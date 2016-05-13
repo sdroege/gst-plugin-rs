@@ -1,7 +1,8 @@
 use libc::{c_char};
 use std::ffi::{CStr, CString};
-use std::ptr;
+use std::{ptr, mem};
 use std::u64;
+use std::slice;
 
 #[derive(Debug)]
 pub struct FileSrc {
@@ -72,10 +73,15 @@ pub extern "C" fn filesrc_get_location(ptr: *mut FileSrc) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_fill(ptr: *mut FileSrc) -> GstFlowReturn {
+pub extern "C" fn filesrc_fill(ptr: *mut FileSrc, data_ptr: *mut u8, data_len: usize) -> GstFlowReturn {
     let filesrc: &mut FileSrc = unsafe { &mut *ptr };
 
     println!("{:?}", filesrc);
+    let mut data = unsafe { slice::from_raw_parts_mut(data_ptr, data_len) };
+
+    for i in 0..data.len() - 1 {
+        data[i] = 1;
+    }
 
     return GstFlowReturn::Ok;
 }
@@ -91,7 +97,10 @@ pub extern "C" fn filesrc_get_size(ptr: *mut FileSrc) -> u64 {
 pub extern "C" fn filesrc_start(ptr: *mut FileSrc) -> GBoolean {
     let filesrc: &mut FileSrc = unsafe { &mut *ptr };
 
-    return GBoolean::True;
+    match filesrc.location {
+        None => GBoolean::False,
+        Some(_) => GBoolean::True
+    }
 }
 
 #[no_mangle]

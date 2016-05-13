@@ -5,7 +5,7 @@
 /* Declarations for Rust code */
 extern void * filesrc_new (void);
 extern void filesrc_drop (void * filesrc);
-extern GstFlowReturn filesrc_fill (void * filesrc);
+extern GstFlowReturn filesrc_fill (void * filesrc, void * data, size_t data_len);
 extern void filesrc_set_location (void * filesrc, const char *location);
 extern char * filesrc_get_location (void * filesrc);
 extern uint64_t filesrc_get_size (void * filesrc);
@@ -138,8 +138,14 @@ gst_rsfile_src_fill (GstBaseSrc * basesrc, guint64 offset, guint length,
     GstBuffer * buf)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
+  GstMapInfo map;
+  GstFlowReturn ret;
 
-  return filesrc_fill (src->instance);
+  gst_buffer_map (buf, &map, GST_MAP_READWRITE);
+  ret = filesrc_fill (src->instance, map.data, map.size);
+  gst_buffer_unmap (buf, &map);
+
+  return ret;
 }
 
 static gboolean
