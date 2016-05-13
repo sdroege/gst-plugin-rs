@@ -1,6 +1,40 @@
 use libc::{c_char};
 use std::ffi::{CStr, CString};
 use std::ptr;
+use std::u64;
+
+#[derive(Debug)]
+pub struct FileSrc {
+    location: Option<String>,
+}
+
+#[repr(C)]
+pub enum GstFlowReturn {
+    Ok = 0,
+    NotLinked = -1,
+    Flushing = -2,
+    Eos = -3,
+    NotNegotiated = -4,
+    Error = -5,
+}
+
+#[repr(C)]
+pub enum GBoolean {
+    False = 0,
+    True = 1,
+}
+
+impl FileSrc {
+    fn new() -> FileSrc {
+        FileSrc { location: None }
+    }
+}
+
+impl Drop for FileSrc {
+    fn drop(&mut self) {
+        println!("drop");
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn filesrc_new() -> *mut FileSrc {
@@ -38,25 +72,39 @@ pub extern "C" fn filesrc_get_location(ptr: *mut FileSrc) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_fill(ptr: *mut FileSrc) {
+pub extern "C" fn filesrc_fill(ptr: *mut FileSrc) -> GstFlowReturn {
     let filesrc: &mut FileSrc = unsafe { &mut *ptr };
 
-    println!("fill {:?}", filesrc);
+    println!("{:?}", filesrc);
+
+    return GstFlowReturn::Ok;
 }
 
-#[derive(Debug)]
-pub struct FileSrc {
-    location: Option<String>,
+#[no_mangle]
+pub extern "C" fn filesrc_get_size(ptr: *mut FileSrc) -> u64 {
+    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+
+    return u64::MAX;
 }
 
-impl FileSrc {
-    fn new() -> FileSrc {
-        FileSrc { location: None }
-    }
+#[no_mangle]
+pub extern "C" fn filesrc_start(ptr: *mut FileSrc) -> GBoolean {
+    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+
+    return GBoolean::True;
 }
 
-impl Drop for FileSrc {
-    fn drop(&mut self) {
-        println!("drop");
-    }
+#[no_mangle]
+pub extern "C" fn filesrc_stop(ptr: *mut FileSrc) -> GBoolean {
+    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+
+    return GBoolean::True;
 }
+
+#[no_mangle]
+pub extern "C" fn filesrc_is_seekable(ptr: *mut FileSrc) -> GBoolean {
+    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+
+    return GBoolean::True;
+}
+

@@ -1,11 +1,17 @@
 #include "rsfilesrc.h"
 
+#include <stdint.h>
+
 /* Declarations for Rust code */
 extern void * filesrc_new (void);
 extern void filesrc_drop (void * filesrc);
-extern int filesrc_fill (void * filesrc);
-extern void filesrc_set_location (void * filesrc, const gchar *location);
-extern gchar * filesrc_get_location (void * filesrc);
+extern GstFlowReturn filesrc_fill (void * filesrc);
+extern void filesrc_set_location (void * filesrc, const char *location);
+extern char * filesrc_get_location (void * filesrc);
+extern uint64_t filesrc_get_size (void * filesrc);
+extern gboolean filesrc_is_seekable (void * filesrc);
+extern gboolean filesrc_start (void * filesrc);
+extern gboolean filesrc_stop (void * filesrc);
 
 GST_DEBUG_CATEGORY_STATIC (gst_rsfile_src_debug);
 #define GST_CAT_DEFAULT gst_rsfile_src_debug
@@ -133,12 +139,7 @@ gst_rsfile_src_fill (GstBaseSrc * basesrc, guint64 offset, guint length,
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  g_print ("foo %p\n", src->instance);
-  filesrc_fill (src->instance);
-
-  gst_buffer_memset (buf, 0, 0, gst_buffer_get_size (buf));
-
-  return GST_FLOW_OK;
+  return filesrc_fill (src->instance);
 }
 
 static gboolean
@@ -146,7 +147,7 @@ gst_rsfile_src_is_seekable (GstBaseSrc * basesrc)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  return TRUE;
+  return filesrc_is_seekable (src->instance);
 }
 
 static gboolean
@@ -154,7 +155,7 @@ gst_rsfile_src_get_size (GstBaseSrc * basesrc, guint64 * size)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  *size = -1;
+  *size = filesrc_get_size (src->instance);
 
   return TRUE;
 }
@@ -165,7 +166,7 @@ gst_rsfile_src_start (GstBaseSrc * basesrc)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  return TRUE;
+  return filesrc_start (src->instance);
 }
 
 /* unmap and close the rsfile */
@@ -174,7 +175,7 @@ gst_rsfile_src_stop (GstBaseSrc * basesrc)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  return TRUE;
+  return filesrc_stop (src->instance);
 }
 
 
