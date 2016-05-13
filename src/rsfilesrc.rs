@@ -56,7 +56,12 @@ impl FileSrc {
     }
 
     fn get_size(&self) -> u64 {
-        u64::MAX
+        match self.file {
+            None => return u64::MAX,
+            Some(ref f) => {
+                return f.metadata().unwrap().len();
+            },
+        }
     }
 
     fn start(&mut self) -> bool {
