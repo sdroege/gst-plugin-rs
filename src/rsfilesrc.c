@@ -4,6 +4,8 @@
 extern void * filesrc_new (void);
 extern void filesrc_drop (void * filesrc);
 extern int filesrc_fill (void * filesrc);
+extern void filesrc_set_location (void * filesrc, const gchar *location);
+extern gchar * filesrc_get_location (void * filesrc);
 
 GST_DEBUG_CATEGORY_STATIC (gst_rsfile_src_debug);
 #define GST_CAT_DEFAULT gst_rsfile_src_debug
@@ -89,7 +91,6 @@ gst_rsfile_src_finalize (GObject * object)
   GstRsfileSrc *src = GST_RSFILE_SRC (object);
 
   filesrc_drop (src->instance);
-  g_free (src->location);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -102,9 +103,7 @@ gst_rsfile_src_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_LOCATION:
-      if (src->location)
-        g_free (src->location);
-      src->location = g_value_dup_string (value);
+      filesrc_set_location (src->instance, g_value_get_string (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -120,7 +119,7 @@ gst_rsfile_src_get_property (GObject * object, guint prop_id, GValue * value,
 
   switch (prop_id) {
     case PROP_LOCATION:
-      g_value_set_string (value, src->location);
+      g_value_take_string (value, filesrc_get_location (src->instance));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);

@@ -1,3 +1,7 @@
+use libc::{c_char};
+use std::ffi::{CStr, CString};
+use std::ptr;
+
 #[no_mangle]
 pub extern "C" fn filesrc_new() -> *mut FileSrc {
     let instance = Box::new(FileSrc::new());
@@ -10,11 +14,34 @@ pub extern "C" fn filesrc_drop(ptr: *mut FileSrc) {
 }
 
 #[no_mangle]
+pub extern "C" fn filesrc_set_location(ptr: *mut FileSrc, location_ptr: *const c_char) {
+    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+
+    if location_ptr.is_null() {
+        filesrc.location = None;
+    } else {
+        let location = unsafe { CStr::from_ptr(location_ptr) };
+        filesrc.location = Some(String::from(location.to_str().unwrap()));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn filesrc_get_location(ptr: *mut FileSrc) -> *mut c_char {
+    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+
+    match filesrc.location {
+        Some(ref location) =>
+            CString::new(location.clone().into_bytes()).unwrap().into_raw(),
+        None =>
+            ptr::null_mut()
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn filesrc_fill(ptr: *mut FileSrc) {
     let filesrc: &mut FileSrc = unsafe { &mut *ptr };
 
-    println!("fill");
-    filesrc.location = Some(String::from("bla"));
+    println!("fill {:?}", filesrc);
 }
 
 #[derive(Debug)]
