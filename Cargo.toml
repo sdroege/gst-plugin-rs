@@ -1,0 +1,16 @@
+[package]
+name = "rsplugin"
+version = "0.1.0"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+build = "build.rs"
+
+[dependencies]
+
+[build-dependencies]
+gcc = "0.3"
+pkg-config = "0.3"
+
+[lib]
+name = "rsplugin"
+crate-type = ["dylib"]
+path = "src/lib.rs"
