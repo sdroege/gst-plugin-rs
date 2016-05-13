@@ -25,6 +25,7 @@ struct _GstRsfileSrc {
   GstBaseSrc element;
 
   gchar *location;
+  gpointer instance;
 };
 
 struct _GstRsfileSrcClass {

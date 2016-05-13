@@ -1,5 +1,10 @@
 #include "rsfilesrc.h"
 
+/* Declarations for Rust code */
+extern void * filesrc_new (void);
+extern void filesrc_drop (void * filesrc);
+extern int filesrc_fill (void * filesrc);
+
 GST_DEBUG_CATEGORY_STATIC (gst_rsfile_src_debug);
 #define GST_CAT_DEFAULT gst_rsfile_src_debug
 
@@ -74,6 +79,8 @@ static void
 gst_rsfile_src_init (GstRsfileSrc * src)
 {
   gst_base_src_set_blocksize (GST_BASE_SRC (src), 4096);
+
+  src->instance = filesrc_new ();
 }
 
 static void
@@ -81,6 +88,7 @@ gst_rsfile_src_finalize (GObject * object)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (object);
 
+  filesrc_drop (src->instance);
   g_free (src->location);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
@@ -120,15 +128,14 @@ gst_rsfile_src_get_property (GObject * object, guint prop_id, GValue * value,
   }
 }
 
-extern void foo(void);
-
 static GstFlowReturn
 gst_rsfile_src_fill (GstBaseSrc * basesrc, guint64 offset, guint length,
     GstBuffer * buf)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  foo();
+  g_print ("foo %p\n", src->instance);
+  filesrc_fill (src->instance);
 
   gst_buffer_memset (buf, 0, 0, gst_buffer_get_size (buf));
 
