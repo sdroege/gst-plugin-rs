@@ -3,6 +3,9 @@ use std::ffi::{CStr, CString};
 use std::ptr;
 use std::u64;
 use std::slice;
+use std::io::Read;
+use std::fs::File;
+use std::path::Path;
 
 #[repr(C)]
 pub enum GstFlowReturn {
@@ -32,11 +35,12 @@ impl GBoolean {
 #[derive(Debug)]
 pub struct FileSrc {
     location: Option<String>,
+    file: Option<File>,
 }
 
 impl FileSrc {
     fn new() -> FileSrc {
-        FileSrc { location: None }
+        FileSrc { location: None, file: None }
     }
 
     fn set_location(&mut self, location: &Option<String>) {
@@ -56,22 +60,28 @@ impl FileSrc {
     }
 
     fn start(&mut self) -> bool {
-        match self.location {
-            None => false,
-            Some(_) => true
-        }
+        if self.location.is_none() { return false; }
+
+        self.file = Some(File::open(Path::new(&self.location.clone().unwrap())).unwrap());
+
+        return true;
     }
 
     fn stop(&mut self) -> bool {
+        self.file = None;
+
         true
     }
 
     fn fill(&mut self, data: &mut [u8]) -> GstFlowReturn {
-        for i in 0..data.len() - 1 {
-            data[i] = 1;
+        match self.file {
+            None => return GstFlowReturn::Error,
+            Some(ref mut f) => {
+                // FIXME: Need to return the actual size, handle EOF, etc
+                f.read(data);
+                return GstFlowReturn::Ok;
+            },
         }
-
-        return GstFlowReturn::Ok;
     }
 }
 
