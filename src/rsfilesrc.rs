@@ -1,17 +1,12 @@
-use std::mem;
-
 #[no_mangle]
 pub extern "C" fn filesrc_new() -> *mut FileSrc {
-    let mut instance = Box::new(FileSrc::new());
-    return &mut *instance;
+    let instance = Box::new(FileSrc::new());
+    return Box::into_raw(instance);
 }
 
 #[no_mangle]
 pub extern "C" fn filesrc_drop(ptr: *mut FileSrc) {
-    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
-
-    println!("drop");
-    drop(filesrc);
+    unsafe { Box::from_raw(ptr) };
 }
 
 #[no_mangle]
