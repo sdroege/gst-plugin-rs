@@ -3,3 +3,4 @@
 extern crate libc;
 
 pub mod rsfilesrc;
+pub mod rsfilesink;
