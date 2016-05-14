@@ -78,21 +78,14 @@ impl FileSrc {
         true
     }
 
-    fn fill(&mut self, data: &mut [u8]) -> GstFlowReturn {
+    fn fill(&mut self, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
         match self.file {
-            None => return GstFlowReturn::Error,
+            None => return Err(GstFlowReturn::Error),
             Some(ref mut f) => {
                 // FIXME: Need to return the actual size, handle EOF, etc
-                f.read(data);
-                return GstFlowReturn::Ok;
+                return Ok(f.read(data).unwrap());
             },
         }
-    }
-}
-
-impl Drop for FileSrc {
-    fn drop(&mut self) {
-        println!("drop");
     }
 }
 
@@ -132,12 +125,18 @@ pub extern "C" fn filesrc_get_location(ptr: *mut FileSrc) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_fill(ptr: *mut FileSrc, data_ptr: *mut u8, data_len: usize) -> GstFlowReturn {
+pub extern "C" fn filesrc_fill(ptr: *mut FileSrc, data_ptr: *mut u8, data_len_ptr: *mut usize) -> GstFlowReturn {
     let filesrc: &mut FileSrc = unsafe { &mut *ptr };
 
-    println!("{:?}", filesrc);
-    let mut data = unsafe { slice::from_raw_parts_mut(data_ptr, data_len) };
-    return filesrc.fill(data);
+    let mut data_len: &mut usize = unsafe { &mut *data_len_ptr };
+    let mut data = unsafe { slice::from_raw_parts_mut(data_ptr, *data_len) };
+    match filesrc.fill(data) {
+        Ok(actual_len) => {
+            *data_len = actual_len;
+            GstFlowReturn::Ok
+        },
+        Err(ret) => ret,
+    }
 }
 
 #[no_mangle]

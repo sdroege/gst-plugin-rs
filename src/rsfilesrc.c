@@ -1,11 +1,12 @@
 #include "rsfilesrc.h"
 
+#include <string.h>
 #include <stdint.h>
 
 /* Declarations for Rust code */
 extern void * filesrc_new (void);
 extern void filesrc_drop (void * filesrc);
-extern GstFlowReturn filesrc_fill (void * filesrc, void * data, size_t data_len);
+extern GstFlowReturn filesrc_fill (void * filesrc, void * data, size_t * data_len);
 extern void filesrc_set_location (void * filesrc, const char *location);
 extern char * filesrc_get_location (void * filesrc);
 extern uint64_t filesrc_get_size (void * filesrc);
@@ -27,6 +28,9 @@ enum
   PROP_LOCATION
 };
 
+static void gst_rsfile_src_uri_handler_init (gpointer g_iface,
+    gpointer iface_data);
+
 static void gst_rsfile_src_finalize (GObject * object);
 
 static void gst_rsfile_src_set_property (GObject * object, guint prop_id,
@@ -43,6 +47,7 @@ static GstFlowReturn gst_rsfile_src_fill (GstBaseSrc * src, guint64 offset,
     guint length, GstBuffer * buf);
 
 #define _do_init \
+  G_IMPLEMENT_INTERFACE (GST_TYPE_URI_HANDLER, gst_rsfile_src_uri_handler_init); \
   GST_DEBUG_CATEGORY_INIT (gst_rsfile_src_debug, "rsfilesrc", 0, "rsfilesrc element");
 #define gst_rsfile_src_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstRsfileSrc, gst_rsfile_src, GST_TYPE_BASE_SRC, _do_init);
@@ -140,10 +145,14 @@ gst_rsfile_src_fill (GstBaseSrc * basesrc, guint64 offset, guint length,
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
   GstMapInfo map;
   GstFlowReturn ret;
+  gsize size;
 
   gst_buffer_map (buf, &map, GST_MAP_READWRITE);
-  ret = filesrc_fill (src->instance, map.data, map.size);
+  size = map.size;
+  ret = filesrc_fill (src->instance, map.data, &size);
   gst_buffer_unmap (buf, &map);
+  if (ret == GST_FLOW_OK)
+    gst_buffer_resize (buf, 0, size);
 
   return ret;
 }
@@ -184,4 +193,95 @@ gst_rsfile_src_stop (GstBaseSrc * basesrc)
   return filesrc_stop (src->instance);
 }
 
+static GstURIType
+gst_rsfile_src_uri_get_type (GType type)
+{
+  return GST_URI_SRC;
+}
 
+static const gchar *const *
+gst_rsfile_src_uri_get_protocols (GType type)
+{
+  static const gchar *protocols[] = { "file", NULL };
+
+  return protocols;
+}
+
+static gchar *
+gst_rsfile_src_uri_get_uri (GstURIHandler * handler)
+{
+  GstRsfileSrc *src = GST_RSFILE_SRC (handler);
+  gchar *location, *uri;
+
+  location = filesrc_get_location (src->instance);
+  if (!location)
+    return NULL;
+  uri = gst_filename_to_uri (location, NULL);
+  g_free (location);
+
+  return uri;
+}
+
+static gboolean
+gst_rsfile_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
+    GError ** err)
+{
+  gchar *location, *hostname = NULL;
+  gboolean ret = FALSE;
+  GstRsfileSrc *src = GST_RSFILE_SRC (handler);
+
+  if (strcmp (uri, "file://") == 0) {
+    /* Special case for "file://" as this is used by some applications
+     *  to test with gst_element_make_from_uri if there's an element
+     *  that supports the URI protocol. */
+    filesrc_set_location (src->instance, location);
+    return TRUE;
+  }
+
+  location = g_filename_from_uri (uri, &hostname, err);
+
+  if (!location || (err != NULL && *err != NULL)) {
+    GST_WARNING_OBJECT (src, "Invalid URI '%s' for filesrc: %s", uri,
+        (err != NULL && *err != NULL) ? (*err)->message : "unknown error");
+    goto beach;
+  }
+
+  if ((hostname) && (strcmp (hostname, "localhost"))) {
+    /* Only 'localhost' is permitted */
+    GST_WARNING_OBJECT (src, "Invalid hostname '%s' for filesrc", hostname);
+    g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
+        "File URI with invalid hostname '%s'", hostname);
+    goto beach;
+  }
+#ifdef G_OS_WIN32
+  /* Unfortunately, g_filename_from_uri() doesn't handle some UNC paths
+   * correctly on windows, it leaves them with an extra backslash
+   * at the start if they're of the mozilla-style file://///host/path/file 
+   * form. Correct this.
+   */
+  if (location[0] == '\\' && location[1] == '\\' && location[2] == '\\')
+    memmove (location, location + 1, strlen (location + 1) + 1);
+#endif
+
+  ret = TRUE;
+  filesrc_set_location (src->instance, location);
+
+beach:
+  if (location)
+    g_free (location);
+  if (hostname)
+    g_free (hostname);
+
+  return ret;
+}
+
+static void
+gst_rsfile_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+{
+  GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
+
+  iface->get_type = gst_rsfile_src_uri_get_type;
+  iface->get_protocols = gst_rsfile_src_uri_get_protocols;
+  iface->get_uri = gst_rsfile_src_uri_get_uri;
+  iface->set_uri = gst_rsfile_src_uri_set_uri;
+}

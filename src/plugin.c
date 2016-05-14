@@ -6,7 +6,7 @@
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
-  if (!gst_element_register (plugin, "rsfilesrc", GST_RANK_NONE,
+  if (!gst_element_register (plugin, "rsfilesrc", GST_RANK_PRIMARY+100,
           GST_TYPE_RSFILE_SRC)) {
     return FALSE;
   }
