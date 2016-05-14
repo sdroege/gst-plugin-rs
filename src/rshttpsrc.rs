@@ -116,7 +116,7 @@ impl Source for HttpSrc {
         }
         self.response = None;
 
-        true
+        return true;
     }
 
     fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn> {

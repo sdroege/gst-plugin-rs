@@ -266,7 +266,7 @@ gst_rs_source_plugin_init (GstPlugin * plugin)
 }
 
 gboolean
-gst_rs_source_register (GstPlugin * plugin, const gchar *name, const gchar * long_name, const gchar * description, const gchar * classification, const gchar * author, GstRank rank, void * (*create_instance) (void), const gchar *protocols)
+gst_rs_source_register (GstPlugin * plugin, const gchar *name, const gchar * long_name, const gchar * description, const gchar * classification, const gchar * author, GstRank rank, void * (*create_instance) (void), const gchar *protocols, gboolean push_only)
 {
   GTypeInfo type_info = {
     sizeof (GstRsSrcClass),
@@ -298,7 +298,7 @@ gst_rs_source_register (GstPlugin * plugin, const gchar *name, const gchar * lon
   data->protocols = g_strsplit (protocols, ":", -1);
 
   type_name = g_strconcat ("RsSrc-", name, NULL);
-  type = g_type_register_static (GST_TYPE_BASE_SRC, type_name, &type_info, 0);
+  type = g_type_register_static (push_only ? GST_TYPE_PUSH_SRC : GST_TYPE_BASE_SRC, type_name, &type_info, 0);
   g_free (type_name);
 
   g_type_add_interface_static (type, GST_TYPE_URI_HANDLER, &iface_info);

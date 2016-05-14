@@ -29,7 +29,8 @@ extern "C" {
         author: *const c_char,
         rank: i32,
         create_instance: extern fn() -> *mut Box<Source>,
-        protocols: *const c_char) -> GBoolean;
+        protocols: *const c_char,
+        push_only: GBoolean) -> GBoolean;
 }
 
 #[no_mangle]
@@ -44,7 +45,8 @@ pub extern "C" fn sources_register(plugin: *const c_void) -> GBoolean {
             CString::new("Sebastian Dröge <sebastian@centricular.com>").unwrap().as_ptr(),
             256 + 100,
             FileSrc::new_ptr,
-            CString::new("file").unwrap().as_ptr());
+            CString::new("file").unwrap().as_ptr(),
+            GBoolean::False);
 
         gst_rs_source_register(plugin,
             CString::new("rshttpsrc").unwrap().as_ptr(),
@@ -54,7 +56,8 @@ pub extern "C" fn sources_register(plugin: *const c_void) -> GBoolean {
             CString::new("Sebastian Dröge <sebastian@centricular.com>").unwrap().as_ptr(),
             256 + 100,
             HttpSrc::new_ptr,
-            CString::new("http:https").unwrap().as_ptr());
+            CString::new("http:https").unwrap().as_ptr(),
+            GBoolean::True);
     }
 
     return GBoolean::True;
