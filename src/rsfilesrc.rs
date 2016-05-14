@@ -1,8 +1,4 @@
-use libc::{c_char};
-use std::ffi::{CStr, CString};
-use std::ptr;
 use std::u64;
-use std::slice;
 use std::io::{Read, Seek, SeekFrom};
 use std::fs::File;
 use std::path::PathBuf;
@@ -10,47 +6,8 @@ use url::Url;
 
 use std::io::Write;
 
-macro_rules! println_err(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-    } }
-);
-
-#[repr(C)]
-pub enum GstFlowReturn {
-    Ok = 0,
-    NotLinked = -1,
-    Flushing = -2,
-    Eos = -3,
-    NotNegotiated = -4,
-    Error = -5,
-}
-
-#[repr(C)]
-pub enum GBoolean {
-    False = 0,
-    True = 1,
-}
-
-impl GBoolean {
-    fn from_bool(v: bool) -> GBoolean {
-        match v {
-            true => GBoolean::True,
-            false => GBoolean::False,
-        }
-    }
-}
-
-pub trait Source {
-    fn set_uri(&mut self, uri_str: &Option<String>) -> bool;
-    fn get_uri(&self) -> Option<String>;
-    fn is_seekable(&self) -> bool;
-    fn get_size(&self) -> u64;
-    fn start(&mut self) -> bool;
-    fn stop(&mut self) -> bool;
-    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn>;
-}
+use utils::*;
+use rssource::*;
 
 #[derive(Debug)]
 pub struct FileSrc {
@@ -186,76 +143,3 @@ pub extern "C" fn filesrc_new() -> *mut Box<Source> {
     let instance = Box::new(FileSrc::new_source());
     return Box::into_raw(instance);
 }
-
-#[no_mangle]
-pub extern "C" fn source_drop(ptr: *mut Box<Source>) {
-    unsafe { Box::from_raw(ptr) };
-}
-
-#[no_mangle]
-pub extern "C" fn source_set_uri(ptr: *mut Box<Source>, uri_ptr: *const c_char) -> GBoolean{
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
-
-    if uri_ptr.is_null() {
-        GBoolean::from_bool(source.set_uri(&None))
-    } else {
-        let uri = unsafe { CStr::from_ptr(uri_ptr) };
-        GBoolean::from_bool(source.set_uri(&Some(String::from(uri.to_str().unwrap()))))
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn source_get_uri(ptr: *mut Box<Source>) -> *mut c_char {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
-
-    match source.get_uri() {
-        Some(ref uri) =>
-            CString::new(uri.clone().into_bytes()).unwrap().into_raw(),
-        None =>
-            ptr::null_mut()
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn source_fill(ptr: *mut Box<Source>, offset: u64, data_ptr: *mut u8, data_len_ptr: *mut usize) -> GstFlowReturn {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
-
-    let mut data_len: &mut usize = unsafe { &mut *data_len_ptr };
-    let mut data = unsafe { slice::from_raw_parts_mut(data_ptr, *data_len) };
-    match source.fill(offset, data) {
-        Ok(actual_len) => {
-            *data_len = actual_len;
-            GstFlowReturn::Ok
-        },
-        Err(ret) => ret,
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn source_get_size(ptr: *mut Box<Source>) -> u64 {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
-
-    return source.get_size();
-}
-
-#[no_mangle]
-pub extern "C" fn source_start(ptr: *mut Box<Source>) -> GBoolean {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
-
-    GBoolean::from_bool(source.start())
-}
-
-#[no_mangle]
-pub extern "C" fn source_stop(ptr: *mut Box<Source>) -> GBoolean {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
-
-    GBoolean::from_bool(source.stop())
-}
-
-#[no_mangle]
-pub extern "C" fn source_is_seekable(ptr: *mut Box<Source>) -> GBoolean {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
-
-    GBoolean::from_bool(source.is_seekable())
-}
-
