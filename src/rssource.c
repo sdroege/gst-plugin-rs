@@ -157,13 +157,14 @@ gst_rs_src_fill (GstBaseSrc * basesrc, guint64 offset, guint length,
   GstRsSrc *src = GST_RS_SRC (basesrc);
   GstMapInfo map;
   GstFlowReturn ret;
-  gsize size;
+  gsize map_size, size;
 
   gst_buffer_map (buf, &map, GST_MAP_READWRITE);
-  size = map.size;
+  size = length;
+  map_size = map.size;
   ret = source_fill (src->instance, offset, map.data, &size);
   gst_buffer_unmap (buf, &map);
-  if (ret == GST_FLOW_OK)
+  if (ret == GST_FLOW_OK && size != map_size)
     gst_buffer_resize (buf, 0, size);
 
   return ret;
