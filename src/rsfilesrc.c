@@ -7,8 +7,8 @@
 extern void * filesrc_new (void);
 extern void filesrc_drop (void * filesrc);
 extern GstFlowReturn filesrc_fill (void * filesrc, uint64_t offset, void * data, size_t * data_len);
-extern void filesrc_set_location (void * filesrc, const char *location);
-extern char * filesrc_get_location (void * filesrc);
+extern gboolean filesrc_set_uri (void * filesrc, const char *uri);
+extern char * filesrc_get_uri (void * filesrc);
 extern uint64_t filesrc_get_size (void * filesrc);
 extern gboolean filesrc_is_seekable (void * filesrc);
 extern gboolean filesrc_start (void * filesrc);
@@ -25,7 +25,7 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
 enum
 {
   PROP_0,
-  PROP_LOCATION
+  PROP_URI
 };
 
 static void gst_rsfile_src_uri_handler_init (gpointer g_iface,
@@ -66,9 +66,9 @@ gst_rsfile_src_class_init (GstRsfileSrcClass * klass)
   gobject_class->set_property = gst_rsfile_src_set_property;
   gobject_class->get_property = gst_rsfile_src_get_property;
 
-  g_object_class_install_property (gobject_class, PROP_LOCATION,
-      g_param_spec_string ("location", "File Location",
-          "Location of the file to read", NULL,
+  g_object_class_install_property (gobject_class, PROP_URI,
+      g_param_spec_string ("uri", "URI",
+          "URI of the file to read", NULL,
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS |
           GST_PARAM_MUTABLE_READY));
 
@@ -113,8 +113,8 @@ gst_rsfile_src_set_property (GObject * object, guint prop_id,
   GstRsfileSrc *src = GST_RSFILE_SRC (object);
 
   switch (prop_id) {
-    case PROP_LOCATION:
-      filesrc_set_location (src->instance, g_value_get_string (value));
+    case PROP_URI:
+      filesrc_set_uri (src->instance, g_value_get_string (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -129,8 +129,8 @@ gst_rsfile_src_get_property (GObject * object, guint prop_id, GValue * value,
   GstRsfileSrc *src = GST_RSFILE_SRC (object);
 
   switch (prop_id) {
-    case PROP_LOCATION:
-      g_value_take_string (value, filesrc_get_location (src->instance));
+    case PROP_URI:
+      g_value_take_string (value, filesrc_get_uri (src->instance));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -211,68 +211,23 @@ static gchar *
 gst_rsfile_src_uri_get_uri (GstURIHandler * handler)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (handler);
-  gchar *location, *uri;
 
-  location = filesrc_get_location (src->instance);
-  if (!location)
-    return NULL;
-  uri = gst_filename_to_uri (location, NULL);
-  g_free (location);
-
-  return uri;
+  return filesrc_get_uri (src->instance);
 }
 
 static gboolean
 gst_rsfile_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
     GError ** err)
 {
-  gchar *location, *hostname = NULL;
-  gboolean ret = FALSE;
   GstRsfileSrc *src = GST_RSFILE_SRC (handler);
 
-  if (strcmp (uri, "file://") == 0) {
-    /* Special case for "file://" as this is used by some applications
-     *  to test with gst_element_make_from_uri if there's an element
-     *  that supports the URI protocol. */
-    filesrc_set_location (src->instance, location);
-    return TRUE;
-  }
-
-  location = g_filename_from_uri (uri, &hostname, err);
-
-  if (!location || (err != NULL && *err != NULL)) {
-    GST_WARNING_OBJECT (src, "Invalid URI '%s' for filesrc: %s", uri,
-        (err != NULL && *err != NULL) ? (*err)->message : "unknown error");
-    goto beach;
-  }
-
-  if ((hostname) && (strcmp (hostname, "localhost"))) {
-    /* Only 'localhost' is permitted */
-    GST_WARNING_OBJECT (src, "Invalid hostname '%s' for filesrc", hostname);
+  if (!filesrc_set_uri (src->instance, uri)) {
     g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
-        "File URI with invalid hostname '%s'", hostname);
-    goto beach;
+          "Can't handle URI '%s'", uri);
+    return FALSE;
   }
-#ifdef G_OS_WIN32
-  /* Unfortunately, g_filename_from_uri() doesn't handle some UNC paths
-   * correctly on windows, it leaves them with an extra backslash
-   * at the start if they're of the mozilla-style file://///host/path/file 
-   * form. Correct this.
-   */
-  if (location[0] == '\\' && location[1] == '\\' && location[2] == '\\')
-    memmove (location, location + 1, strlen (location + 1) + 1);
-#endif
 
-  ret = TRUE;
-  filesrc_set_location (src->instance, location);
-
-beach:
-  if (location)
-    g_free (location);
-  if (hostname)
-    g_free (hostname);
-
-  return ret;
+  return TRUE;
 }
 
 static void

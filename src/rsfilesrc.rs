@@ -5,7 +5,8 @@ use std::u64;
 use std::slice;
 use std::io::{Read, Seek, SeekFrom};
 use std::fs::File;
-use std::path::Path;
+use std::path::PathBuf;
+use url::Url;
 
 use std::io::Write;
 
@@ -43,7 +44,7 @@ impl GBoolean {
 
 #[derive(Debug)]
 pub struct FileSrc {
-    location: Option<String>,
+    location: Option<PathBuf>,
     file: Option<File>,
     position: u64,
 }
@@ -53,12 +54,43 @@ impl FileSrc {
         FileSrc { location: None, file: None, position: 0 }
     }
 
-    fn set_location(&mut self, location: &Option<String>) {
-        self.location = location.clone();
+    fn set_uri(&mut self, uri_str: &Option<String>) -> bool {
+        match *uri_str {
+            None => {
+                self.location = None;
+                return true;
+            },
+            Some(ref uri_str) => {
+                let uri_parsed = Url::parse(uri_str.as_str());
+                match uri_parsed {
+                    Ok(u) => {
+                        match u.to_file_path().ok() {
+                            Some(p) => {
+                                self.location = Some(p);
+                                return true;
+                            },
+                            None => {
+                                self.location = None;
+                                println_err!("Unsupported file URI '{}'", uri_str);
+                                return false;
+                            }
+                        }
+                    },
+                    Err(err) => {
+                        self.location = None;
+                        println_err!("Failed to parse URI '{}': {}", uri_str, err);
+                        return false;
+                    }
+                }
+            }
+        }
     }
 
-    fn get_location(&self) -> &Option<String> {
-        &self.location
+    fn get_uri(&self) -> Option<String> {
+        match self.location {
+            None => None,
+            Some(ref location) => Url::from_file_path(&location).map(|u| u.into_string()).ok()
+        }
     }
 
     fn is_seekable(&self) -> bool {
@@ -81,13 +113,13 @@ impl FileSrc {
         match self.location {
             None => return false,
             Some(ref location) => {
-                match File::open(Path::new(&location.clone())) {
+                match File::open(location.as_path()) {
                     Ok(file) => {
                         self.file = Some(file);
                         return true;
                     },
                     Err(err) => {
-                        println_err!("Failed to open file '{}': {}", location, err.to_string());
+                        println_err!("Failed to open file '{}': {}", location.to_str().unwrap_or("Non-UTF8 path"), err.to_string());
                         return false;
                     },
                 }
@@ -145,24 +177,24 @@ pub extern "C" fn filesrc_drop(ptr: *mut FileSrc) {
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_set_location(ptr: *mut FileSrc, location_ptr: *const c_char) {
+pub extern "C" fn filesrc_set_uri(ptr: *mut FileSrc, uri_ptr: *const c_char) -> GBoolean{
     let filesrc: &mut FileSrc = unsafe { &mut *ptr };
 
-    if location_ptr.is_null() {
-        filesrc.set_location(&None)
+    if uri_ptr.is_null() {
+        GBoolean::from_bool(filesrc.set_uri(&None))
     } else {
-        let location = unsafe { CStr::from_ptr(location_ptr) };
-        filesrc.set_location(&Some(String::from(location.to_str().unwrap())));
+        let uri = unsafe { CStr::from_ptr(uri_ptr) };
+        GBoolean::from_bool(filesrc.set_uri(&Some(String::from(uri.to_str().unwrap()))))
     }
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_get_location(ptr: *mut FileSrc) -> *mut c_char {
+pub extern "C" fn filesrc_get_uri(ptr: *mut FileSrc) -> *mut c_char {
     let filesrc: &mut FileSrc = unsafe { &mut *ptr };
 
-    match *filesrc.get_location() {
-        Some(ref location) =>
-            CString::new(location.clone().into_bytes()).unwrap().into_raw(),
+    match filesrc.get_uri() {
+        Some(ref uri) =>
+            CString::new(uri.clone().into_bytes()).unwrap().into_raw(),
         None =>
             ptr::null_mut()
     }
