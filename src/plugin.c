@@ -1,7 +1,7 @@
 #include <gst/gst.h>
 
 #include "rssource.h"
-#include "rsfilesink.h"
+#include "rssink.h"
 
 static gboolean
 plugin_init (GstPlugin * plugin)
@@ -9,10 +9,8 @@ plugin_init (GstPlugin * plugin)
   if (!gst_rs_source_plugin_init (plugin))
     return FALSE;
 
-  if (!gst_element_register (plugin, "rsfilesink", GST_RANK_NONE,
-          GST_TYPE_RSFILE_SINK)) {
+  if (!gst_rs_sink_plugin_init (plugin))
     return FALSE;
-  }
 
   return TRUE;
 }
