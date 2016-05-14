@@ -1,15 +1,13 @@
 #include <gst/gst.h>
 
-#include "rsfilesrc.h"
+#include "rssource.h"
 #include "rsfilesink.h"
 
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
-  if (!gst_element_register (plugin, "rsfilesrc", GST_RANK_PRIMARY+100,
-          GST_TYPE_RSFILE_SRC)) {
+  if (!gst_rs_source_plugin_init (plugin))
     return FALSE;
-  }
 
   if (!gst_element_register (plugin, "rsfilesink", GST_RANK_NONE,
           GST_TYPE_RSFILE_SINK)) {

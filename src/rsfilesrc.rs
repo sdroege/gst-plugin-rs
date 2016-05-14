@@ -24,6 +24,10 @@ impl FileSrc {
     fn new_source() -> Box<Source> {
         Box::new(FileSrc::new())
     }
+    pub extern "C" fn new_ptr() -> *mut Box<Source> {
+        let instance = Box::new(FileSrc::new_source());
+        return Box::into_raw(instance);
+    }
 }
 
 impl Source for FileSrc {
@@ -138,8 +142,3 @@ impl Source for FileSrc {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn filesrc_new() -> *mut Box<Source> {
-    let instance = Box::new(FileSrc::new_source());
-    return Box::into_raw(instance);
-}
