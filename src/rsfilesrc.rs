@@ -42,6 +42,16 @@ impl GBoolean {
     }
 }
 
+pub trait Source {
+    fn set_uri(&mut self, uri_str: &Option<String>) -> bool;
+    fn get_uri(&self) -> Option<String>;
+    fn is_seekable(&self) -> bool;
+    fn get_size(&self) -> u64;
+    fn start(&mut self) -> bool;
+    fn stop(&mut self) -> bool;
+    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn>;
+}
+
 #[derive(Debug)]
 pub struct FileSrc {
     location: Option<PathBuf>,
@@ -54,6 +64,12 @@ impl FileSrc {
         FileSrc { location: None, file: None, position: 0 }
     }
 
+    fn new_source() -> Box<Source> {
+        Box::new(FileSrc::new())
+    }
+}
+
+impl Source for FileSrc {
     fn set_uri(&mut self, uri_str: &Option<String>) -> bool {
         match *uri_str {
             None => {
@@ -166,33 +182,33 @@ impl FileSrc {
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_new() -> *mut FileSrc {
-    let instance = Box::new(FileSrc::new());
+pub extern "C" fn filesrc_new() -> *mut Box<Source> {
+    let instance = Box::new(FileSrc::new_source());
     return Box::into_raw(instance);
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_drop(ptr: *mut FileSrc) {
+pub extern "C" fn source_drop(ptr: *mut Box<Source>) {
     unsafe { Box::from_raw(ptr) };
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_set_uri(ptr: *mut FileSrc, uri_ptr: *const c_char) -> GBoolean{
-    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+pub extern "C" fn source_set_uri(ptr: *mut Box<Source>, uri_ptr: *const c_char) -> GBoolean{
+    let source: &mut Box<Source> = unsafe { &mut *ptr };
 
     if uri_ptr.is_null() {
-        GBoolean::from_bool(filesrc.set_uri(&None))
+        GBoolean::from_bool(source.set_uri(&None))
     } else {
         let uri = unsafe { CStr::from_ptr(uri_ptr) };
-        GBoolean::from_bool(filesrc.set_uri(&Some(String::from(uri.to_str().unwrap()))))
+        GBoolean::from_bool(source.set_uri(&Some(String::from(uri.to_str().unwrap()))))
     }
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_get_uri(ptr: *mut FileSrc) -> *mut c_char {
-    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+pub extern "C" fn source_get_uri(ptr: *mut Box<Source>) -> *mut c_char {
+    let source: &mut Box<Source> = unsafe { &mut *ptr };
 
-    match filesrc.get_uri() {
+    match source.get_uri() {
         Some(ref uri) =>
             CString::new(uri.clone().into_bytes()).unwrap().into_raw(),
         None =>
@@ -201,12 +217,12 @@ pub extern "C" fn filesrc_get_uri(ptr: *mut FileSrc) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_fill(ptr: *mut FileSrc, offset: u64, data_ptr: *mut u8, data_len_ptr: *mut usize) -> GstFlowReturn {
-    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+pub extern "C" fn source_fill(ptr: *mut Box<Source>, offset: u64, data_ptr: *mut u8, data_len_ptr: *mut usize) -> GstFlowReturn {
+    let source: &mut Box<Source> = unsafe { &mut *ptr };
 
     let mut data_len: &mut usize = unsafe { &mut *data_len_ptr };
     let mut data = unsafe { slice::from_raw_parts_mut(data_ptr, *data_len) };
-    match filesrc.fill(offset, data) {
+    match source.fill(offset, data) {
         Ok(actual_len) => {
             *data_len = actual_len;
             GstFlowReturn::Ok
@@ -216,30 +232,30 @@ pub extern "C" fn filesrc_fill(ptr: *mut FileSrc, offset: u64, data_ptr: *mut u8
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_get_size(ptr: *mut FileSrc) -> u64 {
-    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+pub extern "C" fn source_get_size(ptr: *mut Box<Source>) -> u64 {
+    let source: &mut Box<Source> = unsafe { &mut *ptr };
 
-    return filesrc.get_size();
+    return source.get_size();
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_start(ptr: *mut FileSrc) -> GBoolean {
-    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+pub extern "C" fn source_start(ptr: *mut Box<Source>) -> GBoolean {
+    let source: &mut Box<Source> = unsafe { &mut *ptr };
 
-    GBoolean::from_bool(filesrc.start())
+    GBoolean::from_bool(source.start())
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_stop(ptr: *mut FileSrc) -> GBoolean {
-    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+pub extern "C" fn source_stop(ptr: *mut Box<Source>) -> GBoolean {
+    let source: &mut Box<Source> = unsafe { &mut *ptr };
 
-    GBoolean::from_bool(filesrc.stop())
+    GBoolean::from_bool(source.stop())
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_is_seekable(ptr: *mut FileSrc) -> GBoolean {
-    let filesrc: &mut FileSrc = unsafe { &mut *ptr };
+pub extern "C" fn source_is_seekable(ptr: *mut Box<Source>) -> GBoolean {
+    let source: &mut Box<Source> = unsafe { &mut *ptr };
 
-    GBoolean::from_bool(filesrc.is_seekable())
+    GBoolean::from_bool(source.is_seekable())
 }
 

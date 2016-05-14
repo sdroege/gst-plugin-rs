@@ -5,14 +5,14 @@
 
 /* Declarations for Rust code */
 extern void * filesrc_new (void);
-extern void filesrc_drop (void * filesrc);
-extern GstFlowReturn filesrc_fill (void * filesrc, uint64_t offset, void * data, size_t * data_len);
-extern gboolean filesrc_set_uri (void * filesrc, const char *uri);
-extern char * filesrc_get_uri (void * filesrc);
-extern uint64_t filesrc_get_size (void * filesrc);
-extern gboolean filesrc_is_seekable (void * filesrc);
-extern gboolean filesrc_start (void * filesrc);
-extern gboolean filesrc_stop (void * filesrc);
+extern void source_drop (void * filesrc);
+extern GstFlowReturn source_fill (void * filesrc, uint64_t offset, void * data, size_t * data_len);
+extern gboolean source_set_uri (void * filesrc, const char *uri);
+extern char * source_get_uri (void * filesrc);
+extern uint64_t source_get_size (void * filesrc);
+extern gboolean source_is_seekable (void * filesrc);
+extern gboolean source_start (void * filesrc);
+extern gboolean source_stop (void * filesrc);
 
 GST_DEBUG_CATEGORY_STATIC (gst_rsfile_src_debug);
 #define GST_CAT_DEFAULT gst_rsfile_src_debug
@@ -101,7 +101,7 @@ gst_rsfile_src_finalize (GObject * object)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (object);
 
-  filesrc_drop (src->instance);
+  source_drop (src->instance);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -114,7 +114,7 @@ gst_rsfile_src_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_URI:
-      filesrc_set_uri (src->instance, g_value_get_string (value));
+      source_set_uri (src->instance, g_value_get_string (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -130,7 +130,7 @@ gst_rsfile_src_get_property (GObject * object, guint prop_id, GValue * value,
 
   switch (prop_id) {
     case PROP_URI:
-      g_value_take_string (value, filesrc_get_uri (src->instance));
+      g_value_take_string (value, source_get_uri (src->instance));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -149,7 +149,7 @@ gst_rsfile_src_fill (GstBaseSrc * basesrc, guint64 offset, guint length,
 
   gst_buffer_map (buf, &map, GST_MAP_READWRITE);
   size = map.size;
-  ret = filesrc_fill (src->instance, offset, map.data, &size);
+  ret = source_fill (src->instance, offset, map.data, &size);
   gst_buffer_unmap (buf, &map);
   if (ret == GST_FLOW_OK)
     gst_buffer_resize (buf, 0, size);
@@ -162,7 +162,7 @@ gst_rsfile_src_is_seekable (GstBaseSrc * basesrc)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  return filesrc_is_seekable (src->instance);
+  return source_is_seekable (src->instance);
 }
 
 static gboolean
@@ -170,7 +170,7 @@ gst_rsfile_src_get_size (GstBaseSrc * basesrc, guint64 * size)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  *size = filesrc_get_size (src->instance);
+  *size = source_get_size (src->instance);
 
   return TRUE;
 }
@@ -181,7 +181,7 @@ gst_rsfile_src_start (GstBaseSrc * basesrc)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  return filesrc_start (src->instance);
+  return source_start (src->instance);
 }
 
 /* unmap and close the rsfile */
@@ -190,7 +190,7 @@ gst_rsfile_src_stop (GstBaseSrc * basesrc)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (basesrc);
 
-  return filesrc_stop (src->instance);
+  return source_stop (src->instance);
 }
 
 static GstURIType
@@ -212,7 +212,7 @@ gst_rsfile_src_uri_get_uri (GstURIHandler * handler)
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (handler);
 
-  return filesrc_get_uri (src->instance);
+  return source_get_uri (src->instance);
 }
 
 static gboolean
@@ -221,7 +221,7 @@ gst_rsfile_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 {
   GstRsfileSrc *src = GST_RSFILE_SRC (handler);
 
-  if (!filesrc_set_uri (src->instance, uri)) {
+  if (!source_set_uri (src->instance, uri)) {
     g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
           "Can't handle URI '%s'", uri);
     return FALSE;
