@@ -2,16 +2,19 @@
 
 extern crate libc;
 extern crate url;
+extern crate hyper;
 
 #[macro_use]
 pub mod utils;
 pub mod rssource;
 pub mod rsfilesrc;
+pub mod rshttpsrc;
 pub mod rsfilesink;
 
 use utils::*;
 use rssource::Source;
 use rsfilesrc::FileSrc;
+use rshttpsrc::HttpSrc;
 
 use std::os::raw::c_void;
 use libc::{c_char};
@@ -42,6 +45,17 @@ pub extern "C" fn sources_register(plugin: *const c_void) -> GBoolean {
             256 + 100,
             FileSrc::new_ptr,
             CString::new("file").unwrap().as_ptr());
+
+        gst_rs_source_register(plugin,
+            CString::new("rshttpsrc").unwrap().as_ptr(),
+            CString::new("HTTP Source").unwrap().as_ptr(),
+            CString::new("Read HTTP/HTTPS files").unwrap().as_ptr(),
+            CString::new("Source/Network/HTTP").unwrap().as_ptr(),
+            CString::new("Sebastian Dröge <sebastian@centricular.com>").unwrap().as_ptr(),
+            256 + 100,
+            HttpSrc::new_ptr,
+            CString::new("http:https").unwrap().as_ptr());
     }
+
     return GBoolean::True;
 }

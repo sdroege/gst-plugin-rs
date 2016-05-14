@@ -214,9 +214,10 @@ gst_rs_src_uri_get_type (GType type)
 static const gchar *const *
 gst_rs_src_uri_get_protocols (GType type)
 {
-  static const gchar *protocols[] = { "file", NULL };
+  ElementData * data = g_hash_table_lookup (sources, GSIZE_TO_POINTER (type));
+  g_assert (data != NULL);
 
-  return protocols;
+  return (const gchar * const *) data->protocols;
 }
 
 static gchar *
