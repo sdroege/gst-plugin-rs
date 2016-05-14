@@ -84,17 +84,24 @@ impl Source for HttpSrc {
         match self.url {
             None => return false,
             Some(ref url) => {
-                let response = self.client.get(url.clone()).send().unwrap();
-                if response.status.is_success() {
-                    match response.headers.get::<ContentLength>() {
-                        Some(&ContentLength(size)) => self.size = size,
-                        _ => self.size = u64::MAX
+                match self.client.get(url.clone()).send() {
+                    Ok(response) => {
+                        if response.status.is_success() {
+                            self.size = match response.headers.get::<ContentLength>() {
+                                Some(&ContentLength(size)) => size,
+                                _ => u64::MAX
+                            };
+                            self.response = Some(response);
+                            return true;
+                        } else {
+                            println_err!("Failed to fetch {}: {}", url, response.status);
+                            return false;
+                        }
+                    },
+                    Err(err) => {
+                        println_err!("Failed to fetch {}: {}", url, err.to_string());
+                        return false;
                     }
-                    self.response = Some(response);
-                    return true;
-                } else {
-                    println_err!("Failed to fetch {}: {}", url, response.status);
-                    return false;
                 }
             },
         }
