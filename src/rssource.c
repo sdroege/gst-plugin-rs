@@ -16,14 +16,15 @@ static GHashTable *sources;
 
 /* Declarations for Rust code */
 extern gboolean sources_register (void *plugin);
-extern void source_drop (void * filesrc);
-extern GstFlowReturn source_fill (void * filesrc, uint64_t offset, void * data, size_t * data_len);
-extern gboolean source_set_uri (void * filesrc, const char *uri);
-extern char * source_get_uri (void * filesrc);
-extern uint64_t source_get_size (void * filesrc);
-extern gboolean source_is_seekable (void * filesrc);
-extern gboolean source_start (void * filesrc);
-extern gboolean source_stop (void * filesrc);
+extern void source_drop (void * source);
+extern GstFlowReturn source_fill (void * source, uint64_t offset, void * data, size_t * data_len);
+extern gboolean source_do_seek (void * source, uint64_t start, uint64_t stop);
+extern gboolean source_set_uri (void * source, const char *uri);
+extern char * source_get_uri (void * source);
+extern uint64_t source_get_size (void * source);
+extern gboolean source_is_seekable (void * source);
+extern gboolean source_start (void * source);
+extern gboolean source_stop (void * source);
 
 GST_DEBUG_CATEGORY_STATIC (gst_rs_src_debug);
 #define GST_CAT_DEFAULT gst_rs_src_debug
@@ -56,6 +57,7 @@ static gboolean gst_rs_src_is_seekable (GstBaseSrc * src);
 static gboolean gst_rs_src_get_size (GstBaseSrc * src, guint64 * size);
 static GstFlowReturn gst_rs_src_fill (GstBaseSrc * src, guint64 offset,
     guint length, GstBuffer * buf);
+static gboolean gst_rs_src_do_seek (GstBaseSrc * src, GstSegment * segment);
 
 static GObjectClass *parent_class;
 
@@ -95,6 +97,7 @@ gst_rs_src_class_init (GstRsSrcClass * klass)
   gstbasesrc_class->is_seekable = GST_DEBUG_FUNCPTR (gst_rs_src_is_seekable);
   gstbasesrc_class->get_size = GST_DEBUG_FUNCPTR (gst_rs_src_get_size);
   gstbasesrc_class->fill = GST_DEBUG_FUNCPTR (gst_rs_src_fill);
+  gstbasesrc_class->do_seek = GST_DEBUG_FUNCPTR (gst_rs_src_do_seek);
 }
 
 static void
@@ -197,13 +200,25 @@ gst_rs_src_start (GstBaseSrc * basesrc)
   return source_start (src->instance);
 }
 
-/* unmap and close the rs */
 static gboolean
 gst_rs_src_stop (GstBaseSrc * basesrc)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
 
   return source_stop (src->instance);
+}
+
+static gboolean
+gst_rs_src_do_seek (GstBaseSrc * basesrc, GstSegment * segment)
+{
+  GstRsSrc *src = GST_RS_SRC (basesrc);
+  gboolean ret;
+
+  ret = source_do_seek (src->instance, segment->start, segment->stop);
+  if (!ret)
+    return FALSE;
+
+  return GST_BASE_SRC_CLASS (parent_class)->do_seek (basesrc, segment);
 }
 
 static GstURIType

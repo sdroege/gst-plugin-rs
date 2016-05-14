@@ -13,6 +13,9 @@ pub trait Source {
     fn start(&mut self) -> bool;
     fn stop(&mut self) -> bool;
     fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn>;
+    fn do_seek(&mut self, start: u64, stop: u64) -> bool {
+        return true;
+    }
 }
 
 #[no_mangle]
@@ -85,5 +88,12 @@ pub extern "C" fn source_is_seekable(ptr: *mut Box<Source>) -> GBoolean {
     let source: &mut Box<Source> = unsafe { &mut *ptr };
 
     GBoolean::from_bool(source.is_seekable())
+}
+
+#[no_mangle]
+pub extern "C" fn source_do_seek(ptr: *mut Box<Source>, start: u64, stop: u64) -> GBoolean {
+    let source: &mut Box<Source> = unsafe { &mut *ptr };
+
+    GBoolean::from_bool(source.do_seek(start, stop))
 }
 
