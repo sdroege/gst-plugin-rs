@@ -3,9 +3,18 @@ use std::ffi::{CStr, CString};
 use std::ptr;
 use std::u64;
 use std::slice;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::fs::File;
 use std::path::Path;
+
+use std::io::Write;
+
+macro_rules! println_err(
+    ($($arg:tt)*) => { {
+        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
+        r.expect("failed printing to stderr");
+    } }
+);
 
 #[repr(C)]
 pub enum GstFlowReturn {
@@ -36,11 +45,12 @@ impl GBoolean {
 pub struct FileSrc {
     location: Option<String>,
     file: Option<File>,
+    position: u64,
 }
 
 impl FileSrc {
     fn new() -> FileSrc {
-        FileSrc { location: None, file: None }
+        FileSrc { location: None, file: None, position: 0 }
     }
 
     fn set_location(&mut self, location: &Option<String>) {
@@ -59,31 +69,65 @@ impl FileSrc {
         match self.file {
             None => return u64::MAX,
             Some(ref f) => {
-                return f.metadata().unwrap().len();
+                return f.metadata().map(|m| m.len()).unwrap_or(u64::MAX);
             },
         }
     }
 
     fn start(&mut self) -> bool {
-        if self.location.is_none() { return false; }
+        self.file = None;
+        self.position = 0;
 
-        self.file = Some(File::open(Path::new(&self.location.clone().unwrap())).unwrap());
-
-        return true;
+        match self.location {
+            None => return false,
+            Some(ref location) => {
+                match File::open(Path::new(&location.clone())) {
+                    Ok(file) => {
+                        self.file = Some(file);
+                        return true;
+                    },
+                    Err(err) => {
+                        println_err!("Failed to open file '{}': {}", location, err.to_string());
+                        return false;
+                    },
+                }
+            },
+        }
     }
 
     fn stop(&mut self) -> bool {
         self.file = None;
+        self.position = 0;
 
         true
     }
 
-    fn fill(&mut self, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
+    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
         match self.file {
             None => return Err(GstFlowReturn::Error),
             Some(ref mut f) => {
-                // FIXME: Need to return the actual size, handle EOF, etc
-                return Ok(f.read(data).unwrap());
+                if self.position != offset {
+                    match f.seek(SeekFrom::Start(offset)) {
+                        Ok(_) => {
+                            self.position = offset;
+                        },
+                        Err(err) => {
+                            println_err!("Failed to seek to {}: {}", offset, err.to_string());
+                            return Err(GstFlowReturn::Error);
+                        }
+                    }
+                }
+
+                match f.read(data) {
+                    Ok(size) => {
+                        self.position += size as u64;
+                        return Ok(size)
+                    },
+                    Err(err) => {
+                        println_err!("Failed to read at {}: {}", offset, err.to_string());
+                        return Err(GstFlowReturn::Error);
+                    },
+                }
             },
         }
     }
@@ -125,12 +169,12 @@ pub extern "C" fn filesrc_get_location(ptr: *mut FileSrc) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn filesrc_fill(ptr: *mut FileSrc, data_ptr: *mut u8, data_len_ptr: *mut usize) -> GstFlowReturn {
+pub extern "C" fn filesrc_fill(ptr: *mut FileSrc, offset: u64, data_ptr: *mut u8, data_len_ptr: *mut usize) -> GstFlowReturn {
     let filesrc: &mut FileSrc = unsafe { &mut *ptr };
 
     let mut data_len: &mut usize = unsafe { &mut *data_len_ptr };
     let mut data = unsafe { slice::from_raw_parts_mut(data_ptr, *data_len) };
-    match filesrc.fill(data) {
+    match filesrc.fill(offset, data) {
         Ok(actual_len) => {
             *data_len = actual_len;
             GstFlowReturn::Ok
