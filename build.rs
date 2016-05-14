@@ -6,7 +6,7 @@ fn main() {
     let gstbase = pkg_config::probe_library("gstreamer-base-1.0").unwrap();
     let includes = [gstreamer.include_paths, gstbase.include_paths];
 
-    let files = ["src/plugin.c", "src/rssource.c", "src/rsfilesink.c"];
+    let files = ["src/plugin.c", "src/rssource.c", "src/rssink.c"];
 
     let mut config = gcc::Config::new();
     config.include("src");
