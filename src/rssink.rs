@@ -14,6 +14,11 @@ pub trait Sink {
 }
 
 #[no_mangle]
+pub extern "C" fn sink_drop(ptr: *mut Box<Sink>) {
+    unsafe { Box::from_raw(ptr) };
+}
+
+#[no_mangle]
 pub extern "C" fn sink_set_uri(ptr: *mut Box<Sink>, uri_ptr: *const c_char) -> GBoolean{
     let source: &mut Box<Sink> = unsafe { &mut *ptr };
 

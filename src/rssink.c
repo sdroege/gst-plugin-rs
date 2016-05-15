@@ -21,6 +21,7 @@ extern gboolean sink_set_uri (void * filesink, const char *uri);
 extern char * sink_get_uri (void * filesink);
 extern gboolean sink_start (void * filesink);
 extern gboolean sink_stop (void * filesink);
+extern void sink_drop (void * filesink);
 
 GST_DEBUG_CATEGORY_STATIC (gst_rs_sink_debug);
 #define GST_CAT_DEFAULT gst_rs_sink_debug
@@ -39,6 +40,7 @@ enum
 static void gst_rs_sink_uri_handler_init (gpointer g_iface,
     gpointer iface_data);
 
+static void gst_rs_sink_finalize (GObject * object);
 static void gst_rs_sink_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_rs_sink_get_property (GObject * object, guint prop_id,
@@ -64,6 +66,7 @@ gst_rs_sink_class_init (GstRsSinkClass * klass)
   gstelement_class = GST_ELEMENT_CLASS (klass);
   gstbasesink_class = GST_BASE_SINK_CLASS (klass);
 
+  gobject_class->finalize = gst_rs_sink_finalize;
   gobject_class->set_property = gst_rs_sink_set_property;
   gobject_class->get_property = gst_rs_sink_get_property;
 
@@ -94,6 +97,16 @@ gst_rs_sink_init (GstRsSink * sink, GstRsSinkClass * klass)
   gst_base_sink_set_sync (GST_BASE_SINK (sink), FALSE);
 
   sink->instance = data->create_instance ();
+}
+
+static void
+gst_rs_sink_finalize (GObject * object)
+{
+  GstRsSink *sink = GST_RS_SINK (object);
+
+  sink_drop (sink->instance);
+
+  G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
 static void
