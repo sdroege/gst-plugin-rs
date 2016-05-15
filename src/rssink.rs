@@ -1,5 +1,6 @@
 use libc::{c_char};
 use std::ffi::{CStr, CString};
+use std::slice;
 use std::ptr;
 
 use utils::*;
@@ -9,7 +10,7 @@ pub trait Sink {
     fn get_uri(&self) -> Option<String>;
     fn start(&mut self) -> bool;
     fn stop(&mut self) -> bool;
-    fn render(&mut self) -> Result<usize, GstFlowReturn>;
+    fn render(&mut self, data: &mut [u8]) -> GstFlowReturn;
 }
 
 #[no_mangle]
@@ -37,15 +38,11 @@ pub extern "C" fn sink_get_uri(ptr: *mut Box<Sink>) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn sink_render(ptr: *mut Box<Sink>) -> GstFlowReturn {
+pub extern "C" fn sink_render(ptr: *mut Box<Sink>, data_ptr: *mut u8, data_len: usize) -> GstFlowReturn {
     let source: &mut Box<Sink> = unsafe { &mut *ptr };
 
-    match source.render() {
-        Ok(data) => {
-            GstFlowReturn::Ok
-        },
-        Err(ret) => ret,
-    }
+    let mut data = unsafe { slice::from_raw_parts_mut(data_ptr, data_len) };
+    source.render(data)
 }
 
 #[no_mangle]
