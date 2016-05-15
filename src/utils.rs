@@ -2,7 +2,11 @@
 macro_rules! println_err(
     ($($arg:tt)*) => { {
         let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
+        // Ignore when writing fails
+        match r {
+            Ok(_) => (),
+            Err(_) => ()
+        };
     } }
 );
 
