@@ -14,6 +14,9 @@ pub struct FileSink {
     position: u64,
 }
 
+unsafe impl Sync for FileSink {}
+unsafe impl Send for FileSink {}
+
 impl FileSink {
     fn new() -> FileSink {
         FileSink { location: None, file: None, position: 0 }
