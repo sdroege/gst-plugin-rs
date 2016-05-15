@@ -22,6 +22,9 @@ pub struct HttpSrc {
     stop: u64,
 }
 
+unsafe impl Sync for HttpSrc {}
+unsafe impl Send for HttpSrc {}
+
 impl HttpSrc {
     fn new() -> HttpSrc {
         HttpSrc { url: None, client: Client::new(), response: None, seekable: false, position: 0, size: u64::MAX, start: 0, stop: u64::MAX }

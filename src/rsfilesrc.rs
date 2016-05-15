@@ -16,6 +16,9 @@ pub struct FileSrc {
     position: u64,
 }
 
+unsafe impl Sync for FileSrc {}
+unsafe impl Send for FileSrc {}
+
 impl FileSrc {
     fn new() -> FileSrc {
         FileSrc { location: None, file: None, position: 0 }

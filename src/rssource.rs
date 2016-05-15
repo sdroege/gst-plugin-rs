@@ -5,7 +5,7 @@ use std::ptr;
 
 use utils::*;
 
-pub trait Source {
+pub trait Source: Sync + Send {
     fn set_uri(&mut self, uri_str: &Option<String>) -> bool;
     fn get_uri(&self) -> Option<String>;
     fn is_seekable(&self) -> bool;
