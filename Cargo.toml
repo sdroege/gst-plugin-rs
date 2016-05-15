@@ -3,6 +3,8 @@ name = "rsplugin"
 version = "0.1.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 build = "build.rs"
+repository = "https://github.com/sdroege/rsplugin"
+license = "LGPL-2.1+"
 
 [dependencies]
 libc = "0.2"
