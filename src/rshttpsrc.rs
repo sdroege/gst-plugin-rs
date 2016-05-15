@@ -1,5 +1,5 @@
 use std::u64;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::Read;
 use url::Url;
 use hyper::header::{ContentLength, ContentRange, ContentRangeSpec, Range, ByteRangeSpec, AcceptRanges, RangeUnit};
 use hyper::client::Client;

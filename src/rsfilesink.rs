@@ -1,4 +1,3 @@
-use std::u64;
 use std::fs::File;
 use std::path::PathBuf;
 use url::Url;
