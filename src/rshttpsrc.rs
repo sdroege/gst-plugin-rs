@@ -177,7 +177,7 @@ impl Source for HttpSrc {
 
     fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
         if self.position != offset || self.response.is_none() {
-            let stop = self.stop;
+            let stop = self.stop; // FIXME: Borrow checker fail
             if !self.do_request(offset, stop) {
                 println_err!("Failed to seek to {}", offset);
                 return Err(GstFlowReturn::Error);
