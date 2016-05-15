@@ -142,7 +142,7 @@ impl Source for HttpSrc {
     }
 
     fn get_uri(&self) -> Option<String> {
-        self.url.clone().map(|u| u.into_string())
+        self.url.as_ref().map(|u| String::from(u.as_str()))
     }
 
     fn is_seekable(&self) -> bool {

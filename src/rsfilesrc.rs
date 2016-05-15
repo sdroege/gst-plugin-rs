@@ -67,10 +67,10 @@ impl Source for FileSrc {
     }
 
     fn get_uri(&self) -> Option<String> {
-        match self.location {
-            None => None,
-            Some(ref location) => Url::from_file_path(&location).map(|u| u.into_string()).ok()
-        }
+        self.location.as_ref()
+            .map(|l| Url::from_file_path(l).ok())
+            .and_then(|i| i) // join()
+            .map(|u| u.into_string())
     }
 
     fn is_seekable(&self) -> bool {
@@ -78,12 +78,11 @@ impl Source for FileSrc {
     }
 
     fn get_size(&self) -> u64 {
-        match self.file {
-            None => return u64::MAX,
-            Some(ref f) => {
-                return f.metadata().map(|m| m.len()).unwrap_or(u64::MAX);
-            },
-        }
+        self.file.as_ref()
+            .map(|f| f.metadata().ok())
+            .and_then(|i| i) // join()
+            .map(|m| m.len())
+            .unwrap_or(u64::MAX)
     }
 
     fn start(&mut self) -> bool {

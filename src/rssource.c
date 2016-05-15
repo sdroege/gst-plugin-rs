@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 typedef struct {
-  gchar *name;
   gchar *long_name;
   gchar *description;
   gchar *classification;
@@ -305,7 +304,6 @@ gst_rs_source_register (GstPlugin * plugin, const gchar *name, const gchar * lon
   ElementData *data;
 
   data = g_new0 (ElementData, 1);
-  data->name = g_strdup (name);
   data->long_name = g_strdup (long_name);
   data->description = g_strdup (description);
   data->classification = g_strdup (classification);

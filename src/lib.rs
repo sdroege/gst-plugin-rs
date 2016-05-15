@@ -20,7 +20,7 @@ use rssink::Sink;
 use rsfilesink::FileSink;
 
 use std::os::raw::c_void;
-use libc::{c_char};
+use libc::c_char;
 use std::ffi::CString;
 
 extern "C" {
