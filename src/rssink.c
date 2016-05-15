@@ -16,7 +16,7 @@ static GHashTable *sinks;
 
 /* Declarations for Rust code */
 extern gboolean sinks_register (void *plugin);
-extern GstFlowReturn sink_render (void * filesink);
+extern GstFlowReturn sink_render (void * filesink, void * data, size_t data_len);
 extern gboolean sink_set_uri (void * filesink, const char *uri);
 extern char * sink_get_uri (void * filesink);
 extern gboolean sink_start (void * filesink);
@@ -132,9 +132,12 @@ static GstFlowReturn
 gst_rs_sink_render (GstBaseSink * basesink, GstBuffer * buffer)
 {
   GstRsSink *sink = GST_RS_SINK (basesink);
+  GstMapInfo map;
   GstFlowReturn ret;
 
-  ret = sink_render (sink->instance);
+  gst_buffer_map (buffer, &map, GST_MAP_READ);
+  ret = sink_render (sink->instance, map.data, map.size);
+  gst_buffer_unmap (buffer, &map);
 
   return ret;
 }

@@ -76,7 +76,16 @@ impl Sink for FileSink {
         match self.location {
             None => return false,
             Some(ref location) => {
-                return true;
+                match File::create(location.as_path()) {
+                    Ok(file) => {
+                        self.file = Some(file);
+                        return true;
+                    },
+                    Err(err) => {
+                        println_err!("Could not open file for writing '{}': {}", location.to_str().unwrap_or("Non-UTF8 path"), err.to_string());
+                        return false;
+                    }
+                }
             },
         }
     }
@@ -88,8 +97,20 @@ impl Sink for FileSink {
         true
     }
 
-    fn render(&mut self) -> Result<usize, GstFlowReturn> {
-        println!("Got a buffer!");
-        Err(GstFlowReturn::Ok)
+    fn render(&mut self, data: &mut [u8]) -> GstFlowReturn {
+        match self.file {
+            None => return GstFlowReturn::Error,
+            Some(ref mut f) => {
+                match f.write_all(data) {
+                    Ok(_) => {
+                        return GstFlowReturn::Ok
+                    },
+                    Err(err) => {
+                        println_err!("Failed to write: {}", err);
+                        return GstFlowReturn::Error
+                    },
+                }
+            },
+        }
     }
 }
