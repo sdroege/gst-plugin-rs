@@ -62,10 +62,10 @@ impl Sink for FileSink {
     }
 
     fn get_uri(&self) -> Option<String> {
-        match self.location {
-            None => None,
-            Some(ref location) => Url::from_file_path(&location).map(|u| u.into_string()).ok()
-        }
+        self.location.as_ref()
+            .map(|l| Url::from_file_path(l).ok())
+            .and_then(|i| i) // join()
+            .map(|u| u.into_string())
     }
 
     fn start(&mut self) -> bool {
@@ -96,7 +96,7 @@ impl Sink for FileSink {
         true
     }
 
-    fn render(&mut self, data: &mut [u8]) -> GstFlowReturn {
+    fn render(&mut self, data: &[u8]) -> GstFlowReturn {
         match self.file {
             None => return GstFlowReturn::Error,
             Some(ref mut f) => {

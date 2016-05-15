@@ -1,4 +1,4 @@
-use libc::{c_char};
+use libc::c_char;
 use std::ffi::{CStr, CString};
 use std::slice;
 use std::ptr;
@@ -63,8 +63,8 @@ pub extern "C" fn source_fill(ptr: *mut Box<Source>, offset: u64, data_ptr: *mut
 }
 
 #[no_mangle]
-pub extern "C" fn source_get_size(ptr: *mut Box<Source>) -> u64 {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
+pub extern "C" fn source_get_size(ptr: *const Box<Source>) -> u64 {
+    let source: &Box<Source> = unsafe { & *ptr };
 
     return source.get_size();
 }
@@ -84,8 +84,8 @@ pub extern "C" fn source_stop(ptr: *mut Box<Source>) -> GBoolean {
 }
 
 #[no_mangle]
-pub extern "C" fn source_is_seekable(ptr: *mut Box<Source>) -> GBoolean {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
+pub extern "C" fn source_is_seekable(ptr: *const Box<Source>) -> GBoolean {
+    let source: &Box<Source> = unsafe { & *ptr };
 
     GBoolean::from_bool(source.is_seekable())
 }

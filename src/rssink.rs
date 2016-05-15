@@ -1,4 +1,4 @@
-use libc::{c_char};
+use libc::c_char;
 use std::ffi::{CStr, CString};
 use std::slice;
 use std::ptr;
@@ -10,7 +10,7 @@ pub trait Sink {
     fn get_uri(&self) -> Option<String>;
     fn start(&mut self) -> bool;
     fn stop(&mut self) -> bool;
-    fn render(&mut self, data: &mut [u8]) -> GstFlowReturn;
+    fn render(&mut self, data: &[u8]) -> GstFlowReturn;
 }
 
 #[no_mangle]
@@ -26,8 +26,8 @@ pub extern "C" fn sink_set_uri(ptr: *mut Box<Sink>, uri_ptr: *const c_char) -> G
 }
 
 #[no_mangle]
-pub extern "C" fn sink_get_uri(ptr: *mut Box<Sink>) -> *mut c_char {
-    let source: &mut Box<Sink> = unsafe { &mut *ptr };
+pub extern "C" fn sink_get_uri(ptr: *const Box<Sink>) -> *mut c_char {
+    let source: &Box<Sink> = unsafe { &*ptr };
 
     match source.get_uri() {
         Some(ref uri) =>
@@ -38,10 +38,10 @@ pub extern "C" fn sink_get_uri(ptr: *mut Box<Sink>) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn sink_render(ptr: *mut Box<Sink>, data_ptr: *mut u8, data_len: usize) -> GstFlowReturn {
+pub extern "C" fn sink_render(ptr: *mut Box<Sink>, data_ptr: *const u8, data_len: usize) -> GstFlowReturn {
     let source: &mut Box<Sink> = unsafe { &mut *ptr };
 
-    let mut data = unsafe { slice::from_raw_parts_mut(data_ptr, data_len) };
+    let data = unsafe { slice::from_raw_parts(data_ptr, data_len) };
     source.render(data)
 }
 
