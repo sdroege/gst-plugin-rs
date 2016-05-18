@@ -50,14 +50,14 @@ impl FileSink {
 }
 
 impl Sink for FileSink {
-    fn set_uri(&mut self, uri_str: &Option<String>) -> bool {
+    fn set_uri(&mut self, uri_str: &Option<&str>) -> bool {
         match *uri_str {
             None => {
                 self.location = None;
                 return true;
             },
             Some(ref uri_str) => {
-                let uri_parsed = Url::parse(uri_str.as_str());
+                let uri_parsed = Url::parse(uri_str);
                 match uri_parsed {
                     Ok(u) => {
                         match u.to_file_path().ok() {

@@ -123,7 +123,7 @@ impl HttpSrc {
 }
 
 impl Source for HttpSrc {
-    fn set_uri(&mut self, uri_str: &Option<String>) -> bool {
+    fn set_uri(&mut self, uri_str: &Option<&str>) -> bool {
         if self.response.is_some() {
             println_err!("Can't set URI after starting");
             return false;
@@ -135,7 +135,7 @@ impl Source for HttpSrc {
                 return true;
             },
             Some(ref uri_str) => {
-                let uri_parsed = Url::parse(uri_str.as_str());
+                let uri_parsed = Url::parse(uri_str);
                 match uri_parsed {
                     Ok(u) => {
                         if u.scheme() == "http" ||
