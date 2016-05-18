@@ -23,7 +23,7 @@ use std::ptr;
 use utils::*;
 
 pub trait Source: Sync + Send {
-    fn set_uri(&mut self, uri_str: &Option<&str>) -> bool;
+    fn set_uri(&mut self, uri_str: Option<&str>) -> bool;
     fn get_uri(&self) -> Option<String>;
     fn is_seekable(&self) -> bool;
     fn get_size(&self) -> u64;
@@ -45,10 +45,10 @@ pub extern "C" fn source_set_uri(ptr: *mut Box<Source>, uri_ptr: *const c_char) 
     let source: &mut Box<Source> = unsafe { &mut *ptr };
 
     if uri_ptr.is_null() {
-        GBoolean::from_bool(source.set_uri(&None))
+        GBoolean::from_bool(source.set_uri(None))
     } else {
         let uri = unsafe { CStr::from_ptr(uri_ptr) };
-        GBoolean::from_bool(source.set_uri(&Some(uri.to_str().unwrap())))
+        GBoolean::from_bool(source.set_uri(Some(uri.to_str().unwrap())))
     }
 }
 

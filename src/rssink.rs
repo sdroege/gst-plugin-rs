@@ -24,7 +24,7 @@ use std::ptr;
 use utils::*;
 
 pub trait Sink: Sync + Send {
-    fn set_uri(&mut self, uri_str: &Option<&str>) -> bool;
+    fn set_uri(&mut self, uri_str: Option<&str>) -> bool;
     fn get_uri(&self) -> Option<String>;
     fn start(&mut self) -> bool;
     fn stop(&mut self) -> bool;
@@ -41,10 +41,10 @@ pub extern "C" fn sink_set_uri(ptr: *mut Box<Sink>, uri_ptr: *const c_char) -> G
     let source: &mut Box<Sink> = unsafe { &mut *ptr };
 
     if uri_ptr.is_null() {
-        GBoolean::from_bool(source.set_uri(&None))
+        GBoolean::from_bool(source.set_uri(None))
     } else {
         let uri = unsafe { CStr::from_ptr(uri_ptr) };
-        GBoolean::from_bool(source.set_uri(&Some(uri.to_str().unwrap())))
+        GBoolean::from_bool(source.set_uri(Some(uri.to_str().unwrap())))
     }
 }
 

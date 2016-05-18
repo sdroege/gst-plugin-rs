@@ -123,13 +123,13 @@ impl HttpSrc {
 }
 
 impl Source for HttpSrc {
-    fn set_uri(&mut self, uri_str: &Option<&str>) -> bool {
+    fn set_uri(&mut self, uri_str: Option<&str>) -> bool {
         if self.response.is_some() {
             println_err!("Can't set URI after starting");
             return false;
         }
 
-        match *uri_str {
+        match uri_str {
             None => {
                 self.url = None;
                 return true;

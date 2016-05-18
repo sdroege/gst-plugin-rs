@@ -50,8 +50,8 @@ impl FileSink {
 }
 
 impl Sink for FileSink {
-    fn set_uri(&mut self, uri_str: &Option<&str>) -> bool {
-        match *uri_str {
+    fn set_uri(&mut self, uri_str: Option<&str>) -> bool {
+        match uri_str {
             None => {
                 self.location = None;
                 return true;
