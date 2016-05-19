@@ -42,6 +42,8 @@ extern gboolean sink_start (void * filesink);
 extern gboolean sink_stop (void * filesink);
 extern void sink_drop (void * filesink);
 
+extern void cstring_drop (void * str);
+
 GST_DEBUG_CATEGORY_STATIC (gst_rs_sink_debug);
 #define GST_CAT_DEFAULT gst_rs_sink_debug
 
@@ -151,9 +153,13 @@ gst_rs_sink_get_property (GObject * object, guint prop_id, GValue * value,
   GstRsSink *sink = GST_RS_SINK (object);
 
   switch (prop_id) {
-    case PROP_URI:
-      g_value_take_string (value, sink_get_uri (sink->instance));
+    case PROP_URI: {
+      gchar *str = sink_get_uri (sink->instance);
+      g_value_set_string (value, str);
+      if (str)
+        cstring_drop (str);
       break;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;

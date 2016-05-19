@@ -14,6 +14,10 @@
 //  License along with this library; if not, write to the
 //  Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 //  Boston, MA 02110-1301, USA.
+//
+//
+use libc::c_char;
+use std::ffi::CString;
 
 #[macro_export]
 macro_rules! println_err(
@@ -50,5 +54,10 @@ impl GBoolean {
             false => GBoolean::False,
         }
     }
+}
+
+#[no_mangle]
+pub extern "C" fn cstring_drop(ptr: *mut c_char) {
+    unsafe { CString::from_raw(ptr); }
 }
 

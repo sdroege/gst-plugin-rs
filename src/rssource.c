@@ -43,6 +43,8 @@ extern gboolean source_is_seekable (void * source);
 extern gboolean source_start (void * source);
 extern gboolean source_stop (void * source);
 
+extern void cstring_drop (void * str);
+
 GST_DEBUG_CATEGORY_STATIC (gst_rs_src_debug);
 #define GST_CAT_DEFAULT gst_rs_src_debug
 
@@ -161,9 +163,13 @@ gst_rs_src_get_property (GObject * object, guint prop_id, GValue * value,
   GstRsSrc *src = GST_RS_SRC (object);
 
   switch (prop_id) {
-    case PROP_URI:
-      g_value_take_string (value, source_get_uri (src->instance));
+    case PROP_URI: {
+      gchar *str = source_get_uri (src->instance);
+      g_value_set_string (value, str);
+      if (str)
+        cstring_drop (str);
       break;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
