@@ -159,5 +159,9 @@ impl Source for FileSrc {
             },
         }
     }
+
+    fn do_seek(&mut self, _: u64, _: u64) -> bool {
+        true
+    }
 }
 

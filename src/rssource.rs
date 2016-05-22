@@ -30,9 +30,7 @@ pub trait Source: Sync + Send {
     fn start(&mut self) -> bool;
     fn stop(&mut self) -> bool;
     fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn>;
-    fn do_seek(&mut self, _: u64, _: u64) -> bool {
-        return true;
-    }
+    fn do_seek(&mut self, start: u64, stop: u64) -> bool;
 }
 
 #[no_mangle]
