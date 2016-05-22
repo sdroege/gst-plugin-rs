@@ -53,8 +53,8 @@ pub extern "C" fn sink_get_uri(ptr: *const Box<Sink>) -> *mut c_char {
     let source: &Box<Sink> = unsafe { &*ptr };
 
     match source.get_uri() {
-        Some(ref uri) =>
-            CString::new(uri.clone().into_bytes()).unwrap().into_raw(),
+        Some(uri) =>
+            CString::new(uri.into_bytes()).unwrap().into_raw(),
         None =>
             ptr::null_mut()
     }

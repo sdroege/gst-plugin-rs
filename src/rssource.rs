@@ -55,8 +55,8 @@ pub extern "C" fn source_get_uri(ptr: *mut Box<Source>) -> *mut c_char {
     let source: &mut Box<Source> = unsafe { &mut *ptr };
 
     match source.get_uri() {
-        Some(ref uri) =>
-            CString::new(uri.clone().into_bytes()).unwrap().into_raw(),
+        Some(uri) =>
+            CString::new(uri.into_bytes()).unwrap().into_raw(),
         None =>
             ptr::null_mut()
     }
