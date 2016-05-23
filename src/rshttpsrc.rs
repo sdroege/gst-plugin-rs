@@ -24,6 +24,7 @@ use hyper::client::response::Response;
 
 use std::io::Write;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use utils::*;
 use rssource::*;
@@ -33,7 +34,7 @@ pub struct HttpSrc {
     url: Mutex<Option<Url>>,
     client: Client,
     response: Option<Response>,
-    seekable: bool,
+    seekable: AtomicBool,
     position: u64,
     size: u64,
     start: u64,
@@ -45,7 +46,7 @@ unsafe impl Send for HttpSrc {}
 
 impl HttpSrc {
     fn new() -> HttpSrc {
-        HttpSrc { url: Mutex::new(None), client: Client::new(), response: None, seekable: false, position: 0, size: u64::MAX, start: 0, stop: u64::MAX }
+        HttpSrc { url: Mutex::new(None), client: Client::new(), response: None, seekable: AtomicBool::new(false), position: 0, size: u64::MAX, start: 0, stop: u64::MAX }
     }
 
     fn new_source() -> Box<Source> {
@@ -58,7 +59,7 @@ impl HttpSrc {
 
     pub fn do_request(&mut self, start: u64, stop: u64) -> bool {
         self.response = None;
-        self.seekable = false;
+        self.seekable.store(false, Ordering::Relaxed);
         self.position = 0;
         self.size = u64::MAX;
 
@@ -90,7 +91,7 @@ impl HttpSrc {
                                 false
                             };
 
-                            self.seekable = self.size != u64::MAX && accept_byte_ranges;
+                            self.seekable.store(self.size != u64::MAX && accept_byte_ranges, Ordering::Relaxed);
 
                             self.start = start;
                             self.stop = stop;
@@ -170,7 +171,7 @@ impl Source for HttpSrc {
     }
 
     fn is_seekable(&self) -> bool {
-        self.seekable
+        self.seekable.load(Ordering::Relaxed)
     }
 
     fn get_size(&self) -> u64 {
@@ -178,12 +179,12 @@ impl Source for HttpSrc {
     }
 
     fn start(&mut self) -> bool {
-        self.seekable = false;
+        self.seekable.store(false, Ordering::Relaxed);
         return self.do_request(0, u64::MAX);
     }
 
     fn stop(&mut self) -> bool {
-        self.seekable = false;
+        self.seekable.store(false, Ordering::Relaxed);
         self.position = 0;
         self.size = u64::MAX;
         match self.response {
