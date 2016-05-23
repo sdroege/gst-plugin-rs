@@ -24,8 +24,11 @@ use std::ptr;
 use utils::*;
 
 pub trait Sink: Sync + Send {
+    // Called from any thread at any time
     fn set_uri(&mut self, uri_str: Option<&str>) -> bool;
     fn get_uri(&self) -> Option<String>;
+
+    // Called from the streaming thread only
     fn start(&mut self) -> bool;
     fn stop(&mut self) -> bool;
     fn render(&mut self, data: &[u8]) -> GstFlowReturn;

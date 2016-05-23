@@ -23,14 +23,19 @@ use std::ptr;
 use utils::*;
 
 pub trait Source: Sync + Send {
+    // Called from any thread at any time
     fn set_uri(&mut self, uri_str: Option<&str>) -> bool;
     fn get_uri(&self) -> Option<String>;
+
+    // Called from any thread between start/stop
     fn is_seekable(&self) -> bool;
-    fn get_size(&self) -> u64;
+
+    // Called from the streaming thread only
     fn start(&mut self) -> bool;
     fn stop(&mut self) -> bool;
     fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn>;
     fn do_seek(&mut self, start: u64, stop: u64) -> bool;
+    fn get_size(&self) -> u64;
 }
 
 #[no_mangle]
