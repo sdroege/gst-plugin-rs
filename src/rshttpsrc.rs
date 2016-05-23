@@ -23,13 +23,14 @@ use hyper::client::Client;
 use hyper::client::response::Response;
 
 use std::io::Write;
+use std::sync::Mutex;
 
 use utils::*;
 use rssource::*;
 
 #[derive(Debug)]
 pub struct HttpSrc {
-    url: Option<Url>,
+    url: Mutex<Option<Url>>,
     client: Client,
     response: Option<Response>,
     seekable: bool,
@@ -44,7 +45,7 @@ unsafe impl Send for HttpSrc {}
 
 impl HttpSrc {
     fn new() -> HttpSrc {
-        HttpSrc { url: None, client: Client::new(), response: None, seekable: false, position: 0, size: u64::MAX, start: 0, stop: u64::MAX }
+        HttpSrc { url: Mutex::new(None), client: Client::new(), response: None, seekable: false, position: 0, size: u64::MAX, start: 0, stop: u64::MAX }
     }
 
     fn new_source() -> Box<Source> {
@@ -61,7 +62,8 @@ impl HttpSrc {
         self.position = 0;
         self.size = u64::MAX;
 
-        match self.url {
+        let url = self.url.lock().unwrap();
+        match *url {
             None => return false,
             Some(ref url) => {
                 let mut req = self.client.get(url.clone());
@@ -131,7 +133,8 @@ impl Source for HttpSrc {
 
         match uri_str {
             None => {
-                self.url = None;
+                let mut url = self.url.lock().unwrap();
+                *url = None;
                 return true;
             },
             Some(ref uri_str) => {
@@ -140,16 +143,19 @@ impl Source for HttpSrc {
                     Ok(u) => {
                         if u.scheme() == "http" ||
                            u.scheme() == "https" {
-                            self.url = Some(u);
+                            let mut url = self.url.lock().unwrap();
+                            *url = Some(u);
                             return true;
                         } else {
-                            self.url = None;
+                            let mut url = self.url.lock().unwrap();
+                            *url = None;
                             println_err!("Unsupported file URI '{}'", uri_str);
                             return false;
                         }
                     },
                     Err(err) => {
-                        self.url = None;
+                        let mut url = self.url.lock().unwrap();
+                        *url = None;
                         println_err!("Failed to parse URI '{}': {}", uri_str, err);
                         return false;
                     }
@@ -159,7 +165,8 @@ impl Source for HttpSrc {
     }
 
     fn get_uri(&self) -> Option<String> {
-        self.url.as_ref().map(|u| String::from(u.as_str()))
+        let url = self.url.lock().unwrap();
+        (*url).as_ref().map(|u| String::from(u.as_str()))
     }
 
     fn is_seekable(&self) -> bool {

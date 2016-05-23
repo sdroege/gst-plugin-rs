@@ -21,13 +21,14 @@ use std::path::PathBuf;
 use url::Url;
 
 use std::io::Write;
+use std::sync::Mutex;
 
 use utils::*;
 use rssink::*;
 
 #[derive(Debug)]
 pub struct FileSink {
-    location: Option<PathBuf>,
+    location: Mutex<Option<PathBuf>>,
     file: Option<File>,
     position: u64,
 }
@@ -37,7 +38,7 @@ unsafe impl Send for FileSink {}
 
 impl FileSink {
     fn new() -> FileSink {
-        FileSink { location: None, file: None, position: 0 }
+        FileSink { location: Mutex::new(None), file: None, position: 0 }
     }
 
     fn new_source() -> Box<Sink> {
@@ -53,7 +54,8 @@ impl Sink for FileSink {
     fn set_uri(&mut self, uri_str: Option<&str>) -> bool {
         match uri_str {
             None => {
-                self.location = None;
+                let mut location = self.location.lock().unwrap();
+                *location = None;
                 return true;
             },
             Some(ref uri_str) => {
@@ -62,18 +64,21 @@ impl Sink for FileSink {
                     Ok(u) => {
                         match u.to_file_path().ok() {
                             Some(p) => {
-                                self.location = Some(p);
+                                let mut location = self.location.lock().unwrap();
+                                *location = Some(p);
                                 return true;
                             },
                             None => {
-                                self.location = None;
+                                let mut location = self.location.lock().unwrap();
+                                *location = None;
                                 println_err!("Unsupported file URI '{}'", uri_str);
                                 return false;
                             }
                         }
                     },
                     Err(err) => {
-                        self.location = None;
+                        let mut location = self.location.lock().unwrap();
+                        *location = None;
                         println_err!("Failed to parse URI '{}': {}", uri_str, err);
                         return false;
                     }
@@ -83,7 +88,8 @@ impl Sink for FileSink {
     }
 
     fn get_uri(&self) -> Option<String> {
-        self.location.as_ref()
+        let location = self.location.lock().unwrap();
+        (*location).as_ref()
             .map(|l| Url::from_file_path(l).ok())
             .and_then(|i| i) // join()
             .map(|u| u.into_string())
@@ -93,7 +99,8 @@ impl Sink for FileSink {
         self.file = None;
         self.position = 0;
 
-        match self.location {
+        let location = self.location.lock().unwrap();
+        match *location {
             None => return false,
             Some(ref location) => {
                 match File::create(location.as_path()) {

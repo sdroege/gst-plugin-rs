@@ -19,6 +19,7 @@ use std::u64;
 use std::io::{Read, Seek, SeekFrom};
 use std::fs::File;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use url::Url;
 
 use std::io::Write;
@@ -28,7 +29,7 @@ use rssource::*;
 
 #[derive(Debug)]
 pub struct FileSrc {
-    location: Option<PathBuf>,
+    location: Mutex<Option<PathBuf>>,
     file: Option<File>,
     position: u64,
 }
@@ -38,7 +39,7 @@ unsafe impl Send for FileSrc {}
 
 impl FileSrc {
     fn new() -> FileSrc {
-        FileSrc { location: None, file: None, position: 0 }
+        FileSrc { location: Mutex::new(None), file: None, position: 0 }
     }
 
     fn new_source() -> Box<Source> {
@@ -54,7 +55,8 @@ impl Source for FileSrc {
     fn set_uri(&mut self, uri_str: Option<&str>) -> bool {
         match uri_str {
             None => {
-                self.location = None;
+                let mut location = self.location.lock().unwrap();
+                *location = None;
                 return true;
             },
             Some(ref uri_str) => {
@@ -63,18 +65,21 @@ impl Source for FileSrc {
                     Ok(u) => {
                         match u.to_file_path().ok() {
                             Some(p) => {
-                                self.location = Some(p);
+                                let mut location = self.location.lock().unwrap();
+                                *location = Some(p);
                                 return true;
                             },
                             None => {
-                                self.location = None;
+                                let mut location = self.location.lock().unwrap();
+                                *location = None;
                                 println_err!("Unsupported file URI '{}'", uri_str);
                                 return false;
                             }
                         }
                     },
                     Err(err) => {
-                        self.location = None;
+                        let mut location = self.location.lock().unwrap();
+                        *location = None;
                         println_err!("Failed to parse URI '{}': {}", uri_str, err);
                         return false;
                     }
@@ -84,7 +89,8 @@ impl Source for FileSrc {
     }
 
     fn get_uri(&self) -> Option<String> {
-        self.location.as_ref()
+        let location = self.location.lock().unwrap();
+        (*location).as_ref()
             .map(|l| Url::from_file_path(l).ok())
             .and_then(|i| i) // join()
             .map(|u| u.into_string())
@@ -105,8 +111,9 @@ impl Source for FileSrc {
     fn start(&mut self) -> bool {
         self.file = None;
         self.position = 0;
+        let location = self.location.lock().unwrap();
 
-        match self.location {
+        match *location {
             None => return false,
             Some(ref location) => {
                 match File::open(location.as_path()) {
