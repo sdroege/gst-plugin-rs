@@ -126,48 +126,37 @@ impl HttpSrc {
 }
 
 impl Source for HttpSrc {
-    fn set_uri(&mut self, uri_str: Option<&str>) -> bool {
+    fn set_uri(&mut self, uri: Option<Url>) -> bool {
         if self.response.is_some() {
             println_err!("Can't set URI after starting");
             return false;
         }
 
-        match uri_str {
+        match uri {
             None => {
                 let mut url = self.url.lock().unwrap();
                 *url = None;
                 return true;
             },
-            Some(ref uri_str) => {
-                let uri_parsed = Url::parse(uri_str);
-                match uri_parsed {
-                    Ok(u) => {
-                        if u.scheme() == "http" ||
-                           u.scheme() == "https" {
-                            let mut url = self.url.lock().unwrap();
-                            *url = Some(u);
-                            return true;
-                        } else {
-                            let mut url = self.url.lock().unwrap();
-                            *url = None;
-                            println_err!("Unsupported file URI '{}'", uri_str);
-                            return false;
-                        }
-                    },
-                    Err(err) => {
-                        let mut url = self.url.lock().unwrap();
-                        *url = None;
-                        println_err!("Failed to parse URI '{}': {}", uri_str, err);
-                        return false;
-                    }
+            Some(uri) => {
+                if uri.scheme() == "http" ||
+                   uri.scheme() == "https" {
+                    let mut url = self.url.lock().unwrap();
+                    *url = Some(uri);
+                    return true;
+                } else {
+                    let mut url = self.url.lock().unwrap();
+                    *url = None;
+                    println_err!("Unsupported URI '{}'", uri.as_str());
+                    return false;
                 }
             }
         }
     }
 
-    fn get_uri(&self) -> Option<String> {
+    fn get_uri(&self) -> Option<Url> {
         let url = self.url.lock().unwrap();
-        (*url).as_ref().map(|u| String::from(u.as_str()))
+        (*url).as_ref().map(|u| u.clone())
     }
 
     fn is_seekable(&self) -> bool {

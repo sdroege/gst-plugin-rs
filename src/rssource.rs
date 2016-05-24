@@ -19,13 +19,16 @@ use libc::c_char;
 use std::ffi::{CStr, CString};
 use std::slice;
 use std::ptr;
+use std::io::Write;
+
+use url::Url;
 
 use utils::*;
 
 pub trait Source: Sync + Send {
     // Called from any thread at any time
-    fn set_uri(&mut self, uri_str: Option<&str>) -> bool;
-    fn get_uri(&self) -> Option<String>;
+    fn set_uri(&mut self, uri: Option<Url>) -> bool;
+    fn get_uri(&self) -> Option<Url>;
 
     // Called from any thread between start/stop
     fn is_seekable(&self) -> bool;
@@ -50,8 +53,15 @@ pub extern "C" fn source_set_uri(ptr: *mut Box<Source>, uri_ptr: *const c_char) 
     if uri_ptr.is_null() {
         GBoolean::from_bool(source.set_uri(None))
     } else {
-        let uri = unsafe { CStr::from_ptr(uri_ptr) };
-        GBoolean::from_bool(source.set_uri(Some(uri.to_str().unwrap())))
+        let uri_str = unsafe { CStr::from_ptr(uri_ptr) }.to_str().unwrap();
+        match Url::parse(uri_str) {
+            Ok(uri) => GBoolean::from_bool(source.set_uri(Some(uri))),
+            Err(err) => {
+                source.set_uri(None);
+                println_err!("Failed to parse URI '{}': {}", uri_str, err);
+                GBoolean::False
+            }
+        }
     }
 }
 
@@ -61,7 +71,7 @@ pub extern "C" fn source_get_uri(ptr: *mut Box<Source>) -> *mut c_char {
 
     match source.get_uri() {
         Some(uri) =>
-            CString::new(uri.into_bytes()).unwrap().into_raw(),
+            CString::new(uri.into_string().into_bytes()).unwrap().into_raw(),
         None =>
             ptr::null_mut()
     }

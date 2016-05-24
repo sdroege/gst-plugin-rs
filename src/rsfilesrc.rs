@@ -52,35 +52,24 @@ impl FileSrc {
 }
 
 impl Source for FileSrc {
-    fn set_uri(&mut self, uri_str: Option<&str>) -> bool {
-        match uri_str {
+    fn set_uri(&mut self, uri: Option<Url>) -> bool {
+        match uri {
             None => {
                 let mut location = self.location.lock().unwrap();
                 *location = None;
                 return true;
             },
-            Some(ref uri_str) => {
-                let uri_parsed = Url::parse(uri_str);
-                match uri_parsed {
-                    Ok(u) => {
-                        match u.to_file_path().ok() {
-                            Some(p) => {
-                                let mut location = self.location.lock().unwrap();
-                                *location = Some(p);
-                                return true;
-                            },
-                            None => {
-                                let mut location = self.location.lock().unwrap();
-                                *location = None;
-                                println_err!("Unsupported file URI '{}'", uri_str);
-                                return false;
-                            }
-                        }
+            Some(uri) => {
+                match uri.to_file_path().ok() {
+                    Some(p) => {
+                        let mut location = self.location.lock().unwrap();
+                        *location = Some(p);
+                        return true;
                     },
-                    Err(err) => {
+                    None => {
                         let mut location = self.location.lock().unwrap();
                         *location = None;
-                        println_err!("Failed to parse URI '{}': {}", uri_str, err);
+                        println_err!("Unsupported file URI '{}'", uri.as_str());
                         return false;
                     }
                 }
@@ -88,12 +77,11 @@ impl Source for FileSrc {
         }
     }
 
-    fn get_uri(&self) -> Option<String> {
+    fn get_uri(&self) -> Option<Url> {
         let location = self.location.lock().unwrap();
         (*location).as_ref()
             .map(|l| Url::from_file_path(l).ok())
             .and_then(|i| i) // join()
-            .map(|u| u.into_string())
     }
 
     fn is_seekable(&self) -> bool {
