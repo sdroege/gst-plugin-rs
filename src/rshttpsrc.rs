@@ -32,6 +32,7 @@ use rssource::*;
 
 #[derive(Debug)]
 pub struct HttpSrc {
+    controller: SourceController,
     url: Mutex<Option<Url>>,
     client: Client,
     response: Option<Response>,
@@ -46,8 +47,9 @@ unsafe impl Sync for HttpSrc {}
 unsafe impl Send for HttpSrc {}
 
 impl HttpSrc {
-    fn new() -> HttpSrc {
+    fn new(controller: SourceController) -> HttpSrc {
         HttpSrc {
+            controller: controller,
             url: Mutex::new(None),
             client: Client::new(),
             response: None,
@@ -59,11 +61,8 @@ impl HttpSrc {
         }
     }
 
-    fn new_source() -> Box<Source> {
-        Box::new(HttpSrc::new())
-    }
-    pub extern "C" fn new_ptr() -> *mut Box<Source> {
-        let instance = Box::new(HttpSrc::new_source());
+    pub extern "C" fn new_ptr(controller: SourceController) -> *mut Box<Source> {
+        let instance: Box<Box<Source>> = Box::new(Box::new(HttpSrc::new(controller)));
         return Box::into_raw(instance);
     }
 

@@ -29,6 +29,7 @@ use rssource::*;
 
 #[derive(Debug)]
 pub struct FileSrc {
+    controller: SourceController,
     location: Mutex<Option<PathBuf>>,
     file: Option<File>,
     position: u64,
@@ -38,19 +39,17 @@ unsafe impl Sync for FileSrc {}
 unsafe impl Send for FileSrc {}
 
 impl FileSrc {
-    fn new() -> FileSrc {
+    fn new(controller: SourceController) -> FileSrc {
         FileSrc {
+            controller: controller,
             location: Mutex::new(None),
             file: None,
             position: 0,
         }
     }
 
-    fn new_source() -> Box<Source> {
-        Box::new(FileSrc::new())
-    }
-    pub extern "C" fn new_ptr() -> *mut Box<Source> {
-        let instance = Box::new(FileSrc::new_source());
+    pub extern "C" fn new_ptr(controller: SourceController) -> *mut Box<Source> {
+        let instance: Box<Box<Source>> = Box::new(Box::new(FileSrc::new(controller)));
         return Box::into_raw(instance);
     }
 }

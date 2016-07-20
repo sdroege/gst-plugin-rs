@@ -17,6 +17,7 @@
 //  Boston, MA 02110-1301, USA.
 
 use libc::c_char;
+use std::os::raw::c_void;
 use std::ffi::{CStr, CString};
 use std::slice;
 use std::ptr;
@@ -25,6 +26,17 @@ use std::io::Write;
 use url::Url;
 
 use utils::*;
+
+#[derive(Debug)]
+pub struct SinkController {
+    sink: *mut c_void,
+}
+
+impl SinkController {
+    fn new(sink: *mut c_void) -> SinkController {
+        SinkController { sink: sink }
+    }
+}
 
 pub trait Sink: Sync + Send {
     // Called from any thread at any time
@@ -35,6 +47,14 @@ pub trait Sink: Sync + Send {
     fn start(&mut self) -> bool;
     fn stop(&mut self) -> bool;
     fn render(&mut self, data: &[u8]) -> GstFlowReturn;
+}
+
+#[no_mangle]
+pub extern "C" fn sink_new(sink: *mut c_void,
+                           create_instance: extern "C" fn(controller: SinkController)
+                                                          -> *mut Box<Sink>)
+                           -> *mut Box<Sink> {
+    create_instance(SinkController::new(sink))
 }
 
 #[no_mangle]

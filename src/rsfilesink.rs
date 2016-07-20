@@ -28,6 +28,7 @@ use rssink::*;
 
 #[derive(Debug)]
 pub struct FileSink {
+    controller: SinkController,
     location: Mutex<Option<PathBuf>>,
     file: Option<File>,
     position: u64,
@@ -37,19 +38,17 @@ unsafe impl Sync for FileSink {}
 unsafe impl Send for FileSink {}
 
 impl FileSink {
-    fn new() -> FileSink {
+    fn new(controller: SinkController) -> FileSink {
         FileSink {
+            controller: controller,
             location: Mutex::new(None),
             file: None,
             position: 0,
         }
     }
 
-    fn new_source() -> Box<Sink> {
-        Box::new(FileSink::new())
-    }
-    pub extern "C" fn new_ptr() -> *mut Box<Sink> {
-        let instance = Box::new(FileSink::new_source());
+    pub extern "C" fn new_ptr(controller: SinkController) -> *mut Box<Sink> {
+        let instance: Box<Box<Sink>> = Box::new(Box::new(FileSink::new(controller)));
         return Box::into_raw(instance);
     }
 }

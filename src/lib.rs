@@ -31,10 +31,10 @@ pub mod rshttpsrc;
 pub mod rsfilesink;
 
 use utils::*;
-use rssource::Source;
+use rssource::{Source, SourceController};
 use rsfilesrc::FileSrc;
 use rshttpsrc::HttpSrc;
-use rssink::Sink;
+use rssink::{Sink, SinkController};
 use rsfilesink::FileSink;
 
 use std::os::raw::c_void;
@@ -49,7 +49,8 @@ extern "C" {
                               classification: *const c_char,
                               author: *const c_char,
                               rank: i32,
-                              create_instance: extern "C" fn() -> *mut Box<Source>,
+                              create_instance: extern "C" fn(controller: SourceController)
+                                                             -> *mut Box<Source>,
                               protocols: *const c_char,
                               push_only: GBoolean)
                               -> GBoolean;
@@ -63,7 +64,8 @@ extern "C" {
                             classification: *const c_char,
                             author: *const c_char,
                             rank: i32,
-                            create_instance: extern "C" fn() -> *mut Box<Sink>,
+                            create_instance: extern "C" fn(controller: SinkController)
+                                                           -> *mut Box<Sink>,
                             protocols: *const c_char)
                             -> GBoolean;
 }

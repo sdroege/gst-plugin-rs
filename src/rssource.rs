@@ -16,6 +16,7 @@
 //  Boston, MA 02110-1301, USA.
 
 use libc::c_char;
+use std::os::raw::c_void;
 use std::ffi::{CStr, CString};
 use std::slice;
 use std::ptr;
@@ -24,6 +25,17 @@ use std::io::Write;
 use url::Url;
 
 use utils::*;
+
+#[derive(Debug)]
+pub struct SourceController {
+    source: *mut c_void,
+}
+
+impl SourceController {
+    fn new(source: *mut c_void) -> SourceController {
+        SourceController { source: source }
+    }
+}
 
 pub trait Source: Sync + Send {
     // Called from any thread at any time
@@ -39,6 +51,14 @@ pub trait Source: Sync + Send {
     fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn>;
     fn do_seek(&mut self, start: u64, stop: u64) -> bool;
     fn get_size(&self) -> u64;
+}
+
+#[no_mangle]
+pub extern "C" fn source_new(source: *mut c_void,
+                             create_instance: extern "C" fn(controller: SourceController)
+                                                            -> *mut Box<Source>)
+                             -> *mut Box<Source> {
+    create_instance(SourceController::new(source))
 }
 
 #[no_mangle]

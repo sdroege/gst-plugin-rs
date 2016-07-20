@@ -27,13 +27,14 @@ typedef struct
   gchar *description;
   gchar *classification;
   gchar *author;
-  void *(*create_instance) (void);
+  void *create_instance;
   gchar **protocols;
 } ElementData;
 static GHashTable *sources;
 
 /* Declarations for Rust code */
 extern gboolean sources_register (void *plugin);
+extern void *source_new (GstRsSrc * source, void *create_instance);
 extern void source_drop (void *source);
 extern GstFlowReturn source_fill (void *source, uint64_t offset, void *data,
     size_t * data_len);
@@ -127,7 +128,7 @@ gst_rs_src_init (GstRsSrc * src, GstRsSrcClass * klass)
 
   gst_base_src_set_blocksize (GST_BASE_SRC (src), 4096);
 
-  src->instance = data->create_instance ();
+  src->instance = source_new (src, data->create_instance);
 }
 
 static void
@@ -308,8 +309,7 @@ gboolean
 gst_rs_source_register (GstPlugin * plugin, const gchar * name,
     const gchar * long_name, const gchar * description,
     const gchar * classification, const gchar * author, GstRank rank,
-    void *(*create_instance) (void), const gchar * protocols,
-    gboolean push_only)
+    void *create_instance, const gchar * protocols, gboolean push_only)
 {
   GTypeInfo type_info = {
     sizeof (GstRsSrcClass),

@@ -29,13 +29,14 @@ typedef struct
   gchar *description;
   gchar *classification;
   gchar *author;
-  void *(*create_instance) (void);
+  void *create_instance;
   gchar **protocols;
 } ElementData;
 static GHashTable *sinks;
 
 /* Declarations for Rust code */
 extern gboolean sinks_register (void *plugin);
+extern void *sink_new (GstRsSink * sink, void *create_instance);
 extern GstFlowReturn sink_render (void *filesink, void *data, size_t data_len);
 extern gboolean sink_set_uri (void *filesink, const char *uri);
 extern char *sink_get_uri (void *filesink);
@@ -118,7 +119,7 @@ gst_rs_sink_init (GstRsSink * sink, GstRsSinkClass * klass)
 
   gst_base_sink_set_sync (GST_BASE_SINK (sink), FALSE);
 
-  sink->instance = data->create_instance ();
+  sink->instance = sink_new (sink, data->create_instance);
 }
 
 static void
@@ -263,7 +264,7 @@ gboolean
 gst_rs_sink_register (GstPlugin * plugin, const gchar * name,
     const gchar * long_name, const gchar * description,
     const gchar * classification, const gchar * author, GstRank rank,
-    void *(*create_instance) (void), const gchar * protocols)
+    void *create_instance, const gchar * protocols)
 {
   GTypeInfo type_info = {
     sizeof (GstRsSinkClass),
