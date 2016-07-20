@@ -37,12 +37,13 @@ static GHashTable *sinks;
 /* Declarations for Rust code */
 extern gboolean sinks_register (void *plugin);
 extern void *sink_new (GstRsSink * sink, void *create_instance);
-extern GstFlowReturn sink_render (void *filesink, void *data, size_t data_len);
-extern gboolean sink_set_uri (void *filesink, const char *uri);
-extern char *sink_get_uri (void *filesink);
-extern gboolean sink_start (void *filesink);
-extern gboolean sink_stop (void *filesink);
-extern void sink_drop (void *filesink);
+extern GstFlowReturn sink_render (GstRsSink * sink, void *rssink, void *data,
+    size_t data_len);
+extern gboolean sink_set_uri (GstRsSink * sink, void *rssink, const char *uri);
+extern char *sink_get_uri (GstRsSink * sink, void *rssink);
+extern gboolean sink_start (GstRsSink * sink, void *rssink);
+extern gboolean sink_stop (GstRsSink * sink, void *rssink);
+extern void sink_drop (GstRsSink * sink, void *rssink);
 
 extern void cstring_drop (void *str);
 
@@ -127,7 +128,7 @@ gst_rs_sink_finalize (GObject * object)
 {
   GstRsSink *sink = GST_RS_SINK (object);
 
-  sink_drop (sink->instance);
+  sink_drop (sink, sink->instance);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -140,7 +141,7 @@ gst_rs_sink_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_URI:
-      sink_set_uri (sink->instance, g_value_get_string (value));
+      sink_set_uri (sink, sink->instance, g_value_get_string (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -156,7 +157,7 @@ gst_rs_sink_get_property (GObject * object, guint prop_id, GValue * value,
 
   switch (prop_id) {
     case PROP_URI:{
-      gchar *str = sink_get_uri (sink->instance);
+      gchar *str = sink_get_uri (sink, sink->instance);
       g_value_set_string (value, str);
       if (str)
         cstring_drop (str);
@@ -176,7 +177,7 @@ gst_rs_sink_render (GstBaseSink * basesink, GstBuffer * buffer)
   GstFlowReturn ret;
 
   gst_buffer_map (buffer, &map, GST_MAP_READ);
-  ret = sink_render (sink->instance, map.data, map.size);
+  ret = sink_render (sink, sink->instance, map.data, map.size);
   gst_buffer_unmap (buffer, &map);
 
   return ret;
@@ -188,7 +189,7 @@ gst_rs_sink_start (GstBaseSink * basesink)
 {
   GstRsSink *sink = GST_RS_SINK (basesink);
 
-  return sink_start (sink->instance);
+  return sink_start (sink, sink->instance);
 }
 
 /* unmap and close the rs */
@@ -197,7 +198,7 @@ gst_rs_sink_stop (GstBaseSink * basesink)
 {
   GstRsSink *sink = GST_RS_SINK (basesink);
 
-  return sink_stop (sink->instance);
+  return sink_stop (sink, sink->instance);
 }
 
 static GstURIType
@@ -220,7 +221,7 @@ gst_rs_sink_uri_get_uri (GstURIHandler * handler)
 {
   GstRsSink *sink = GST_RS_SINK (handler);
 
-  return sink_get_uri (sink->instance);
+  return sink_get_uri (sink, sink->instance);
 }
 
 static gboolean
@@ -229,7 +230,7 @@ gst_rs_sink_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 {
   GstRsSink *sink = GST_RS_SINK (handler);
 
-  if (!sink_set_uri (sink->instance, uri)) {
+  if (!sink_set_uri (sink, sink->instance, uri)) {
     g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
         "Can't handle URI '%s'", uri);
     return FALSE;

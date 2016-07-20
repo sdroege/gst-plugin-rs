@@ -35,16 +35,18 @@ static GHashTable *sources;
 /* Declarations for Rust code */
 extern gboolean sources_register (void *plugin);
 extern void *source_new (GstRsSrc * source, void *create_instance);
-extern void source_drop (void *source);
-extern GstFlowReturn source_fill (void *source, uint64_t offset, void *data,
-    size_t * data_len);
-extern gboolean source_do_seek (void *source, uint64_t start, uint64_t stop);
-extern gboolean source_set_uri (void *source, const char *uri);
-extern char *source_get_uri (void *source);
-extern uint64_t source_get_size (void *source);
-extern gboolean source_is_seekable (void *source);
-extern gboolean source_start (void *source);
-extern gboolean source_stop (void *source);
+extern void source_drop (GstRsSrc * source, void *rssource);
+extern GstFlowReturn source_fill (GstRsSrc * source, void *rssource,
+    uint64_t offset, void *data, size_t * data_len);
+extern gboolean source_do_seek (GstRsSrc * source, void *rssource,
+    uint64_t start, uint64_t stop);
+extern gboolean source_set_uri (GstRsSrc * source, void *rssource,
+    const char *uri);
+extern char *rssource_get_uri (GstRsSrc * source, void *rssource);
+extern uint64_t source_get_size (GstRsSrc * source, void *rssource);
+extern gboolean source_is_seekable (GstRsSrc * source, void *rssource);
+extern gboolean source_start (GstRsSrc * source, void *rssource);
+extern gboolean source_stop (GstRsSrc * source, void *rssource);
 
 extern void cstring_drop (void *str);
 
@@ -136,7 +138,7 @@ gst_rs_src_finalize (GObject * object)
 {
   GstRsSrc *src = GST_RS_SRC (object);
 
-  source_drop (src->instance);
+  source_drop (src, src->instance);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -149,7 +151,7 @@ gst_rs_src_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_URI:
-      source_set_uri (src->instance, g_value_get_string (value));
+      source_set_uri (src, src->instance, g_value_get_string (value));
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -189,7 +191,7 @@ gst_rs_src_fill (GstBaseSrc * basesrc, guint64 offset, guint length,
   gst_buffer_map (buf, &map, GST_MAP_READWRITE);
   size = length;
   map_size = map.size;
-  ret = source_fill (src->instance, offset, map.data, &size);
+  ret = source_fill (src, src->instance, offset, map.data, &size);
   gst_buffer_unmap (buf, &map);
   if (ret == GST_FLOW_OK && size != map_size)
     gst_buffer_resize (buf, 0, size);
@@ -202,7 +204,7 @@ gst_rs_src_is_seekable (GstBaseSrc * basesrc)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
 
-  return source_is_seekable (src->instance);
+  return source_is_seekable (src, src->instance);
 }
 
 static gboolean
@@ -210,7 +212,7 @@ gst_rs_src_get_size (GstBaseSrc * basesrc, guint64 * size)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
 
-  *size = source_get_size (src->instance);
+  *size = source_get_size (src, src->instance);
 
   return TRUE;
 }
@@ -221,7 +223,7 @@ gst_rs_src_start (GstBaseSrc * basesrc)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
 
-  return source_start (src->instance);
+  return source_start (src, src->instance);
 }
 
 static gboolean
@@ -229,7 +231,7 @@ gst_rs_src_stop (GstBaseSrc * basesrc)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
 
-  return source_stop (src->instance);
+  return source_stop (src, src->instance);
 }
 
 static gboolean
@@ -238,7 +240,7 @@ gst_rs_src_do_seek (GstBaseSrc * basesrc, GstSegment * segment)
   GstRsSrc *src = GST_RS_SRC (basesrc);
   gboolean ret;
 
-  ret = source_do_seek (src->instance, segment->start, segment->stop);
+  ret = source_do_seek (src, src->instance, segment->start, segment->stop);
   if (!ret)
     return FALSE;
 
@@ -265,7 +267,7 @@ gst_rs_src_uri_get_uri (GstURIHandler * handler)
 {
   GstRsSrc *src = GST_RS_SRC (handler);
 
-  return source_get_uri (src->instance);
+  return source_get_uri (src, src->instance);
 }
 
 static gboolean
@@ -274,7 +276,7 @@ gst_rs_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 {
   GstRsSrc *src = GST_RS_SRC (handler);
 
-  if (!source_set_uri (src->instance, uri)) {
+  if (!source_set_uri (src, src->instance, uri)) {
     g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
         "Can't handle URI '%s'", uri);
     return FALSE;

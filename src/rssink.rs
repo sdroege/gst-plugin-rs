@@ -58,12 +58,15 @@ pub extern "C" fn sink_new(sink: *mut c_void,
 }
 
 #[no_mangle]
-pub extern "C" fn sink_drop(ptr: *mut Box<Sink>) {
+pub extern "C" fn sink_drop(sink: *mut c_void, ptr: *mut Box<Sink>) {
     unsafe { Box::from_raw(ptr) };
 }
 
 #[no_mangle]
-pub extern "C" fn sink_set_uri(ptr: *mut Box<Sink>, uri_ptr: *const c_char) -> GBoolean {
+pub extern "C" fn sink_set_uri(sink: *mut c_void,
+                               ptr: *mut Box<Sink>,
+                               uri_ptr: *const c_char)
+                               -> GBoolean {
     let sink: &mut Box<Sink> = unsafe { &mut *ptr };
 
     if uri_ptr.is_null() {
@@ -82,7 +85,7 @@ pub extern "C" fn sink_set_uri(ptr: *mut Box<Sink>, uri_ptr: *const c_char) -> G
 }
 
 #[no_mangle]
-pub extern "C" fn sink_get_uri(ptr: *const Box<Sink>) -> *mut c_char {
+pub extern "C" fn sink_get_uri(sink: *mut c_void, ptr: *const Box<Sink>) -> *mut c_char {
     let sink: &Box<Sink> = unsafe { &*ptr };
 
     match sink.get_uri() {
@@ -92,7 +95,8 @@ pub extern "C" fn sink_get_uri(ptr: *const Box<Sink>) -> *mut c_char {
 }
 
 #[no_mangle]
-pub extern "C" fn sink_render(ptr: *mut Box<Sink>,
+pub extern "C" fn sink_render(sink: *mut c_void,
+                              ptr: *mut Box<Sink>,
                               data_ptr: *const u8,
                               data_len: usize)
                               -> GstFlowReturn {
@@ -103,14 +107,14 @@ pub extern "C" fn sink_render(ptr: *mut Box<Sink>,
 }
 
 #[no_mangle]
-pub extern "C" fn sink_start(ptr: *mut Box<Sink>) -> GBoolean {
+pub extern "C" fn sink_start(sink: *mut c_void, ptr: *mut Box<Sink>) -> GBoolean {
     let sink: &mut Box<Sink> = unsafe { &mut *ptr };
 
     GBoolean::from_bool(sink.start())
 }
 
 #[no_mangle]
-pub extern "C" fn sink_stop(ptr: *mut Box<Sink>) -> GBoolean {
+pub extern "C" fn sink_stop(sink: *mut c_void, ptr: *mut Box<Sink>) -> GBoolean {
     let sink: &mut Box<Sink> = unsafe { &mut *ptr };
 
     GBoolean::from_bool(sink.stop())
