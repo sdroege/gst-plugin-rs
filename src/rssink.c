@@ -22,27 +22,28 @@
 #include <string.h>
 #include <stdint.h>
 
-typedef struct {
+typedef struct
+{
   gchar *name;
   gchar *long_name;
   gchar *description;
   gchar *classification;
   gchar *author;
-  void * (*create_instance) (void);
+  void *(*create_instance) (void);
   gchar **protocols;
 } ElementData;
 static GHashTable *sinks;
 
 /* Declarations for Rust code */
 extern gboolean sinks_register (void *plugin);
-extern GstFlowReturn sink_render (void * filesink, void * data, size_t data_len);
-extern gboolean sink_set_uri (void * filesink, const char *uri);
-extern char * sink_get_uri (void * filesink);
-extern gboolean sink_start (void * filesink);
-extern gboolean sink_stop (void * filesink);
-extern void sink_drop (void * filesink);
+extern GstFlowReturn sink_render (void *filesink, void *data, size_t data_len);
+extern gboolean sink_set_uri (void *filesink, const char *uri);
+extern char *sink_get_uri (void *filesink);
+extern gboolean sink_start (void *filesink);
+extern gboolean sink_stop (void *filesink);
+extern void sink_drop (void *filesink);
 
-extern void cstring_drop (void * str);
+extern void cstring_drop (void *str);
 
 GST_DEBUG_CATEGORY_STATIC (gst_rs_sink_debug);
 #define GST_CAT_DEFAULT gst_rs_sink_debug
@@ -70,7 +71,8 @@ static void gst_rs_sink_get_property (GObject * object, guint prop_id,
 static gboolean gst_rs_sink_start (GstBaseSink * basesink);
 static gboolean gst_rs_sink_stop (GstBaseSink * basesink);
 
-static GstFlowReturn gst_rs_sink_render (GstBaseSink * sink, GstBuffer * buffer);
+static GstFlowReturn gst_rs_sink_render (GstBaseSink * sink,
+    GstBuffer * buffer);
 
 static GObjectClass *parent_class;
 
@@ -80,7 +82,8 @@ gst_rs_sink_class_init (GstRsSinkClass * klass)
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
   GstBaseSinkClass *gstbasesink_class;
-  ElementData * data = g_hash_table_lookup (sinks, GSIZE_TO_POINTER (G_TYPE_FROM_CLASS (klass)));
+  ElementData *data =
+      g_hash_table_lookup (sinks, GSIZE_TO_POINTER (G_TYPE_FROM_CLASS (klass)));
   g_assert (data != NULL);
 
   gobject_class = G_OBJECT_CLASS (klass);
@@ -98,10 +101,7 @@ gst_rs_sink_class_init (GstRsSinkClass * klass)
           GST_PARAM_MUTABLE_READY));
 
   gst_element_class_set_static_metadata (gstelement_class,
-      data->long_name,
-      data->classification,
-      data->description,
-      data->author);
+      data->long_name, data->classification, data->description, data->author);
   gst_element_class_add_static_pad_template (gstelement_class, &sink_template);
 
   gstbasesink_class->start = GST_DEBUG_FUNCPTR (gst_rs_sink_start);
@@ -112,7 +112,8 @@ gst_rs_sink_class_init (GstRsSinkClass * klass)
 static void
 gst_rs_sink_init (GstRsSink * sink, GstRsSinkClass * klass)
 {
-  ElementData * data = g_hash_table_lookup (sinks, GSIZE_TO_POINTER (G_TYPE_FROM_CLASS (klass)));
+  ElementData *data =
+      g_hash_table_lookup (sinks, GSIZE_TO_POINTER (G_TYPE_FROM_CLASS (klass)));
   g_assert (data != NULL);
 
   gst_base_sink_set_sync (GST_BASE_SINK (sink), FALSE);
@@ -153,7 +154,7 @@ gst_rs_sink_get_property (GObject * object, guint prop_id, GValue * value,
   GstRsSink *sink = GST_RS_SINK (object);
 
   switch (prop_id) {
-    case PROP_URI: {
+    case PROP_URI:{
       gchar *str = sink_get_uri (sink->instance);
       g_value_set_string (value, str);
       if (str)
@@ -207,7 +208,7 @@ gst_rs_sink_uri_get_type (GType type)
 static const gchar *const *
 gst_rs_sink_uri_get_protocols (GType type)
 {
-  ElementData * data = g_hash_table_lookup (sinks, GSIZE_TO_POINTER (type));
+  ElementData *data = g_hash_table_lookup (sinks, GSIZE_TO_POINTER (type));
   g_assert (data != NULL);
 
   return (const gchar * const *) data->protocols;
@@ -229,7 +230,7 @@ gst_rs_sink_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 
   if (!sink_set_uri (sink->instance, uri)) {
     g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
-          "Can't handle URI '%s'", uri);
+        "Can't handle URI '%s'", uri);
     return FALSE;
   }
 
@@ -259,7 +260,10 @@ gst_rs_sink_plugin_init (GstPlugin * plugin)
 }
 
 gboolean
-gst_rs_sink_register (GstPlugin * plugin, const gchar *name, const gchar * long_name, const gchar * description, const gchar * classification, const gchar * author, GstRank rank, void * (*create_instance) (void), const gchar *protocols)
+gst_rs_sink_register (GstPlugin * plugin, const gchar * name,
+    const gchar * long_name, const gchar * description,
+    const gchar * classification, const gchar * author, GstRank rank,
+    void *(*create_instance) (void), const gchar * protocols)
 {
   GTypeInfo type_info = {
     sizeof (GstRsSinkClass),

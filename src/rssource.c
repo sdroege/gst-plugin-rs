@@ -21,29 +21,31 @@
 #include <string.h>
 #include <stdint.h>
 
-typedef struct {
+typedef struct
+{
   gchar *long_name;
   gchar *description;
   gchar *classification;
   gchar *author;
-  void * (*create_instance) (void);
+  void *(*create_instance) (void);
   gchar **protocols;
 } ElementData;
 static GHashTable *sources;
 
 /* Declarations for Rust code */
 extern gboolean sources_register (void *plugin);
-extern void source_drop (void * source);
-extern GstFlowReturn source_fill (void * source, uint64_t offset, void * data, size_t * data_len);
-extern gboolean source_do_seek (void * source, uint64_t start, uint64_t stop);
-extern gboolean source_set_uri (void * source, const char *uri);
-extern char * source_get_uri (void * source);
-extern uint64_t source_get_size (void * source);
-extern gboolean source_is_seekable (void * source);
-extern gboolean source_start (void * source);
-extern gboolean source_stop (void * source);
+extern void source_drop (void *source);
+extern GstFlowReturn source_fill (void *source, uint64_t offset, void *data,
+    size_t * data_len);
+extern gboolean source_do_seek (void *source, uint64_t start, uint64_t stop);
+extern gboolean source_set_uri (void *source, const char *uri);
+extern char *source_get_uri (void *source);
+extern uint64_t source_get_size (void *source);
+extern gboolean source_is_seekable (void *source);
+extern gboolean source_start (void *source);
+extern gboolean source_stop (void *source);
 
-extern void cstring_drop (void * str);
+extern void cstring_drop (void *str);
 
 GST_DEBUG_CATEGORY_STATIC (gst_rs_src_debug);
 #define GST_CAT_DEFAULT gst_rs_src_debug
@@ -59,8 +61,7 @@ enum
   PROP_URI
 };
 
-static void gst_rs_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_rs_src_uri_handler_init (gpointer g_iface, gpointer iface_data);
 
 static void gst_rs_src_finalize (GObject * object);
 
@@ -86,7 +87,8 @@ gst_rs_src_class_init (GstRsSrcClass * klass)
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
   GstBaseSrcClass *gstbasesrc_class;
-  ElementData * data = g_hash_table_lookup (sources, GSIZE_TO_POINTER (G_TYPE_FROM_CLASS (klass)));
+  ElementData *data = g_hash_table_lookup (sources,
+      GSIZE_TO_POINTER (G_TYPE_FROM_CLASS (klass)));
   g_assert (data != NULL);
 
   gobject_class = G_OBJECT_CLASS (klass);
@@ -105,10 +107,7 @@ gst_rs_src_class_init (GstRsSrcClass * klass)
   gobject_class->finalize = gst_rs_src_finalize;
 
   gst_element_class_set_static_metadata (gstelement_class,
-      data->long_name,
-      data->classification,
-      data->description,
-      data->author);
+      data->long_name, data->classification, data->description, data->author);
   gst_element_class_add_static_pad_template (gstelement_class, &src_template);
 
   gstbasesrc_class->start = GST_DEBUG_FUNCPTR (gst_rs_src_start);
@@ -122,7 +121,8 @@ gst_rs_src_class_init (GstRsSrcClass * klass)
 static void
 gst_rs_src_init (GstRsSrc * src, GstRsSrcClass * klass)
 {
-  ElementData * data = g_hash_table_lookup (sources, GSIZE_TO_POINTER (G_TYPE_FROM_CLASS (klass)));
+  ElementData *data = g_hash_table_lookup (sources,
+      GSIZE_TO_POINTER (G_TYPE_FROM_CLASS (klass)));
   g_assert (data != NULL);
 
   gst_base_src_set_blocksize (GST_BASE_SRC (src), 4096);
@@ -163,7 +163,7 @@ gst_rs_src_get_property (GObject * object, guint prop_id, GValue * value,
   GstRsSrc *src = GST_RS_SRC (object);
 
   switch (prop_id) {
-    case PROP_URI: {
+    case PROP_URI:{
       gchar *str = source_get_uri (src->instance);
       g_value_set_string (value, str);
       if (str)
@@ -253,7 +253,7 @@ gst_rs_src_uri_get_type (GType type)
 static const gchar *const *
 gst_rs_src_uri_get_protocols (GType type)
 {
-  ElementData * data = g_hash_table_lookup (sources, GSIZE_TO_POINTER (type));
+  ElementData *data = g_hash_table_lookup (sources, GSIZE_TO_POINTER (type));
   g_assert (data != NULL);
 
   return (const gchar * const *) data->protocols;
@@ -275,7 +275,7 @@ gst_rs_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 
   if (!source_set_uri (src->instance, uri)) {
     g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
-          "Can't handle URI '%s'", uri);
+        "Can't handle URI '%s'", uri);
     return FALSE;
   }
 
@@ -305,7 +305,11 @@ gst_rs_source_plugin_init (GstPlugin * plugin)
 }
 
 gboolean
-gst_rs_source_register (GstPlugin * plugin, const gchar *name, const gchar * long_name, const gchar * description, const gchar * classification, const gchar * author, GstRank rank, void * (*create_instance) (void), const gchar *protocols, gboolean push_only)
+gst_rs_source_register (GstPlugin * plugin, const gchar * name,
+    const gchar * long_name, const gchar * description,
+    const gchar * classification, const gchar * author, GstRank rank,
+    void *(*create_instance) (void), const gchar * protocols,
+    gboolean push_only)
 {
   GTypeInfo type_info = {
     sizeof (GstRsSrcClass),
@@ -336,7 +340,9 @@ gst_rs_source_register (GstPlugin * plugin, const gchar *name, const gchar * lon
   data->protocols = g_strsplit (protocols, ":", -1);
 
   type_name = g_strconcat ("RsSrc-", name, NULL);
-  type = g_type_register_static (push_only ? GST_TYPE_PUSH_SRC : GST_TYPE_BASE_SRC, type_name, &type_info, 0);
+  type =
+      g_type_register_static (push_only ? GST_TYPE_PUSH_SRC : GST_TYPE_BASE_SRC,
+      type_name, &type_info, 0);
   g_free (type_name);
 
   g_type_add_interface_static (type, GST_TYPE_URI_HANDLER, &iface_info);
