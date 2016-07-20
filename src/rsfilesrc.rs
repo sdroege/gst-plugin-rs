@@ -39,7 +39,11 @@ unsafe impl Send for FileSrc {}
 
 impl FileSrc {
     fn new() -> FileSrc {
-        FileSrc { location: Mutex::new(None), file: None, position: 0 }
+        FileSrc {
+            location: Mutex::new(None),
+            file: None,
+            position: 0,
+        }
     }
 
     fn new_source() -> Box<Source> {
@@ -58,14 +62,14 @@ impl Source for FileSrc {
                 let mut location = self.location.lock().unwrap();
                 *location = None;
                 return true;
-            },
+            }
             Some(uri) => {
                 match uri.to_file_path().ok() {
                     Some(p) => {
                         let mut location = self.location.lock().unwrap();
                         *location = Some(p);
                         return true;
-                    },
+                    }
                     None => {
                         let mut location = self.location.lock().unwrap();
                         *location = None;
@@ -79,7 +83,8 @@ impl Source for FileSrc {
 
     fn get_uri(&self) -> Option<Url> {
         let location = self.location.lock().unwrap();
-        (*location).as_ref()
+        (*location)
+            .as_ref()
             .map(|l| Url::from_file_path(l).ok())
             .and_then(|i| i) // join()
     }
@@ -108,13 +113,15 @@ impl Source for FileSrc {
                     Ok(file) => {
                         self.file = Some(file);
                         return true;
-                    },
+                    }
                     Err(err) => {
-                        println_err!("Failed to open file '{}': {}", location.to_str().unwrap_or("Non-UTF8 path"), err.to_string());
+                        println_err!("Failed to open file '{}': {}",
+                                     location.to_str().unwrap_or("Non-UTF8 path"),
+                                     err.to_string());
                         return false;
-                    },
+                    }
                 }
-            },
+            }
         }
     }
 
@@ -133,7 +140,7 @@ impl Source for FileSrc {
                     match f.seek(SeekFrom::Start(offset)) {
                         Ok(_) => {
                             self.position = offset;
-                        },
+                        }
                         Err(err) => {
                             println_err!("Failed to seek to {}: {}", offset, err.to_string());
                             return Err(GstFlowReturn::Error);
@@ -144,14 +151,14 @@ impl Source for FileSrc {
                 match f.read(data) {
                     Ok(size) => {
                         self.position += size as u64;
-                        return Ok(size)
-                    },
+                        return Ok(size);
+                    }
                     Err(err) => {
                         println_err!("Failed to read at {}: {}", offset, err.to_string());
                         return Err(GstFlowReturn::Error);
-                    },
+                    }
                 }
-            },
+            }
         }
     }
 
@@ -159,4 +166,3 @@ impl Source for FileSrc {
         true
     }
 }
-

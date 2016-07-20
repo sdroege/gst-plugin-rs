@@ -43,7 +43,7 @@ pub extern "C" fn sink_drop(ptr: *mut Box<Sink>) {
 }
 
 #[no_mangle]
-pub extern "C" fn sink_set_uri(ptr: *mut Box<Sink>, uri_ptr: *const c_char) -> GBoolean{
+pub extern "C" fn sink_set_uri(ptr: *mut Box<Sink>, uri_ptr: *const c_char) -> GBoolean {
     let sink: &mut Box<Sink> = unsafe { &mut *ptr };
 
     if uri_ptr.is_null() {
@@ -66,15 +66,16 @@ pub extern "C" fn sink_get_uri(ptr: *const Box<Sink>) -> *mut c_char {
     let sink: &Box<Sink> = unsafe { &*ptr };
 
     match sink.get_uri() {
-        Some(uri) =>
-            CString::new(uri.into_string().into_bytes()).unwrap().into_raw(),
-        None =>
-            ptr::null_mut()
+        Some(uri) => CString::new(uri.into_string().into_bytes()).unwrap().into_raw(),
+        None => ptr::null_mut(),
     }
 }
 
 #[no_mangle]
-pub extern "C" fn sink_render(ptr: *mut Box<Sink>, data_ptr: *const u8, data_len: usize) -> GstFlowReturn {
+pub extern "C" fn sink_render(ptr: *mut Box<Sink>,
+                              data_ptr: *const u8,
+                              data_len: usize)
+                              -> GstFlowReturn {
     let sink: &mut Box<Sink> = unsafe { &mut *ptr };
 
     let data = unsafe { slice::from_raw_parts(data_ptr, data_len) };

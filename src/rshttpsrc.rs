@@ -18,7 +18,8 @@
 use std::u64;
 use std::io::Read;
 use url::Url;
-use hyper::header::{ContentLength, ContentRange, ContentRangeSpec, Range, ByteRangeSpec, AcceptRanges, RangeUnit};
+use hyper::header::{ContentLength, ContentRange, ContentRangeSpec, Range, ByteRangeSpec,
+                    AcceptRanges, RangeUnit};
 use hyper::client::Client;
 use hyper::client::response::Response;
 
@@ -46,7 +47,16 @@ unsafe impl Send for HttpSrc {}
 
 impl HttpSrc {
     fn new() -> HttpSrc {
-        HttpSrc { url: Mutex::new(None), client: Client::new(), response: None, seekable: AtomicBool::new(false), position: 0, size: u64::MAX, start: 0, stop: u64::MAX }
+        HttpSrc {
+            url: Mutex::new(None),
+            client: Client::new(),
+            response: None,
+            seekable: AtomicBool::new(false),
+            position: 0,
+            size: u64::MAX,
+            start: 0,
+            stop: u64::MAX,
+        }
     }
 
     fn new_source() -> Box<Source> {
@@ -71,27 +81,30 @@ impl HttpSrc {
 
                 if start != 0 || stop != u64::MAX {
                     req = if stop == u64::MAX {
-                            req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]))
-                        } else {
-                            req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop)]))
-                        };
+                        req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]))
+                    } else {
+                        req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop)]))
+                    };
                 }
 
                 match req.send() {
                     Ok(response) => {
                         if response.status.is_success() {
-                            self.size = if let Some(&ContentLength(content_length)) = response.headers.get() {
+                            self.size = if let Some(&ContentLength(content_length)) =
+                                               response.headers.get() {
                                 content_length + start
                             } else {
                                 u64::MAX
                             };
-                            let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = response.headers.get() {
+                            let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) =
+                                                            response.headers.get() {
                                 ranges.iter().any(|u| *u == RangeUnit::Bytes)
                             } else {
                                 false
                             };
 
-                            self.seekable.store(self.size != u64::MAX && accept_byte_ranges, Ordering::Relaxed);
+                            self.seekable.store(self.size != u64::MAX && accept_byte_ranges,
+                                                Ordering::Relaxed);
 
                             self.start = start;
                             self.stop = stop;
@@ -114,13 +127,13 @@ impl HttpSrc {
                             println_err!("Failed to fetch {}: {}", url, response.status);
                             return false;
                         }
-                    },
+                    }
                     Err(err) => {
                         println_err!("Failed to fetch {}: {}", url, err.to_string());
                         return false;
                     }
                 }
-            },
+            }
         }
     }
 }
@@ -137,10 +150,9 @@ impl Source for HttpSrc {
                 let mut url = self.url.lock().unwrap();
                 *url = None;
                 return true;
-            },
+            }
             Some(uri) => {
-                if uri.scheme() == "http" ||
-                   uri.scheme() == "https" {
+                if uri.scheme() == "http" || uri.scheme() == "https" {
                     let mut url = self.url.lock().unwrap();
                     *url = Some(uri);
                     return true;
@@ -178,7 +190,7 @@ impl Source for HttpSrc {
         self.size = u64::MAX;
         match self.response {
             Some(ref mut response) => drop(response),
-            None => ()
+            None => (),
         }
         self.response = None;
 
@@ -208,15 +220,14 @@ impl Source for HttpSrc {
                         }
 
                         self.position += size as u64;
-                        return Ok(size)
-                    },
+                        return Ok(size);
+                    }
                     Err(err) => {
                         println_err!("Failed to read at {}: {}", offset, err.to_string());
                         return Err(GstFlowReturn::Error);
-                    },
+                    }
                 }
-            },
+            }
         }
     }
 }
-

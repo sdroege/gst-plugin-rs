@@ -23,7 +23,7 @@ use std::ffi::CString;
 macro_rules! println_err(
     ($($arg:tt)*) => { {
         let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        // Ignore when writing fails
+// Ignore when writing fails
         match r {
             Ok(_) => (),
             Err(_) => ()
@@ -58,6 +58,7 @@ impl GBoolean {
 
 #[no_mangle]
 pub extern "C" fn cstring_drop(ptr: *mut c_char) {
-    unsafe { CString::from_raw(ptr); }
+    unsafe {
+        CString::from_raw(ptr);
+    }
 }
-
