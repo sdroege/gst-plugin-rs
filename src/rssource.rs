@@ -55,10 +55,9 @@ pub trait Source: Sync + Send {
 
 #[no_mangle]
 pub extern "C" fn source_new(source: *mut c_void,
-                             create_instance: extern "C" fn(controller: SourceController)
-                                                            -> *mut Box<Source>)
+                             create_instance: fn(controller: SourceController) -> Box<Source>)
                              -> *mut Box<Source> {
-    create_instance(SourceController::new(source))
+    Box::into_raw(Box::new(create_instance(SourceController::new(source))))
 }
 
 #[no_mangle]

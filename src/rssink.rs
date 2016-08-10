@@ -51,10 +51,9 @@ pub trait Sink: Sync + Send {
 
 #[no_mangle]
 pub extern "C" fn sink_new(sink: *mut c_void,
-                           create_instance: extern "C" fn(controller: SinkController)
-                                                          -> *mut Box<Sink>)
+                           create_instance: fn(controller: SinkController) -> Box<Sink>)
                            -> *mut Box<Sink> {
-    create_instance(SinkController::new(sink))
+    Box::into_raw(Box::new(create_instance(SinkController::new(sink))))
 }
 
 #[no_mangle]

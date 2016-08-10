@@ -47,7 +47,7 @@ unsafe impl Sync for HttpSrc {}
 unsafe impl Send for HttpSrc {}
 
 impl HttpSrc {
-    fn new(controller: SourceController) -> HttpSrc {
+    pub fn new(controller: SourceController) -> HttpSrc {
         HttpSrc {
             controller: controller,
             url: Mutex::new(None),
@@ -61,9 +61,8 @@ impl HttpSrc {
         }
     }
 
-    pub extern "C" fn new_ptr(controller: SourceController) -> *mut Box<Source> {
-        let instance: Box<Box<Source>> = Box::new(Box::new(HttpSrc::new(controller)));
-        return Box::into_raw(instance);
+    pub fn new_boxed(controller: SourceController) -> Box<Source> {
+        Box::new(HttpSrc::new(controller))
     }
 
     pub fn do_request(&mut self, start: u64, stop: u64) -> bool {

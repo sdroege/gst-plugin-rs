@@ -49,8 +49,7 @@ extern "C" {
                               classification: *const c_char,
                               author: *const c_char,
                               rank: i32,
-                              create_instance: extern "C" fn(controller: SourceController)
-                                                             -> *mut Box<Source>,
+                              create_instance: fn(controller: SourceController) -> Box<Source>,
                               protocols: *const c_char,
                               push_only: GBoolean)
                               -> GBoolean;
@@ -64,8 +63,7 @@ extern "C" {
                             classification: *const c_char,
                             author: *const c_char,
                             rank: i32,
-                            create_instance: extern "C" fn(controller: SinkController)
-                                                           -> *mut Box<Sink>,
+                            create_instance: fn(controller: SinkController) -> Box<Sink>,
                             protocols: *const c_char)
                             -> GBoolean;
 }
@@ -83,7 +81,7 @@ pub extern "C" fn sources_register(plugin: *const c_void) -> GBoolean {
                                    .unwrap()
                                    .as_ptr(),
                                256 + 100,
-                               FileSrc::new_ptr,
+                               FileSrc::new_boxed,
                                CString::new("file").unwrap().as_ptr(),
                                GBoolean::False);
 
@@ -96,7 +94,7 @@ pub extern "C" fn sources_register(plugin: *const c_void) -> GBoolean {
                                    .unwrap()
                                    .as_ptr(),
                                256 + 100,
-                               HttpSrc::new_ptr,
+                               HttpSrc::new_boxed,
                                CString::new("http:https").unwrap().as_ptr(),
                                GBoolean::True);
     }
@@ -117,7 +115,7 @@ pub extern "C" fn sinks_register(plugin: *const c_void) -> GBoolean {
                                  .unwrap()
                                  .as_ptr(),
                              256 + 100,
-                             FileSink::new_ptr,
+                             FileSink::new_boxed,
                              CString::new("file").unwrap().as_ptr());
     }
     return GBoolean::True;

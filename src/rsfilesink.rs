@@ -38,7 +38,7 @@ unsafe impl Sync for FileSink {}
 unsafe impl Send for FileSink {}
 
 impl FileSink {
-    fn new(controller: SinkController) -> FileSink {
+    pub fn new(controller: SinkController) -> FileSink {
         FileSink {
             controller: controller,
             location: Mutex::new(None),
@@ -47,9 +47,8 @@ impl FileSink {
         }
     }
 
-    pub extern "C" fn new_ptr(controller: SinkController) -> *mut Box<Sink> {
-        let instance: Box<Box<Sink>> = Box::new(Box::new(FileSink::new(controller)));
-        return Box::into_raw(instance);
+    pub fn new_boxed(controller: SinkController) -> Box<Sink> {
+        Box::new(FileSink::new(controller))
     }
 }
 

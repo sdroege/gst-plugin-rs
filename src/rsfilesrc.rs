@@ -39,7 +39,7 @@ unsafe impl Sync for FileSrc {}
 unsafe impl Send for FileSrc {}
 
 impl FileSrc {
-    fn new(controller: SourceController) -> FileSrc {
+    pub fn new(controller: SourceController) -> FileSrc {
         FileSrc {
             controller: controller,
             location: Mutex::new(None),
@@ -48,9 +48,8 @@ impl FileSrc {
         }
     }
 
-    pub extern "C" fn new_ptr(controller: SourceController) -> *mut Box<Source> {
-        let instance: Box<Box<Source>> = Box::new(Box::new(FileSrc::new(controller)));
-        return Box::into_raw(instance);
+    pub fn new_boxed(controller: SourceController) -> Box<Source> {
+        Box::new(FileSrc::new(controller))
     }
 }
 
