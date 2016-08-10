@@ -42,7 +42,7 @@ extern gboolean source_do_seek (GstRsSrc * source, void *rssource,
     uint64_t start, uint64_t stop);
 extern gboolean source_set_uri (GstRsSrc * source, void *rssource,
     const char *uri);
-extern char *rssource_get_uri (GstRsSrc * source, void *rssource);
+extern char *source_get_uri (GstRsSrc * source, void *rssource);
 extern uint64_t source_get_size (GstRsSrc * source, void *rssource);
 extern gboolean source_is_seekable (GstRsSrc * source, void *rssource);
 extern gboolean source_start (GstRsSrc * source, void *rssource);
@@ -167,7 +167,7 @@ gst_rs_src_get_property (GObject * object, guint prop_id, GValue * value,
 
   switch (prop_id) {
     case PROP_URI:{
-      gchar *str = source_get_uri (src->instance);
+      gchar *str = source_get_uri (src, src->instance);
       g_value_set_string (value, str);
       if (str)
         cstring_drop (str);
