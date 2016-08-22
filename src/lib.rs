@@ -31,10 +31,8 @@ pub mod rshttpsrc;
 pub mod rsfilesink;
 
 use utils::*;
-use rssource::{Source, SourceController};
 use rsfilesrc::FileSrc;
 use rshttpsrc::HttpSrc;
-use rssink::{Sink, SinkController};
 use rsfilesink::FileSink;
 
 use std::os::raw::c_void;
@@ -49,7 +47,7 @@ extern "C" {
                               classification: *const c_char,
                               author: *const c_char,
                               rank: i32,
-                              create_instance: fn(controller: SourceController) -> Box<Source>,
+                              create_instance: *const c_void,
                               protocols: *const c_char,
                               push_only: GBoolean)
                               -> GBoolean;
@@ -63,60 +61,106 @@ extern "C" {
                             classification: *const c_char,
                             author: *const c_char,
                             rank: i32,
-                            create_instance: fn(controller: SinkController) -> Box<Sink>,
+                            create_instance: *const c_void,
                             protocols: *const c_char)
                             -> GBoolean;
 }
 
-#[no_mangle]
-pub extern "C" fn sources_register(plugin: *const c_void) -> GBoolean {
+unsafe fn source_register(plugin: *const c_void,
+                          name: &str,
+                          long_name: &str,
+                          description: &str,
+                          classification: &str,
+                          author: &str,
+                          rank: i32,
+                          create_instance: *const c_void,
+                          protocols: &str,
+                          push_only: bool) {
+    let cname = CString::new(name).unwrap();
+    let clong_name = CString::new(long_name).unwrap();
+    let cdescription = CString::new(description).unwrap();
+    let cclassification = CString::new(classification).unwrap();
+    let cauthor = CString::new(author).unwrap();
+    let cprotocols = CString::new(protocols).unwrap();
 
-    unsafe {
-        gst_rs_source_register(plugin,
-                               CString::new("rsfilesrc").unwrap().as_ptr(),
-                               CString::new("File Source").unwrap().as_ptr(),
-                               CString::new("Reads local files").unwrap().as_ptr(),
-                               CString::new("Source/File").unwrap().as_ptr(),
-                               CString::new("Sebastian Dröge <sebastian@centricular.com>")
-                                   .unwrap()
-                                   .as_ptr(),
-                               256 + 100,
-                               FileSrc::new_boxed,
-                               CString::new("file").unwrap().as_ptr(),
-                               GBoolean::False);
+    gst_rs_source_register(plugin,
+                           cname.as_ptr(),
+                           clong_name.as_ptr(),
+                           cdescription.as_ptr(),
+                           cclassification.as_ptr(),
+                           cauthor.as_ptr(),
+                           rank,
+                           create_instance,
+                           cprotocols.as_ptr(),
+                           GBoolean::from_bool(push_only));
 
-        gst_rs_source_register(plugin,
-                               CString::new("rshttpsrc").unwrap().as_ptr(),
-                               CString::new("HTTP Source").unwrap().as_ptr(),
-                               CString::new("Read HTTP/HTTPS files").unwrap().as_ptr(),
-                               CString::new("Source/Network/HTTP").unwrap().as_ptr(),
-                               CString::new("Sebastian Dröge <sebastian@centricular.com>")
-                                   .unwrap()
-                                   .as_ptr(),
-                               256 + 100,
-                               HttpSrc::new_boxed,
-                               CString::new("http:https").unwrap().as_ptr(),
-                               GBoolean::True);
-    }
-
-    return GBoolean::True;
 }
 
 #[no_mangle]
-pub extern "C" fn sinks_register(plugin: *const c_void) -> GBoolean {
+pub unsafe extern "C" fn sources_register(plugin: *const c_void) -> GBoolean {
+    source_register(plugin,
+                    "rsfilesrc",
+                    "File Source",
+                    "Reads local files",
+                    "Source/File",
+                    "Sebastian Dröge <sebastian@centricular.com>",
+                    256 + 100,
+                    FileSrc::new_boxed as *const c_void,
+                    "file",
+                    false);
 
-    unsafe {
-        gst_rs_sink_register(plugin,
-                             CString::new("rsfilesink").unwrap().as_ptr(),
-                             CString::new("File Sink").unwrap().as_ptr(),
-                             CString::new("Writes to local files").unwrap().as_ptr(),
-                             CString::new("Sink/File").unwrap().as_ptr(),
-                             CString::new("Luis de Bethencourt <luisbg@osg.samsung.com>")
-                                 .unwrap()
-                                 .as_ptr(),
-                             256 + 100,
-                             FileSink::new_boxed,
-                             CString::new("file").unwrap().as_ptr());
-    }
-    return GBoolean::True;
+    source_register(plugin,
+                    "rshttpsrc",
+                    "HTTP Source",
+                    "Read HTTP/HTTPS files",
+                    "Source/Network/HTTP",
+                    "Sebastian Dröge <sebastian@centricular.com>",
+                    256 + 100,
+                    HttpSrc::new_boxed as *const c_void,
+                    "http:https",
+                    true);
+
+    GBoolean::True
+}
+
+unsafe fn sink_register(plugin: *const c_void,
+                        name: &str,
+                        long_name: &str,
+                        description: &str,
+                        classification: &str,
+                        author: &str,
+                        rank: i32,
+                        create_instance: *const c_void,
+                        protocols: &str) {
+    let cname = CString::new(name).unwrap();
+    let clong_name = CString::new(long_name).unwrap();
+    let cdescription = CString::new(description).unwrap();
+    let cclassification = CString::new(classification).unwrap();
+    let cauthor = CString::new(author).unwrap();
+    let cprotocols = CString::new(protocols).unwrap();
+
+    gst_rs_sink_register(plugin,
+                         cname.as_ptr(),
+                         clong_name.as_ptr(),
+                         cdescription.as_ptr(),
+                         cclassification.as_ptr(),
+                         cauthor.as_ptr(),
+                         rank,
+                         create_instance,
+                         cprotocols.as_ptr());
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sinks_register(plugin: *const c_void) -> GBoolean {
+    sink_register(plugin,
+                  "rsfilesink",
+                  "File Sink",
+                  "Writes to local files",
+                  "Sink/File",
+                  "Luis de Bethencourt <luisbg@osg.samsung.com>",
+                  256 + 100,
+                  FileSink::new_boxed as *const c_void,
+                  "file");
+
+    GBoolean::True
 }

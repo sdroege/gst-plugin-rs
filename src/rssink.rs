@@ -57,21 +57,19 @@ pub extern "C" fn sink_new(sink: *mut c_void,
 }
 
 #[no_mangle]
-pub extern "C" fn sink_drop(sink: *mut c_void, ptr: *mut Box<Sink>) {
-    unsafe { Box::from_raw(ptr) };
+pub unsafe extern "C" fn sink_drop(ptr: *mut Box<Sink>) {
+    Box::from_raw(ptr);
 }
 
 #[no_mangle]
-pub extern "C" fn sink_set_uri(sink: *mut c_void,
-                               ptr: *mut Box<Sink>,
-                               uri_ptr: *const c_char)
-                               -> GBoolean {
-    let sink: &mut Box<Sink> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn sink_set_uri(ptr: *mut Box<Sink>, uri_ptr: *const c_char) -> GBoolean {
+    let sink: &mut Box<Sink> = &mut *ptr;
 
     if uri_ptr.is_null() {
         GBoolean::from_bool(sink.set_uri(None))
     } else {
-        let uri_str = unsafe { CStr::from_ptr(uri_ptr) }.to_str().unwrap();
+        let uri_str = CStr::from_ptr(uri_ptr).to_str().unwrap();
+
         match Url::parse(uri_str) {
             Ok(uri) => GBoolean::from_bool(sink.set_uri(Some(uri))),
             Err(err) => {
@@ -84,8 +82,8 @@ pub extern "C" fn sink_set_uri(sink: *mut c_void,
 }
 
 #[no_mangle]
-pub extern "C" fn sink_get_uri(sink: *mut c_void, ptr: *const Box<Sink>) -> *mut c_char {
-    let sink: &Box<Sink> = unsafe { &*ptr };
+pub unsafe extern "C" fn sink_get_uri(ptr: *const Box<Sink>) -> *mut c_char {
+    let sink: &Box<Sink> = &*ptr;
 
     match sink.get_uri() {
         Some(uri) => CString::new(uri.into_string().into_bytes()).unwrap().into_raw(),
@@ -94,27 +92,26 @@ pub extern "C" fn sink_get_uri(sink: *mut c_void, ptr: *const Box<Sink>) -> *mut
 }
 
 #[no_mangle]
-pub extern "C" fn sink_render(sink: *mut c_void,
-                              ptr: *mut Box<Sink>,
-                              data_ptr: *const u8,
-                              data_len: usize)
-                              -> GstFlowReturn {
-    let sink: &mut Box<Sink> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn sink_render(ptr: *mut Box<Sink>,
+                                     data_ptr: *const u8,
+                                     data_len: usize)
+                                     -> GstFlowReturn {
+    let sink: &mut Box<Sink> = &mut *ptr;
+    let data = slice::from_raw_parts(data_ptr, data_len);
 
-    let data = unsafe { slice::from_raw_parts(data_ptr, data_len) };
     sink.render(data)
 }
 
 #[no_mangle]
-pub extern "C" fn sink_start(sink: *mut c_void, ptr: *mut Box<Sink>) -> GBoolean {
-    let sink: &mut Box<Sink> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn sink_start(ptr: *mut Box<Sink>) -> GBoolean {
+    let sink: &mut Box<Sink> = &mut *ptr;
 
     GBoolean::from_bool(sink.start())
 }
 
 #[no_mangle]
-pub extern "C" fn sink_stop(sink: *mut c_void, ptr: *mut Box<Sink>) -> GBoolean {
-    let sink: &mut Box<Sink> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn sink_stop(ptr: *mut Box<Sink>) -> GBoolean {
+    let sink: &mut Box<Sink> = &mut *ptr;
 
     GBoolean::from_bool(sink.stop())
 }

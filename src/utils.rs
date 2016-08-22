@@ -46,16 +46,11 @@ pub enum GBoolean {
 
 impl GBoolean {
     pub fn from_bool(v: bool) -> GBoolean {
-        match v {
-            true => GBoolean::True,
-            false => GBoolean::False,
-        }
+        if v { GBoolean::True } else { GBoolean::False }
     }
 }
 
 #[no_mangle]
-pub extern "C" fn cstring_drop(ptr: *mut c_char) {
-    unsafe {
-        CString::from_raw(ptr);
-    }
+pub unsafe extern "C" fn cstring_drop(ptr: *mut c_char) {
+    CString::from_raw(ptr);
 }

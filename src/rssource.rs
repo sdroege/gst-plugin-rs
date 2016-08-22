@@ -61,21 +61,19 @@ pub extern "C" fn source_new(source: *mut c_void,
 }
 
 #[no_mangle]
-pub extern "C" fn source_drop(source: *mut c_void, ptr: *mut Box<Source>) {
-    unsafe { Box::from_raw(ptr) };
+pub unsafe extern "C" fn source_drop(ptr: *mut Box<Source>) {
+    Box::from_raw(ptr);
 }
 
 #[no_mangle]
-pub extern "C" fn source_set_uri(source: *mut c_void,
-                                 ptr: *mut Box<Source>,
-                                 uri_ptr: *const c_char)
-                                 -> GBoolean {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn source_set_uri(ptr: *mut Box<Source>, uri_ptr: *const c_char) -> GBoolean {
+    let source: &mut Box<Source> = &mut *ptr;
 
     if uri_ptr.is_null() {
         GBoolean::from_bool(source.set_uri(None))
     } else {
-        let uri_str = unsafe { CStr::from_ptr(uri_ptr) }.to_str().unwrap();
+        let uri_str = CStr::from_ptr(uri_ptr).to_str().unwrap();
+
         match Url::parse(uri_str) {
             Ok(uri) => GBoolean::from_bool(source.set_uri(Some(uri))),
             Err(err) => {
@@ -88,8 +86,8 @@ pub extern "C" fn source_set_uri(source: *mut c_void,
 }
 
 #[no_mangle]
-pub extern "C" fn source_get_uri(source: *mut c_void, ptr: *mut Box<Source>) -> *mut c_char {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn source_get_uri(ptr: *mut Box<Source>) -> *mut c_char {
+    let source: &mut Box<Source> = &mut *ptr;
 
     match source.get_uri() {
         Some(uri) => CString::new(uri.into_string().into_bytes()).unwrap().into_raw(),
@@ -98,16 +96,16 @@ pub extern "C" fn source_get_uri(source: *mut c_void, ptr: *mut Box<Source>) -> 
 }
 
 #[no_mangle]
-pub extern "C" fn source_fill(source: *mut c_void,
-                              ptr: *mut Box<Source>,
-                              offset: u64,
-                              data_ptr: *mut u8,
-                              data_len_ptr: *mut usize)
-                              -> GstFlowReturn {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn source_fill(ptr: *mut Box<Source>,
+                                     offset: u64,
+                                     data_ptr: *mut u8,
+                                     data_len_ptr: *mut usize)
+                                     -> GstFlowReturn {
+    let source: &mut Box<Source> = &mut *ptr;
 
-    let mut data_len: &mut usize = unsafe { &mut *data_len_ptr };
-    let mut data = unsafe { slice::from_raw_parts_mut(data_ptr, *data_len) };
+    let mut data_len: &mut usize = &mut *data_len_ptr;
+    let mut data = slice::from_raw_parts_mut(data_ptr, *data_len);
+
     match source.fill(offset, data) {
         Ok(actual_len) => {
             *data_len = actual_len;
@@ -118,40 +116,36 @@ pub extern "C" fn source_fill(source: *mut c_void,
 }
 
 #[no_mangle]
-pub extern "C" fn source_get_size(source: *mut c_void, ptr: *const Box<Source>) -> u64 {
-    let source: &Box<Source> = unsafe { &*ptr };
+pub unsafe extern "C" fn source_get_size(ptr: *const Box<Source>) -> u64 {
+    let source: &Box<Source> = &*ptr;
 
-    return source.get_size();
+    source.get_size()
 }
 
 #[no_mangle]
-pub extern "C" fn source_start(source: *mut c_void, ptr: *mut Box<Source>) -> GBoolean {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn source_start(ptr: *mut Box<Source>) -> GBoolean {
+    let source: &mut Box<Source> = &mut *ptr;
 
     GBoolean::from_bool(source.start())
 }
 
 #[no_mangle]
-pub extern "C" fn source_stop(source: *mut c_void, ptr: *mut Box<Source>) -> GBoolean {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn source_stop(ptr: *mut Box<Source>) -> GBoolean {
+    let source: &mut Box<Source> = &mut *ptr;
 
     GBoolean::from_bool(source.stop())
 }
 
 #[no_mangle]
-pub extern "C" fn source_is_seekable(source: *mut c_void, ptr: *const Box<Source>) -> GBoolean {
-    let source: &Box<Source> = unsafe { &*ptr };
+pub unsafe extern "C" fn source_is_seekable(ptr: *const Box<Source>) -> GBoolean {
+    let source: &Box<Source> = &*ptr;
 
     GBoolean::from_bool(source.is_seekable())
 }
 
 #[no_mangle]
-pub extern "C" fn source_do_seek(source: *mut c_void,
-                                 ptr: *mut Box<Source>,
-                                 start: u64,
-                                 stop: u64)
-                                 -> GBoolean {
-    let source: &mut Box<Source> = unsafe { &mut *ptr };
+pub unsafe extern "C" fn source_do_seek(ptr: *mut Box<Source>, start: u64, stop: u64) -> GBoolean {
+    let source: &mut Box<Source> = &mut *ptr;
 
     GBoolean::from_bool(source.do_seek(start, stop))
 }
