@@ -17,5 +17,5 @@ pkg-config = "0.3"
 
 [lib]
 name = "rsplugin"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
 path = "src/lib.rs"

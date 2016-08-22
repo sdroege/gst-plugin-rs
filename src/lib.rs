@@ -16,7 +16,7 @@
 //  Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 //  Boston, MA 02110-1301, USA.
 
-#![crate_type="dylib"]
+#![crate_type="cdylib"]
 
 extern crate libc;
 extern crate url;
