@@ -25,22 +25,34 @@ use hyper::client::response::Response;
 
 use std::io::Write;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use utils::*;
 use rssource::*;
 
 #[derive(Debug)]
+struct Settings {
+    url: Option<Url>,
+}
+
+#[derive(Debug)]
+enum StreamingState {
+    Stopped,
+    Started {
+        response: Response,
+        seekable: bool,
+        position: u64,
+        size: u64,
+        start: u64,
+        stop: u64,
+    },
+}
+
+#[derive(Debug)]
 pub struct HttpSrc {
     controller: SourceController,
-    url: Mutex<Option<Url>>,
+    settings: Mutex<Settings>,
+    streaming_state: Mutex<StreamingState>,
     client: Client,
-    response: Option<Response>,
-    seekable: AtomicBool,
-    position: u64,
-    size: u64,
-    start: u64,
-    stop: u64,
 }
 
 unsafe impl Sync for HttpSrc {}
@@ -50,14 +62,9 @@ impl HttpSrc {
     pub fn new(controller: SourceController) -> HttpSrc {
         HttpSrc {
             controller: controller,
-            url: Mutex::new(None),
+            settings: Mutex::new(Settings { url: None }),
+            streaming_state: Mutex::new(StreamingState::Stopped),
             client: Client::new(),
-            response: None,
-            seekable: AtomicBool::new(false),
-            position: 0,
-            size: u64::MAX,
-            start: 0,
-            stop: u64::MAX,
         }
     }
 
@@ -65,15 +72,11 @@ impl HttpSrc {
         Box::new(HttpSrc::new(controller))
     }
 
-    pub fn do_request(&mut self, start: u64, stop: u64) -> bool {
-        self.response = None;
-        self.seekable.store(false, Ordering::Relaxed);
-        self.position = 0;
-        self.size = u64::MAX;
+    fn do_request(&self, start: u64, stop: u64) -> StreamingState {
+        let ref url = self.settings.lock().unwrap().url;
 
-        let url = self.url.lock().unwrap();
         match *url {
-            None => return false,
+            None => StreamingState::Stopped,
             Some(ref url) => {
                 let mut req = self.client.get(url.clone());
 
@@ -81,15 +84,15 @@ impl HttpSrc {
                     req = if stop == u64::MAX {
                         req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]))
                     } else {
-                        req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop)]))
+                        req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]))
                     };
                 }
 
                 match req.send() {
                     Ok(response) => {
                         if response.status.is_success() {
-                            self.size = if let Some(&ContentLength(content_length)) =
-                                               response.headers.get() {
+                            let size = if let Some(&ContentLength(content_length)) =
+                                              response.headers.get() {
                                 content_length + start
                             } else {
                                 u64::MAX
@@ -101,34 +104,35 @@ impl HttpSrc {
                                 false
                             };
 
-                            self.seekable.store(self.size != u64::MAX && accept_byte_ranges,
-                                                Ordering::Relaxed);
+                            let seekable = size != u64::MAX && accept_byte_ranges;
 
-                            self.start = start;
-                            self.stop = stop;
-
-                            self.position = if let Some(&ContentRange(ContentRangeSpec::Bytes{range: Some((range_start, _)), ..})) = response.headers.get() {
+                            let position = if let Some(&ContentRange(ContentRangeSpec::Bytes{range: Some((range_start, _)), ..})) = response.headers.get() {
                                 range_start
                             } else {
                                 start
                             };
 
-                            if self.position != start {
-                                println_err!("Failed to seek to {}: Got {}", start, self.position);
-                                return false;
+                            if position != start {
+                                println_err!("Failed to seek to {}: Got {}", start, position);
+                                StreamingState::Stopped
+                            } else {
+                                StreamingState::Started {
+                                    response: response,
+                                    seekable: seekable,
+                                    position: 0,
+                                    size: size,
+                                    start: start,
+                                    stop: stop,
+                                }
                             }
-
-                            self.response = Some(response);
-
-                            return true;
                         } else {
                             println_err!("Failed to fetch {}: {}", url, response.status);
-                            return false;
+                            StreamingState::Stopped
                         }
                     }
                     Err(err) => {
                         println_err!("Failed to fetch {}: {}", url, err.to_string());
-                        return false;
+                        StreamingState::Stopped
                     }
                 }
             }
@@ -137,25 +141,19 @@ impl HttpSrc {
 }
 
 impl Source for HttpSrc {
-    fn set_uri(&mut self, uri: Option<Url>) -> bool {
-        if self.response.is_some() {
-            println_err!("Can't set URI after starting");
-            return false;
-        }
+    fn set_uri(&self, uri: Option<Url>) -> bool {
+        let ref mut url = self.settings.lock().unwrap().url;
 
         match uri {
             None => {
-                let mut url = self.url.lock().unwrap();
                 *url = None;
                 return true;
             }
             Some(uri) => {
                 if uri.scheme() == "http" || uri.scheme() == "https" {
-                    let mut url = self.url.lock().unwrap();
                     *url = Some(uri);
                     return true;
                 } else {
-                    let mut url = self.url.lock().unwrap();
                     *url = None;
                     println_err!("Unsupported URI '{}'", uri.as_str());
                     return false;
@@ -165,67 +163,91 @@ impl Source for HttpSrc {
     }
 
     fn get_uri(&self) -> Option<Url> {
-        let url = self.url.lock().unwrap();
-        (*url).as_ref().map(|u| u.clone())
+        let ref url = self.settings.lock().unwrap().url;
+        url.as_ref().map(|u| u.clone())
     }
 
     fn is_seekable(&self) -> bool {
-        self.seekable.load(Ordering::Relaxed)
+        let streaming_state = self.streaming_state.lock().unwrap();
+
+        match *streaming_state {
+            StreamingState::Started { seekable, .. } => seekable,
+            _ => false,
+        }
     }
 
     fn get_size(&self) -> u64 {
-        self.size
-    }
-
-    fn start(&mut self) -> bool {
-        self.seekable.store(false, Ordering::Relaxed);
-        return self.do_request(0, u64::MAX);
-    }
-
-    fn stop(&mut self) -> bool {
-        self.seekable.store(false, Ordering::Relaxed);
-        self.position = 0;
-        self.size = u64::MAX;
-        match self.response {
-            Some(ref mut response) => drop(response),
-            None => (),
+        let streaming_state = self.streaming_state.lock().unwrap();
+        match *streaming_state {
+            StreamingState::Started { size, .. } => size,
+            _ => u64::MAX,
         }
-        self.response = None;
-
-        return true;
     }
 
-    fn do_seek(&mut self, start: u64, stop: u64) -> bool {
-        return self.do_request(start, stop);
+    fn start(&self) -> bool {
+        let mut streaming_state = self.streaming_state.lock().unwrap();
+        *streaming_state = self.do_request(0, u64::MAX);
+
+        if let StreamingState::Stopped = *streaming_state {
+            false
+        } else {
+            true
+        }
     }
 
-    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
-        if self.position != offset || self.response.is_none() {
-            let stop = self.stop; // FIXME: Borrow checker fail
-            if !self.do_request(offset, stop) {
-                println_err!("Failed to seek to {}", offset);
-                return Err(GstFlowReturn::Error);
-            }
+    fn stop(&self) -> bool {
+        let mut streaming_state = self.streaming_state.lock().unwrap();
+        *streaming_state = StreamingState::Stopped;
+
+        true
+    }
+
+    fn do_seek(&self, start: u64, stop: u64) -> bool {
+        let mut streaming_state = self.streaming_state.lock().unwrap();
+        *streaming_state = self.do_request(start, stop);
+
+        if let StreamingState::Stopped = *streaming_state {
+            false
+        } else {
+            true
+        }
+    }
+
+    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
+        let mut streaming_state = self.streaming_state.lock().unwrap();
+
+        if let StreamingState::Stopped = *streaming_state {
+            return Err(GstFlowReturn::Error);
         }
 
-        match self.response {
-            None => return Err(GstFlowReturn::Error),
-            Some(ref mut r) => {
-                match r.read(data) {
-                    Ok(size) => {
-                        if size == 0 {
-                            return Err(GstFlowReturn::Eos);
-                        }
-
-                        self.position += size as u64;
-                        return Ok(size);
-                    }
-                    Err(err) => {
-                        println_err!("Failed to read at {}: {}", offset, err.to_string());
-                        return Err(GstFlowReturn::Error);
-                    }
+        if let StreamingState::Started { position, stop, .. } = *streaming_state {
+            if position != offset {
+                *streaming_state = self.do_request(offset, stop);
+                if let StreamingState::Stopped = *streaming_state {
+                    println_err!("Failed to seek to {}", offset);
+                    return Err(GstFlowReturn::Error);
                 }
             }
+        }
+
+        if let StreamingState::Started { ref mut response, ref mut position, .. } =
+               *streaming_state {
+            match response.read(data) {
+                Ok(size) => {
+                    if size == 0 {
+                        return Err(GstFlowReturn::Eos);
+                    }
+
+                    *position += size as u64;
+                    Ok(size)
+                }
+                Err(err) => {
+                    println_err!("Failed to read at {}: {}", offset, err.to_string());
+                    Err(GstFlowReturn::Error)
+                }
+            }
+        } else {
+            Err(GstFlowReturn::Error)
         }
     }
 }

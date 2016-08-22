@@ -39,17 +39,17 @@ impl SourceController {
 
 pub trait Source: Sync + Send {
     // Called from any thread at any time
-    fn set_uri(&mut self, uri: Option<Url>) -> bool;
+    fn set_uri(&self, uri: Option<Url>) -> bool;
     fn get_uri(&self) -> Option<Url>;
 
     // Called from any thread between start/stop
     fn is_seekable(&self) -> bool;
 
     // Called from the streaming thread only
-    fn start(&mut self) -> bool;
-    fn stop(&mut self) -> bool;
-    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn>;
-    fn do_seek(&mut self, start: u64, stop: u64) -> bool;
+    fn start(&self) -> bool;
+    fn stop(&self) -> bool;
+    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn>;
+    fn do_seek(&self, start: u64, stop: u64) -> bool;
     fn get_size(&self) -> u64;
 }
 

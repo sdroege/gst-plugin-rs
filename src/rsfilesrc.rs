@@ -28,11 +28,21 @@ use utils::*;
 use rssource::*;
 
 #[derive(Debug)]
+struct Settings {
+    location: Option<PathBuf>,
+}
+
+#[derive(Debug)]
+enum StreamingState {
+    Stopped,
+    Started { file: File, position: u64 },
+}
+
+#[derive(Debug)]
 pub struct FileSrc {
     controller: SourceController,
-    location: Mutex<Option<PathBuf>>,
-    file: Option<File>,
-    position: u64,
+    settings: Mutex<Settings>,
+    streaming_state: Mutex<StreamingState>,
 }
 
 unsafe impl Sync for FileSrc {}
@@ -42,9 +52,8 @@ impl FileSrc {
     pub fn new(controller: SourceController) -> FileSrc {
         FileSrc {
             controller: controller,
-            location: Mutex::new(None),
-            file: None,
-            position: 0,
+            settings: Mutex::new(Settings { location: None }),
+            streaming_state: Mutex::new(StreamingState::Stopped),
         }
     }
 
@@ -54,25 +63,24 @@ impl FileSrc {
 }
 
 impl Source for FileSrc {
-    fn set_uri(&mut self, uri: Option<Url>) -> bool {
+    fn set_uri(&self, uri: Option<Url>) -> bool {
+        let ref mut location = self.settings.lock().unwrap().location;
+
         match uri {
             None => {
-                let mut location = self.location.lock().unwrap();
                 *location = None;
-                return true;
+                true
             }
-            Some(uri) => {
+            Some(ref uri) => {
                 match uri.to_file_path().ok() {
                     Some(p) => {
-                        let mut location = self.location.lock().unwrap();
                         *location = Some(p);
-                        return true;
+                        true
                     }
                     None => {
-                        let mut location = self.location.lock().unwrap();
                         *location = None;
                         println_err!("Unsupported file URI '{}'", uri.as_str());
-                        return false;
+                        false
                     }
                 }
             }
@@ -80,9 +88,8 @@ impl Source for FileSrc {
     }
 
     fn get_uri(&self) -> Option<Url> {
-        let location = self.location.lock().unwrap();
-        (*location)
-            .as_ref()
+        let ref location = self.settings.lock().unwrap().location;
+        location.as_ref()
             .map(|l| Url::from_file_path(l).ok())
             .and_then(|i| i) // join()
     }
@@ -92,75 +99,87 @@ impl Source for FileSrc {
     }
 
     fn get_size(&self) -> u64 {
-        self.file.as_ref()
-            .map(|f| f.metadata().ok())
-            .and_then(|i| i) // join()
-            .map(|m| m.len())
-            .unwrap_or(u64::MAX)
+        let streaming_state = self.streaming_state.lock().unwrap();
+
+        if let StreamingState::Started { ref file, .. } = *streaming_state {
+            file.metadata()
+                .ok()
+                .map(|m| m.len())
+                .unwrap_or(u64::MAX)
+        } else {
+            u64::MAX
+        }
     }
 
-    fn start(&mut self) -> bool {
-        self.file = None;
-        self.position = 0;
-        let location = self.location.lock().unwrap();
+    fn start(&self) -> bool {
+        let ref location = self.settings.lock().unwrap().location;
+        let mut streaming_state = self.streaming_state.lock().unwrap();
+
+        if let StreamingState::Started { .. } = *streaming_state {
+            return false;
+        }
 
         match *location {
-            None => return false,
+            None => false,
             Some(ref location) => {
                 match File::open(location.as_path()) {
                     Ok(file) => {
-                        self.file = Some(file);
-                        return true;
+                        *streaming_state = StreamingState::Started {
+                            file: file,
+                            position: 0,
+                        };
+                        true
                     }
                     Err(err) => {
-                        println_err!("Failed to open file '{}': {}",
+                        println_err!("Could not open file for writing '{}': {}",
                                      location.to_str().unwrap_or("Non-UTF8 path"),
                                      err.to_string());
-                        return false;
+                        false
                     }
                 }
             }
         }
     }
 
-    fn stop(&mut self) -> bool {
-        self.file = None;
-        self.position = 0;
+    fn stop(&self) -> bool {
+        let mut streaming_state = self.streaming_state.lock().unwrap();
+        *streaming_state = StreamingState::Stopped;
 
         true
     }
 
-    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
-        match self.file {
-            None => return Err(GstFlowReturn::Error),
-            Some(ref mut f) => {
-                if self.position != offset {
-                    match f.seek(SeekFrom::Start(offset)) {
-                        Ok(_) => {
-                            self.position = offset;
-                        }
-                        Err(err) => {
-                            println_err!("Failed to seek to {}: {}", offset, err.to_string());
-                            return Err(GstFlowReturn::Error);
-                        }
-                    }
-                }
+    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
+        let mut streaming_state = self.streaming_state.lock().unwrap();
 
-                match f.read(data) {
-                    Ok(size) => {
-                        self.position += size as u64;
-                        return Ok(size);
+        if let StreamingState::Started { ref mut file, ref mut position } = *streaming_state {
+            if *position != offset {
+                match file.seek(SeekFrom::Start(offset)) {
+                    Ok(_) => {
+                        *position = offset;
                     }
                     Err(err) => {
-                        println_err!("Failed to read at {}: {}", offset, err.to_string());
+                        println_err!("Failed to seek to {}: {}", offset, err.to_string());
                         return Err(GstFlowReturn::Error);
                     }
                 }
             }
+
+            match file.read(data) {
+                Ok(size) => {
+                    *position += size as u64;
+                    Ok(size)
+                }
+                Err(err) => {
+                    println_err!("Failed to read at {}: {}", offset, err.to_string());
+                    Err(GstFlowReturn::Error)
+                }
+            }
+        } else {
+            Err(GstFlowReturn::Error)
         }
     }
 
-    fn do_seek(&mut self, _: u64, _: u64) -> bool {
+    fn do_seek(&self, _: u64, _: u64) -> bool {
         true
     }
 }

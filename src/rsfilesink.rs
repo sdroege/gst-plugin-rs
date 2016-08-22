@@ -27,11 +27,21 @@ use utils::*;
 use rssink::*;
 
 #[derive(Debug)]
+struct Settings {
+    location: Option<PathBuf>,
+}
+
+#[derive(Debug)]
+enum StreamingState {
+    Stopped,
+    Started { file: File, position: u64 },
+}
+
+#[derive(Debug)]
 pub struct FileSink {
     controller: SinkController,
-    location: Mutex<Option<PathBuf>>,
-    file: Option<File>,
-    position: u64,
+    settings: Mutex<Settings>,
+    streaming_state: Mutex<StreamingState>,
 }
 
 unsafe impl Sync for FileSink {}
@@ -41,9 +51,8 @@ impl FileSink {
     pub fn new(controller: SinkController) -> FileSink {
         FileSink {
             controller: controller,
-            location: Mutex::new(None),
-            file: None,
-            position: 0,
+            settings: Mutex::new(Settings { location: None }),
+            streaming_state: Mutex::new(StreamingState::Stopped),
         }
     }
 
@@ -54,24 +63,23 @@ impl FileSink {
 
 impl Sink for FileSink {
     fn set_uri(&self, uri: Option<Url>) -> bool {
+        let ref mut location = self.settings.lock().unwrap().location;
+
         match uri {
             None => {
-                let mut location = self.location.lock().unwrap();
                 *location = None;
-                return true;
+                true
             }
             Some(ref uri) => {
                 match uri.to_file_path().ok() {
                     Some(p) => {
-                        let mut location = self.location.lock().unwrap();
                         *location = Some(p);
-                        return true;
+                        true
                     }
                     None => {
-                        let mut location = self.location.lock().unwrap();
                         *location = None;
                         println_err!("Unsupported file URI '{}'", uri.as_str());
-                        return false;
+                        false
                     }
                 }
             }
@@ -79,31 +87,36 @@ impl Sink for FileSink {
     }
 
     fn get_uri(&self) -> Option<Url> {
-        let location = self.location.lock().unwrap();
-        (*location)
-            .as_ref()
+        let ref location = self.settings.lock().unwrap().location;
+        location.as_ref()
             .map(|l| Url::from_file_path(l).ok())
             .and_then(|i| i) // join()
     }
 
     fn start(&self) -> bool {
-        self.file = None;
-        self.position = 0;
+        let ref location = self.settings.lock().unwrap().location;
+        let mut streaming_state = self.streaming_state.lock().unwrap();
 
-        let location = self.location.lock().unwrap();
+        if let StreamingState::Started { .. } = *streaming_state {
+            return false;
+        }
+
         match *location {
-            None => return false,
+            None => false,
             Some(ref location) => {
                 match File::create(location.as_path()) {
                     Ok(file) => {
-                        self.file = Some(file);
-                        return true;
+                        *streaming_state = StreamingState::Started {
+                            file: file,
+                            position: 0,
+                        };
+                        true
                     }
                     Err(err) => {
                         println_err!("Could not open file for writing '{}': {}",
                                      location.to_str().unwrap_or("Non-UTF8 path"),
                                      err.to_string());
-                        return false;
+                        false
                     }
                 }
             }
@@ -111,24 +124,28 @@ impl Sink for FileSink {
     }
 
     fn stop(&self) -> bool {
-        self.file = None;
-        self.position = 0;
+        let mut streaming_state = self.streaming_state.lock().unwrap();
+        *streaming_state = StreamingState::Stopped;
 
         true
     }
 
     fn render(&self, data: &[u8]) -> GstFlowReturn {
-        match self.file {
-            None => return GstFlowReturn::Error,
-            Some(ref mut f) => {
-                match f.write_all(data) {
-                    Ok(_) => return GstFlowReturn::Ok,
-                    Err(err) => {
-                        println_err!("Failed to write: {}", err);
-                        return GstFlowReturn::Error;
-                    }
+        let mut streaming_state = self.streaming_state.lock().unwrap();
+
+        if let StreamingState::Started { ref mut file, ref mut position } = *streaming_state {
+            match file.write_all(data) {
+                Ok(_) => {
+                    *position += data.len() as u64;
+                    return GstFlowReturn::Ok;
+                }
+                Err(err) => {
+                    println_err!("Failed to write: {}", err);
+                    return GstFlowReturn::Error;
                 }
             }
+        } else {
+            return GstFlowReturn::Error;
         }
     }
 }
