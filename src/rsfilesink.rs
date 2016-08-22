@@ -53,7 +53,7 @@ impl FileSink {
 }
 
 impl Sink for FileSink {
-    fn set_uri(&mut self, uri: Option<Url>) -> bool {
+    fn set_uri(&self, uri: Option<Url>) -> bool {
         match uri {
             None => {
                 let mut location = self.location.lock().unwrap();
@@ -86,7 +86,7 @@ impl Sink for FileSink {
             .and_then(|i| i) // join()
     }
 
-    fn start(&mut self) -> bool {
+    fn start(&self) -> bool {
         self.file = None;
         self.position = 0;
 
@@ -110,14 +110,14 @@ impl Sink for FileSink {
         }
     }
 
-    fn stop(&mut self) -> bool {
+    fn stop(&self) -> bool {
         self.file = None;
         self.position = 0;
 
         true
     }
 
-    fn render(&mut self, data: &[u8]) -> GstFlowReturn {
+    fn render(&self, data: &[u8]) -> GstFlowReturn {
         match self.file {
             None => return GstFlowReturn::Error,
             Some(ref mut f) => {

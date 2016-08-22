@@ -40,13 +40,13 @@ impl SinkController {
 
 pub trait Sink: Sync + Send {
     // Called from any thread at any time
-    fn set_uri(&mut self, uri: Option<Url>) -> bool;
+    fn set_uri(&self, uri: Option<Url>) -> bool;
     fn get_uri(&self) -> Option<Url>;
 
     // Called from the streaming thread only
-    fn start(&mut self) -> bool;
-    fn stop(&mut self) -> bool;
-    fn render(&mut self, data: &[u8]) -> GstFlowReturn;
+    fn start(&self) -> bool;
+    fn stop(&self) -> bool;
+    fn render(&self, data: &[u8]) -> GstFlowReturn;
 }
 
 #[no_mangle]
