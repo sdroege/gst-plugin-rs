@@ -22,11 +22,8 @@ use std::ffi::CString;
 #[macro_export]
 macro_rules! println_err(
     ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
+        if let Err(_) = writeln!(&mut ::std::io::stderr(), $($arg)*) {
 // Ignore when writing fails
-        match r {
-            Ok(_) => (),
-            Err(_) => ()
         };
     } }
 );

@@ -73,7 +73,7 @@ impl HttpSrc {
     }
 
     fn do_request(&self, start: u64, stop: u64) -> StreamingState {
-        let ref url = self.settings.lock().unwrap().url;
+        let url = &self.settings.lock().unwrap().url;
 
         match *url {
             None => StreamingState::Stopped,
@@ -142,29 +142,29 @@ impl HttpSrc {
 
 impl Source for HttpSrc {
     fn set_uri(&self, uri: Option<Url>) -> bool {
-        let ref mut url = self.settings.lock().unwrap().url;
+        let url = &mut self.settings.lock().unwrap().url;
 
         match uri {
             None => {
                 *url = None;
-                return true;
+                true
             }
             Some(uri) => {
                 if uri.scheme() == "http" || uri.scheme() == "https" {
                     *url = Some(uri);
-                    return true;
+                    true
                 } else {
                     *url = None;
                     println_err!("Unsupported URI '{}'", uri.as_str());
-                    return false;
+                    false
                 }
             }
         }
     }
 
     fn get_uri(&self) -> Option<Url> {
-        let ref url = self.settings.lock().unwrap().url;
-        url.as_ref().map(|u| u.clone())
+        let url = &self.settings.lock().unwrap().url;
+        url.as_ref().cloned()
     }
 
     fn is_seekable(&self) -> bool {
