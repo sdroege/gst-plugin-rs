@@ -141,22 +141,22 @@ impl HttpSrc {
 }
 
 impl Source for HttpSrc {
-    fn set_uri(&self, uri: Option<Url>) -> bool {
+    fn set_uri(&self, uri: Option<Url>) -> Result<(), (UriError, String)> {
         let url = &mut self.settings.lock().unwrap().url;
 
         match uri {
             None => {
                 *url = None;
-                true
+                Ok(())
             }
             Some(uri) => {
                 if uri.scheme() == "http" || uri.scheme() == "https" {
                     *url = Some(uri);
-                    true
+                    Ok(())
                 } else {
                     *url = None;
-                    println_err!("Unsupported URI '{}'", uri.as_str());
-                    false
+                    Err((UriError::UnsupportedProtocol,
+                         format!("Unsupported URI '{}'", uri.as_str())))
                 }
             }
         }

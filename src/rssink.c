@@ -38,7 +38,7 @@ static GHashTable *sinks;
 extern gboolean sinks_register (void *plugin);
 extern void *sink_new (GstRsSink * sink, void *create_instance);
 extern GstFlowReturn sink_render (void *rssink, void *data, size_t data_len);
-extern gboolean sink_set_uri (void *rssink, const char *uri);
+extern gboolean sink_set_uri (void *rssink, const char *uri, GError ** err);
 extern char *sink_get_uri (void *rssink);
 extern gboolean sink_start (void *rssink);
 extern gboolean sink_stop (void *rssink);
@@ -140,7 +140,7 @@ gst_rs_sink_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_URI:
-      sink_set_uri (sink->instance, g_value_get_string (value));
+      sink_set_uri (sink->instance, g_value_get_string (value), NULL);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -229,11 +229,8 @@ gst_rs_sink_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 {
   GstRsSink *sink = GST_RS_SINK (handler);
 
-  if (!sink_set_uri (sink->instance, uri)) {
-    g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
-        "Can't handle URI '%s'", uri);
+  if (!sink_set_uri (sink->instance, uri, err))
     return FALSE;
-  }
 
   return TRUE;
 }

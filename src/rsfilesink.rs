@@ -62,24 +62,24 @@ impl FileSink {
 }
 
 impl Sink for FileSink {
-    fn set_uri(&self, uri: Option<Url>) -> bool {
+    fn set_uri(&self, uri: Option<Url>) -> Result<(), (UriError, String)> {
         let location = &mut self.settings.lock().unwrap().location;
 
         match uri {
             None => {
                 *location = None;
-                true
+                Ok(())
             }
             Some(ref uri) => {
                 match uri.to_file_path().ok() {
                     Some(p) => {
                         *location = Some(p);
-                        true
+                        Ok(())
                     }
                     None => {
                         *location = None;
-                        println_err!("Unsupported file URI '{}'", uri.as_str());
-                        false
+                        Err((UriError::UnsupportedProtocol,
+                             format!("Unsupported file URI '{}'", uri.as_str())))
                     }
                 }
             }

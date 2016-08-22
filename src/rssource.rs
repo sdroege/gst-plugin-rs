@@ -20,7 +20,6 @@ use std::os::raw::c_void;
 use std::ffi::{CStr, CString};
 use std::slice;
 use std::ptr;
-use std::io::Write;
 
 use url::Url;
 
@@ -39,7 +38,7 @@ impl SourceController {
 
 pub trait Source: Sync + Send {
     // Called from any thread at any time
-    fn set_uri(&self, uri: Option<Url>) -> bool;
+    fn set_uri(&self, uri: Option<Url>) -> Result<(), (UriError, String)>;
     fn get_uri(&self) -> Option<Url>;
 
     // Called from any thread between start/stop
@@ -66,19 +65,37 @@ pub unsafe extern "C" fn source_drop(ptr: *mut Box<Source>) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_set_uri(ptr: *mut Box<Source>, uri_ptr: *const c_char) -> GBoolean {
+pub unsafe extern "C" fn source_set_uri(ptr: *mut Box<Source>,
+                                        uri_ptr: *const c_char,
+                                        cerr: *mut c_void)
+                                        -> GBoolean {
     let source: &mut Box<Source> = &mut *ptr;
 
     if uri_ptr.is_null() {
-        GBoolean::from_bool(source.set_uri(None))
+        if let Err((code, msg)) = source.set_uri(None) {
+            code.into_gerror(cerr, Some(&msg));
+            GBoolean::False
+        } else {
+            GBoolean::True
+        }
     } else {
         let uri_str = CStr::from_ptr(uri_ptr).to_str().unwrap();
 
         match Url::parse(uri_str) {
-            Ok(uri) => GBoolean::from_bool(source.set_uri(Some(uri))),
+            Ok(uri) => {
+                if let Err((code, msg)) = source.set_uri(Some(uri)) {
+                    code.into_gerror(cerr, Some(&msg));
+                    GBoolean::False
+                } else {
+                    GBoolean::True
+                }
+            }
             Err(err) => {
-                source.set_uri(None);
-                println_err!("Failed to parse URI '{}': {}", uri_str, err);
+                let _ = source.set_uri(None);
+                UriError::BadUri.into_gerror(cerr,
+                                             Some(&format!("Failed to parse URI '{}': {}",
+                                                           uri_str,
+                                                           err)));
                 GBoolean::False
             }
         }

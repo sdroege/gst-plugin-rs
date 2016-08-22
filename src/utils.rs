@@ -17,7 +17,9 @@
 //
 //
 use libc::c_char;
+use std::os::raw::c_void;
 use std::ffi::CString;
+use std::ptr;
 
 #[macro_export]
 macro_rules! println_err(
@@ -53,4 +55,28 @@ impl GBoolean {
 #[no_mangle]
 pub unsafe extern "C" fn cstring_drop(ptr: *mut c_char) {
     CString::from_raw(ptr);
+}
+
+#[repr(C)]
+pub enum UriError {
+    UnsupportedProtocol = 0,
+    BadUri,
+    BadState,
+    BadReference,
+}
+
+extern "C" {
+    fn g_set_error_literal(err: *mut c_void, domain: u32, code: i32, message: *const c_char);
+    fn gst_uri_error_quark() -> u32;
+}
+
+impl UriError {
+    pub unsafe fn into_gerror(self, err: *mut c_void, message: Option<&String>) {
+        if let Some(msg) = message {
+            let cmsg = CString::new(msg.as_str()).unwrap();
+            g_set_error_literal(err, gst_uri_error_quark(), self as i32, cmsg.as_ptr());
+        } else {
+            g_set_error_literal(err, gst_uri_error_quark(), self as i32, ptr::null());
+        }
+    }
 }

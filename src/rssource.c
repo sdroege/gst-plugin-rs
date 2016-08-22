@@ -39,7 +39,7 @@ extern void source_drop (void *rssource);
 extern GstFlowReturn source_fill (void *rssource,
     uint64_t offset, void *data, size_t * data_len);
 extern gboolean source_do_seek (void *rssource, uint64_t start, uint64_t stop);
-extern gboolean source_set_uri (void *rssource, const char *uri);
+extern gboolean source_set_uri (void *rssource, const char *uri, GError ** err);
 extern char *source_get_uri (void *rssource);
 extern uint64_t source_get_size (void *rssource);
 extern gboolean source_is_seekable (void *rssource);
@@ -149,7 +149,7 @@ gst_rs_src_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case PROP_URI:
-      source_set_uri (src->instance, g_value_get_string (value));
+      source_set_uri (src->instance, g_value_get_string (value), NULL);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -274,11 +274,8 @@ gst_rs_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 {
   GstRsSrc *src = GST_RS_SRC (handler);
 
-  if (!source_set_uri (src->instance, uri)) {
-    g_set_error (err, GST_URI_ERROR, GST_URI_ERROR_BAD_URI,
-        "Can't handle URI '%s'", uri);
+  if (!source_set_uri (src->instance, uri, err))
     return FALSE;
-  }
 
   return TRUE;
 }
