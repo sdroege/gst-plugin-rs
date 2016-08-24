@@ -141,6 +141,10 @@ impl HttpSrc {
 }
 
 impl Source for HttpSrc {
+    fn get_controller(&self) -> &SourceController {
+        &self.controller
+    }
+
     fn set_uri(&self, uri: Option<Url>) -> Result<(), (UriError, String)> {
         let url = &mut self.settings.lock().unwrap().url;
 

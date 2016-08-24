@@ -62,6 +62,10 @@ impl FileSink {
 }
 
 impl Sink for FileSink {
+    fn get_controller(&self) -> &SinkController {
+        &self.controller
+    }
+
     fn set_uri(&self, uri: Option<Url>) -> Result<(), (UriError, String)> {
         let location = &mut self.settings.lock().unwrap().location;
 

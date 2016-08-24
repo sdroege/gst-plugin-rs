@@ -38,6 +38,8 @@ impl SinkController {
 }
 
 pub trait Sink: Sync + Send {
+    fn get_controller(&self) -> &SinkController;
+
     // Called from any thread at any time
     fn set_uri(&self, uri: Option<Url>) -> Result<(), (UriError, String)>;
     fn get_uri(&self) -> Option<Url>;
