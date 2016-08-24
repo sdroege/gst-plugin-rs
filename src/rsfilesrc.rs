@@ -67,7 +67,7 @@ impl Source for FileSrc {
         &self.controller
     }
 
-    fn set_uri(&self, uri: Option<Url>) -> Result<(), (UriError, String)> {
+    fn set_uri(&self, uri: Option<Url>) -> Result<(), UriError> {
         let location = &mut self.settings.lock().unwrap().location;
 
         match uri {
@@ -83,8 +83,8 @@ impl Source for FileSrc {
                     }
                     None => {
                         *location = None;
-                        Err((UriError::UnsupportedProtocol,
-                             format!("Unsupported file URI '{}'", uri.as_str())))
+                        Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+                                          Some(format!("Unsupported file URI '{}'", uri.as_str()))))
                     }
                 }
             }

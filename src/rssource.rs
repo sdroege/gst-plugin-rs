@@ -40,7 +40,7 @@ pub trait Source: Sync + Send {
     fn get_controller(&self) -> &SourceController;
 
     // Called from any thread at any time
-    fn set_uri(&self, uri: Option<Url>) -> Result<(), (UriError, String)>;
+    fn set_uri(&self, uri: Option<Url>) -> Result<(), UriError>;
     fn get_uri(&self) -> Option<Url>;
 
     // Called from any thread between start/stop
@@ -74,8 +74,8 @@ pub unsafe extern "C" fn source_set_uri(ptr: *mut Box<Source>,
     let source: &mut Box<Source> = &mut *ptr;
 
     if uri_ptr.is_null() {
-        if let Err((code, msg)) = source.set_uri(None) {
-            code.into_gerror(cerr, Some(&msg));
+        if let Err(err) = source.set_uri(None) {
+            err.into_gerror(cerr);
             GBoolean::False
         } else {
             GBoolean::True
@@ -85,8 +85,8 @@ pub unsafe extern "C" fn source_set_uri(ptr: *mut Box<Source>,
 
         match Url::parse(uri_str) {
             Ok(uri) => {
-                if let Err((code, msg)) = source.set_uri(Some(uri)) {
-                    code.into_gerror(cerr, Some(&msg));
+                if let Err(err) = source.set_uri(Some(uri)) {
+                    err.into_gerror(cerr);
                     GBoolean::False
                 } else {
                     GBoolean::True
@@ -94,10 +94,9 @@ pub unsafe extern "C" fn source_set_uri(ptr: *mut Box<Source>,
             }
             Err(err) => {
                 let _ = source.set_uri(None);
-                UriError::BadUri.into_gerror(cerr,
-                                             Some(&format!("Failed to parse URI '{}': {}",
-                                                           uri_str,
-                                                           err)));
+                UriError::new(UriErrorKind::BadUri,
+                              Some(format!("Failed to parse URI '{}': {}", uri_str, err)))
+                    .into_gerror(cerr);
                 GBoolean::False
             }
         }

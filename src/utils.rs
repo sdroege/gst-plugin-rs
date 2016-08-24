@@ -20,6 +20,9 @@ use libc::c_char;
 use std::os::raw::c_void;
 use std::ffi::CString;
 use std::ptr;
+use std::error::Error;
+use std::fmt::{Display, Formatter};
+use std::fmt::Error as FmtError;
 
 #[macro_export]
 macro_rules! println_err(
@@ -57,12 +60,18 @@ pub unsafe extern "C" fn cstring_drop(ptr: *mut c_char) {
     CString::from_raw(ptr);
 }
 
-#[repr(C)]
-pub enum UriError {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UriErrorKind {
     UnsupportedProtocol = 0,
     BadUri,
     BadState,
     BadReference,
+}
+
+#[derive(Debug)]
+pub struct UriError {
+    error_kind: UriErrorKind,
+    message: Option<String>,
 }
 
 extern "C" {
@@ -71,12 +80,53 @@ extern "C" {
 }
 
 impl UriError {
-    pub unsafe fn into_gerror(self, err: *mut c_void, message: Option<&String>) {
-        if let Some(msg) = message {
+    pub fn new(error_kind: UriErrorKind, message: Option<String>) -> UriError {
+        UriError {
+            error_kind: error_kind,
+            message: message,
+        }
+    }
+
+    pub fn message(&self) -> &Option<String> {
+        &self.message
+    }
+
+    pub fn kind(&self) -> UriErrorKind {
+        self.error_kind
+    }
+
+    pub unsafe fn into_gerror(self, err: *mut c_void) {
+        if let Some(msg) = self.message {
             let cmsg = CString::new(msg.as_str()).unwrap();
-            g_set_error_literal(err, gst_uri_error_quark(), self as i32, cmsg.as_ptr());
+            g_set_error_literal(err,
+                                gst_uri_error_quark(),
+                                self.error_kind as i32,
+                                cmsg.as_ptr());
         } else {
-            g_set_error_literal(err, gst_uri_error_quark(), self as i32, ptr::null());
+            g_set_error_literal(err,
+                                gst_uri_error_quark(),
+                                self.error_kind as i32,
+                                ptr::null());
+        }
+    }
+}
+
+impl Display for UriError {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        match self.message {
+            None => f.write_str(self.description()),
+            Some(ref message) => f.write_fmt(format_args!("{}: {}", self.description(), message)),
+        }
+    }
+}
+
+impl Error for UriError {
+    fn description(&self) -> &str {
+        match self.error_kind {
+            UriErrorKind::UnsupportedProtocol => "Unsupported protocol",
+            UriErrorKind::BadUri => "Bad URI",
+            UriErrorKind::BadState => "Bad State",
+            UriErrorKind::BadReference => "Bad Reference",
         }
     }
 }

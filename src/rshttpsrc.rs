@@ -145,7 +145,7 @@ impl Source for HttpSrc {
         &self.controller
     }
 
-    fn set_uri(&self, uri: Option<Url>) -> Result<(), (UriError, String)> {
+    fn set_uri(&self, uri: Option<Url>) -> Result<(), UriError> {
         let url = &mut self.settings.lock().unwrap().url;
 
         match uri {
@@ -159,8 +159,8 @@ impl Source for HttpSrc {
                     Ok(())
                 } else {
                     *url = None;
-                    Err((UriError::UnsupportedProtocol,
-                         format!("Unsupported URI '{}'", uri.as_str())))
+                    Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+                                      Some(format!("Unsupported URI '{}'", uri.as_str()))))
                 }
             }
         }
