@@ -34,6 +34,7 @@ macro_rules! println_err(
 );
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GstFlowReturn {
     Ok = 0,
     NotLinked = -1,
@@ -44,6 +45,7 @@ pub enum GstFlowReturn {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GBoolean {
     False = 0,
     True = 1,
