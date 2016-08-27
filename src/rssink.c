@@ -246,6 +246,15 @@ gst_rs_sink_uri_handler_init (gpointer g_iface, gpointer iface_data)
   iface->set_uri = gst_rs_sink_uri_set_uri;
 }
 
+void
+gst_rs_sink_error (GstRsSink * sink, GQuark error_domain, gint error_code,
+    const gchar * message, const gchar * debug, const gchar * file,
+    const gchar * function, guint line)
+{
+  gst_element_message_full (GST_ELEMENT (sink), GST_MESSAGE_ERROR, error_domain,
+      error_code, g_strdup (message), g_strdup (debug), file, function, line);
+}
+
 gboolean
 gst_rs_sink_plugin_init (GstPlugin * plugin)
 {

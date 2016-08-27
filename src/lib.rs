@@ -24,6 +24,8 @@ extern crate hyper;
 
 #[macro_use]
 pub mod utils;
+#[macro_use]
+pub mod error;
 pub mod rssource;
 pub mod rssink;
 pub mod rsfilesrc;

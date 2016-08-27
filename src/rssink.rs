@@ -25,6 +25,28 @@ use std::ptr;
 use url::Url;
 
 use utils::*;
+use error::*;
+
+#[derive(Debug)]
+pub enum SinkError {
+    Failure,
+    OpenFailed,
+    NotFound,
+    WriteFailed,
+    SeekFailed,
+}
+
+impl ToGError for SinkError {
+    fn to_gerror(&self) -> (u32, i32) {
+        match *self {
+            SinkError::Failure => (gst_library_error_domain(), 1),
+            SinkError::OpenFailed => (gst_resource_error_domain(), 6),
+            SinkError::NotFound => (gst_resource_error_domain(), 3),
+            SinkError::WriteFailed => (gst_resource_error_domain(), 10),
+            SinkError::SeekFailed => (gst_resource_error_domain(), 11),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct SinkController {
@@ -34,6 +56,50 @@ pub struct SinkController {
 impl SinkController {
     fn new(sink: *mut c_void) -> SinkController {
         SinkController { sink: sink }
+    }
+
+    pub fn error(&self, error: &ErrorMessage) {
+        extern "C" {
+            fn gst_rs_sink_error(sink: *mut c_void,
+                                 error_domain: u32,
+                                 error_code: i32,
+                                 message: *const c_char,
+                                 debug: *const c_char,
+                                 filename: *const c_char,
+                                 function: *const c_char,
+                                 line: u32);
+        }
+
+        let ErrorMessage { error_domain,
+                           error_code,
+                           ref message,
+                           ref debug,
+                           filename,
+                           function,
+                           line } = *error;
+
+        let message_cstr = message.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
+        let message_ptr = message_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
+
+        let debug_cstr = debug.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
+        let debug_ptr = debug_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
+
+        let file_cstr = CString::new(filename.as_bytes()).unwrap();
+        let file_ptr = file_cstr.as_ptr();
+
+        let function_cstr = CString::new(function.as_bytes()).unwrap();
+        let function_ptr = function_cstr.as_ptr();
+
+        unsafe {
+            gst_rs_sink_error(self.sink,
+                              error_domain,
+                              error_code,
+                              message_ptr,
+                              debug_ptr,
+                              file_ptr,
+                              function_ptr,
+                              line);
+        }
     }
 }
 
@@ -45,9 +111,9 @@ pub trait Sink: Sync + Send {
     fn get_uri(&self) -> Option<Url>;
 
     // Called from the streaming thread only
-    fn start(&self) -> bool;
-    fn stop(&self) -> bool;
-    fn render(&self, data: &[u8]) -> GstFlowReturn;
+    fn start(&self) -> Result<(), ErrorMessage>;
+    fn stop(&self) -> Result<(), ErrorMessage>;
+    fn render(&self, data: &[u8]) -> Result<(), FlowError>;
 }
 
 #[no_mangle]
@@ -117,19 +183,41 @@ pub unsafe extern "C" fn sink_render(ptr: *mut Box<Sink>,
     let sink: &mut Box<Sink> = &mut *ptr;
     let data = slice::from_raw_parts(data_ptr, data_len);
 
-    sink.render(data)
+    match sink.render(data) {
+        Ok(..) => GstFlowReturn::Ok,
+        Err(flow_error) => {
+            match flow_error {
+                FlowError::NotNegotiated(ref msg) |
+                FlowError::Error(ref msg) => sink.get_controller().error(msg),
+                _ => (),
+            }
+            flow_error.to_native()
+        }
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn sink_start(ptr: *mut Box<Sink>) -> GBoolean {
     let sink: &mut Box<Sink> = &mut *ptr;
 
-    GBoolean::from_bool(sink.start())
+    match sink.start() {
+        Ok(..) => GBoolean::True,
+        Err(ref msg) => {
+            sink.get_controller().error(msg);
+            GBoolean::False
+        }
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn sink_stop(ptr: *mut Box<Sink>) -> GBoolean {
     let sink: &mut Box<Sink> = &mut *ptr;
 
-    GBoolean::from_bool(sink.stop())
+    match sink.stop() {
+        Ok(..) => GBoolean::True,
+        Err(ref msg) => {
+            sink.get_controller().error(msg);
+            GBoolean::False
+        }
+    }
 }

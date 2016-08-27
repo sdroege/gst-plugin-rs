@@ -22,9 +22,47 @@ use url::Url;
 
 use std::io::Write;
 use std::sync::Mutex;
+use std::convert::From;
 
-use utils::*;
+use error::*;
 use rssink::*;
+
+macro_rules! error_msg(
+// Format strings
+    ($err:expr, ($($msg:tt)*), [$($dbg:tt)*]) =>  { {
+        ErrorMessage::new(&$err, Some(From::from(format!($($msg)*))),
+                          From::from(Some(format!($($dbg)*))),
+                          file!(), module_path!(), line!())
+    }};
+    ($err:expr, ($($msg:tt)*)) =>  { {
+        ErrorMessage::new(&$err, Some(From::from(format!($($msg)*))),
+                          None,
+                          file!(), module_path!(), line!())
+    }};
+
+    ($err:expr, [$($dbg:tt)*]) =>  { {
+        ErrorMessage::new(&$err, None,
+                          Some(From::from(format!($($dbg)*))),
+                          file!(), module_path!(), line!())
+    }};
+
+// Plain strings
+    ($err:expr, ($msg:expr), [$dbg:expr]) =>  {
+        ErrorMessage::new(&$err, Some(From::from($msg)),
+                          Some(From::from($dbg)),
+                          file!(), module_path!(), line!())
+    };
+    ($err:expr, ($msg:expr)) => {
+        ErrorMessage::new(&$err, Some(From::from($msg)),
+                          None,
+                          file!(), module_path!(), line!())
+    };
+    ($err:expr, [$dbg:expr]) => {
+        ErrorMessage::new(&$err, None,
+                          Some(From::from($dbg)),
+                          file!(), module_path!(), line!())
+    };
+);
 
 #[derive(Debug)]
 struct Settings {
@@ -69,23 +107,16 @@ impl Sink for FileSink {
     fn set_uri(&self, uri: Option<Url>) -> Result<(), UriError> {
         let location = &mut self.settings.lock().unwrap().location;
 
+        *location = None;
         match uri {
-            None => {
-                *location = None;
-                Ok(())
-            }
+            None => Ok(()),
             Some(ref uri) => {
-                match uri.to_file_path().ok() {
-                    Some(p) => {
-                        *location = Some(p);
-                        Ok(())
-                    }
-                    None => {
-                        *location = None;
+                *location = Some(try!(uri.to_file_path()
+                    .or_else(|_| {
                         Err(UriError::new(UriErrorKind::UnsupportedProtocol,
                                           Some(format!("Unsupported file URI '{}'", uri.as_str()))))
-                    }
-                }
+                    })));
+                Ok(())
             }
         }
     }
@@ -97,59 +128,55 @@ impl Sink for FileSink {
             .and_then(|i| i) // join()
     }
 
-    fn start(&self) -> bool {
+    fn start(&self) -> Result<(), ErrorMessage> {
         let location = &self.settings.lock().unwrap().location;
         let mut streaming_state = self.streaming_state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *streaming_state {
-            return false;
+            return Err(error_msg!(SinkError::Failure, ["Sink already started"]));
         }
 
-        match *location {
-            None => false,
-            Some(ref location) => {
-                match File::create(location.as_path()) {
-                    Ok(file) => {
-                        *streaming_state = StreamingState::Started {
-                            file: file,
-                            position: 0,
-                        };
-                        true
-                    }
-                    Err(err) => {
-                        println_err!("Could not open file for writing '{}': {}",
-                                     location.to_str().unwrap_or("Non-UTF8 path"),
-                                     err.to_string());
-                        false
-                    }
-                }
-            }
-        }
+        let location = &try!(location.as_ref().ok_or_else(|| {
+            error_msg!(SinkError::Failure, ["No URI provided"])
+        }));
+
+        let file = try!(File::create(location.as_path()).or_else(|err| {
+            Err(error_msg!(SinkError::OpenFailed,
+                           ["Could not open file for writing '{}': {}",
+                            location.to_str().unwrap_or("Non-UTF8 path"),
+                            err.to_string()]))
+        }));
+
+        *streaming_state = StreamingState::Started {
+            file: file,
+            position: 0,
+        };
+
+        Ok(())
     }
 
-    fn stop(&self) -> bool {
+    fn stop(&self) -> Result<(), ErrorMessage> {
         let mut streaming_state = self.streaming_state.lock().unwrap();
         *streaming_state = StreamingState::Stopped;
 
-        true
+        Ok(())
     }
 
-    fn render(&self, data: &[u8]) -> GstFlowReturn {
+    fn render(&self, data: &[u8]) -> Result<(), FlowError> {
         let mut streaming_state = self.streaming_state.lock().unwrap();
 
-        if let StreamingState::Started { ref mut file, ref mut position } = *streaming_state {
-            match file.write_all(data) {
-                Ok(_) => {
-                    *position += data.len() as u64;
-                    GstFlowReturn::Ok
-                }
-                Err(err) => {
-                    println_err!("Failed to write: {}", err);
-                    GstFlowReturn::Error
-                }
+        let (file, position) = match *streaming_state {
+            StreamingState::Started { ref mut file, ref mut position } => (file, position),
+            StreamingState::Stopped => {
+                return Err(FlowError::Error(error_msg!(SinkError::Failure, ["Not started yet"])));
             }
-        } else {
-            GstFlowReturn::Error
-        }
+        };
+
+        try!(file.write_all(data).or_else(|err| {
+            Err(FlowError::Error(error_msg!(SinkError::WriteFailed, ["Failed to write: {}", err])))
+        }));
+
+        *position += data.len() as u64;
+        Ok(())
     }
 }

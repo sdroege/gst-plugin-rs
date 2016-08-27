@@ -23,10 +23,9 @@ use hyper::header::{ContentLength, ContentRange, ContentRangeSpec, Range, ByteRa
 use hyper::client::Client;
 use hyper::client::response::Response;
 
-use std::io::Write;
 use std::sync::Mutex;
 
-use utils::*;
+use error::*;
 use rssource::*;
 
 #[derive(Debug)]
@@ -72,71 +71,70 @@ impl HttpSrc {
         Box::new(HttpSrc::new(controller))
     }
 
-    fn do_request(&self, start: u64, stop: u64) -> StreamingState {
+    fn do_request(&self, start: u64, stop: u64) -> Result<StreamingState, ErrorMessage> {
         let url = &self.settings.lock().unwrap().url;
 
-        match *url {
-            None => StreamingState::Stopped,
-            Some(ref url) => {
-                let mut req = self.client.get(url.clone());
+        let url = try!(url.as_ref()
+            .ok_or_else(|| error_msg!(SourceError::Failure, ["No URI provided"])));
 
-                if start != 0 || stop != u64::MAX {
-                    req = if stop == u64::MAX {
-                        req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]))
-                    } else {
-                        req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]))
-                    };
-                }
 
-                match req.send() {
-                    Ok(response) => {
-                        if response.status.is_success() {
-                            let size = if let Some(&ContentLength(content_length)) =
-                                              response.headers.get() {
-                                content_length + start
-                            } else {
-                                u64::MAX
-                            };
-                            let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) =
-                                                            response.headers.get() {
-                                ranges.iter().any(|u| *u == RangeUnit::Bytes)
-                            } else {
-                                false
-                            };
+        let mut req = self.client.get(url.clone());
 
-                            let seekable = size != u64::MAX && accept_byte_ranges;
-
-                            let position = if let Some(&ContentRange(ContentRangeSpec::Bytes{range: Some((range_start, _)), ..})) = response.headers.get() {
-                                range_start
-                            } else {
-                                start
-                            };
-
-                            if position != start {
-                                println_err!("Failed to seek to {}: Got {}", start, position);
-                                StreamingState::Stopped
-                            } else {
-                                StreamingState::Started {
-                                    response: response,
-                                    seekable: seekable,
-                                    position: 0,
-                                    size: size,
-                                    start: start,
-                                    stop: stop,
-                                }
-                            }
-                        } else {
-                            println_err!("Failed to fetch {}: {}", url, response.status);
-                            StreamingState::Stopped
-                        }
-                    }
-                    Err(err) => {
-                        println_err!("Failed to fetch {}: {}", url, err.to_string());
-                        StreamingState::Stopped
-                    }
-                }
-            }
+        if start != 0 || stop != u64::MAX {
+            req = if stop == u64::MAX {
+                req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]))
+            } else {
+                req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]))
+            };
         }
+
+        let response = try!(req.send().or_else(|err| {
+            Err(error_msg!(SourceError::ReadFailed,
+                           ["Failed to fetch {}: {}", url, err.to_string()]))
+        }));
+
+        if !response.status.is_success() {
+            return Err(error_msg!(SourceError::ReadFailed,
+                                  ["Failed to fetch {}: {}", url, response.status]));
+        }
+
+        let size = if let Some(&ContentLength(content_length)) = response.headers.get() {
+            content_length + start
+        } else {
+            u64::MAX
+        };
+
+        let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = response.headers
+            .get() {
+            ranges.iter().any(|u| *u == RangeUnit::Bytes)
+        } else {
+            false
+        };
+
+        let seekable = size != u64::MAX && accept_byte_ranges;
+
+        let position = if let Some(&ContentRange(ContentRangeSpec::Bytes { range: Some((range_start,
+                                                                                 _)),
+                                                                           .. })) = response.headers
+            .get() {
+            range_start
+        } else {
+            start
+        };
+
+        if position != start {
+            return Err(error_msg!(SourceError::SeekFailed,
+                                  ["Failed to seek to {}: Got {}", start, position]));
+        }
+
+        Ok(StreamingState::Started {
+            response: response,
+            seekable: seekable,
+            position: 0,
+            size: size,
+            start: start,
+            stop: stop,
+        })
     }
 }
 
@@ -154,14 +152,14 @@ impl Source for HttpSrc {
                 Ok(())
             }
             Some(uri) => {
-                if uri.scheme() == "http" || uri.scheme() == "https" {
-                    *url = Some(uri);
-                    Ok(())
-                } else {
+                if uri.scheme() != "http" && uri.scheme() != "https" {
                     *url = None;
-                    Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                                      Some(format!("Unsupported URI '{}'", uri.as_str()))))
+                    return Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+                                             Some(format!("Unsupported URI '{}'", uri.as_str()))));
                 }
+
+                *url = Some(uri);
+                Ok(())
             }
         }
     }
@@ -188,70 +186,65 @@ impl Source for HttpSrc {
         }
     }
 
-    fn start(&self) -> bool {
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-        *streaming_state = self.do_request(0, u64::MAX);
-
-        if let StreamingState::Stopped = *streaming_state {
-            false
-        } else {
-            true
-        }
-    }
-
-    fn stop(&self) -> bool {
+    fn start(&self) -> Result<(), ErrorMessage> {
         let mut streaming_state = self.streaming_state.lock().unwrap();
         *streaming_state = StreamingState::Stopped;
 
-        true
+        let new_state = try!(self.do_request(0, u64::MAX));
+
+        *streaming_state = new_state;
+        Ok(())
     }
 
-    fn do_seek(&self, start: u64, stop: u64) -> bool {
+    fn stop(&self) -> Result<(), ErrorMessage> {
         let mut streaming_state = self.streaming_state.lock().unwrap();
-        *streaming_state = self.do_request(start, stop);
+        *streaming_state = StreamingState::Stopped;
 
-        if let StreamingState::Stopped = *streaming_state {
-            false
-        } else {
-            true
-        }
+        Ok(())
     }
 
-    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
+    fn do_seek(&self, start: u64, stop: u64) -> Result<(), ErrorMessage> {
         let mut streaming_state = self.streaming_state.lock().unwrap();
+        *streaming_state = StreamingState::Stopped;
 
-        if let StreamingState::Stopped = *streaming_state {
-            return Err(GstFlowReturn::Error);
-        }
+        let new_state = try!(self.do_request(start, stop));
+
+        *streaming_state = new_state;
+        Ok(())
+    }
+
+    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError> {
+        let mut streaming_state = self.streaming_state.lock().unwrap();
 
         if let StreamingState::Started { position, stop, .. } = *streaming_state {
             if position != offset {
-                *streaming_state = self.do_request(offset, stop);
-                if let StreamingState::Stopped = *streaming_state {
-                    println_err!("Failed to seek to {}", offset);
-                    return Err(GstFlowReturn::Error);
-                }
+                *streaming_state = StreamingState::Stopped;
+                let new_state = try!(self.do_request(offset, stop)
+                    .or_else(|err| Err(FlowError::Error(err))));
+
+                *streaming_state = new_state;
             }
         }
 
-        if let StreamingState::Started { ref mut response, ref mut position, .. } =
-               *streaming_state {
-            match response.read(data) {
-                Ok(size) => {
-                    if size == 0 {
-                        return Err(GstFlowReturn::Eos);
-                    }
-
-                    *position += size as u64;
-                    Ok(size)
-                }
-                Err(err) => {
-                    println_err!("Failed to read at {}: {}", offset, err.to_string());
-                    Err(GstFlowReturn::Error)
-                }
+        let (response, position) = match *streaming_state {
+            StreamingState::Started { ref mut response, ref mut position, .. } => {
+                (response, position)
             }
-        } else {
-            Err(GstFlowReturn::Error)
+            StreamingState::Stopped => {
+                return Err(FlowError::Error(error_msg!(SourceError::Failure, ["Not started yet"])));
+            }
+        };
+
+        let size = try!(response.read(data).or_else(|err| {
+            Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
+                                            ["Failed to read at {}: {}", offset, err.to_string()])))
+        }));
+
+        if size == 0 {
+            return Err(FlowError::Eos);
         }
+
+        *position += size as u64;
+        Ok(size)
     }
 }

@@ -24,6 +24,28 @@ use std::ptr;
 use url::Url;
 
 use utils::*;
+use error::*;
+
+#[derive(Debug)]
+pub enum SourceError {
+    Failure,
+    OpenFailed,
+    NotFound,
+    ReadFailed,
+    SeekFailed,
+}
+
+impl ToGError for SourceError {
+    fn to_gerror(&self) -> (u32, i32) {
+        match *self {
+            SourceError::Failure => (gst_library_error_domain(), 1),
+            SourceError::OpenFailed => (gst_resource_error_domain(), 5),
+            SourceError::NotFound => (gst_resource_error_domain(), 3),
+            SourceError::ReadFailed => (gst_resource_error_domain(), 9),
+            SourceError::SeekFailed => (gst_resource_error_domain(), 11),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct SourceController {
@@ -33,6 +55,50 @@ pub struct SourceController {
 impl SourceController {
     fn new(source: *mut c_void) -> SourceController {
         SourceController { source: source }
+    }
+
+    pub fn error(&self, error: &ErrorMessage) {
+        extern "C" {
+            fn gst_rs_source_error(source: *mut c_void,
+                                   error_domain: u32,
+                                   error_code: i32,
+                                   message: *const c_char,
+                                   debug: *const c_char,
+                                   filename: *const c_char,
+                                   function: *const c_char,
+                                   line: u32);
+        }
+
+        let ErrorMessage { error_domain,
+                           error_code,
+                           ref message,
+                           ref debug,
+                           filename,
+                           function,
+                           line } = *error;
+
+        let message_cstr = message.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
+        let message_ptr = message_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
+
+        let debug_cstr = debug.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
+        let debug_ptr = debug_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
+
+        let file_cstr = CString::new(filename.as_bytes()).unwrap();
+        let file_ptr = file_cstr.as_ptr();
+
+        let function_cstr = CString::new(function.as_bytes()).unwrap();
+        let function_ptr = function_cstr.as_ptr();
+
+        unsafe {
+            gst_rs_source_error(self.source,
+                                error_domain,
+                                error_code,
+                                message_ptr,
+                                debug_ptr,
+                                file_ptr,
+                                function_ptr,
+                                line);
+        }
     }
 }
 
@@ -47,10 +113,10 @@ pub trait Source: Sync + Send {
     fn is_seekable(&self) -> bool;
 
     // Called from the streaming thread only
-    fn start(&self) -> bool;
-    fn stop(&self) -> bool;
-    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn>;
-    fn do_seek(&self, start: u64, stop: u64) -> bool;
+    fn start(&self) -> Result<(), ErrorMessage>;
+    fn stop(&self) -> Result<(), ErrorMessage>;
+    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError>;
+    fn do_seek(&self, start: u64, stop: u64) -> Result<(), ErrorMessage>;
     fn get_size(&self) -> u64;
 }
 
@@ -129,7 +195,14 @@ pub unsafe extern "C" fn source_fill(ptr: *mut Box<Source>,
             *data_len = actual_len;
             GstFlowReturn::Ok
         }
-        Err(ret) => ret,
+        Err(flow_error) => {
+            match flow_error {
+                FlowError::NotNegotiated(ref msg) |
+                FlowError::Error(ref msg) => source.get_controller().error(msg),
+                _ => (),
+            }
+            flow_error.to_native()
+        }
     }
 }
 
@@ -144,14 +217,26 @@ pub unsafe extern "C" fn source_get_size(ptr: *const Box<Source>) -> u64 {
 pub unsafe extern "C" fn source_start(ptr: *mut Box<Source>) -> GBoolean {
     let source: &mut Box<Source> = &mut *ptr;
 
-    GBoolean::from_bool(source.start())
+    match source.start() {
+        Ok(..) => GBoolean::True,
+        Err(ref msg) => {
+            source.get_controller().error(msg);
+            GBoolean::False
+        }
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn source_stop(ptr: *mut Box<Source>) -> GBoolean {
     let source: &mut Box<Source> = &mut *ptr;
 
-    GBoolean::from_bool(source.stop())
+    match source.stop() {
+        Ok(..) => GBoolean::True,
+        Err(ref msg) => {
+            source.get_controller().error(msg);
+            GBoolean::False
+        }
+    }
 }
 
 #[no_mangle]
@@ -165,5 +250,11 @@ pub unsafe extern "C" fn source_is_seekable(ptr: *const Box<Source>) -> GBoolean
 pub unsafe extern "C" fn source_do_seek(ptr: *mut Box<Source>, start: u64, stop: u64) -> GBoolean {
     let source: &mut Box<Source> = &mut *ptr;
 
-    GBoolean::from_bool(source.do_seek(start, stop))
+    match source.do_seek(start, stop) {
+        Ok(..) => GBoolean::True,
+        Err(ref msg) => {
+            source.get_controller().error(msg);
+            GBoolean::False
+        }
+    }
 }

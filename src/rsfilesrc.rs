@@ -22,9 +22,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use url::Url;
 
-use std::io::Write;
-
-use utils::*;
+use error::*;
 use rssource::*;
 
 #[derive(Debug)]
@@ -76,17 +74,12 @@ impl Source for FileSrc {
                 Ok(())
             }
             Some(ref uri) => {
-                match uri.to_file_path().ok() {
-                    Some(p) => {
-                        *location = Some(p);
-                        Ok(())
-                    }
-                    None => {
-                        *location = None;
+                *location = Some(try!(uri.to_file_path()
+                    .or_else(|_| {
                         Err(UriError::new(UriErrorKind::UnsupportedProtocol,
                                           Some(format!("Unsupported file URI '{}'", uri.as_str()))))
-                    }
-                }
+                    })));
+                Ok(())
             }
         }
     }
@@ -115,75 +108,71 @@ impl Source for FileSrc {
         }
     }
 
-    fn start(&self) -> bool {
+    fn start(&self) -> Result<(), ErrorMessage> {
         let location = &self.settings.lock().unwrap().location;
         let mut streaming_state = self.streaming_state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *streaming_state {
-            return false;
+            return Err(error_msg!(SourceError::Failure, ["Source already started"]));
         }
 
-        match *location {
-            None => false,
-            Some(ref location) => {
-                match File::open(location.as_path()) {
-                    Ok(file) => {
-                        *streaming_state = StreamingState::Started {
-                            file: file,
-                            position: 0,
-                        };
-                        true
-                    }
-                    Err(err) => {
-                        println_err!("Could not open file for writing '{}': {}",
-                                     location.to_str().unwrap_or("Non-UTF8 path"),
-                                     err.to_string());
-                        false
-                    }
-                }
-            }
-        }
+        let location = &try!(location.as_ref()
+            .ok_or_else(|| error_msg!(SourceError::Failure, ["No URI provided"])));
+
+        let file = try!(File::open(location.as_path()).or_else(|err| {
+            Err(error_msg!(SourceError::OpenFailed,
+                           ["Could not open file for reading '{}': {}",
+                            location.to_str().unwrap_or("Non-UTF8 path"),
+                            err.to_string()]))
+        }));
+
+        *streaming_state = StreamingState::Started {
+            file: file,
+            position: 0,
+        };
+
+        Ok(())
     }
 
-    fn stop(&self) -> bool {
+    fn stop(&self) -> Result<(), ErrorMessage> {
         let mut streaming_state = self.streaming_state.lock().unwrap();
         *streaming_state = StreamingState::Stopped;
 
-        true
+        Ok(())
     }
 
-    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, GstFlowReturn> {
+    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError> {
         let mut streaming_state = self.streaming_state.lock().unwrap();
 
-        if let StreamingState::Started { ref mut file, ref mut position } = *streaming_state {
-            if *position != offset {
-                match file.seek(SeekFrom::Start(offset)) {
-                    Ok(_) => {
-                        *position = offset;
-                    }
-                    Err(err) => {
-                        println_err!("Failed to seek to {}: {}", offset, err.to_string());
-                        return Err(GstFlowReturn::Error);
-                    }
-                }
-            }
 
-            match file.read(data) {
-                Ok(size) => {
-                    *position += size as u64;
-                    Ok(size)
-                }
-                Err(err) => {
-                    println_err!("Failed to read at {}: {}", offset, err.to_string());
-                    Err(GstFlowReturn::Error)
-                }
+        let (file, position) = match *streaming_state {
+            StreamingState::Started { ref mut file, ref mut position } => (file, position),
+            StreamingState::Stopped => {
+                return Err(FlowError::Error(error_msg!(SourceError::Failure, ["Not started yet"])));
             }
-        } else {
-            Err(GstFlowReturn::Error)
+        };
+
+        if *position != offset {
+            try!(file.seek(SeekFrom::Start(offset)).or_else(|err| {
+                Err(FlowError::Error(error_msg!(SourceError::SeekFailed,
+                                                ["Failed to seek to {}: {}",
+                                                 offset,
+                                                 err.to_string()])))
+            }));
+            *position = offset;
         }
+
+        let size = try!(file.read(data).or_else(|err| {
+            Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
+                                            ["Failed to read at {}: {}", offset, err.to_string()])))
+        }));
+
+        *position += size as u64;
+
+        Ok(size)
     }
 
-    fn do_seek(&self, _: u64, _: u64) -> bool {
-        true
+    fn do_seek(&self, _: u64, _: u64) -> Result<(), ErrorMessage> {
+        Ok(())
     }
 }
