@@ -27,43 +27,6 @@ use std::convert::From;
 use error::*;
 use rssink::*;
 
-macro_rules! error_msg(
-// Format strings
-    ($err:expr, ($($msg:tt)*), [$($dbg:tt)*]) =>  { {
-        ErrorMessage::new(&$err, Some(From::from(format!($($msg)*))),
-                          From::from(Some(format!($($dbg)*))),
-                          file!(), module_path!(), line!())
-    }};
-    ($err:expr, ($($msg:tt)*)) =>  { {
-        ErrorMessage::new(&$err, Some(From::from(format!($($msg)*))),
-                          None,
-                          file!(), module_path!(), line!())
-    }};
-
-    ($err:expr, [$($dbg:tt)*]) =>  { {
-        ErrorMessage::new(&$err, None,
-                          Some(From::from(format!($($dbg)*))),
-                          file!(), module_path!(), line!())
-    }};
-
-// Plain strings
-    ($err:expr, ($msg:expr), [$dbg:expr]) =>  {
-        ErrorMessage::new(&$err, Some(From::from($msg)),
-                          Some(From::from($dbg)),
-                          file!(), module_path!(), line!())
-    };
-    ($err:expr, ($msg:expr)) => {
-        ErrorMessage::new(&$err, Some(From::from($msg)),
-                          None,
-                          file!(), module_path!(), line!())
-    };
-    ($err:expr, [$dbg:expr]) => {
-        ErrorMessage::new(&$err, None,
-                          Some(From::from($dbg)),
-                          file!(), module_path!(), line!())
-    };
-);
-
 #[derive(Debug)]
 struct Settings {
     location: Option<PathBuf>,
