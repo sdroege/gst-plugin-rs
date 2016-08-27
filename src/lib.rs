@@ -41,33 +41,6 @@ use std::os::raw::c_void;
 use libc::c_char;
 use std::ffi::CString;
 
-extern "C" {
-    fn gst_rs_source_register(plugin: *const c_void,
-                              name: *const c_char,
-                              long_name: *const c_char,
-                              description: *const c_char,
-                              classification: *const c_char,
-                              author: *const c_char,
-                              rank: i32,
-                              create_instance: *const c_void,
-                              protocols: *const c_char,
-                              push_only: GBoolean)
-                              -> GBoolean;
-}
-
-extern "C" {
-    fn gst_rs_sink_register(plugin: *const c_void,
-                            name: *const c_char,
-                            long_name: *const c_char,
-                            description: *const c_char,
-                            classification: *const c_char,
-                            author: *const c_char,
-                            rank: i32,
-                            create_instance: *const c_void,
-                            protocols: *const c_char)
-                            -> GBoolean;
-}
-
 unsafe fn source_register(plugin: *const c_void,
                           name: &str,
                           long_name: &str,
@@ -78,6 +51,21 @@ unsafe fn source_register(plugin: *const c_void,
                           create_instance: *const c_void,
                           protocols: &str,
                           push_only: bool) {
+
+    extern "C" {
+        fn gst_rs_source_register(plugin: *const c_void,
+                                  name: *const c_char,
+                                  long_name: *const c_char,
+                                  description: *const c_char,
+                                  classification: *const c_char,
+                                  author: *const c_char,
+                                  rank: i32,
+                                  create_instance: *const c_void,
+                                  protocols: *const c_char,
+                                  push_only: GBoolean)
+                                  -> GBoolean;
+    }
+
     let cname = CString::new(name).unwrap();
     let clong_name = CString::new(long_name).unwrap();
     let cdescription = CString::new(description).unwrap();
@@ -134,6 +122,19 @@ unsafe fn sink_register(plugin: *const c_void,
                         rank: i32,
                         create_instance: *const c_void,
                         protocols: &str) {
+    extern "C" {
+        fn gst_rs_sink_register(plugin: *const c_void,
+                                name: *const c_char,
+                                long_name: *const c_char,
+                                description: *const c_char,
+                                classification: *const c_char,
+                                author: *const c_char,
+                                rank: i32,
+                                create_instance: *const c_void,
+                                protocols: *const c_char)
+                                -> GBoolean;
+    }
+
     let cname = CString::new(name).unwrap();
     let clong_name = CString::new(long_name).unwrap();
     let cdescription = CString::new(description).unwrap();
