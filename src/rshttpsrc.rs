@@ -23,20 +23,14 @@ use hyper::header::{ContentLength, ContentRange, ContentRangeSpec, Range, ByteRa
 use hyper::client::Client;
 use hyper::client::response::Response;
 
-use std::sync::Mutex;
-
 use error::*;
 use rssource::*;
-
-#[derive(Debug)]
-struct Settings {
-    url: Option<Url>,
-}
 
 #[derive(Debug)]
 enum StreamingState {
     Stopped,
     Started {
+        uri: Url,
         response: Response,
         seekable: bool,
         position: u64,
@@ -48,37 +42,24 @@ enum StreamingState {
 
 #[derive(Debug)]
 pub struct HttpSrc {
-    controller: SourceController,
-    settings: Mutex<Settings>,
-    streaming_state: Mutex<StreamingState>,
+    streaming_state: StreamingState,
     client: Client,
 }
 
-unsafe impl Sync for HttpSrc {}
-unsafe impl Send for HttpSrc {}
-
 impl HttpSrc {
-    pub fn new(controller: SourceController) -> HttpSrc {
+    pub fn new() -> HttpSrc {
         HttpSrc {
-            controller: controller,
-            settings: Mutex::new(Settings { url: None }),
-            streaming_state: Mutex::new(StreamingState::Stopped),
+            streaming_state: StreamingState::Stopped,
             client: Client::new(),
         }
     }
 
-    pub fn new_boxed(controller: SourceController) -> Box<Source> {
-        Box::new(HttpSrc::new(controller))
+    pub fn new_boxed() -> Box<Source> {
+        Box::new(HttpSrc::new())
     }
 
-    fn do_request(&self, start: u64, stop: u64) -> Result<StreamingState, ErrorMessage> {
-        let url = &self.settings.lock().unwrap().url;
-
-        let url = try!(url.as_ref()
-            .ok_or_else(|| error_msg!(SourceError::Failure, ["No URI provided"])));
-
-
-        let mut req = self.client.get(url.clone());
+    fn do_request(&self, uri: Url, start: u64, stop: u64) -> Result<StreamingState, ErrorMessage> {
+        let mut req = self.client.get(uri.clone());
 
         if start != 0 || stop != u64::MAX {
             req = if stop == u64::MAX {
@@ -90,12 +71,12 @@ impl HttpSrc {
 
         let response = try!(req.send().or_else(|err| {
             Err(error_msg!(SourceError::ReadFailed,
-                           ["Failed to fetch {}: {}", url, err.to_string()]))
+                           ["Failed to fetch {}: {}", uri, err.to_string()]))
         }));
 
         if !response.status.is_success() {
             return Err(error_msg!(SourceError::ReadFailed,
-                                  ["Failed to fetch {}: {}", url, response.status]));
+                                  ["Failed to fetch {}: {}", uri, response.status]));
         }
 
         let size = if let Some(&ContentLength(content_length)) = response.headers.get() {
@@ -128,6 +109,7 @@ impl HttpSrc {
         }
 
         Ok(StreamingState::Started {
+            uri: uri,
             response: response,
             seekable: seekable,
             position: 0,
@@ -138,95 +120,69 @@ impl HttpSrc {
     }
 }
 
+fn validate_uri(uri: &Url) -> Result<(), UriError> {
+    if uri.scheme() != "http" && uri.scheme() != "https" {
+        return Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+                                 Some(format!("Unsupported URI '{}'", uri.as_str()))));
+    }
+
+    Ok(())
+}
+
 impl Source for HttpSrc {
-    fn get_controller(&self) -> &SourceController {
-        &self.controller
-    }
-
-    fn set_uri(&self, uri: Option<Url>) -> Result<(), UriError> {
-        let url = &mut self.settings.lock().unwrap().url;
-
-        match uri {
-            None => {
-                *url = None;
-                Ok(())
-            }
-            Some(uri) => {
-                if uri.scheme() != "http" && uri.scheme() != "https" {
-                    *url = None;
-                    return Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                                             Some(format!("Unsupported URI '{}'", uri.as_str()))));
-                }
-
-                *url = Some(uri);
-                Ok(())
-            }
-        }
-    }
-
-    fn get_uri(&self) -> Option<Url> {
-        let url = &self.settings.lock().unwrap().url;
-        url.as_ref().cloned()
+    fn uri_validator(&self) -> Box<UriValidator> {
+        Box::new(validate_uri)
     }
 
     fn is_seekable(&self) -> bool {
-        let streaming_state = self.streaming_state.lock().unwrap();
-
-        match *streaming_state {
+        match self.streaming_state {
             StreamingState::Started { seekable, .. } => seekable,
             _ => false,
         }
     }
 
     fn get_size(&self) -> u64 {
-        let streaming_state = self.streaming_state.lock().unwrap();
-        match *streaming_state {
+        match self.streaming_state {
             StreamingState::Started { size, .. } => size,
             _ => u64::MAX,
         }
     }
 
-    fn start(&self) -> Result<(), ErrorMessage> {
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-        *streaming_state = StreamingState::Stopped;
-
-        let new_state = try!(self.do_request(0, u64::MAX));
-
-        *streaming_state = new_state;
-        Ok(())
-    }
-
-    fn stop(&self) -> Result<(), ErrorMessage> {
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-        *streaming_state = StreamingState::Stopped;
+    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage> {
+        self.streaming_state = StreamingState::Stopped;
+        self.streaming_state = try!(self.do_request(uri.clone(), 0, u64::MAX));
 
         Ok(())
     }
 
-    fn do_seek(&self, start: u64, stop: u64) -> Result<(), ErrorMessage> {
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-        *streaming_state = StreamingState::Stopped;
+    fn stop(&mut self) -> Result<(), ErrorMessage> {
+        self.streaming_state = StreamingState::Stopped;
 
-        let new_state = try!(self.do_request(start, stop));
-
-        *streaming_state = new_state;
         Ok(())
     }
 
-    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError> {
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-
-        if let StreamingState::Started { position, stop, .. } = *streaming_state {
-            if position != offset {
-                *streaming_state = StreamingState::Stopped;
-                let new_state = try!(self.do_request(offset, stop)
-                    .or_else(|err| Err(FlowError::Error(err))));
-
-                *streaming_state = new_state;
+    fn seek(&mut self, start: u64, stop: u64) -> Result<(), ErrorMessage> {
+        let (position, old_stop, uri) = match self.streaming_state {
+            StreamingState::Started { position, stop, ref uri, .. } => {
+                (position, stop, uri.clone())
             }
+            StreamingState::Stopped => {
+                return Err(error_msg!(SourceError::Failure, ["Not started yet"]));
+            }
+        };
+
+        if position == start && old_stop == stop {
+            return Ok(());
         }
 
-        let (response, position) = match *streaming_state {
+        self.streaming_state = StreamingState::Stopped;
+        self.streaming_state = try!(self.do_request(uri, start, stop));
+
+        Ok(())
+    }
+
+    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError> {
+        let (response, position) = match self.streaming_state {
             StreamingState::Started { ref mut response, ref mut position, .. } => {
                 (response, position)
             }
@@ -234,6 +190,13 @@ impl Source for HttpSrc {
                 return Err(FlowError::Error(error_msg!(SourceError::Failure, ["Not started yet"])));
             }
         };
+
+        if *position != offset {
+            return Err(FlowError::Error(error_msg!(SourceError::SeekFailed,
+                                                   ["Got unexpected offset {}, expected {}",
+                                                    offset,
+                                                    position])));
+        }
 
         let size = try!(response.read(data).or_else(|err| {
             Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
@@ -245,6 +208,7 @@ impl Source for HttpSrc {
         }
 
         *position += size as u64;
+
         Ok(size)
     }
 }

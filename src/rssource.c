@@ -38,7 +38,7 @@ extern void *source_new (GstRsSrc * source, void *create_instance);
 extern void source_drop (void *rssource);
 extern GstFlowReturn source_fill (void *rssource,
     uint64_t offset, void *data, size_t * data_len);
-extern gboolean source_do_seek (void *rssource, uint64_t start, uint64_t stop);
+extern gboolean source_seek (void *rssource, uint64_t start, uint64_t stop);
 extern gboolean source_set_uri (void *rssource, const char *uri, GError ** err);
 extern char *source_get_uri (void *rssource);
 extern uint64_t source_get_size (void *rssource);
@@ -238,7 +238,7 @@ gst_rs_src_do_seek (GstBaseSrc * basesrc, GstSegment * segment)
   GstRsSrc *src = GST_RS_SRC (basesrc);
   gboolean ret;
 
-  ret = source_do_seek (src->instance, segment->start, segment->stop);
+  ret = source_seek (src->instance, segment->start, segment->stop);
   if (!ret)
     return FALSE;
 
@@ -289,15 +289,6 @@ gst_rs_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
   iface->get_protocols = gst_rs_src_uri_get_protocols;
   iface->get_uri = gst_rs_src_uri_get_uri;
   iface->set_uri = gst_rs_src_uri_set_uri;
-}
-
-void
-gst_rs_source_error (GstRsSrc * src, GQuark error_domain, gint error_code,
-    const gchar * message, const gchar * debug, const gchar * file,
-    const gchar * function, guint line)
-{
-  gst_element_message_full (GST_ELEMENT (src), GST_MESSAGE_ERROR, error_domain,
-      error_code, g_strdup (message), g_strdup (debug), file, function, line);
 }
 
 gboolean

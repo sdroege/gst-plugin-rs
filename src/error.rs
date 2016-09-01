@@ -25,6 +25,8 @@ use std::fmt::{Display, Formatter};
 use std::fmt::Error as FmtError;
 use std::borrow::Cow;
 
+use url::Url;
+
 use utils::*;
 
 macro_rules! error_msg(
@@ -114,6 +116,49 @@ impl ErrorMessage {
             function: function,
             line: line,
         }
+    }
+
+
+    pub unsafe fn post(&self, element: *mut c_void) {
+        extern "C" {
+            fn gst_rs_element_error(sink: *mut c_void,
+                                    error_domain: u32,
+                                    error_code: i32,
+                                    message: *const c_char,
+                                    debug: *const c_char,
+                                    filename: *const c_char,
+                                    function: *const c_char,
+                                    line: u32);
+        }
+
+        let ErrorMessage { error_domain,
+                           error_code,
+                           ref message,
+                           ref debug,
+                           filename,
+                           function,
+                           line } = *self;
+
+        let message_cstr = message.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
+        let message_ptr = message_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
+
+        let debug_cstr = debug.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
+        let debug_ptr = debug_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
+
+        let file_cstr = CString::new(filename.as_bytes()).unwrap();
+        let file_ptr = file_cstr.as_ptr();
+
+        let function_cstr = CString::new(function.as_bytes()).unwrap();
+        let function_ptr = function_cstr.as_ptr();
+
+        gst_rs_element_error(element,
+                             error_domain,
+                             error_code,
+                             message_ptr,
+                             debug_ptr,
+                             file_ptr,
+                             function_ptr,
+                             line);
     }
 }
 
@@ -246,3 +291,5 @@ impl Error for UriError {
         }
     }
 }
+
+pub type UriValidator = Fn(&Url) -> Result<(), UriError>;

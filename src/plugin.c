@@ -43,3 +43,12 @@ GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     rsplugin,
     "Rust Plugin", plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME,
     GST_PACKAGE_ORIGIN);
+
+void
+gst_rs_element_error (GstElement * element, GQuark error_domain,
+    gint error_code, const gchar * message, const gchar * debug,
+    const gchar * file, const gchar * function, guint line)
+{
+  gst_element_message_full (element, GST_MESSAGE_ERROR, error_domain,
+      error_code, g_strdup (message), g_strdup (debug), file, function, line);
+}

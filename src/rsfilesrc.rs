@@ -18,17 +18,10 @@
 use std::u64;
 use std::io::{Read, Seek, SeekFrom};
 use std::fs::File;
-use std::path::PathBuf;
-use std::sync::Mutex;
 use url::Url;
 
 use error::*;
 use rssource::*;
-
-#[derive(Debug)]
-struct Settings {
-    location: Option<PathBuf>,
-}
 
 #[derive(Debug)]
 enum StreamingState {
@@ -38,58 +31,31 @@ enum StreamingState {
 
 #[derive(Debug)]
 pub struct FileSrc {
-    controller: SourceController,
-    settings: Mutex<Settings>,
-    streaming_state: Mutex<StreamingState>,
+    streaming_state: StreamingState,
 }
 
-unsafe impl Sync for FileSrc {}
-unsafe impl Send for FileSrc {}
-
 impl FileSrc {
-    pub fn new(controller: SourceController) -> FileSrc {
-        FileSrc {
-            controller: controller,
-            settings: Mutex::new(Settings { location: None }),
-            streaming_state: Mutex::new(StreamingState::Stopped),
-        }
+    pub fn new() -> FileSrc {
+        FileSrc { streaming_state: StreamingState::Stopped }
     }
 
-    pub fn new_boxed(controller: SourceController) -> Box<Source> {
-        Box::new(FileSrc::new(controller))
+    pub fn new_boxed() -> Box<Source> {
+        Box::new(FileSrc::new())
     }
+}
+
+fn validate_uri(uri: &Url) -> Result<(), UriError> {
+    let _ = try!(uri.to_file_path()
+        .or_else(|_| {
+            Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+                              Some(format!("Unsupported file URI '{}'", uri.as_str()))))
+        }));
+    Ok(())
 }
 
 impl Source for FileSrc {
-    fn get_controller(&self) -> &SourceController {
-        &self.controller
-    }
-
-    fn set_uri(&self, uri: Option<Url>) -> Result<(), UriError> {
-        let location = &mut self.settings.lock().unwrap().location;
-
-        match uri {
-            None => {
-                *location = None;
-                Ok(())
-            }
-            Some(ref uri) => {
-                *location = Some(try!(uri.to_file_path()
-                    .or_else(|_| {
-                        Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                                          Some(format!("Unsupported file URI '{}'", uri.as_str()))))
-                    })));
-                Ok(())
-            }
-        }
-    }
-
-    fn get_uri(&self) -> Option<Url> {
-        let location = &self.settings.lock().unwrap().location;
-
-        location.as_ref()
-            .map(|l| Url::from_file_path(l).ok())
-            .and_then(|i| i) // join()
+    fn uri_validator(&self) -> Box<UriValidator> {
+        Box::new(validate_uri)
     }
 
     fn is_seekable(&self) -> bool {
@@ -97,9 +63,7 @@ impl Source for FileSrc {
     }
 
     fn get_size(&self) -> u64 {
-        let streaming_state = self.streaming_state.lock().unwrap();
-
-        if let StreamingState::Started { ref file, .. } = *streaming_state {
+        if let StreamingState::Started { ref file, .. } = self.streaming_state {
             file.metadata()
                 .ok()
                 .map_or(u64::MAX, |m| m.len())
@@ -108,16 +72,16 @@ impl Source for FileSrc {
         }
     }
 
-    fn start(&self) -> Result<(), ErrorMessage> {
-        let location = &self.settings.lock().unwrap().location;
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-
-        if let StreamingState::Started { .. } = *streaming_state {
+    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage> {
+        if let StreamingState::Started { .. } = self.streaming_state {
             return Err(error_msg!(SourceError::Failure, ["Source already started"]));
         }
 
-        let location = &try!(location.as_ref()
-            .ok_or_else(|| error_msg!(SourceError::Failure, ["No URI provided"])));
+        let location = try!(uri.to_file_path()
+            .or_else(|_| {
+                Err(error_msg!(SourceError::Failure,
+                               ["Unsupported file URI '{}'", uri.as_str()]))
+            }));
 
         let file = try!(File::open(location.as_path()).or_else(|err| {
             Err(error_msg!(SourceError::OpenFailed,
@@ -126,7 +90,7 @@ impl Source for FileSrc {
                             err.to_string()]))
         }));
 
-        *streaming_state = StreamingState::Started {
+        self.streaming_state = StreamingState::Started {
             file: file,
             position: 0,
         };
@@ -134,18 +98,14 @@ impl Source for FileSrc {
         Ok(())
     }
 
-    fn stop(&self) -> Result<(), ErrorMessage> {
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-        *streaming_state = StreamingState::Stopped;
+    fn stop(&mut self) -> Result<(), ErrorMessage> {
+        self.streaming_state = StreamingState::Stopped;
 
         Ok(())
     }
 
-    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError> {
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-
-
-        let (file, position) = match *streaming_state {
+    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError> {
+        let (file, position) = match self.streaming_state {
             StreamingState::Started { ref mut file, ref mut position } => (file, position),
             StreamingState::Stopped => {
                 return Err(FlowError::Error(error_msg!(SourceError::Failure, ["Not started yet"])));
@@ -172,7 +132,7 @@ impl Source for FileSrc {
         Ok(size)
     }
 
-    fn do_seek(&self, _: u64, _: u64) -> Result<(), ErrorMessage> {
+    fn seek(&mut self, _: u64, _: u64) -> Result<(), ErrorMessage> {
         Ok(())
     }
 }

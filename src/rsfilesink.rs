@@ -17,20 +17,13 @@
 //  Boston, MA 02110-1301, USA.
 
 use std::fs::File;
-use std::path::PathBuf;
 use url::Url;
 
 use std::io::Write;
-use std::sync::Mutex;
 use std::convert::From;
 
 use error::*;
 use rssink::*;
-
-#[derive(Debug)]
-struct Settings {
-    location: Option<PathBuf>,
-}
 
 #[derive(Debug)]
 enum StreamingState {
@@ -40,68 +33,44 @@ enum StreamingState {
 
 #[derive(Debug)]
 pub struct FileSink {
-    controller: SinkController,
-    settings: Mutex<Settings>,
-    streaming_state: Mutex<StreamingState>,
+    streaming_state: StreamingState,
 }
 
-unsafe impl Sync for FileSink {}
-unsafe impl Send for FileSink {}
-
 impl FileSink {
-    pub fn new(controller: SinkController) -> FileSink {
-        FileSink {
-            controller: controller,
-            settings: Mutex::new(Settings { location: None }),
-            streaming_state: Mutex::new(StreamingState::Stopped),
-        }
+    pub fn new() -> FileSink {
+        FileSink { streaming_state: StreamingState::Stopped }
     }
 
-    pub fn new_boxed(controller: SinkController) -> Box<Sink> {
-        Box::new(FileSink::new(controller))
+    pub fn new_boxed() -> Box<Sink> {
+        Box::new(FileSink::new())
     }
+}
+
+fn validate_uri(uri: &Url) -> Result<(), UriError> {
+    let _ = try!(uri.to_file_path()
+        .or_else(|_| {
+            Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+                              Some(format!("Unsupported file URI '{}'", uri.as_str()))))
+        }));
+    Ok(())
 }
 
 impl Sink for FileSink {
-    fn get_controller(&self) -> &SinkController {
-        &self.controller
+    fn uri_validator(&self) -> Box<UriValidator> {
+        Box::new(validate_uri)
     }
 
-    fn set_uri(&self, uri: Option<Url>) -> Result<(), UriError> {
-        let location = &mut self.settings.lock().unwrap().location;
-
-        *location = None;
-        match uri {
-            None => Ok(()),
-            Some(ref uri) => {
-                *location = Some(try!(uri.to_file_path()
-                    .or_else(|_| {
-                        Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                                          Some(format!("Unsupported file URI '{}'", uri.as_str()))))
-                    })));
-                Ok(())
-            }
-        }
-    }
-
-    fn get_uri(&self) -> Option<Url> {
-        let location = &self.settings.lock().unwrap().location;
-        location.as_ref()
-            .map(|l| Url::from_file_path(l).ok())
-            .and_then(|i| i) // join()
-    }
-
-    fn start(&self) -> Result<(), ErrorMessage> {
-        let location = &self.settings.lock().unwrap().location;
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-
-        if let StreamingState::Started { .. } = *streaming_state {
+    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage> {
+        if let StreamingState::Started { .. } = self.streaming_state {
             return Err(error_msg!(SinkError::Failure, ["Sink already started"]));
         }
 
-        let location = &try!(location.as_ref().ok_or_else(|| {
-            error_msg!(SinkError::Failure, ["No URI provided"])
-        }));
+        let location = try!(uri.to_file_path()
+            .or_else(|_| {
+                Err(error_msg!(SinkError::Failure,
+                               ["Unsupported file URI '{}'", uri.as_str()]))
+            }));
+
 
         let file = try!(File::create(location.as_path()).or_else(|err| {
             Err(error_msg!(SinkError::OpenFailed,
@@ -110,7 +79,7 @@ impl Sink for FileSink {
                             err.to_string()]))
         }));
 
-        *streaming_state = StreamingState::Started {
+        self.streaming_state = StreamingState::Started {
             file: file,
             position: 0,
         };
@@ -118,17 +87,14 @@ impl Sink for FileSink {
         Ok(())
     }
 
-    fn stop(&self) -> Result<(), ErrorMessage> {
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-        *streaming_state = StreamingState::Stopped;
+    fn stop(&mut self) -> Result<(), ErrorMessage> {
+        self.streaming_state = StreamingState::Stopped;
 
         Ok(())
     }
 
-    fn render(&self, data: &[u8]) -> Result<(), FlowError> {
-        let mut streaming_state = self.streaming_state.lock().unwrap();
-
-        let (file, position) = match *streaming_state {
+    fn render(&mut self, data: &[u8]) -> Result<(), FlowError> {
+        let (file, position) = match self.streaming_state {
             StreamingState::Started { ref mut file, ref mut position } => (file, position),
             StreamingState::Stopped => {
                 return Err(FlowError::Error(error_msg!(SinkError::Failure, ["Not started yet"])));
@@ -140,6 +106,7 @@ impl Sink for FileSink {
         }));
 
         *position += data.len() as u64;
+
         Ok(())
     }
 }

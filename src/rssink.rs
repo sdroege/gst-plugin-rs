@@ -22,6 +22,8 @@ use std::ffi::{CStr, CString};
 use std::slice;
 use std::ptr;
 
+use std::sync::Mutex;
+
 use url::Url;
 
 use utils::*;
@@ -48,117 +50,82 @@ impl ToGError for SinkError {
     }
 }
 
-#[derive(Debug)]
-pub struct SinkController {
-    sink: *mut c_void,
+pub struct SinkWrapper {
+    sink_raw: *mut c_void,
+    uri: Mutex<(Option<Url>, bool)>,
+    uri_validator: Box<UriValidator>,
+    sink: Mutex<Box<Sink>>,
 }
 
-impl SinkController {
-    fn new(sink: *mut c_void) -> SinkController {
-        SinkController { sink: sink }
-    }
+pub trait Sink {
+    fn uri_validator(&self) -> Box<UriValidator>;
 
-    pub fn error(&self, error: &ErrorMessage) {
-        extern "C" {
-            fn gst_rs_sink_error(sink: *mut c_void,
-                                 error_domain: u32,
-                                 error_code: i32,
-                                 message: *const c_char,
-                                 debug: *const c_char,
-                                 filename: *const c_char,
-                                 function: *const c_char,
-                                 line: u32);
-        }
+    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage>;
+    fn stop(&mut self) -> Result<(), ErrorMessage>;
 
-        let ErrorMessage { error_domain,
-                           error_code,
-                           ref message,
-                           ref debug,
-                           filename,
-                           function,
-                           line } = *error;
-
-        let message_cstr = message.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
-        let message_ptr = message_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
-
-        let debug_cstr = debug.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
-        let debug_ptr = debug_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
-
-        let file_cstr = CString::new(filename.as_bytes()).unwrap();
-        let file_ptr = file_cstr.as_ptr();
-
-        let function_cstr = CString::new(function.as_bytes()).unwrap();
-        let function_ptr = function_cstr.as_ptr();
-
-        unsafe {
-            gst_rs_sink_error(self.sink,
-                              error_domain,
-                              error_code,
-                              message_ptr,
-                              debug_ptr,
-                              file_ptr,
-                              function_ptr,
-                              line);
-        }
-    }
+    fn render(&mut self, data: &[u8]) -> Result<(), FlowError>;
 }
 
-pub trait Sink: Sync + Send {
-    fn get_controller(&self) -> &SinkController;
-
-    // Called from any thread at any time
-    fn set_uri(&self, uri: Option<Url>) -> Result<(), UriError>;
-    fn get_uri(&self) -> Option<Url>;
-
-    // Called from the streaming thread only
-    fn start(&self) -> Result<(), ErrorMessage>;
-    fn stop(&self) -> Result<(), ErrorMessage>;
-    fn render(&self, data: &[u8]) -> Result<(), FlowError>;
+impl SinkWrapper {
+    fn new(sink_raw: *mut c_void, sink: Box<Sink>) -> SinkWrapper {
+        SinkWrapper {
+            sink_raw: sink_raw,
+            uri: Mutex::new((None, false)),
+            uri_validator: sink.uri_validator(),
+            sink: Mutex::new(sink),
+        }
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn sink_new(sink: *mut c_void,
-                           create_instance: fn(controller: SinkController) -> Box<Sink>)
-                           -> *mut Box<Sink> {
-    Box::into_raw(Box::new(create_instance(SinkController::new(sink))))
+                           create_instance: fn() -> Box<Sink>)
+                           -> *mut SinkWrapper {
+    Box::into_raw(Box::new(SinkWrapper::new(sink, create_instance())))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_drop(ptr: *mut Box<Sink>) {
+pub unsafe extern "C" fn sink_drop(ptr: *mut SinkWrapper) {
     Box::from_raw(ptr);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_set_uri(ptr: *mut Box<Sink>,
+pub unsafe extern "C" fn sink_set_uri(ptr: *mut SinkWrapper,
                                       uri_ptr: *const c_char,
                                       cerr: *mut c_void)
                                       -> GBoolean {
-    let sink: &mut Box<Sink> = &mut *ptr;
+    let wrap: &mut SinkWrapper = &mut *ptr;
+    let uri_storage = &mut wrap.uri.lock().unwrap();
 
+    if uri_storage.1 {
+        UriError::new(UriErrorKind::BadState, Some("Already started".to_string()))
+            .into_gerror(cerr);
+        return GBoolean::False;
+    }
+
+    uri_storage.0 = None;
     if uri_ptr.is_null() {
-        if let Err(err) = sink.set_uri(None) {
-            err.into_gerror(cerr);
-            GBoolean::False
-        } else {
-            GBoolean::True
-        }
+        GBoolean::True
     } else {
         let uri_str = CStr::from_ptr(uri_ptr).to_str().unwrap();
 
         match Url::parse(uri_str) {
             Ok(uri) => {
-                if let Err(err) = sink.set_uri(Some(uri)) {
+                if let Err(err) = (*wrap.uri_validator)(&uri) {
                     err.into_gerror(cerr);
+
                     GBoolean::False
                 } else {
+                    uri_storage.0 = Some(uri);
+
                     GBoolean::True
                 }
             }
             Err(err) => {
-                let _ = sink.set_uri(None);
                 UriError::new(UriErrorKind::BadUri,
                               Some(format!("Failed to parse URI '{}': {}", uri_str, err)))
                     .into_gerror(cerr);
+
                 GBoolean::False
             }
         }
@@ -166,21 +133,23 @@ pub unsafe extern "C" fn sink_set_uri(ptr: *mut Box<Sink>,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_get_uri(ptr: *const Box<Sink>) -> *mut c_char {
-    let sink: &Box<Sink> = &*ptr;
+pub unsafe extern "C" fn sink_get_uri(ptr: *const SinkWrapper) -> *mut c_char {
+    let wrap: &SinkWrapper = &*ptr;
+    let uri_storage = &mut wrap.uri.lock().unwrap();
 
-    match sink.get_uri() {
-        Some(uri) => CString::new(uri.into_string().into_bytes()).unwrap().into_raw(),
+    match uri_storage.0 {
+        Some(ref uri) => CString::new(uri.as_ref().as_bytes()).unwrap().into_raw(),
         None => ptr::null_mut(),
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_render(ptr: *mut Box<Sink>,
+pub unsafe extern "C" fn sink_render(ptr: *mut SinkWrapper,
                                      data_ptr: *const u8,
                                      data_len: usize)
                                      -> GstFlowReturn {
-    let sink: &mut Box<Sink> = &mut *ptr;
+    let wrap: &mut SinkWrapper = &mut *ptr;
+    let sink = &mut wrap.sink.lock().unwrap();
     let data = slice::from_raw_parts(data_ptr, data_len);
 
     match sink.render(data) {
@@ -188,7 +157,7 @@ pub unsafe extern "C" fn sink_render(ptr: *mut Box<Sink>,
         Err(flow_error) => {
             match flow_error {
                 FlowError::NotNegotiated(ref msg) |
-                FlowError::Error(ref msg) => sink.get_controller().error(msg),
+                FlowError::Error(ref msg) => msg.post(wrap.sink_raw),
                 _ => (),
             }
             flow_error.to_native()
@@ -197,26 +166,45 @@ pub unsafe extern "C" fn sink_render(ptr: *mut Box<Sink>,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_start(ptr: *mut Box<Sink>) -> GBoolean {
-    let sink: &mut Box<Sink> = &mut *ptr;
+pub unsafe extern "C" fn sink_start(ptr: *mut SinkWrapper) -> GBoolean {
+    let wrap: &mut SinkWrapper = &mut *ptr;
+    let sink = &mut wrap.sink.lock().unwrap();
+    let uri_storage = &mut wrap.uri.lock().unwrap();
 
-    match sink.start() {
-        Ok(..) => GBoolean::True,
+    let (uri, started) = match **uri_storage {
+        (Some(ref uri), ref mut started) => (uri, started),
+        (None, _) => {
+            error_msg!(SinkError::OpenFailed, ["No URI given"]).post(wrap.sink_raw);
+            return GBoolean::False;
+        }
+    };
+
+    match sink.start(uri) {
+        Ok(..) => {
+            *started = true;
+
+            GBoolean::True
+        }
         Err(ref msg) => {
-            sink.get_controller().error(msg);
+            msg.post(wrap.sink_raw);
             GBoolean::False
         }
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_stop(ptr: *mut Box<Sink>) -> GBoolean {
-    let sink: &mut Box<Sink> = &mut *ptr;
+pub unsafe extern "C" fn sink_stop(ptr: *mut SinkWrapper) -> GBoolean {
+    let wrap: &mut SinkWrapper = &mut *ptr;
+    let sink = &mut wrap.sink.lock().unwrap();
+    let uri_storage = &mut wrap.uri.lock().unwrap();
 
     match sink.stop() {
-        Ok(..) => GBoolean::True,
+        Ok(..) => {
+            uri_storage.1 = false;
+            GBoolean::True
+        }
         Err(ref msg) => {
-            sink.get_controller().error(msg);
+            msg.post(wrap.sink_raw);
             GBoolean::False
         }
     }

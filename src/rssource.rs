@@ -21,6 +21,8 @@ use std::ffi::{CStr, CString};
 use std::slice;
 use std::ptr;
 
+use std::sync::Mutex;
+
 use url::Url;
 
 use utils::*;
@@ -47,122 +49,85 @@ impl ToGError for SourceError {
     }
 }
 
-#[derive(Debug)]
-pub struct SourceController {
-    source: *mut c_void,
+pub struct SourceWrapper {
+    source_raw: *mut c_void,
+    uri: Mutex<(Option<Url>, bool)>,
+    uri_validator: Box<UriValidator>,
+    source: Mutex<Box<Source>>,
 }
 
-impl SourceController {
-    fn new(source: *mut c_void) -> SourceController {
-        SourceController { source: source }
-    }
+pub trait Source {
+    fn uri_validator(&self) -> Box<UriValidator>;
 
-    pub fn error(&self, error: &ErrorMessage) {
-        extern "C" {
-            fn gst_rs_source_error(source: *mut c_void,
-                                   error_domain: u32,
-                                   error_code: i32,
-                                   message: *const c_char,
-                                   debug: *const c_char,
-                                   filename: *const c_char,
-                                   function: *const c_char,
-                                   line: u32);
-        }
-
-        let ErrorMessage { error_domain,
-                           error_code,
-                           ref message,
-                           ref debug,
-                           filename,
-                           function,
-                           line } = *error;
-
-        let message_cstr = message.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
-        let message_ptr = message_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
-
-        let debug_cstr = debug.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
-        let debug_ptr = debug_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
-
-        let file_cstr = CString::new(filename.as_bytes()).unwrap();
-        let file_ptr = file_cstr.as_ptr();
-
-        let function_cstr = CString::new(function.as_bytes()).unwrap();
-        let function_ptr = function_cstr.as_ptr();
-
-        unsafe {
-            gst_rs_source_error(self.source,
-                                error_domain,
-                                error_code,
-                                message_ptr,
-                                debug_ptr,
-                                file_ptr,
-                                function_ptr,
-                                line);
-        }
-    }
-}
-
-pub trait Source: Sync + Send {
-    fn get_controller(&self) -> &SourceController;
-
-    // Called from any thread at any time
-    fn set_uri(&self, uri: Option<Url>) -> Result<(), UriError>;
-    fn get_uri(&self) -> Option<Url>;
-
-    // Called from any thread between start/stop
     fn is_seekable(&self) -> bool;
-
-    // Called from the streaming thread only
-    fn start(&self) -> Result<(), ErrorMessage>;
-    fn stop(&self) -> Result<(), ErrorMessage>;
-    fn fill(&self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError>;
-    fn do_seek(&self, start: u64, stop: u64) -> Result<(), ErrorMessage>;
     fn get_size(&self) -> u64;
+
+    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage>;
+    fn stop(&mut self) -> Result<(), ErrorMessage>;
+    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError>;
+    fn seek(&mut self, start: u64, stop: u64) -> Result<(), ErrorMessage>;
+}
+
+impl SourceWrapper {
+    fn new(source_raw: *mut c_void, source: Box<Source>) -> SourceWrapper {
+        SourceWrapper {
+            source_raw: source_raw,
+            uri: Mutex::new((None, false)),
+            uri_validator: source.uri_validator(),
+            source: Mutex::new(source),
+        }
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn source_new(source: *mut c_void,
-                             create_instance: fn(controller: SourceController) -> Box<Source>)
-                             -> *mut Box<Source> {
-    Box::into_raw(Box::new(create_instance(SourceController::new(source))))
+                             create_instance: fn() -> Box<Source>)
+                             -> *mut SourceWrapper {
+    Box::into_raw(Box::new(SourceWrapper::new(source, create_instance())))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_drop(ptr: *mut Box<Source>) {
+pub unsafe extern "C" fn source_drop(ptr: *mut SourceWrapper) {
     Box::from_raw(ptr);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_set_uri(ptr: *mut Box<Source>,
+pub unsafe extern "C" fn source_set_uri(ptr: *mut SourceWrapper,
                                         uri_ptr: *const c_char,
                                         cerr: *mut c_void)
                                         -> GBoolean {
-    let source: &mut Box<Source> = &mut *ptr;
+    let wrap: &mut SourceWrapper = &mut *ptr;
+    let uri_storage = &mut wrap.uri.lock().unwrap();
 
+    if uri_storage.1 {
+        UriError::new(UriErrorKind::BadState, Some("Already started".to_string()))
+            .into_gerror(cerr);
+        return GBoolean::False;
+    }
+
+    uri_storage.0 = None;
     if uri_ptr.is_null() {
-        if let Err(err) = source.set_uri(None) {
-            err.into_gerror(cerr);
-            GBoolean::False
-        } else {
-            GBoolean::True
-        }
+        GBoolean::True
     } else {
         let uri_str = CStr::from_ptr(uri_ptr).to_str().unwrap();
 
         match Url::parse(uri_str) {
             Ok(uri) => {
-                if let Err(err) = source.set_uri(Some(uri)) {
+                if let Err(err) = (*wrap.uri_validator)(&uri) {
                     err.into_gerror(cerr);
+
                     GBoolean::False
                 } else {
+                    uri_storage.0 = Some(uri);
+
                     GBoolean::True
                 }
             }
             Err(err) => {
-                let _ = source.set_uri(None);
                 UriError::new(UriErrorKind::BadUri,
                               Some(format!("Failed to parse URI '{}': {}", uri_str, err)))
                     .into_gerror(cerr);
+
                 GBoolean::False
             }
         }
@@ -170,23 +135,84 @@ pub unsafe extern "C" fn source_set_uri(ptr: *mut Box<Source>,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_get_uri(ptr: *mut Box<Source>) -> *mut c_char {
-    let source: &mut Box<Source> = &mut *ptr;
+pub unsafe extern "C" fn source_get_uri(ptr: *mut SourceWrapper) -> *mut c_char {
+    let wrap: &SourceWrapper = &*ptr;
+    let uri_storage = &mut wrap.uri.lock().unwrap();
 
-    match source.get_uri() {
-        Some(uri) => CString::new(uri.into_string().into_bytes()).unwrap().into_raw(),
+    match uri_storage.0 {
+        Some(ref uri) => CString::new(uri.as_ref().as_bytes()).unwrap().into_raw(),
         None => ptr::null_mut(),
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_fill(ptr: *mut Box<Source>,
+pub unsafe extern "C" fn source_is_seekable(ptr: *const SourceWrapper) -> GBoolean {
+    let wrap: &SourceWrapper = &*ptr;
+    let source = &wrap.source.lock().unwrap();
+
+    GBoolean::from_bool(source.is_seekable())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn source_get_size(ptr: *const SourceWrapper) -> u64 {
+    let wrap: &SourceWrapper = &*ptr;
+    let source = &wrap.source.lock().unwrap();
+
+    source.get_size()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn source_start(ptr: *mut SourceWrapper) -> GBoolean {
+    let wrap: &mut SourceWrapper = &mut *ptr;
+    let source = &mut wrap.source.lock().unwrap();
+    let uri_storage = &mut wrap.uri.lock().unwrap();
+
+    let (uri, started) = match **uri_storage {
+        (Some(ref uri), ref mut started) => (uri, started),
+        (None, _) => {
+            error_msg!(SourceError::OpenFailed, ["No URI given"]).post(wrap.source_raw);
+            return GBoolean::False;
+        }
+    };
+
+    match source.start(uri) {
+        Ok(..) => {
+            *started = true;
+            GBoolean::True
+        }
+        Err(ref msg) => {
+            msg.post(wrap.source_raw);
+            GBoolean::False
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn source_stop(ptr: *mut SourceWrapper) -> GBoolean {
+    let wrap: &mut SourceWrapper = &mut *ptr;
+    let source = &mut wrap.source.lock().unwrap();
+    let uri_storage = &mut wrap.uri.lock().unwrap();
+
+    match source.stop() {
+        Ok(..) => {
+            uri_storage.1 = false;
+            GBoolean::True
+        }
+        Err(ref msg) => {
+            msg.post(wrap.source_raw);
+            GBoolean::False
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn source_fill(ptr: *mut SourceWrapper,
                                      offset: u64,
                                      data_ptr: *mut u8,
                                      data_len_ptr: *mut usize)
                                      -> GstFlowReturn {
-    let source: &mut Box<Source> = &mut *ptr;
-
+    let wrap: &mut SourceWrapper = &mut *ptr;
+    let source = &mut wrap.source.lock().unwrap();
     let mut data_len: &mut usize = &mut *data_len_ptr;
     let mut data = slice::from_raw_parts_mut(data_ptr, *data_len);
 
@@ -198,7 +224,7 @@ pub unsafe extern "C" fn source_fill(ptr: *mut Box<Source>,
         Err(flow_error) => {
             match flow_error {
                 FlowError::NotNegotiated(ref msg) |
-                FlowError::Error(ref msg) => source.get_controller().error(msg),
+                FlowError::Error(ref msg) => msg.post(wrap.source_raw),
                 _ => (),
             }
             flow_error.to_native()
@@ -207,53 +233,14 @@ pub unsafe extern "C" fn source_fill(ptr: *mut Box<Source>,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_get_size(ptr: *const Box<Source>) -> u64 {
-    let source: &Box<Source> = &*ptr;
+pub unsafe extern "C" fn source_seek(ptr: *mut SourceWrapper, start: u64, stop: u64) -> GBoolean {
+    let wrap: &mut SourceWrapper = &mut *ptr;
+    let source = &mut wrap.source.lock().unwrap();
 
-    source.get_size()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn source_start(ptr: *mut Box<Source>) -> GBoolean {
-    let source: &mut Box<Source> = &mut *ptr;
-
-    match source.start() {
+    match source.seek(start, stop) {
         Ok(..) => GBoolean::True,
         Err(ref msg) => {
-            source.get_controller().error(msg);
-            GBoolean::False
-        }
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn source_stop(ptr: *mut Box<Source>) -> GBoolean {
-    let source: &mut Box<Source> = &mut *ptr;
-
-    match source.stop() {
-        Ok(..) => GBoolean::True,
-        Err(ref msg) => {
-            source.get_controller().error(msg);
-            GBoolean::False
-        }
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn source_is_seekable(ptr: *const Box<Source>) -> GBoolean {
-    let source: &Box<Source> = &*ptr;
-
-    GBoolean::from_bool(source.is_seekable())
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn source_do_seek(ptr: *mut Box<Source>, start: u64, stop: u64) -> GBoolean {
-    let source: &mut Box<Source> = &mut *ptr;
-
-    match source.do_seek(start, stop) {
-        Ok(..) => GBoolean::True,
-        Err(ref msg) => {
-            source.get_controller().error(msg);
+            msg.post(wrap.source_raw);
             GBoolean::False
         }
     }
