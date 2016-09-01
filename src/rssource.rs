@@ -20,6 +20,7 @@ use std::os::raw::c_void;
 use std::ffi::{CStr, CString};
 use std::slice;
 use std::ptr;
+use std::u64;
 
 use std::sync::Mutex;
 
@@ -60,12 +61,12 @@ pub trait Source {
     fn uri_validator(&self) -> Box<UriValidator>;
 
     fn is_seekable(&self) -> bool;
-    fn get_size(&self) -> u64;
+    fn get_size(&self) -> Option<u64>;
 
     fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage>;
     fn stop(&mut self) -> Result<(), ErrorMessage>;
     fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError>;
-    fn seek(&mut self, start: u64, stop: u64) -> Result<(), ErrorMessage>;
+    fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage>;
 }
 
 impl SourceWrapper {
@@ -158,7 +159,10 @@ pub unsafe extern "C" fn source_get_size(ptr: *const SourceWrapper) -> u64 {
     let wrap: &SourceWrapper = &*ptr;
     let source = &wrap.source.lock().unwrap();
 
-    source.get_size()
+    match source.get_size() {
+        Some(size) => size,
+        None => u64::MAX,
+    }
 }
 
 #[no_mangle]
@@ -237,7 +241,7 @@ pub unsafe extern "C" fn source_seek(ptr: *mut SourceWrapper, start: u64, stop: 
     let wrap: &mut SourceWrapper = &mut *ptr;
     let source = &mut wrap.source.lock().unwrap();
 
-    match source.seek(start, stop) {
+    match source.seek(start, if stop == u64::MAX { None } else { Some(stop) }) {
         Ok(..) => GBoolean::True,
         Err(ref msg) => {
             msg.post(wrap.source_raw);

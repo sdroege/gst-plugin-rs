@@ -62,13 +62,13 @@ impl Source for FileSrc {
         true
     }
 
-    fn get_size(&self) -> u64 {
+    fn get_size(&self) -> Option<u64> {
         if let StreamingState::Started { ref file, .. } = self.streaming_state {
             file.metadata()
                 .ok()
-                .map_or(u64::MAX, |m| m.len())
+                .map(|m| m.len())
         } else {
-            u64::MAX
+            None
         }
     }
 
@@ -132,7 +132,7 @@ impl Source for FileSrc {
         Ok(size)
     }
 
-    fn seek(&mut self, _: u64, _: u64) -> Result<(), ErrorMessage> {
+    fn seek(&mut self, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
         Ok(())
     }
 }

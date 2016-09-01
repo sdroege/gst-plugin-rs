@@ -34,9 +34,9 @@ enum StreamingState {
         response: Response,
         seekable: bool,
         position: u64,
-        size: u64,
+        size: Option<u64>,
         start: u64,
-        stop: u64,
+        stop: Option<u64>,
     },
 }
 
@@ -58,14 +58,19 @@ impl HttpSrc {
         Box::new(HttpSrc::new())
     }
 
-    fn do_request(&self, uri: Url, start: u64, stop: u64) -> Result<StreamingState, ErrorMessage> {
+    fn do_request(&self,
+                  uri: Url,
+                  start: u64,
+                  stop: Option<u64>)
+                  -> Result<StreamingState, ErrorMessage> {
         let mut req = self.client.get(uri.clone());
 
-        if start != 0 || stop != u64::MAX {
-            req = if stop == u64::MAX {
-                req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]))
-            } else {
-                req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]))
+        if start != 0 || stop.is_some() {
+            req = match stop {
+                None => req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)])),
+                Some(stop) => {
+                    req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]))
+                }
             };
         }
 
@@ -80,9 +85,9 @@ impl HttpSrc {
         }
 
         let size = if let Some(&ContentLength(content_length)) = response.headers.get() {
-            content_length + start
+            Some(content_length + start)
         } else {
-            u64::MAX
+            None
         };
 
         let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = response.headers
@@ -92,7 +97,7 @@ impl HttpSrc {
             false
         };
 
-        let seekable = size != u64::MAX && accept_byte_ranges;
+        let seekable = size.is_some() && accept_byte_ranges;
 
         let position = if let Some(&ContentRange(ContentRangeSpec::Bytes { range: Some((range_start,
                                                                                  _)),
@@ -141,16 +146,16 @@ impl Source for HttpSrc {
         }
     }
 
-    fn get_size(&self) -> u64 {
+    fn get_size(&self) -> Option<u64> {
         match self.streaming_state {
             StreamingState::Started { size, .. } => size,
-            _ => u64::MAX,
+            _ => None,
         }
     }
 
     fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
-        self.streaming_state = try!(self.do_request(uri.clone(), 0, u64::MAX));
+        self.streaming_state = try!(self.do_request(uri.clone(), 0, None));
 
         Ok(())
     }
@@ -161,7 +166,7 @@ impl Source for HttpSrc {
         Ok(())
     }
 
-    fn seek(&mut self, start: u64, stop: u64) -> Result<(), ErrorMessage> {
+    fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage> {
         let (position, old_stop, uri) = match self.streaming_state {
             StreamingState::Started { position, stop, ref uri, .. } => {
                 (position, stop, uri.clone())
