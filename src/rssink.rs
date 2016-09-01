@@ -144,28 +144,6 @@ pub unsafe extern "C" fn sink_get_uri(ptr: *const SinkWrapper) -> *mut c_char {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_render(ptr: *mut SinkWrapper,
-                                     data_ptr: *const u8,
-                                     data_len: usize)
-                                     -> GstFlowReturn {
-    let wrap: &mut SinkWrapper = &mut *ptr;
-    let sink = &mut wrap.sink.lock().unwrap();
-    let data = slice::from_raw_parts(data_ptr, data_len);
-
-    match sink.render(data) {
-        Ok(..) => GstFlowReturn::Ok,
-        Err(flow_error) => {
-            match flow_error {
-                FlowError::NotNegotiated(ref msg) |
-                FlowError::Error(ref msg) => msg.post(wrap.sink_raw),
-                _ => (),
-            }
-            flow_error.to_native()
-        }
-    }
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn sink_start(ptr: *mut SinkWrapper) -> GBoolean {
     let wrap: &mut SinkWrapper = &mut *ptr;
     let sink = &mut wrap.sink.lock().unwrap();
@@ -206,6 +184,28 @@ pub unsafe extern "C" fn sink_stop(ptr: *mut SinkWrapper) -> GBoolean {
         Err(ref msg) => {
             msg.post(wrap.sink_raw);
             GBoolean::False
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sink_render(ptr: *mut SinkWrapper,
+                                     data_ptr: *const u8,
+                                     data_len: usize)
+                                     -> GstFlowReturn {
+    let wrap: &mut SinkWrapper = &mut *ptr;
+    let sink = &mut wrap.sink.lock().unwrap();
+    let data = slice::from_raw_parts(data_ptr, data_len);
+
+    match sink.render(data) {
+        Ok(..) => GstFlowReturn::Ok,
+        Err(flow_error) => {
+            match flow_error {
+                FlowError::NotNegotiated(ref msg) |
+                FlowError::Error(ref msg) => msg.post(wrap.sink_raw),
+                _ => (),
+            }
+            flow_error.to_native()
         }
     }
 }
