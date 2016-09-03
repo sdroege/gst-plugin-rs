@@ -293,3 +293,38 @@ impl Error for UriError {
 }
 
 pub type UriValidator = Fn(&Url) -> Result<(), UriError>;
+
+#[derive(Debug)]
+pub struct PanicError;
+
+impl ToGError for PanicError {
+    fn to_gerror(&self) -> (u32, i32) {
+        (gst_library_error_domain(), 1)
+    }
+}
+
+macro_rules! panic_to_error(
+    ($wrap:expr, $ret:expr, $code:block) => {{
+        if $wrap.panicked.load(Ordering::Relaxed) {
+            error_msg!(PanicError, ["Panicked"]).post($wrap.raw);
+            return $ret;
+        }
+
+        let result = panic::catch_unwind(AssertUnwindSafe(|| $code));
+
+        match result {
+            Ok(result) => result,
+            Err(err) => {
+                $wrap.panicked.store(true, Ordering::Relaxed);
+                if let Some(cause) = err.downcast_ref::<&str>() {
+                    error_msg!(PanicError, ["Panicked: {}", cause]).post($wrap.raw);
+                } else if let Some(cause) = err.downcast_ref::<String>() {
+                    error_msg!(PanicError, ["Panicked: {}", cause]).post($wrap.raw);
+                } else {
+                    error_msg!(PanicError, ["Panicked"]).post($wrap.raw);
+                }
+                $ret
+            }
+        }
+    }}
+);
