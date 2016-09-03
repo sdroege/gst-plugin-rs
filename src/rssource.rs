@@ -63,7 +63,7 @@ pub trait Source {
     fn is_seekable(&self) -> bool;
     fn get_size(&self) -> Option<u64>;
 
-    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage>;
+    fn start(&mut self, uri: Url) -> Result<(), ErrorMessage>;
     fn stop(&mut self) -> Result<(), ErrorMessage>;
     fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError>;
     fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage>;
@@ -169,10 +169,13 @@ pub unsafe extern "C" fn source_get_size(ptr: *const SourceWrapper) -> u64 {
 pub unsafe extern "C" fn source_start(ptr: *mut SourceWrapper) -> GBoolean {
     let wrap: &mut SourceWrapper = &mut *ptr;
     let source = &mut wrap.source.lock().unwrap();
-    let uri_storage = &mut wrap.uri.lock().unwrap();
 
-    let (uri, started) = match **uri_storage {
-        (Some(ref uri), ref mut started) => (uri, started),
+    let uri = match *wrap.uri.lock().unwrap() {
+        (Some(ref uri), ref mut started) => {
+            *started = true;
+
+            uri.clone()
+        }
         (None, _) => {
             error_msg!(SourceError::OpenFailed, ["No URI given"]).post(wrap.source_raw);
             return GBoolean::False;
@@ -180,11 +183,9 @@ pub unsafe extern "C" fn source_start(ptr: *mut SourceWrapper) -> GBoolean {
     };
 
     match source.start(uri) {
-        Ok(..) => {
-            *started = true;
-            GBoolean::True
-        }
+        Ok(..) => GBoolean::True,
         Err(ref msg) => {
+            wrap.uri.lock().unwrap().1 = false;
             msg.post(wrap.source_raw);
             GBoolean::False
         }
@@ -195,11 +196,10 @@ pub unsafe extern "C" fn source_start(ptr: *mut SourceWrapper) -> GBoolean {
 pub unsafe extern "C" fn source_stop(ptr: *mut SourceWrapper) -> GBoolean {
     let wrap: &mut SourceWrapper = &mut *ptr;
     let source = &mut wrap.source.lock().unwrap();
-    let uri_storage = &mut wrap.uri.lock().unwrap();
 
     match source.stop() {
         Ok(..) => {
-            uri_storage.1 = false;
+            wrap.uri.lock().unwrap().1 = false;
             GBoolean::True
         }
         Err(ref msg) => {

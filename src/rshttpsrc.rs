@@ -153,9 +153,9 @@ impl Source for HttpSrc {
         }
     }
 
-    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, uri: Url) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
-        self.streaming_state = try!(self.do_request(uri.clone(), 0, None));
+        self.streaming_state = try!(self.do_request(uri, 0, None));
 
         Ok(())
     }

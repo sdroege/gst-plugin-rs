@@ -72,7 +72,7 @@ impl Source for FileSrc {
         }
     }
 
-    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, uri: Url) -> Result<(), ErrorMessage> {
         if let StreamingState::Started { .. } = self.streaming_state {
             return Err(error_msg!(SourceError::Failure, ["Source already started"]));
         }

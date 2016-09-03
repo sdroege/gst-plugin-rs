@@ -60,7 +60,7 @@ impl Sink for FileSink {
         Box::new(validate_uri)
     }
 
-    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, uri: Url) -> Result<(), ErrorMessage> {
         if let StreamingState::Started { .. } = self.streaming_state {
             return Err(error_msg!(SinkError::Failure, ["Sink already started"]));
         }

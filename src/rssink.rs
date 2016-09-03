@@ -60,7 +60,7 @@ pub struct SinkWrapper {
 pub trait Sink {
     fn uri_validator(&self) -> Box<UriValidator>;
 
-    fn start(&mut self, uri: &Url) -> Result<(), ErrorMessage>;
+    fn start(&mut self, uri: Url) -> Result<(), ErrorMessage>;
     fn stop(&mut self) -> Result<(), ErrorMessage>;
 
     fn render(&mut self, data: &[u8]) -> Result<(), FlowError>;
@@ -147,10 +147,13 @@ pub unsafe extern "C" fn sink_get_uri(ptr: *const SinkWrapper) -> *mut c_char {
 pub unsafe extern "C" fn sink_start(ptr: *mut SinkWrapper) -> GBoolean {
     let wrap: &mut SinkWrapper = &mut *ptr;
     let sink = &mut wrap.sink.lock().unwrap();
-    let uri_storage = &mut wrap.uri.lock().unwrap();
 
-    let (uri, started) = match **uri_storage {
-        (Some(ref uri), ref mut started) => (uri, started),
+    let uri = match *wrap.uri.lock().unwrap() {
+        (Some(ref uri), ref mut started) => {
+            *started = true;
+
+            uri.clone()
+        }
         (None, _) => {
             error_msg!(SinkError::OpenFailed, ["No URI given"]).post(wrap.sink_raw);
             return GBoolean::False;
@@ -158,12 +161,9 @@ pub unsafe extern "C" fn sink_start(ptr: *mut SinkWrapper) -> GBoolean {
     };
 
     match sink.start(uri) {
-        Ok(..) => {
-            *started = true;
-
-            GBoolean::True
-        }
+        Ok(..) => GBoolean::True,
         Err(ref msg) => {
+            wrap.uri.lock().unwrap().1 = false;
             msg.post(wrap.sink_raw);
             GBoolean::False
         }
@@ -174,11 +174,10 @@ pub unsafe extern "C" fn sink_start(ptr: *mut SinkWrapper) -> GBoolean {
 pub unsafe extern "C" fn sink_stop(ptr: *mut SinkWrapper) -> GBoolean {
     let wrap: &mut SinkWrapper = &mut *ptr;
     let sink = &mut wrap.sink.lock().unwrap();
-    let uri_storage = &mut wrap.uri.lock().unwrap();
 
     match sink.stop() {
         Ok(..) => {
-            uri_storage.1 = false;
+            wrap.uri.lock().unwrap().1 = false;
             GBoolean::True
         }
         Err(ref msg) => {
