@@ -93,11 +93,11 @@ pub unsafe extern "C" fn source_drop(ptr: *mut SourceWrapper) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_set_uri(ptr: *mut SourceWrapper,
+pub unsafe extern "C" fn source_set_uri(ptr: *const SourceWrapper,
                                         uri_ptr: *const c_char,
                                         cerr: *mut c_void)
                                         -> GBoolean {
-    let wrap: &mut SourceWrapper = &mut *ptr;
+    let wrap: &SourceWrapper = &*ptr;
     let uri_storage = &mut wrap.uri.lock().unwrap();
 
     if uri_storage.1 {
@@ -136,7 +136,7 @@ pub unsafe extern "C" fn source_set_uri(ptr: *mut SourceWrapper,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_get_uri(ptr: *mut SourceWrapper) -> *mut c_char {
+pub unsafe extern "C" fn source_get_uri(ptr: *const SourceWrapper) -> *mut c_char {
     let wrap: &SourceWrapper = &*ptr;
     let uri_storage = &mut wrap.uri.lock().unwrap();
 
@@ -166,8 +166,8 @@ pub unsafe extern "C" fn source_get_size(ptr: *const SourceWrapper) -> u64 {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_start(ptr: *mut SourceWrapper) -> GBoolean {
-    let wrap: &mut SourceWrapper = &mut *ptr;
+pub unsafe extern "C" fn source_start(ptr: *const SourceWrapper) -> GBoolean {
+    let wrap: &SourceWrapper = &*ptr;
     let source = &mut wrap.source.lock().unwrap();
 
     let uri = match *wrap.uri.lock().unwrap() {
@@ -193,8 +193,8 @@ pub unsafe extern "C" fn source_start(ptr: *mut SourceWrapper) -> GBoolean {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_stop(ptr: *mut SourceWrapper) -> GBoolean {
-    let wrap: &mut SourceWrapper = &mut *ptr;
+pub unsafe extern "C" fn source_stop(ptr: *const SourceWrapper) -> GBoolean {
+    let wrap: &SourceWrapper = &*ptr;
     let source = &mut wrap.source.lock().unwrap();
 
     match source.stop() {
@@ -210,12 +210,12 @@ pub unsafe extern "C" fn source_stop(ptr: *mut SourceWrapper) -> GBoolean {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_fill(ptr: *mut SourceWrapper,
+pub unsafe extern "C" fn source_fill(ptr: *const SourceWrapper,
                                      offset: u64,
                                      data_ptr: *mut u8,
                                      data_len_ptr: *mut usize)
                                      -> GstFlowReturn {
-    let wrap: &mut SourceWrapper = &mut *ptr;
+    let wrap: &SourceWrapper = &*ptr;
     let source = &mut wrap.source.lock().unwrap();
     let mut data_len: &mut usize = &mut *data_len_ptr;
     let mut data = slice::from_raw_parts_mut(data_ptr, *data_len);
@@ -237,8 +237,8 @@ pub unsafe extern "C" fn source_fill(ptr: *mut SourceWrapper,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_seek(ptr: *mut SourceWrapper, start: u64, stop: u64) -> GBoolean {
-    let wrap: &mut SourceWrapper = &mut *ptr;
+pub unsafe extern "C" fn source_seek(ptr: *const SourceWrapper, start: u64, stop: u64) -> GBoolean {
+    let wrap: &SourceWrapper = &*ptr;
     let source = &mut wrap.source.lock().unwrap();
 
     match source.seek(start, if stop == u64::MAX { None } else { Some(stop) }) {

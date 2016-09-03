@@ -90,11 +90,11 @@ pub unsafe extern "C" fn sink_drop(ptr: *mut SinkWrapper) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_set_uri(ptr: *mut SinkWrapper,
+pub unsafe extern "C" fn sink_set_uri(ptr: *const SinkWrapper,
                                       uri_ptr: *const c_char,
                                       cerr: *mut c_void)
                                       -> GBoolean {
-    let wrap: &mut SinkWrapper = &mut *ptr;
+    let wrap: &SinkWrapper = &*ptr;
     let uri_storage = &mut wrap.uri.lock().unwrap();
 
     if uri_storage.1 {
@@ -144,8 +144,8 @@ pub unsafe extern "C" fn sink_get_uri(ptr: *const SinkWrapper) -> *mut c_char {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_start(ptr: *mut SinkWrapper) -> GBoolean {
-    let wrap: &mut SinkWrapper = &mut *ptr;
+pub unsafe extern "C" fn sink_start(ptr: *const SinkWrapper) -> GBoolean {
+    let wrap: &SinkWrapper = &*ptr;
     let sink = &mut wrap.sink.lock().unwrap();
 
     let uri = match *wrap.uri.lock().unwrap() {
@@ -171,8 +171,8 @@ pub unsafe extern "C" fn sink_start(ptr: *mut SinkWrapper) -> GBoolean {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_stop(ptr: *mut SinkWrapper) -> GBoolean {
-    let wrap: &mut SinkWrapper = &mut *ptr;
+pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> GBoolean {
+    let wrap: &SinkWrapper = &*ptr;
     let sink = &mut wrap.sink.lock().unwrap();
 
     match sink.stop() {
@@ -188,11 +188,11 @@ pub unsafe extern "C" fn sink_stop(ptr: *mut SinkWrapper) -> GBoolean {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_render(ptr: *mut SinkWrapper,
+pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper,
                                      data_ptr: *const u8,
                                      data_len: usize)
                                      -> GstFlowReturn {
-    let wrap: &mut SinkWrapper = &mut *ptr;
+    let wrap: &SinkWrapper = &*ptr;
     let sink = &mut wrap.sink.lock().unwrap();
     let data = slice::from_raw_parts(data_ptr, data_len);
 
