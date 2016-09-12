@@ -440,15 +440,19 @@ impl<'a> Drop for ReadWriteBufferMap<'a> {
     }
 }
 
+#[repr(C)]
+pub struct ScopedBufferPtr(*mut c_void);
+
 pub struct ScopedBuffer<'a> {
     buffer: Buffer,
-    phantom: PhantomData<&'a c_void>,
+    #[allow(dead_code)]
+    phantom: PhantomData<&'a ScopedBufferPtr>,
 }
 
 impl<'a> ScopedBuffer<'a> {
-    pub unsafe fn new(ptr: *mut c_void) -> ScopedBuffer<'a> {
+    pub unsafe fn new(ptr: &'a ScopedBufferPtr) -> ScopedBuffer<'a> {
         ScopedBuffer {
-            buffer: Buffer::new_from_ptr_scoped(ptr),
+            buffer: Buffer::new_from_ptr_scoped(ptr.0),
             phantom: PhantomData,
         }
     }
@@ -467,4 +471,3 @@ impl<'a> DerefMut for ScopedBuffer<'a> {
         &mut self.buffer
     }
 }
-

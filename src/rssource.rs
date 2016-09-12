@@ -235,13 +235,13 @@ pub unsafe extern "C" fn source_stop(ptr: *const SourceWrapper) -> GBoolean {
 pub unsafe extern "C" fn source_fill(ptr: *const SourceWrapper,
                                      offset: u64,
                                      length: u32,
-                                     buffer: *mut c_void)
+                                     buffer: ScopedBufferPtr)
                                      -> GstFlowReturn {
     let wrap: &SourceWrapper = &*ptr;
 
     panic_to_error!(wrap, GstFlowReturn::Error, {
         let source = &mut wrap.source.lock().unwrap();
-        let mut buffer = ScopedBuffer::new(buffer);
+        let mut buffer = ScopedBuffer::new(&buffer);
 
         match source.fill(offset, length, &mut buffer) {
             Ok(()) => GstFlowReturn::Ok,

@@ -205,12 +205,12 @@ pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> GBoolean {
 
 #[no_mangle]
 pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper,
-                                     buffer: *mut c_void)
+                                     buffer: ScopedBufferPtr)
                                      -> GstFlowReturn {
     let wrap: &SinkWrapper = &*ptr;
     panic_to_error!(wrap, GstFlowReturn::Error, {
         let sink = &mut wrap.sink.lock().unwrap();
-        let buffer = ScopedBuffer::new(buffer);
+        let buffer = ScopedBuffer::new(&buffer);
 
         match sink.render(&buffer) {
             Ok(..) => GstFlowReturn::Ok,
