@@ -25,6 +25,7 @@ use hyper::client::response::Response;
 
 use error::*;
 use rssource::*;
+use buffer::*;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -186,7 +187,7 @@ impl Source for HttpSrc {
         Ok(())
     }
 
-    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError> {
+    fn fill(&mut self, offset: u64, _: u32, buffer: &mut Buffer) -> Result<(), FlowError> {
         let (response, position) = match self.streaming_state {
             StreamingState::Started { ref mut response, ref mut position, .. } => {
                 (response, position)
@@ -203,10 +204,24 @@ impl Source for HttpSrc {
                                                     position])));
         }
 
-        let size = try!(response.read(data).or_else(|err| {
-            Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
-                                            ["Failed to read at {}: {}", offset, err.to_string()])))
-        }));
+        let size = {
+            let map = match buffer.map_readwrite() {
+                None => {
+                    return Err(FlowError::Error(error_msg!(SourceError::Failure,
+                                                           ["Failed to map buffer"])));
+                }
+                Some(map) => map,
+            };
+
+            let data = map.as_mut_slice();
+
+            try!(response.read(data).or_else(|err| {
+                Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
+                                                ["Failed to read at {}: {}",
+                                                 offset,
+                                                 err.to_string()])))
+            }))
+        };
 
         if size == 0 {
             return Err(FlowError::Eos);
@@ -214,6 +229,12 @@ impl Source for HttpSrc {
 
         *position += size as u64;
 
-        Ok(size)
+        if let Err(err) = buffer.set_size(size) {
+            return Err(FlowError::Error(error_msg!(SourceError::Failure,
+                                                   ["Failed to resize buffer: {}", err])));
+        }
+
+
+        Ok(())
     }
 }

@@ -18,7 +18,6 @@
 use libc::c_char;
 use std::os::raw::c_void;
 use std::ffi::{CStr, CString};
-use std::slice;
 use std::ptr;
 use std::u64;
 
@@ -31,6 +30,7 @@ use url::Url;
 
 use utils::*;
 use error::*;
+use buffer::*;
 
 #[derive(Debug)]
 pub enum SourceError {
@@ -69,7 +69,7 @@ pub trait Source {
 
     fn start(&mut self, uri: Url) -> Result<(), ErrorMessage>;
     fn stop(&mut self) -> Result<(), ErrorMessage>;
-    fn fill(&mut self, offset: u64, data: &mut [u8]) -> Result<usize, FlowError>;
+    fn fill(&mut self, offset: u64, length: u32, buffer: &mut Buffer) -> Result<(), FlowError>;
     fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage>;
 }
 
@@ -234,21 +234,17 @@ pub unsafe extern "C" fn source_stop(ptr: *const SourceWrapper) -> GBoolean {
 #[no_mangle]
 pub unsafe extern "C" fn source_fill(ptr: *const SourceWrapper,
                                      offset: u64,
-                                     data_ptr: *mut u8,
-                                     data_len_ptr: *mut usize)
+                                     length: u32,
+                                     buffer: *mut c_void)
                                      -> GstFlowReturn {
     let wrap: &SourceWrapper = &*ptr;
 
     panic_to_error!(wrap, GstFlowReturn::Error, {
         let source = &mut wrap.source.lock().unwrap();
-        let mut data_len: &mut usize = &mut *data_len_ptr;
-        let mut data = slice::from_raw_parts_mut(data_ptr, *data_len);
+        let mut buffer = ScopedBuffer::new(buffer);
 
-        match source.fill(offset, data) {
-            Ok(actual_len) => {
-                *data_len = actual_len;
-                GstFlowReturn::Ok
-            }
+        match source.fill(offset, length, &mut buffer) {
+            Ok(()) => GstFlowReturn::Ok,
             Err(flow_error) => {
                 match flow_error {
                     FlowError::NotNegotiated(ref msg) |

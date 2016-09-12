@@ -52,3 +52,51 @@ gst_rs_element_error (GstElement * element, GQuark error_domain,
   gst_element_message_full (element, GST_MESSAGE_ERROR, error_domain,
       error_code, g_strdup (message), g_strdup (debug), file, function, line);
 }
+
+guint64
+gst_rs_buffer_get_pts (GstBuffer * buffer)
+{
+  return GST_BUFFER_PTS (buffer);
+}
+
+void
+gst_rs_buffer_set_pts (GstBuffer * buffer, guint64 pts)
+{
+  GST_BUFFER_PTS (buffer) = pts;
+}
+
+guint64
+gst_rs_buffer_get_dts (GstBuffer * buffer)
+{
+  return GST_BUFFER_DTS (buffer);
+}
+
+void
+gst_rs_buffer_set_dts (GstBuffer * buffer, guint64 dts)
+{
+  GST_BUFFER_DTS (buffer) = dts;
+}
+
+guint64
+gst_rs_buffer_get_offset (GstBuffer * buffer)
+{
+  return GST_BUFFER_OFFSET (buffer);
+}
+
+void
+gst_rs_buffer_set_offset (GstBuffer * buffer, guint64 offset)
+{
+  GST_BUFFER_OFFSET (buffer) = offset;
+}
+
+guint64
+gst_rs_buffer_get_offset_end (GstBuffer * buffer)
+{
+  return GST_BUFFER_OFFSET_END (buffer);
+}
+
+void
+gst_rs_buffer_set_offset_end (GstBuffer * buffer, guint64 offset_end)
+{
+  GST_BUFFER_OFFSET_END (buffer) = offset_end;
+}

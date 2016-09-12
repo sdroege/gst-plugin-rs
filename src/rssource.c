@@ -36,8 +36,8 @@ static GHashTable *sources;
 extern gboolean sources_register (void *plugin);
 extern void *source_new (GstRsSrc * source, void *create_instance);
 extern void source_drop (void *rssource);
-extern GstFlowReturn source_fill (void *rssource,
-    uint64_t offset, void *data, size_t * data_len);
+extern GstFlowReturn source_fill (void *rssource, guint64 offset, guint size,
+    GstBuffer * buffer);
 extern gboolean source_seek (void *rssource, uint64_t start, uint64_t stop);
 extern gboolean source_set_uri (void *rssource, const char *uri, GError ** err);
 extern char *source_get_uri (void *rssource);
@@ -182,19 +182,8 @@ gst_rs_src_fill (GstBaseSrc * basesrc, guint64 offset, guint length,
     GstBuffer * buf)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
-  GstMapInfo map;
-  GstFlowReturn ret;
-  gsize map_size, size;
 
-  gst_buffer_map (buf, &map, GST_MAP_READWRITE);
-  size = length;
-  map_size = map.size;
-  ret = source_fill (src->instance, offset, map.data, &size);
-  gst_buffer_unmap (buf, &map);
-  if (ret == GST_FLOW_OK && size != map_size)
-    gst_buffer_resize (buf, 0, size);
-
-  return ret;
+  return source_fill (src->instance, offset, length, buf);
 }
 
 static gboolean

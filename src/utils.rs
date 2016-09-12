@@ -41,6 +41,10 @@ impl GBoolean {
     pub fn from_bool(v: bool) -> GBoolean {
         if v { GBoolean::True } else { GBoolean::False }
     }
+
+    pub fn to_bool(&self) -> bool {
+        !(*self == GBoolean::False)
+    }
 }
 
 #[no_mangle]

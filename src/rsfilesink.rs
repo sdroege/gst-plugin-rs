@@ -24,6 +24,7 @@ use std::convert::From;
 
 use error::*;
 use rssink::*;
+use buffer::*;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -93,13 +94,22 @@ impl Sink for FileSink {
         Ok(())
     }
 
-    fn render(&mut self, data: &[u8]) -> Result<(), FlowError> {
+    fn render(&mut self, buffer: &Buffer) -> Result<(), FlowError> {
         let (file, position) = match self.streaming_state {
             StreamingState::Started { ref mut file, ref mut position } => (file, position),
             StreamingState::Stopped => {
                 return Err(FlowError::Error(error_msg!(SinkError::Failure, ["Not started yet"])));
             }
         };
+
+        let map = match buffer.map_read() {
+            None => {
+                return Err(FlowError::Error(error_msg!(SinkError::Failure,
+                                                       ["Failed to map buffer"])));
+            }
+            Some(map) => map,
+        };
+        let data = map.as_slice();
 
         try!(file.write_all(data).or_else(|err| {
             Err(FlowError::Error(error_msg!(SinkError::WriteFailed, ["Failed to write: {}", err])))

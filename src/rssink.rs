@@ -19,7 +19,6 @@
 use libc::c_char;
 use std::os::raw::c_void;
 use std::ffi::{CStr, CString};
-use std::slice;
 use std::ptr;
 
 use std::panic::{self, AssertUnwindSafe};
@@ -31,6 +30,7 @@ use url::Url;
 
 use utils::*;
 use error::*;
+use buffer::*;
 
 #[derive(Debug)]
 pub enum SinkError {
@@ -67,7 +67,7 @@ pub trait Sink {
     fn start(&mut self, uri: Url) -> Result<(), ErrorMessage>;
     fn stop(&mut self) -> Result<(), ErrorMessage>;
 
-    fn render(&mut self, data: &[u8]) -> Result<(), FlowError>;
+    fn render(&mut self, buffer: &Buffer) -> Result<(), FlowError>;
 }
 
 impl SinkWrapper {
@@ -205,15 +205,14 @@ pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> GBoolean {
 
 #[no_mangle]
 pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper,
-                                     data_ptr: *const u8,
-                                     data_len: usize)
+                                     buffer: *mut c_void)
                                      -> GstFlowReturn {
     let wrap: &SinkWrapper = &*ptr;
     panic_to_error!(wrap, GstFlowReturn::Error, {
         let sink = &mut wrap.sink.lock().unwrap();
-        let data = slice::from_raw_parts(data_ptr, data_len);
+        let buffer = ScopedBuffer::new(buffer);
 
-        match sink.render(data) {
+        match sink.render(&buffer) {
             Ok(..) => GstFlowReturn::Ok,
             Err(flow_error) => {
                 match flow_error {
