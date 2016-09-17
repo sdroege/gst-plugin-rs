@@ -264,8 +264,11 @@ impl Buffer {
         }
     }
 
-    pub fn share(&self) -> Buffer {
-        unsafe { Buffer::new_from_ptr(self.raw) }
+    pub fn copy(&self) -> Buffer {
+        extern "C" {
+            fn gst_mini_object_copy(obj: *const c_void) -> *mut c_void;
+        }
+        unsafe { Buffer::new_from_ptr_owned(gst_mini_object_copy(self.raw)) }
     }
 
     pub fn append(self, other: Buffer) -> Buffer {
@@ -583,13 +586,16 @@ impl Drop for Buffer {
     }
 }
 
+unsafe impl Sync for Buffer {}
+unsafe impl Send for Buffer {}
+
 impl Clone for Buffer {
     fn clone(&self) -> Buffer {
         extern "C" {
-            fn gst_mini_object_copy(obj: *const c_void) -> *mut c_void;
+            fn gst_mini_object_ref(obj: *mut c_void) -> *mut c_void;
         }
 
-        let raw = unsafe { gst_mini_object_copy(self.raw) };
+        let raw = unsafe { gst_mini_object_ref(self.raw) };
 
         Buffer {
             raw: raw,
@@ -672,6 +678,9 @@ impl Drop for ReadMappedBuffer {
     }
 }
 
+unsafe impl Sync for ReadMappedBuffer {}
+unsafe impl Send for ReadMappedBuffer {}
+
 impl ReadWriteMappedBuffer {
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.map_info.data as *mut u8, self.map_info.size) }
@@ -701,6 +710,9 @@ impl Drop for ReadWriteMappedBuffer {
         }
     }
 }
+
+unsafe impl Sync for ReadWriteMappedBuffer {}
+unsafe impl Send for ReadWriteMappedBuffer {}
 
 #[repr(C)]
 pub struct ScopedBufferPtr(*mut c_void);
