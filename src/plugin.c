@@ -100,3 +100,15 @@ gst_rs_buffer_set_offset_end (GstBuffer * buffer, guint64 offset_end)
 {
   GST_BUFFER_OFFSET_END (buffer) = offset_end;
 }
+
+GstBufferFlags
+gst_rs_buffer_get_buffer_flags (GstBuffer * buffer)
+{
+  return GST_MINI_OBJECT_FLAGS (buffer);
+}
+
+void
+gst_rs_buffer_set_buffer_flags (GstBuffer * buffer, GstBufferFlags flags)
+{
+  GST_MINI_OBJECT_FLAGS (buffer) = flags;
+}

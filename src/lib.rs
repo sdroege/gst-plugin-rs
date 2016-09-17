@@ -21,6 +21,8 @@
 extern crate libc;
 extern crate url;
 extern crate hyper;
+#[macro_use]
+extern crate bitflags;
 
 #[macro_use]
 pub mod utils;

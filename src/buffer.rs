@@ -22,6 +22,7 @@ use std::os::raw::c_void;
 use std::slice;
 use std::marker::PhantomData;
 use std::u64;
+use std::usize;
 use std::fmt::{Display, Formatter};
 use std::fmt::Error as FmtError;
 use std::error::Error;
@@ -29,12 +30,14 @@ use std::ops::{Deref, DerefMut};
 
 use utils::*;
 
+#[derive(Debug)]
 pub struct Buffer {
     raw: *mut c_void,
     owned: bool,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 struct GstMapInfo {
     memory: *mut c_void,
     flags: i32,
@@ -45,20 +48,35 @@ struct GstMapInfo {
     _gst_reserved: [*const c_void; 4],
 }
 
+#[derive(Debug)]
 pub struct ReadBufferMap<'a> {
     buffer: &'a Buffer,
     map_info: GstMapInfo,
 }
 
+#[derive(Debug)]
 pub struct ReadWriteBufferMap<'a> {
     buffer: &'a Buffer,
     map_info: GstMapInfo,
 }
 
 #[derive(Debug)]
+pub struct ReadMappedBuffer {
+    buffer: Buffer,
+    map_info: GstMapInfo,
+}
+
+#[derive(Debug)]
+pub struct ReadWriteMappedBuffer {
+    buffer: Buffer,
+    map_info: GstMapInfo,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum BufferError {
     NotWritable,
     NotEnoughSpace,
+    Unknown,
 }
 
 impl Display for BufferError {
@@ -72,6 +90,7 @@ impl Error for BufferError {
         match *self {
             BufferError::NotWritable => "Not Writable",
             BufferError::NotEnoughSpace => "Not Enough Space",
+            BufferError::Unknown => "Unknown",
         }
     }
 }
@@ -101,6 +120,18 @@ impl Buffer {
         }
     }
 
+    pub fn new() -> Buffer {
+        extern "C" {
+            fn gst_buffer_new() -> *mut c_void;
+        }
+
+        let raw = unsafe { gst_buffer_new() };
+        Buffer {
+            raw: raw,
+            owned: true,
+        }
+    }
+
     pub fn new_with_size(size: usize) -> Option<Buffer> {
         extern "C" {
             fn gst_buffer_new_allocate(allocator: *const c_void,
@@ -122,11 +153,15 @@ impl Buffer {
 
     pub fn map_read(&self) -> Option<ReadBufferMap> {
         extern "C" {
-            fn gst_buffer_map(buffer: *mut c_void, map: *mut GstMapInfo, flags: i32) -> GBoolean;
+            fn gst_buffer_map(buffer: *mut c_void,
+                              map: *mut GstMapInfo,
+                              flags: MapFlags)
+                              -> GBoolean;
         }
 
         let mut map_info: GstMapInfo = unsafe { mem::zeroed() };
-        let res = unsafe { gst_buffer_map(self.raw, &mut map_info as *mut GstMapInfo, 1) };
+        let res =
+            unsafe { gst_buffer_map(self.raw, &mut map_info as *mut GstMapInfo, MAP_FLAG_READ) };
         if res.to_bool() {
             Some(ReadBufferMap {
                 buffer: self,
@@ -139,13 +174,65 @@ impl Buffer {
 
     pub fn map_readwrite(&mut self) -> Option<ReadWriteBufferMap> {
         extern "C" {
-            fn gst_buffer_map(buffer: *mut c_void, map: *mut GstMapInfo, flags: i32) -> GBoolean;
+            fn gst_buffer_map(buffer: *mut c_void,
+                              map: *mut GstMapInfo,
+                              flags: MapFlags)
+                              -> GBoolean;
         }
 
         let mut map_info: GstMapInfo = unsafe { mem::zeroed() };
-        let res = unsafe { gst_buffer_map(self.raw, &mut map_info as *mut GstMapInfo, 3) };
+        let res = unsafe {
+            gst_buffer_map(self.raw,
+                           &mut map_info as *mut GstMapInfo,
+                           MAP_FLAG_READWRITE)
+        };
         if res.to_bool() {
             Some(ReadWriteBufferMap {
+                buffer: self,
+                map_info: map_info,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn into_read_mapped_buffer(self) -> Option<ReadMappedBuffer> {
+        extern "C" {
+            fn gst_buffer_map(buffer: *mut c_void,
+                              map: *mut GstMapInfo,
+                              flags: MapFlags)
+                              -> GBoolean;
+        }
+
+        let mut map_info: GstMapInfo = unsafe { mem::zeroed() };
+        let res =
+            unsafe { gst_buffer_map(self.raw, &mut map_info as *mut GstMapInfo, MAP_FLAG_READ) };
+        if res.to_bool() {
+            Some(ReadMappedBuffer {
+                buffer: self,
+                map_info: map_info,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn into_readwrite_mapped_buffer(self) -> Option<ReadWriteMappedBuffer> {
+        extern "C" {
+            fn gst_buffer_map(buffer: *mut c_void,
+                              map: *mut GstMapInfo,
+                              flags: MapFlags)
+                              -> GBoolean;
+        }
+
+        let mut map_info: GstMapInfo = unsafe { mem::zeroed() };
+        let res = unsafe {
+            gst_buffer_map(self.raw,
+                           &mut map_info as *mut GstMapInfo,
+                           MAP_FLAG_READWRITE)
+        };
+        if res.to_bool() {
+            Some(ReadWriteMappedBuffer {
                 buffer: self,
                 map_info: map_info,
             })
@@ -179,6 +266,101 @@ impl Buffer {
 
     pub fn share(&self) -> Buffer {
         unsafe { Buffer::new_from_ptr(self.raw) }
+    }
+
+    pub fn append(self, other: Buffer) -> Buffer {
+        extern "C" {
+            fn gst_buffer_append(buf1: *mut c_void, buf2: *mut c_void) -> *mut c_void;
+        }
+
+        let raw = unsafe { gst_buffer_append(self.raw, other.raw) };
+
+        Buffer {
+            raw: raw,
+            owned: true,
+        }
+    }
+
+    pub fn copy_region(&self, offset: usize, size: Option<usize>) -> Option<Buffer> {
+        extern "C" {
+            fn gst_buffer_copy_region(buf: *mut c_void,
+                                      flags: BufferCopyFlags,
+                                      offset: usize,
+                                      size: usize)
+                                      -> *mut c_void;
+        }
+
+        let size_real = size.unwrap_or(usize::MAX);
+
+        let raw =
+            unsafe { gst_buffer_copy_region(self.raw, BUFFER_COPY_FLAG_ALL, offset, size_real) };
+
+        if raw.is_null() {
+            None
+        } else {
+            Some(Buffer {
+                raw: raw,
+                owned: true,
+            })
+        }
+    }
+
+    pub fn copy_from_slice(&mut self, offset: usize, slice: &[u8]) -> Result<(), BufferError> {
+        if !self.is_writable() {
+            return Err(BufferError::NotWritable);
+        }
+
+        let maxsize = self.get_maxsize();
+        let size = slice.len();
+        if maxsize < offset || maxsize - offset < size {
+            return Err(BufferError::NotEnoughSpace);
+        }
+
+        extern "C" {
+            fn gst_buffer_fill(buffer: *mut c_void,
+                               offset: usize,
+                               src: *const u8,
+                               size: usize)
+                               -> usize;
+        };
+
+        let copied = unsafe {
+            let src = slice.as_ptr();
+            gst_buffer_fill(self.raw, offset, src, size)
+        };
+
+        if copied < size {
+            Err(BufferError::Unknown)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn copy_to_slice(&self, offset: usize, slice: &mut [u8]) -> Result<(), BufferError> {
+        let maxsize = self.get_size();
+        let size = slice.len();
+        if maxsize < offset || maxsize - offset < size {
+            return Err(BufferError::NotEnoughSpace);
+        }
+
+        extern "C" {
+            fn gst_buffer_extract(buffer: *mut c_void,
+                                  offset: usize,
+                                  src: *mut u8,
+                                  size: usize)
+                                  -> usize;
+        };
+
+        let copied = unsafe {
+            let src = slice.as_mut_ptr();
+            gst_buffer_extract(self.raw, offset, src, size)
+        };
+
+        if copied < size {
+            Err(BufferError::Unknown)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn get_size(&self) -> usize {
@@ -363,6 +545,30 @@ impl Buffer {
 
         Ok(())
     }
+
+    pub fn get_flags(&self) -> BufferFlags {
+        extern "C" {
+            fn gst_rs_buffer_get_flags(buf: *const c_void) -> BufferFlags;
+        }
+
+        unsafe { gst_rs_buffer_get_flags(self.raw) }
+    }
+
+    pub fn set_flags(&mut self, flags: BufferFlags) -> Result<(), BufferError> {
+        if !self.is_writable() {
+            return Err(BufferError::NotWritable);
+        }
+
+        extern "C" {
+            fn gst_rs_buffer_set_flags(buf: *const c_void, flags: BufferFlags);
+        }
+
+        unsafe {
+            gst_rs_buffer_set_flags(self.raw, flags);
+        }
+
+        Ok(())
+    }
 }
 
 impl Drop for Buffer {
@@ -415,7 +621,7 @@ impl<'a> Drop for ReadBufferMap<'a> {
 }
 
 impl<'a> ReadWriteBufferMap<'a> {
-    pub fn as_mut_slice(&self) -> &mut [u8] {
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.map_info.data as *mut u8, self.map_info.size) }
     }
 
@@ -429,6 +635,62 @@ impl<'a> ReadWriteBufferMap<'a> {
 }
 
 impl<'a> Drop for ReadWriteBufferMap<'a> {
+    fn drop(&mut self) {
+        extern "C" {
+            fn gst_buffer_unmap(buffer: *mut c_void, map: *mut GstMapInfo);
+        };
+
+        unsafe {
+            gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+        }
+    }
+}
+
+impl ReadMappedBuffer {
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.map_info.data as *const u8, self.map_info.size) }
+    }
+
+    pub fn get_size(&self) -> usize {
+        self.map_info.size
+    }
+
+    pub fn get_buffer(&self) -> &Buffer {
+        &self.buffer
+    }
+}
+
+impl Drop for ReadMappedBuffer {
+    fn drop(&mut self) {
+        extern "C" {
+            fn gst_buffer_unmap(buffer: *mut c_void, map: *mut GstMapInfo);
+        };
+
+        unsafe {
+            gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+        }
+    }
+}
+
+impl ReadWriteMappedBuffer {
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        unsafe { slice::from_raw_parts_mut(self.map_info.data as *mut u8, self.map_info.size) }
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { slice::from_raw_parts(self.map_info.data as *const u8, self.map_info.size) }
+    }
+
+    pub fn get_size(&self) -> usize {
+        self.map_info.size
+    }
+
+    pub fn get_buffer(&self) -> &Buffer {
+        &self.buffer
+    }
+}
+
+impl Drop for ReadWriteMappedBuffer {
     fn drop(&mut self) {
         extern "C" {
             fn gst_buffer_unmap(buffer: *mut c_void, map: *mut GstMapInfo);
@@ -469,5 +731,50 @@ impl<'a> Deref for ScopedBuffer<'a> {
 impl<'a> DerefMut for ScopedBuffer<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.buffer
+    }
+}
+
+bitflags! {
+    #[repr(C)]
+    flags MapFlags: u32 {
+        const MAP_FLAG_READ  = 0b00000001,
+        const MAP_FLAG_WRITE = 0b00000010,
+        const MAP_FLAG_READWRITE = MAP_FLAG_READ.bits
+                           | MAP_FLAG_WRITE.bits,
+    }
+}
+
+bitflags! {
+    #[repr(C)]
+    pub flags BufferFlags: u32 {
+        const BUFFER_FLAG_LIVE         = 0b0000000000010000,
+        const BUFFER_FLAG_DECODE_ONLY  = 0b0000000000100000,
+        const BUFFER_FLAG_DISCONT      = 0b0000000001000000,
+        const BUFFER_FLAG_RESYNC       = 0b0000000010000000,
+        const BUFFER_FLAG_CORRUPTED    = 0b0000000100000000,
+        const BUFFER_FLAG_MARKER       = 0b0000001000000000,
+        const BUFFER_FLAG_HEADER       = 0b0000010000000000,
+        const BUFFER_FLAG_GAP          = 0b0000100000000000,
+        const BUFFER_FLAG_DROPPABLE    = 0b0001000000000000,
+        const BUFFER_FLAG_DELTA_UNIT   = 0b0010000000000000,
+        const BUFFER_FLAG_TAG_MEMORY   = 0b0100000000000000,
+        const BUFFER_FLAG_SYNC_AFTER   = 0b1000000000000000,
+    }
+}
+
+bitflags! {
+    #[repr(C)]
+    flags BufferCopyFlags: u32 {
+        const BUFFER_COPY_FLAG_FLAGS       = 0b00000001,
+        const BUFFER_COPY_FLAG_TIMESTAMPS  = 0b00000010,
+        const BUFFER_COPY_FLAG_META        = 0b00000100,
+        const BUFFER_COPY_FLAG_MEMORY      = 0b00001000,
+        const BUFFER_COPY_FLAG_MERGE       = 0b00010000,
+        const BUFFER_COPY_FLAG_DEEP        = 0b00100000,
+        const BUFFER_COPY_FLAG_METADATA = BUFFER_COPY_FLAG_FLAGS.bits
+                           | BUFFER_COPY_FLAG_TIMESTAMPS.bits
+                           | BUFFER_COPY_FLAG_META.bits,
+        const BUFFER_COPY_FLAG_ALL = BUFFER_COPY_FLAG_METADATA.bits
+                           | BUFFER_COPY_FLAG_MEMORY.bits,
     }
 }

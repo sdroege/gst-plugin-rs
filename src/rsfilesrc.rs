@@ -124,7 +124,7 @@ impl Source for FileSrc {
         }
 
         let size = {
-            let map = match buffer.map_readwrite() {
+            let mut map = match buffer.map_readwrite() {
                 None => {
                     return Err(FlowError::Error(error_msg!(SourceError::Failure,
                                                            ["Failed to map buffer"])));

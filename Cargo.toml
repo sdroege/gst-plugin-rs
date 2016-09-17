@@ -10,6 +10,7 @@ license = "LGPL-2.1+"
 libc = "0.2"
 url = "1.1"
 hyper = "0.9"
+bitflags = "0.7"
 
 [build-dependencies]
 gcc = "0.3"
