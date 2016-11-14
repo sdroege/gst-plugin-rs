@@ -18,10 +18,9 @@
 use std::u64;
 use std::io::Read;
 use url::Url;
-use hyper::header::{ContentLength, ContentRange, ContentRangeSpec, Range, ByteRangeSpec,
-                    AcceptRanges, RangeUnit};
-use hyper::client::Client;
-use hyper::client::response::Response;
+use reqwest::{Client, Response};
+use reqwest::header::{ContentLength, ContentRange, ContentRangeSpec, Range, ByteRangeSpec,
+                      AcceptRanges, RangeUnit};
 
 use error::*;
 use rssource::*;
@@ -51,7 +50,7 @@ impl HttpSrc {
     pub fn new() -> HttpSrc {
         HttpSrc {
             streaming_state: StreamingState::Stopped,
-            client: Client::new(),
+            client: Client::new().unwrap(),
         }
     }
 
@@ -80,18 +79,18 @@ impl HttpSrc {
                            ["Failed to fetch {}: {}", uri, err.to_string()]))
         }));
 
-        if !response.status.is_success() {
+        if !response.status().is_success() {
             return Err(error_msg!(SourceError::ReadFailed,
-                                  ["Failed to fetch {}: {}", uri, response.status]));
+                                  ["Failed to fetch {}: {}", uri, response.status()]));
         }
 
-        let size = if let Some(&ContentLength(content_length)) = response.headers.get() {
+        let size = if let Some(&ContentLength(content_length)) = response.headers().get() {
             Some(content_length + start)
         } else {
             None
         };
 
-        let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = response.headers
+        let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = response.headers()
             .get() {
             ranges.iter().any(|u| *u == RangeUnit::Bytes)
         } else {
@@ -102,7 +101,7 @@ impl HttpSrc {
 
         let position = if let Some(&ContentRange(ContentRangeSpec::Bytes { range: Some((range_start,
                                                                                  _)),
-                                                                           .. })) = response.headers
+                                                                           .. })) = response.headers()
             .get() {
             range_start
         } else {

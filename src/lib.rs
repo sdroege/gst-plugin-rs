@@ -20,7 +20,7 @@
 
 extern crate libc;
 extern crate url;
-extern crate hyper;
+extern crate reqwest;
 #[macro_use]
 extern crate bitflags;
 

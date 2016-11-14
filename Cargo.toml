@@ -9,8 +9,8 @@ license = "LGPL-2.1+"
 [dependencies]
 libc = "0.2"
 url = "1.1"
-hyper = "0.9"
 bitflags = "0.7"
+reqwest = { git = "https://github.com/sdroege/reqwest.git"}
 
 [build-dependencies]
 gcc = "0.3"
