@@ -80,6 +80,98 @@ impl SinkWrapper {
             panicked: AtomicBool::new(false),
         }
     }
+
+    fn set_uri(&self, uri_str: Option<&str>) -> Result<(), UriError> {
+        let uri_storage = &mut self.uri.lock().unwrap();
+
+        if uri_storage.1 {
+            return Err(UriError::new(UriErrorKind::BadState, Some("Already started".to_string())));
+        }
+
+        uri_storage.0 = None;
+
+        if let Some(uri_str) = uri_str {
+            match Url::parse(uri_str) {
+                Ok(uri) => {
+                    try!((self.uri_validator)(&uri));
+                    uri_storage.0 = Some(uri);
+                    Ok(())
+                }
+                Err(err) => {
+                    Err(UriError::new(UriErrorKind::BadUri,
+                                      Some(format!("Failed to parse URI '{}': {}", uri_str, err))))
+                }
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    fn get_uri(&self) -> Option<String> {
+        let uri_storage = &self.uri.lock().unwrap();
+        uri_storage.0.as_ref().map(|uri| String::from(uri.as_str()))
+    }
+
+    fn start(&self) -> bool {
+        // Don't keep the URI locked while we call start later
+        let uri = match *self.uri.lock().unwrap() {
+            (Some(ref uri), ref mut started) => {
+                *started = true;
+                uri.clone()
+            }
+            (None, _) => {
+                self.post_message(&error_msg!(SinkError::OpenFailed, ["No URI given"]));
+                return false;
+            }
+        };
+
+        let sink = &mut self.sink.lock().unwrap();
+        match sink.start(uri) {
+            Ok(..) => true,
+            Err(ref msg) => {
+                self.uri.lock().unwrap().1 = false;
+                self.post_message(msg);
+                false
+            }
+        }
+    }
+
+    fn stop(&self) -> bool {
+        let sink = &mut self.sink.lock().unwrap();
+
+        match sink.stop() {
+            Ok(..) => {
+                self.uri.lock().unwrap().1 = false;
+                true
+            }
+            Err(ref msg) => {
+                self.post_message(msg);
+                false
+            }
+        }
+    }
+
+    fn render(&self, buffer: &Buffer) -> GstFlowReturn {
+        let sink = &mut self.sink.lock().unwrap();
+
+        match sink.render(buffer) {
+            Ok(..) => GstFlowReturn::Ok,
+            Err(flow_error) => {
+                match flow_error {
+                    FlowError::NotNegotiated(ref msg) |
+                    FlowError::Error(ref msg) => self.post_message(msg),
+                    _ => (),
+                }
+                flow_error.to_native()
+            }
+        }
+    }
+
+    fn post_message(&self, msg: &ErrorMessage) {
+        unsafe {
+            msg.post(self.raw);
+        }
+    }
 }
 
 #[no_mangle]
@@ -91,7 +183,7 @@ pub extern "C" fn sink_new(sink: *mut c_void,
 
 #[no_mangle]
 pub unsafe extern "C" fn sink_drop(ptr: *mut SinkWrapper) {
-    Box::from_raw(ptr);
+    let _ = Box::from_raw(ptr);
 }
 
 #[no_mangle]
@@ -102,40 +194,18 @@ pub unsafe extern "C" fn sink_set_uri(ptr: *const SinkWrapper,
     let wrap: &SinkWrapper = &*ptr;
 
     panic_to_error!(wrap, GBoolean::False, {
-        let uri_storage = &mut wrap.uri.lock().unwrap();
-
-        if uri_storage.1 {
-            UriError::new(UriErrorKind::BadState, Some("Already started".to_string()))
-                .into_gerror(cerr);
-            return GBoolean::False;
-        }
-
-        uri_storage.0 = None;
-        if uri_ptr.is_null() {
-            GBoolean::True
+        let uri_str = if uri_ptr.is_null() {
+            None
         } else {
-            let uri_str = CStr::from_ptr(uri_ptr).to_str().unwrap();
+            Some(CStr::from_ptr(uri_ptr).to_str().unwrap())
+        };
 
-            match Url::parse(uri_str) {
-                Ok(uri) => {
-                    if let Err(err) = (*wrap.uri_validator)(&uri) {
-                        err.into_gerror(cerr);
-
-                        GBoolean::False
-                    } else {
-                        uri_storage.0 = Some(uri);
-
-                        GBoolean::True
-                    }
-                }
-                Err(err) => {
-                    UriError::new(UriErrorKind::BadUri,
-                                  Some(format!("Failed to parse URI '{}': {}", uri_str, err)))
-                        .into_gerror(cerr);
-
-                    GBoolean::False
-                }
+        match wrap.set_uri(uri_str) {
+            Err(err) => {
+                err.into_gerror(cerr);
+                GBoolean::False
             }
+            Ok(_) => GBoolean::True,
         }
     })
 }
@@ -145,10 +215,8 @@ pub unsafe extern "C" fn sink_get_uri(ptr: *const SinkWrapper) -> *mut c_char {
     let wrap: &SinkWrapper = &*ptr;
 
     panic_to_error!(wrap, ptr::null_mut(), {
-        let uri_storage = &mut wrap.uri.lock().unwrap();
-
-        match uri_storage.0 {
-            Some(ref uri) => CString::new(uri.as_ref().as_bytes()).unwrap().into_raw(),
+        match wrap.get_uri() {
+            Some(uri_str) => CString::new(uri_str).unwrap().into_raw(),
             None => ptr::null_mut(),
         }
     })
@@ -159,28 +227,7 @@ pub unsafe extern "C" fn sink_start(ptr: *const SinkWrapper) -> GBoolean {
     let wrap: &SinkWrapper = &*ptr;
 
     panic_to_error!(wrap, GBoolean::False, {
-        let sink = &mut wrap.sink.lock().unwrap();
-
-        let uri = match *wrap.uri.lock().unwrap() {
-            (Some(ref uri), ref mut started) => {
-                *started = true;
-
-                uri.clone()
-            }
-            (None, _) => {
-                error_msg!(SinkError::OpenFailed, ["No URI given"]).post(wrap.raw);
-                return GBoolean::False;
-            }
-        };
-
-        match sink.start(uri) {
-            Ok(..) => GBoolean::True,
-            Err(ref msg) => {
-                wrap.uri.lock().unwrap().1 = false;
-                msg.post(wrap.raw);
-                GBoolean::False
-            }
-        }
+        GBoolean::from_bool(wrap.start())
     })
 }
 
@@ -188,18 +235,7 @@ pub unsafe extern "C" fn sink_start(ptr: *const SinkWrapper) -> GBoolean {
 pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> GBoolean {
     let wrap: &SinkWrapper = &*ptr;
     panic_to_error!(wrap, GBoolean::False, {
-        let sink = &mut wrap.sink.lock().unwrap();
-
-        match sink.stop() {
-            Ok(..) => {
-                wrap.uri.lock().unwrap().1 = false;
-                GBoolean::True
-            }
-            Err(ref msg) => {
-                msg.post(wrap.raw);
-                GBoolean::False
-            }
-        }
+        GBoolean::from_bool(wrap.stop())
     })
 }
 
@@ -209,19 +245,7 @@ pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper,
                                      -> GstFlowReturn {
     let wrap: &SinkWrapper = &*ptr;
     panic_to_error!(wrap, GstFlowReturn::Error, {
-        let sink = &mut wrap.sink.lock().unwrap();
         let buffer = ScopedBuffer::new(&buffer);
-
-        match sink.render(&buffer) {
-            Ok(..) => GstFlowReturn::Ok,
-            Err(flow_error) => {
-                match flow_error {
-                    FlowError::NotNegotiated(ref msg) |
-                    FlowError::Error(ref msg) => msg.post(wrap.raw),
-                    _ => (),
-                }
-                flow_error.to_native()
-            }
-        }
+        wrap.render(&*buffer)
     })
 }

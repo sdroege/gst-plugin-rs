@@ -49,5 +49,5 @@ impl GBoolean {
 
 #[no_mangle]
 pub unsafe extern "C" fn cstring_drop(ptr: *mut c_char) {
-    CString::from_raw(ptr);
+    let _ = CString::from_raw(ptr);
 }

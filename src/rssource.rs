@@ -83,6 +83,122 @@ impl SourceWrapper {
             panicked: AtomicBool::new(false),
         }
     }
+
+    fn set_uri(&self, uri_str: Option<&str>) -> Result<(), UriError> {
+        let uri_storage = &mut self.uri.lock().unwrap();
+
+        if uri_storage.1 {
+            return Err(UriError::new(UriErrorKind::BadState, Some("Already started".to_string())));
+        }
+
+        uri_storage.0 = None;
+
+        if let Some(uri_str) = uri_str {
+            match Url::parse(uri_str) {
+                Ok(uri) => {
+                    try!((self.uri_validator)(&uri));
+                    uri_storage.0 = Some(uri);
+                    Ok(())
+                }
+                Err(err) => {
+                    Err(UriError::new(UriErrorKind::BadUri,
+                                      Some(format!("Failed to parse URI '{}': {}", uri_str, err))))
+                }
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    fn get_uri(&self) -> Option<String> {
+        let uri_storage = &self.uri.lock().unwrap();
+        uri_storage.0.as_ref().map(|uri| String::from(uri.as_str()))
+    }
+
+    fn is_seekable(&self) -> bool {
+        let source = &self.source.lock().unwrap();
+        source.is_seekable()
+    }
+
+    fn get_size(&self) -> u64 {
+        let source = &self.source.lock().unwrap();
+        match source.get_size() {
+            Some(size) => size,
+            None => u64::MAX,
+        }
+    }
+
+    fn start(&self) -> bool {
+        // Don't keep the URI locked while we call start later
+        let uri = match *self.uri.lock().unwrap() {
+            (Some(ref uri), ref mut started) => {
+                *started = true;
+                uri.clone()
+            }
+            (None, _) => {
+                self.post_message(&error_msg!(SourceError::OpenFailed, ["No URI given"]));
+                return false;
+            }
+        };
+
+        let source = &mut self.source.lock().unwrap();
+        match source.start(uri) {
+            Ok(..) => true,
+            Err(ref msg) => {
+                self.uri.lock().unwrap().1 = false;
+                self.post_message(msg);
+                false
+            }
+        }
+    }
+
+    fn stop(&self) -> bool {
+        let source = &mut self.source.lock().unwrap();
+
+        match source.stop() {
+            Ok(..) => {
+                self.uri.lock().unwrap().1 = false;
+                true
+            }
+            Err(ref msg) => {
+                self.post_message(msg);
+                false
+            }
+        }
+    }
+
+    fn fill(&self, offset: u64, length: u32, buffer: &mut Buffer) -> GstFlowReturn {
+        let source = &mut self.source.lock().unwrap();
+        match source.fill(offset, length, buffer) {
+            Ok(()) => GstFlowReturn::Ok,
+            Err(flow_error) => {
+                match flow_error {
+                    FlowError::NotNegotiated(ref msg) |
+                    FlowError::Error(ref msg) => self.post_message(msg),
+                    _ => (),
+                }
+                flow_error.to_native()
+            }
+        }
+    }
+
+    fn seek(&self, start: u64, stop: Option<u64>) -> bool {
+        let source = &mut self.source.lock().unwrap();
+
+        match source.seek(start, stop) {
+            Ok(..) => true,
+            Err(ref msg) => {
+                self.post_message(msg);
+                false
+            }
+        }
+    }
+
+    fn post_message(&self, msg: &ErrorMessage) {
+        unsafe {
+            msg.post(self.raw);
+        }
+    }
 }
 
 #[no_mangle]
@@ -94,7 +210,7 @@ pub extern "C" fn source_new(source: *mut c_void,
 
 #[no_mangle]
 pub unsafe extern "C" fn source_drop(ptr: *mut SourceWrapper) {
-    Box::from_raw(ptr);
+    let _ = Box::from_raw(ptr);
 }
 
 #[no_mangle]
@@ -105,40 +221,18 @@ pub unsafe extern "C" fn source_set_uri(ptr: *const SourceWrapper,
     let wrap: &SourceWrapper = &*ptr;
 
     panic_to_error!(wrap, GBoolean::False, {
-        let uri_storage = &mut wrap.uri.lock().unwrap();
-
-        if uri_storage.1 {
-            UriError::new(UriErrorKind::BadState, Some("Already started".to_string()))
-                .into_gerror(cerr);
-            return GBoolean::False;
-        }
-
-        uri_storage.0 = None;
-        if uri_ptr.is_null() {
-            GBoolean::True
+        let uri_str = if uri_ptr.is_null() {
+            None
         } else {
-            let uri_str = CStr::from_ptr(uri_ptr).to_str().unwrap();
+            Some(CStr::from_ptr(uri_ptr).to_str().unwrap())
+        };
 
-            match Url::parse(uri_str) {
-                Ok(uri) => {
-                    if let Err(err) = (*wrap.uri_validator)(&uri) {
-                        err.into_gerror(cerr);
-
-                        GBoolean::False
-                    } else {
-                        uri_storage.0 = Some(uri);
-
-                        GBoolean::True
-                    }
-                }
-                Err(err) => {
-                    UriError::new(UriErrorKind::BadUri,
-                                  Some(format!("Failed to parse URI '{}': {}", uri_str, err)))
-                        .into_gerror(cerr);
-
-                    GBoolean::False
-                }
+        match wrap.set_uri(uri_str) {
+            Err(err) => {
+                err.into_gerror(cerr);
+                GBoolean::False
             }
+            Ok(_) => GBoolean::True,
         }
     })
 }
@@ -147,10 +241,8 @@ pub unsafe extern "C" fn source_set_uri(ptr: *const SourceWrapper,
 pub unsafe extern "C" fn source_get_uri(ptr: *const SourceWrapper) -> *mut c_char {
     let wrap: &SourceWrapper = &*ptr;
     panic_to_error!(wrap, ptr::null_mut(), {
-        let uri_storage = &mut wrap.uri.lock().unwrap();
-
-        match uri_storage.0 {
-            Some(ref uri) => CString::new(uri.as_ref().as_bytes()).unwrap().into_raw(),
+        match wrap.get_uri() {
+            Some(uri_str) => CString::new(uri_str).unwrap().into_raw(),
             None => ptr::null_mut(),
         }
     })
@@ -161,9 +253,7 @@ pub unsafe extern "C" fn source_is_seekable(ptr: *const SourceWrapper) -> GBoole
     let wrap: &SourceWrapper = &*ptr;
 
     panic_to_error!(wrap, GBoolean::False, {
-        let source = &wrap.source.lock().unwrap();
-
-        GBoolean::from_bool(source.is_seekable())
+        GBoolean::from_bool(wrap.is_seekable())
     })
 }
 
@@ -171,13 +261,7 @@ pub unsafe extern "C" fn source_is_seekable(ptr: *const SourceWrapper) -> GBoole
 pub unsafe extern "C" fn source_get_size(ptr: *const SourceWrapper) -> u64 {
     let wrap: &SourceWrapper = &*ptr;
     panic_to_error!(wrap, u64::MAX, {
-
-        let source = &wrap.source.lock().unwrap();
-
-        match source.get_size() {
-            Some(size) => size,
-            None => u64::MAX,
-        }
+        wrap.get_size()
     })
 }
 
@@ -186,28 +270,7 @@ pub unsafe extern "C" fn source_start(ptr: *const SourceWrapper) -> GBoolean {
     let wrap: &SourceWrapper = &*ptr;
 
     panic_to_error!(wrap, GBoolean::False, {
-        let source = &mut wrap.source.lock().unwrap();
-
-        let uri = match *wrap.uri.lock().unwrap() {
-            (Some(ref uri), ref mut started) => {
-                *started = true;
-
-                uri.clone()
-            }
-            (None, _) => {
-                error_msg!(SourceError::OpenFailed, ["No URI given"]).post(wrap.raw);
-                return GBoolean::False;
-            }
-        };
-
-        match source.start(uri) {
-            Ok(..) => GBoolean::True,
-            Err(ref msg) => {
-                wrap.uri.lock().unwrap().1 = false;
-                msg.post(wrap.raw);
-                GBoolean::False
-            }
-        }
+        GBoolean::from_bool(wrap.start())
     })
 }
 
@@ -216,18 +279,7 @@ pub unsafe extern "C" fn source_stop(ptr: *const SourceWrapper) -> GBoolean {
     let wrap: &SourceWrapper = &*ptr;
 
     panic_to_error!(wrap, GBoolean::False, {
-        let source = &mut wrap.source.lock().unwrap();
-
-        match source.stop() {
-            Ok(..) => {
-                wrap.uri.lock().unwrap().1 = false;
-                GBoolean::True
-            }
-            Err(ref msg) => {
-                msg.post(wrap.raw);
-                GBoolean::False
-            }
-        }
+        GBoolean::from_bool(wrap.stop())
     })
 }
 
@@ -240,20 +292,8 @@ pub unsafe extern "C" fn source_fill(ptr: *const SourceWrapper,
     let wrap: &SourceWrapper = &*ptr;
 
     panic_to_error!(wrap, GstFlowReturn::Error, {
-        let source = &mut wrap.source.lock().unwrap();
         let mut buffer = ScopedBuffer::new(&buffer);
-
-        match source.fill(offset, length, &mut buffer) {
-            Ok(()) => GstFlowReturn::Ok,
-            Err(flow_error) => {
-                match flow_error {
-                    FlowError::NotNegotiated(ref msg) |
-                    FlowError::Error(ref msg) => msg.post(wrap.raw),
-                    _ => (),
-                }
-                flow_error.to_native()
-            }
-        }
+        wrap.fill(offset, length, &mut *buffer)
     })
 }
 
@@ -262,14 +302,6 @@ pub unsafe extern "C" fn source_seek(ptr: *const SourceWrapper, start: u64, stop
     let wrap: &SourceWrapper = &*ptr;
 
     panic_to_error!(wrap, GBoolean::False, {
-        let source = &mut wrap.source.lock().unwrap();
-
-        match source.seek(start, if stop == u64::MAX { None } else { Some(stop) }) {
-            Ok(..) => GBoolean::True,
-            Err(ref msg) => {
-                msg.post(wrap.raw);
-                GBoolean::False
-            }
-        }
+        GBoolean::from_bool(wrap.seek(start, if stop == u64::MAX { None } else { Some(stop) }))
     })
 }
