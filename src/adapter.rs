@@ -61,6 +61,26 @@ impl Adapter {
         self.size
     }
 
+    fn copy_data(deque: &VecDeque<ReadMappedBuffer>, skip: usize, data: &mut [u8], size: usize) {
+        let mut skip = skip;
+        let mut left = size;
+        let mut idx = 0;
+
+        for item in deque {
+            let data_item = item.as_slice();
+
+            let to_copy = cmp::min(left, data_item.len() - skip);
+            data[idx..idx + to_copy].copy_from_slice(&data_item[skip..skip + to_copy]);
+            skip = 0;
+            idx += to_copy;
+            left -= to_copy;
+            if left == 0 {
+                break;
+            }
+        }
+        assert_eq!(left, 0);
+    }
+
     pub fn peek(&mut self, size: usize) -> Result<&[u8], AdapterError> {
         if self.size < size {
             return Err(AdapterError::NotEnoughData);
@@ -80,24 +100,7 @@ impl Adapter {
         self.scratch.reserve(size);
         {
             let data = self.scratch.as_mut_slice();
-
-            let mut skip = self.skip;
-            let mut left = size;
-            let mut idx = 0;
-
-            for item in &self.deque {
-                let data_item = item.as_slice();
-
-                let to_copy = cmp::min(left, data_item.len() - skip);
-                data[idx..idx + to_copy].copy_from_slice(&data_item[skip..skip + to_copy]);
-                skip = 0;
-                idx += to_copy;
-                left -= to_copy;
-                if left == 0 {
-                    break;
-                }
-            }
-            assert_eq!(left, 0);
+            Self::copy_data(&self.deque, self.skip, data, size);
         }
 
         Ok(self.scratch.as_slice())
@@ -132,24 +135,7 @@ impl Adapter {
         {
             let mut map = new.map_readwrite().unwrap();
             let data = map.as_mut_slice();
-
-            let mut skip = self.skip;
-            let mut left = size;
-            let mut idx = 0;
-
-            for item in &self.deque {
-                let data_item = item.as_slice();
-
-                let to_copy = cmp::min(left, data_item.len() - skip);
-                data[idx..idx + to_copy].copy_from_slice(&data_item[skip..skip + to_copy]);
-                skip = 0;
-                idx += to_copy;
-                left -= to_copy;
-                if left == 0 {
-                    break;
-                }
-            }
-            assert_eq!(left, 0);
+            Self::copy_data(&self.deque, self.skip, data, size);
         }
         self.flush(size).unwrap();
         Ok(new)
