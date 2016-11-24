@@ -20,6 +20,7 @@
 
 #include "rssource.h"
 #include "rssink.h"
+#include "rsdemuxer.h"
 
 static gboolean
 plugin_init (GstPlugin * plugin)
@@ -28,6 +29,9 @@ plugin_init (GstPlugin * plugin)
     return FALSE;
 
   if (!gst_rs_sink_plugin_init (plugin))
+    return FALSE;
+
+  if (!gst_rs_demuxer_plugin_init (plugin))
     return FALSE;
 
   return TRUE;
@@ -102,13 +106,13 @@ gst_rs_buffer_set_offset_end (GstBuffer * buffer, guint64 offset_end)
 }
 
 GstBufferFlags
-gst_rs_buffer_get_buffer_flags (GstBuffer * buffer)
+gst_rs_buffer_get_flags (GstBuffer * buffer)
 {
   return GST_MINI_OBJECT_FLAGS (buffer);
 }
 
 void
-gst_rs_buffer_set_buffer_flags (GstBuffer * buffer, GstBufferFlags flags)
+gst_rs_buffer_set_flags (GstBuffer * buffer, GstBufferFlags flags)
 {
   GST_MINI_OBJECT_FLAGS (buffer) = flags;
 }

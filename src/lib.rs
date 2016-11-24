@@ -23,6 +23,9 @@ extern crate url;
 extern crate reqwest;
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate nom;
+extern crate flavors;
 
 #[macro_use]
 pub mod utils;
@@ -35,11 +38,14 @@ pub mod rssink;
 pub mod rsfilesrc;
 pub mod rshttpsrc;
 pub mod rsfilesink;
+pub mod rsdemuxer;
+pub mod flvdemux;
 
 use utils::*;
 use rsfilesrc::FileSrc;
 use rshttpsrc::HttpSrc;
 use rsfilesink::FileSink;
+use flvdemux::FlvDemux;
 
 use std::os::raw::c_void;
 use libc::c_char;
@@ -168,6 +174,66 @@ pub unsafe extern "C" fn sinks_register(plugin: *const c_void) -> GBoolean {
                   256 + 100,
                   FileSink::new_boxed as *const c_void,
                   "file");
+
+    GBoolean::True
+}
+
+unsafe fn demuxer_register(plugin: *const c_void,
+                           name: &str,
+                           long_name: &str,
+                           description: &str,
+                           classification: &str,
+                           author: &str,
+                           rank: i32,
+                           create_instance: *const c_void,
+                           input_format: &str,
+                           output_formats: &str) {
+    extern "C" {
+        fn gst_rs_demuxer_register(plugin: *const c_void,
+                                   name: *const c_char,
+                                   long_name: *const c_char,
+                                   description: *const c_char,
+                                   classification: *const c_char,
+                                   author: *const c_char,
+                                   rank: i32,
+                                   create_instance: *const c_void,
+                                   input_format: *const c_char,
+                                   output_formats: *const c_char)
+                                   -> GBoolean;
+    }
+
+    let cname = CString::new(name).unwrap();
+    let clong_name = CString::new(long_name).unwrap();
+    let cdescription = CString::new(description).unwrap();
+    let cclassification = CString::new(classification).unwrap();
+    let cauthor = CString::new(author).unwrap();
+    let cinput_format = CString::new(input_format).unwrap();
+    let coutput_formats = CString::new(output_formats).unwrap();
+
+    gst_rs_demuxer_register(plugin,
+                            cname.as_ptr(),
+                            clong_name.as_ptr(),
+                            cdescription.as_ptr(),
+                            cclassification.as_ptr(),
+                            cauthor.as_ptr(),
+                            rank,
+                            create_instance,
+                            cinput_format.as_ptr(),
+                            coutput_formats.as_ptr());
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn demuxers_register(plugin: *const c_void) -> GBoolean {
+    demuxer_register(plugin,
+                     "rsflvdemux",
+                     "FLV Demuxer",
+                     "Demuxes FLV Streams",
+                     "Codec/Demuxer",
+                     "Sebastian Dröge <sebastian@centricular.com>",
+                     256 + 100,
+                     FlvDemux::new_boxed as *const c_void,
+                     "video/x-flv",
+                     "ANY");
 
     GBoolean::True
 }

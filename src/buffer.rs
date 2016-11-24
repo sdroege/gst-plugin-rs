@@ -241,6 +241,19 @@ impl Buffer {
         }
     }
 
+    pub unsafe fn into_ptr(mut self) -> *mut c_void {
+        extern "C" {
+            fn gst_mini_object_ref(obj: *mut c_void) -> *mut c_void;
+        };
+        if !self.owned {
+            gst_mini_object_ref(self.raw);
+        }
+
+        self.owned = false;
+
+        self.raw
+    }
+
     pub fn is_writable(&self) -> bool {
         extern "C" {
             fn gst_mini_object_is_writable(obj: *const c_void) -> GBoolean;

@@ -81,6 +81,21 @@ impl Adapter {
         assert_eq!(left, 0);
     }
 
+    pub fn peek_into(&self, data: &mut [u8]) -> Result<(), AdapterError> {
+        let size = data.len();
+
+        if self.size < size {
+            return Err(AdapterError::NotEnoughData);
+        }
+
+        if size == 0 {
+            return Ok(());
+        }
+
+        Self::copy_data(&self.deque, self.skip, data, size);
+        Ok(())
+    }
+
     pub fn peek(&mut self, size: usize) -> Result<&[u8], AdapterError> {
         if self.size < size {
             return Err(AdapterError::NotEnoughData);
