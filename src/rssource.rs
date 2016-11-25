@@ -122,10 +122,7 @@ impl SourceWrapper {
 
     fn get_size(&self) -> u64 {
         let source = &self.source.lock().unwrap();
-        match source.get_size() {
-            Some(size) => size,
-            None => u64::MAX,
-        }
+        source.get_size().unwrap_or(u64::MAX)
     }
 
     fn start(&self) -> bool {

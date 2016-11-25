@@ -115,20 +115,18 @@ impl Adapter {
             return Ok(Buffer::new());
         }
 
-        if let Some(sub) = {
-            if let Some(front) = self.deque.front() {
-                if front.get_size() - self.skip >= size {
-                    let new = front.get_buffer().copy_region(self.skip, Some(size)).unwrap();
-                    Some(new)
-                } else {
-                    None
-                }
+        let sub = self.deque.front().and_then(|front| {
+            if front.get_size() - self.skip >= size {
+                let new = front.get_buffer().copy_region(self.skip, Some(size)).unwrap();
+                Some(new)
             } else {
                 None
             }
-        } {
+        });
+
+        if let Some(s) = sub {
             self.flush(size).unwrap();
-            return Ok(sub);
+            return Ok(s);
         }
 
         let mut new = Buffer::new_with_size(size).unwrap();
