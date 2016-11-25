@@ -65,13 +65,12 @@ impl HttpSrc {
                   -> Result<StreamingState, ErrorMessage> {
         let mut req = self.client.get(uri.clone());
 
-        if start != 0 || stop.is_some() {
-            req = match stop {
-                None => req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)])),
-                Some(stop) => {
-                    req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]))
-                }
-            };
+        match (start != 0, stop) {
+            (false, None) => (),
+            (true, None) => req = req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)])),
+            (_, Some(stop)) => {
+                req = req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]))
+            }
         }
 
         let response = try!(req.send().or_else(|err| {
@@ -84,11 +83,7 @@ impl HttpSrc {
                                   ["Failed to fetch {}: {}", uri, response.status()]));
         }
 
-        let size = if let Some(&ContentLength(content_length)) = response.headers().get() {
-            Some(content_length + start)
-        } else {
-            None
-        };
+        let size = response.headers().get().map(|&ContentLength(cl)| cl + start);
 
         let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = response.headers()
             .get() {
