@@ -440,10 +440,7 @@ impl Buffer {
             fn gst_rs_buffer_set_offset(buf: *const c_void, offset: u64);
         }
 
-        let offset = match offset {
-            None => u64::MAX,
-            Some(offset) => offset,
-        };
+        let offset = offset.unwrap_or(u64::MAX);
 
         unsafe {
             gst_rs_buffer_set_offset(self.raw, offset);
@@ -475,10 +472,7 @@ impl Buffer {
             fn gst_rs_buffer_set_offset_end(buf: *const c_void, offset_end: u64);
         }
 
-        let offset_end = match offset_end {
-            None => u64::MAX,
-            Some(offset_end) => offset_end,
-        };
+        let offset_end = offset_end.unwrap_or(u64::MAX);
 
         unsafe {
             gst_rs_buffer_set_offset_end(self.raw, offset_end);
@@ -506,10 +500,7 @@ impl Buffer {
             fn gst_rs_buffer_set_pts(buf: *const c_void, pts: u64);
         }
 
-        let pts = match pts {
-            None => u64::MAX,
-            Some(pts) => pts,
-        };
+        let pts = pts.unwrap_or(u64::MAX);
 
         unsafe {
             gst_rs_buffer_set_pts(self.raw, pts);
@@ -537,10 +528,7 @@ impl Buffer {
             fn gst_rs_buffer_set_dts(buf: *const c_void, dts: u64);
         }
 
-        let dts = match dts {
-            None => u64::MAX,
-            Some(dts) => dts,
-        };
+        let dts = dts.unwrap_or(u64::MAX);
 
         unsafe {
             gst_rs_buffer_set_dts(self.raw, dts);
