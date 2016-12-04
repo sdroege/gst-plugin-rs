@@ -85,8 +85,9 @@ impl HttpSrc {
 
         let size = response.headers().get().map(|&ContentLength(cl)| cl + start);
 
-        let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = response.headers()
-            .get() {
+        let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) =
+            response.headers()
+                .get() {
             ranges.iter().any(|u| *u == RangeUnit::Bytes)
         } else {
             false

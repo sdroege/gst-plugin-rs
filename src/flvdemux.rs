@@ -34,25 +34,189 @@ const VIDEO_STREAM_ID: u32 = 1;
 enum State {
     Stopped,
     NeedHeader,
-    Skipping { skip_left: u32 },
+    Skipping {
+        audio: bool,
+        video: bool,
+        skip_left: u32,
+    },
     Streaming,
 }
 
 #[derive(Debug)]
 struct StreamingState {
-    // TODO: Store in custom structs that just contain what we need
-    audio: Option<flavors::AudioDataHeader>,
-    video: Option<flavors::VideoDataHeader>,
+    audio: Option<AudioFormat>,
+    expect_audio: bool,
+    video: Option<VideoFormat>,
+    expect_video: bool,
     got_all_streams: bool,
-    last_position: Option<u64>, // TODO: parse and store various audio/video metadata from ScriptDataObject
+    last_position: Option<u64>,
+    duration: Option<u64>,
+
+    creation_date: Option<String>,
+    creator: Option<String>,
+    title: Option<String>,
+    metadata_creator: Option<String>, /* TODO: seek_table: _,
+                                       * filepositions / times metadata arrays */
+}
+
+impl StreamingState {
+    fn new(audio: bool, video: bool) -> StreamingState {
+        StreamingState {
+            audio: None,
+            expect_audio: audio,
+            video: None,
+            expect_video: video,
+            got_all_streams: false,
+            last_position: None,
+            duration: None,
+            creation_date: None,
+            creator: None,
+            title: None,
+            metadata_creator: None, // seek_table: None
+        }
+    }
+}
+
+#[derive(Debug, Eq, Clone)]
+struct AudioFormat {
+    format: flavors::SoundFormat,
+    rate: u16,
+    width: u8,
+    channels: u8,
+    bitrate: Option<u32>,
+}
+
+// Ignores bitrate
+impl PartialEq for AudioFormat {
+    fn eq(&self, other: &Self) -> bool {
+        self.format.eq(&other.format) && self.rate.eq(&other.rate) && self.width.eq(&other.width) &&
+        self.channels.eq(&other.channels)
+    }
+}
+
+impl AudioFormat {
+    fn new(format: flavors::SoundFormat,
+           rate: flavors::SoundRate,
+           width: flavors::SoundSize,
+           channels: flavors::SoundType,
+           bitrate: Option<u32>)
+           -> AudioFormat {
+        let numeric_rate = match (format, rate) {
+            (flavors::SoundFormat::NELLYMOSER_16KHZ_MONO, _) => 16000,
+            (flavors::SoundFormat::NELLYMOSER_8KHZ_MONO, _) => 8000,
+            (flavors::SoundFormat::MP3_8KHZ, _) => 8000,
+            (_, flavors::SoundRate::_5_5KHZ) => 5500,
+            (_, flavors::SoundRate::_11KHZ) => 11025,
+            (_, flavors::SoundRate::_22KHZ) => 22050,
+            (_, flavors::SoundRate::_44KHZ) => 44100,
+        };
+
+        let numeric_width = match width {
+            flavors::SoundSize::Snd8bit => 8,
+            flavors::SoundSize::Snd16bit => 16,
+        };
+
+        let numeric_channels = match channels {
+            flavors::SoundType::SndMono => 1,
+            flavors::SoundType::SndStereo => 2,
+        };
+
+        AudioFormat {
+            format: format,
+            rate: numeric_rate,
+            width: numeric_width,
+            channels: numeric_channels,
+            bitrate: bitrate,
+        }
+    }
+
+    fn to_string(&self) -> Option<String> {
+        match self.format {
+            flavors::SoundFormat::MP3 => {
+                let mut format = String::from("audio/mpeg, mpegversion=(int) 1, layer=(int) 3");
+                if self.rate != 0 {
+                    format.push_str(&format!(", rate=(int) {}", self.rate));
+                }
+                if self.channels != 0 {
+                    format.push_str(&format!(", channels=(int) {}", self.channels));
+                }
+
+                Some(format)
+            }
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Eq, Clone)]
+struct VideoFormat {
+    format: flavors::CodecId,
+    width: Option<u32>,
+    height: Option<u32>,
+    pixel_aspect_ratio: Option<(u32, u32)>,
+    framerate: Option<(u32, u32)>,
+    bitrate: Option<u32>,
+}
+
+impl VideoFormat {
+    fn new(format: flavors::CodecId,
+           width: Option<u32>,
+           height: Option<u32>,
+           pixel_aspect_ratio: Option<(u32, u32)>,
+           framerate: Option<(u32, u32)>,
+           bitrate: Option<u32>)
+           -> VideoFormat {
+        VideoFormat {
+            format: format,
+            width: width,
+            height: height,
+            pixel_aspect_ratio: pixel_aspect_ratio,
+            framerate: framerate,
+            bitrate: bitrate,
+        }
+    }
+
+    fn to_string(&self) -> Option<String> {
+        match self.format {
+            flavors::CodecId::VP6 => {
+                let mut format = String::from("video/x-vp6-flash");
+                if let (Some(width), Some(height)) = (self.width, self.height) {
+                    format.push_str(&format!(", width=(int) {}, height=(int) {}", width, height));
+                }
+                if let Some(par) = self.pixel_aspect_ratio {
+                    if par.0 != 0 && par.1 != 0 {
+                        format.push_str(&format!(", pixel-aspect-ratio=(fraction) {}/{}",
+                                                 par.0,
+                                                 par.1));
+                    }
+                }
+                if let Some(fps) = self.framerate {
+                    if fps.1 != 0 {
+                        format.push_str(&format!(", framerate=(fraction) {}/{}", fps.0, fps.1));
+                    }
+                }
+
+                Some(format)
+            }
+            _ => None,
+        }
+    }
+}
+
+// Ignores bitrate
+impl PartialEq for VideoFormat {
+    fn eq(&self, other: &Self) -> bool {
+        self.format.eq(&other.format) && self.width.eq(&other.width) &&
+        self.height.eq(&other.height) &&
+        self.pixel_aspect_ratio.eq(&other.pixel_aspect_ratio) &&
+        self.framerate.eq(&other.framerate)
+    }
 }
 
 #[derive(Debug)]
 pub struct FlvDemux {
     state: State,
     adapter: Adapter,
-    // Only in >= State::Skipping
-    header: Option<flavors::Header>,
     // Only in >= State::Streaming
     streaming_state: Option<StreamingState>,
 }
@@ -62,7 +226,6 @@ impl FlvDemux {
         FlvDemux {
             state: State::Stopped,
             adapter: Adapter::new(),
-            header: None,
             streaming_state: None,
         }
     }
@@ -80,44 +243,35 @@ impl FlvDemux {
     }
 
     fn update_audio_stream(&mut self,
-                           data_header: flavors::AudioDataHeader)
+                           data_header: &flavors::AudioDataHeader)
                            -> Result<HandleBufferResult, FlowError> {
-        let header = self.header.as_ref().unwrap();
         let streaming_state = self.streaming_state.as_mut().unwrap();
 
-        let stream_changed = match streaming_state.audio {
-            None => true,
-            Some(flavors::AudioDataHeader { sound_format, sound_rate, sound_size, sound_type })
-                if sound_format != data_header.sound_format ||
-                   sound_rate != data_header.sound_rate ||
-                   sound_size != data_header.sound_size ||
-                   sound_type != data_header.sound_type => true,
-            _ => false,
-        };
+        let new_audio_format =
+            AudioFormat::new(data_header.sound_format,
+                             data_header.sound_rate,
+                             data_header.sound_size,
+                             data_header.sound_type,
+                             streaming_state.audio.as_ref().and_then(|s| s.bitrate));
 
-        if stream_changed {
-            match data_header {
-                flavors::AudioDataHeader { sound_format: flavors::SoundFormat::MP3, .. } => {
-                    let format = String::from("audio/mpeg, mpegversion=1, layer=3");
-                    let new_stream = streaming_state.audio == None;
+        if streaming_state.audio.as_ref() != Some(&new_audio_format) {
+            let new_stream = streaming_state.audio == None;
 
-                    streaming_state.audio = Some(data_header);
-                    let stream = Stream::new(AUDIO_STREAM_ID, format, String::from("audio"));
-                    if new_stream {
-                        return Ok(HandleBufferResult::StreamAdded(stream));
-                    } else {
-                        return Ok(HandleBufferResult::StreamChanged(stream));
-                    }
-                }
-                _ => {
-                    unimplemented!();
+            let format = new_audio_format.to_string();
+            if let Some(format) = format {
+                streaming_state.audio = Some(new_audio_format);
+                let stream = Stream::new(AUDIO_STREAM_ID, format, String::from("audio"));
+                if new_stream {
+                    return Ok(HandleBufferResult::StreamAdded(stream));
+                } else {
+                    return Ok(HandleBufferResult::StreamChanged(stream));
                 }
             }
         }
-        streaming_state.audio = Some(data_header);
 
         if !streaming_state.got_all_streams &&
-           (header.video && streaming_state.video != None || !header.video) {
+           (streaming_state.expect_video && streaming_state.video != None ||
+            !streaming_state.expect_video) {
             streaming_state.got_all_streams = true;
             return Ok(HandleBufferResult::HaveAllStreams);
         }
@@ -127,7 +281,7 @@ impl FlvDemux {
 
     fn handle_audio_tag(&mut self,
                         tag_header: &flavors::TagHeader,
-                        data_header: flavors::AudioDataHeader)
+                        data_header: &flavors::AudioDataHeader)
                         -> Result<HandleBufferResult, FlowError> {
         let res = self.update_audio_stream(data_header);
         match res {
@@ -151,43 +305,36 @@ impl FlvDemux {
     }
 
     fn update_video_stream(&mut self,
-                           data_header: flavors::VideoDataHeader)
+                           data_header: &flavors::VideoDataHeader)
                            -> Result<HandleBufferResult, FlowError> {
-        let header = self.header.as_ref().unwrap();
         let streaming_state = self.streaming_state.as_mut().unwrap();
 
-        let stream_changed = match streaming_state.video {
-            None => true,
-            Some(flavors::VideoDataHeader { codec_id, .. }) if codec_id != data_header.codec_id => {
-                true
-            }
-            _ => false,
-        };
+        let new_video_format =
+            VideoFormat::new(data_header.codec_id,
+                             streaming_state.video.as_ref().and_then(|s| s.width),
+                             streaming_state.video.as_ref().and_then(|s| s.height),
+                             streaming_state.video.as_ref().and_then(|s| s.pixel_aspect_ratio),
+                             streaming_state.video.as_ref().and_then(|s| s.framerate),
+                             streaming_state.video.as_ref().and_then(|s| s.bitrate));
 
-        if stream_changed {
-            match data_header {
-                flavors::VideoDataHeader { codec_id: flavors::CodecId::VP6, .. } => {
-                    let format = String::from("video/x-vp6-flash");
-                    let new_stream = streaming_state.video == None;
-                    streaming_state.video = Some(data_header);
+        if streaming_state.video.as_ref() != Some(&new_video_format) {
+            let new_stream = streaming_state.video == None;
 
-                    let stream = Stream::new(VIDEO_STREAM_ID, format, String::from("video"));
-                    if new_stream {
-                        return Ok(HandleBufferResult::StreamAdded(stream));
-                    } else {
-                        return Ok(HandleBufferResult::StreamChanged(stream));
-                    }
-                }
-                _ => {
-                    unimplemented!();
+            let format = new_video_format.to_string();
+            if let Some(format) = format {
+                streaming_state.video = Some(new_video_format);
+                let stream = Stream::new(VIDEO_STREAM_ID, format, String::from("video"));
+                if new_stream {
+                    return Ok(HandleBufferResult::StreamAdded(stream));
+                } else {
+                    return Ok(HandleBufferResult::StreamChanged(stream));
                 }
             }
         }
 
-        streaming_state.video = Some(data_header);
-
         if !streaming_state.got_all_streams &&
-           (header.audio && streaming_state.audio != None || !header.audio) {
+           (streaming_state.expect_audio && streaming_state.audio != None ||
+            !streaming_state.expect_audio) {
             streaming_state.got_all_streams = true;
             return Ok(HandleBufferResult::HaveAllStreams);
         }
@@ -197,7 +344,7 @@ impl FlvDemux {
 
     fn handle_video_tag(&mut self,
                         tag_header: &flavors::TagHeader,
-                        data_header: flavors::VideoDataHeader)
+                        data_header: &flavors::VideoDataHeader)
                         -> Result<HandleBufferResult, FlowError> {
         let res = self.update_video_stream(data_header);
         match res {
@@ -211,12 +358,12 @@ impl FlvDemux {
 
         let streaming_state = self.streaming_state.as_ref().unwrap();
         let video = streaming_state.video.as_ref().unwrap();
-        let is_keyframe = video.frame_type == flavors::FrameType::Key;
+        let is_keyframe = data_header.frame_type == flavors::FrameType::Key;
 
         self.adapter.flush(16).unwrap();
 
-        let offset = if video.codec_id == flavors::CodecId::VP6 ||
-                        video.codec_id == flavors::CodecId::VP6A {
+        let offset = if video.format == flavors::CodecId::VP6 ||
+                        video.format == flavors::CodecId::VP6A {
             1
         } else {
             0
@@ -260,15 +407,20 @@ impl FlvDemux {
                         IResult::Incomplete(_) => {
                             // fall through
                         }
-                        IResult::Done(_, mut header) => {
-                            if header.offset < 9 {
-                                header.offset = 9;
-                            }
-                            let skip = header.offset - 9;
+                        IResult::Done(_, header) => {
+                            let skip = if header.offset < 9 {
+                                0
+                            } else {
+                                header.offset - 9
+                            };
+
                             self.adapter.flush(9).unwrap();
 
-                            self.header = Some(header);
-                            self.state = State::Skipping { skip_left: skip };
+                            self.state = State::Skipping {
+                                audio: header.audio,
+                                video: header.video,
+                                skip_left: skip,
+                            };
 
                             return Ok(HandleBufferResult::Again);
                         }
@@ -279,18 +431,13 @@ impl FlvDemux {
 
                 Ok(HandleBufferResult::NeedMoreData)
             }
-            State::Skipping { skip_left: 0 } => {
+            State::Skipping { audio, video, skip_left: 0 } => {
                 self.state = State::Streaming;
-                self.streaming_state = Some(StreamingState {
-                    audio: None,
-                    video: None,
-                    got_all_streams: false,
-                    last_position: None,
-                });
+                self.streaming_state = Some(StreamingState::new(audio, video));
 
                 Ok(HandleBufferResult::Again)
             }
-            State::Skipping { ref mut skip_left } => {
+            State::Skipping { ref mut skip_left, .. } => {
                 let skip = cmp::min(self.adapter.get_available(), *skip_left as usize);
                 self.adapter.flush(skip).unwrap();
                 *skip_left -= skip as u32;
@@ -334,7 +481,7 @@ impl FlvDemux {
                             IResult::Done(_, data_header) => data_header,
                         };
 
-                        self.handle_audio_tag(&tag_header, data_header)
+                        self.handle_audio_tag(&tag_header, &data_header)
                     }
                     flavors::TagType::Video => {
                         let data_header = match flavors::video_data_header(&data[15..]) {
@@ -345,7 +492,7 @@ impl FlvDemux {
                             IResult::Done(_, data_header) => data_header,
                         };
 
-                        self.handle_video_tag(&tag_header, data_header)
+                        self.handle_video_tag(&tag_header, &data_header)
                     }
                 };
 
@@ -383,7 +530,6 @@ impl Demuxer for FlvDemux {
     fn stop(&mut self) -> Result<(), ErrorMessage> {
         self.state = State::Stopped;
         self.adapter.clear();
-        self.header = None;
         self.streaming_state = None;
 
         Ok(())
