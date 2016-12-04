@@ -329,8 +329,10 @@ gst_rs_demuxer_change_state (GstElement * element, GstStateChange transition)
 
       gst_flow_combiner_clear (demuxer->flow_combiner);
 
-      for (i = 0; i < demuxer->n_srcpads; i++)
-        gst_element_remove_pad (GST_ELEMENT (demuxer), demuxer->srcpads[i]);
+      for (i = 0; i < G_N_ELEMENTS (demuxer->srcpads); i++) {
+        if (demuxer->srcpads[i])
+          gst_element_remove_pad (GST_ELEMENT (demuxer), demuxer->srcpads[i]);
+      }
       memset (demuxer->srcpads, 0, sizeof (demuxer->srcpads));
       break;
     }
@@ -359,7 +361,6 @@ gst_rs_demuxer_add_stream (GstRsDemuxer * demuxer, guint32 index,
   gchar *name, *full_stream_id;
 
   g_assert (demuxer->srcpads[index] == NULL);
-  g_assert (demuxer->n_srcpads == index);
 
   templ =
       gst_element_class_get_pad_template (GST_ELEMENT_GET_CLASS (demuxer),
@@ -392,7 +393,6 @@ gst_rs_demuxer_add_stream (GstRsDemuxer * demuxer, guint32 index,
 
   gst_flow_combiner_add_pad (demuxer->flow_combiner, pad);
   gst_element_add_pad (GST_ELEMENT (demuxer), pad);
-  demuxer->n_srcpads++;
 }
 
 void
@@ -424,14 +424,16 @@ gst_rs_demuxer_stream_eos (GstRsDemuxer * demuxer, guint32 index)
   GstCaps *caps;
   GstEvent *event;
 
-  g_assert (demuxer->srcpads[index] != NULL);
+  g_assert (index == -1 || demuxer->srcpads[index] != NULL);
 
   event = gst_event_new_eos ();
   if (index == -1) {
     gint i;
 
-    for (i = 0; i < demuxer->n_srcpads; i++)
-      gst_pad_push_event (demuxer->srcpads[i], gst_event_ref (event));
+    for (i = 0; i < G_N_ELEMENTS (demuxer->srcpads); i++) {
+      if (demuxer->srcpads[i])
+        gst_pad_push_event (demuxer->srcpads[i], gst_event_ref (event));
+    }
 
     gst_event_unref (event);
   } else {
@@ -461,8 +463,10 @@ gst_rs_demuxer_remove_all_streams (GstRsDemuxer * demuxer)
 
   gst_flow_combiner_clear (demuxer->flow_combiner);
 
-  for (i = 0; i < demuxer->n_srcpads; i++)
-    gst_element_remove_pad (GST_ELEMENT (demuxer), demuxer->srcpads[i]);
+  for (i = 0; i < G_N_ELEMENTS (demuxer->srcpads); i++) {
+    if (demuxer->srcpads[i])
+      gst_element_remove_pad (GST_ELEMENT (demuxer), demuxer->srcpads[i]);
+  }
   memset (demuxer->srcpads, 0, sizeof (demuxer->srcpads));
 }
 

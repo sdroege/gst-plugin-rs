@@ -42,7 +42,6 @@ struct _GstRsDemuxer {
   guint64 upstream_size;
 
   GstPad *srcpads[32];
-  guint n_srcpads;
   guint32 group_id;
 
   GstSegment segment;

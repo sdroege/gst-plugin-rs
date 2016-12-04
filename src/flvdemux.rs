@@ -91,7 +91,8 @@ impl AudioFormat {
             (flavors::SoundFormat::NELLYMOSER_16KHZ_MONO, _) => 16000,
             (flavors::SoundFormat::NELLYMOSER_8KHZ_MONO, _) => 8000,
             (flavors::SoundFormat::MP3_8KHZ, _) => 8000,
-            (_, flavors::SoundRate::_5_5KHZ) => 5500,
+            (flavors::SoundFormat::SPEEX, _) => 16000,
+            (_, flavors::SoundRate::_5_5KHZ) => 5512,
             (_, flavors::SoundRate::_11KHZ) => 11025,
             (_, flavors::SoundRate::_22KHZ) => 22050,
             (_, flavors::SoundRate::_44KHZ) => 44100,
@@ -128,20 +129,51 @@ impl AudioFormat {
     }
 
     fn to_string(&self) -> Option<String> {
-        match self.format {
-            flavors::SoundFormat::MP3 => {
-                let mut format = String::from("audio/mpeg, mpegversion=(int) 1, layer=(int) 3");
-                if self.rate != 0 {
-                    format.push_str(&format!(", rate=(int) {}", self.rate));
-                }
-                if self.channels != 0 {
-                    format.push_str(&format!(", channels=(int) {}", self.channels));
-                }
-
-                Some(format)
+        let mut format = match self.format {
+            flavors::SoundFormat::MP3 |
+            flavors::SoundFormat::MP3_8KHZ => {
+                Some(String::from("audio/mpeg, mpegversion=(int) 1, layer=(int) 3"))
             }
-            _ => None,
+            flavors::SoundFormat::PCM_BE |
+            flavors::SoundFormat::PCM_LE => {
+                if self.rate != 0 && self.channels != 0 {
+                    // Assume little-endian for "PCM_NE", it's probably more common and we have no
+                    // way to know what the endianness of the system creating the stream was
+                    Some(format!("audio/x-raw, layout=(string) interleaved, \
+                                          format=(string) {}",
+                                 if self.width == 8 { "U8" } else { "S16LE" }))
+                } else {
+                    None
+                }
+            }
+            flavors::SoundFormat::ADPCM => Some(String::from("audio/x-adpcm, layout=(string) swf")),
+            flavors::SoundFormat::NELLYMOSER_16KHZ_MONO |
+            flavors::SoundFormat::NELLYMOSER_8KHZ_MONO |
+            flavors::SoundFormat::NELLYMOSER => Some(String::from("audio/x-nellymoser")),
+            flavors::SoundFormat::PCM_ALAW => Some(String::from("audio/x-alaw")),
+            flavors::SoundFormat::PCM_ULAW => Some(String::from("audio/x-mulaw")),
+            flavors::SoundFormat::AAC => {
+                // TODO: This requires getting the codec config from the stream
+                None
+            }
+            flavors::SoundFormat::SPEEX => {
+                // TODO: This requires creating a Speex streamheader...
+                None
+            }
+            flavors::SoundFormat::DEVICE_SPECIFIC => {
+                // Nobody knows
+                None
+            }
+        };
+
+        if self.rate != 0 {
+            format.as_mut().map(|f| f.push_str(&format!(", rate=(int) {}", self.rate)));
         }
+        if self.channels != 0 {
+            format.as_mut().map(|f| f.push_str(&format!(", channels=(int) {}", self.channels)));
+        }
+
+        format
     }
 }
 
@@ -199,29 +231,43 @@ impl VideoFormat {
     }
 
     fn to_string(&self) -> Option<String> {
-        match self.format {
-            flavors::CodecId::VP6 => {
-                let mut format = String::from("video/x-vp6-flash");
-                if let (Some(width), Some(height)) = (self.width, self.height) {
-                    format.push_str(&format!(", width=(int) {}, height=(int) {}", width, height));
-                }
-                if let Some(par) = self.pixel_aspect_ratio {
-                    if par.0 != 0 && par.1 != 0 {
-                        format.push_str(&format!(", pixel-aspect-ratio=(fraction) {}/{}",
-                                                 par.0,
-                                                 par.1));
-                    }
-                }
-                if let Some(fps) = self.framerate {
-                    if fps.1 != 0 {
-                        format.push_str(&format!(", framerate=(fraction) {}/{}", fps.0, fps.1));
-                    }
-                }
-
-                Some(format)
+        let mut format = match self.format {
+            flavors::CodecId::H263 => Some(String::from("video/x-flash-video, flvversion=(int) 1")),
+            flavors::CodecId::SCREEN => Some(String::from("video/x-flash-screen")),
+            flavors::CodecId::VP6 => Some(String::from("video/x-vp6-flash")),
+            flavors::CodecId::VP6A => Some(String::from("video/x-vp6-alpha")),
+            flavors::CodecId::SCREEN2 => Some(String::from("video/x-flash-screen2")),
+            flavors::CodecId::H264 => {
+                // TODO: Need codec_data from the stream
+                None
             }
-            _ => None,
+            flavors::CodecId::JPEG => {
+                // Unused according to spec
+                None
+            }
+        };
+
+        if let (Some(width), Some(height)) = (self.width, self.height) {
+            format.as_mut()
+                .map(|f| f.push_str(&format!(", width=(int) {}, height=(int) {}", width, height)));
         }
+
+        if let Some(par) = self.pixel_aspect_ratio {
+            if par.0 != 0 && par.1 != 0 {
+                format.as_mut().map(|f| {
+                    f.push_str(&format!(", pixel-aspect-ratio=(fraction) {}/{}", par.0, par.1))
+                });
+            }
+        }
+
+        if let Some(fps) = self.framerate {
+            if fps.1 != 0 {
+                format.as_mut()
+                    .map(|f| f.push_str(&format!(", framerate=(fraction) {}/{}", fps.0, fps.1)));
+            }
+        }
+
+        format
     }
 }
 
