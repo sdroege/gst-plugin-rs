@@ -50,13 +50,8 @@ struct StreamingState {
     expect_video: bool,
     got_all_streams: bool,
     last_position: Option<u64>,
-    duration: Option<u64>,
 
-    creation_date: Option<String>,
-    creator: Option<String>,
-    title: Option<String>,
-    metadata_creator: Option<String>, /* TODO: seek_table: _,
-                                       * filepositions / times metadata arrays */
+    metadata: Option<Metadata>,
 }
 
 impl StreamingState {
@@ -68,11 +63,7 @@ impl StreamingState {
             expect_video: video,
             got_all_streams: false,
             last_position: None,
-            duration: None,
-            creation_date: None,
-            creator: None,
-            title: None,
-            metadata_creator: None, // seek_table: None
+            metadata: None,
         }
     }
 }
@@ -95,13 +86,8 @@ impl PartialEq for AudioFormat {
 }
 
 impl AudioFormat {
-    fn new(format: flavors::SoundFormat,
-           rate: flavors::SoundRate,
-           width: flavors::SoundSize,
-           channels: flavors::SoundType,
-           bitrate: Option<u32>)
-           -> AudioFormat {
-        let numeric_rate = match (format, rate) {
+    fn new(data_header: &flavors::AudioDataHeader, metadata: &Option<Metadata>) -> AudioFormat {
+        let numeric_rate = match (data_header.sound_format, data_header.sound_rate) {
             (flavors::SoundFormat::NELLYMOSER_16KHZ_MONO, _) => 16000,
             (flavors::SoundFormat::NELLYMOSER_8KHZ_MONO, _) => 8000,
             (flavors::SoundFormat::MP3_8KHZ, _) => 8000,
@@ -111,23 +97,34 @@ impl AudioFormat {
             (_, flavors::SoundRate::_44KHZ) => 44100,
         };
 
-        let numeric_width = match width {
+        let numeric_width = match data_header.sound_size {
             flavors::SoundSize::Snd8bit => 8,
             flavors::SoundSize::Snd16bit => 16,
         };
 
-        let numeric_channels = match channels {
+        let numeric_channels = match data_header.sound_type {
             flavors::SoundType::SndMono => 1,
             flavors::SoundType::SndStereo => 2,
         };
 
         AudioFormat {
-            format: format,
+            format: data_header.sound_format,
             rate: numeric_rate,
             width: numeric_width,
             channels: numeric_channels,
-            bitrate: bitrate,
+            bitrate: metadata.as_ref().and_then(|m| m.audio_bitrate),
         }
+    }
+
+    fn update_with_metadata(&mut self, metadata: &Metadata) -> bool {
+        let mut changed = false;
+
+        if self.bitrate != metadata.audio_bitrate {
+            self.bitrate = metadata.audio_bitrate;
+            changed = true;
+        }
+
+        changed
     }
 
     fn to_string(&self) -> Option<String> {
@@ -159,21 +156,46 @@ struct VideoFormat {
 }
 
 impl VideoFormat {
-    fn new(format: flavors::CodecId,
-           width: Option<u32>,
-           height: Option<u32>,
-           pixel_aspect_ratio: Option<(u32, u32)>,
-           framerate: Option<(u32, u32)>,
-           bitrate: Option<u32>)
-           -> VideoFormat {
+    fn new(data_header: &flavors::VideoDataHeader, metadata: &Option<Metadata>) -> VideoFormat {
         VideoFormat {
-            format: format,
-            width: width,
-            height: height,
-            pixel_aspect_ratio: pixel_aspect_ratio,
-            framerate: framerate,
-            bitrate: bitrate,
+            format: data_header.codec_id,
+            width: metadata.as_ref().and_then(|m| m.video_width),
+            height: metadata.as_ref().and_then(|m| m.video_height),
+            pixel_aspect_ratio: metadata.as_ref().and_then(|m| m.video_pixel_aspect_ratio),
+            framerate: metadata.as_ref().and_then(|m| m.video_framerate),
+            bitrate: metadata.as_ref().and_then(|m| m.video_bitrate),
         }
+    }
+
+    fn update_with_metadata(&mut self, metadata: &Metadata) -> bool {
+        let mut changed = false;
+
+        if self.width != metadata.video_width {
+            self.width = metadata.video_width;
+            changed = true;
+        }
+
+        if self.height != metadata.video_height {
+            self.height = metadata.video_height;
+            changed = true;
+        }
+
+        if self.pixel_aspect_ratio != metadata.video_pixel_aspect_ratio {
+            self.pixel_aspect_ratio = metadata.video_pixel_aspect_ratio;
+            changed = true;
+        }
+
+        if self.framerate != metadata.video_framerate {
+            self.framerate = metadata.video_framerate;
+            changed = true;
+        }
+
+        if self.bitrate != metadata.video_bitrate {
+            self.bitrate = metadata.video_bitrate;
+            changed = true;
+        }
+
+        changed
     }
 
     fn to_string(&self) -> Option<String> {
@@ -213,6 +235,104 @@ impl PartialEq for VideoFormat {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct Metadata {
+    duration: Option<u64>,
+
+    creation_date: Option<String>,
+    creator: Option<String>,
+    title: Option<String>,
+    metadata_creator: Option<String>, /* TODO: seek_table: _,
+                                       * filepositions / times metadata arrays */
+
+    audio_bitrate: Option<u32>,
+
+    video_width: Option<u32>,
+    video_height: Option<u32>,
+    video_pixel_aspect_ratio: Option<(u32, u32)>,
+    video_framerate: Option<(u32, u32)>,
+    video_bitrate: Option<u32>,
+}
+
+impl Metadata {
+    fn new(script_data: &flavors::ScriptData) -> Metadata {
+        assert_eq!(script_data.name, "onMetaData");
+
+        let mut metadata = Metadata {
+            duration: None,
+            creation_date: None,
+            creator: None,
+            title: None,
+            metadata_creator: None,
+            audio_bitrate: None,
+            video_width: None,
+            video_height: None,
+            video_pixel_aspect_ratio: None,
+            video_framerate: None,
+            video_bitrate: None,
+        };
+
+        let args = match script_data.arguments {
+            flavors::ScriptDataValue::Object(ref objects) => objects,
+            flavors::ScriptDataValue::ECMAArray(ref objects) => objects,
+            flavors::ScriptDataValue::StrictArray(ref objects) => objects,
+            _ => return metadata,
+        };
+
+        let mut par_n = None;
+        let mut par_d = None;
+
+        for arg in args {
+            match (arg.name, &arg.data) {
+                ("duration", &flavors::ScriptDataValue::Number(duration)) => {
+                    metadata.duration = Some((duration * 1000.0 * 1000.0 * 1000.0) as u64);
+                }
+                ("creationdate", &flavors::ScriptDataValue::String(date)) => {
+                    metadata.creation_date = Some(String::from(date));
+                }
+                ("creator", &flavors::ScriptDataValue::String(creator)) => {
+                    metadata.creator = Some(String::from(creator));
+                }
+                ("title", &flavors::ScriptDataValue::String(title)) => {
+                    metadata.title = Some(String::from(title));
+                }
+                ("metadatacreator", &flavors::ScriptDataValue::String(creator)) => {
+                    metadata.metadata_creator = Some(String::from(creator));
+                }
+                ("audiodatarate", &flavors::ScriptDataValue::Number(datarate)) => {
+                    metadata.audio_bitrate = Some((datarate * 1024.0) as u32);
+                }
+                ("width", &flavors::ScriptDataValue::Number(width)) => {
+                    metadata.video_width = Some(width as u32);
+                }
+                ("height", &flavors::ScriptDataValue::Number(height)) => {
+                    metadata.video_height = Some(height as u32);
+                }
+                ("framerate", &flavors::ScriptDataValue::Number(framerate)) => {
+                    // FIXME: Convert properly to a fraction
+                    metadata.video_framerate = Some((framerate as u32, 1));
+                }
+                ("AspectRatioX", &flavors::ScriptDataValue::Number(par_x)) => {
+                    par_n = Some(par_x as u32);
+                }
+                ("AspectRatioY", &flavors::ScriptDataValue::Number(par_y)) => {
+                    par_d = Some(par_y as u32);
+                }
+                ("videodatarate", &flavors::ScriptDataValue::Number(datarate)) => {
+                    metadata.video_bitrate = Some((datarate * 1024.0) as u32);
+                }
+                _ => {}
+            }
+        }
+
+        if let (Some(par_n), Some(par_d)) = (par_n, par_d) {
+            metadata.video_pixel_aspect_ratio = Some((par_n, par_d));
+        }
+
+        metadata
+    }
+}
+
 #[derive(Debug)]
 pub struct FlvDemux {
     state: State,
@@ -237,7 +357,62 @@ impl FlvDemux {
     fn handle_script_tag(&mut self,
                          tag_header: &flavors::TagHeader)
                          -> Result<HandleBufferResult, FlowError> {
-        self.adapter.flush((15 + tag_header.data_size) as usize).unwrap();
+        if self.adapter.get_available() < (15 + tag_header.data_size) as usize {
+            return Ok(HandleBufferResult::NeedMoreData);
+        }
+
+        self.adapter.flush(15).unwrap();
+
+        let buffer = self.adapter.get_buffer(tag_header.data_size as usize).unwrap();
+        let map = buffer.map_read().unwrap();
+        let data = map.as_slice();
+
+        match flavors::script_data(data) {
+            IResult::Done(_, ref script_data) if script_data.name == "onMetaData" => {
+                let streaming_state = self.streaming_state.as_mut().unwrap();
+                let metadata = Metadata::new(script_data);
+
+                let audio_changed = streaming_state.audio
+                    .as_mut()
+                    .map(|a| a.update_with_metadata(&metadata))
+                    .unwrap_or(false);
+                let video_changed = streaming_state.video
+                    .as_mut()
+                    .map(|v| v.update_with_metadata(&metadata))
+                    .unwrap_or(false);
+                streaming_state.metadata = Some(metadata);
+
+                if audio_changed || video_changed {
+                    let mut streams = Vec::new();
+
+                    if audio_changed {
+                        if let Some(format) = streaming_state.audio
+                            .as_ref()
+                            .and_then(|a| a.to_string()) {
+                            streams.push(Stream::new(AUDIO_STREAM_ID,
+                                                         format,
+                                                         String::from("audio")));
+                        }
+                    }
+                    if video_changed {
+                        if let Some(format) = streaming_state.video
+                            .as_ref()
+                            .and_then(|v| v.to_string()) {
+                            streams.push(Stream::new(VIDEO_STREAM_ID,
+                                                         format,
+                                                         String::from("video")));
+                        }
+                    }
+
+                    return Ok(HandleBufferResult::StreamsChanged(streams));
+                }
+            }
+            IResult::Done(_, _) |
+            IResult::Error(_) |
+            IResult::Incomplete(_) => {
+                // ignore
+            }
+        }
 
         Ok(HandleBufferResult::Again)
     }
@@ -247,12 +422,7 @@ impl FlvDemux {
                            -> Result<HandleBufferResult, FlowError> {
         let streaming_state = self.streaming_state.as_mut().unwrap();
 
-        let new_audio_format =
-            AudioFormat::new(data_header.sound_format,
-                             data_header.sound_rate,
-                             data_header.sound_size,
-                             data_header.sound_type,
-                             streaming_state.audio.as_ref().and_then(|s| s.bitrate));
+        let new_audio_format = AudioFormat::new(data_header, &streaming_state.metadata);
 
         if streaming_state.audio.as_ref() != Some(&new_audio_format) {
             let new_stream = streaming_state.audio == None;
@@ -309,13 +479,7 @@ impl FlvDemux {
                            -> Result<HandleBufferResult, FlowError> {
         let streaming_state = self.streaming_state.as_mut().unwrap();
 
-        let new_video_format =
-            VideoFormat::new(data_header.codec_id,
-                             streaming_state.video.as_ref().and_then(|s| s.width),
-                             streaming_state.video.as_ref().and_then(|s| s.height),
-                             streaming_state.video.as_ref().and_then(|s| s.pixel_aspect_ratio),
-                             streaming_state.video.as_ref().and_then(|s| s.framerate),
-                             streaming_state.video.as_ref().and_then(|s| s.bitrate));
+        let new_video_format = VideoFormat::new(data_header, &streaming_state.metadata);
 
         if streaming_state.video.as_ref() != Some(&new_video_format) {
             let new_stream = streaming_state.video == None;
@@ -407,7 +571,7 @@ impl FlvDemux {
                         IResult::Incomplete(_) => {
                             // fall through
                         }
-                        IResult::Done(_, header) => {
+                        IResult::Done(_, ref header) => {
                             let skip = if header.offset < 9 {
                                 0
                             } else {
@@ -565,6 +729,11 @@ impl Demuxer for FlvDemux {
     }
 
     fn get_duration(&self) -> Option<u64> {
+        if let Some(StreamingState { metadata: Some(Metadata { duration, .. }), .. }) =
+            self.streaming_state {
+            return duration;
+        }
+
         None
     }
 }

@@ -49,7 +49,7 @@ pub enum HandleBufferResult {
     HaveAllStreams,
     StreamChanged(Stream),
     // StreamsAdded(Vec<Stream>), // Implies HaveAllStreams
-    // StreamsChanged(Vec<Stream>),
+    StreamsChanged(Vec<Stream>),
     // TODO need something to replace/add new streams
     // TODO should probably directly implement the GstStreams new world order
     BufferForStream(StreamIndex, Buffer),
@@ -270,6 +270,17 @@ impl DemuxerWrapper {
                         gst_rs_demuxer_stream_format_changed(self.raw,
                                                              stream.index,
                                                              format_cstr.as_ptr());
+                    }
+                }
+                HandleBufferResult::StreamsChanged(streams) => {
+                    for stream in streams {
+                        let format_cstr = CString::new(stream.format.as_bytes()).unwrap();
+
+                        unsafe {
+                            gst_rs_demuxer_stream_format_changed(self.raw,
+                                                                 stream.index,
+                                                                 format_cstr.as_ptr());
+                        }
                     }
                 }
                 HandleBufferResult::BufferForStream(index, buffer) => {
