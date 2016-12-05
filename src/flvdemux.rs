@@ -26,6 +26,7 @@ use error::*;
 use rsdemuxer::*;
 use buffer::*;
 use adapter::*;
+use utils;
 
 const AUDIO_STREAM_ID: u32 = 0;
 const VIDEO_STREAM_ID: u32 = 1;
@@ -354,9 +355,10 @@ impl Metadata {
                 ("height", &flavors::ScriptDataValue::Number(height)) => {
                     metadata.video_height = Some(height as u32);
                 }
-                ("framerate", &flavors::ScriptDataValue::Number(framerate)) => {
-                    // FIXME: Convert properly to a fraction
-                    metadata.video_framerate = Some((framerate as u32, 1));
+                ("framerate", &flavors::ScriptDataValue::Number(framerate)) if framerate >= 0.0 => {
+                    if let Some((n, d)) = utils::f64_to_fraction(framerate) {
+                        metadata.video_framerate = Some((n as u32, d as u32));
+                    }
                 }
                 ("AspectRatioX", &flavors::ScriptDataValue::Number(par_x)) => {
                     par_n = Some(par_x as u32);
