@@ -280,15 +280,15 @@ gst_rs_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
   iface->set_uri = gst_rs_src_uri_set_uri;
 }
 
-gboolean
-gst_rs_source_plugin_init (GstPlugin * plugin)
+static gpointer
+gst_rs_source_init_class (gpointer data)
 {
   sources = g_hash_table_new (g_direct_hash, g_direct_equal);
   GST_DEBUG_CATEGORY_INIT (gst_rs_src_debug, "rssrc", 0, "rssrc element");
 
   parent_class = g_type_class_ref (GST_TYPE_BASE_SRC);
 
-  return sources_register (plugin);
+  return NULL;
 }
 
 gboolean
@@ -297,6 +297,7 @@ gst_rs_source_register (GstPlugin * plugin, const gchar * name,
     const gchar * classification, const gchar * author, GstRank rank,
     void *create_instance, const gchar * protocols, gboolean push_only)
 {
+  static GOnce gonce = G_ONCE_INIT;
   GTypeInfo type_info = {
     sizeof (GstRsSrcClass),
     NULL,
@@ -316,6 +317,8 @@ gst_rs_source_register (GstPlugin * plugin, const gchar * name,
   GType type;
   gchar *type_name;
   ElementData *data;
+
+  g_once (&gonce, gst_rs_source_init_class, NULL);
 
   data = g_new0 (ElementData, 1);
   data->long_name = g_strdup (long_name);

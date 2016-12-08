@@ -243,15 +243,13 @@ gst_rs_sink_uri_handler_init (gpointer g_iface, gpointer iface_data)
   iface->set_uri = gst_rs_sink_uri_set_uri;
 }
 
-gboolean
-gst_rs_sink_plugin_init (GstPlugin * plugin)
+static gpointer
+gst_rs_sink_init_class (gpointer data)
 {
   sinks = g_hash_table_new (g_direct_hash, g_direct_equal);
   GST_DEBUG_CATEGORY_INIT (gst_rs_sink_debug, "rssink", 0, "rssink element");
 
   parent_class = g_type_class_ref (GST_TYPE_BASE_SINK);
-
-  return sinks_register (plugin);
 }
 
 gboolean
@@ -260,6 +258,7 @@ gst_rs_sink_register (GstPlugin * plugin, const gchar * name,
     const gchar * classification, const gchar * author, GstRank rank,
     void *create_instance, const gchar * protocols)
 {
+  static GOnce gonce = G_ONCE_INIT;
   GTypeInfo type_info = {
     sizeof (GstRsSinkClass),
     NULL,
@@ -279,6 +278,8 @@ gst_rs_sink_register (GstPlugin * plugin, const gchar * name,
   GType type;
   gchar *type_name;
   ElementData *data;
+
+  g_once (&gonce, gst_rs_sink_init_class, NULL);
 
   data = g_new0 (ElementData, 1);
   data->name = g_strdup (name);

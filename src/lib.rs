@@ -96,8 +96,7 @@ unsafe fn source_register(plugin: *const c_void,
 
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn sources_register(plugin: *const c_void) -> GBoolean {
+unsafe fn sources_register(plugin: *const c_void) -> GBoolean {
     source_register(plugin,
                     "rsfilesrc",
                     "File Source",
@@ -163,8 +162,7 @@ unsafe fn sink_register(plugin: *const c_void,
                          cprotocols.as_ptr());
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn sinks_register(plugin: *const c_void) -> GBoolean {
+unsafe fn sinks_register(plugin: *const c_void) -> GBoolean {
     sink_register(plugin,
                   "rsfilesink",
                   "File Sink",
@@ -222,8 +220,7 @@ unsafe fn demuxer_register(plugin: *const c_void,
                             coutput_formats.as_ptr());
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn demuxers_register(plugin: *const c_void) -> GBoolean {
+unsafe fn demuxers_register(plugin: *const c_void) -> GBoolean {
     demuxer_register(plugin,
                      "rsflvdemux",
                      "FLV Demuxer",
@@ -237,3 +234,48 @@ pub unsafe extern "C" fn demuxers_register(plugin: *const c_void) -> GBoolean {
 
     GBoolean::True
 }
+
+#[repr(C)]
+pub struct GstPluginDesc {
+    major_version: i32,
+    minor_version: i32,
+    name: *const u8,
+    description: *const u8,
+    plugin_init: extern "C" fn(plugin: *const c_void) -> GBoolean,
+    version: *const u8,
+    license: *const u8,
+    source: *const u8,
+    package: *const u8,
+    origin: *const u8,
+    release_datetime: *const u8,
+    _gst_reserved: [usize; 4],
+}
+
+unsafe impl Sync for GstPluginDesc {}
+
+extern "C" fn plugin_init(plugin: *const c_void) -> GBoolean {
+    unsafe {
+        sources_register(plugin);
+        sinks_register(plugin);
+        demuxers_register(plugin);
+    }
+
+    GBoolean::True
+}
+
+#[no_mangle]
+#[allow(non_upper_case_globals)]
+pub static gst_plugin_desc: GstPluginDesc = GstPluginDesc {
+    major_version: 1,
+    minor_version: 10,
+    name: b"rsplugin\0" as *const u8,
+    description: b"Rust Plugin\0" as *const u8,
+    plugin_init: plugin_init,
+    version: b"1.0\0" as *const u8,
+    license: b"LGPL\0" as *const u8,
+    source: b"rsplugin\0" as *const u8,
+    package: b"rsplugin\0" as *const u8,
+    origin: b"https://github.com/sdroege/rsplugin\0" as *const u8,
+    release_datetime: b"2016-12-08\0" as *const u8,
+    _gst_reserved: [0, 0, 0, 0],
+};

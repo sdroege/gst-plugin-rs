@@ -470,16 +470,14 @@ gst_rs_demuxer_remove_all_streams (GstRsDemuxer * demuxer)
   memset (demuxer->srcpads, 0, sizeof (demuxer->srcpads));
 }
 
-gboolean
-gst_rs_demuxer_plugin_init (GstPlugin * plugin)
+static gpointer
+gst_rs_demuxer_init_class (gpointer data)
 {
   demuxers = g_hash_table_new (g_direct_hash, g_direct_equal);
   GST_DEBUG_CATEGORY_INIT (gst_rs_demuxer_debug, "rsdemux", 0,
       "rsdemux element");
 
   parent_class = g_type_class_ref (GST_TYPE_ELEMENT);
-
-  return demuxers_register (plugin);
 }
 
 gboolean
@@ -489,6 +487,7 @@ gst_rs_demuxer_register (GstPlugin * plugin, const gchar * name,
     void *create_instance, const gchar * input_format,
     const gchar * output_formats)
 {
+  GOnce gonce = G_ONCE_INIT;
   GTypeInfo type_info = {
     sizeof (GstRsDemuxerClass),
     NULL,
@@ -503,6 +502,8 @@ gst_rs_demuxer_register (GstPlugin * plugin, const gchar * name,
   GType type;
   gchar *type_name;
   ElementData *data;
+
+  g_once (&gonce, gst_rs_demuxer_init_class, NULL);
 
   data = g_new0 (ElementData, 1);
   data->long_name = g_strdup (long_name);
