@@ -320,8 +320,8 @@ impl Metadata {
         };
 
         let args = match script_data.arguments {
-            flavors::ScriptDataValue::Object(ref objects) => objects,
-            flavors::ScriptDataValue::ECMAArray(ref objects) => objects,
+            flavors::ScriptDataValue::Object(ref objects) |
+            flavors::ScriptDataValue::ECMAArray(ref objects) |
             flavors::ScriptDataValue::StrictArray(ref objects) => objects,
             _ => return metadata,
         };
