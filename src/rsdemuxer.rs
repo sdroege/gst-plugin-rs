@@ -30,6 +30,7 @@ use std::u64;
 use utils::*;
 use error::*;
 use buffer::*;
+use plugin::Plugin;
 
 pub type StreamIndex = u32;
 
@@ -441,4 +442,53 @@ pub unsafe extern "C" fn demuxer_end_of_stream(ptr: *mut DemuxerWrapper) {
     panic_to_error!(wrap, (), {
         wrap.end_of_stream();
     })
+}
+
+pub struct DemuxerInfo<'a> {
+    pub name: &'a str,
+    pub long_name: &'a str,
+    pub description: &'a str,
+    pub classification: &'a str,
+    pub author: &'a str,
+    pub rank: i32,
+    pub create_instance: fn() -> Box<Demuxer>,
+    pub input_formats: &'a str,
+    pub output_formats: &'a str,
+}
+
+pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
+    extern "C" {
+        fn gst_rs_demuxer_register(plugin: *const c_void,
+                                   name: *const c_char,
+                                   long_name: *const c_char,
+                                   description: *const c_char,
+                                   classification: *const c_char,
+                                   author: *const c_char,
+                                   rank: i32,
+                                   create_instance: *const c_void,
+                                   input_format: *const c_char,
+                                   output_formats: *const c_char)
+                                   -> GBoolean;
+    }
+
+    let cname = CString::new(demuxer_info.name).unwrap();
+    let clong_name = CString::new(demuxer_info.long_name).unwrap();
+    let cdescription = CString::new(demuxer_info.description).unwrap();
+    let cclassification = CString::new(demuxer_info.classification).unwrap();
+    let cauthor = CString::new(demuxer_info.author).unwrap();
+    let cinput_format = CString::new(demuxer_info.input_formats).unwrap();
+    let coutput_formats = CString::new(demuxer_info.output_formats).unwrap();
+
+    unsafe {
+        gst_rs_demuxer_register(plugin.to_raw(),
+                                cname.as_ptr(),
+                                clong_name.as_ptr(),
+                                cdescription.as_ptr(),
+                                cclassification.as_ptr(),
+                                cauthor.as_ptr(),
+                                demuxer_info.rank,
+                                demuxer_info.create_instance as *const c_void,
+                                cinput_format.as_ptr(),
+                                coutput_formats.as_ptr());
+    }
 }

@@ -31,6 +31,7 @@ use url::Url;
 use utils::*;
 use error::*;
 use buffer::*;
+use plugin::Plugin;
 
 #[derive(Debug)]
 pub enum SinkError {
@@ -248,4 +249,49 @@ pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper,
         let buffer = ScopedBuffer::new(&buffer);
         wrap.render(&*buffer)
     })
+}
+
+pub struct SinkInfo<'a> {
+    pub name: &'a str,
+    pub long_name: &'a str,
+    pub description: &'a str,
+    pub classification: &'a str,
+    pub author: &'a str,
+    pub rank: i32,
+    pub create_instance: fn() -> Box<Sink>,
+    pub protocols: &'a str,
+}
+
+pub fn sink_register(plugin: &Plugin, sink_info: &SinkInfo) {
+    extern "C" {
+        fn gst_rs_sink_register(plugin: *const c_void,
+                                name: *const c_char,
+                                long_name: *const c_char,
+                                description: *const c_char,
+                                classification: *const c_char,
+                                author: *const c_char,
+                                rank: i32,
+                                create_instance: *const c_void,
+                                protocols: *const c_char)
+                                -> GBoolean;
+    }
+
+    let cname = CString::new(sink_info.name).unwrap();
+    let clong_name = CString::new(sink_info.long_name).unwrap();
+    let cdescription = CString::new(sink_info.description).unwrap();
+    let cclassification = CString::new(sink_info.classification).unwrap();
+    let cauthor = CString::new(sink_info.author).unwrap();
+    let cprotocols = CString::new(sink_info.protocols).unwrap();
+
+    unsafe {
+        gst_rs_sink_register(plugin.to_raw(),
+                             cname.as_ptr(),
+                             clong_name.as_ptr(),
+                             cdescription.as_ptr(),
+                             cclassification.as_ptr(),
+                             cauthor.as_ptr(),
+                             sink_info.rank,
+                             sink_info.create_instance as *const c_void,
+                             cprotocols.as_ptr());
+    }
 }

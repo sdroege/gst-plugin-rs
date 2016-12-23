@@ -33,6 +33,8 @@ pub mod utils;
 pub mod error;
 pub mod buffer;
 pub mod adapter;
+#[macro_use]
+pub mod plugin;
 pub mod rssource;
 pub mod rssink;
 pub mod rsfilesrc;
@@ -41,241 +43,76 @@ pub mod rsfilesink;
 pub mod rsdemuxer;
 pub mod flvdemux;
 
-use utils::*;
+use plugin::*;
+use rssource::*;
 use rsfilesrc::FileSrc;
 use rshttpsrc::HttpSrc;
+use rssink::*;
 use rsfilesink::FileSink;
+use rsdemuxer::*;
 use flvdemux::FlvDemux;
 
-use std::os::raw::c_void;
-use libc::c_char;
-use std::ffi::CString;
-
-unsafe fn source_register(plugin: *const c_void,
-                          name: &str,
-                          long_name: &str,
-                          description: &str,
-                          classification: &str,
-                          author: &str,
-                          rank: i32,
-                          create_instance: *const c_void,
-                          protocols: &str,
-                          push_only: bool) {
-
-    extern "C" {
-        fn gst_rs_source_register(plugin: *const c_void,
-                                  name: *const c_char,
-                                  long_name: *const c_char,
-                                  description: *const c_char,
-                                  classification: *const c_char,
-                                  author: *const c_char,
-                                  rank: i32,
-                                  create_instance: *const c_void,
-                                  protocols: *const c_char,
-                                  push_only: GBoolean)
-                                  -> GBoolean;
-    }
-
-    let cname = CString::new(name).unwrap();
-    let clong_name = CString::new(long_name).unwrap();
-    let cdescription = CString::new(description).unwrap();
-    let cclassification = CString::new(classification).unwrap();
-    let cauthor = CString::new(author).unwrap();
-    let cprotocols = CString::new(protocols).unwrap();
-
-    gst_rs_source_register(plugin,
-                           cname.as_ptr(),
-                           clong_name.as_ptr(),
-                           cdescription.as_ptr(),
-                           cclassification.as_ptr(),
-                           cauthor.as_ptr(),
-                           rank,
-                           create_instance,
-                           cprotocols.as_ptr(),
-                           GBoolean::from_bool(push_only));
-
-}
-
-unsafe fn sources_register(plugin: *const c_void) -> GBoolean {
+fn plugin_init(plugin: &Plugin) -> bool {
     source_register(plugin,
-                    "rsfilesrc",
-                    "File Source",
-                    "Reads local files",
-                    "Source/File",
-                    "Sebastian Dröge <sebastian@centricular.com>",
-                    256 + 100,
-                    FileSrc::new_boxed as *const c_void,
-                    "file",
-                    false);
+                    &SourceInfo {
+                        name: "rsfilesrc",
+                        long_name: "File Source",
+                        description: "Reads local files",
+                        classification: "Source/File",
+                        author: "Sebastian Dröge <sebastian@centricular.com>",
+                        rank: 256 + 100,
+                        create_instance: FileSrc::new_boxed,
+                        protocols: "file",
+                        push_only: false,
+                    });
 
     source_register(plugin,
-                    "rshttpsrc",
-                    "HTTP Source",
-                    "Read HTTP/HTTPS files",
-                    "Source/Network/HTTP",
-                    "Sebastian Dröge <sebastian@centricular.com>",
-                    256 + 100,
-                    HttpSrc::new_boxed as *const c_void,
-                    "http:https",
-                    true);
+                    &SourceInfo {
+                        name: "rshttpsrc",
+                        long_name: "HTTP Source",
+                        description: "Reads HTTP/HTTPS streams",
+                        classification: "Source/Network/HTTP",
+                        author: "Sebastian Dröge <sebastian@centricular.com>",
+                        rank: 256 + 100,
+                        create_instance: HttpSrc::new_boxed,
+                        protocols: "http:https",
+                        push_only: true,
+                    });
 
-    GBoolean::True
-}
-
-unsafe fn sink_register(plugin: *const c_void,
-                        name: &str,
-                        long_name: &str,
-                        description: &str,
-                        classification: &str,
-                        author: &str,
-                        rank: i32,
-                        create_instance: *const c_void,
-                        protocols: &str) {
-    extern "C" {
-        fn gst_rs_sink_register(plugin: *const c_void,
-                                name: *const c_char,
-                                long_name: *const c_char,
-                                description: *const c_char,
-                                classification: *const c_char,
-                                author: *const c_char,
-                                rank: i32,
-                                create_instance: *const c_void,
-                                protocols: *const c_char)
-                                -> GBoolean;
-    }
-
-    let cname = CString::new(name).unwrap();
-    let clong_name = CString::new(long_name).unwrap();
-    let cdescription = CString::new(description).unwrap();
-    let cclassification = CString::new(classification).unwrap();
-    let cauthor = CString::new(author).unwrap();
-    let cprotocols = CString::new(protocols).unwrap();
-
-    gst_rs_sink_register(plugin,
-                         cname.as_ptr(),
-                         clong_name.as_ptr(),
-                         cdescription.as_ptr(),
-                         cclassification.as_ptr(),
-                         cauthor.as_ptr(),
-                         rank,
-                         create_instance,
-                         cprotocols.as_ptr());
-}
-
-unsafe fn sinks_register(plugin: *const c_void) -> GBoolean {
     sink_register(plugin,
-                  "rsfilesink",
-                  "File Sink",
-                  "Writes to local files",
-                  "Sink/File",
-                  "Luis de Bethencourt <luisbg@osg.samsung.com>",
-                  256 + 100,
-                  FileSink::new_boxed as *const c_void,
-                  "file");
+                  &SinkInfo {
+                      name: "rsfilesink",
+                      long_name: "File Sink",
+                      description: "Writes to local files",
+                      classification: "Sink/File",
+                      author: "Luis de Bethencourt <luisbg@osg.samsung.com>",
+                      rank: 256 + 100,
+                      create_instance: FileSink::new_boxed,
+                      protocols: "file",
+                  });
 
-    GBoolean::True
-}
-
-unsafe fn demuxer_register(plugin: *const c_void,
-                           name: &str,
-                           long_name: &str,
-                           description: &str,
-                           classification: &str,
-                           author: &str,
-                           rank: i32,
-                           create_instance: *const c_void,
-                           input_format: &str,
-                           output_formats: &str) {
-    extern "C" {
-        fn gst_rs_demuxer_register(plugin: *const c_void,
-                                   name: *const c_char,
-                                   long_name: *const c_char,
-                                   description: *const c_char,
-                                   classification: *const c_char,
-                                   author: *const c_char,
-                                   rank: i32,
-                                   create_instance: *const c_void,
-                                   input_format: *const c_char,
-                                   output_formats: *const c_char)
-                                   -> GBoolean;
-    }
-
-    let cname = CString::new(name).unwrap();
-    let clong_name = CString::new(long_name).unwrap();
-    let cdescription = CString::new(description).unwrap();
-    let cclassification = CString::new(classification).unwrap();
-    let cauthor = CString::new(author).unwrap();
-    let cinput_format = CString::new(input_format).unwrap();
-    let coutput_formats = CString::new(output_formats).unwrap();
-
-    gst_rs_demuxer_register(plugin,
-                            cname.as_ptr(),
-                            clong_name.as_ptr(),
-                            cdescription.as_ptr(),
-                            cclassification.as_ptr(),
-                            cauthor.as_ptr(),
-                            rank,
-                            create_instance,
-                            cinput_format.as_ptr(),
-                            coutput_formats.as_ptr());
-}
-
-unsafe fn demuxers_register(plugin: *const c_void) -> GBoolean {
     demuxer_register(plugin,
-                     "rsflvdemux",
-                     "FLV Demuxer",
-                     "Demuxes FLV Streams",
-                     "Codec/Demuxer",
-                     "Sebastian Dröge <sebastian@centricular.com>",
-                     256 + 100,
-                     FlvDemux::new_boxed as *const c_void,
-                     "video/x-flv",
-                     "ANY");
+                     &DemuxerInfo {
+                         name: "rsflvdemux",
+                         long_name: "FLV Demuxer",
+                         description: "Demuxes FLV Streams",
+                         classification: "Codec/Demuxer",
+                         author: "Sebastian Dröge <sebastian@centricular.com>",
+                         rank: 256 + 100,
+                         create_instance: FlvDemux::new_boxed,
+                         input_formats: "video/x-flv",
+                         output_formats: "ANY",
+                     });
 
-    GBoolean::True
+    true
 }
 
-#[repr(C)]
-pub struct GstPluginDesc {
-    major_version: i32,
-    minor_version: i32,
-    name: *const u8,
-    description: *const u8,
-    plugin_init: extern "C" fn(plugin: *const c_void) -> GBoolean,
-    version: *const u8,
-    license: *const u8,
-    source: *const u8,
-    package: *const u8,
-    origin: *const u8,
-    release_datetime: *const u8,
-    _gst_reserved: [usize; 4],
-}
-
-unsafe impl Sync for GstPluginDesc {}
-
-extern "C" fn plugin_init(plugin: *const c_void) -> GBoolean {
-    unsafe {
-        sources_register(plugin);
-        sinks_register(plugin);
-        demuxers_register(plugin);
-    }
-
-    GBoolean::True
-}
-
-#[no_mangle]
-#[allow(non_upper_case_globals)]
-pub static gst_plugin_desc: GstPluginDesc = GstPluginDesc {
-    major_version: 1,
-    minor_version: 10,
-    name: b"rsplugin\0" as *const u8,
-    description: b"Rust Plugin\0" as *const u8,
-    plugin_init: plugin_init,
-    version: b"1.0\0" as *const u8,
-    license: b"LGPL\0" as *const u8,
-    source: b"rsplugin\0" as *const u8,
-    package: b"rsplugin\0" as *const u8,
-    origin: b"https://github.com/sdroege/rsplugin\0" as *const u8,
-    release_datetime: b"2016-12-08\0" as *const u8,
-    _gst_reserved: [0, 0, 0, 0],
-};
+plugin_define!(b"rsplugin\0",
+               b"Rust Plugin\0",
+               plugin_init,
+               b"1.0\0",
+               b"LGPL\0",
+               b"rsplugin\0",
+               b"rsplugin\0",
+               b"https://github.com/sdroege/rsplugin\0",
+               b"2016-12-08\0");

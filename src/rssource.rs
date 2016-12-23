@@ -28,6 +28,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use url::Url;
 
+use plugin::Plugin;
 use utils::*;
 use error::*;
 use buffer::*;
@@ -301,4 +302,53 @@ pub unsafe extern "C" fn source_seek(ptr: *const SourceWrapper, start: u64, stop
     panic_to_error!(wrap, GBoolean::False, {
         GBoolean::from_bool(wrap.seek(start, if stop == u64::MAX { None } else { Some(stop) }))
     })
+}
+
+pub struct SourceInfo<'a> {
+    pub name: &'a str,
+    pub long_name: &'a str,
+    pub description: &'a str,
+    pub classification: &'a str,
+    pub author: &'a str,
+    pub rank: i32,
+    pub create_instance: fn() -> Box<Source>,
+    pub protocols: &'a str,
+    pub push_only: bool,
+}
+
+pub fn source_register(plugin: &Plugin, source_info: &SourceInfo) {
+
+    extern "C" {
+        fn gst_rs_source_register(plugin: *const c_void,
+                                  name: *const c_char,
+                                  long_name: *const c_char,
+                                  description: *const c_char,
+                                  classification: *const c_char,
+                                  author: *const c_char,
+                                  rank: i32,
+                                  create_instance: *const c_void,
+                                  protocols: *const c_char,
+                                  push_only: GBoolean)
+                                  -> GBoolean;
+    }
+
+    let cname = CString::new(source_info.name).unwrap();
+    let clong_name = CString::new(source_info.long_name).unwrap();
+    let cdescription = CString::new(source_info.description).unwrap();
+    let cclassification = CString::new(source_info.classification).unwrap();
+    let cauthor = CString::new(source_info.author).unwrap();
+    let cprotocols = CString::new(source_info.protocols).unwrap();
+
+    unsafe {
+        gst_rs_source_register(plugin.to_raw(),
+                               cname.as_ptr(),
+                               clong_name.as_ptr(),
+                               cdescription.as_ptr(),
+                               cclassification.as_ptr(),
+                               cauthor.as_ptr(),
+                               source_info.rank,
+                               source_info.create_instance as *const c_void,
+                               cprotocols.as_ptr(),
+                               GBoolean::from_bool(source_info.push_only));
+    }
 }
