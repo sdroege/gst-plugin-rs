@@ -22,9 +22,9 @@ use url::Url;
 use std::io::Write;
 use std::convert::From;
 
-use error::*;
-use rssink::*;
-use buffer::*;
+use gst_plugin::error::*;
+use gst_plugin::sink::*;
+use gst_plugin::buffer::*;
 
 #[derive(Debug)]
 enum StreamingState {

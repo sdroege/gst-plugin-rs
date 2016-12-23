@@ -1,0 +1,17 @@
+[package]
+name = "gst-plugin-flv"
+version = "0.1.0"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+repository = "https://github.com/sdroege/rsplugin"
+license = "LGPL-2.1+"
+
+[dependencies]
+url = "1.1"
+gst-plugin = { path="../gst-plugin" }
+nom = "2.0"
+flavors = {git = "https://github.com/sdroege/flavors.git"}
+
+[lib]
+name = "gstrsflv"
+crate-type = ["cdylib"]
+path = "src/lib.rs"

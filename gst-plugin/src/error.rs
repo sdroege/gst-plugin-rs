@@ -29,6 +29,7 @@ use url::Url;
 
 use utils::*;
 
+#[macro_export]
 macro_rules! error_msg(
 // Plain strings
     ($err:expr, ($msg:expr), [$dbg:expr]) =>  {
@@ -303,6 +304,7 @@ impl ToGError for PanicError {
     }
 }
 
+#[macro_export]
 macro_rules! panic_to_error(
     ($wrap:expr, $ret:expr, $code:block) => {{
         if $wrap.panicked.load(Ordering::Relaxed) {

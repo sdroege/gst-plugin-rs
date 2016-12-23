@@ -30,14 +30,15 @@ impl Plugin {
     }
 }
 
+#[macro_export]
 macro_rules! plugin_define(
     ($name:expr, $description:expr, $plugin_init:ident,
      $version:expr, $license:expr, $source:expr,
      $package:expr, $origin:expr, $release_datetime:expr) => {
         pub mod plugin_desc {
             use std::os::raw::c_void;
-            use utils::GBoolean;
-            use plugin::Plugin;
+            use $crate::utils::GBoolean;
+            use $crate::plugin::Plugin;
 
             #[repr(C)]
             pub struct GstPluginDesc {

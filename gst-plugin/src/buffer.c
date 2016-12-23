@@ -18,19 +18,6 @@
 
 #include <gst/gst.h>
 
-#include "rssource.h"
-#include "rssink.h"
-#include "rsdemuxer.h"
-
-void
-gst_rs_element_error (GstElement * element, GQuark error_domain,
-    gint error_code, const gchar * message, const gchar * debug,
-    const gchar * file, const gchar * function, guint line)
-{
-  gst_element_message_full (element, GST_MESSAGE_ERROR, error_domain,
-      error_code, g_strdup (message), g_strdup (debug), file, function, line);
-}
-
 guint64
 gst_rs_buffer_get_pts (GstBuffer * buffer)
 {

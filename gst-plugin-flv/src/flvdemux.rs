@@ -22,11 +22,11 @@ use nom::IResult;
 
 use flavors::parser as flavors;
 
-use error::*;
-use rsdemuxer::*;
-use buffer::*;
-use adapter::*;
-use utils;
+use gst_plugin::error::*;
+use gst_plugin::demuxer::*;
+use gst_plugin::buffer::*;
+use gst_plugin::adapter::*;
+use gst_plugin::utils;
 
 const AUDIO_STREAM_ID: u32 = 0;
 const VIDEO_STREAM_ID: u32 = 1;

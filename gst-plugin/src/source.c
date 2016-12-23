@@ -16,7 +16,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include "rssource.h"
+#include "source.h"
 
 #include <string.h>
 #include <stdint.h>

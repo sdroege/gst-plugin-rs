@@ -20,9 +20,9 @@ use std::io::{Read, Seek, SeekFrom};
 use std::fs::File;
 use url::Url;
 
-use error::*;
-use rssource::*;
-use buffer::*;
+use gst_plugin::error::*;
+use gst_plugin::source::*;
+use gst_plugin::buffer::*;
 
 #[derive(Debug)]
 enum StreamingState {

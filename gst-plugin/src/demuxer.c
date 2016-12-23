@@ -16,7 +16,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#include "rsdemuxer.h"
+#include "demuxer.h"
 
 #include <string.h>
 #include <stdint.h>

@@ -22,9 +22,9 @@ use reqwest::{Client, Response};
 use reqwest::header::{ContentLength, ContentRange, ContentRangeSpec, Range, ByteRangeSpec,
                       AcceptRanges, RangeUnit};
 
-use error::*;
-use rssource::*;
-use buffer::*;
+use gst_plugin::error::*;
+use gst_plugin::source::*;
+use gst_plugin::buffer::*;
 
 #[derive(Debug)]
 enum StreamingState {
