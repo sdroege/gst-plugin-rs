@@ -218,7 +218,10 @@ gst_rs_src_stop (GstBaseSrc * basesrc)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
 
-  return source_stop (src->instance);
+  /* Ignore stop failures */
+  source_stop (src->instance);
+
+  return TRUE;
 }
 
 static gboolean

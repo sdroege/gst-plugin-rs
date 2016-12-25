@@ -278,7 +278,7 @@ pub unsafe extern "C" fn source_start(ptr: *const SourceWrapper) -> GBoolean {
 pub unsafe extern "C" fn source_stop(ptr: *const SourceWrapper) -> GBoolean {
     let wrap: &SourceWrapper = &*ptr;
 
-    panic_to_error!(wrap, GBoolean::False, {
+    panic_to_error!(wrap, GBoolean::True, {
         GBoolean::from_bool(wrap.stop())
     })
 }

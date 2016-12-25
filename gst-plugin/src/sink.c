@@ -194,7 +194,10 @@ gst_rs_sink_stop (GstBaseSink * basesink)
 {
   GstRsSink *sink = GST_RS_SINK (basesink);
 
-  return sink_stop (sink->instance);
+  /* Ignore stop failures */
+  sink_stop (sink->instance);
+
+  return TRUE;
 }
 
 static GstURIType

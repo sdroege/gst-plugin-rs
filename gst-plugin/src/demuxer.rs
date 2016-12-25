@@ -370,7 +370,7 @@ pub unsafe extern "C" fn demuxer_start(ptr: *const DemuxerWrapper,
 pub unsafe extern "C" fn demuxer_stop(ptr: *const DemuxerWrapper) -> GBoolean {
     let wrap: &DemuxerWrapper = &*ptr;
 
-    panic_to_error!(wrap, GBoolean::False, {
+    panic_to_error!(wrap, GBoolean::True, {
         GBoolean::from_bool(wrap.stop())
     })
 }

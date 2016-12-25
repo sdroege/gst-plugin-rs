@@ -236,7 +236,7 @@ pub unsafe extern "C" fn sink_start(ptr: *const SinkWrapper) -> GBoolean {
 #[no_mangle]
 pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> GBoolean {
     let wrap: &SinkWrapper = &*ptr;
-    panic_to_error!(wrap, GBoolean::False, {
+    panic_to_error!(wrap, GBoolean::True, {
         GBoolean::from_bool(wrap.stop())
     })
 }
