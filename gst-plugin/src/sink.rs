@@ -176,10 +176,10 @@ impl SinkWrapper {
 }
 
 #[no_mangle]
-pub extern "C" fn sink_new(sink: *mut c_void,
-                           create_instance: fn(Element) -> Box<Sink>)
-                           -> *mut SinkWrapper {
-    let instance = create_instance(unsafe { Element::new(sink) });
+pub unsafe extern "C" fn sink_new(sink: *mut c_void,
+                                  create_instance: fn(Element) -> Box<Sink>)
+                                  -> *mut SinkWrapper {
+    let instance = create_instance(Element::new(sink));
     Box::into_raw(Box::new(SinkWrapper::new(sink, instance)))
 }
 

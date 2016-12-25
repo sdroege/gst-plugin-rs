@@ -200,10 +200,10 @@ impl SourceWrapper {
 }
 
 #[no_mangle]
-pub extern "C" fn source_new(source: *mut c_void,
-                             create_instance: fn(Element) -> Box<Source>)
-                             -> *mut SourceWrapper {
-    let instance = create_instance(unsafe { Element::new(source) });
+pub unsafe extern "C" fn source_new(source: *mut c_void,
+                                    create_instance: fn(Element) -> Box<Source>)
+                                    -> *mut SourceWrapper {
+    let instance = create_instance(Element::new(source));
 
     Box::into_raw(Box::new(SourceWrapper::new(source, instance)))
 }

@@ -342,10 +342,10 @@ impl DemuxerWrapper {
 }
 
 #[no_mangle]
-pub extern "C" fn demuxer_new(demuxer: *mut c_void,
-                              create_instance: fn(Element) -> Box<Demuxer>)
-                              -> *mut DemuxerWrapper {
-    let instance = create_instance(unsafe { Element::new(demuxer) });
+pub unsafe extern "C" fn demuxer_new(demuxer: *mut c_void,
+                                     create_instance: fn(Element) -> Box<Demuxer>)
+                                     -> *mut DemuxerWrapper {
+    let instance = create_instance(Element::new(demuxer));
     Box::into_raw(Box::new(DemuxerWrapper::new(demuxer, instance)))
 }
 
