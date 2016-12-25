@@ -19,10 +19,10 @@
 #include <gst/gst.h>
 
 void
-gst_rs_element_error (GstElement * element, GQuark error_domain,
-    gint error_code, const gchar * message, const gchar * debug,
-    const gchar * file, const gchar * function, guint line)
+gst_rs_debug_log (GstDebugCategory * category,
+    GstDebugLevel level,
+    const gchar * file,
+    const gchar * function, gint line, GObject * object, const gchar * message)
 {
-  gst_element_message_full (element, GST_MESSAGE_ERROR, error_domain,
-      error_code, g_strdup (message), g_strdup (debug), file, function, line);
+  gst_debug_log (category, level, file, function, line, object, "%s", message);
 }

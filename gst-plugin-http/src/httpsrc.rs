@@ -25,6 +25,10 @@ use reqwest::header::{ContentLength, ContentRange, ContentRangeSpec, Range, Byte
 use gst_plugin::error::*;
 use gst_plugin::source::*;
 use gst_plugin::buffer::*;
+use gst_plugin::utils::*;
+use gst_plugin::log::*;
+
+use slog::*;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -43,19 +47,25 @@ enum StreamingState {
 #[derive(Debug)]
 pub struct HttpSrc {
     streaming_state: StreamingState,
+    logger: Logger,
     client: Client,
 }
 
 impl HttpSrc {
-    pub fn new() -> HttpSrc {
+    pub fn new(element: Element) -> HttpSrc {
         HttpSrc {
             streaming_state: StreamingState::Stopped,
+            logger: Logger::root(GstDebugDrain::new(Some(&element),
+                                                    "rshttpsink",
+                                                    0,
+                                                    "Rust http sink"),
+                                 None),
             client: Client::new().unwrap(),
         }
     }
 
-    pub fn new_boxed() -> Box<Source> {
-        Box::new(HttpSrc::new())
+    pub fn new_boxed(element: Element) -> Box<Source> {
+        Box::new(HttpSrc::new(element))
     }
 
     fn do_request(&self,

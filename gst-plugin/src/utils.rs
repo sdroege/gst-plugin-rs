@@ -17,6 +17,7 @@
 //
 //
 use libc::c_char;
+use std::os::raw::c_void;
 use std::ffi::CString;
 use std::i32;
 
@@ -45,6 +46,46 @@ impl GBoolean {
 
     pub fn to_bool(&self) -> bool {
         !(*self == GBoolean::False)
+    }
+}
+
+pub struct Element(*const c_void);
+
+impl Element {
+    pub unsafe fn new(element: *const c_void) -> Element {
+        extern "C" {
+            fn gst_object_ref(object: *const c_void) -> *const c_void;
+        }
+
+        if element.is_null() {
+            panic!("NULL not allowed");
+        }
+
+        gst_object_ref(element);
+
+        Element(element)
+    }
+
+    pub unsafe fn as_ptr(&self) -> *const c_void {
+        self.0
+    }
+}
+
+impl Drop for Element {
+    fn drop(&mut self) {
+        extern "C" {
+            fn gst_object_unref(object: *const c_void);
+        }
+
+        unsafe {
+            gst_object_unref(self.0);
+        }
+    }
+}
+
+impl Clone for Element {
+    fn clone(&self) -> Self {
+        unsafe { Element::new(self.0) }
     }
 }
 

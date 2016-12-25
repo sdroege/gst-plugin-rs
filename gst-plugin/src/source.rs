@@ -201,9 +201,11 @@ impl SourceWrapper {
 
 #[no_mangle]
 pub extern "C" fn source_new(source: *mut c_void,
-                             create_instance: fn() -> Box<Source>)
+                             create_instance: fn(Element) -> Box<Source>)
                              -> *mut SourceWrapper {
-    Box::into_raw(Box::new(SourceWrapper::new(source, create_instance())))
+    let instance = create_instance(unsafe { Element::new(source) });
+
+    Box::into_raw(Box::new(SourceWrapper::new(source, instance)))
 }
 
 #[no_mangle]
@@ -311,7 +313,7 @@ pub struct SourceInfo<'a> {
     pub classification: &'a str,
     pub author: &'a str,
     pub rank: i32,
-    pub create_instance: fn() -> Box<Source>,
+    pub create_instance: fn(Element) -> Box<Source>,
     pub protocols: &'a str,
     pub push_only: bool,
 }
@@ -340,7 +342,7 @@ pub fn source_register(plugin: &Plugin, source_info: &SourceInfo) {
     let cprotocols = CString::new(source_info.protocols).unwrap();
 
     unsafe {
-        gst_rs_source_register(plugin.to_raw(),
+        gst_rs_source_register(plugin.as_ptr(),
                                cname.as_ptr(),
                                clong_name.as_ptr(),
                                cdescription.as_ptr(),

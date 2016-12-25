@@ -27,6 +27,10 @@ use gst_plugin::demuxer::*;
 use gst_plugin::buffer::*;
 use gst_plugin::adapter::*;
 use gst_plugin::utils;
+use gst_plugin::utils::Element;
+use gst_plugin::log::*;
+
+use slog::*;
 
 const AUDIO_STREAM_ID: u32 = 0;
 const VIDEO_STREAM_ID: u32 = 1;
@@ -383,6 +387,7 @@ impl Metadata {
 
 #[derive(Debug)]
 pub struct FlvDemux {
+    logger: Logger,
     state: State,
     adapter: Adapter,
     // Only in >= State::Streaming
@@ -390,16 +395,21 @@ pub struct FlvDemux {
 }
 
 impl FlvDemux {
-    pub fn new() -> FlvDemux {
+    pub fn new(element: Element) -> FlvDemux {
         FlvDemux {
+            logger: Logger::root(GstDebugDrain::new(Some(&element),
+                                                    "rsflvdemux",
+                                                    0,
+                                                    "Rust FLV demuxer"),
+                                 None),
             state: State::Stopped,
             adapter: Adapter::new(),
             streaming_state: None,
         }
     }
 
-    pub fn new_boxed() -> Box<Demuxer> {
-        Box::new(FlvDemux::new())
+    pub fn new_boxed(element: Element) -> Box<Demuxer> {
+        Box::new(FlvDemux::new(element))
     }
 
     fn handle_script_tag(&mut self,

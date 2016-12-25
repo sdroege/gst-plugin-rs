@@ -25,6 +25,10 @@ use std::convert::From;
 use gst_plugin::error::*;
 use gst_plugin::sink::*;
 use gst_plugin::buffer::*;
+use gst_plugin::utils::*;
+use gst_plugin::log::*;
+
+use slog::*;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -35,15 +39,23 @@ enum StreamingState {
 #[derive(Debug)]
 pub struct FileSink {
     streaming_state: StreamingState,
+    logger: Logger,
 }
 
 impl FileSink {
-    pub fn new() -> FileSink {
-        FileSink { streaming_state: StreamingState::Stopped }
+    pub fn new(element: Element) -> FileSink {
+        FileSink {
+            streaming_state: StreamingState::Stopped,
+            logger: Logger::root(GstDebugDrain::new(Some(&element),
+                                                    "rsfilesink",
+                                                    0,
+                                                    "Rust file sink"),
+                                 None),
+        }
     }
 
-    pub fn new_boxed() -> Box<Sink> {
-        Box::new(FileSink::new())
+    pub fn new_boxed(element: Element) -> Box<Sink> {
+        Box::new(FileSink::new(element))
     }
 }
 

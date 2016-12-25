@@ -20,6 +20,8 @@ extern crate libc;
 extern crate url;
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
+extern crate slog;
 
 #[macro_use]
 pub mod utils;
@@ -32,4 +34,4 @@ pub mod plugin;
 pub mod source;
 pub mod sink;
 pub mod demuxer;
-
+pub mod log;

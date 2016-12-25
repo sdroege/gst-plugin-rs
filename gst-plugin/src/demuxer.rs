@@ -343,9 +343,10 @@ impl DemuxerWrapper {
 
 #[no_mangle]
 pub extern "C" fn demuxer_new(demuxer: *mut c_void,
-                              create_instance: fn() -> Box<Demuxer>)
+                              create_instance: fn(Element) -> Box<Demuxer>)
                               -> *mut DemuxerWrapper {
-    Box::into_raw(Box::new(DemuxerWrapper::new(demuxer, create_instance())))
+    let instance = create_instance(unsafe { Element::new(demuxer) });
+    Box::into_raw(Box::new(DemuxerWrapper::new(demuxer, instance)))
 }
 
 #[no_mangle]
@@ -451,7 +452,7 @@ pub struct DemuxerInfo<'a> {
     pub classification: &'a str,
     pub author: &'a str,
     pub rank: i32,
-    pub create_instance: fn() -> Box<Demuxer>,
+    pub create_instance: fn(Element) -> Box<Demuxer>,
     pub input_formats: &'a str,
     pub output_formats: &'a str,
 }
@@ -480,7 +481,7 @@ pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
     let coutput_formats = CString::new(demuxer_info.output_formats).unwrap();
 
     unsafe {
-        gst_rs_demuxer_register(plugin.to_raw(),
+        gst_rs_demuxer_register(plugin.as_ptr(),
                                 cname.as_ptr(),
                                 clong_name.as_ptr(),
                                 cdescription.as_ptr(),

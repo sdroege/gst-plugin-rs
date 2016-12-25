@@ -23,6 +23,10 @@ use url::Url;
 use gst_plugin::error::*;
 use gst_plugin::source::*;
 use gst_plugin::buffer::*;
+use gst_plugin::log::*;
+use gst_plugin::utils::*;
+
+use slog::*;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -33,15 +37,23 @@ enum StreamingState {
 #[derive(Debug)]
 pub struct FileSrc {
     streaming_state: StreamingState,
+    logger: Logger,
 }
 
 impl FileSrc {
-    pub fn new() -> FileSrc {
-        FileSrc { streaming_state: StreamingState::Stopped }
+    pub fn new(element: Element) -> FileSrc {
+        FileSrc {
+            streaming_state: StreamingState::Stopped,
+            logger: Logger::root(GstDebugDrain::new(Some(&element),
+                                                    "rsfilesrc",
+                                                    0,
+                                                    "Rust file source"),
+                                 None),
+        }
     }
 
-    pub fn new_boxed() -> Box<Source> {
-        Box::new(FileSrc::new())
+    pub fn new_boxed(element: Element) -> Box<Source> {
+        Box::new(FileSrc::new(element))
     }
 }
 

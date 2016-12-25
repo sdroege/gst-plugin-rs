@@ -21,6 +21,8 @@ extern crate url;
 #[macro_use]
 extern crate gst_plugin;
 extern crate reqwest;
+#[macro_use]
+extern crate slog;
 
 use gst_plugin::plugin::*;
 use gst_plugin::source::*;

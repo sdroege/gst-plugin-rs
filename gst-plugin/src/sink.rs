@@ -177,9 +177,10 @@ impl SinkWrapper {
 
 #[no_mangle]
 pub extern "C" fn sink_new(sink: *mut c_void,
-                           create_instance: fn() -> Box<Sink>)
+                           create_instance: fn(Element) -> Box<Sink>)
                            -> *mut SinkWrapper {
-    Box::into_raw(Box::new(SinkWrapper::new(sink, create_instance())))
+    let instance = create_instance(unsafe { Element::new(sink) });
+    Box::into_raw(Box::new(SinkWrapper::new(sink, instance)))
 }
 
 #[no_mangle]
@@ -258,7 +259,7 @@ pub struct SinkInfo<'a> {
     pub classification: &'a str,
     pub author: &'a str,
     pub rank: i32,
-    pub create_instance: fn() -> Box<Sink>,
+    pub create_instance: fn(Element) -> Box<Sink>,
     pub protocols: &'a str,
 }
 
@@ -284,7 +285,7 @@ pub fn sink_register(plugin: &Plugin, sink_info: &SinkInfo) {
     let cprotocols = CString::new(sink_info.protocols).unwrap();
 
     unsafe {
-        gst_rs_sink_register(plugin.to_raw(),
+        gst_rs_sink_register(plugin.as_ptr(),
                              cname.as_ptr(),
                              clong_name.as_ptr(),
                              cdescription.as_ptr(),

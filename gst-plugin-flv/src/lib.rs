@@ -21,6 +21,8 @@ extern crate url;
 #[macro_use]
 extern crate gst_plugin;
 #[macro_use]
+extern crate slog;
+#[macro_use]
 extern crate nom;
 extern crate flavors;
 

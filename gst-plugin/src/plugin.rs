@@ -25,7 +25,7 @@ impl Plugin {
         Plugin(plugin)
     }
 
-    pub unsafe fn to_raw(&self) -> *const c_void {
+    pub unsafe fn as_ptr(&self) -> *const c_void {
         self.0
     }
 }
