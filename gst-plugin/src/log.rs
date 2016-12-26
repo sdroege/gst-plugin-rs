@@ -101,14 +101,10 @@ impl Drain for GstDebugDrain {
                                 line: u32,
                                 object: *const c_void,
                                 message: *const c_char);
+            fn gst_debug_category_get_threshold(category: *const c_void) -> u32;
+            fn g_weak_ref_get(weak_ref: &*const c_void) -> *const c_void;
+            fn gst_object_unref(obj: *const c_void);
         }
-
-        let file_cstr = CString::new(record.file().as_bytes()).unwrap();
-
-        // TODO: Probably want to include module?
-        let function_cstr = CString::new(record.function().as_bytes()).unwrap();
-
-        let message_cstr = CString::new(fmt::format(record.msg()).as_bytes()).unwrap();
 
         let level = match record.level() {
             Level::Critical | Level::Error => 1,
@@ -118,10 +114,18 @@ impl Drain for GstDebugDrain {
             Level::Trace => 7,
         };
 
-        extern "C" {
-            fn g_weak_ref_get(weak_ref: &*const c_void) -> *const c_void;
-            fn gst_object_unref(obj: *const c_void);
+        let threshold = unsafe { gst_debug_category_get_threshold(self.category) };
+
+        if level > threshold {
+            return Ok(());
         }
+
+        let file_cstr = CString::new(record.file().as_bytes()).unwrap();
+
+        // TODO: Probably want to include module?
+        let function_cstr = CString::new(record.function().as_bytes()).unwrap();
+
+        let message_cstr = CString::new(fmt::format(record.msg()).as_bytes()).unwrap();
 
         unsafe {
             let element = if self.element.is_null() {
