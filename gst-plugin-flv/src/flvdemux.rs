@@ -427,8 +427,12 @@ impl FlvDemux {
 
         match flavors::script_data(data) {
             IResult::Done(_, ref script_data) if script_data.name == "onMetaData" => {
-                let streaming_state = self.streaming_state.as_mut().unwrap();
+                trace!(self.logger, "Got script tag: {:?}", script_data);
+
                 let metadata = Metadata::new(script_data);
+                debug!(self.logger, "Got metadata: {:?}", metadata);
+
+                let streaming_state = self.streaming_state.as_mut().unwrap();
 
                 let audio_changed = streaming_state.audio
                     .as_mut()
@@ -465,7 +469,9 @@ impl FlvDemux {
                     return Ok(HandleBufferResult::StreamsChanged(streams));
                 }
             }
-            IResult::Done(_, _) |
+            IResult::Done(_, ref script_data) => {
+                trace!(self.logger, "Got script tag: {:?}", script_data);
+            }
             IResult::Error(_) |
             IResult::Incomplete(_) => {
                 // ignore
@@ -478,11 +484,15 @@ impl FlvDemux {
     fn update_audio_stream(&mut self,
                            data_header: &flavors::AudioDataHeader)
                            -> Result<HandleBufferResult, FlowError> {
+        let logger = self.logger.clone();
+        trace!(logger, "Got audio data header: {:?}", data_header);
+
         let streaming_state = self.streaming_state.as_mut().unwrap();
 
         let new_audio_format = AudioFormat::new(data_header, &streaming_state.metadata);
 
         if streaming_state.audio.as_ref() != Some(&new_audio_format) {
+            debug!(logger, "Got new audio format: {:?}", new_audio_format);
             let new_stream = streaming_state.audio == None;
 
             let format = new_audio_format.to_string();
@@ -494,6 +504,8 @@ impl FlvDemux {
                 } else {
                     return Ok(HandleBufferResult::StreamChanged(stream));
                 }
+            } else {
+                unimplemented!();
             }
         }
 
@@ -528,6 +540,11 @@ impl FlvDemux {
 
         let mut buffer = self.adapter.get_buffer((tag_header.data_size - 1) as usize).unwrap();
         buffer.set_pts(Some((tag_header.timestamp as u64) * 1000 * 1000)).unwrap();
+        trace!(self.logger,
+               "Outputting audio buffer {:?} for tag {:?} of size {}",
+               buffer,
+               tag_header,
+               tag_header.data_size - 1);
 
         Ok(HandleBufferResult::BufferForStream(AUDIO_STREAM_ID, buffer))
     }
@@ -535,11 +552,16 @@ impl FlvDemux {
     fn update_video_stream(&mut self,
                            data_header: &flavors::VideoDataHeader)
                            -> Result<HandleBufferResult, FlowError> {
+        let logger = self.logger.clone();
+        trace!(logger, "Got video data header: {:?}", data_header);
+
         let streaming_state = self.streaming_state.as_mut().unwrap();
 
         let new_video_format = VideoFormat::new(data_header, &streaming_state.metadata);
 
         if streaming_state.video.as_ref() != Some(&new_video_format) {
+            debug!(logger, "Got new video format: {:?}", new_video_format);
+
             let new_stream = streaming_state.video == None;
 
             let format = new_video_format.to_string();
@@ -551,6 +573,8 @@ impl FlvDemux {
                 } else {
                     return Ok(HandleBufferResult::StreamChanged(stream));
                 }
+            } else {
+                unimplemented!();
             }
         }
 
@@ -613,6 +637,13 @@ impl FlvDemux {
         buffer.set_dts(Some((tag_header.timestamp as u64) * 1000 * 1000))
             .unwrap();
 
+        trace!(self.logger,
+               "Outputting video buffer {:?} for tag {:?} of size {}, keyframe: {}",
+               buffer,
+               tag_header,
+               tag_header.data_size - 1 - offset,
+               is_keyframe);
+
         Ok(HandleBufferResult::BufferForStream(VIDEO_STREAM_ID, buffer))
     }
 
@@ -630,6 +661,8 @@ impl FlvDemux {
                             // fall through
                         }
                         IResult::Done(_, ref header) => {
+                            debug!(self.logger, "Found FLV header: {:?}", header);
+
                             let skip = if header.offset < 9 {
                                 0
                             } else {
@@ -679,7 +712,8 @@ impl FlvDemux {
                     IResult::Incomplete(_) => {
                         unimplemented!();
                     }
-                    IResult::Done(_, _previous_size) => {
+                    IResult::Done(_, previous_size) => {
+                        trace!(self.logger, "Previous tag size {}", previous_size);
                         // Nothing to do here, we just consume it for now
                     }
                 }
@@ -693,8 +727,14 @@ impl FlvDemux {
                 };
 
                 let res = match tag_header.tag_type {
-                    flavors::TagType::Script => self.handle_script_tag(&tag_header),
+                    flavors::TagType::Script => {
+                        trace!(self.logger, "Found sript tag");
+
+                        self.handle_script_tag(&tag_header)
+                    }
                     flavors::TagType::Audio => {
+                        trace!(self.logger, "Found audio tag");
+
                         let data_header = match flavors::audio_data_header(&data[15..]) {
                             IResult::Error(_) |
                             IResult::Incomplete(_) => {
@@ -706,6 +746,8 @@ impl FlvDemux {
                         self.handle_audio_tag(&tag_header, &data_header)
                     }
                     flavors::TagType::Video => {
+                        trace!(self.logger, "Found video tag");
+
                         let data_header = match flavors::video_data_header(&data[15..]) {
                             IResult::Error(_) |
                             IResult::Incomplete(_) => {
