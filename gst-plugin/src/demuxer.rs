@@ -27,9 +27,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::u32;
 use std::u64;
 
+use slog::*;
+
 use utils::*;
 use error::*;
 use buffer::*;
+use log::*;
 use plugin::Plugin;
 
 pub type StreamIndex = u32;
@@ -92,6 +95,7 @@ impl Stream {
 
 pub struct DemuxerWrapper {
     raw: *mut c_void,
+    logger: Logger,
     demuxer: Mutex<Box<Demuxer>>,
     panicked: AtomicBool,
 }
@@ -100,6 +104,11 @@ impl DemuxerWrapper {
     fn new(raw: *mut c_void, demuxer: Box<Demuxer>) -> DemuxerWrapper {
         DemuxerWrapper {
             raw: raw,
+            logger: Logger::root(GstDebugDrain::new(Some(unsafe { &Element::new(raw) }),
+                                                    "rsdemux",
+                                                    0,
+                                                    "Rust demuxer base class"),
+                                 None),
             demuxer: Mutex::new(demuxer),
             panicked: AtomicBool::new(false),
         }
@@ -108,6 +117,11 @@ impl DemuxerWrapper {
     fn start(&self, upstream_size: u64, random_access: bool) -> bool {
         let demuxer = &mut self.demuxer.lock().unwrap();
 
+        debug!(self.logger,
+               "Starting with upstream size {} and random access {}",
+               upstream_size,
+               random_access);
+
         let upstream_size = if upstream_size == u64::MAX {
             None
         } else {
@@ -115,8 +129,12 @@ impl DemuxerWrapper {
         };
 
         match demuxer.start(upstream_size, random_access) {
-            Ok(..) => true,
+            Ok(..) => {
+                trace!(self.logger, "Successfully started");
+                true
+            }
             Err(ref msg) => {
+                error!(self.logger, "Failed to start: {:?}", msg);
                 self.post_message(msg);
                 false
             }
@@ -126,9 +144,15 @@ impl DemuxerWrapper {
     fn stop(&self) -> bool {
         let demuxer = &mut self.demuxer.lock().unwrap();
 
+        debug!(self.logger, "Stopping");
+
         match demuxer.stop() {
-            Ok(..) => true,
+            Ok(..) => {
+                trace!(self.logger, "Successfully stop");
+                true
+            }
             Err(ref msg) => {
+                error!(self.logger, "Failed to stop: {:?}", msg);
                 self.post_message(msg);
                 false
             }
@@ -138,7 +162,10 @@ impl DemuxerWrapper {
     fn is_seekable(&self) -> bool {
         let demuxer = &self.demuxer.lock().unwrap();
 
-        demuxer.is_seekable()
+        let seekable = demuxer.is_seekable();
+        debug!(self.logger, "Seekable {}", seekable);
+
+        seekable
     }
 
 
@@ -147,10 +174,12 @@ impl DemuxerWrapper {
 
         match demuxer.get_position() {
             None => {
+                trace!(self.logger, "Got no position");
                 *position = u64::MAX;
                 GBoolean::False
             }
             Some(pos) => {
+                trace!(self.logger, "Returning position {}", pos);
                 *position = pos;
                 GBoolean::True
             }
@@ -158,16 +187,18 @@ impl DemuxerWrapper {
 
     }
 
-    fn get_duration(&self, position: &mut u64) -> GBoolean {
+    fn get_duration(&self, duration: &mut u64) -> GBoolean {
         let demuxer = &self.demuxer.lock().unwrap();
 
         match demuxer.get_duration() {
             None => {
-                *position = u64::MAX;
+                trace!(self.logger, "Got no duration");
+                *duration = u64::MAX;
                 GBoolean::False
             }
-            Some(pos) => {
-                *position = pos;
+            Some(dur) => {
+                trace!(self.logger, "Returning duration {}", dur);
+                *duration = dur;
                 GBoolean::True
             }
         }
@@ -180,12 +211,15 @@ impl DemuxerWrapper {
 
         let stop = if stop == u64::MAX { None } else { Some(stop) };
 
+        debug!(self.logger, "Seeking to {:?}-{:?}", start, stop);
+
         let res = {
             let mut demuxer = &mut self.demuxer.lock().unwrap();
 
             match demuxer.seek(start, stop) {
                 Ok(res) => res,
                 Err(ref msg) => {
+                    error!(self.logger, "Failed to seek: {:?}", msg);
                     self.post_message(msg);
                     return false;
                 }
@@ -193,12 +227,17 @@ impl DemuxerWrapper {
         };
 
         match res {
-            SeekResult::TooEarly => false,
+            SeekResult::TooEarly => {
+                debug!(self.logger, "Seeked too early");
+                false
+            }
             SeekResult::Ok(off) => {
+                trace!(self.logger, "Seeked successfully");
                 *offset = off;
                 true
             }
             SeekResult::Eos => {
+                debug!(self.logger, "Seeked after EOS");
                 *offset = u64::MAX;
 
                 unsafe {
@@ -231,9 +270,12 @@ impl DemuxerWrapper {
         let mut res = {
             let mut demuxer = &mut self.demuxer.lock().unwrap();
 
+            trace!(self.logger, "Handling buffer {:?}", buffer);
+
             match demuxer.handle_buffer(Some(buffer)) {
                 Ok(res) => res,
                 Err(flow_error) => {
+                    error!(self.logger, "Failed handling buffer: {:?}", flow_error);
                     match flow_error {
                         FlowError::NotNegotiated(ref msg) |
                         FlowError::Error(ref msg) => self.post_message(msg),
@@ -246,6 +288,8 @@ impl DemuxerWrapper {
 
         // Loop until AllEos, NeedMoreData or error when pushing downstream
         loop {
+            trace!(self.logger, "Handled {:?}", res);
+
             match res {
                 HandleBufferResult::NeedMoreData => {
                     return GstFlowReturn::Ok;
@@ -306,11 +350,14 @@ impl DemuxerWrapper {
                 }
             };
 
+            trace!(self.logger, "Calling again");
+
             res = {
                 let mut demuxer = &mut self.demuxer.lock().unwrap();
                 match demuxer.handle_buffer(None) {
                     Ok(res) => res,
                     Err(flow_error) => {
+                        error!(self.logger, "Failed calling again: {:?}", flow_error);
                         match flow_error {
                             FlowError::NotNegotiated(ref msg) |
                             FlowError::Error(ref msg) => self.post_message(msg),
@@ -326,9 +373,11 @@ impl DemuxerWrapper {
     fn end_of_stream(&self) {
         let mut demuxer = &mut self.demuxer.lock().unwrap();
 
+        debug!(self.logger, "End of stream");
         match demuxer.end_of_stream() {
             Ok(_) => (),
             Err(ref msg) => {
+                error!(self.logger, "Failed end of stream: {:?}", msg);
                 self.post_message(msg);
             }
         }

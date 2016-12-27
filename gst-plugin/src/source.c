@@ -128,6 +128,8 @@ gst_rs_src_init (GstRsSrc * src, GstRsSrcClass * klass)
 
   gst_base_src_set_blocksize (GST_BASE_SRC (src), 4096);
 
+  GST_DEBUG_OBJECT (src, "Instantiating");
+
   src->instance = source_new (src, data->create_instance);
 }
 
@@ -135,6 +137,8 @@ static void
 gst_rs_src_finalize (GObject * object)
 {
   GstRsSrc *src = GST_RS_SRC (object);
+
+  GST_DEBUG_OBJECT (src, "Finalizing");
 
   source_drop (src->instance);
 
@@ -182,16 +186,28 @@ gst_rs_src_fill (GstBaseSrc * basesrc, guint64 offset, guint length,
     GstBuffer * buf)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
+  GstFlowReturn ret;
 
-  return source_fill (src->instance, offset, length, buf);
+  GST_TRACE_OBJECT (src,
+      "Filling buffer %p, offset %" G_GUINT64_FORMAT " and length %"
+      G_GUINT64_FORMAT, *buf, offset, length);
+
+  ret = source_fill (src->instance, offset, length, buf);
+
+  GST_TRACE_OBJECT (src, "Filled buffer: %s", gst_flow_get_name (ret));
+
+  return ret;
 }
 
 static gboolean
 gst_rs_src_is_seekable (GstBaseSrc * basesrc)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
+  gboolean res;
 
-  return source_is_seekable (src->instance);
+  res = source_is_seekable (src->instance);
+
+  GST_DEBUG_OBJECT (src, "Returning seekable %d", res);
 }
 
 static gboolean
@@ -200,6 +216,8 @@ gst_rs_src_get_size (GstBaseSrc * basesrc, guint64 * size)
   GstRsSrc *src = GST_RS_SRC (basesrc);
 
   *size = source_get_size (src->instance);
+
+  GST_DEBUG_OBJECT (src, "Returning size %" G_GUINT64_FORMAT, *size);
 
   return TRUE;
 }
@@ -210,6 +228,8 @@ gst_rs_src_start (GstBaseSrc * basesrc)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
 
+  GST_DEBUG_OBJECT (src, "Starting");
+
   return source_start (src->instance);
 }
 
@@ -217,6 +237,8 @@ static gboolean
 gst_rs_src_stop (GstBaseSrc * basesrc)
 {
   GstRsSrc *src = GST_RS_SRC (basesrc);
+
+  GST_DEBUG_OBJECT (src, "Stopping");
 
   /* Ignore stop failures */
   source_stop (src->instance);
@@ -230,9 +252,14 @@ gst_rs_src_do_seek (GstBaseSrc * basesrc, GstSegment * segment)
   GstRsSrc *src = GST_RS_SRC (basesrc);
   gboolean ret;
 
+  GST_DEBUG_OBJECT (src, "Seeking to %" GST_TIME_FORMAT "-%" GST_TIME_FORMAT,
+      GST_TIME_ARGS (segment->start), GST_TIME_ARGS (segment->stop));
+
   ret = source_seek (src->instance, segment->start, segment->stop);
-  if (!ret)
+  if (!ret) {
+    GST_DEBUG_OBJECT (src, "Failed to seek");
     return FALSE;
+  }
 
   return GST_BASE_SRC_CLASS (parent_class)->do_seek (basesrc, segment);
 }
@@ -256,8 +283,13 @@ static gchar *
 gst_rs_src_uri_get_uri (GstURIHandler * handler)
 {
   GstRsSrc *src = GST_RS_SRC (handler);
+  gchar *res;
 
-  return source_get_uri (src->instance);
+  res = source_get_uri (src->instance);
+
+  GST_DEBUG_OBJECT (src, "Returning URI %s", res);
+
+  return res;
 }
 
 static gboolean
@@ -266,8 +298,12 @@ gst_rs_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 {
   GstRsSrc *src = GST_RS_SRC (handler);
 
-  if (!source_set_uri (src->instance, uri, err))
+  GST_DEBUG_OBJECT (src, "Setting URI %s", uri);
+
+  if (!source_set_uri (src->instance, uri, err)) {
+    GST_ERROR_OBJECT (src, "Failed to set URI: %s", (*err)->message);
     return FALSE;
+  }
 
   return TRUE;
 }
@@ -287,7 +323,8 @@ static gpointer
 gst_rs_source_init_class (gpointer data)
 {
   sources = g_hash_table_new (g_direct_hash, g_direct_equal);
-  GST_DEBUG_CATEGORY_INIT (gst_rs_src_debug, "rssrc", 0, "rssrc element");
+  GST_DEBUG_CATEGORY_INIT (gst_rs_src_debug, "rssrc", 0,
+      "Rust source base class");
 
   parent_class = g_type_class_ref (GST_TYPE_BASE_SRC);
 
@@ -322,6 +359,15 @@ gst_rs_source_register (GstPlugin * plugin, const gchar * name,
   ElementData *data;
 
   g_once (&gonce, gst_rs_source_init_class, NULL);
+
+  GST_DEBUG ("Registering for %" GST_PTR_FORMAT ": %s", plugin, name);
+  GST_DEBUG ("  long name: %s", long_name);
+  GST_DEBUG ("  description: %s", description);
+  GST_DEBUG ("  classification: %s", classification);
+  GST_DEBUG ("  author: %s", author);
+  GST_DEBUG ("  rank: %d", rank);
+  GST_DEBUG ("  protocols: %s", protocols);
+  GST_DEBUG ("  push only: %d", push_only);
 
   data = g_new0 (ElementData, 1);
   data->long_name = g_strdup (long_name);

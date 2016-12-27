@@ -581,7 +581,7 @@ impl Drop for Buffer {
             fn gst_mini_object_unref(obj: *mut c_void);
         }
 
-        if self.owned {
+        if self.owned && !self.raw.is_null() {
             unsafe { gst_mini_object_unref(self.raw) }
         }
     }
@@ -673,8 +673,10 @@ impl Drop for ReadMappedBuffer {
             fn gst_buffer_unmap(buffer: *mut c_void, map: *mut GstMapInfo);
         };
 
-        unsafe {
-            gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+        if !self.buffer.raw.is_null() {
+            unsafe {
+                gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+            }
         }
     }
 }
@@ -706,8 +708,10 @@ impl Drop for ReadWriteMappedBuffer {
             fn gst_buffer_unmap(buffer: *mut c_void, map: *mut GstMapInfo);
         };
 
-        unsafe {
-            gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+        if !self.buffer.raw.is_null() {
+            unsafe {
+                gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+            }
         }
     }
 }

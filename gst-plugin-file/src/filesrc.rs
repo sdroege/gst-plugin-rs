@@ -92,16 +92,22 @@ impl Source for FileSrc {
 
         let location = try!(uri.to_file_path()
             .or_else(|_| {
+                error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
                 Err(error_msg!(SourceError::Failure,
                                ["Unsupported file URI '{}'", uri.as_str()]))
             }));
 
         let file = try!(File::open(location.as_path()).or_else(|err| {
+            error!(self.logger,
+                   "Could not open file for reading: {}",
+                   err.to_string());
             Err(error_msg!(SourceError::OpenFailed,
                            ["Could not open file for reading '{}': {}",
                             location.to_str().unwrap_or("Non-UTF8 path"),
                             err.to_string()]))
         }));
+
+        debug!(self.logger, "Opened file {:?}", file);
 
         self.streaming_state = StreamingState::Started {
             file: file,
@@ -118,6 +124,9 @@ impl Source for FileSrc {
     }
 
     fn fill(&mut self, offset: u64, _: u32, buffer: &mut Buffer) -> Result<(), FlowError> {
+        // FIXME: Because we borrow streaming state mutably below
+        let logger = self.logger.clone();
+
         let (file, position) = match self.streaming_state {
             StreamingState::Started { ref mut file, ref mut position } => (file, position),
             StreamingState::Stopped => {
@@ -127,6 +136,7 @@ impl Source for FileSrc {
 
         if *position != offset {
             try!(file.seek(SeekFrom::Start(offset)).or_else(|err| {
+                error!(logger, "Failed to seek to {}: {:?}", offset, err);
                 Err(FlowError::Error(error_msg!(SourceError::SeekFailed,
                                                 ["Failed to seek to {}: {}",
                                                  offset,
@@ -147,6 +157,7 @@ impl Source for FileSrc {
             let data = map.as_mut_slice();
 
             try!(file.read(data).or_else(|err| {
+                error!(logger, "Failed to read: {:?}", err);
                 Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
                                                 ["Failed to read at {}: {}",
                                                  offset,

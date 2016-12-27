@@ -28,10 +28,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use url::Url;
 
+use slog::*;
+
 use plugin::Plugin;
 use utils::*;
 use error::*;
 use buffer::*;
+use log::*;
 
 #[derive(Debug)]
 pub enum SourceError {
@@ -56,6 +59,7 @@ impl ToGError for SourceError {
 
 pub struct SourceWrapper {
     raw: *mut c_void,
+    logger: Logger,
     uri: Mutex<(Option<Url>, bool)>,
     uri_validator: Box<UriValidator>,
     source: Mutex<Box<Source>>,
@@ -78,6 +82,11 @@ impl SourceWrapper {
     fn new(raw: *mut c_void, source: Box<Source>) -> SourceWrapper {
         SourceWrapper {
             raw: raw,
+            logger: Logger::root(GstDebugDrain::new(Some(unsafe { &Element::new(raw) }),
+                                                    "rssrc",
+                                                    0,
+                                                    "Rust source base class"),
+                                 None),
             uri: Mutex::new((None, false)),
             uri_validator: source.uri_validator(),
             source: Mutex::new(source),
@@ -87,6 +96,8 @@ impl SourceWrapper {
 
     fn set_uri(&self, uri_str: Option<&str>) -> Result<(), UriError> {
         let uri_storage = &mut self.uri.lock().unwrap();
+
+        debug!(self.logger, "Setting URI {:?}", uri_str);
 
         if uri_storage.1 {
             return Err(UriError::new(UriErrorKind::BadState, Some("Already started".to_string())));
@@ -127,6 +138,8 @@ impl SourceWrapper {
     }
 
     fn start(&self) -> bool {
+        debug!(self.logger, "Starting");
+
         // Don't keep the URI locked while we call start later
         let uri = match *self.uri.lock().unwrap() {
             (Some(ref uri), ref mut started) => {
@@ -134,6 +147,7 @@ impl SourceWrapper {
                 uri.clone()
             }
             (None, _) => {
+                error!(self.logger, "No URI given");
                 self.post_message(&error_msg!(SourceError::OpenFailed, ["No URI given"]));
                 return false;
             }
@@ -141,8 +155,13 @@ impl SourceWrapper {
 
         let source = &mut self.source.lock().unwrap();
         match source.start(uri) {
-            Ok(..) => true,
+            Ok(..) => {
+                trace!(self.logger, "Started successfully");
+                true
+            }
             Err(ref msg) => {
+                error!(self.logger, "Failed to start: {:?}", msg);
+
                 self.uri.lock().unwrap().1 = false;
                 self.post_message(msg);
                 false
@@ -153,12 +172,17 @@ impl SourceWrapper {
     fn stop(&self) -> bool {
         let source = &mut self.source.lock().unwrap();
 
+        debug!(self.logger, "Stopping");
+
         match source.stop() {
             Ok(..) => {
+                trace!(self.logger, "Stopped successfully");
                 self.uri.lock().unwrap().1 = false;
                 true
             }
             Err(ref msg) => {
+                error!(self.logger, "Failed to stop: {:?}", msg);
+
                 self.post_message(msg);
                 false
             }
@@ -167,9 +191,17 @@ impl SourceWrapper {
 
     fn fill(&self, offset: u64, length: u32, buffer: &mut Buffer) -> GstFlowReturn {
         let source = &mut self.source.lock().unwrap();
+
+        trace!(self.logger,
+               "Filling buffer {:?} with offset {} and length {}",
+               buffer,
+               offset,
+               length);
+
         match source.fill(offset, length, buffer) {
             Ok(()) => GstFlowReturn::Ok,
             Err(flow_error) => {
+                error!(self.logger, "Failed to fill: {:?}", flow_error);
                 match flow_error {
                     FlowError::NotNegotiated(ref msg) |
                     FlowError::Error(ref msg) => self.post_message(msg),
@@ -183,9 +215,12 @@ impl SourceWrapper {
     fn seek(&self, start: u64, stop: Option<u64>) -> bool {
         let source = &mut self.source.lock().unwrap();
 
+        debug!(self.logger, "Seeking to {:?}-{:?}", start, stop);
+
         match source.seek(start, stop) {
             Ok(..) => true,
             Err(ref msg) => {
+                error!(self.logger, "Failed to seek {:?}", msg);
                 self.post_message(msg);
                 false
             }
@@ -229,6 +264,7 @@ pub unsafe extern "C" fn source_set_uri(ptr: *const SourceWrapper,
 
         match wrap.set_uri(uri_str) {
             Err(err) => {
+                error!(wrap.logger, "Failed to set URI {:?}", err);
                 err.into_gerror(cerr);
                 GBoolean::False
             }

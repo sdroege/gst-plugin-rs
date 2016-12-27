@@ -119,6 +119,8 @@ gst_rs_sink_init (GstRsSink * sink, GstRsSinkClass * klass)
 
   gst_base_sink_set_sync (GST_BASE_SINK (sink), FALSE);
 
+  GST_DEBUG_OBJECT (sink, "Instantiating");
+
   sink->instance = sink_new (sink, data->create_instance);
 }
 
@@ -126,6 +128,8 @@ static void
 gst_rs_sink_finalize (GObject * object)
 {
   GstRsSink *sink = GST_RS_SINK (object);
+
+  GST_DEBUG_OBJECT (sink, "Finalizing");
 
   sink_drop (sink->instance);
 
@@ -174,7 +178,11 @@ gst_rs_sink_render (GstBaseSink * basesink, GstBuffer * buffer)
   GstRsSink *sink = GST_RS_SINK (basesink);
   GstFlowReturn ret;
 
+  GST_TRACE_OBJECT (sink, "Rendering buffer %p", buffer);
+
   ret = sink_render (sink->instance, buffer);
+
+  GST_TRACE_OBJECT (sink, "Rendered buffer: %s", gst_flow_get_name (ret));
 
   return ret;
 }
@@ -185,6 +193,8 @@ gst_rs_sink_start (GstBaseSink * basesink)
 {
   GstRsSink *sink = GST_RS_SINK (basesink);
 
+  GST_DEBUG_OBJECT (sink, "Starting");
+
   return sink_start (sink->instance);
 }
 
@@ -193,6 +203,8 @@ static gboolean
 gst_rs_sink_stop (GstBaseSink * basesink)
 {
   GstRsSink *sink = GST_RS_SINK (basesink);
+
+  GST_DEBUG_OBJECT (sink, "Stopping");
 
   /* Ignore stop failures */
   sink_stop (sink->instance);
@@ -219,8 +231,13 @@ static gchar *
 gst_rs_sink_uri_get_uri (GstURIHandler * handler)
 {
   GstRsSink *sink = GST_RS_SINK (handler);
+  gchar *res;
 
-  return sink_get_uri (sink->instance);
+  res = sink_get_uri (sink->instance);
+
+  GST_DEBUG_OBJECT (sink, "Returning URI %s", res);
+
+  return res;
 }
 
 static gboolean
@@ -229,8 +246,12 @@ gst_rs_sink_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 {
   GstRsSink *sink = GST_RS_SINK (handler);
 
-  if (!sink_set_uri (sink->instance, uri, err))
+  GST_DEBUG_OBJECT (sink, "Setting URI %s", uri);
+
+  if (!sink_set_uri (sink->instance, uri, err)) {
+    GST_ERROR_OBJECT (sink, "Failed to set URI: %s", (*err)->message);
     return FALSE;
+  }
 
   return TRUE;
 }
@@ -250,7 +271,8 @@ static gpointer
 gst_rs_sink_init_class (gpointer data)
 {
   sinks = g_hash_table_new (g_direct_hash, g_direct_equal);
-  GST_DEBUG_CATEGORY_INIT (gst_rs_sink_debug, "rssink", 0, "rssink element");
+  GST_DEBUG_CATEGORY_INIT (gst_rs_sink_debug, "rssink", 0,
+      "Rust sink base class");
 
   parent_class = g_type_class_ref (GST_TYPE_BASE_SINK);
 }
@@ -283,6 +305,14 @@ gst_rs_sink_register (GstPlugin * plugin, const gchar * name,
   ElementData *data;
 
   g_once (&gonce, gst_rs_sink_init_class, NULL);
+
+  GST_DEBUG ("Registering for %" GST_PTR_FORMAT ": %s", plugin, name);
+  GST_DEBUG ("  long name: %s", long_name);
+  GST_DEBUG ("  description: %s", description);
+  GST_DEBUG ("  classification: %s", classification);
+  GST_DEBUG ("  author: %s", author);
+  GST_DEBUG ("  rank: %d", rank);
+  GST_DEBUG ("  protocols: %s", protocols);
 
   data = g_new0 (ElementData, 1);
   data->name = g_strdup (name);

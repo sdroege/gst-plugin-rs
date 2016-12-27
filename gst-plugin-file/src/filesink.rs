@@ -80,17 +80,23 @@ impl Sink for FileSink {
 
         let location = try!(uri.to_file_path()
             .or_else(|_| {
+                error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
                 Err(error_msg!(SinkError::Failure,
                                ["Unsupported file URI '{}'", uri.as_str()]))
             }));
 
 
         let file = try!(File::create(location.as_path()).or_else(|err| {
+            error!(self.logger,
+                   "Could not open file for writing: {}",
+                   err.to_string());
             Err(error_msg!(SinkError::OpenFailed,
                            ["Could not open file for writing '{}': {}",
                             location.to_str().unwrap_or("Non-UTF8 path"),
                             err.to_string()]))
         }));
+
+        debug!(self.logger, "Opened file {:?}", file);
 
         self.streaming_state = StreamingState::Started {
             file: file,
@@ -107,6 +113,11 @@ impl Sink for FileSink {
     }
 
     fn render(&mut self, buffer: &Buffer) -> Result<(), FlowError> {
+        // FIXME: Because we borrow streaming state mutably below
+        let logger = self.logger.clone();
+
+        trace!(logger, "Rendering {:?}", buffer);
+
         let (file, position) = match self.streaming_state {
             StreamingState::Started { ref mut file, ref mut position } => (file, position),
             StreamingState::Stopped => {
@@ -124,6 +135,7 @@ impl Sink for FileSink {
         let data = map.as_slice();
 
         try!(file.write_all(data).or_else(|err| {
+            error!(logger, "Failed to write: {}", err);
             Err(FlowError::Error(error_msg!(SinkError::WriteFailed, ["Failed to write: {}", err])))
         }));
 

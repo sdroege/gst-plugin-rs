@@ -28,9 +28,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use url::Url;
 
+use slog::*;
+
 use utils::*;
 use error::*;
 use buffer::*;
+use log::*;
 use plugin::Plugin;
 
 #[derive(Debug)]
@@ -56,6 +59,7 @@ impl ToGError for SinkError {
 
 pub struct SinkWrapper {
     raw: *mut c_void,
+    logger: Logger,
     uri: Mutex<(Option<Url>, bool)>,
     uri_validator: Box<UriValidator>,
     sink: Mutex<Box<Sink>>,
@@ -75,6 +79,11 @@ impl SinkWrapper {
     fn new(raw: *mut c_void, sink: Box<Sink>) -> SinkWrapper {
         SinkWrapper {
             raw: raw,
+            logger: Logger::root(GstDebugDrain::new(Some(unsafe { &Element::new(raw) }),
+                                                    "rssink",
+                                                    0,
+                                                    "Rust sink base class"),
+                                 None),
             uri: Mutex::new((None, false)),
             uri_validator: sink.uri_validator(),
             sink: Mutex::new(sink),
@@ -84,6 +93,8 @@ impl SinkWrapper {
 
     fn set_uri(&self, uri_str: Option<&str>) -> Result<(), UriError> {
         let uri_storage = &mut self.uri.lock().unwrap();
+
+        debug!(self.logger, "Setting URI {:?}", uri_str);
 
         if uri_storage.1 {
             return Err(UriError::new(UriErrorKind::BadState, Some("Already started".to_string())));
@@ -114,6 +125,8 @@ impl SinkWrapper {
     }
 
     fn start(&self) -> bool {
+        debug!(self.logger, "Starting");
+
         // Don't keep the URI locked while we call start later
         let uri = match *self.uri.lock().unwrap() {
             (Some(ref uri), ref mut started) => {
@@ -121,6 +134,7 @@ impl SinkWrapper {
                 uri.clone()
             }
             (None, _) => {
+                error!(self.logger, "No URI given");
                 self.post_message(&error_msg!(SinkError::OpenFailed, ["No URI given"]));
                 return false;
             }
@@ -128,8 +142,13 @@ impl SinkWrapper {
 
         let sink = &mut self.sink.lock().unwrap();
         match sink.start(uri) {
-            Ok(..) => true,
+            Ok(..) => {
+                trace!(self.logger, "Started successfully");
+                true
+            }
             Err(ref msg) => {
+                error!(self.logger, "Failed to start: {:?}", msg);
+
                 self.uri.lock().unwrap().1 = false;
                 self.post_message(msg);
                 false
@@ -140,12 +159,17 @@ impl SinkWrapper {
     fn stop(&self) -> bool {
         let sink = &mut self.sink.lock().unwrap();
 
+        debug!(self.logger, "Stopping");
+
         match sink.stop() {
             Ok(..) => {
+                trace!(self.logger, "Stopped successfully");
                 self.uri.lock().unwrap().1 = false;
                 true
             }
             Err(ref msg) => {
+                error!(self.logger, "Failed to stop: {:?}", msg);
+
                 self.post_message(msg);
                 false
             }
@@ -155,9 +179,12 @@ impl SinkWrapper {
     fn render(&self, buffer: &Buffer) -> GstFlowReturn {
         let sink = &mut self.sink.lock().unwrap();
 
+        trace!(self.logger, "Rendering buffer {:?}", buffer);
+
         match sink.render(buffer) {
             Ok(..) => GstFlowReturn::Ok,
             Err(flow_error) => {
+                error!(self.logger, "Failed to render: {:?}", flow_error);
                 match flow_error {
                     FlowError::NotNegotiated(ref msg) |
                     FlowError::Error(ref msg) => self.post_message(msg),
@@ -204,6 +231,7 @@ pub unsafe extern "C" fn sink_set_uri(ptr: *const SinkWrapper,
 
         match wrap.set_uri(uri_str) {
             Err(err) => {
+                error!(wrap.logger, "Failed to set URI {:?}", err);
                 err.into_gerror(cerr);
                 GBoolean::False
             }

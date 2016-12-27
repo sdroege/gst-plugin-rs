@@ -132,6 +132,8 @@ gst_rs_demuxer_init (GstRsDemuxer * demuxer, GstRsDemuxerClass * klass)
   gst_element_add_pad (GST_ELEMENT (demuxer), demuxer->sinkpad);
 
   demuxer->flow_combiner = gst_flow_combiner_new ();
+
+  GST_DEBUG_OBJECT (demuxer, "Instantiating");
 }
 
 static void
@@ -139,6 +141,7 @@ gst_rs_demuxer_finalize (GObject * object)
 {
   GstRsDemuxer *demuxer = GST_RS_DEMUXER (object);
 
+  GST_DEBUG_OBJECT (demuxer, "Finalizing");
   gst_flow_combiner_free (demuxer->flow_combiner);
   demuxer_drop (demuxer->instance);
 
@@ -158,8 +161,12 @@ gst_rs_demuxer_sink_activate (GstPad * pad, GstObject * parent)
     return FALSE;
   }
   // TODO
-  //if (gst_query_has_scheduling_mode_with_flags (query, GST_PAD_MODE_PULL, GST_SCHEDULING_FLAG_SEEKABLE))
+  //if (gst_query_has_scheduling_mode_with_flags (query, GST_PAD_MODE_PULL, GST_SCHEDULING_FLAG_SEEKABLE)) {
+  //  GST_DEBUG_OBJECT (demuxer, "Activating in PULL mode");
   //  mode = GST_PAD_MODE_PULL;
+  //} else {
+  //GST_DEBUG_OBJECT (demuxer, "Activating in PUSH mode");
+  //}
   gst_query_unref (query);
 
   demuxer->upstream_size = -1;
@@ -179,7 +186,11 @@ gst_rs_demuxer_sink_activate_mode (GstPad * pad,
   GstRsDemuxer *demuxer = GST_RS_DEMUXER (parent);
   gboolean res = TRUE;
 
+  GST_DEBUG_OBJECT (demuxer, "%s pad in %s mode",
+      (active ? "Activating" : "Deactivating"), gst_pad_mode_get_name (mode));
+
   if (active) {
+    GST_DEBUG_OBJECT (demuxer, "Starting");
     if (!demuxer_start (demuxer->instance, demuxer->upstream_size,
             mode == GST_PAD_MODE_PULL ? TRUE : FALSE)) {
       res = FALSE;
@@ -202,8 +213,16 @@ static GstFlowReturn
 gst_rs_demuxer_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 {
   GstRsDemuxer *demuxer = GST_RS_DEMUXER (parent);
+  GstFlowReturn res;
 
-  return demuxer_handle_buffer (demuxer->instance, buf);
+  GST_TRACE_OBJECT (demuxer, "Handling buffer %p", buf);
+
+  res = demuxer_handle_buffer (demuxer->instance, buf);
+
+  GST_TRACE_OBJECT (demuxer, "Handling buffer returned %s",
+      gst_flow_get_name (res));
+
+  return res;
 }
 
 static gboolean
@@ -220,6 +239,7 @@ gst_rs_demuxer_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
       break;
     }
     case GST_EVENT_EOS:
+      GST_DEBUG_OBJECT (demuxer, "Got EOS");
       demuxer_end_of_stream (demuxer->instance);
       res = gst_pad_event_default (pad, parent, event);
       break;
@@ -245,6 +265,8 @@ gst_rs_demuxer_src_query (GstPad * pad, GstObject * parent, GstQuery * query)
         gint64 position;
 
         if (demuxer_get_position (demuxer->instance, &position)) {
+          GST_DEBUG_OBJECT (demuxer, "Returning position %" GST_TIME_FORMAT,
+              GST_TIME_ARGS (position));
           gst_query_set_position (query, format, position);
           res = TRUE;
         } else {
@@ -261,6 +283,8 @@ gst_rs_demuxer_src_query (GstPad * pad, GstObject * parent, GstQuery * query)
         gint64 duration;
 
         if (demuxer_get_duration (demuxer->instance, &duration)) {
+          GST_DEBUG_OBJECT (demuxer, "Returning duration %" GST_TIME_FORMAT,
+              GST_TIME_ARGS (duration));
           gst_query_set_duration (query, format, duration);
           res = TRUE;
         } else {
@@ -302,6 +326,10 @@ gst_rs_demuxer_change_state (GstElement * element, GstStateChange transition)
   GstRsDemuxer *demuxer = GST_RS_DEMUXER (element);
   GstStateChangeReturn result;
 
+  GST_DEBUG_OBJECT (demuxer, "Change state %s to %s",
+      gst_element_state_get_name (GST_STATE_TRANSITION_CURRENT (transition)),
+      gst_element_state_get_name (GST_STATE_TRANSITION_NEXT (transition)));
+
   switch (transition) {
     case GST_STATE_CHANGE_READY_TO_PAUSED:
       demuxer->offset = 0;
@@ -325,6 +353,7 @@ gst_rs_demuxer_change_state (GstElement * element, GstStateChange transition)
       guint i;
 
       /* Ignore stop failures */
+      GST_DEBUG_OBJECT (demuxer, "Stopping");
       demuxer_stop (demuxer->instance);
 
       gst_flow_combiner_clear (demuxer->flow_combiner);
@@ -362,6 +391,9 @@ gst_rs_demuxer_add_stream (GstRsDemuxer * demuxer, guint32 index,
 
   g_assert (demuxer->srcpads[index] == NULL);
 
+  GST_DEBUG_OBJECT (demuxer, "Adding stream %u with format %s and stream id %s",
+      index, format, stream_id);
+
   templ =
       gst_element_class_get_pad_template (GST_ELEMENT_GET_CLASS (demuxer),
       "src_%u");
@@ -398,6 +430,8 @@ gst_rs_demuxer_add_stream (GstRsDemuxer * demuxer, guint32 index,
 void
 gst_rs_demuxer_added_all_streams (GstRsDemuxer * demuxer)
 {
+  GST_DEBUG_OBJECT (demuxer, "No more pads");
+
   gst_element_no_more_pads (GST_ELEMENT (demuxer));
   demuxer->group_id = gst_util_group_id_next ();
 }
@@ -410,6 +444,8 @@ gst_rs_demuxer_stream_format_changed (GstRsDemuxer * demuxer, guint32 index,
   GstEvent *event;
 
   g_assert (demuxer->srcpads[index] != NULL);
+
+  GST_DEBUG_OBJECT (demuxer, "Format changed for stream %u: %s", index, format);
 
   caps = gst_caps_from_string (format);
   event = gst_event_new_caps (caps);
@@ -425,6 +461,8 @@ gst_rs_demuxer_stream_eos (GstRsDemuxer * demuxer, guint32 index)
   GstEvent *event;
 
   g_assert (index == -1 || demuxer->srcpads[index] != NULL);
+
+  GST_DEBUG_OBJECT (demuxer, "EOS for stream %u", index);
 
   event = gst_event_new_eos ();
   if (index == -1) {
@@ -450,8 +488,12 @@ gst_rs_demuxer_stream_push_buffer (GstRsDemuxer * demuxer, guint32 index,
 
   g_assert (demuxer->srcpads[index] != NULL);
 
+  GST_DEBUG_OBJECT (demuxer, "Pushing buffer %p for pad %u", buffer, index);
   res = gst_pad_push (demuxer->srcpads[index], buffer);
+  GST_DEBUG_OBJECT (demuxer, "Pushed buffer returned: %s",
+      gst_flow_get_name (res));
   res = gst_flow_combiner_update_flow (demuxer->flow_combiner, res);
+  GST_DEBUG_OBJECT (demuxer, "Combined return: %s", gst_flow_get_name (res));
 
   return res;
 }
@@ -461,6 +503,7 @@ gst_rs_demuxer_remove_all_streams (GstRsDemuxer * demuxer)
 {
   guint i;
 
+  GST_DEBUG_OBJECT (demuxer, "Removing all streams");
   gst_flow_combiner_clear (demuxer->flow_combiner);
 
   for (i = 0; i < G_N_ELEMENTS (demuxer->srcpads); i++) {
@@ -475,7 +518,7 @@ gst_rs_demuxer_init_class (gpointer data)
 {
   demuxers = g_hash_table_new (g_direct_hash, g_direct_equal);
   GST_DEBUG_CATEGORY_INIT (gst_rs_demuxer_debug, "rsdemux", 0,
-      "rsdemux element");
+      "Rust demuxer base class");
 
   parent_class = g_type_class_ref (GST_TYPE_ELEMENT);
 }
@@ -504,6 +547,15 @@ gst_rs_demuxer_register (GstPlugin * plugin, const gchar * name,
   ElementData *data;
 
   g_once (&gonce, gst_rs_demuxer_init_class, NULL);
+
+  GST_DEBUG ("Registering for %" GST_PTR_FORMAT ": %s", plugin, name);
+  GST_DEBUG ("  long name: %s", long_name);
+  GST_DEBUG ("  description: %s", description);
+  GST_DEBUG ("  classification: %s", classification);
+  GST_DEBUG ("  author: %s", author);
+  GST_DEBUG ("  rank: %d", rank);
+  GST_DEBUG ("  input formats: %s", input_format);
+  GST_DEBUG ("  output formats: %s", output_formats);
 
   data = g_new0 (ElementData, 1);
   data->long_name = g_strdup (long_name);

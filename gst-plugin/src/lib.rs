@@ -22,6 +22,8 @@ extern crate url;
 extern crate bitflags;
 #[macro_use]
 extern crate slog;
+#[macro_use]
+extern crate lazy_static;
 
 #[macro_use]
 pub mod utils;

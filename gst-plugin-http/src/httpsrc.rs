@@ -83,12 +83,16 @@ impl HttpSrc {
             }
         }
 
+        debug!(self.logger, "Doing new request {:?}", req);
+
         let response = try!(req.send().or_else(|err| {
+            error!(self.logger, "Request failed: {:?}", err);
             Err(error_msg!(SourceError::ReadFailed,
                            ["Failed to fetch {}: {}", uri, err.to_string()]))
         }));
 
         if !response.status().is_success() {
+            error!(self.logger, "Request status failed: {:?}", response);
             return Err(error_msg!(SourceError::ReadFailed,
                                   ["Failed to fetch {}: {}", uri, response.status()]));
         }
@@ -118,6 +122,8 @@ impl HttpSrc {
             return Err(error_msg!(SourceError::SeekFailed,
                                   ["Failed to seek to {}: Got {}", start, position]));
         }
+
+        debug!(self.logger, "Request successful: {:?}", response);
 
         Ok(StreamingState::Started {
             uri: uri,
@@ -193,6 +199,8 @@ impl Source for HttpSrc {
     }
 
     fn fill(&mut self, offset: u64, _: u32, buffer: &mut Buffer) -> Result<(), FlowError> {
+        let logger = self.logger.clone();
+
         let (response, position) = match self.streaming_state {
             StreamingState::Started { ref mut response, ref mut position, .. } => {
                 (response, position)
@@ -221,6 +229,7 @@ impl Source for HttpSrc {
             let data = map.as_mut_slice();
 
             try!(response.read(data).or_else(|err| {
+                error!(logger, "Failed to read: {:?}", err);
                 Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
                                                 ["Failed to read at {}: {}",
                                                  offset,
