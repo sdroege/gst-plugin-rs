@@ -86,6 +86,22 @@ impl Caps {
         caps
     }
 
+    pub fn from_string(value: &str) -> Option<Self> {
+        extern "C" {
+            fn gst_caps_from_string(value: *const c_char) -> *mut c_void;
+        }
+
+        let value_cstr = CString::new(value).unwrap();
+
+        let caps_ptr = unsafe { gst_caps_from_string(value_cstr.as_ptr()) };
+
+        if caps_ptr.is_null() {
+            None
+        } else {
+            Some(Caps(caps_ptr))
+        }
+    }
+
     pub fn set_simple(&mut self, values: Vec<(&str, &Value)>) {
         extern "C" {
             fn gst_caps_set_value(caps: *mut c_void, name: *const c_char, value: *const GValue);
