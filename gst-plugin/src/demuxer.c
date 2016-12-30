@@ -28,8 +28,8 @@ typedef struct
   gchar *classification;
   gchar *author;
   void *create_instance;
-  gchar *input_format;
-  gchar *output_formats;
+  GstCaps *input_caps;
+  GstCaps *output_caps;
 } ElementData;
 static GHashTable *demuxers;
 
@@ -82,7 +82,6 @@ gst_rs_demuxer_class_init (GstRsDemuxerClass * klass)
   GstElementClass *gstelement_class;
   ElementData *data = g_hash_table_lookup (demuxers,
       GSIZE_TO_POINTER (G_TYPE_FROM_CLASS (klass)));
-  GstCaps *caps;
   GstPadTemplate *templ;
   g_assert (data != NULL);
 
@@ -96,16 +95,14 @@ gst_rs_demuxer_class_init (GstRsDemuxerClass * klass)
   gst_element_class_set_static_metadata (gstelement_class,
       data->long_name, data->classification, data->description, data->author);
 
-  caps = gst_caps_from_string (data->input_format);
-  templ = gst_pad_template_new ("sink", GST_PAD_SINK, GST_PAD_ALWAYS, caps);
-  gst_caps_unref (caps);
-
+  templ =
+      gst_pad_template_new ("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
+      data->input_caps);
   gst_element_class_add_pad_template (gstelement_class, templ);
 
-  caps = gst_caps_from_string (data->output_formats);
-  templ = gst_pad_template_new ("src_%u", GST_PAD_SRC, GST_PAD_SOMETIMES, caps);
-  gst_caps_unref (caps);
-
+  templ =
+      gst_pad_template_new ("src_%u", GST_PAD_SRC, GST_PAD_SOMETIMES,
+      data->output_caps);
   gst_element_class_add_pad_template (gstelement_class, templ);
 }
 
@@ -523,8 +520,7 @@ gboolean
 gst_rs_demuxer_register (GstPlugin * plugin, const gchar * name,
     const gchar * long_name, const gchar * description,
     const gchar * classification, const gchar * author, GstRank rank,
-    void *create_instance, const gchar * input_format,
-    const gchar * output_formats)
+    void *create_instance, GstCaps * input_caps, GstCaps * output_caps)
 {
   GOnce gonce = G_ONCE_INIT;
   GTypeInfo type_info = {
@@ -550,8 +546,8 @@ gst_rs_demuxer_register (GstPlugin * plugin, const gchar * name,
   GST_DEBUG ("  classification: %s", classification);
   GST_DEBUG ("  author: %s", author);
   GST_DEBUG ("  rank: %d", rank);
-  GST_DEBUG ("  input formats: %s", input_format);
-  GST_DEBUG ("  output formats: %s", output_formats);
+  GST_DEBUG ("  input caps: %" GST_PTR_FORMAT, input_caps);
+  GST_DEBUG ("  output caps: %" GST_PTR_FORMAT, output_caps);
 
   data = g_new0 (ElementData, 1);
   data->long_name = g_strdup (long_name);
@@ -559,8 +555,8 @@ gst_rs_demuxer_register (GstPlugin * plugin, const gchar * name,
   data->classification = g_strdup (classification);
   data->author = g_strdup (author);
   data->create_instance = create_instance;
-  data->input_format = g_strdup (input_format);
-  data->output_formats = g_strdup (output_formats);
+  data->input_caps = gst_caps_ref (input_caps);
+  data->output_caps = gst_caps_ref (output_caps);
 
   type_name = g_strconcat ("RsDemuxer-", name, NULL);
   type = g_type_register_static (GST_TYPE_ELEMENT, type_name, &type_info, 0);

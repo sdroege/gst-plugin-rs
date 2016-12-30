@@ -28,6 +28,7 @@ extern crate flavors;
 
 use gst_plugin::plugin::*;
 use gst_plugin::demuxer::*;
+use gst_plugin::caps::*;
 
 mod flvdemux;
 
@@ -43,8 +44,8 @@ fn plugin_init(plugin: &Plugin) -> bool {
                          author: "Sebastian Dröge <sebastian@centricular.com>",
                          rank: 256 + 100,
                          create_instance: FlvDemux::new_boxed,
-                         input_formats: "video/x-flv",
-                         output_formats: "ANY",
+                         input_caps: &Caps::new_simple("video/x-flv", vec![]),
+                         output_caps: &Caps::new_any(),
                      });
 
     true

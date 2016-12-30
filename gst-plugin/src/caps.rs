@@ -45,6 +45,26 @@ const TYPE_INT: usize = (6 << 2);
 const TYPE_STRING: usize = (16 << 2);
 
 impl Caps {
+    pub fn new_empty() -> Self {
+        extern "C" {
+            fn gst_caps_new_empty() -> *mut c_void;
+        }
+
+        let caps = Caps(unsafe { gst_caps_new_empty() });
+
+        caps
+    }
+
+    pub fn new_any() -> Self {
+        extern "C" {
+            fn gst_caps_new_any() -> *mut c_void;
+        }
+
+        let caps = Caps(unsafe { gst_caps_new_any() });
+
+        caps
+    }
+
     pub fn new_simple(name: &str, values: Vec<(&str, &Value)>) -> Self {
         extern "C" {
             fn gst_caps_new_empty() -> *mut c_void;

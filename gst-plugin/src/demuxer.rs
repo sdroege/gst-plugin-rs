@@ -496,8 +496,8 @@ pub struct DemuxerInfo<'a> {
     pub author: &'a str,
     pub rank: i32,
     pub create_instance: fn(Element) -> Box<Demuxer>,
-    pub input_formats: &'a str,
-    pub output_formats: &'a str,
+    pub input_caps: &'a Caps,
+    pub output_caps: &'a Caps,
 }
 
 pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
@@ -510,8 +510,8 @@ pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
                                    author: *const c_char,
                                    rank: i32,
                                    create_instance: *const c_void,
-                                   input_format: *const c_char,
-                                   output_formats: *const c_char)
+                                   input_caps: *const c_void,
+                                   output_caps: *const c_void)
                                    -> GBoolean;
     }
 
@@ -520,8 +520,6 @@ pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
     let cdescription = CString::new(demuxer_info.description).unwrap();
     let cclassification = CString::new(demuxer_info.classification).unwrap();
     let cauthor = CString::new(demuxer_info.author).unwrap();
-    let cinput_format = CString::new(demuxer_info.input_formats).unwrap();
-    let coutput_formats = CString::new(demuxer_info.output_formats).unwrap();
 
     unsafe {
         gst_rs_demuxer_register(plugin.as_ptr(),
@@ -532,7 +530,7 @@ pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
                                 cauthor.as_ptr(),
                                 demuxer_info.rank,
                                 demuxer_info.create_instance as *const c_void,
-                                cinput_format.as_ptr(),
-                                coutput_formats.as_ptr());
+                                demuxer_info.input_caps.as_ptr(),
+                                demuxer_info.output_caps.as_ptr());
     }
 }
