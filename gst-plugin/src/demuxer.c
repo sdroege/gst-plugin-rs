@@ -381,18 +381,18 @@ gst_rs_demuxer_loop (GstRsDemuxer * demuxer)
 
 void
 gst_rs_demuxer_add_stream (GstRsDemuxer * demuxer, guint32 index,
-    const gchar * format, const gchar * stream_id)
+    GstCaps * caps, const gchar * stream_id)
 {
   GstPad *pad;
   GstPadTemplate *templ;
-  GstCaps *caps;
   GstEvent *event;
   gchar *name, *full_stream_id;
 
   g_assert (demuxer->srcpads[index] == NULL);
 
-  GST_DEBUG_OBJECT (demuxer, "Adding stream %u with format %s and stream id %s",
-      index, format, stream_id);
+  GST_DEBUG_OBJECT (demuxer,
+      "Adding stream %u with format %" GST_PTR_FORMAT " and stream id %s",
+      index, caps, stream_id);
 
   templ =
       gst_element_class_get_pad_template (GST_ELEMENT_GET_CLASS (demuxer),
@@ -414,9 +414,7 @@ gst_rs_demuxer_add_stream (GstRsDemuxer * demuxer, guint32 index,
   g_free (full_stream_id);
   gst_pad_push_event (pad, event);
 
-  caps = gst_caps_from_string (format);
   event = gst_event_new_caps (caps);
-  gst_caps_unref (caps);
   gst_pad_push_event (pad, event);
 
   event = gst_event_new_segment (&demuxer->segment);
@@ -438,18 +436,16 @@ gst_rs_demuxer_added_all_streams (GstRsDemuxer * demuxer)
 
 void
 gst_rs_demuxer_stream_format_changed (GstRsDemuxer * demuxer, guint32 index,
-    const gchar * format)
+    GstCaps * caps)
 {
-  GstCaps *caps;
   GstEvent *event;
 
   g_assert (demuxer->srcpads[index] != NULL);
 
-  GST_DEBUG_OBJECT (demuxer, "Format changed for stream %u: %s", index, format);
+  GST_DEBUG_OBJECT (demuxer, "Format changed for stream %u: %" GST_PTR_FORMAT,
+      index, caps);
 
-  caps = gst_caps_from_string (format);
   event = gst_event_new_caps (caps);
-  gst_caps_unref (caps);
 
   gst_pad_push_event (demuxer->srcpads[index], event);
 }

@@ -33,6 +33,7 @@ use utils::*;
 use error::*;
 use buffer::*;
 use log::*;
+use caps::Caps;
 use plugin::Plugin;
 
 pub type StreamIndex = u32;
@@ -79,15 +80,15 @@ pub trait Demuxer {
 #[derive(Debug)]
 pub struct Stream {
     pub index: StreamIndex,
-    pub format: String,
+    pub caps: Caps,
     pub stream_id: String,
 }
 
 impl Stream {
-    pub fn new(index: StreamIndex, format: String, stream_id: String) -> Stream {
+    pub fn new(index: StreamIndex, caps: Caps, stream_id: String) -> Stream {
         Stream {
             index: index,
-            format: format,
+            caps: caps,
             stream_id: stream_id,
         }
     }
@@ -254,13 +255,13 @@ impl DemuxerWrapper {
             fn gst_rs_demuxer_stream_eos(raw: *mut c_void, index: u32);
             fn gst_rs_demuxer_add_stream(raw: *mut c_void,
                                          index: u32,
-                                         format: *const c_char,
+                                         caps: *const c_void,
                                          stream_id: *const c_char);
             fn gst_rs_demuxer_added_all_streams(raw: *mut c_void);
             // fn gst_rs_demuxer_remove_all_streams(raw: *mut c_void);
             fn gst_rs_demuxer_stream_format_changed(raw: *mut c_void,
                                                     index: u32,
-                                                    format: *const c_char);
+                                                    caps: *const c_void);
             fn gst_rs_demuxer_stream_push_buffer(raw: *mut c_void,
                                                  index: u32,
                                                  buffer: *mut c_void)
@@ -295,36 +296,29 @@ impl DemuxerWrapper {
                     return GstFlowReturn::Ok;
                 }
                 HandleBufferResult::StreamAdded(stream) => {
-                    let format_cstr = CString::new(stream.format.as_bytes()).unwrap();
                     let stream_id_cstr = CString::new(stream.stream_id.as_bytes()).unwrap();
 
                     unsafe {
                         gst_rs_demuxer_add_stream(self.raw,
                                                   stream.index,
-                                                  format_cstr.as_ptr(),
+                                                  stream.caps.as_ptr(),
                                                   stream_id_cstr.as_ptr());
                     }
                 }
                 HandleBufferResult::HaveAllStreams => unsafe {
                     gst_rs_demuxer_added_all_streams(self.raw);
                 },
-                HandleBufferResult::StreamChanged(stream) => {
-                    let format_cstr = CString::new(stream.format.as_bytes()).unwrap();
-
-                    unsafe {
-                        gst_rs_demuxer_stream_format_changed(self.raw,
-                                                             stream.index,
-                                                             format_cstr.as_ptr());
-                    }
-                }
+                HandleBufferResult::StreamChanged(stream) => unsafe {
+                    gst_rs_demuxer_stream_format_changed(self.raw,
+                                                         stream.index,
+                                                         stream.caps.as_ptr());
+                },
                 HandleBufferResult::StreamsChanged(streams) => {
                     for stream in streams {
-                        let format_cstr = CString::new(stream.format.as_bytes()).unwrap();
-
                         unsafe {
                             gst_rs_demuxer_stream_format_changed(self.raw,
                                                                  stream.index,
-                                                                 format_cstr.as_ptr());
+                                                                 stream.caps.as_ptr());
                         }
                     }
                 }

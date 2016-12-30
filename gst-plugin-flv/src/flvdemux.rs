@@ -29,6 +29,8 @@ use gst_plugin::adapter::*;
 use gst_plugin::utils;
 use gst_plugin::utils::Element;
 use gst_plugin::log::*;
+use gst_plugin::caps::Caps;
+use gst_plugin::caps;
 
 use slog::*;
 
@@ -134,29 +136,46 @@ impl AudioFormat {
     }
 
     fn to_string(&self) -> Option<String> {
-        let mut format = match self.format {
+        self.to_caps().map(|c| c.to_string())
+    }
+
+    fn to_caps(&self) -> Option<Caps> {
+        let mut caps = match self.format {
             flavors::SoundFormat::MP3 |
             flavors::SoundFormat::MP3_8KHZ => {
-                Some(String::from("audio/mpeg, mpegversion=(int) 1, layer=(int) 3"))
+                Some(Caps::new_simple("audio/mpeg",
+                                      vec![("mpegversion", &caps::Value::Int(1)),
+                                           ("layer", &caps::Value::Int(3))]))
             }
             flavors::SoundFormat::PCM_BE |
             flavors::SoundFormat::PCM_LE => {
                 if self.rate != 0 && self.channels != 0 {
                     // Assume little-endian for "PCM_NE", it's probably more common and we have no
                     // way to know what the endianness of the system creating the stream was
-                    Some(format!("audio/x-raw, layout=(string) interleaved, \
-                                          format=(string) {}",
-                                 if self.width == 8 { "U8" } else { "S16LE" }))
+                    Some(Caps::new_simple("audio/x-raw",
+                                          vec![("layout",
+                                                &caps::Value::String("interleaved".into())),
+                                               ("format",
+                                                &caps::Value::String(if self.width == 8 {
+                                                    "U8".into()
+                                                } else {
+                                                    "S16LE".into()
+                                                }))]))
                 } else {
                     None
                 }
             }
-            flavors::SoundFormat::ADPCM => Some(String::from("audio/x-adpcm, layout=(string) swf")),
+            flavors::SoundFormat::ADPCM => {
+                Some(Caps::new_simple("audio/x-adpcm",
+                                      vec![("layout", &caps::Value::String("swf".into()))]))
+            }
             flavors::SoundFormat::NELLYMOSER_16KHZ_MONO |
             flavors::SoundFormat::NELLYMOSER_8KHZ_MONO |
-            flavors::SoundFormat::NELLYMOSER => Some(String::from("audio/x-nellymoser")),
-            flavors::SoundFormat::PCM_ALAW => Some(String::from("audio/x-alaw")),
-            flavors::SoundFormat::PCM_ULAW => Some(String::from("audio/x-mulaw")),
+            flavors::SoundFormat::NELLYMOSER => {
+                Some(Caps::new_simple("audio/x-nellymoser", vec![]))
+            }
+            flavors::SoundFormat::PCM_ALAW => Some(Caps::new_simple("audio/x-alaw", vec![])),
+            flavors::SoundFormat::PCM_ULAW => Some(Caps::new_simple("audio/x-mulaw", vec![])),
             flavors::SoundFormat::AAC => {
                 // TODO: This requires getting the codec config from the stream
                 None
@@ -172,13 +191,15 @@ impl AudioFormat {
         };
 
         if self.rate != 0 {
-            format.as_mut().map(|f| f.push_str(&format!(", rate=(int) {}", self.rate)));
+            caps.as_mut()
+                .map(|c| c.set_simple(vec![("rate", &caps::Value::Int(self.rate as i32))]));
         }
         if self.channels != 0 {
-            format.as_mut().map(|f| f.push_str(&format!(", channels=(int) {}", self.channels)));
+            caps.as_mut()
+                .map(|c| c.set_simple(vec![("channels", &caps::Value::Int(self.channels as i32))]));
         }
 
-        format
+        caps
     }
 }
 
@@ -236,12 +257,19 @@ impl VideoFormat {
     }
 
     fn to_string(&self) -> Option<String> {
-        let mut format = match self.format {
-            flavors::CodecId::H263 => Some(String::from("video/x-flash-video, flvversion=(int) 1")),
-            flavors::CodecId::SCREEN => Some(String::from("video/x-flash-screen")),
-            flavors::CodecId::VP6 => Some(String::from("video/x-vp6-flash")),
-            flavors::CodecId::VP6A => Some(String::from("video/x-vp6-alpha")),
-            flavors::CodecId::SCREEN2 => Some(String::from("video/x-flash-screen2")),
+        self.to_caps().map(|caps| caps.to_string())
+    }
+
+    fn to_caps(&self) -> Option<Caps> {
+        let mut caps = match self.format {
+            flavors::CodecId::H263 => {
+                Some(Caps::new_simple("video/x-flash-video",
+                                      vec![("flvversion", &caps::Value::Int(1))]))
+            }
+            flavors::CodecId::SCREEN => Some(Caps::new_simple("video/x-flash-screen", vec![])),
+            flavors::CodecId::VP6 => Some(Caps::new_simple("video/x-vp6-flash", vec![])),
+            flavors::CodecId::VP6A => Some(Caps::new_simple("video/x-vp6-flash-alpha", vec![])),
+            flavors::CodecId::SCREEN2 => Some(Caps::new_simple("video/x-flash-screen2", vec![])),
             flavors::CodecId::H264 => {
                 // TODO: Need codec_data from the stream
                 None
@@ -253,26 +281,31 @@ impl VideoFormat {
         };
 
         if let (Some(width), Some(height)) = (self.width, self.height) {
-            format.as_mut()
-                .map(|f| f.push_str(&format!(", width=(int) {}, height=(int) {}", width, height)));
+            caps.as_mut().map(|c| {
+                c.set_simple(vec![("width", &caps::Value::Int(width as i32)),
+                                  ("height", &caps::Value::Int(height as i32))])
+            });
         }
 
         if let Some(par) = self.pixel_aspect_ratio {
             if par.0 != 0 && par.1 != 0 {
-                format.as_mut().map(|f| {
-                    f.push_str(&format!(", pixel-aspect-ratio=(fraction) {}/{}", par.0, par.1))
+                caps.as_mut().map(|c| {
+                    c.set_simple(vec![("pixel-aspect-ratio",
+                                       &caps::Value::Fraction(par.0 as i32, par.1 as i32))])
                 });
             }
         }
 
         if let Some(fps) = self.framerate {
             if fps.1 != 0 {
-                format.as_mut()
-                    .map(|f| f.push_str(&format!(", framerate=(fraction) {}/{}", fps.0, fps.1)));
+                caps.as_mut().map(|c| {
+                    c.set_simple(vec![("framerate",
+                                       &caps::Value::Fraction(fps.0 as i32, fps.1 as i32))])
+                });
             }
         }
 
-        format
+        caps
     }
 }
 
@@ -448,21 +481,17 @@ impl FlvDemux {
                     let mut streams = Vec::new();
 
                     if audio_changed {
-                        if let Some(format) = streaming_state.audio
+                        if let Some(caps) = streaming_state.audio
                             .as_ref()
-                            .and_then(|a| a.to_string()) {
-                            streams.push(Stream::new(AUDIO_STREAM_ID,
-                                                         format,
-                                                         String::from("audio")));
+                            .and_then(|a| a.to_caps()) {
+                            streams.push(Stream::new(AUDIO_STREAM_ID, caps, String::from("audio")));
                         }
                     }
                     if video_changed {
-                        if let Some(format) = streaming_state.video
+                        if let Some(caps) = streaming_state.video
                             .as_ref()
-                            .and_then(|v| v.to_string()) {
-                            streams.push(Stream::new(VIDEO_STREAM_ID,
-                                                         format,
-                                                         String::from("video")));
+                            .and_then(|v| v.to_caps()) {
+                            streams.push(Stream::new(VIDEO_STREAM_ID, caps, String::from("video")));
                         }
                     }
 
@@ -495,10 +524,10 @@ impl FlvDemux {
             debug!(logger, "Got new audio format: {:?}", new_audio_format);
             let new_stream = streaming_state.audio == None;
 
-            let format = new_audio_format.to_string();
-            if let Some(format) = format {
+            let caps = new_audio_format.to_caps();
+            if let Some(caps) = caps {
                 streaming_state.audio = Some(new_audio_format);
-                let stream = Stream::new(AUDIO_STREAM_ID, format, String::from("audio"));
+                let stream = Stream::new(AUDIO_STREAM_ID, caps, String::from("audio"));
                 if new_stream {
                     return Ok(HandleBufferResult::StreamAdded(stream));
                 } else {
@@ -564,10 +593,10 @@ impl FlvDemux {
 
             let new_stream = streaming_state.video == None;
 
-            let format = new_video_format.to_string();
-            if let Some(format) = format {
+            let caps = new_video_format.to_caps();
+            if let Some(caps) = caps {
                 streaming_state.video = Some(new_video_format);
-                let stream = Stream::new(VIDEO_STREAM_ID, format, String::from("video"));
+                let stream = Stream::new(VIDEO_STREAM_ID, caps, String::from("video"));
                 if new_stream {
                     return Ok(HandleBufferResult::StreamAdded(stream));
                 } else {
