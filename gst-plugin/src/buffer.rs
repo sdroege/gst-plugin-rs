@@ -254,6 +254,10 @@ impl Buffer {
         self.raw
     }
 
+    pub unsafe fn as_ptr(&self) -> *mut c_void {
+        self.raw
+    }
+
     pub fn is_writable(&self) -> bool {
         extern "C" {
             fn gst_mini_object_is_writable(obj: *const c_void) -> GBoolean;
@@ -604,6 +608,24 @@ impl Clone for Buffer {
         }
     }
 }
+
+impl PartialEq for Buffer {
+    fn eq(&self, other: &Buffer) -> bool {
+        if self.get_size() != other.get_size() {
+            return false;
+        }
+
+        let self_map = self.map_read();
+        let other_map = other.map_read();
+
+        match (self_map, other_map) {
+            (Some(self_map), Some(other_map)) => self_map.as_slice().eq(other_map.as_slice()),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Buffer {}
 
 impl<'a> ReadBufferMap<'a> {
     pub fn as_slice(&self) -> &[u8] {
