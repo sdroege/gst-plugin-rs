@@ -389,8 +389,7 @@ impl Metadata {
 
         let args = match script_data.arguments {
             flavors::ScriptDataValue::Object(ref objects) |
-            flavors::ScriptDataValue::ECMAArray(ref objects) |
-            flavors::ScriptDataValue::StrictArray(ref objects) => objects,
+            flavors::ScriptDataValue::ECMAArray(ref objects) => objects,
             _ => return metadata,
         };
 
@@ -925,7 +924,7 @@ impl FlvDemux {
 
                 let res = match tag_header.tag_type {
                     flavors::TagType::Script => {
-                        trace!(self.logger, "Found sript tag");
+                        trace!(self.logger, "Found script tag");
 
                         self.handle_script_tag(&tag_header)
                     }
