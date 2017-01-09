@@ -44,7 +44,7 @@ fn plugin_init(plugin: &Plugin) -> bool {
                          author: "Sebastian Dröge <sebastian@centricular.com>",
                          rank: 256 + 100,
                          create_instance: FlvDemux::new_boxed,
-                         input_caps: &Caps::new_simple("video/x-flv", vec![]),
+                         input_caps: &Caps::new_simple("video/x-flv", &[]),
                          output_caps: &Caps::new_any(),
                      });
 

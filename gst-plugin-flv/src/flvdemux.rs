@@ -155,8 +155,8 @@ impl AudioFormat {
             flavors::SoundFormat::MP3 |
             flavors::SoundFormat::MP3_8KHZ => {
                 Some(Caps::new_simple("audio/mpeg",
-                                      vec![("mpegversion", &caps::Value::Int(1)),
-                                           ("layer", &caps::Value::Int(3))]))
+                                      &[("mpegversion", &caps::Value::Int(1)),
+                                        ("layer", &caps::Value::Int(3))]))
             }
             flavors::SoundFormat::PCM_NE |
             flavors::SoundFormat::PCM_LE => {
@@ -164,36 +164,34 @@ impl AudioFormat {
                     // Assume little-endian for "PCM_NE", it's probably more common and we have no
                     // way to know what the endianness of the system creating the stream was
                     Some(Caps::new_simple("audio/x-raw",
-                                          vec![("layout",
-                                                &caps::Value::String("interleaved".into())),
-                                               ("format",
-                                                &caps::Value::String(if self.width == 8 {
-                                                    "U8".into()
-                                                } else {
-                                                    "S16LE".into()
-                                                }))]))
+                                          &[("layout",
+                                             &caps::Value::String("interleaved".into())),
+                                            ("format",
+                                             &caps::Value::String(if self.width == 8 {
+                                                 "U8".into()
+                                             } else {
+                                                 "S16LE".into()
+                                             }))]))
                 } else {
                     None
                 }
             }
             flavors::SoundFormat::ADPCM => {
                 Some(Caps::new_simple("audio/x-adpcm",
-                                      vec![("layout", &caps::Value::String("swf".into()))]))
+                                      &[("layout", &caps::Value::String("swf".into()))]))
             }
             flavors::SoundFormat::NELLYMOSER_16KHZ_MONO |
             flavors::SoundFormat::NELLYMOSER_8KHZ_MONO |
-            flavors::SoundFormat::NELLYMOSER => {
-                Some(Caps::new_simple("audio/x-nellymoser", vec![]))
-            }
-            flavors::SoundFormat::PCM_ALAW => Some(Caps::new_simple("audio/x-alaw", vec![])),
-            flavors::SoundFormat::PCM_ULAW => Some(Caps::new_simple("audio/x-mulaw", vec![])),
+            flavors::SoundFormat::NELLYMOSER => Some(Caps::new_simple("audio/x-nellymoser", &[])),
+            flavors::SoundFormat::PCM_ALAW => Some(Caps::new_simple("audio/x-alaw", &[])),
+            flavors::SoundFormat::PCM_ULAW => Some(Caps::new_simple("audio/x-mulaw", &[])),
             flavors::SoundFormat::AAC => {
                 self.aac_sequence_header.as_ref().map(|header| {
                     Caps::new_simple("audio/mpeg",
-                                     vec![("mpegversion", &caps::Value::Int(4)),
-                                          ("framed", &caps::Value::Bool(true)),
-                                          ("stream-format", &caps::Value::String("raw".into())),
-                                          ("codec_data", &caps::Value::Buffer(header.clone()))])
+                                     &[("mpegversion", &caps::Value::Int(4)),
+                                       ("framed", &caps::Value::Bool(true)),
+                                       ("stream-format", &caps::Value::String("raw".into())),
+                                       ("codec_data", &caps::Value::Buffer(header.clone()))])
                 })
             }
             flavors::SoundFormat::SPEEX => {
@@ -208,11 +206,11 @@ impl AudioFormat {
 
         if self.rate != 0 {
             caps.as_mut()
-                .map(|c| c.set_simple(vec![("rate", &caps::Value::Int(self.rate as i32))]));
+                .map(|c| c.set_simple(&[("rate", &caps::Value::Int(self.rate as i32))]));
         }
         if self.channels != 0 {
             caps.as_mut()
-                .map(|c| c.set_simple(vec![("channels", &caps::Value::Int(self.channels as i32))]));
+                .map(|c| c.set_simple(&[("channels", &caps::Value::Int(self.channels as i32))]));
         }
 
         caps
@@ -285,24 +283,24 @@ impl VideoFormat {
         let mut caps = match self.format {
             flavors::CodecId::SORENSON_H263 => {
                 Some(Caps::new_simple("video/x-flash-video",
-                                      vec![("flvversion", &caps::Value::Int(1))]))
+                                      &[("flvversion", &caps::Value::Int(1))]))
             }
-            flavors::CodecId::SCREEN => Some(Caps::new_simple("video/x-flash-screen", vec![])),
-            flavors::CodecId::VP6 => Some(Caps::new_simple("video/x-vp6-flash", vec![])),
-            flavors::CodecId::VP6A => Some(Caps::new_simple("video/x-vp6-flash-alpha", vec![])),
-            flavors::CodecId::SCREEN2 => Some(Caps::new_simple("video/x-flash-screen2", vec![])),
+            flavors::CodecId::SCREEN => Some(Caps::new_simple("video/x-flash-screen", &[])),
+            flavors::CodecId::VP6 => Some(Caps::new_simple("video/x-vp6-flash", &[])),
+            flavors::CodecId::VP6A => Some(Caps::new_simple("video/x-vp6-flash-alpha", &[])),
+            flavors::CodecId::SCREEN2 => Some(Caps::new_simple("video/x-flash-screen2", &[])),
             flavors::CodecId::H264 => {
                 self.avc_sequence_header.as_ref().map(|header| {
                     Caps::new_simple("video/x-h264",
-                                     vec![("stream-format", &caps::Value::String("avc".into())),
-                                          ("codec_data", &caps::Value::Buffer(header.clone()))])
+                                     &[("stream-format", &caps::Value::String("avc".into())),
+                                       ("codec_data", &caps::Value::Buffer(header.clone()))])
                 })
             }
-            flavors::CodecId::H263 => Some(Caps::new_simple("video/x-h263", vec![])),
+            flavors::CodecId::H263 => Some(Caps::new_simple("video/x-h263", &[])),
             flavors::CodecId::MPEG4Part2 => {
                 Some(Caps::new_simple("video/x-h263",
-                                      vec![("mpegversion", &caps::Value::Int(4)),
-                                           ("systemstream", &caps::Value::Bool(false))]))
+                                      &[("mpegversion", &caps::Value::Int(4)),
+                                        ("systemstream", &caps::Value::Bool(false))]))
             }
             flavors::CodecId::JPEG => {
                 // Unused according to spec
@@ -312,16 +310,16 @@ impl VideoFormat {
 
         if let (Some(width), Some(height)) = (self.width, self.height) {
             caps.as_mut().map(|c| {
-                c.set_simple(vec![("width", &caps::Value::Int(width as i32)),
-                                  ("height", &caps::Value::Int(height as i32))])
+                c.set_simple(&[("width", &caps::Value::Int(width as i32)),
+                               ("height", &caps::Value::Int(height as i32))])
             });
         }
 
         if let Some(par) = self.pixel_aspect_ratio {
             if par.0 != 0 && par.1 != 0 {
                 caps.as_mut().map(|c| {
-                    c.set_simple(vec![("pixel-aspect-ratio",
-                                       &caps::Value::Fraction(par.0 as i32, par.1 as i32))])
+                    c.set_simple(&[("pixel-aspect-ratio",
+                                    &caps::Value::Fraction(par.0 as i32, par.1 as i32))])
                 });
             }
         }
@@ -329,8 +327,8 @@ impl VideoFormat {
         if let Some(fps) = self.framerate {
             if fps.1 != 0 {
                 caps.as_mut().map(|c| {
-                    c.set_simple(vec![("framerate",
-                                       &caps::Value::Fraction(fps.0 as i32, fps.1 as i32))])
+                    c.set_simple(&[("framerate",
+                                    &caps::Value::Fraction(fps.0 as i32, fps.1 as i32))])
                 });
             }
         }

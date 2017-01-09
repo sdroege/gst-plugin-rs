@@ -64,9 +64,7 @@ impl Caps {
         Caps(unsafe { gst_caps_new_any() })
     }
 
-    pub fn new_simple<'a, I>(name: &str, values: I) -> Self
-        where I: IntoIterator<Item = (&'a str, &'a Value<'a>)>
-    {
+    pub fn new_simple<'a>(name: &str, values: &[(&'a str, &'a Value<'a>)]) -> Self {
         extern "C" {
             fn gst_caps_append_structure(caps: *mut c_void, structure: *mut c_void);
             fn gst_structure_new_empty(name: *const c_char) -> *mut c_void;
@@ -102,9 +100,7 @@ impl Caps {
         }
     }
 
-    pub fn set_simple<'a, I>(&mut self, values: I)
-        where I: IntoIterator<Item = (&'a str, &'a Value<'a>)>
-    {
+    pub fn set_simple(&mut self, values: &[(&str, &Value)]) {
         extern "C" {
             fn gst_caps_set_value(caps: *mut c_void, name: *const c_char, value: *const GValue);
             fn g_value_init(value: *mut GValue, gtype: usize);
