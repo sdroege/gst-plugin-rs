@@ -38,5 +38,6 @@ pub mod source;
 pub mod sink;
 pub mod demuxer;
 pub mod log;
+pub mod value;
 pub mod caps;
 pub mod bytes;

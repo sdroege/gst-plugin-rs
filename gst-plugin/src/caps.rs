@@ -19,102 +19,11 @@ use libc::c_char;
 use std::os::raw::c_void;
 use std::ffi::CString;
 use std::ffi::CStr;
-use std::mem;
 use std::fmt;
 
-use buffer::*;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Value {
-    Bool(bool),
-    Int(i32),
-    String(String),
-    Fraction(i32, i32),
-    Buffer(Buffer),
-    Array(Vec<Value>),
-}
+use value::*;
 
 pub struct Caps(*mut c_void);
-
-#[repr(C)]
-struct GValue {
-    typ: usize,
-    data: [u64; 2],
-}
-
-// See gtype.h
-const TYPE_BOOLEAN: usize = (5 << 2);
-const TYPE_INT: usize = (6 << 2);
-const TYPE_STRING: usize = (16 << 2);
-
-impl Value {
-    fn to_gvalue(&self) -> GValue {
-        extern "C" {
-            fn g_value_init(value: *mut GValue, gtype: usize);
-            fn g_value_set_boolean(value: *mut GValue, value: i32);
-            fn g_value_set_int(value: *mut GValue, value: i32);
-            fn g_value_set_string(value: *mut GValue, value: *const c_char);
-            fn gst_value_set_fraction(value: *mut GValue, value_n: i32, value_d: i32);
-            fn gst_fraction_get_type() -> usize;
-            fn g_value_set_boxed(value: *mut GValue, boxed: *const c_void);
-            fn gst_buffer_get_type() -> usize;
-            fn gst_value_array_get_type() -> usize;
-            fn gst_value_array_append_and_take_value(value: *mut GValue, element: *mut GValue);
-        }
-
-        let mut gvalue: GValue = unsafe { mem::zeroed() };
-
-        match *self {
-            Value::Bool(v) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, TYPE_BOOLEAN);
-                g_value_set_boolean(&mut gvalue as *mut GValue, if v { 1 } else { 0 });
-            },
-            Value::Int(v) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, TYPE_INT);
-                g_value_set_int(&mut gvalue as *mut GValue, v);
-            },
-            Value::String(ref v) => unsafe {
-                let v_cstr = CString::new(String::from(v.clone())).unwrap();
-
-                g_value_init(&mut gvalue as *mut GValue, TYPE_STRING);
-                g_value_set_string(&mut gvalue as *mut GValue, v_cstr.as_ptr());
-            },
-            Value::Fraction(v_n, v_d) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, gst_fraction_get_type());
-                gst_value_set_fraction(&mut gvalue as *mut GValue, v_n, v_d);
-            },
-            Value::Buffer(ref buffer) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, gst_buffer_get_type());
-                g_value_set_boxed(&mut gvalue as *mut GValue, buffer.as_ptr());
-            },
-            Value::Array(ref array) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, gst_value_array_get_type());
-
-                for e in array {
-                    let mut e_value = e.to_gvalue();
-                    gst_value_array_append_and_take_value(&mut gvalue as *mut GValue,
-                                                          &mut e_value as *mut GValue);
-                    // Takes ownership, invalidate GValue
-                    e_value.typ = 0;
-                }
-            },
-        }
-
-        gvalue
-    }
-}
-
-impl Drop for GValue {
-    fn drop(&mut self) {
-        extern "C" {
-            fn g_value_unset(value: *mut GValue);
-        }
-
-        if self.typ != 0 {
-            unsafe { g_value_unset(self as *mut GValue) }
-        }
-    }
-}
 
 impl Caps {
     pub fn new_empty() -> Self {
@@ -243,6 +152,7 @@ impl fmt::Debug for Caps {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use value::*;
     use std::ptr;
     use std::os::raw::c_void;
 
