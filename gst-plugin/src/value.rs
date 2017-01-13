@@ -111,3 +111,57 @@ impl Drop for GValue {
         }
     }
 }
+
+impl From<bool> for Value {
+    fn from(f: bool) -> Value {
+        Value::Bool(f)
+    }
+}
+
+impl From<i32> for Value {
+    fn from(f: i32) -> Value {
+        Value::Int(f)
+    }
+}
+
+impl From<String> for Value {
+    fn from(f: String) -> Value {
+        Value::String(f)
+    }
+}
+
+impl<'a> From<&'a str> for Value {
+    fn from(f: &'a str) -> Value {
+        Value::String(f.into())
+    }
+}
+
+impl From<(i32, i32)> for Value {
+    fn from((f_n, f_d): (i32, i32)) -> Value {
+        Value::Fraction(f_n, f_d)
+    }
+}
+
+impl From<Buffer> for Value {
+    fn from(f: Buffer) -> Value {
+        Value::Buffer(f)
+    }
+}
+
+impl<'a> From<&'a Buffer> for Value {
+    fn from(f: &'a Buffer) -> Value {
+        Value::Buffer(f.clone())
+    }
+}
+
+impl From<Vec<Value>> for Value {
+    fn from(f: Vec<Value>) -> Value {
+        Value::Array(f)
+    }
+}
+
+impl<'a> From<&'a [Value]> for Value {
+    fn from(f: &'a [Value]) -> Value {
+        Value::Array(f.to_vec())
+    }
+}

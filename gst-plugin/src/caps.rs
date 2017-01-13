@@ -171,12 +171,11 @@ mod tests {
         init();
 
         let caps = Caps::new_simple("foo/bar",
-                                    &[("int", &Value::Int(12)),
-                                      ("bool", &Value::Bool(true)),
-                                      ("string", &Value::String("bla".into())),
-                                      ("fraction", &Value::Fraction(1, 2)),
-                                      ("array",
-                                       &Value::Array(vec![Value::Int(1), Value::Int(2)]))]);
+                                    &[("int", &12.into()),
+                                      ("bool", &true.into()),
+                                      ("string", &"bla".into()),
+                                      ("fraction", &(1, 2).into()),
+                                      ("array", &vec![1.into(), 2.into()].into())]);
         assert_eq!(caps.to_string(),
                    "foo/bar, int=(int)12, bool=(boolean)true, string=(string)bla, \
                     fraction=(fraction)1/2, array=(int)< 1, 2 >");
