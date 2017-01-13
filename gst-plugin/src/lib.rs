@@ -24,6 +24,7 @@ extern crate bitflags;
 extern crate slog;
 #[macro_use]
 extern crate lazy_static;
+extern crate byteorder;
 
 #[macro_use]
 pub mod utils;
@@ -38,3 +39,4 @@ pub mod sink;
 pub mod demuxer;
 pub mod log;
 pub mod caps;
+pub mod bytes;

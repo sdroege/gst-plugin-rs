@@ -16,6 +16,7 @@
 //  Boston, MA 02110-1301, USA.
 
 use std::cmp;
+use std::io::{Write, Cursor};
 
 use nom;
 use nom::IResult;
@@ -31,6 +32,7 @@ use gst_plugin::utils::Element;
 use gst_plugin::log::*;
 use gst_plugin::caps::Caps;
 use gst_plugin::caps;
+use gst_plugin::bytes::*;
 
 use slog::*;
 
@@ -195,8 +197,42 @@ impl AudioFormat {
                 })
             }
             flavors::SoundFormat::SPEEX => {
-                // TODO: This requires creating a Speex streamheader...
-                None
+                let mut header = Buffer::new_with_size(80).unwrap();
+                {
+                    let mut map = header.map_readwrite().unwrap();
+                    let mut data = Cursor::new(map.as_mut_slice());
+                    data.write(b"Speex   1.1.12").unwrap();
+                    data.write(&[0; 14]).unwrap();
+                    data.write_u32le(1).unwrap(); // version
+                    data.write_u32le(80).unwrap(); // header size
+                    data.write_u32le(16000).unwrap(); // sample rate
+                    data.write_u32le(1).unwrap(); // mode = wideband
+                    data.write_u32le(4).unwrap(); // mode bitstream version
+                    data.write_u32le(1).unwrap(); // channels
+                    data.write_i32le(-1).unwrap(); // bitrate
+                    data.write_u32le(0x50).unwrap(); // frame size
+                    data.write_u32le(0).unwrap(); // VBR
+                    data.write_u32le(1).unwrap(); // frames per packet
+                    data.write_u32le(0).unwrap(); // extra headers
+                    data.write_u32le(0).unwrap(); // reserved 1
+                    data.write_u32le(0).unwrap(); // reserved 2
+                }
+
+                let comment_size = 4 + 7 /* nothing */ + 4 + 1;
+
+                let mut comment = Buffer::new_with_size(comment_size).unwrap();
+                {
+                    let mut map = comment.map_readwrite().unwrap();
+                    let mut data = Cursor::new(map.as_mut_slice());
+                    data.write_u32le(7).unwrap(); // length of "nothing"
+                    data.write(b"nothing").unwrap(); // "vendor" string
+                    data.write_u32le(0).unwrap(); // number of elements
+                    data.write_u8(1);
+                }
+                Some(Caps::new_simple("audio/x-speex",
+                                      &[("streamheader",
+                                         &caps::Value::Array(vec![caps::Value::Buffer(header),
+                                                                  caps::Value::Buffer(comment)]))]))
             }
             flavors::SoundFormat::DEVICE_SPECIFIC => {
                 // Nobody knows
