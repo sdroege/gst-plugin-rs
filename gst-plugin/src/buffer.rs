@@ -151,6 +151,48 @@ impl Buffer {
         }
     }
 
+    extern "C" fn vec_drop(vec: *mut c_void) {
+        let vec: Box<Vec<u8>> = unsafe { Box::from_raw(vec as *mut Vec<u8>) };
+        drop(vec);
+    }
+
+    pub fn new_from_vec(vec: Vec<u8>) -> Option<Buffer> {
+        extern "C" {
+            fn gst_buffer_new_wrapped_full(flags: u32,
+                                           data: *mut u8,
+                                           maxsize: usize,
+                                           offset: usize,
+                                           size: usize,
+                                           user_data: *mut c_void,
+                                           destroy_notify: extern "C" fn(*mut c_void))
+                                           -> *mut c_void;
+        }
+
+        let raw = unsafe {
+            let mut vec = Box::new(vec);
+            let maxsize = vec.capacity();
+            let size = vec.len();
+            let data = vec.as_mut_ptr();
+            let user_data = Box::into_raw(vec);
+            gst_buffer_new_wrapped_full(0,
+                                        data,
+                                        maxsize,
+                                        0,
+                                        size,
+                                        user_data as *mut c_void,
+                                        Buffer::vec_drop)
+        };
+
+        if raw.is_null() {
+            None
+        } else {
+            Some(Buffer {
+                raw: raw,
+                owned: true,
+            })
+        }
+    }
+
     pub fn map_read(&self) -> Option<ReadBufferMap> {
         extern "C" {
             fn gst_buffer_map(buffer: *mut c_void,

@@ -194,10 +194,8 @@ impl AudioFormat {
                 })
             }
             flavors::SoundFormat::SPEEX => {
-                let mut header = Buffer::new_with_size(80).unwrap();
-                {
-                    let mut map = header.map_readwrite().unwrap();
-                    let mut data = Cursor::new(map.as_mut_slice());
+                let header = {
+                    let mut data = Cursor::new(Vec::with_capacity(80));
                     data.write(b"Speex   1.1.12").unwrap();
                     data.write(&[0; 14]).unwrap();
                     data.write_u32le(1).unwrap(); // version
@@ -213,19 +211,28 @@ impl AudioFormat {
                     data.write_u32le(0).unwrap(); // extra headers
                     data.write_u32le(0).unwrap(); // reserved 1
                     data.write_u32le(0).unwrap(); // reserved 2
-                }
+
+                    assert_eq!(data.position(), 80);
+
+                    data.into_inner()
+                };
+                let header = Buffer::new_from_vec(header).unwrap();
 
                 let comment_size = 4 + 7 /* nothing */ + 4 + 1;
 
-                let mut comment = Buffer::new_with_size(comment_size).unwrap();
-                {
-                    let mut map = comment.map_readwrite().unwrap();
-                    let mut data = Cursor::new(map.as_mut_slice());
+                let comment = {
+                    let mut data = Cursor::new(Vec::with_capacity(comment_size));
                     data.write_u32le(7).unwrap(); // length of "nothing"
                     data.write(b"nothing").unwrap(); // "vendor" string
                     data.write_u32le(0).unwrap(); // number of elements
-                    data.write_u8(1);
-                }
+                    data.write_u8(1).unwrap();
+
+                    assert_eq!(data.position() as usize, comment_size);
+
+                    data.into_inner()
+                };
+                let comment = Buffer::new_from_vec(comment).unwrap();
+
                 Some(Caps::new_simple("audio/x-speex",
                                       &[("streamheader",
                                          &vec![header.into(), comment.into()].into())]))
