@@ -195,9 +195,10 @@ impl AudioFormat {
             }
             flavors::SoundFormat::SPEEX => {
                 let header = {
-                    let mut data = Cursor::new(Vec::with_capacity(80));
-                    data.write(b"Speex   1.1.12").unwrap();
-                    data.write(&[0; 14]).unwrap();
+                    let header_size = 80;
+                    let mut data = Cursor::new(Vec::with_capacity(header_size));
+                    data.write_all(b"Speex   1.1.12").unwrap();
+                    data.write_all(&[0; 14]).unwrap();
                     data.write_u32le(1).unwrap(); // version
                     data.write_u32le(80).unwrap(); // header size
                     data.write_u32le(16000).unwrap(); // sample rate
@@ -212,18 +213,17 @@ impl AudioFormat {
                     data.write_u32le(0).unwrap(); // reserved 1
                     data.write_u32le(0).unwrap(); // reserved 2
 
-                    assert_eq!(data.position(), 80);
+                    assert_eq!(data.position() as usize, header_size);
 
                     data.into_inner()
                 };
                 let header = Buffer::new_from_vec(header).unwrap();
 
-                let comment_size = 4 + 7 /* nothing */ + 4 + 1;
-
                 let comment = {
+                    let comment_size = 4 + 7 /* nothing */ + 4 + 1;
                     let mut data = Cursor::new(Vec::with_capacity(comment_size));
                     data.write_u32le(7).unwrap(); // length of "nothing"
-                    data.write(b"nothing").unwrap(); // "vendor" string
+                    data.write_all(b"nothing").unwrap(); // "vendor" string
                     data.write_u32le(0).unwrap(); // number of elements
                     data.write_u8(1).unwrap();
 
