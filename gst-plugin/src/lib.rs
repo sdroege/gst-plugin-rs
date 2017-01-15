@@ -25,6 +25,7 @@ extern crate slog;
 #[macro_use]
 extern crate lazy_static;
 extern crate byteorder;
+extern crate num_rational;
 
 #[macro_use]
 pub mod utils;

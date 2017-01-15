@@ -20,6 +20,7 @@ use libc::c_char;
 use std::os::raw::c_void;
 use std::ffi::CString;
 use std::i32;
+use num_rational::Rational32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,7 +95,7 @@ pub unsafe extern "C" fn cstring_drop(ptr: *mut c_char) {
     let _ = CString::from_raw(ptr);
 }
 
-pub fn f64_to_fraction(val: f64) -> Option<(i32, i32)> {
+pub fn f64_to_fraction(val: f64) -> Option<Rational32> {
     // Continued fractions algorithm
     // http://mathforum.org/dr.math/faq/faq.fractions.html#decfrac
 
@@ -168,9 +169,9 @@ pub fn f64_to_fraction(val: f64) -> Option<(i32, i32)> {
 
     // Make negative again if needed
     if negative {
-        Some((-(n1 as i32), d1 as i32))
+        Some(Rational32::new(-(n1 as i32), d1 as i32))
     } else {
-        Some((n1 as i32, d1 as i32))
+        Some(Rational32::new(n1 as i32, d1 as i32))
     }
 }
 

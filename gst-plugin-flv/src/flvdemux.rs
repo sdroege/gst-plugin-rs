@@ -31,7 +31,7 @@ use gst_plugin::utils;
 use gst_plugin::utils::Element;
 use gst_plugin::log::*;
 use gst_plugin::caps::Caps;
-use gst_plugin::value;
+use gst_plugin::value::Rational32;
 use gst_plugin::bytes::*;
 
 use slog::*;
@@ -261,8 +261,8 @@ struct VideoFormat {
     format: flavors::CodecId,
     width: Option<u32>,
     height: Option<u32>,
-    pixel_aspect_ratio: Option<(u32, u32)>,
-    framerate: Option<(u32, u32)>,
+    pixel_aspect_ratio: Option<Rational32>,
+    framerate: Option<Rational32>,
     bitrate: Option<u32>,
     avc_sequence_header: Option<Buffer>,
 }
@@ -354,17 +354,15 @@ impl VideoFormat {
         }
 
         if let Some(par) = self.pixel_aspect_ratio {
-            if par.0 != 0 && par.1 != 0 {
-                caps.as_mut().map(|c| {
-                    c.set_simple(&[("pixel-aspect-ratio", &(par.0 as i32, par.1 as i32).into())])
-                });
+            if *par.numer() != 0 && par.numer() != par.denom() {
+                caps.as_mut().map(|c| c.set_simple(&[("pixel-aspect-ratio", &par.into())]));
             }
         }
 
         if let Some(fps) = self.framerate {
-            if fps.1 != 0 {
+            if *fps.numer() != 0 {
                 caps.as_mut()
-                    .map(|c| c.set_simple(&[("framerate", &(fps.0 as i32, fps.1 as i32).into())]));
+                    .map(|c| c.set_simple(&[("framerate", &fps.into())]));
             }
         }
 
@@ -397,8 +395,8 @@ struct Metadata {
 
     video_width: Option<u32>,
     video_height: Option<u32>,
-    video_pixel_aspect_ratio: Option<(u32, u32)>,
-    video_framerate: Option<(u32, u32)>,
+    video_pixel_aspect_ratio: Option<Rational32>,
+    video_framerate: Option<Rational32>,
     video_bitrate: Option<u32>,
 }
 
@@ -456,15 +454,15 @@ impl Metadata {
                     metadata.video_height = Some(height as u32);
                 }
                 ("framerate", &flavors::ScriptDataValue::Number(framerate)) if framerate >= 0.0 => {
-                    if let Some((n, d)) = utils::f64_to_fraction(framerate) {
-                        metadata.video_framerate = Some((n as u32, d as u32));
+                    if let Some(framerate) = utils::f64_to_fraction(framerate) {
+                        metadata.video_framerate = Some(framerate);
                     }
                 }
-                ("AspectRatioX", &flavors::ScriptDataValue::Number(par_x)) => {
-                    par_n = Some(par_x as u32);
+                ("AspectRatioX", &flavors::ScriptDataValue::Number(par_x)) if par_x > 0.0 => {
+                    par_n = Some(par_x as i32);
                 }
-                ("AspectRatioY", &flavors::ScriptDataValue::Number(par_y)) => {
-                    par_d = Some(par_y as u32);
+                ("AspectRatioY", &flavors::ScriptDataValue::Number(par_y)) if par_y > 0.0 => {
+                    par_d = Some(par_y as i32);
                 }
                 ("videodatarate", &flavors::ScriptDataValue::Number(datarate)) => {
                     metadata.video_bitrate = Some((datarate * 1024.0) as u32);
@@ -474,7 +472,7 @@ impl Metadata {
         }
 
         if let (Some(par_n), Some(par_d)) = (par_n, par_d) {
-            metadata.video_pixel_aspect_ratio = Some((par_n, par_d));
+            metadata.video_pixel_aspect_ratio = Some(Rational32::new(par_n, par_d));
         }
 
         metadata

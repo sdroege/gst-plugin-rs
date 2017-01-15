@@ -20,6 +20,8 @@ use std::os::raw::c_void;
 use std::ffi::CString;
 use std::mem;
 
+pub use num_rational::Rational32;
+
 use buffer::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -27,7 +29,7 @@ pub enum Value {
     Bool(bool),
     Int(i32),
     String(String),
-    Fraction(i32, i32),
+    Fraction(Rational32),
     Buffer(Buffer),
     Array(Vec<Value>),
 }
@@ -75,9 +77,9 @@ impl Value {
                 g_value_init(&mut gvalue as *mut GValue, TYPE_STRING);
                 g_value_set_string(&mut gvalue as *mut GValue, v_cstr.as_ptr());
             },
-            Value::Fraction(v_n, v_d) => unsafe {
+            Value::Fraction(ref v) => unsafe {
                 g_value_init(&mut gvalue as *mut GValue, gst_fraction_get_type());
-                gst_value_set_fraction(&mut gvalue as *mut GValue, v_n, v_d);
+                gst_value_set_fraction(&mut gvalue as *mut GValue, *v.numer(), *v.denom());
             },
             Value::Buffer(ref buffer) => unsafe {
                 g_value_init(&mut gvalue as *mut GValue, gst_buffer_get_type());
@@ -136,9 +138,15 @@ impl<'a> From<&'a str> for Value {
     }
 }
 
+impl From<Rational32> for Value {
+    fn from(f: Rational32) -> Value {
+        Value::Fraction(f)
+    }
+}
+
 impl From<(i32, i32)> for Value {
     fn from((f_n, f_d): (i32, i32)) -> Value {
-        Value::Fraction(f_n, f_d)
+        Value::Fraction(Rational32::new(f_n, f_d))
     }
 }
 
