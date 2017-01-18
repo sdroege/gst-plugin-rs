@@ -20,7 +20,6 @@ use std::os::raw::c_void;
 use std::ffi::CString;
 use std::ffi::CStr;
 use std::fmt;
-
 use value::*;
 
 pub struct Caps(*mut c_void);

@@ -189,6 +189,7 @@ pub fn gcd(mut a: u32, mut b: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_rational::Rational32;
 
     #[test]
     fn test_gcd() {
@@ -198,9 +199,10 @@ mod tests {
 
     #[test]
     fn test_f64_to_fraction() {
-        assert_eq!(f64_to_fraction(2.0), Some((2, 1)));
-        assert_eq!(f64_to_fraction(2.5), Some((5, 2)));
-        assert_eq!(f64_to_fraction(0.127659574), Some((29013539, 227272723)));
-        assert_eq!(f64_to_fraction(29.97), Some((2997, 100)));
+        assert_eq!(f64_to_fraction(2.0), Some(Rational32::new(2, 1)));
+        assert_eq!(f64_to_fraction(2.5), Some(Rational32::new(5, 2)));
+        assert_eq!(f64_to_fraction(0.127659574),
+                   Some(Rational32::new(29013539, 227272723)));
+        assert_eq!(f64_to_fraction(29.97), Some(Rational32::new(2997, 100)));
     }
 }
