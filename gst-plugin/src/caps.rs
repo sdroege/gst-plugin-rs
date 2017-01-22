@@ -61,6 +61,14 @@ impl Caps {
         caps
     }
 
+    pub unsafe fn new_from_ptr(ptr: *mut c_void) -> Caps {
+        extern "C" {
+            fn gst_mini_object_ref(mini_object: *mut c_void) -> *mut c_void;
+        }
+
+        Caps(gst_mini_object_ref(ptr))
+    }
+
     pub fn from_string(value: &str) -> Option<Self> {
         extern "C" {
             fn gst_caps_from_string(value: *const c_char) -> *mut c_void;
@@ -95,9 +103,16 @@ impl Caps {
     pub fn to_string(&self) -> String {
         extern "C" {
             fn gst_caps_to_string(caps: *mut c_void) -> *mut c_char;
+            fn g_free(ptr: *mut c_char);
         }
 
-        unsafe { CStr::from_ptr(gst_caps_to_string(self.0)).to_string_lossy().into_owned() }
+        unsafe {
+            let ptr = gst_caps_to_string(self.0);
+            let s = CStr::from_ptr(ptr).to_string_lossy().into_owned();
+            g_free(ptr);
+
+            s
+        }
     }
 
     pub unsafe fn as_ptr(&self) -> *const c_void {

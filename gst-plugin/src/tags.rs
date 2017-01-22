@@ -73,6 +73,14 @@ impl TagList {
         TagList(unsafe { gst_tag_list_new_empty() })
     }
 
+    pub unsafe fn new_from_ptr(ptr: *mut c_void) -> TagList {
+        extern "C" {
+            fn gst_mini_object_ref(mini_object: *mut c_void) -> *mut c_void;
+        }
+
+        TagList(gst_mini_object_ref(ptr))
+    }
+
     pub fn add<T: Tag>(&mut self, value: T::TagType, mode: MergeMode)
         where Value: From<<T as Tag>::TagType>
     {
@@ -125,9 +133,16 @@ impl TagList {
     pub fn to_string(&self) -> String {
         extern "C" {
             fn gst_tag_list_to_string(tag_list: *mut c_void) -> *mut c_char;
+            fn g_free(ptr: *mut c_char);
         }
 
-        unsafe { CStr::from_ptr(gst_tag_list_to_string(self.0)).to_string_lossy().into_owned() }
+        unsafe {
+            let ptr = gst_tag_list_to_string(self.0);
+            let s = CStr::from_ptr(ptr).to_string_lossy().into_owned();
+            g_free(ptr);
+
+            s
+        }
     }
 
     pub unsafe fn as_ptr(&self) -> *const c_void {

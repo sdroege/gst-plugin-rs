@@ -43,3 +43,4 @@ pub mod value;
 pub mod caps;
 pub mod bytes;
 pub mod tags;
+pub mod streams;
