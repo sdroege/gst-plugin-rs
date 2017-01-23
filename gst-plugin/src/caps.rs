@@ -108,7 +108,7 @@ impl Caps {
 
         unsafe {
             let ptr = gst_caps_to_string(self.0);
-            let s = CStr::from_ptr(ptr).to_string_lossy().into_owned();
+            let s = CStr::from_ptr(ptr).to_str().unwrap().into();
             g_free(ptr);
 
             s

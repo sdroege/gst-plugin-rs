@@ -102,8 +102,9 @@ impl Stream {
 
         unsafe {
             CStr::from_ptr(gst_stream_get_stream_id(self.0))
-                .to_string_lossy()
-                .into_owned()
+                .to_str()
+                .unwrap()
+                .into()
         }
     }
 
@@ -215,8 +216,9 @@ impl StreamCollection {
 
         unsafe {
             CStr::from_ptr(gst_stream_collection_get_upstream_id(self.0))
-                .to_string_lossy()
-                .into_owned()
+                .to_str()
+                .unwrap()
+                .into()
         }
     }
 
