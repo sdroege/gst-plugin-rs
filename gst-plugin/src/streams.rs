@@ -95,7 +95,7 @@ impl Stream {
         StreamType::from_bits_truncate(unsafe { gst_stream_get_stream_type(self.0) })
     }
 
-    pub fn get_stream_id(&self) -> String {
+    pub fn get_stream_id(&self) -> &str {
         extern "C" {
             fn gst_stream_get_stream_id(collection: *mut c_void) -> *mut c_char;
         }
@@ -104,7 +104,6 @@ impl Stream {
             CStr::from_ptr(gst_stream_get_stream_id(self.0))
                 .to_str()
                 .unwrap()
-                .into()
         }
     }
 
@@ -209,7 +208,7 @@ impl StreamCollection {
         unsafe { gst_stream_collection_get_size(self.0) }
     }
 
-    pub fn get_upstream_id(&self) -> String {
+    pub fn get_upstream_id(&self) -> &str {
         extern "C" {
             fn gst_stream_collection_get_upstream_id(collection: *mut c_void) -> *mut c_char;
         }
@@ -218,7 +217,6 @@ impl StreamCollection {
             CStr::from_ptr(gst_stream_collection_get_upstream_id(self.0))
                 .to_str()
                 .unwrap()
-                .into()
         }
     }
 
