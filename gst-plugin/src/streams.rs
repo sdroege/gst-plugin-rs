@@ -100,11 +100,8 @@ impl Stream {
             fn gst_stream_get_stream_id(collection: *mut c_void) -> *mut c_char;
         }
 
-        unsafe {
-            CStr::from_ptr(gst_stream_get_stream_id(self.0))
-                .to_str()
-                .unwrap()
-        }
+        let cstr = unsafe { CStr::from_ptr(gst_stream_get_stream_id(self.0)) };
+        cstr.to_str().unwrap()
     }
 
     pub fn get_tags(&self) -> Option<TagList> {
@@ -213,11 +210,8 @@ impl StreamCollection {
             fn gst_stream_collection_get_upstream_id(collection: *mut c_void) -> *mut c_char;
         }
 
-        unsafe {
-            CStr::from_ptr(gst_stream_collection_get_upstream_id(self.0))
-                .to_str()
-                .unwrap()
-        }
+        let cstr = unsafe { CStr::from_ptr(gst_stream_collection_get_upstream_id(self.0)) };
+        cstr.to_str().unwrap()
     }
 
     pub unsafe fn as_ptr(&self) -> *const c_void {
