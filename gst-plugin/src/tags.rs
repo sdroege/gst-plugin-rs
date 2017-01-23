@@ -62,6 +62,7 @@ pub enum MergeMode {
     KeepAll,
 }
 
+#[derive(Eq)]
 pub struct TagList(*mut c_void);
 
 impl TagList {
@@ -190,6 +191,16 @@ impl Drop for TagList {
 impl fmt::Debug for TagList {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.to_string())
+    }
+}
+
+impl PartialEq for TagList {
+    fn eq(&self, other: &TagList) -> bool {
+        extern "C" {
+            fn gst_tag_list_is_equal(a: *const c_void, b: *const c_void) -> GBoolean;
+        }
+
+        unsafe { gst_tag_list_is_equal(self.0, other.0).to_bool() }
     }
 }
 

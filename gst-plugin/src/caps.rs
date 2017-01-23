@@ -21,7 +21,9 @@ use std::ffi::CString;
 use std::ffi::CStr;
 use std::fmt;
 use value::*;
+use utils::*;
 
+#[derive(Eq)]
 pub struct Caps(*mut c_void);
 
 impl Caps {
@@ -160,6 +162,16 @@ impl Drop for Caps {
 impl fmt::Debug for Caps {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&self.to_string())
+    }
+}
+
+impl PartialEq for Caps {
+    fn eq(&self, other: &Caps) -> bool {
+        extern "C" {
+            fn gst_caps_is_equal(a: *const c_void, b: *const c_void) -> GBoolean;
+        }
+
+        unsafe { gst_caps_is_equal(self.0, other.0).to_bool() }
     }
 }
 
