@@ -1,3 +1,6 @@
 [workspace]
 
 members = ["gst-plugin", "gst-plugin-file", "gst-plugin-http", "gst-plugin-flv"]
+
+[profile.release]
+lto = true
