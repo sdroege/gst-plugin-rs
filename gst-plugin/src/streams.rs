@@ -210,6 +210,10 @@ impl StreamCollection {
         unsafe { gst_stream_collection_get_size(self.0) }
     }
 
+    pub fn empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn get_upstream_id(&self) -> &str {
         extern "C" {
             fn gst_stream_collection_get_upstream_id(collection: *mut c_void) -> *mut c_char;

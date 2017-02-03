@@ -196,11 +196,7 @@ impl Value {
 
         match gvalue.typ {
             TYPE_BOOLEAN => unsafe {
-                Some(Value::Bool(if g_value_get_boolean(gvalue as *const GValue) == 0 {
-                    false
-                } else {
-                    true
-                }))
+                Some(Value::Bool(!(g_value_get_boolean(gvalue as *const GValue) == 0)))
             },
             TYPE_INT => unsafe { Some(Value::Int(g_value_get_int(gvalue as *const GValue))) },
             TYPE_UINT => unsafe { Some(Value::UInt(g_value_get_uint(gvalue as *const GValue))) },
