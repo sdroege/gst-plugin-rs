@@ -20,6 +20,7 @@ use std::ptr;
 use libc::c_char;
 use std::ffi::{CStr, CString};
 use caps::Caps;
+use miniobject::*;
 use tags::TagList;
 
 pub struct Stream(*mut c_void);
@@ -46,7 +47,11 @@ bitflags! {
 }
 
 impl Stream {
-    pub fn new(stream_id: &str, caps: Option<Caps>, t: StreamType, flags: StreamFlags) -> Self {
+    pub fn new(stream_id: &str,
+               caps: Option<GstRc<Caps>>,
+               t: StreamType,
+               flags: StreamFlags)
+               -> Self {
         extern "C" {
             fn gst_stream_new(stream_id: *const c_char,
                               caps: *const c_void,
@@ -65,7 +70,7 @@ impl Stream {
         self.0
     }
 
-    pub fn get_caps(&self) -> Option<Caps> {
+    pub fn get_caps(&self) -> Option<GstRc<Caps>> {
         extern "C" {
             fn gst_stream_get_caps(stream: *mut c_void) -> *mut c_void;
         }
@@ -76,7 +81,7 @@ impl Stream {
             return None;
         }
 
-        Some(unsafe { Caps::new_from_ptr(ptr) })
+        Some(unsafe { GstRc::new_from_owned_ptr(ptr) })
     }
 
     pub fn get_stream_flags(&self) -> StreamFlags {
@@ -118,7 +123,7 @@ impl Stream {
         Some(unsafe { TagList::new_from_ptr(ptr) })
     }
 
-    pub fn set_caps(&self, caps: Option<Caps>) {
+    pub fn set_caps(&self, caps: Option<GstRc<Caps>>) {
         extern "C" {
             fn gst_stream_set_caps(stream: *mut c_void, caps: *mut c_void);
         }

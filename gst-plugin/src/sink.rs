@@ -33,6 +33,7 @@ use slog::*;
 use utils::*;
 use error::*;
 use buffer::*;
+use miniobject::*;
 use log::*;
 use plugin::Plugin;
 
@@ -270,13 +271,11 @@ pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> GBoolean {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper,
-                                     buffer: ScopedBufferPtr)
-                                     -> GstFlowReturn {
+pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper, buffer: GstRefPtr) -> GstFlowReturn {
     let wrap: &SinkWrapper = &*ptr;
     panic_to_error!(wrap, GstFlowReturn::Error, {
-        let buffer = ScopedBuffer::new(&buffer);
-        wrap.render(&*buffer)
+        let buffer: GstRef<Buffer> = GstRef::new(&buffer);
+        wrap.render(buffer.as_ref())
     })
 }
 

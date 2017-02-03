@@ -20,21 +20,14 @@ use std::ptr;
 use std::mem;
 use std::os::raw::c_void;
 use std::slice;
-use std::marker::PhantomData;
 use std::u64;
 use std::usize;
-use std::fmt::{Display, Formatter};
-use std::fmt::Error as FmtError;
-use std::error::Error;
-use std::ops::{Deref, DerefMut};
 
 use utils::*;
+use miniobject::*;
 
 #[derive(Debug)]
-pub struct Buffer {
-    raw: *mut c_void,
-    owned: bool,
-}
+pub struct Buffer(*mut c_void);
 
 #[repr(C)]
 #[derive(Debug)]
@@ -62,77 +55,40 @@ pub struct ReadWriteBufferMap<'a> {
 
 #[derive(Debug)]
 pub struct ReadMappedBuffer {
-    buffer: Buffer,
+    buffer: GstRc<Buffer>,
     map_info: GstMapInfo,
 }
 
 #[derive(Debug)]
 pub struct ReadWriteMappedBuffer {
-    buffer: Buffer,
+    buffer: GstRc<Buffer>,
     map_info: GstMapInfo,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum BufferError {
-    NotWritable,
-    NotEnoughSpace,
-    Unknown,
-}
-
-impl Display for BufferError {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        f.write_str(self.description())
+unsafe impl MiniObject for Buffer {
+    unsafe fn as_ptr(&self) -> *mut c_void {
+        self.0
     }
-}
 
-impl Error for BufferError {
-    fn description(&self) -> &str {
-        match *self {
-            BufferError::NotWritable => "Not Writable",
-            BufferError::NotEnoughSpace => "Not Enough Space",
-            BufferError::Unknown => "Unknown",
-        }
+    unsafe fn replace_ptr(&mut self, ptr: *mut c_void) {
+        self.0 = ptr
+    }
+
+    unsafe fn new_from_ptr(ptr: *mut c_void) -> Self {
+        Buffer(ptr)
     }
 }
 
 impl Buffer {
-    pub unsafe fn new_from_ptr(raw: *mut c_void) -> Buffer {
-        extern "C" {
-            fn gst_mini_object_ref(obj: *mut c_void) -> *mut c_void;
-        };
-        Buffer {
-            raw: gst_mini_object_ref(raw),
-            owned: true,
-        }
-    }
-
-    pub unsafe fn new_from_ptr_owned(raw: *mut c_void) -> Buffer {
-        Buffer {
-            raw: raw,
-            owned: true,
-        }
-    }
-
-    unsafe fn new_from_ptr_scoped(raw: *mut c_void) -> Buffer {
-        Buffer {
-            raw: raw,
-            owned: false,
-        }
-    }
-
-    pub fn new() -> Buffer {
+    pub fn new() -> GstRc<Buffer> {
         extern "C" {
             fn gst_buffer_new() -> *mut c_void;
         }
 
-        let raw = unsafe { gst_buffer_new() };
-        Buffer {
-            raw: raw,
-            owned: true,
-        }
+        unsafe { GstRc::new_from_owned_ptr(gst_buffer_new()) }
     }
 
-    pub fn new_with_size(size: usize) -> Option<Buffer> {
+    pub fn new_with_size(size: usize) -> Option<GstRc<Buffer>> {
         extern "C" {
             fn gst_buffer_new_allocate(allocator: *const c_void,
                                        size: usize,
@@ -144,10 +100,7 @@ impl Buffer {
         if raw.is_null() {
             None
         } else {
-            Some(Buffer {
-                raw: raw,
-                owned: true,
-            })
+            Some(unsafe { GstRc::new_from_owned_ptr(raw) })
         }
     }
 
@@ -156,7 +109,7 @@ impl Buffer {
         drop(vec);
     }
 
-    pub fn new_from_vec(vec: Vec<u8>) -> Option<Buffer> {
+    pub fn new_from_vec(vec: Vec<u8>) -> Option<GstRc<Buffer>> {
         extern "C" {
             fn gst_buffer_new_wrapped_full(flags: u32,
                                            data: *mut u8,
@@ -186,10 +139,7 @@ impl Buffer {
         if raw.is_null() {
             None
         } else {
-            Some(Buffer {
-                raw: raw,
-                owned: true,
-            })
+            Some(unsafe { GstRc::new_from_owned_ptr(raw) })
         }
     }
 
@@ -203,7 +153,7 @@ impl Buffer {
 
         let mut map_info: GstMapInfo = unsafe { mem::zeroed() };
         let res =
-            unsafe { gst_buffer_map(self.raw, &mut map_info as *mut GstMapInfo, MAP_FLAG_READ) };
+            unsafe { gst_buffer_map(self.0, &mut map_info as *mut GstMapInfo, MAP_FLAG_READ) };
         if res.to_bool() {
             Some(ReadBufferMap {
                 buffer: self,
@@ -223,11 +173,8 @@ impl Buffer {
         }
 
         let mut map_info: GstMapInfo = unsafe { mem::zeroed() };
-        let res = unsafe {
-            gst_buffer_map(self.raw,
-                           &mut map_info as *mut GstMapInfo,
-                           MAP_FLAG_READWRITE)
-        };
+        let res =
+            unsafe { gst_buffer_map(self.0, &mut map_info as *mut GstMapInfo, MAP_FLAG_READWRITE) };
         if res.to_bool() {
             Some(ReadWriteBufferMap {
                 buffer: self,
@@ -238,7 +185,7 @@ impl Buffer {
         }
     }
 
-    pub fn into_read_mapped_buffer(self) -> Option<ReadMappedBuffer> {
+    pub fn into_read_mapped_buffer(buffer: GstRc<Buffer>) -> Option<ReadMappedBuffer> {
         extern "C" {
             fn gst_buffer_map(buffer: *mut c_void,
                               map: *mut GstMapInfo,
@@ -248,10 +195,10 @@ impl Buffer {
 
         let mut map_info: GstMapInfo = unsafe { mem::zeroed() };
         let res =
-            unsafe { gst_buffer_map(self.raw, &mut map_info as *mut GstMapInfo, MAP_FLAG_READ) };
+            unsafe { gst_buffer_map(buffer.0, &mut map_info as *mut GstMapInfo, MAP_FLAG_READ) };
         if res.to_bool() {
             Some(ReadMappedBuffer {
-                buffer: self,
+                buffer: buffer,
                 map_info: map_info,
             })
         } else {
@@ -259,7 +206,7 @@ impl Buffer {
         }
     }
 
-    pub fn into_readwrite_mapped_buffer(self) -> Option<ReadWriteMappedBuffer> {
+    pub fn into_readwrite_mapped_buffer(buffer: GstRc<Buffer>) -> Option<ReadWriteMappedBuffer> {
         extern "C" {
             fn gst_buffer_map(buffer: *mut c_void,
                               map: *mut GstMapInfo,
@@ -269,13 +216,13 @@ impl Buffer {
 
         let mut map_info: GstMapInfo = unsafe { mem::zeroed() };
         let res = unsafe {
-            gst_buffer_map(self.raw,
+            gst_buffer_map(buffer.0,
                            &mut map_info as *mut GstMapInfo,
                            MAP_FLAG_READWRITE)
         };
         if res.to_bool() {
             Some(ReadWriteMappedBuffer {
-                buffer: self,
+                buffer: buffer,
                 map_info: map_info,
             })
         } else {
@@ -283,67 +230,15 @@ impl Buffer {
         }
     }
 
-    pub unsafe fn into_ptr(mut self) -> *mut c_void {
-        extern "C" {
-            fn gst_mini_object_ref(obj: *mut c_void) -> *mut c_void;
-        };
-        if !self.owned {
-            gst_mini_object_ref(self.raw);
-        }
-
-        self.owned = false;
-
-        self.raw
-    }
-
-    pub unsafe fn as_ptr(&self) -> *mut c_void {
-        self.raw
-    }
-
-    pub fn is_writable(&self) -> bool {
-        extern "C" {
-            fn gst_mini_object_is_writable(obj: *const c_void) -> GBoolean;
-        }
-
-        let res = unsafe { gst_mini_object_is_writable(self.raw) };
-
-        res.to_bool()
-    }
-
-    pub fn make_writable(self: Buffer) -> Buffer {
-        extern "C" {
-            fn gst_mini_object_make_writable(obj: *mut c_void) -> *mut c_void;
-        }
-
-        let raw = unsafe { gst_mini_object_make_writable(self.raw) };
-
-        Buffer {
-            raw: raw,
-            owned: true,
-        }
-    }
-
-    pub fn copy(&self) -> Buffer {
-        extern "C" {
-            fn gst_mini_object_copy(obj: *const c_void) -> *mut c_void;
-        }
-        unsafe { Buffer::new_from_ptr_owned(gst_mini_object_copy(self.raw)) }
-    }
-
-    pub fn append(self, other: Buffer) -> Buffer {
+    pub fn append(buffer: GstRc<Buffer>, other: GstRc<Buffer>) -> GstRc<Buffer> {
         extern "C" {
             fn gst_buffer_append(buf1: *mut c_void, buf2: *mut c_void) -> *mut c_void;
         }
 
-        let raw = unsafe { gst_buffer_append(self.raw, other.raw) };
-
-        Buffer {
-            raw: raw,
-            owned: true,
-        }
+        unsafe { GstRc::new_from_owned_ptr(gst_buffer_append(buffer.into_ptr(), other.into_ptr())) }
     }
 
-    pub fn copy_region(&self, offset: usize, size: Option<usize>) -> Option<Buffer> {
+    pub fn copy_region(&self, offset: usize, size: Option<usize>) -> Option<GstRc<Buffer>> {
         extern "C" {
             fn gst_buffer_copy_region(buf: *mut c_void,
                                       flags: BufferCopyFlags,
@@ -355,28 +250,20 @@ impl Buffer {
         let size_real = size.unwrap_or(usize::MAX);
 
         let raw =
-            unsafe { gst_buffer_copy_region(self.raw, BUFFER_COPY_FLAG_ALL, offset, size_real) };
+            unsafe { gst_buffer_copy_region(self.0, BUFFER_COPY_FLAG_ALL, offset, size_real) };
 
         if raw.is_null() {
             None
         } else {
-            Some(Buffer {
-                raw: raw,
-                owned: true,
-            })
+            Some(unsafe { GstRc::new_from_owned_ptr(raw) })
         }
     }
 
-    pub fn copy_from_slice(&mut self, offset: usize, slice: &[u8]) -> Result<(), BufferError> {
-        if !self.is_writable() {
-            return Err(BufferError::NotWritable);
-        }
-
+    pub fn copy_from_slice(&mut self, offset: usize, slice: &[u8]) -> Result<(), usize> {
         let maxsize = self.get_maxsize();
         let size = slice.len();
-        if maxsize < offset || maxsize - offset < size {
-            return Err(BufferError::NotEnoughSpace);
-        }
+
+        assert!(maxsize >= offset && maxsize - offset >= size);
 
         extern "C" {
             fn gst_buffer_fill(buffer: *mut c_void,
@@ -388,22 +275,17 @@ impl Buffer {
 
         let copied = unsafe {
             let src = slice.as_ptr();
-            gst_buffer_fill(self.raw, offset, src, size)
+            gst_buffer_fill(self.0, offset, src, size)
         };
 
-        if copied < size {
-            Err(BufferError::Unknown)
-        } else {
-            Ok(())
-        }
+        if copied == size { Ok(()) } else { Err(copied) }
     }
 
-    pub fn copy_to_slice(&self, offset: usize, slice: &mut [u8]) -> Result<(), BufferError> {
+    pub fn copy_to_slice(&self, offset: usize, slice: &mut [u8]) -> Result<(), usize> {
         let maxsize = self.get_size();
         let size = slice.len();
-        if maxsize < offset || maxsize - offset < size {
-            return Err(BufferError::NotEnoughSpace);
-        }
+
+        assert!(maxsize >= offset && maxsize - offset >= size);
 
         extern "C" {
             fn gst_buffer_extract(buffer: *mut c_void,
@@ -415,14 +297,10 @@ impl Buffer {
 
         let copied = unsafe {
             let src = slice.as_mut_ptr();
-            gst_buffer_extract(self.raw, offset, src, size)
+            gst_buffer_extract(self.0, offset, src, size)
         };
 
-        if copied < size {
-            Err(BufferError::Unknown)
-        } else {
-            Ok(())
-        }
+        if copied == size { Ok(()) } else { Err(copied) }
     }
 
     pub fn get_size(&self) -> usize {
@@ -430,7 +308,7 @@ impl Buffer {
             fn gst_buffer_get_size(obj: *const c_void) -> usize;
         }
 
-        unsafe { gst_buffer_get_size(self.raw) }
+        unsafe { gst_buffer_get_size(self.0) }
     }
 
     pub fn get_maxsize(&self) -> usize {
@@ -446,34 +324,22 @@ impl Buffer {
         let mut maxsize: usize = 0;
 
         unsafe {
-            gst_buffer_get_sizes_range(self.raw,
-                                       0,
-                                       -1,
-                                       ptr::null_mut(),
-                                       &mut maxsize as *mut usize);
+            gst_buffer_get_sizes_range(self.0, 0, -1, ptr::null_mut(), &mut maxsize as *mut usize);
         };
 
         maxsize
     }
 
-    pub fn set_size(&mut self, size: usize) -> Result<(), BufferError> {
+    pub fn set_size(&mut self, size: usize) {
         extern "C" {
             fn gst_buffer_set_size(obj: *const c_void, size: usize);
         }
 
-        if !self.is_writable() {
-            return Err(BufferError::NotWritable);
-        }
-
-        if self.get_maxsize() < size {
-            return Err(BufferError::NotEnoughSpace);
-        }
+        assert!(self.get_maxsize() >= size);
 
         unsafe {
-            gst_buffer_set_size(self.raw, size);
+            gst_buffer_set_size(self.0, size);
         }
-
-        Ok(())
     }
 
     pub fn get_offset(&self) -> Option<u64> {
@@ -481,7 +347,7 @@ impl Buffer {
             fn gst_rs_buffer_get_offset(buf: *const c_void) -> u64;
         }
 
-        let offset = unsafe { gst_rs_buffer_get_offset(self.raw) };
+        let offset = unsafe { gst_rs_buffer_get_offset(self.0) };
 
         if offset == u64::MAX {
             None
@@ -490,11 +356,7 @@ impl Buffer {
         }
     }
 
-    pub fn set_offset(&mut self, offset: Option<u64>) -> Result<(), BufferError> {
-        if !self.is_writable() {
-            return Err(BufferError::NotWritable);
-        }
-
+    pub fn set_offset(&mut self, offset: Option<u64>) {
         extern "C" {
             fn gst_rs_buffer_set_offset(buf: *const c_void, offset: u64);
         }
@@ -502,10 +364,8 @@ impl Buffer {
         let offset = offset.unwrap_or(u64::MAX);
 
         unsafe {
-            gst_rs_buffer_set_offset(self.raw, offset);
+            gst_rs_buffer_set_offset(self.0, offset);
         }
-
-        Ok(())
     }
 
     pub fn get_offset_end(&self) -> Option<u64> {
@@ -513,7 +373,7 @@ impl Buffer {
             fn gst_rs_buffer_get_offset_end(buf: *const c_void) -> u64;
         }
 
-        let offset_end = unsafe { gst_rs_buffer_get_offset_end(self.raw) };
+        let offset_end = unsafe { gst_rs_buffer_get_offset_end(self.0) };
 
         if offset_end == u64::MAX {
             None
@@ -522,11 +382,7 @@ impl Buffer {
         }
     }
 
-    pub fn set_offset_end(&mut self, offset_end: Option<u64>) -> Result<(), BufferError> {
-        if !self.is_writable() {
-            return Err(BufferError::NotWritable);
-        }
-
+    pub fn set_offset_end(&mut self, offset_end: Option<u64>) {
         extern "C" {
             fn gst_rs_buffer_set_offset_end(buf: *const c_void, offset_end: u64);
         }
@@ -534,10 +390,8 @@ impl Buffer {
         let offset_end = offset_end.unwrap_or(u64::MAX);
 
         unsafe {
-            gst_rs_buffer_set_offset_end(self.raw, offset_end);
+            gst_rs_buffer_set_offset_end(self.0, offset_end);
         }
-
-        Ok(())
     }
 
     pub fn get_pts(&self) -> Option<u64> {
@@ -545,16 +399,12 @@ impl Buffer {
             fn gst_rs_buffer_get_pts(buf: *const c_void) -> u64;
         }
 
-        let pts = unsafe { gst_rs_buffer_get_pts(self.raw) };
+        let pts = unsafe { gst_rs_buffer_get_pts(self.0) };
 
         if pts == u64::MAX { None } else { Some(pts) }
     }
 
-    pub fn set_pts(&mut self, pts: Option<u64>) -> Result<(), BufferError> {
-        if !self.is_writable() {
-            return Err(BufferError::NotWritable);
-        }
-
+    pub fn set_pts(&mut self, pts: Option<u64>) {
         extern "C" {
             fn gst_rs_buffer_set_pts(buf: *const c_void, pts: u64);
         }
@@ -562,10 +412,8 @@ impl Buffer {
         let pts = pts.unwrap_or(u64::MAX);
 
         unsafe {
-            gst_rs_buffer_set_pts(self.raw, pts);
+            gst_rs_buffer_set_pts(self.0, pts);
         }
-
-        Ok(())
     }
 
     pub fn get_dts(&self) -> Option<u64> {
@@ -573,16 +421,12 @@ impl Buffer {
             fn gst_rs_buffer_get_dts(buf: *const c_void) -> u64;
         }
 
-        let dts = unsafe { gst_rs_buffer_get_dts(self.raw) };
+        let dts = unsafe { gst_rs_buffer_get_dts(self.0) };
 
         if dts == u64::MAX { None } else { Some(dts) }
     }
 
-    pub fn set_dts(&mut self, dts: Option<u64>) -> Result<(), BufferError> {
-        if !self.is_writable() {
-            return Err(BufferError::NotWritable);
-        }
-
+    pub fn set_dts(&mut self, dts: Option<u64>) {
         extern "C" {
             fn gst_rs_buffer_set_dts(buf: *const c_void, dts: u64);
         }
@@ -590,10 +434,34 @@ impl Buffer {
         let dts = dts.unwrap_or(u64::MAX);
 
         unsafe {
-            gst_rs_buffer_set_dts(self.raw, dts);
+            gst_rs_buffer_set_dts(self.0, dts);
+        }
+    }
+
+    pub fn get_duration(&self) -> Option<u64> {
+        extern "C" {
+            fn gst_rs_buffer_get_duration(buf: *const c_void) -> u64;
         }
 
-        Ok(())
+        let duration = unsafe { gst_rs_buffer_get_duration(self.0) };
+
+        if duration == u64::MAX {
+            None
+        } else {
+            Some(duration)
+        }
+    }
+
+    pub fn set_duration(&mut self, duration: Option<u64>) {
+        extern "C" {
+            fn gst_rs_buffer_set_duration(buf: *const c_void, duration: u64);
+        }
+
+        let duration = duration.unwrap_or(u64::MAX);
+
+        unsafe {
+            gst_rs_buffer_set_duration(self.0, duration);
+        }
     }
 
     pub fn get_flags(&self) -> BufferFlags {
@@ -601,55 +469,22 @@ impl Buffer {
             fn gst_rs_buffer_get_flags(buf: *const c_void) -> BufferFlags;
         }
 
-        unsafe { gst_rs_buffer_get_flags(self.raw) }
+        unsafe { gst_rs_buffer_get_flags(self.0) }
     }
 
-    pub fn set_flags(&mut self, flags: BufferFlags) -> Result<(), BufferError> {
-        if !self.is_writable() {
-            return Err(BufferError::NotWritable);
-        }
-
+    pub fn set_flags(&mut self, flags: BufferFlags) {
         extern "C" {
             fn gst_rs_buffer_set_flags(buf: *const c_void, flags: BufferFlags);
         }
 
         unsafe {
-            gst_rs_buffer_set_flags(self.raw, flags);
-        }
-
-        Ok(())
-    }
-}
-
-impl Drop for Buffer {
-    fn drop(&mut self) {
-        extern "C" {
-            fn gst_mini_object_unref(obj: *mut c_void);
-        }
-
-        if self.owned && !self.raw.is_null() {
-            unsafe { gst_mini_object_unref(self.raw) }
+            gst_rs_buffer_set_flags(self.0, flags);
         }
     }
 }
 
 unsafe impl Sync for Buffer {}
 unsafe impl Send for Buffer {}
-
-impl Clone for Buffer {
-    fn clone(&self) -> Buffer {
-        extern "C" {
-            fn gst_mini_object_ref(obj: *mut c_void) -> *mut c_void;
-        }
-
-        let raw = unsafe { gst_mini_object_ref(self.raw) };
-
-        Buffer {
-            raw: raw,
-            owned: true,
-        }
-    }
-}
 
 impl PartialEq for Buffer {
     fn eq(&self, other: &Buffer) -> bool {
@@ -677,6 +512,10 @@ impl<'a> ReadBufferMap<'a> {
     pub fn get_size(&self) -> usize {
         self.map_info.size
     }
+
+    pub fn get_buffer(&self) -> &Buffer {
+        self.buffer
+    }
 }
 
 impl<'a> Drop for ReadBufferMap<'a> {
@@ -686,7 +525,7 @@ impl<'a> Drop for ReadBufferMap<'a> {
         };
 
         unsafe {
-            gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+            gst_buffer_unmap(self.buffer.0, &mut self.map_info as *mut GstMapInfo);
         }
     }
 }
@@ -703,6 +542,10 @@ impl<'a> ReadWriteBufferMap<'a> {
     pub fn get_size(&self) -> usize {
         self.map_info.size
     }
+
+    pub fn get_buffer(&self) -> &Buffer {
+        self.buffer
+    }
 }
 
 impl<'a> Drop for ReadWriteBufferMap<'a> {
@@ -712,7 +555,7 @@ impl<'a> Drop for ReadWriteBufferMap<'a> {
         };
 
         unsafe {
-            gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+            gst_buffer_unmap(self.buffer.0, &mut self.map_info as *mut GstMapInfo);
         }
     }
 }
@@ -727,7 +570,7 @@ impl ReadMappedBuffer {
     }
 
     pub fn get_buffer(&self) -> &Buffer {
-        &self.buffer
+        self.buffer.as_ref()
     }
 }
 
@@ -737,9 +580,9 @@ impl Drop for ReadMappedBuffer {
             fn gst_buffer_unmap(buffer: *mut c_void, map: *mut GstMapInfo);
         };
 
-        if !self.buffer.raw.is_null() {
+        if !self.buffer.0.is_null() {
             unsafe {
-                gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+                gst_buffer_unmap(self.buffer.0, &mut self.map_info as *mut GstMapInfo);
             }
         }
     }
@@ -762,7 +605,7 @@ impl ReadWriteMappedBuffer {
     }
 
     pub fn get_buffer(&self) -> &Buffer {
-        &self.buffer
+        self.buffer.as_ref()
     }
 }
 
@@ -772,9 +615,9 @@ impl Drop for ReadWriteMappedBuffer {
             fn gst_buffer_unmap(buffer: *mut c_void, map: *mut GstMapInfo);
         };
 
-        if !self.buffer.raw.is_null() {
+        if !self.buffer.0.is_null() {
             unsafe {
-                gst_buffer_unmap(self.buffer.raw, &mut self.map_info as *mut GstMapInfo);
+                gst_buffer_unmap(self.buffer.0, &mut self.map_info as *mut GstMapInfo);
             }
         }
     }
@@ -782,38 +625,6 @@ impl Drop for ReadWriteMappedBuffer {
 
 unsafe impl Sync for ReadWriteMappedBuffer {}
 unsafe impl Send for ReadWriteMappedBuffer {}
-
-#[repr(C)]
-pub struct ScopedBufferPtr(*mut c_void);
-
-pub struct ScopedBuffer<'a> {
-    buffer: Buffer,
-    #[allow(dead_code)]
-    phantom: PhantomData<&'a ScopedBufferPtr>,
-}
-
-impl<'a> ScopedBuffer<'a> {
-    pub unsafe fn new(ptr: &'a ScopedBufferPtr) -> ScopedBuffer<'a> {
-        ScopedBuffer {
-            buffer: Buffer::new_from_ptr_scoped(ptr.0),
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<'a> Deref for ScopedBuffer<'a> {
-    type Target = Buffer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.buffer
-    }
-}
-
-impl<'a> DerefMut for ScopedBuffer<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.buffer
-    }
-}
 
 bitflags! {
     #[repr(C)]

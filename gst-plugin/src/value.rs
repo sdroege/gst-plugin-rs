@@ -25,6 +25,7 @@ use std::ops::Deref;
 pub use num_rational::Rational32;
 
 use buffer::*;
+use miniobject::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value {
@@ -35,7 +36,7 @@ pub enum Value {
     UInt64(u64),
     String(String),
     Fraction(Rational32),
-    Buffer(Buffer),
+    Buffer(GstRc<Buffer>),
     Array(Vec<Value>),
 }
 
@@ -63,7 +64,7 @@ impl_value_type!(i64, Int64);
 impl_value_type!(u64, UInt64);
 impl_value_type!(String, String);
 impl_value_type!(Rational32, Fraction);
-impl_value_type!(Buffer, Buffer);
+impl_value_type!(GstRc<Buffer>, Buffer);
 impl_value_type!(Vec<Value>, Array);
 
 #[repr(C)]
@@ -74,9 +75,7 @@ pub struct GValue {
 
 impl GValue {
     pub fn new() -> GValue {
-        let gvalue: GValue = unsafe { mem::zeroed() };
-
-        gvalue
+        unsafe { mem::zeroed() }
     }
 }
 
@@ -234,7 +233,7 @@ impl Value {
                     return None;
                 }
 
-                Some(Value::Buffer(Buffer::new_from_ptr(b)))
+                Some(Value::Buffer(GstRc::new_from_unowned_ptr(b)))
             },
             typ if typ == *TYPE_GST_VALUE_ARRAY => unsafe {
                 let n = gst_value_array_get_size(gvalue as *const GValue);
@@ -320,15 +319,15 @@ impl From<(i32, i32)> for Value {
     }
 }
 
-impl From<Buffer> for Value {
-    fn from(f: Buffer) -> Value {
+impl From<GstRc<Buffer>> for Value {
+    fn from(f: GstRc<Buffer>) -> Value {
         Value::Buffer(f)
     }
 }
 
 impl<'a> From<&'a Buffer> for Value {
     fn from(f: &'a Buffer) -> Value {
-        Value::Buffer(f.clone())
+        Value::Buffer(f.into())
     }
 }
 

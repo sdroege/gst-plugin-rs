@@ -43,6 +43,18 @@ gst_rs_buffer_set_dts (GstBuffer * buffer, guint64 dts)
 }
 
 guint64
+gst_rs_buffer_get_duration (GstBuffer * buffer)
+{
+  return GST_BUFFER_DURATION (buffer);
+}
+
+void
+gst_rs_buffer_set_duration (GstBuffer * buffer, guint64 dts)
+{
+  GST_BUFFER_DURATION (buffer) = dts;
+}
+
+guint64
 gst_rs_buffer_get_offset (GstBuffer * buffer)
 {
   return GST_BUFFER_OFFSET (buffer);

@@ -34,6 +34,7 @@ use plugin::Plugin;
 use utils::*;
 use error::*;
 use buffer::*;
+use miniobject::*;
 use log::*;
 
 #[derive(Debug)]
@@ -323,13 +324,13 @@ pub unsafe extern "C" fn source_stop(ptr: *const SourceWrapper) -> GBoolean {
 pub unsafe extern "C" fn source_fill(ptr: *const SourceWrapper,
                                      offset: u64,
                                      length: u32,
-                                     buffer: ScopedBufferPtr)
+                                     buffer: GstRefPtr)
                                      -> GstFlowReturn {
     let wrap: &SourceWrapper = &*ptr;
 
     panic_to_error!(wrap, GstFlowReturn::Error, {
-        let mut buffer = ScopedBuffer::new(&buffer);
-        wrap.fill(offset, length, &mut *buffer)
+        let mut buffer: GstRef<Buffer> = GstRef::new(&buffer);
+        wrap.fill(offset, length, buffer.get_mut().unwrap())
     })
 }
 

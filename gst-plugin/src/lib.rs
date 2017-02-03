@@ -44,3 +44,4 @@ pub mod caps;
 pub mod bytes;
 pub mod tags;
 pub mod streams;
+pub mod miniobject;

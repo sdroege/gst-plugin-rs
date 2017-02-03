@@ -22,28 +22,43 @@ use std::ffi::CStr;
 use std::fmt;
 use value::*;
 use utils::*;
+use miniobject::*;
 
 #[derive(Eq)]
 pub struct Caps(*mut c_void);
 
+unsafe impl MiniObject for Caps {
+    unsafe fn as_ptr(&self) -> *mut c_void {
+        self.0
+    }
+
+    unsafe fn replace_ptr(&mut self, ptr: *mut c_void) {
+        self.0 = ptr
+    }
+
+    unsafe fn new_from_ptr(ptr: *mut c_void) -> Self {
+        Caps(ptr)
+    }
+}
+
 impl Caps {
-    pub fn new_empty() -> Self {
+    pub fn new_empty() -> GstRc<Self> {
         extern "C" {
             fn gst_caps_new_empty() -> *mut c_void;
         }
 
-        Caps(unsafe { gst_caps_new_empty() })
+        unsafe { GstRc::new_from_owned_ptr(gst_caps_new_empty()) }
     }
 
-    pub fn new_any() -> Self {
+    pub fn new_any() -> GstRc<Self> {
         extern "C" {
             fn gst_caps_new_any() -> *mut c_void;
         }
 
-        Caps(unsafe { gst_caps_new_any() })
+        unsafe { GstRc::new_from_owned_ptr(gst_caps_new_any()) }
     }
 
-    pub fn new_simple(name: &str, values: &[(&str, &Value)]) -> Self {
+    pub fn new_simple(name: &str, values: &[(&str, &Value)]) -> GstRc<Self> {
         extern "C" {
             fn gst_caps_append_structure(caps: *mut c_void, structure: *mut c_void);
             fn gst_structure_new_empty(name: *const c_char) -> *mut c_void;
@@ -55,35 +70,29 @@ impl Caps {
         let structure = unsafe { gst_structure_new_empty(name_cstr.as_ptr()) };
 
         unsafe {
-            gst_caps_append_structure(caps.0, structure);
+            gst_caps_append_structure(caps.as_ptr(), structure);
         }
 
-        caps.set_simple(values);
+        caps.get_mut().unwrap().set_simple(values);
 
         caps
     }
 
-    pub unsafe fn new_from_ptr(ptr: *mut c_void) -> Caps {
-        extern "C" {
-            fn gst_mini_object_ref(mini_object: *mut c_void) -> *mut c_void;
-        }
-
-        Caps(gst_mini_object_ref(ptr))
-    }
-
-    pub fn from_string(value: &str) -> Option<Self> {
+    pub fn from_string(value: &str) -> Option<GstRc<Self>> {
         extern "C" {
             fn gst_caps_from_string(value: *const c_char) -> *mut c_void;
         }
 
         let value_cstr = CString::new(value).unwrap();
 
-        let caps_ptr = unsafe { gst_caps_from_string(value_cstr.as_ptr()) };
+        unsafe {
+            let caps_ptr = gst_caps_from_string(value_cstr.as_ptr());
 
-        if caps_ptr.is_null() {
-            None
-        } else {
-            Some(Caps(caps_ptr))
+            if caps_ptr.is_null() {
+                None
+            } else {
+                Some(GstRc::new_from_owned_ptr(caps_ptr))
+            }
         }
     }
 
@@ -116,47 +125,6 @@ impl Caps {
             s
         }
     }
-
-    pub unsafe fn as_ptr(&self) -> *const c_void {
-        self.0
-    }
-
-    pub fn make_writable(self: Caps) -> Caps {
-        extern "C" {
-            fn gst_mini_object_make_writable(obj: *mut c_void) -> *mut c_void;
-        }
-
-        let raw = unsafe { gst_mini_object_make_writable(self.0) };
-
-        Caps(raw)
-    }
-
-    pub fn copy(&self) -> Caps {
-        extern "C" {
-            fn gst_mini_object_copy(obj: *const c_void) -> *mut c_void;
-        }
-        unsafe { Caps(gst_mini_object_copy(self.0)) }
-    }
-}
-
-impl Clone for Caps {
-    fn clone(&self) -> Self {
-        extern "C" {
-            fn gst_mini_object_ref(mini_object: *mut c_void) -> *mut c_void;
-        }
-
-        unsafe { Caps(gst_mini_object_ref(self.0)) }
-    }
-}
-
-impl Drop for Caps {
-    fn drop(&mut self) {
-        extern "C" {
-            fn gst_mini_object_unref(mini_object: *mut c_void);
-        }
-
-        unsafe { gst_mini_object_unref(self.0) }
-    }
 }
 
 impl fmt::Debug for Caps {
@@ -175,10 +143,12 @@ impl PartialEq for Caps {
     }
 }
 
+unsafe impl Sync for Caps {}
+unsafe impl Send for Caps {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use value::*;
     use std::ptr;
     use std::os::raw::c_void;
 

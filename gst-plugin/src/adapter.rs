@@ -17,6 +17,7 @@
 //
 
 use buffer::*;
+use miniobject::*;
 use log::*;
 use std::collections::VecDeque;
 use std::cmp;
@@ -55,7 +56,7 @@ impl Adapter {
         }
     }
 
-    pub fn push(&mut self, buffer: Buffer) {
+    pub fn push(&mut self, buffer: GstRc<Buffer>) {
         let size = buffer.get_size();
 
         self.size += size;
@@ -64,7 +65,7 @@ impl Adapter {
                buffer,
                size,
                self.size);
-        self.deque.push_back(buffer.into_read_mapped_buffer().unwrap());
+        self.deque.push_back(Buffer::into_read_mapped_buffer(buffer).unwrap());
     }
 
     pub fn clear(&mut self) {
@@ -159,7 +160,7 @@ impl Adapter {
         Ok(self.scratch.as_slice())
     }
 
-    pub fn get_buffer(&mut self, size: usize) -> Result<Buffer, AdapterError> {
+    pub fn get_buffer(&mut self, size: usize) -> Result<GstRc<Buffer>, AdapterError> {
         if self.size < size {
             debug!(LOGGER,
                    "Get buffer of {} bytes, not enough data: have {}",
@@ -172,14 +173,12 @@ impl Adapter {
             return Ok(Buffer::new());
         }
 
-        let sub = self.deque.front().and_then(|front| {
-            if front.get_size() - self.skip >= size {
-                trace!(LOGGER, "Get buffer of {} bytes, subbuffer of first", size);
-                let new = front.get_buffer().copy_region(self.skip, Some(size)).unwrap();
-                Some(new)
-            } else {
-                None
-            }
+        let sub = self.deque.front().and_then(|front| if front.get_size() - self.skip >= size {
+            trace!(LOGGER, "Get buffer of {} bytes, subbuffer of first", size);
+            let new = front.get_buffer().copy_region(self.skip, Some(size)).unwrap();
+            Some(new)
+        } else {
+            None
         });
 
         if let Some(s) = sub {
@@ -190,7 +189,7 @@ impl Adapter {
         trace!(LOGGER, "Get buffer of {} bytes, copy into new buffer", size);
         let mut new = Buffer::new_with_size(size).unwrap();
         {
-            let mut map = new.map_readwrite().unwrap();
+            let mut map = new.get_mut().unwrap().map_readwrite().unwrap();
             let data = map.as_mut_slice();
             Self::copy_data(&self.deque, self.skip, data, size);
         }
@@ -244,7 +243,6 @@ impl Adapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use buffer::*;
     use std::ptr;
     use std::os::raw::c_void;
 

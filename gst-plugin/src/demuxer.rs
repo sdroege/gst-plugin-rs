@@ -32,6 +32,7 @@ use slog::*;
 use utils::*;
 use error::*;
 use buffer::*;
+use miniobject::*;
 use log::*;
 use caps::Caps;
 use plugin::Plugin;
@@ -57,7 +58,7 @@ pub enum HandleBufferResult {
     StreamsChanged(Vec<Stream>),
     // TODO need something to replace/add new streams
     // TODO should probably directly implement the GstStreams new world order
-    BufferForStream(StreamIndex, Buffer),
+    BufferForStream(StreamIndex, GstRc<Buffer>),
     Eos(Option<StreamIndex>),
 }
 
@@ -69,7 +70,9 @@ pub trait Demuxer {
     fn stop(&mut self) -> Result<(), ErrorMessage>;
 
     fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<SeekResult, ErrorMessage>;
-    fn handle_buffer(&mut self, buffer: Option<Buffer>) -> Result<HandleBufferResult, FlowError>;
+    fn handle_buffer(&mut self,
+                     buffer: Option<GstRc<Buffer>>)
+                     -> Result<HandleBufferResult, FlowError>;
     fn end_of_stream(&mut self) -> Result<(), ErrorMessage>;
 
     fn is_seekable(&self) -> bool;
@@ -80,12 +83,12 @@ pub trait Demuxer {
 #[derive(Debug)]
 pub struct Stream {
     pub index: StreamIndex,
-    pub caps: Caps,
+    pub caps: GstRc<Caps>,
     pub stream_id: String,
 }
 
 impl Stream {
-    pub fn new(index: StreamIndex, caps: Caps, stream_id: String) -> Stream {
+    pub fn new(index: StreamIndex, caps: GstRc<Caps>, stream_id: String) -> Stream {
         Stream {
             index: index,
             caps: caps,
@@ -250,7 +253,7 @@ impl DemuxerWrapper {
         }
     }
 
-    fn handle_buffer(&self, buffer: Buffer) -> GstFlowReturn {
+    fn handle_buffer(&self, buffer: GstRc<Buffer>) -> GstFlowReturn {
         extern "C" {
             fn gst_rs_demuxer_stream_eos(raw: *mut c_void, index: u32);
             fn gst_rs_demuxer_add_stream(raw: *mut c_void,
@@ -474,7 +477,7 @@ pub unsafe extern "C" fn demuxer_handle_buffer(ptr: *mut DemuxerWrapper,
     let wrap: &mut DemuxerWrapper = &mut *ptr;
 
     panic_to_error!(wrap, GstFlowReturn::Error, {
-        let buffer = Buffer::new_from_ptr_owned(buffer);
+        let buffer = GstRc::new_from_owned_ptr(buffer);
         wrap.handle_buffer(buffer)
     })
 }

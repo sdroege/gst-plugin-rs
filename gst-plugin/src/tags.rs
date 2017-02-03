@@ -21,6 +21,7 @@ use libc::c_char;
 use std::ffi::{CStr, CString};
 use utils::*;
 use value::*;
+use miniobject::*;
 
 pub trait Tag {
     type TagType: ValueType;
@@ -65,21 +66,27 @@ pub enum MergeMode {
 #[derive(Eq)]
 pub struct TagList(*mut c_void);
 
+unsafe impl MiniObject for TagList {
+    unsafe fn as_ptr(&self) -> *mut c_void {
+        self.0
+    }
+
+    unsafe fn replace_ptr(&mut self, ptr: *mut c_void) {
+        self.0 = ptr
+    }
+
+    unsafe fn new_from_ptr(ptr: *mut c_void) -> Self {
+        TagList(ptr)
+    }
+}
+
 impl TagList {
-    pub fn new() -> Self {
+    pub fn new() -> GstRc<Self> {
         extern "C" {
             fn gst_tag_list_new_empty() -> *mut c_void;
         }
 
-        TagList(unsafe { gst_tag_list_new_empty() })
-    }
-
-    pub unsafe fn new_from_ptr(ptr: *mut c_void) -> TagList {
-        extern "C" {
-            fn gst_mini_object_ref(mini_object: *mut c_void) -> *mut c_void;
-        }
-
-        TagList(gst_mini_object_ref(ptr))
+        unsafe { GstRc::new_from_owned_ptr(gst_tag_list_new_empty()) }
     }
 
     pub fn add<T: Tag>(&mut self, value: T::TagType, mode: MergeMode)
@@ -104,7 +111,7 @@ impl TagList {
         }
     }
 
-    pub fn get<T: Tag>(&mut self) -> Option<TypedValue<T::TagType>>
+    pub fn get<T: Tag>(&self) -> Option<TypedValue<T::TagType>>
         where Value: From<<T as Tag>::TagType>
     {
         extern "C" {
@@ -145,47 +152,6 @@ impl TagList {
             s
         }
     }
-
-    pub unsafe fn as_ptr(&self) -> *const c_void {
-        self.0
-    }
-
-    pub fn make_writable(self: TagList) -> TagList {
-        extern "C" {
-            fn gst_mini_object_make_writable(obj: *mut c_void) -> *mut c_void;
-        }
-
-        let raw = unsafe { gst_mini_object_make_writable(self.0) };
-
-        TagList(raw)
-    }
-
-    pub fn copy(&self) -> TagList {
-        extern "C" {
-            fn gst_mini_object_copy(obj: *const c_void) -> *mut c_void;
-        }
-        unsafe { TagList(gst_mini_object_copy(self.0)) }
-    }
-}
-
-impl Clone for TagList {
-    fn clone(&self) -> Self {
-        extern "C" {
-            fn gst_mini_object_ref(mini_object: *mut c_void) -> *mut c_void;
-        }
-
-        unsafe { TagList(gst_mini_object_ref(self.0)) }
-    }
-}
-
-impl Drop for TagList {
-    fn drop(&mut self) {
-        extern "C" {
-            fn gst_mini_object_unref(mini_object: *mut c_void);
-        }
-
-        unsafe { gst_mini_object_unref(self.0) }
-    }
 }
 
 impl fmt::Debug for TagList {
@@ -204,10 +170,12 @@ impl PartialEq for TagList {
     }
 }
 
+unsafe impl Sync for TagList {}
+unsafe impl Send for TagList {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use value::*;
     use std::ptr;
     use std::os::raw::c_void;
 
@@ -227,8 +195,11 @@ mod tests {
 
         let mut tags = TagList::new();
         assert_eq!(tags.to_string(), "taglist;");
-        tags.add::<Title>("some title".into(), MergeMode::Append);
-        tags.add::<Duration>((1000u64 * 1000 * 1000 * 120).into(), MergeMode::Append);
+        {
+            let tags = tags.get_mut().unwrap();
+            tags.add::<Title>("some title".into(), MergeMode::Append);
+            tags.add::<Duration>((1000u64 * 1000 * 1000 * 120).into(), MergeMode::Append);
+        }
         assert_eq!(tags.to_string(),
                    "taglist, title=(string)\"some\\ title\", duration=(guint64)120000000000;");
     }
@@ -239,10 +210,14 @@ mod tests {
 
         let mut tags = TagList::new();
         assert_eq!(tags.to_string(), "taglist;");
-        tags.add::<Title>("some title".into(), MergeMode::Append);
-        tags.add::<Duration>((1000u64 * 1000 * 1000 * 120).into(), MergeMode::Append);
+        {
+            let tags = tags.get_mut().unwrap();
+            tags.add::<Title>("some title".into(), MergeMode::Append);
+            tags.add::<Duration>((1000u64 * 1000 * 1000 * 120).into(), MergeMode::Append);
+        }
 
         assert_eq!(*tags.get::<Title>().unwrap(), "some title");
-        assert_eq!(*tags.get::<Duration>().unwrap(), (1000u64 * 1000 * 1000 * 120));
+        assert_eq!(*tags.get::<Duration>().unwrap(),
+                   (1000u64 * 1000 * 1000 * 120));
     }
 }

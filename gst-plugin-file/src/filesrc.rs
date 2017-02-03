@@ -167,10 +167,7 @@ impl Source for FileSrc {
 
         *position += size as u64;
 
-        if let Err(err) = buffer.set_size(size) {
-            return Err(FlowError::Error(error_msg!(SourceError::Failure,
-                                                   ["Failed to resize buffer: {}", err])));
-        }
+        buffer.set_size(size);
 
         Ok(())
     }

@@ -31,6 +31,7 @@ use gst_plugin::utils;
 use gst_plugin::utils::Element;
 use gst_plugin::log::*;
 use gst_plugin::caps::Caps;
+use gst_plugin::miniobject::*;
 use gst_plugin::value::Rational32;
 use gst_plugin::bytes::*;
 
@@ -62,8 +63,8 @@ struct StreamingState {
 
     metadata: Option<Metadata>,
 
-    aac_sequence_header: Option<Buffer>,
-    avc_sequence_header: Option<Buffer>,
+    aac_sequence_header: Option<GstRc<Buffer>>,
+    avc_sequence_header: Option<GstRc<Buffer>>,
 }
 
 impl StreamingState {
@@ -89,7 +90,7 @@ struct AudioFormat {
     width: u8,
     channels: u8,
     bitrate: Option<u32>,
-    aac_sequence_header: Option<Buffer>,
+    aac_sequence_header: Option<GstRc<Buffer>>,
 }
 
 // Ignores bitrate
@@ -104,7 +105,7 @@ impl PartialEq for AudioFormat {
 impl AudioFormat {
     fn new(data_header: &flavors::AudioDataHeader,
            metadata: &Option<Metadata>,
-           aac_sequence_header: &Option<Buffer>)
+           aac_sequence_header: &Option<GstRc<Buffer>>)
            -> AudioFormat {
         let numeric_rate = match (data_header.sound_format, data_header.sound_rate) {
             (flavors::SoundFormat::NELLYMOSER_16KHZ_MONO, _) => 16000,
@@ -152,7 +153,7 @@ impl AudioFormat {
         self.to_caps().map(|c| c.to_string())
     }
 
-    fn to_caps(&self) -> Option<Caps> {
+    fn to_caps(&self) -> Option<GstRc<Caps>> {
         let mut caps = match self.format {
             flavors::SoundFormat::MP3 |
             flavors::SoundFormat::MP3_8KHZ => {
@@ -190,7 +191,7 @@ impl AudioFormat {
                                      &[("mpegversion", &4.into()),
                                        ("framed", &true.into()),
                                        ("stream-format", &"raw".into()),
-                                       ("codec_data", &header.into())])
+                                       ("codec_data", &header.as_ref().into())])
                 })
             }
             flavors::SoundFormat::SPEEX => {
@@ -245,11 +246,13 @@ impl AudioFormat {
 
         if self.rate != 0 {
             caps.as_mut()
-                .map(|c| c.set_simple(&[("rate", &(self.rate as i32).into())]));
+                .map(|c| c.get_mut().unwrap().set_simple(&[("rate", &(self.rate as i32).into())]));
         }
         if self.channels != 0 {
             caps.as_mut()
-                .map(|c| c.set_simple(&[("channels", &(self.channels as i32).into())]));
+                .map(|c| {
+                    c.get_mut().unwrap().set_simple(&[("channels", &(self.channels as i32).into())])
+                });
         }
 
         caps
@@ -264,13 +267,13 @@ struct VideoFormat {
     pixel_aspect_ratio: Option<Rational32>,
     framerate: Option<Rational32>,
     bitrate: Option<u32>,
-    avc_sequence_header: Option<Buffer>,
+    avc_sequence_header: Option<GstRc<Buffer>>,
 }
 
 impl VideoFormat {
     fn new(data_header: &flavors::VideoDataHeader,
            metadata: &Option<Metadata>,
-           avc_sequence_header: &Option<Buffer>)
+           avc_sequence_header: &Option<GstRc<Buffer>>)
            -> VideoFormat {
         VideoFormat {
             format: data_header.codec_id,
@@ -318,7 +321,7 @@ impl VideoFormat {
         self.to_caps().map(|caps| caps.to_string())
     }
 
-    fn to_caps(&self) -> Option<Caps> {
+    fn to_caps(&self) -> Option<GstRc<Caps>> {
         let mut caps = match self.format {
             flavors::CodecId::SORENSON_H263 => {
                 Some(Caps::new_simple("video/x-flash-video", &[("flvversion", &1.into())]))
@@ -331,7 +334,7 @@ impl VideoFormat {
                 self.avc_sequence_header.as_ref().map(|header| {
                     Caps::new_simple("video/x-h264",
                                      &[("stream-format", &"avc".into()),
-                                       ("codec_data", &header.into())])
+                                       ("codec_data", &header.as_ref().into())])
                 })
             }
             flavors::CodecId::H263 => Some(Caps::new_simple("video/x-h263", &[])),
@@ -348,21 +351,23 @@ impl VideoFormat {
 
         if let (Some(width), Some(height)) = (self.width, self.height) {
             caps.as_mut().map(|c| {
-                c.set_simple(&[("width", &(width as i32).into()),
-                               ("height", &(height as i32).into())])
+                c.get_mut().unwrap().set_simple(&[("width", &(width as i32).into()),
+                                                  ("height", &(height as i32).into())])
             });
         }
 
         if let Some(par) = self.pixel_aspect_ratio {
             if *par.numer() != 0 && par.numer() != par.denom() {
-                caps.as_mut().map(|c| c.set_simple(&[("pixel-aspect-ratio", &par.into())]));
+                caps.as_mut().map(|c| {
+                    c.get_mut().unwrap().set_simple(&[("pixel-aspect-ratio", &par.into())])
+                });
             }
         }
 
         if let Some(fps) = self.framerate {
             if *fps.numer() != 0 {
                 caps.as_mut()
-                    .map(|c| c.set_simple(&[("framerate", &fps.into())]));
+                    .map(|c| c.get_mut().unwrap().set_simple(&[("framerate", &fps.into())]));
             }
         }
 
@@ -700,7 +705,11 @@ impl FlvDemux {
             .get_buffer((tag_header.data_size - 1 - offset) as usize)
             .unwrap();
 
-        buffer.set_pts(Some((tag_header.timestamp as u64) * 1000 * 1000)).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(Some((tag_header.timestamp as u64) * 1000 * 1000));
+        }
+
         trace!(self.logger,
                "Outputting audio buffer {:?} for tag {:?} of size {}",
                buffer,
@@ -850,19 +859,22 @@ impl FlvDemux {
         let mut buffer = self.adapter
             .get_buffer((tag_header.data_size - 1 - offset) as usize)
             .unwrap();
-        if !is_keyframe {
-            buffer.set_flags(BUFFER_FLAG_DELTA_UNIT).unwrap();
-        }
-        buffer.set_dts(Some((tag_header.timestamp as u64) * 1000 * 1000))
-            .unwrap();
 
-        // Prevent negative numbers
-        let pts = if cts < 0 && tag_header.timestamp < (-cts) as u32 {
-            0
-        } else {
-            ((tag_header.timestamp as i64) + (cts as i64)) as u64
-        };
-        buffer.set_pts(Some(pts * 1000 * 1000)).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+            if !is_keyframe {
+                buffer.set_flags(BUFFER_FLAG_DELTA_UNIT);
+            }
+            buffer.set_dts(Some((tag_header.timestamp as u64) * 1000 * 1000));
+
+            // Prevent negative numbers
+            let pts = if cts < 0 && tag_header.timestamp < (-cts) as u32 {
+                0
+            } else {
+                ((tag_header.timestamp as i64) + (cts as i64)) as u64
+            };
+            buffer.set_pts(Some(pts * 1000 * 1000));
+        }
 
         trace!(self.logger,
                "Outputting video buffer {:?} for tag {:?} of size {}, keyframe: {}",
@@ -1030,7 +1042,9 @@ impl Demuxer for FlvDemux {
         unimplemented!();
     }
 
-    fn handle_buffer(&mut self, buffer: Option<Buffer>) -> Result<HandleBufferResult, FlowError> {
+    fn handle_buffer(&mut self,
+                     buffer: Option<GstRc<Buffer>>)
+                     -> Result<HandleBufferResult, FlowError> {
         if let Some(buffer) = buffer {
             self.adapter.push(buffer);
         }
