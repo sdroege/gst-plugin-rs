@@ -670,3 +670,67 @@ bitflags! {
                            | BUFFER_COPY_FLAG_MEMORY.bits,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ptr;
+    use std::os::raw::c_void;
+
+    fn init() {
+        extern "C" {
+            fn gst_init(argc: *mut c_void, argv: *mut c_void);
+        }
+
+        unsafe {
+            gst_init(ptr::null_mut(), ptr::null_mut());
+        }
+    }
+
+    #[test]
+    fn test_writability() {
+        init();
+
+        let mut buffer = Buffer::new_from_vec(vec![1, 2, 3, 4]).unwrap();
+        {
+            let data = buffer.map_read().unwrap();
+            assert_eq!(data.as_slice(), vec![1, 2, 3, 4].as_slice());
+        }
+        assert_ne!(buffer.get_mut(), None);
+        {
+            let buffer = buffer.get_mut().unwrap();
+            buffer.set_pts(Some(1));
+        }
+
+        let mut buffer2 = buffer.clone();
+        assert_eq!(buffer.get_mut(), None);
+
+        unsafe {
+            assert_eq!(buffer2.as_ptr(), buffer.as_ptr());
+        }
+
+        {
+            let buffer2 = buffer2.make_mut();
+            unsafe {
+                assert_ne!(buffer2.as_ptr(), buffer.as_ptr());
+            }
+
+            buffer2.set_pts(Some(2));
+
+            let mut data = buffer2.map_readwrite().unwrap();
+            assert_eq!(data.as_slice(), vec![1, 2, 3, 4].as_slice());
+            data.as_mut_slice()[0] = 0;
+        }
+
+        assert_eq!(buffer.get_pts(), Some(1));
+        assert_eq!(buffer2.get_pts(), Some(2));
+
+        {
+            let data = buffer.map_read().unwrap();
+            assert_eq!(data.as_slice(), vec![1, 2, 3, 4].as_slice());
+
+            let data = buffer2.map_read().unwrap();
+            assert_eq!(data.as_slice(), vec![0, 2, 3, 4].as_slice());
+        }
+    }
+}
