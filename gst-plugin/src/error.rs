@@ -155,7 +155,6 @@ impl ErrorMessage {
 
 #[derive(Debug)]
 pub enum FlowError {
-    NotLinked,
     Flushing,
     Eos,
     NotNegotiated(ErrorMessage),
@@ -165,7 +164,6 @@ pub enum FlowError {
 impl FlowError {
     pub fn to_native(&self) -> GstFlowReturn {
         match *self {
-            FlowError::NotLinked => GstFlowReturn::NotLinked,
             FlowError::Flushing => GstFlowReturn::Flushing,
             FlowError::Eos => GstFlowReturn::Eos,
             FlowError::NotNegotiated(..) => GstFlowReturn::NotNegotiated,
@@ -177,9 +175,7 @@ impl FlowError {
 impl Display for FlowError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match *self {
-            FlowError::NotLinked | FlowError::Flushing | FlowError::Eos => {
-                f.write_str(self.description())
-            }
+            FlowError::Flushing | FlowError::Eos => f.write_str(self.description()),
             FlowError::NotNegotiated(ref m) => {
                 f.write_fmt(format_args!("{}: {} ({})",
                                          self.description(),
@@ -199,7 +195,6 @@ impl Display for FlowError {
 impl Error for FlowError {
     fn description(&self) -> &str {
         match *self {
-            FlowError::NotLinked => "Not Linked",
             FlowError::Flushing => "Flushing",
             FlowError::Eos => "Eos",
             FlowError::NotNegotiated(..) => "Not Negotiated",
