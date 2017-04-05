@@ -72,6 +72,13 @@ impl<T: MiniObject> GstRc<T> {
         unsafe { GstRc::new_from_owned_ptr(gst_mini_object_copy(self.obj.as_ptr())) }
     }
 
+    fn is_writable(&self) -> bool {
+        extern "C" {
+            fn gst_mini_object_is_writable(obj: *mut c_void) -> GBoolean;
+        }
+        unsafe { gst_mini_object_is_writable(self.as_ptr()).to_bool() }
+    }
+
     pub unsafe fn into_ptr(mut self) -> *mut c_void {
         self.obj.swap_ptr(ptr::null_mut())
     }
@@ -137,13 +144,6 @@ pub unsafe trait MiniObject {
     }
 
     unsafe fn new_from_ptr(ptr: *mut c_void) -> Self;
-
-    fn is_writable(&self) -> bool {
-        extern "C" {
-            fn gst_mini_object_is_writable(obj: *mut c_void) -> GBoolean;
-        }
-        unsafe { gst_mini_object_is_writable(self.as_ptr()).to_bool() }
-    }
 }
 
 impl<'a, T: MiniObject> From<&'a T> for GstRc<T> {
@@ -189,6 +189,13 @@ impl<'a, T: MiniObject> GstRef<'a, T> {
             fn gst_mini_object_copy(obj: *const c_void) -> *mut c_void;
         }
         unsafe { GstRc::new_from_owned_ptr(gst_mini_object_copy(self.obj.as_ptr())) }
+    }
+
+    fn is_writable(&self) -> bool {
+        extern "C" {
+            fn gst_mini_object_is_writable(obj: *mut c_void) -> GBoolean;
+        }
+        unsafe { gst_mini_object_is_writable(self.as_ptr()).to_bool() }
     }
 
     pub unsafe fn into_ptr(mut self) -> *mut c_void {
