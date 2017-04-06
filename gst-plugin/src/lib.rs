@@ -17,6 +17,11 @@ extern crate slog;
 extern crate lazy_static;
 extern crate byteorder;
 extern crate num_rational;
+#[macro_use]
+extern crate derivative;
+extern crate gobject_sys as gobject;
+extern crate glib_sys as glib;
+extern crate gstreamer_sys as gst;
 
 #[macro_use]
 pub mod utils;
