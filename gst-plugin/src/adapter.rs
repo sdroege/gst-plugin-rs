@@ -179,7 +179,10 @@ impl Adapter {
         trace!(LOGGER, "Get buffer of {} bytes, copy into new buffer", size);
         let mut new = Buffer::new_with_size(size).unwrap();
         {
-            let mut map = new.get_mut().unwrap().map_readwrite().unwrap();
+            let mut map = new.get_mut()
+                .unwrap()
+                .map_readwrite()
+                .unwrap();
             let data = map.as_mut_slice();
             Self::copy_data(&self.deque, self.skip, data, size);
         }
@@ -204,7 +207,10 @@ impl Adapter {
 
         let mut left = size;
         while left > 0 {
-            let front_size = self.deque.front().unwrap().get_size() - self.skip;
+            let front_size = self.deque
+                .front()
+                .unwrap()
+                .get_size() - self.skip;
 
             if front_size <= left {
                 trace!(LOGGER,
@@ -234,15 +240,11 @@ impl Adapter {
 mod tests {
     use super::*;
     use std::ptr;
-    use std::os::raw::c_void;
+    use gst;
 
     fn init() {
-        extern "C" {
-            fn gst_init(argc: *mut c_void, argv: *mut c_void);
-        }
-
         unsafe {
-            gst_init(ptr::null_mut(), ptr::null_mut());
+            gst::gst_init(ptr::null_mut(), ptr::null_mut());
         }
     }
 

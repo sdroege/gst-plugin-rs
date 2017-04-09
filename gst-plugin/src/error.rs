@@ -6,8 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use libc::c_char;
-use std::os::raw::c_void;
 use std::ffi::CString;
 use std::ptr;
 use std::error::Error;
@@ -18,6 +16,9 @@ use std::borrow::Cow;
 use url::Url;
 
 use utils::*;
+
+use glib;
+use gst;
 
 #[macro_export]
 macro_rules! error_msg(
@@ -61,20 +62,12 @@ pub trait ToGError {
     fn to_gerror(&self) -> (u32, i32);
 }
 
-pub fn gst_library_error_domain() -> u32 {
-    extern "C" {
-        fn gst_library_error_quark() -> u32;
-    }
-
-    unsafe { gst_library_error_quark() }
+pub fn gst_library_error_domain() -> glib::GQuark {
+    unsafe { gst::gst_library_error_quark() }
 }
 
-pub fn gst_resource_error_domain() -> u32 {
-    extern "C" {
-        fn gst_resource_error_quark() -> u32;
-    }
-
-    unsafe { gst_resource_error_quark() }
+pub fn gst_resource_error_domain() -> glib::GQuark {
+    unsafe { gst::gst_resource_error_quark() }
 }
 
 #[derive(Debug)]
@@ -110,18 +103,7 @@ impl ErrorMessage {
     }
 
 
-    pub unsafe fn post(&self, element: *mut c_void) {
-        extern "C" {
-            fn gst_rs_element_error(sink: *mut c_void,
-                                    error_domain: u32,
-                                    error_code: i32,
-                                    message: *const c_char,
-                                    debug: *const c_char,
-                                    filename: *const c_char,
-                                    function: *const c_char,
-                                    line: u32);
-        }
-
+    pub unsafe fn post(&self, element: *mut gst::GstElement) {
         let ErrorMessage { error_domain,
                            error_code,
                            ref message,
@@ -142,14 +124,15 @@ impl ErrorMessage {
         let function_cstr = CString::new(function.as_bytes()).unwrap();
         let function_ptr = function_cstr.as_ptr();
 
-        gst_rs_element_error(element,
-                             error_domain,
-                             error_code,
-                             message_ptr,
-                             debug_ptr,
-                             file_ptr,
-                             function_ptr,
-                             line);
+        gst::gst_element_message_full(element,
+                                      gst::GST_MESSAGE_ERROR,
+                                      error_domain,
+                                      error_code,
+                                      glib::g_strdup(message_ptr),
+                                      glib::g_strdup(debug_ptr),
+                                      file_ptr,
+                                      function_ptr,
+                                      line as i32);
     }
 }
 
@@ -233,27 +216,18 @@ impl UriError {
         &self.error_kind
     }
 
-    pub unsafe fn into_gerror(self, err: *mut c_void) {
-        extern "C" {
-            fn g_set_error_literal(err: *mut c_void,
-                                   domain: u32,
-                                   code: i32,
-                                   message: *const c_char);
-            fn gst_uri_error_quark() -> u32;
-        }
-
-
+    pub unsafe fn into_gerror(self, err: *mut *mut glib::GError) {
         if let Some(msg) = self.message {
             let cmsg = CString::new(msg.as_str()).unwrap();
-            g_set_error_literal(err,
-                                gst_uri_error_quark(),
-                                self.error_kind as i32,
-                                cmsg.as_ptr());
+            glib::g_set_error_literal(err,
+                                      gst::gst_uri_error_quark(),
+                                      self.error_kind as i32,
+                                      cmsg.as_ptr());
         } else {
-            g_set_error_literal(err,
-                                gst_uri_error_quark(),
-                                self.error_kind as i32,
-                                ptr::null());
+            glib::g_set_error_literal(err,
+                                      gst::gst_uri_error_quark(),
+                                      self.error_kind as i32,
+                                      ptr::null());
         }
     }
 }

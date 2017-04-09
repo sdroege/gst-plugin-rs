@@ -6,62 +6,52 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use libc::c_char;
-use std::os::raw::c_void;
 use std::ffi::CString;
 use std::ffi::CStr;
 use std::fmt;
 use value::*;
-use utils::*;
 use miniobject::*;
 
+use glib;
+use gobject;
+use gst;
+
 #[derive(Eq)]
-pub struct Caps(*mut c_void);
+pub struct Caps(*mut gst::GstCaps);
 
 unsafe impl MiniObject for Caps {
-    unsafe fn as_ptr(&self) -> *mut c_void {
+    type PtrType = gst::GstCaps;
+
+    unsafe fn as_ptr(&self) -> *mut gst::GstCaps {
         self.0
     }
 
-    unsafe fn replace_ptr(&mut self, ptr: *mut c_void) {
+    unsafe fn replace_ptr(&mut self, ptr: *mut gst::GstCaps) {
         self.0 = ptr
     }
 
-    unsafe fn new_from_ptr(ptr: *mut c_void) -> Self {
+    unsafe fn new_from_ptr(ptr: *mut gst::GstCaps) -> Self {
         Caps(ptr)
     }
 }
 
 impl Caps {
     pub fn new_empty() -> GstRc<Self> {
-        extern "C" {
-            fn gst_caps_new_empty() -> *mut c_void;
-        }
-
-        unsafe { GstRc::new_from_owned_ptr(gst_caps_new_empty()) }
+        unsafe { GstRc::new_from_owned_ptr(gst::gst_caps_new_empty()) }
     }
 
     pub fn new_any() -> GstRc<Self> {
-        extern "C" {
-            fn gst_caps_new_any() -> *mut c_void;
-        }
-
-        unsafe { GstRc::new_from_owned_ptr(gst_caps_new_any()) }
+        unsafe { GstRc::new_from_owned_ptr(gst::gst_caps_new_any()) }
     }
 
     pub fn new_simple(name: &str, values: &[(&str, &Value)]) -> GstRc<Self> {
-        extern "C" {
-            fn gst_caps_append_structure(caps: *mut c_void, structure: *mut c_void);
-            fn gst_structure_new_empty(name: *const c_char) -> *mut c_void;
-        }
-
         let mut caps = Caps::new_empty();
 
         let name_cstr = CString::new(name).unwrap();
-        let structure = unsafe { gst_structure_new_empty(name_cstr.as_ptr()) };
+        let structure = unsafe { gst::gst_structure_new_empty(name_cstr.as_ptr()) };
 
         unsafe {
-            gst_caps_append_structure(caps.as_ptr(), structure);
+            gst::gst_caps_append_structure((*caps).0, structure);
         }
 
         caps.get_mut().unwrap().set_simple(values);
@@ -70,14 +60,10 @@ impl Caps {
     }
 
     pub fn from_string(value: &str) -> Option<GstRc<Self>> {
-        extern "C" {
-            fn gst_caps_from_string(value: *const c_char) -> *mut c_void;
-        }
-
         let value_cstr = CString::new(value).unwrap();
 
         unsafe {
-            let caps_ptr = gst_caps_from_string(value_cstr.as_ptr());
+            let caps_ptr = gst::gst_caps_from_string(value_cstr.as_ptr());
 
             if caps_ptr.is_null() {
                 None
@@ -88,30 +74,21 @@ impl Caps {
     }
 
     pub fn set_simple(&mut self, values: &[(&str, &Value)]) {
-        extern "C" {
-            fn gst_caps_set_value(caps: *mut c_void, name: *const c_char, value: *const GValue);
-        }
-
         for value in values {
             let name_cstr = CString::new(value.0).unwrap();
-            let mut gvalue = value.1.to_gvalue();
-
             unsafe {
-                gst_caps_set_value(self.0, name_cstr.as_ptr(), &mut gvalue as *mut GValue);
+                let mut gvalue = value.1.to_gvalue();
+                gst::gst_caps_set_value(self.0, name_cstr.as_ptr(), &mut gvalue);
+                gobject::g_value_unset(&mut gvalue);
             }
         }
     }
 
     pub fn to_string(&self) -> String {
-        extern "C" {
-            fn gst_caps_to_string(caps: *mut c_void) -> *mut c_char;
-            fn g_free(ptr: *mut c_char);
-        }
-
         unsafe {
-            let ptr = gst_caps_to_string(self.0);
+            let ptr = gst::gst_caps_to_string(self.0);
             let s = CStr::from_ptr(ptr).to_str().unwrap().into();
-            g_free(ptr);
+            glib::g_free(ptr as glib::gpointer);
 
             s
         }
@@ -126,11 +103,7 @@ impl fmt::Debug for Caps {
 
 impl PartialEq for Caps {
     fn eq(&self, other: &Caps) -> bool {
-        extern "C" {
-            fn gst_caps_is_equal(a: *const c_void, b: *const c_void) -> GBoolean;
-        }
-
-        unsafe { gst_caps_is_equal(self.0, other.0).to_bool() }
+        (unsafe { gst::gst_caps_is_equal(self.0, other.0) } == glib::GTRUE)
     }
 }
 
@@ -141,15 +114,10 @@ unsafe impl Send for Caps {}
 mod tests {
     use super::*;
     use std::ptr;
-    use std::os::raw::c_void;
 
     fn init() {
-        extern "C" {
-            fn gst_init(argc: *mut c_void, argv: *mut c_void);
-        }
-
         unsafe {
-            gst_init(ptr::null_mut(), ptr::null_mut());
+            gst::gst_init(ptr::null_mut(), ptr::null_mut());
         }
     }
 

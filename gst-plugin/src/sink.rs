@@ -28,6 +28,9 @@ use miniobject::*;
 use log::*;
 use plugin::Plugin;
 
+use glib;
+use gst;
+
 #[derive(Debug)]
 pub enum SinkError {
     Failure,
@@ -50,7 +53,7 @@ impl ToGError for SinkError {
 }
 
 pub struct SinkWrapper {
-    raw: *mut c_void,
+    raw: *mut gst::GstElement,
     logger: Logger,
     uri: Mutex<(Option<Url>, bool)>,
     uri_validator: Box<UriValidator>,
@@ -68,7 +71,7 @@ pub trait Sink {
 }
 
 impl SinkWrapper {
-    fn new(raw: *mut c_void, sink: Box<Sink>) -> SinkWrapper {
+    fn new(raw: *mut gst::GstElement, sink: Box<Sink>) -> SinkWrapper {
         SinkWrapper {
             raw: raw,
             logger: Logger::root(GstDebugDrain::new(Some(unsafe { &Element::new(raw) }),
@@ -141,7 +144,10 @@ impl SinkWrapper {
             Err(ref msg) => {
                 error!(self.logger, "Failed to start: {:?}", msg);
 
-                self.uri.lock().unwrap().1 = false;
+                self.uri
+                    .lock()
+                    .unwrap()
+                    .1 = false;
                 self.post_message(msg);
                 false
             }
@@ -156,7 +162,10 @@ impl SinkWrapper {
         match sink.stop() {
             Ok(..) => {
                 trace!(self.logger, "Stopped successfully");
-                self.uri.lock().unwrap().1 = false;
+                self.uri
+                    .lock()
+                    .unwrap()
+                    .1 = false;
                 true
             }
             Err(ref msg) => {
@@ -195,7 +204,7 @@ impl SinkWrapper {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_new(sink: *mut c_void,
+pub unsafe extern "C" fn sink_new(sink: *mut gst::GstElement,
                                   create_instance: fn(Element) -> Box<Sink>)
                                   -> *mut SinkWrapper {
     let instance = create_instance(Element::new(sink));
@@ -210,11 +219,11 @@ pub unsafe extern "C" fn sink_drop(ptr: *mut SinkWrapper) {
 #[no_mangle]
 pub unsafe extern "C" fn sink_set_uri(ptr: *const SinkWrapper,
                                       uri_ptr: *const c_char,
-                                      cerr: *mut c_void)
-                                      -> GBoolean {
+                                      cerr: *mut *mut glib::GError)
+                                      -> glib::gboolean {
     let wrap: &SinkWrapper = &*ptr;
 
-    panic_to_error!(wrap, GBoolean::False, {
+    panic_to_error!(wrap, glib::GFALSE, {
         let uri_str = if uri_ptr.is_null() {
             None
         } else {
@@ -225,9 +234,9 @@ pub unsafe extern "C" fn sink_set_uri(ptr: *const SinkWrapper,
             Err(err) => {
                 error!(wrap.logger, "Failed to set URI {:?}", err);
                 err.into_gerror(cerr);
-                GBoolean::False
+                glib::GFALSE
             }
-            Ok(_) => GBoolean::True,
+            Ok(_) => glib::GTRUE,
         }
     })
 }
@@ -245,24 +254,34 @@ pub unsafe extern "C" fn sink_get_uri(ptr: *const SinkWrapper) -> *mut c_char {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_start(ptr: *const SinkWrapper) -> GBoolean {
+pub unsafe extern "C" fn sink_start(ptr: *const SinkWrapper) -> glib::gboolean {
     let wrap: &SinkWrapper = &*ptr;
 
-    panic_to_error!(wrap, GBoolean::False, {
-        GBoolean::from_bool(wrap.start())
+    panic_to_error!(wrap, glib::GFALSE, {
+        if wrap.start() {
+            glib::GTRUE
+        } else {
+            glib::GFALSE
+        }
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> GBoolean {
+pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> glib::gboolean {
     let wrap: &SinkWrapper = &*ptr;
-    panic_to_error!(wrap, GBoolean::True, {
-        GBoolean::from_bool(wrap.stop())
+    panic_to_error!(wrap, glib::GTRUE, {
+        if wrap.stop() {
+            glib::GTRUE
+        } else {
+            glib::GFALSE
+        }
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper, buffer: GstRefPtr) -> GstFlowReturn {
+pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper,
+                                     buffer: GstRefPtr<Buffer>)
+                                     -> GstFlowReturn {
     let wrap: &SinkWrapper = &*ptr;
     panic_to_error!(wrap, GstFlowReturn::Error, {
         let buffer: GstRef<Buffer> = GstRef::new(&buffer);
@@ -283,7 +302,7 @@ pub struct SinkInfo<'a> {
 
 pub fn sink_register(plugin: &Plugin, sink_info: &SinkInfo) {
     extern "C" {
-        fn gst_rs_sink_register(plugin: *const c_void,
+        fn gst_rs_sink_register(plugin: *const gst::GstPlugin,
                                 name: *const c_char,
                                 long_name: *const c_char,
                                 description: *const c_char,
@@ -292,7 +311,7 @@ pub fn sink_register(plugin: &Plugin, sink_info: &SinkInfo) {
                                 rank: i32,
                                 create_instance: *const c_void,
                                 protocols: *const c_char)
-                                -> GBoolean;
+                                -> glib::gboolean;
     }
 
     let cname = CString::new(sink_info.name).unwrap();

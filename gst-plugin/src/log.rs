@@ -6,19 +6,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::os::raw::c_void;
 use libc::c_char;
 use std::ffi::CString;
 use slog::{Drain, Record, OwnedKeyValueList, Never, Level};
 use std::fmt;
 use std::ptr;
+use std::mem;
 
 use utils::Element;
 
-#[derive(Debug)]
+use gobject;
+use gst;
+
 pub struct GstDebugDrain {
-    category: *const c_void,
-    element: *const c_void,
+    category: *mut gst::GstDebugCategory,
+    element: gobject::GWeakRef,
 }
 
 impl GstDebugDrain {
@@ -31,7 +33,7 @@ impl GstDebugDrain {
             fn _gst_debug_category_new(name: *const c_char,
                                        color: u32,
                                        description: *const c_char)
-                                       -> *const c_void;
+                                       -> *mut gst::GstDebugCategory;
         }
 
         let name_cstr = CString::new(name.as_bytes()).unwrap();
@@ -47,18 +49,14 @@ impl GstDebugDrain {
             None => ptr::null(),
         };
 
-        let drain = GstDebugDrain {
+        let mut drain = GstDebugDrain {
             category: category,
-            element: ptr::null(),
+            element: unsafe { mem::zeroed() },
         };
-
-        extern "C" {
-            fn g_weak_ref_set(weak_ref: &*const c_void, obj: *const c_void);
-        }
 
         if !element.is_null() {
             unsafe {
-                g_weak_ref_set(&drain.element, element);
+                gobject::g_weak_ref_set(&mut drain.element, element as *mut gobject::GObject);
             }
         }
 
@@ -68,14 +66,8 @@ impl GstDebugDrain {
 
 impl Drop for GstDebugDrain {
     fn drop(&mut self) {
-        extern "C" {
-            fn g_weak_ref_clear(weak_ref: &*const c_void);
-        }
-
-        if !self.element.is_null() {
-            unsafe {
-                g_weak_ref_clear(&self.element);
-            }
+        unsafe {
+            gobject::g_weak_ref_clear(&mut self.element);
         }
     }
 }
@@ -84,30 +76,17 @@ impl Drain for GstDebugDrain {
     type Error = Never;
 
     fn log(&self, record: &Record, _: &OwnedKeyValueList) -> Result<(), Never> {
-        extern "C" {
-            fn gst_rs_debug_log(category: *const c_void,
-                                level: u32,
-                                file: *const c_char,
-                                function: *const c_char,
-                                line: u32,
-                                object: *const c_void,
-                                message: *const c_char);
-            fn gst_debug_category_get_threshold(category: *const c_void) -> u32;
-            fn g_weak_ref_get(weak_ref: &*const c_void) -> *const c_void;
-            fn gst_object_unref(obj: *const c_void);
-        }
-
         let level = match record.level() {
-            Level::Critical | Level::Error => 1,
-            Level::Warning => 2,
-            Level::Info => 4,
-            Level::Debug => 5,
-            Level::Trace => 7,
+            Level::Critical | Level::Error => gst::GST_LEVEL_ERROR,
+            Level::Warning => gst::GST_LEVEL_WARNING,
+            Level::Info => gst::GST_LEVEL_INFO,
+            Level::Debug => gst::GST_LEVEL_DEBUG,
+            Level::Trace => gst::GST_LEVEL_TRACE,
         };
 
-        let threshold = unsafe { gst_debug_category_get_threshold(self.category) };
+        let threshold = unsafe { gst::gst_debug_category_get_threshold(self.category) };
 
-        if level > threshold {
+        if level as u32 > threshold as u32 {
             return Ok(());
         }
 
@@ -119,22 +98,19 @@ impl Drain for GstDebugDrain {
         let message_cstr = CString::new(fmt::format(record.msg()).as_bytes()).unwrap();
 
         unsafe {
-            let element = if self.element.is_null() {
-                ptr::null()
-            } else {
-                g_weak_ref_get(&self.element)
-            };
+            let element = gobject::g_weak_ref_get(&self.element as *const gobject::GWeakRef as
+                                                  *mut gobject::GWeakRef);
 
-            gst_rs_debug_log(self.category,
-                             level,
-                             file_cstr.as_ptr(),
-                             function_cstr.as_ptr(),
-                             record.line(),
-                             element,
-                             message_cstr.as_ptr());
+            gst::gst_debug_log(self.category,
+                               level,
+                               file_cstr.as_ptr(),
+                               function_cstr.as_ptr(),
+                               record.line() as i32,
+                               element as *mut gobject::GObject,
+                               message_cstr.as_ptr());
 
             if !element.is_null() {
-                gst_object_unref(element);
+                gst::gst_object_unref(element as *mut gst::GstObject);
             }
         }
 

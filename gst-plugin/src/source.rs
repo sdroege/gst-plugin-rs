@@ -28,6 +28,9 @@ use buffer::*;
 use miniobject::*;
 use log::*;
 
+use glib;
+use gst;
+
 #[derive(Debug)]
 pub enum SourceError {
     Failure,
@@ -50,7 +53,7 @@ impl ToGError for SourceError {
 }
 
 pub struct SourceWrapper {
-    raw: *mut c_void,
+    raw: *mut gst::GstElement,
     logger: Logger,
     uri: Mutex<(Option<Url>, bool)>,
     uri_validator: Box<UriValidator>,
@@ -71,7 +74,7 @@ pub trait Source {
 }
 
 impl SourceWrapper {
-    fn new(raw: *mut c_void, source: Box<Source>) -> SourceWrapper {
+    fn new(raw: *mut gst::GstElement, source: Box<Source>) -> SourceWrapper {
         SourceWrapper {
             raw: raw,
             logger: Logger::root(GstDebugDrain::new(Some(unsafe { &Element::new(raw) }),
@@ -154,7 +157,10 @@ impl SourceWrapper {
             Err(ref msg) => {
                 error!(self.logger, "Failed to start: {:?}", msg);
 
-                self.uri.lock().unwrap().1 = false;
+                self.uri
+                    .lock()
+                    .unwrap()
+                    .1 = false;
                 self.post_message(msg);
                 false
             }
@@ -169,7 +175,10 @@ impl SourceWrapper {
         match source.stop() {
             Ok(..) => {
                 trace!(self.logger, "Stopped successfully");
-                self.uri.lock().unwrap().1 = false;
+                self.uri
+                    .lock()
+                    .unwrap()
+                    .1 = false;
                 true
             }
             Err(ref msg) => {
@@ -227,7 +236,7 @@ impl SourceWrapper {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_new(source: *mut c_void,
+pub unsafe extern "C" fn source_new(source: *mut gst::GstElement,
                                     create_instance: fn(Element) -> Box<Source>)
                                     -> *mut SourceWrapper {
     let instance = create_instance(Element::new(source));
@@ -243,11 +252,11 @@ pub unsafe extern "C" fn source_drop(ptr: *mut SourceWrapper) {
 #[no_mangle]
 pub unsafe extern "C" fn source_set_uri(ptr: *const SourceWrapper,
                                         uri_ptr: *const c_char,
-                                        cerr: *mut c_void)
-                                        -> GBoolean {
+                                        cerr: *mut *mut glib::GError)
+                                        -> glib::gboolean {
     let wrap: &SourceWrapper = &*ptr;
 
-    panic_to_error!(wrap, GBoolean::False, {
+    panic_to_error!(wrap, glib::GFALSE, {
         let uri_str = if uri_ptr.is_null() {
             None
         } else {
@@ -258,9 +267,9 @@ pub unsafe extern "C" fn source_set_uri(ptr: *const SourceWrapper,
             Err(err) => {
                 error!(wrap.logger, "Failed to set URI {:?}", err);
                 err.into_gerror(cerr);
-                GBoolean::False
+                glib::GFALSE
             }
-            Ok(_) => GBoolean::True,
+            Ok(_) => glib::GTRUE,
         }
     })
 }
@@ -277,11 +286,15 @@ pub unsafe extern "C" fn source_get_uri(ptr: *const SourceWrapper) -> *mut c_cha
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_is_seekable(ptr: *const SourceWrapper) -> GBoolean {
+pub unsafe extern "C" fn source_is_seekable(ptr: *const SourceWrapper) -> glib::gboolean {
     let wrap: &SourceWrapper = &*ptr;
 
-    panic_to_error!(wrap, GBoolean::False, {
-        GBoolean::from_bool(wrap.is_seekable())
+    panic_to_error!(wrap, glib::GFALSE, {
+        if wrap.is_seekable() {
+            glib::GTRUE
+        } else {
+            glib::GFALSE
+        }
     })
 }
 
@@ -294,20 +307,28 @@ pub unsafe extern "C" fn source_get_size(ptr: *const SourceWrapper) -> u64 {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_start(ptr: *const SourceWrapper) -> GBoolean {
+pub unsafe extern "C" fn source_start(ptr: *const SourceWrapper) -> glib::gboolean {
     let wrap: &SourceWrapper = &*ptr;
 
-    panic_to_error!(wrap, GBoolean::False, {
-        GBoolean::from_bool(wrap.start())
+    panic_to_error!(wrap, glib::GFALSE, {
+        if wrap.start() {
+            glib::GTRUE
+        } else {
+            glib::GFALSE
+        }
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_stop(ptr: *const SourceWrapper) -> GBoolean {
+pub unsafe extern "C" fn source_stop(ptr: *const SourceWrapper) -> glib::gboolean {
     let wrap: &SourceWrapper = &*ptr;
 
-    panic_to_error!(wrap, GBoolean::True, {
-        GBoolean::from_bool(wrap.stop())
+    panic_to_error!(wrap, glib::GTRUE, {
+        if wrap.stop() {
+            glib::GTRUE
+        } else {
+            glib::GFALSE
+        }
     })
 }
 
@@ -315,7 +336,7 @@ pub unsafe extern "C" fn source_stop(ptr: *const SourceWrapper) -> GBoolean {
 pub unsafe extern "C" fn source_fill(ptr: *const SourceWrapper,
                                      offset: u64,
                                      length: u32,
-                                     buffer: GstRefPtr)
+                                     buffer: GstRefPtr<Buffer>)
                                      -> GstFlowReturn {
     let wrap: &SourceWrapper = &*ptr;
 
@@ -326,11 +347,18 @@ pub unsafe extern "C" fn source_fill(ptr: *const SourceWrapper,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn source_seek(ptr: *const SourceWrapper, start: u64, stop: u64) -> GBoolean {
+pub unsafe extern "C" fn source_seek(ptr: *const SourceWrapper,
+                                     start: u64,
+                                     stop: u64)
+                                     -> glib::gboolean {
     let wrap: &SourceWrapper = &*ptr;
 
-    panic_to_error!(wrap, GBoolean::False, {
-        GBoolean::from_bool(wrap.seek(start, if stop == u64::MAX { None } else { Some(stop) }))
+    panic_to_error!(wrap, glib::GFALSE, {
+        if wrap.seek(start, if stop == u64::MAX { None } else { Some(stop) }) {
+            glib::GTRUE
+        } else {
+            glib::GFALSE
+        }
     })
 }
 
@@ -349,7 +377,7 @@ pub struct SourceInfo<'a> {
 pub fn source_register(plugin: &Plugin, source_info: &SourceInfo) {
 
     extern "C" {
-        fn gst_rs_source_register(plugin: *const c_void,
+        fn gst_rs_source_register(plugin: *const gst::GstPlugin,
                                   name: *const c_char,
                                   long_name: *const c_char,
                                   description: *const c_char,
@@ -358,8 +386,8 @@ pub fn source_register(plugin: &Plugin, source_info: &SourceInfo) {
                                   rank: i32,
                                   create_instance: *const c_void,
                                   protocols: *const c_char,
-                                  push_only: GBoolean)
-                                  -> GBoolean;
+                                  push_only: glib::gboolean)
+                                  -> glib::gboolean;
     }
 
     let cname = CString::new(source_info.name).unwrap();
@@ -379,6 +407,10 @@ pub fn source_register(plugin: &Plugin, source_info: &SourceInfo) {
                                source_info.rank,
                                source_info.create_instance as *const c_void,
                                cprotocols.as_ptr(),
-                               GBoolean::from_bool(source_info.push_only));
+                               if source_info.push_only {
+                                   glib::GTRUE
+                               } else {
+                                   glib::GFALSE
+                               });
     }
 }

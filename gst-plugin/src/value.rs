@@ -6,8 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use libc::c_char;
-use std::os::raw::c_void;
 use std::ffi::{CString, CStr};
 use std::mem;
 use std::marker::PhantomData;
@@ -17,6 +15,10 @@ pub use num_rational::Rational32;
 
 use buffer::*;
 use miniobject::*;
+
+use glib;
+use gobject;
+use gst;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value {
@@ -58,145 +60,76 @@ impl_value_type!(Rational32, Fraction);
 impl_value_type!(GstRc<Buffer>, Buffer);
 impl_value_type!(Vec<Value>, Array);
 
-#[repr(C)]
-pub struct GValue {
-    typ: usize,
-    data: [u64; 2],
-}
-
-impl GValue {
-    pub fn new() -> GValue {
-        unsafe { mem::zeroed() }
-    }
-}
-
-impl Drop for GValue {
-    fn drop(&mut self) {
-        extern "C" {
-            fn g_value_unset(value: *mut GValue);
-        }
-
-        if self.typ != 0 {
-            unsafe { g_value_unset(self as *mut GValue) }
-        }
-    }
-}
-
-// See gtype.h
-const TYPE_BOOLEAN: usize = (5 << 2);
-const TYPE_INT: usize = (6 << 2);
-const TYPE_UINT: usize = (7 << 2);
-const TYPE_INT64: usize = (10 << 2);
-const TYPE_UINT64: usize = (11 << 2);
-const TYPE_STRING: usize = (16 << 2);
-
-extern "C" {
-    fn gst_buffer_get_type() -> usize;
-    fn gst_fraction_get_type() -> usize;
-    fn gst_value_array_get_type() -> usize;
-}
-
 lazy_static! {
-    static ref TYPE_BUFFER: usize = unsafe { gst_buffer_get_type() };
-    static ref TYPE_FRACTION: usize = unsafe { gst_fraction_get_type() };
-    static ref TYPE_GST_VALUE_ARRAY: usize = unsafe { gst_value_array_get_type() };
+    static ref TYPE_BUFFER: glib::GType = unsafe { gst::gst_buffer_get_type() };
+    static ref TYPE_FRACTION: glib::GType = unsafe { gst::gst_fraction_get_type() };
+    static ref TYPE_GST_VALUE_ARRAY: glib::GType = unsafe { gst::gst_value_array_get_type() };
 }
 
 impl Value {
-    pub fn to_gvalue(&self) -> GValue {
-        extern "C" {
-            fn g_value_init(value: *mut GValue, gtype: usize);
-            fn g_value_set_boolean(value: *mut GValue, value: i32);
-            fn g_value_set_int(value: *mut GValue, value: i32);
-            fn g_value_set_uint(value: *mut GValue, value: u32);
-            fn g_value_set_int64(value: *mut GValue, value: i64);
-            fn g_value_set_uint64(value: *mut GValue, value: u64);
-            fn g_value_set_string(value: *mut GValue, value: *const c_char);
-            fn gst_value_set_fraction(value: *mut GValue, value_n: i32, value_d: i32);
-            fn g_value_set_boxed(value: *mut GValue, boxed: *const c_void);
-            fn gst_value_array_append_and_take_value(value: *mut GValue, element: *mut GValue);
-        }
-
-        let mut gvalue = GValue::new();
+    pub unsafe fn to_gvalue(&self) -> gobject::GValue {
+        let mut gvalue = mem::zeroed();
 
         match *self {
-            Value::Bool(v) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, TYPE_BOOLEAN);
-                g_value_set_boolean(&mut gvalue as *mut GValue, if v { 1 } else { 0 });
-            },
-            Value::Int(v) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, TYPE_INT);
-                g_value_set_int(&mut gvalue as *mut GValue, v);
-            },
-            Value::UInt(v) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, TYPE_UINT);
-                g_value_set_uint(&mut gvalue as *mut GValue, v);
-            },
-            Value::Int64(v) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, TYPE_INT64);
-                g_value_set_int64(&mut gvalue as *mut GValue, v);
-            },
-            Value::UInt64(v) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, TYPE_UINT64);
-                g_value_set_uint64(&mut gvalue as *mut GValue, v);
-            },
-            Value::String(ref v) => unsafe {
+            Value::Bool(v) => {
+                gobject::g_value_init(&mut gvalue, gobject::G_TYPE_BOOLEAN);
+                gobject::g_value_set_boolean(&mut gvalue,
+                                             if v { glib::GTRUE } else { glib::GFALSE });
+            }
+            Value::Int(v) => {
+                gobject::g_value_init(&mut gvalue, gobject::G_TYPE_INT);
+                gobject::g_value_set_int(&mut gvalue, v);
+            }
+            Value::UInt(v) => {
+                gobject::g_value_init(&mut gvalue, gobject::G_TYPE_UINT);
+                gobject::g_value_set_uint(&mut gvalue, v);
+            }
+            Value::Int64(v) => {
+                gobject::g_value_init(&mut gvalue, gobject::G_TYPE_INT64);
+                gobject::g_value_set_int64(&mut gvalue, v);
+            }
+            Value::UInt64(v) => {
+                gobject::g_value_init(&mut gvalue, gobject::G_TYPE_UINT64);
+                gobject::g_value_set_uint64(&mut gvalue, v);
+            }
+            Value::String(ref v) => {
                 let v_cstr = CString::new(String::from(v.clone())).unwrap();
 
-                g_value_init(&mut gvalue as *mut GValue, TYPE_STRING);
-                g_value_set_string(&mut gvalue as *mut GValue, v_cstr.as_ptr());
-            },
-            Value::Fraction(ref v) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, *TYPE_FRACTION);
-                gst_value_set_fraction(&mut gvalue as *mut GValue, *v.numer(), *v.denom());
-            },
-            Value::Buffer(ref buffer) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, *TYPE_BUFFER);
-                g_value_set_boxed(&mut gvalue as *mut GValue, buffer.as_ptr());
-            },
-            Value::Array(ref array) => unsafe {
-                g_value_init(&mut gvalue as *mut GValue, *TYPE_GST_VALUE_ARRAY);
+                gobject::g_value_init(&mut gvalue, gobject::G_TYPE_STRING);
+                gobject::g_value_set_string(&mut gvalue, v_cstr.as_ptr());
+            }
+            Value::Fraction(ref v) => {
+                gobject::g_value_init(&mut gvalue, *TYPE_FRACTION);
+                gst::gst_value_set_fraction(&mut gvalue, *v.numer(), *v.denom());
+            }
+            Value::Buffer(ref buffer) => {
+                gobject::g_value_init(&mut gvalue, *TYPE_BUFFER);
+                gobject::g_value_set_boxed(&mut gvalue, buffer.as_ptr() as glib::gconstpointer);
+            }
+            Value::Array(ref array) => {
+                gobject::g_value_init(&mut gvalue, *TYPE_GST_VALUE_ARRAY);
 
                 for e in array {
                     let mut e_value = e.to_gvalue();
-                    gst_value_array_append_and_take_value(&mut gvalue as *mut GValue,
-                                                          &mut e_value as *mut GValue);
-                    // Takes ownership, invalidate GValue
-                    e_value.typ = 0;
+                    gst::gst_value_array_append_and_take_value(&mut gvalue, &mut e_value);
                 }
-            },
+            }
         }
 
         gvalue
     }
 
-    pub fn from_gvalue(gvalue: &GValue) -> Option<Self> {
-        extern "C" {
-            fn g_value_get_boolean(value: *const GValue) -> i32;
-            fn g_value_get_int(value: *const GValue) -> i32;
-            fn g_value_get_uint(value: *const GValue) -> u32;
-            fn g_value_get_int64(value: *const GValue) -> i64;
-            fn g_value_get_uint64(value: *const GValue) -> u64;
-            fn g_value_get_string(value: *const GValue) -> *const c_char;
-            fn gst_value_get_fraction_numerator(value: *const GValue) -> i32;
-            fn gst_value_get_fraction_denominator(value: *const GValue) -> i32;
-            fn g_value_get_boxed(value: *const GValue) -> *mut c_void;
-            fn gst_value_array_get_size(value: *const GValue) -> u32;
-            fn gst_value_array_get_value(value: *const GValue, index: u32) -> *const GValue;
-        }
-
-        match gvalue.typ {
-            TYPE_BOOLEAN => unsafe {
-                Some(Value::Bool(!(g_value_get_boolean(gvalue as *const GValue) == 0)))
-            },
-            TYPE_INT => unsafe { Some(Value::Int(g_value_get_int(gvalue as *const GValue))) },
-            TYPE_UINT => unsafe { Some(Value::UInt(g_value_get_uint(gvalue as *const GValue))) },
-            TYPE_INT64 => unsafe { Some(Value::Int64(g_value_get_int64(gvalue as *const GValue))) },
-            TYPE_UINT64 => unsafe {
-                Some(Value::UInt64(g_value_get_uint64(gvalue as *const GValue)))
-            },
-            TYPE_STRING => unsafe {
-                let s = g_value_get_string(gvalue as *const GValue);
+    pub unsafe fn from_gvalue(gvalue: &gobject::GValue) -> Option<Self> {
+        match gvalue.g_type {
+            gobject::G_TYPE_BOOLEAN => {
+                Some(Value::Bool(!(gobject::g_value_get_boolean(gvalue) == 0)))
+            }
+            gobject::G_TYPE_INT => Some(Value::Int(gobject::g_value_get_int(gvalue))),
+            gobject::G_TYPE_UINT => Some(Value::UInt(gobject::g_value_get_uint(gvalue))),
+            gobject::G_TYPE_INT64 => Some(Value::Int64(gobject::g_value_get_int64(gvalue))),
+            gobject::G_TYPE_UINT64 => Some(Value::UInt64(gobject::g_value_get_uint64(gvalue))),
+            gobject::G_TYPE_STRING => {
+                let s = gobject::g_value_get_string(gvalue);
                 if s.is_null() {
                     return None;
                 }
@@ -206,29 +139,29 @@ impl Value {
                     Err(_) => None,
                     Ok(s) => Some(Value::String(s.into())),
                 }
-            },
-            typ if typ == *TYPE_FRACTION => unsafe {
-                let n = gst_value_get_fraction_numerator(gvalue as *const GValue);
-                let d = gst_value_get_fraction_denominator(gvalue as *const GValue);
+            }
+            typ if typ == *TYPE_FRACTION => {
+                let n = gst::gst_value_get_fraction_numerator(gvalue);
+                let d = gst::gst_value_get_fraction_denominator(gvalue);
 
                 Some(Value::Fraction(Rational32::new(n, d)))
-            },
-            typ if typ == *TYPE_BUFFER => unsafe {
-                let b = g_value_get_boxed(gvalue as *const GValue);
+            }
+            typ if typ == *TYPE_BUFFER => {
+                let b = gobject::g_value_get_boxed(gvalue);
 
                 if b.is_null() {
                     return None;
                 }
 
-                Some(Value::Buffer(GstRc::new_from_unowned_ptr(b)))
-            },
-            typ if typ == *TYPE_GST_VALUE_ARRAY => unsafe {
-                let n = gst_value_array_get_size(gvalue as *const GValue);
+                Some(Value::Buffer(GstRc::new_from_unowned_ptr(b as *mut gst::GstBuffer)))
+            }
+            typ if typ == *TYPE_GST_VALUE_ARRAY => {
+                let n = gst::gst_value_array_get_size(gvalue);
 
                 let mut vec = Vec::with_capacity(n as usize);
 
                 for i in 0..n {
-                    let val = gst_value_array_get_value(gvalue as *const GValue, i);
+                    let val = gst::gst_value_array_get_value(gvalue, i);
 
                     if val.is_null() {
                         return None;
@@ -242,7 +175,7 @@ impl Value {
                 }
 
                 Some(Value::Array(vec))
-            },
+            }
             _ => None,
         }
     }

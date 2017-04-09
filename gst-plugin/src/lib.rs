@@ -19,9 +19,9 @@ extern crate byteorder;
 extern crate num_rational;
 #[macro_use]
 extern crate derivative;
-extern crate gobject_sys as gobject;
-extern crate glib_sys as glib;
-extern crate gstreamer_sys as gst;
+pub extern crate gobject_sys as gobject;
+pub extern crate glib_sys as glib;
+pub extern crate gstreamer_sys as gst;
 
 #[macro_use]
 pub mod utils;
@@ -41,3 +41,9 @@ pub mod bytes;
 pub mod tags;
 pub mod streams;
 pub mod miniobject;
+
+pub mod ffi {
+    pub use glib;
+    pub use gobject;
+    pub use gst;
+}

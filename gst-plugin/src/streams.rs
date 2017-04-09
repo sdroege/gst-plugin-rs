@@ -6,16 +6,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::os::raw::c_void;
 use std::ptr;
-use libc::c_char;
+use std::mem;
 use std::ffi::{CStr, CString};
 use caps::Caps;
 use miniobject::*;
 use tags::TagList;
 
-pub struct Stream(*mut c_void);
-pub struct StreamCollection(*mut c_void);
+use gst;
+
+pub struct Stream(*mut gst::GstStream);
+pub struct StreamCollection(*mut gst::GstStreamCollection);
 
 bitflags! {
     #[repr(C)]
@@ -43,30 +44,23 @@ impl Stream {
                t: StreamType,
                flags: StreamFlags)
                -> Self {
-        extern "C" {
-            fn gst_stream_new(stream_id: *const c_char,
-                              caps: *const c_void,
-                              t: StreamType,
-                              flags: StreamFlags)
-                              -> *mut c_void;
-        }
-
         let stream_id_cstr = CString::new(stream_id).unwrap();
         let caps = caps.map(|caps| unsafe { caps.as_ptr() }).unwrap_or(ptr::null_mut());
 
-        Stream(unsafe { gst_stream_new(stream_id_cstr.as_ptr(), caps, t, flags) })
+        Stream(unsafe {
+                   gst::gst_stream_new(stream_id_cstr.as_ptr(),
+                                       caps,
+                                       mem::transmute(t.bits()),
+                                       mem::transmute(flags.bits()))
+               })
     }
 
-    pub unsafe fn as_ptr(&self) -> *const c_void {
+    pub unsafe fn as_ptr(&self) -> *const gst::GstStream {
         self.0
     }
 
     pub fn get_caps(&self) -> Option<GstRc<Caps>> {
-        extern "C" {
-            fn gst_stream_get_caps(stream: *mut c_void) -> *mut c_void;
-        }
-
-        let ptr = unsafe { gst_stream_get_caps(self.0) };
+        let ptr = unsafe { gst::gst_stream_get_caps(self.0) };
 
         if ptr.is_null() {
             return None;
@@ -76,36 +70,20 @@ impl Stream {
     }
 
     pub fn get_stream_flags(&self) -> StreamFlags {
-        extern "C" {
-            fn gst_stream_get_stream_flags(stream: *mut c_void) -> u32;
-        }
-
-        StreamFlags::from_bits_truncate(unsafe { gst_stream_get_stream_flags(self.0) })
+        StreamFlags::from_bits_truncate(unsafe { gst::gst_stream_get_stream_flags(self.0).bits() })
     }
 
     pub fn get_stream_type(&self) -> StreamType {
-        extern "C" {
-            fn gst_stream_get_stream_type(stream: *mut c_void) -> u32;
-        }
-
-        StreamType::from_bits_truncate(unsafe { gst_stream_get_stream_type(self.0) })
+        StreamType::from_bits_truncate(unsafe { gst::gst_stream_get_stream_type(self.0).bits() })
     }
 
     pub fn get_stream_id(&self) -> &str {
-        extern "C" {
-            fn gst_stream_get_stream_id(collection: *mut c_void) -> *mut c_char;
-        }
-
-        let cstr = unsafe { CStr::from_ptr(gst_stream_get_stream_id(self.0)) };
+        let cstr = unsafe { CStr::from_ptr(gst::gst_stream_get_stream_id(self.0)) };
         cstr.to_str().unwrap()
     }
 
     pub fn get_tags(&self) -> Option<TagList> {
-        extern "C" {
-            fn gst_stream_get_tags(stream: *mut c_void) -> *mut c_void;
-        }
-
-        let ptr = unsafe { gst_stream_get_tags(self.0) };
+        let ptr = unsafe { gst::gst_stream_get_tags(self.0) };
 
         if ptr.is_null() {
             return None;
@@ -115,75 +93,46 @@ impl Stream {
     }
 
     pub fn set_caps(&self, caps: Option<GstRc<Caps>>) {
-        extern "C" {
-            fn gst_stream_set_caps(stream: *mut c_void, caps: *mut c_void);
-        }
-
         let ptr = caps.map(|caps| unsafe { caps.as_ptr() }).unwrap_or(ptr::null_mut());
 
-        unsafe { gst_stream_set_caps(self.0, ptr as *mut c_void) }
+        unsafe { gst::gst_stream_set_caps(self.0, ptr) }
     }
 
     pub fn set_stream_flags(&self, flags: StreamFlags) {
-        extern "C" {
-            fn gst_stream_set_stream_flags(stream: *mut c_void, flags: u32);
-        }
-
-        unsafe { gst_stream_set_stream_flags(self.0, flags.bits()) }
+        unsafe { gst::gst_stream_set_stream_flags(self.0, mem::transmute(flags.bits())) }
     }
 
     pub fn set_stream_type(&self, t: StreamType) {
-        extern "C" {
-            fn gst_stream_set_stream_type(stream: *mut c_void, t: u32);
-        }
-
-        unsafe { gst_stream_set_stream_type(self.0, t.bits()) }
+        unsafe { gst::gst_stream_set_stream_type(self.0, mem::transmute(t.bits())) }
     }
 
     pub fn set_tags(&self, tags: Option<TagList>) {
-        extern "C" {
-            fn gst_stream_set_tags(stream: *mut c_void, tags: *mut c_void);
-        }
-
         let ptr = tags.map(|tags| unsafe { tags.as_ptr() }).unwrap_or(ptr::null_mut());
 
-        unsafe { gst_stream_set_tags(self.0, ptr as *mut c_void) }
+        unsafe { gst::gst_stream_set_tags(self.0, ptr) }
     }
 }
 
 impl Clone for Stream {
     fn clone(&self) -> Self {
-        extern "C" {
-            fn gst_object_ref(object: *mut c_void) -> *mut c_void;
-        }
-
-        unsafe { Stream(gst_object_ref(self.0)) }
+        unsafe { Stream(gst::gst_object_ref(self.0 as *mut gst::GstObject) as *mut gst::GstStream) }
     }
 }
 
 impl Drop for Stream {
     fn drop(&mut self) {
-        extern "C" {
-            fn gst_object_unref(object: *mut c_void);
-        }
-
-        unsafe { gst_object_unref(self.0) }
+        unsafe { gst::gst_object_unref(self.0 as *mut gst::GstObject) }
     }
 }
 
 impl StreamCollection {
     pub fn new(upstream_id: &str, streams: &[Stream]) -> Self {
-        extern "C" {
-            fn gst_stream_collection_new(upstream_id: *const c_char) -> *mut c_void;
-            fn gst_stream_collection_add_stream(collection: *mut c_void, stream: *mut c_void);
-        }
-
         let upstream_id_cstr = CString::new(upstream_id).unwrap();
         let collection =
-            StreamCollection(unsafe { gst_stream_collection_new(upstream_id_cstr.as_ptr()) });
+            StreamCollection(unsafe { gst::gst_stream_collection_new(upstream_id_cstr.as_ptr()) });
 
         for stream in streams {
-            unsafe { gst_stream_collection_add_stream(collection.0, stream.clone().0) }
+            unsafe { gst::gst_stream_collection_add_stream(collection.0, stream.clone().0) };
         }
 
         collection
@@ -194,11 +143,7 @@ impl StreamCollection {
     }
 
     pub fn len(&self) -> u32 {
-        extern "C" {
-            fn gst_stream_collection_get_size(collection: *mut c_void) -> u32;
-        }
-
-        unsafe { gst_stream_collection_get_size(self.0) }
+        unsafe { gst::gst_stream_collection_get_size(self.0) }
     }
 
     pub fn empty(&self) -> bool {
@@ -206,15 +151,11 @@ impl StreamCollection {
     }
 
     pub fn get_upstream_id(&self) -> &str {
-        extern "C" {
-            fn gst_stream_collection_get_upstream_id(collection: *mut c_void) -> *mut c_char;
-        }
-
-        let cstr = unsafe { CStr::from_ptr(gst_stream_collection_get_upstream_id(self.0)) };
+        let cstr = unsafe { CStr::from_ptr(gst::gst_stream_collection_get_upstream_id(self.0)) };
         cstr.to_str().unwrap()
     }
 
-    pub unsafe fn as_ptr(&self) -> *const c_void {
+    pub unsafe fn as_ptr(&self) -> *const gst::GstStreamCollection {
         self.0
     }
 }
@@ -239,44 +180,35 @@ impl<'a> Iterator for StreamCollectionIterator<'a> {
     type Item = Stream;
 
     fn next(&mut self) -> Option<Stream> {
-        extern "C" {
-            fn gst_stream_collection_get_stream(collection: *mut c_void,
-                                                index: u32)
-                                                -> *mut c_void;
-            fn gst_object_ref(object: *mut c_void) -> *mut c_void;
-        }
-
         if self.position == self.length {
             return None;
         }
 
-        let stream = unsafe { gst_stream_collection_get_stream(self.collection.0, self.position) };
+        let stream =
+            unsafe { gst::gst_stream_collection_get_stream(self.collection.0, self.position) };
         if stream.is_null() {
             self.position = self.length;
             return None;
         }
         self.position += 1;
 
-        Some(unsafe { Stream(gst_object_ref(stream)) })
+        Some(unsafe {
+                 Stream(gst::gst_object_ref(stream as *mut gst::GstObject) as *mut gst::GstStream)
+             })
     }
 }
 
 impl Clone for StreamCollection {
     fn clone(&self) -> Self {
-        extern "C" {
-            fn gst_object_ref(object: *mut c_void) -> *mut c_void;
+        unsafe {
+            StreamCollection(gst::gst_object_ref(self.0 as *mut gst::GstObject) as
+                             *mut gst::GstStreamCollection)
         }
-
-        unsafe { StreamCollection(gst_object_ref(self.0)) }
     }
 }
 
 impl Drop for StreamCollection {
     fn drop(&mut self) {
-        extern "C" {
-            fn gst_object_unref(object: *mut c_void);
-        }
-
-        unsafe { gst_object_unref(self.0) }
+        unsafe { gst::gst_object_unref(self.0 as *mut gst::GstObject) }
     }
 }

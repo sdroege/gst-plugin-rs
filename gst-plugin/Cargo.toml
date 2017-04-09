@@ -14,9 +14,9 @@ slog = { version = "1.3", features = ["max_level_trace"] }
 lazy_static = "0.2"
 byteorder = "1.0"
 num-rational = { version = "0.1", default-features = false, features = [] }
-glib-sys = "0.3"
-gobject-sys = "0.3"
-gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys.git" }
+glib-sys = { git = "https://github.com/gtk-rs/sys.git" }
+gobject-sys = { git = "https://github.com/gtk-rs/sys.git" }
+gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys.git", features = ["v1_10"] }
 derivative = "1.0"
 
 [build-dependencies]

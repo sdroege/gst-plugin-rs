@@ -7,10 +7,11 @@
 // except according to those terms.
 
 use libc::c_char;
-use std::os::raw::c_void;
 use std::ffi::CString;
 use std::i32;
 use num_rational::Rational32;
+
+use gst;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,53 +24,28 @@ pub enum GstFlowReturn {
     Error = -5,
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GBoolean {
-    False = 0,
-    True = 1,
-}
-
-impl GBoolean {
-    pub fn from_bool(v: bool) -> GBoolean {
-        if v { GBoolean::True } else { GBoolean::False }
-    }
-
-    pub fn to_bool(&self) -> bool {
-        !(*self == GBoolean::False)
-    }
-}
-
-pub struct Element(*const c_void);
+pub struct Element(*mut gst::GstElement);
 
 impl Element {
-    pub unsafe fn new(element: *const c_void) -> Element {
-        extern "C" {
-            fn gst_object_ref(object: *const c_void) -> *const c_void;
-        }
-
+    pub unsafe fn new(element: *mut gst::GstElement) -> Element {
         if element.is_null() {
             panic!("NULL not allowed");
         }
 
-        gst_object_ref(element);
+        gst::gst_object_ref(element as *mut gst::GstObject);
 
         Element(element)
     }
 
-    pub unsafe fn as_ptr(&self) -> *const c_void {
+    pub unsafe fn as_ptr(&self) -> *mut gst::GstElement {
         self.0
     }
 }
 
 impl Drop for Element {
     fn drop(&mut self) {
-        extern "C" {
-            fn gst_object_unref(object: *const c_void);
-        }
-
         unsafe {
-            gst_object_unref(self.0);
+            gst::gst_object_unref(self.0 as *mut gst::GstObject);
         }
     }
 }

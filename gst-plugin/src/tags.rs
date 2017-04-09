@@ -6,13 +6,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::os::raw::c_void;
 use std::fmt;
-use libc::c_char;
+use std::mem;
 use std::ffi::{CStr, CString};
-use utils::*;
 use value::*;
 use miniobject::*;
+
+use glib;
+use gobject;
+use gst;
 
 pub trait Tag {
     type TagType: ValueType;
@@ -44,9 +46,8 @@ impl_tag!(LanguageCode, String, "language-code");
 impl_tag!(Duration, u64, "duration");
 impl_tag!(NominalBitrate, u32, "nominal-bitrate");
 
-#[repr(C)]
 pub enum MergeMode {
-    ReplaceAll = 1,
+    ReplaceAll,
     Replace,
     Append,
     Prepend,
@@ -54,91 +55,86 @@ pub enum MergeMode {
     KeepAll,
 }
 
+impl MergeMode {
+    fn to_ffi(&self) -> gst::GstTagMergeMode {
+        match *self {
+            MergeMode::ReplaceAll => gst::GST_TAG_MERGE_REPLACE_ALL,
+            MergeMode::Replace => gst::GST_TAG_MERGE_REPLACE,
+            MergeMode::Append => gst::GST_TAG_MERGE_APPEND,
+            MergeMode::Prepend => gst::GST_TAG_MERGE_PREPEND,
+            MergeMode::Keep => gst::GST_TAG_MERGE_KEEP,
+            MergeMode::KeepAll => gst::GST_TAG_MERGE_KEEP_ALL,
+        }
+    }
+}
+
 #[derive(Eq)]
-pub struct TagList(*mut c_void);
+pub struct TagList(*mut gst::GstTagList);
 
 unsafe impl MiniObject for TagList {
-    unsafe fn as_ptr(&self) -> *mut c_void {
+    type PtrType = gst::GstTagList;
+
+    unsafe fn as_ptr(&self) -> *mut gst::GstTagList {
         self.0
     }
 
-    unsafe fn replace_ptr(&mut self, ptr: *mut c_void) {
+    unsafe fn replace_ptr(&mut self, ptr: *mut gst::GstTagList) {
         self.0 = ptr
     }
 
-    unsafe fn new_from_ptr(ptr: *mut c_void) -> Self {
+    unsafe fn new_from_ptr(ptr: *mut gst::GstTagList) -> Self {
         TagList(ptr)
     }
 }
 
 impl TagList {
     pub fn new() -> GstRc<Self> {
-        extern "C" {
-            fn gst_tag_list_new_empty() -> *mut c_void;
-        }
-
-        unsafe { GstRc::new_from_owned_ptr(gst_tag_list_new_empty()) }
+        unsafe { GstRc::new_from_owned_ptr(gst::gst_tag_list_new_empty()) }
     }
 
     pub fn add<T: Tag>(&mut self, value: T::TagType, mode: MergeMode)
         where Value: From<<T as Tag>::TagType>
     {
-        extern "C" {
-            fn gst_tag_list_add_value(list: *mut c_void,
-                                      mode: u32,
-                                      tag: *const c_char,
-                                      value: *const GValue);
-        }
-
-        let v = Value::from(value);
-        let gvalue = v.to_gvalue();
-        let tag_name = CString::new(T::tag_name()).unwrap();
-
         unsafe {
-            gst_tag_list_add_value(self.0,
-                                   mode as u32,
-                                   tag_name.as_ptr(),
-                                   &gvalue as *const GValue);
+            let v = Value::from(value);
+            let mut gvalue = v.to_gvalue();
+            let tag_name = CString::new(T::tag_name()).unwrap();
+
+            gst::gst_tag_list_add_value(self.0, mode.to_ffi(), tag_name.as_ptr(), &gvalue);
+
+            gobject::g_value_unset(&mut gvalue);
         }
     }
 
     pub fn get<T: Tag>(&self) -> Option<TypedValue<T::TagType>>
         where Value: From<<T as Tag>::TagType>
     {
-        extern "C" {
-            fn gst_tag_list_copy_value(value: *mut GValue,
-                                       list: *mut c_void,
-                                       tag: *const c_char)
-                                       -> GBoolean;
-        }
+        unsafe {
+            let mut gvalue = mem::zeroed();
+            let tag_name = CString::new(T::tag_name()).unwrap();
 
-        let mut gvalue = GValue::new();
-        let tag_name = CString::new(T::tag_name()).unwrap();
+            let found = gst::gst_tag_list_copy_value(&mut gvalue, self.0, tag_name.as_ptr());
 
-        let found = unsafe {
-            gst_tag_list_copy_value(&mut gvalue as *mut GValue, self.0, tag_name.as_ptr())
-        };
+            if found == glib::GFALSE {
+                return None;
+            }
 
-        if !found.to_bool() {
-            return None;
-        }
+            let res = match Value::from_gvalue(&gvalue) {
+                Some(value) => Some(TypedValue::new(value)),
+                None => None,
+            };
 
-        match Value::from_gvalue(&gvalue) {
-            Some(value) => Some(TypedValue::new(value)),
-            None => None,
+            gobject::g_value_unset(&mut gvalue);
+
+            res
         }
     }
 
     pub fn to_string(&self) -> String {
-        extern "C" {
-            fn gst_tag_list_to_string(tag_list: *mut c_void) -> *mut c_char;
-            fn g_free(ptr: *mut c_char);
-        }
-
         unsafe {
-            let ptr = gst_tag_list_to_string(self.0);
+            let ptr = gst::gst_tag_list_to_string(self.0);
             let s = CStr::from_ptr(ptr).to_str().unwrap().into();
-            g_free(ptr);
+            glib::g_free(ptr as glib::gpointer);
 
             s
         }
@@ -153,11 +149,7 @@ impl fmt::Debug for TagList {
 
 impl PartialEq for TagList {
     fn eq(&self, other: &TagList) -> bool {
-        extern "C" {
-            fn gst_tag_list_is_equal(a: *const c_void, b: *const c_void) -> GBoolean;
-        }
-
-        unsafe { gst_tag_list_is_equal(self.0, other.0).to_bool() }
+        (unsafe { gst::gst_tag_list_is_equal(self.0, other.0) } == glib::GTRUE)
     }
 }
 
@@ -168,15 +160,10 @@ unsafe impl Send for TagList {}
 mod tests {
     use super::*;
     use std::ptr;
-    use std::os::raw::c_void;
 
     fn init() {
-        extern "C" {
-            fn gst_init(argc: *mut c_void, argv: *mut c_void);
-        }
-
         unsafe {
-            gst_init(ptr::null_mut(), ptr::null_mut());
+            gst::gst_init(ptr::null_mut(), ptr::null_mut());
         }
     }
 

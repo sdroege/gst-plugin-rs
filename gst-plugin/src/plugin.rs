@@ -6,16 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::os::raw::c_void;
+use gst;
 
-pub struct Plugin(*const c_void);
+pub struct Plugin(*mut gst::GstPlugin);
 
 impl Plugin {
-    pub unsafe fn new(plugin: *const c_void) -> Plugin {
+    pub unsafe fn new(plugin: *mut gst::GstPlugin) -> Plugin {
         Plugin(plugin)
     }
 
-    pub unsafe fn as_ptr(&self) -> *const c_void {
+    pub unsafe fn as_ptr(&self) -> *mut gst::GstPlugin {
         self.0
     }
 }
@@ -26,47 +26,41 @@ macro_rules! plugin_define(
      $version:expr, $license:expr, $source:expr,
      $package:expr, $origin:expr, $release_datetime:expr) => {
         pub mod plugin_desc {
-            use std::os::raw::c_void;
-            use $crate::utils::GBoolean;
             use $crate::plugin::Plugin;
+            use $crate::ffi::gst;
+            use $crate::ffi::glib;
+
+            // Not using c_char here because it requires the libc crate
+            #[allow(non_camel_case_types)]
+            type c_char = i8;
 
             #[repr(C)]
-            pub struct GstPluginDesc {
-                major_version: i32,
-                minor_version: i32,
-                name: *const u8,
-                description: *const u8,
-                plugin_init: unsafe extern "C" fn(plugin: *const c_void) -> GBoolean,
-                version: *const u8,
-                license: *const u8,
-                source: *const u8,
-                package: *const u8,
-                origin: *const u8,
-                release_datetime: *const u8,
-                _gst_reserved: [usize; 4],
-            }
-
+            pub struct GstPluginDesc(gst::GstPluginDesc);
             unsafe impl Sync for GstPluginDesc {}
 
             #[no_mangle]
             #[allow(non_upper_case_globals)]
-            pub static gst_plugin_desc: GstPluginDesc = GstPluginDesc {
+            pub static gst_plugin_desc: GstPluginDesc = GstPluginDesc(gst::GstPluginDesc {
                 major_version: 1,
                 minor_version: 10,
-                name: $name as *const u8,
-                description: $description as *const u8,
-                plugin_init: plugin_init_trampoline,
-                version: $version as *const u8,
-                license: $license as *const u8,
-                source: $source as *const u8,
-                package: $package as *const u8,
-                origin: $origin as *const u8,
-                release_datetime: $release_datetime as *const u8,
-                _gst_reserved: [0, 0, 0, 0],
-            };
+                name: $name as *const u8 as *const c_char,
+                description: $description as *const u8 as *const c_char,
+                plugin_init: Some(plugin_init_trampoline),
+                version: $version as *const u8 as *const c_char,
+                license: $license as *const u8 as *const c_char,
+                source: $source as *const u8 as *const c_char,
+                package: $package as *const u8 as *const c_char,
+                origin: $origin as *const u8 as *const c_char,
+                release_datetime: $release_datetime as *const u8 as *const c_char,
+                _gst_reserved: [0 as glib::gpointer; 4],
+            });
 
-            unsafe extern "C" fn plugin_init_trampoline(plugin: *const c_void) -> GBoolean {
-                GBoolean::from_bool(super::$plugin_init(&Plugin::new(plugin)))
+            unsafe extern "C" fn plugin_init_trampoline(plugin: *mut gst::GstPlugin) -> glib::gboolean {
+                if super::$plugin_init(&Plugin::new(plugin)) {
+                    glib::GTRUE
+                } else {
+                    glib::GFALSE
+                }
             }
         }
     };
