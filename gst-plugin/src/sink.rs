@@ -3,14 +3,14 @@
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// <LICENSE-MIT or http://opensink.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
 use libc::c_char;
-use std::os::raw::c_void;
 use std::ffi::{CStr, CString};
 use std::ptr;
+use std::mem;
 
 use std::panic::{self, AssertUnwindSafe};
 
@@ -27,9 +27,12 @@ use buffer::*;
 use miniobject::*;
 use log::*;
 use plugin::Plugin;
+use caps::*;
 
 use glib;
+use gobject;
 use gst;
+use gst_base;
 
 #[derive(Debug)]
 pub enum SinkError {
@@ -203,25 +206,12 @@ impl SinkWrapper {
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn sink_new(sink: *mut gst::GstElement,
-                                  create_instance: fn(Element) -> Box<Sink>)
-                                  -> *mut SinkWrapper {
-    let instance = create_instance(Element::new(sink));
-    Box::into_raw(Box::new(SinkWrapper::new(sink, instance)))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn sink_drop(ptr: *mut SinkWrapper) {
-    let _ = Box::from_raw(ptr);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn sink_set_uri(ptr: *const SinkWrapper,
-                                      uri_ptr: *const c_char,
-                                      cerr: *mut *mut glib::GError)
-                                      -> glib::gboolean {
-    let wrap: &SinkWrapper = &*ptr;
+unsafe fn sink_set_uri(ptr: *const RsSink,
+                       uri_ptr: *const c_char,
+                       cerr: *mut *mut glib::GError)
+                       -> glib::gboolean {
+    let sink = &*(ptr as *const RsSink);
+    let wrap: &SinkWrapper = &*sink.wrap;
 
     panic_to_error!(wrap, glib::GFALSE, {
         let uri_str = if uri_ptr.is_null() {
@@ -241,21 +231,21 @@ pub unsafe extern "C" fn sink_set_uri(ptr: *const SinkWrapper,
     })
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn sink_get_uri(ptr: *const SinkWrapper) -> *mut c_char {
-    let wrap: &SinkWrapper = &*ptr;
+unsafe fn sink_get_uri(ptr: *const RsSink) -> *mut c_char {
+    let sink = &*(ptr as *const RsSink);
+    let wrap: &SinkWrapper = &*sink.wrap;
 
     panic_to_error!(wrap, ptr::null_mut(), {
         match wrap.get_uri() {
-            Some(uri_str) => CString::new(uri_str).unwrap().into_raw(),
+            Some(uri_str) => glib::g_strdup(CString::new(uri_str).unwrap().as_ptr()),
             None => ptr::null_mut(),
         }
     })
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn sink_start(ptr: *const SinkWrapper) -> glib::gboolean {
-    let wrap: &SinkWrapper = &*ptr;
+unsafe extern "C" fn sink_start(ptr: *mut gst_base::GstBaseSink) -> glib::gboolean {
+    let sink = &*(ptr as *const RsSink);
+    let wrap: &SinkWrapper = &*sink.wrap;
 
     panic_to_error!(wrap, glib::GFALSE, {
         if wrap.start() {
@@ -266,9 +256,10 @@ pub unsafe extern "C" fn sink_start(ptr: *const SinkWrapper) -> glib::gboolean {
     })
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> glib::gboolean {
-    let wrap: &SinkWrapper = &*ptr;
+unsafe extern "C" fn sink_stop(ptr: *mut gst_base::GstBaseSink) -> glib::gboolean {
+    let sink = &*(ptr as *const RsSink);
+    let wrap: &SinkWrapper = &*sink.wrap;
+
     panic_to_error!(wrap, glib::GTRUE, {
         if wrap.stop() {
             glib::GTRUE
@@ -278,58 +269,233 @@ pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> glib::gboolean {
     })
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper,
-                                     buffer: GstRefPtr<Buffer>)
-                                     -> gst::GstFlowReturn {
-    let wrap: &SinkWrapper = &*ptr;
+unsafe extern "C" fn sink_render(ptr: *mut gst_base::GstBaseSink,
+                                 buffer: *mut gst::GstBuffer)
+                                 -> gst::GstFlowReturn {
+    let sink = &*(ptr as *const RsSink);
+    let wrap: &SinkWrapper = &*sink.wrap;
+    let buffer = GstRefPtr(buffer);
+
     panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
         let buffer: GstRef<Buffer> = GstRef::new(&buffer);
         wrap.render(buffer.as_ref())
     })
 }
 
-pub struct SinkInfo<'a> {
-    pub name: &'a str,
-    pub long_name: &'a str,
-    pub description: &'a str,
-    pub classification: &'a str,
-    pub author: &'a str,
-    pub rank: i32,
+pub struct SinkInfo {
+    pub name: String,
+    pub long_name: String,
+    pub description: String,
+    pub classification: String,
+    pub author: String,
+    pub rank: u32,
     pub create_instance: fn(Element) -> Box<Sink>,
-    pub protocols: &'a str,
+    pub protocols: Vec<String>,
 }
 
-pub fn sink_register(plugin: &Plugin, sink_info: &SinkInfo) {
-    extern "C" {
-        fn gst_rs_sink_register(plugin: *const gst::GstPlugin,
-                                name: *const c_char,
-                                long_name: *const c_char,
-                                description: *const c_char,
-                                classification: *const c_char,
-                                author: *const c_char,
-                                rank: i32,
-                                create_instance: *const c_void,
-                                protocols: *const c_char)
-                                -> glib::gboolean;
+#[repr(C)]
+struct RsSink {
+    parent: gst_base::GstBaseSink,
+    wrap: *mut SinkWrapper,
+    sink_info: *const SinkInfo,
+}
+
+#[repr(C)]
+struct RsSinkClass {
+    parent_class: gst_base::GstBaseSinkClass,
+    sink_info: *const SinkInfo,
+    protocols: *const Vec<*const c_char>,
+    parent_vtable: glib::gconstpointer,
+}
+
+unsafe extern "C" fn sink_finalize(obj: *mut gobject::GObject) {
+    let sink = &mut *(obj as *mut RsSink);
+
+    drop(Box::from_raw(sink.wrap));
+
+    let sink_klass = &**(obj as *const *const RsSinkClass);
+    let parent_klass = &*(sink_klass.parent_vtable as *const gobject::GObjectClass);
+    parent_klass.finalize.map(|f| f(obj));
+}
+
+unsafe extern "C" fn sink_set_property(obj: *mut gobject::GObject,
+                                       id: u32,
+                                       value: *mut gobject::GValue,
+                                       _pspec: *mut gobject::GParamSpec) {
+    let sink = &*(obj as *const RsSink);
+
+    match id {
+        1 => {
+            let uri_ptr = gobject::g_value_get_string(value);
+            sink_set_uri(sink, uri_ptr, ptr::null_mut());
+        }
+        _ => unreachable!(),
+    }
+}
+
+unsafe extern "C" fn sink_get_property(obj: *mut gobject::GObject,
+                                       id: u32,
+                                       value: *mut gobject::GValue,
+                                       _pspec: *mut gobject::GParamSpec) {
+    let sink = &*(obj as *const RsSink);
+
+    match id {
+        1 => {
+            let uri_ptr = sink_get_uri(sink);
+            gobject::g_value_take_string(value, uri_ptr);
+        }
+        _ => unreachable!(),
+    }
+}
+
+unsafe extern "C" fn sink_class_init(klass: glib::gpointer, klass_data: glib::gpointer) {
+    let sink_klass = &mut *(klass as *mut RsSinkClass);
+    let sink_info = &*(klass_data as *const SinkInfo);
+
+    {
+        let gobject_klass = &mut sink_klass.parent_class
+                                     .parent_class
+                                     .parent_class
+                                     .parent_class;
+        gobject_klass.set_property = Some(sink_set_property);
+        gobject_klass.get_property = Some(sink_get_property);
+        gobject_klass.finalize = Some(sink_finalize);
+
+        let name_cstr = CString::new("uri").unwrap();
+        let nick_cstr = CString::new("URI").unwrap();
+        let blurb_cstr = CString::new("URI to read from").unwrap();
+
+        gobject::g_object_class_install_property(klass as *mut gobject::GObjectClass, 1,
+            gobject::g_param_spec_string(name_cstr.as_ptr(),
+                                         nick_cstr.as_ptr(),
+                                         blurb_cstr.as_ptr(),
+                                         ptr::null_mut(),
+                                         gobject::G_PARAM_READWRITE));
     }
 
-    let cname = CString::new(sink_info.name).unwrap();
-    let clong_name = CString::new(sink_info.long_name).unwrap();
-    let cdescription = CString::new(sink_info.description).unwrap();
-    let cclassification = CString::new(sink_info.classification).unwrap();
-    let cauthor = CString::new(sink_info.author).unwrap();
-    let cprotocols = CString::new(sink_info.protocols).unwrap();
+    {
+        let element_klass = &mut sink_klass.parent_class.parent_class;
 
+        let longname_cstr = CString::new(sink_info.long_name.clone()).unwrap();
+        let classification_cstr = CString::new(sink_info.description.clone()).unwrap();
+        let description_cstr = CString::new(sink_info.classification.clone()).unwrap();
+        let author_cstr = CString::new(sink_info.author.clone()).unwrap();
+
+        gst::gst_element_class_set_static_metadata(element_klass,
+                                                   longname_cstr.into_raw(),
+                                                   classification_cstr.into_raw(),
+                                                   description_cstr.into_raw(),
+                                                   author_cstr.into_raw());
+
+        let caps = Caps::new_any();
+        let templ_name = CString::new("sink").unwrap();
+        let pad_template = gst::gst_pad_template_new(templ_name.into_raw(),
+                                                     gst::GST_PAD_SINK,
+                                                     gst::GST_PAD_ALWAYS,
+                                                     caps.as_ptr());
+        gst::gst_element_class_add_pad_template(element_klass, pad_template);
+    }
+
+    {
+        let basesink_klass = &mut sink_klass.parent_class;
+        basesink_klass.start = Some(sink_start);
+        basesink_klass.stop = Some(sink_stop);
+        basesink_klass.render = Some(sink_render);
+    }
+
+    sink_klass.sink_info = sink_info;
+    let mut protocols = Box::new(Vec::with_capacity(sink_info.protocols.len()));
+    for p in &sink_info.protocols {
+        let p_cstr = CString::new(p.clone().into_bytes()).unwrap();
+        protocols.push(p_cstr.into_raw() as *const c_char);
+    }
+    protocols.push(ptr::null());
+    sink_klass.protocols = Box::into_raw(protocols) as *const Vec<*const c_char>;
+    sink_klass.parent_vtable = gobject::g_type_class_peek_parent(klass);
+}
+
+unsafe extern "C" fn sink_init(instance: *mut gobject::GTypeInstance, klass: glib::gpointer) {
+    let sink = &mut *(instance as *mut RsSink);
+    let sink_klass = &*(klass as *const RsSinkClass);
+    let sink_info = &*sink_klass.sink_info;
+
+    sink.sink_info = sink_info;
+
+    let wrap = Box::new(SinkWrapper::new(&mut sink.parent.element,
+            (sink_info.create_instance)(Element::new(&mut sink.parent.element))));
+    sink.wrap = Box::into_raw(wrap);
+
+    gst_base::gst_base_sink_set_sync(&mut sink.parent, glib::GFALSE);
+}
+
+unsafe extern "C" fn sink_uri_handler_get_type(_type: glib::GType) -> gst::GstURIType {
+    gst::GST_URI_SINK
+}
+
+unsafe extern "C" fn sink_uri_handler_get_protocols(type_: glib::GType) -> *const *const c_char {
+    let klass = gobject::g_type_class_peek(type_);
+    let sink_klass = &*(klass as *const RsSinkClass);
+    (*sink_klass.protocols).as_ptr()
+}
+
+unsafe extern "C" fn sink_uri_handler_get_uri(uri_handler: *mut gst::GstURIHandler) -> *mut c_char {
+    sink_get_uri(uri_handler as *const RsSink)
+}
+
+unsafe extern "C" fn sink_uri_handler_set_uri(uri_handler: *mut gst::GstURIHandler,
+                                              uri: *const c_char,
+                                              err: *mut *mut glib::GError)
+                                              -> glib::gboolean {
+    sink_set_uri(uri_handler as *const RsSink, uri, err)
+}
+
+unsafe extern "C" fn sink_uri_handler_init(iface: glib::gpointer, _iface_data: glib::gpointer) {
+    let uri_handler_iface = &mut *(iface as *mut gst::GstURIHandlerInterface);
+
+    uri_handler_iface.get_type = Some(sink_uri_handler_get_type);
+    uri_handler_iface.get_protocols = Some(sink_uri_handler_get_protocols);
+    uri_handler_iface.get_uri = Some(sink_uri_handler_get_uri);
+    uri_handler_iface.set_uri = Some(sink_uri_handler_set_uri);
+}
+
+pub fn sink_register(plugin: &Plugin, sink_info: SinkInfo) {
     unsafe {
-        gst_rs_sink_register(plugin.as_ptr(),
-                             cname.as_ptr(),
-                             clong_name.as_ptr(),
-                             cdescription.as_ptr(),
-                             cclassification.as_ptr(),
-                             cauthor.as_ptr(),
-                             sink_info.rank,
-                             sink_info.create_instance as *const c_void,
-                             cprotocols.as_ptr());
+        let parent_type = gst_base::gst_base_sink_get_type();
+        let mut type_name = String::from("RsSink-");
+        type_name.push_str(&sink_info.name);
+        let type_name_cstr = CString::new(type_name.into_bytes()).unwrap();
+
+        let name_cstr = CString::new(sink_info.name.clone().into_bytes()).unwrap();
+        let rank = sink_info.rank;
+
+        let sink_info = Box::new(sink_info);
+        let sink_info_ptr = Box::into_raw(sink_info) as glib::gpointer;
+
+        let type_info = gobject::GTypeInfo {
+            class_size: mem::size_of::<RsSinkClass>() as u16,
+            base_init: None,
+            base_finalize: None,
+            class_init: Some(sink_class_init),
+            class_finalize: None,
+            class_data: sink_info_ptr,
+            instance_size: mem::size_of::<RsSink>() as u16,
+            n_preallocs: 0,
+            instance_init: Some(sink_init),
+            value_table: ptr::null(),
+        };
+
+        let type_ = gobject::g_type_register_static(parent_type,
+                                                    type_name_cstr.as_ptr(),
+                                                    &type_info,
+                                                    gobject::GTypeFlags::empty());
+
+        let iface_info = gobject::GInterfaceInfo {
+            interface_init: Some(sink_uri_handler_init),
+            interface_finalize: None,
+            interface_data: ptr::null_mut(),
+        };
+        gobject::g_type_add_interface_static(type_, gst::gst_uri_handler_get_type(), &iface_info);
+
+        gst::gst_element_register(plugin.as_ptr(), name_cstr.as_ptr(), rank, type_);
     }
 }

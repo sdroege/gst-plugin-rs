@@ -39,16 +39,16 @@ fn plugin_init(plugin: &Plugin) -> bool {
                     });
 
     sink_register(plugin,
-                  &SinkInfo {
-                       name: "rsfilesink",
-                       long_name: "File Sink",
-                       description: "Writes to local files",
-                       classification: "Sink/File",
-                       author: "Luis de Bethencourt <luisbg@osg.samsung.com>",
-                       rank: 256 + 100,
-                       create_instance: FileSink::new_boxed,
-                       protocols: "file",
-                   });
+                  SinkInfo {
+                      name: "rsfilesink".into(),
+                      long_name: "File Sink".into(),
+                      description: "Writes to local files".into(),
+                      classification: "Sink/File".into(),
+                      author: "Luis de Bethencourt <luisbg@osg.samsung.com>".into(),
+                      rank: 256 + 100,
+                      create_instance: FileSink::new_boxed,
+                      protocols: vec!["file".into()],
+                  });
 
     true
 }
