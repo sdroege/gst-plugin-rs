@@ -91,8 +91,7 @@ impl HttpSrc {
         let size = response.headers().get().map(|&ContentLength(cl)| cl + start);
 
         let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) =
-            response.headers()
-                .get() {
+            response.headers().get() {
             ranges.iter().any(|u| *u == RangeUnit::Bytes)
         } else {
             false
@@ -117,14 +116,14 @@ impl HttpSrc {
         debug!(self.logger, "Request successful: {:?}", response);
 
         Ok(StreamingState::Started {
-            uri: uri,
-            response: response,
-            seekable: seekable,
-            position: 0,
-            size: size,
-            start: start,
-            stop: stop,
-        })
+               uri: uri,
+               response: response,
+               seekable: seekable,
+               position: 0,
+               size: size,
+               start: start,
+               stop: stop,
+           })
     }
 }
 

@@ -49,11 +49,10 @@ impl FileSrc {
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
-    let _ = try!(uri.to_file_path()
-        .or_else(|_| {
-            Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+    let _ = try!(uri.to_file_path().or_else(|_| {
+                                                Err(UriError::new(UriErrorKind::UnsupportedProtocol,
                               Some(format!("Unsupported file URI '{}'", uri.as_str()))))
-        }));
+                                            }));
     Ok(())
 }
 
@@ -68,9 +67,7 @@ impl Source for FileSrc {
 
     fn get_size(&self) -> Option<u64> {
         if let StreamingState::Started { ref file, .. } = self.streaming_state {
-            file.metadata()
-                .ok()
-                .map(|m| m.len())
+            file.metadata().ok().map(|m| m.len())
         } else {
             None
         }
@@ -81,12 +78,11 @@ impl Source for FileSrc {
             return Err(error_msg!(SourceError::Failure, ["Source already started"]));
         }
 
-        let location = try!(uri.to_file_path()
-            .or_else(|_| {
-                error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
-                Err(error_msg!(SourceError::Failure,
-                               ["Unsupported file URI '{}'", uri.as_str()]))
-            }));
+        let location = try!(uri.to_file_path().or_else(|_| {
+            error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
+            Err(error_msg!(SourceError::Failure,
+                           ["Unsupported file URI '{}'", uri.as_str()]))
+        }));
 
         let file = try!(File::open(location.as_path()).or_else(|err| {
             error!(self.logger,

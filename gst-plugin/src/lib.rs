@@ -22,6 +22,7 @@ extern crate derivative;
 pub extern crate gobject_sys as gobject;
 pub extern crate glib_sys as glib;
 pub extern crate gstreamer_sys as gst;
+pub extern crate gstreamer_base_sys as gst_base;
 
 #[macro_use]
 pub mod utils;

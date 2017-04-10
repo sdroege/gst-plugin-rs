@@ -17,6 +17,7 @@ num-rational = { version = "0.1", default-features = false, features = [] }
 glib-sys = { git = "https://github.com/gtk-rs/sys.git" }
 gobject-sys = { git = "https://github.com/gtk-rs/sys.git" }
 gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys.git", features = ["v1_10"] }
+gstreamer-base-sys = { git = "https://github.com/sdroege/gstreamer-sys.git", features = ["v1_10"] }
 derivative = "1.0"
 
 [build-dependencies]

@@ -160,10 +160,10 @@ impl AudioFormat {
                                           &[("layout", &"interleaved".into()),
                                             ("format",
                                              &if self.width == 8 {
-                                                 "U8".into()
-                                             } else {
-                                                 "S16LE".into()
-                                             })]))
+                                                  "U8".into()
+                                              } else {
+                                                  "S16LE".into()
+                                              })]))
                 } else {
                     None
                 }
@@ -236,14 +236,17 @@ impl AudioFormat {
         };
 
         if self.rate != 0 {
-            caps.as_mut()
-                .map(|c| c.get_mut().unwrap().set_simple(&[("rate", &(self.rate as i32).into())]));
+            caps.as_mut().map(|c| {
+                                  c.get_mut().unwrap().set_simple(&[("rate",
+                                                                     &(self.rate as i32).into())])
+                              });
         }
         if self.channels != 0 {
-            caps.as_mut()
-                .map(|c| {
-                    c.get_mut().unwrap().set_simple(&[("channels", &(self.channels as i32).into())])
-                });
+            caps.as_mut().map(|c| {
+                                  c.get_mut().unwrap().set_simple(&[("channels",
+                                                                     &(self.channels as i32)
+                                                                          .into())])
+                              });
         }
 
         caps
@@ -342,23 +345,27 @@ impl VideoFormat {
 
         if let (Some(width), Some(height)) = (self.width, self.height) {
             caps.as_mut().map(|c| {
-                c.get_mut().unwrap().set_simple(&[("width", &(width as i32).into()),
-                                                  ("height", &(height as i32).into())])
-            });
+                                  c.get_mut().unwrap().set_simple(&[("width",
+                                                                     &(width as i32).into()),
+                                                                    ("height",
+                                                                     &(height as i32).into())])
+                              });
         }
 
         if let Some(par) = self.pixel_aspect_ratio {
             if *par.numer() != 0 && par.numer() != par.denom() {
                 caps.as_mut().map(|c| {
-                    c.get_mut().unwrap().set_simple(&[("pixel-aspect-ratio", &par.into())])
-                });
+                                      c.get_mut().unwrap().set_simple(&[("pixel-aspect-ratio",
+                                                                         &par.into())])
+                                  });
             }
         }
 
         if let Some(fps) = self.framerate {
             if *fps.numer() != 0 {
-                caps.as_mut()
-                    .map(|c| c.get_mut().unwrap().set_simple(&[("framerate", &fps.into())]));
+                caps.as_mut().map(|c| {
+                                      c.get_mut().unwrap().set_simple(&[("framerate", &fps.into())])
+                                  });
             }
         }
 
@@ -538,16 +545,14 @@ impl FlvDemux {
                     let mut streams = Vec::new();
 
                     if audio_changed {
-                        if let Some(caps) = streaming_state.audio
-                            .as_ref()
-                            .and_then(|a| a.to_caps()) {
+                        if let Some(caps) =
+                            streaming_state.audio.as_ref().and_then(|a| a.to_caps()) {
                             streams.push(Stream::new(AUDIO_STREAM_ID, caps, String::from("audio")));
                         }
                     }
                     if video_changed {
-                        if let Some(caps) = streaming_state.video
-                            .as_ref()
-                            .and_then(|v| v.to_caps()) {
+                        if let Some(caps) =
+                            streaming_state.video.as_ref().and_then(|v| v.to_caps()) {
                             streams.push(Stream::new(VIDEO_STREAM_ID, caps, String::from("video")));
                         }
                     }
@@ -692,9 +697,8 @@ impl FlvDemux {
             self.adapter.flush(offset as usize).unwrap();
         }
 
-        let mut buffer = self.adapter
-            .get_buffer((tag_header.data_size - 1 - offset) as usize)
-            .unwrap();
+        let mut buffer =
+            self.adapter.get_buffer((tag_header.data_size - 1 - offset) as usize).unwrap();
 
         {
             let buffer = buffer.get_mut().unwrap();
@@ -847,9 +851,8 @@ impl FlvDemux {
             self.adapter.flush(offset as usize).unwrap();
         }
 
-        let mut buffer = self.adapter
-            .get_buffer((tag_header.data_size - 1 - offset) as usize)
-            .unwrap();
+        let mut buffer =
+            self.adapter.get_buffer((tag_header.data_size - 1 - offset) as usize).unwrap();
 
         {
             let buffer = buffer.get_mut().unwrap();

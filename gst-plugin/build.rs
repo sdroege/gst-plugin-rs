@@ -14,7 +14,7 @@ fn main() {
     let gstbase = pkg_config::probe_library("gstreamer-base-1.0").unwrap();
     let includes = [gstreamer.include_paths, gstbase.include_paths];
 
-    let files = ["src/source.c", "src/sink.c", "src/demuxer.c"];
+    let files = ["src/sink.c", "src/demuxer.c"];
 
     let mut config = gcc::Config::new();
     config.include("src");

@@ -15,8 +15,6 @@ use std::borrow::Cow;
 
 use url::Url;
 
-use utils::*;
-
 use glib;
 use gst;
 
@@ -145,12 +143,12 @@ pub enum FlowError {
 }
 
 impl FlowError {
-    pub fn to_native(&self) -> GstFlowReturn {
+    pub fn to_native(&self) -> gst::GstFlowReturn {
         match *self {
-            FlowError::Flushing => GstFlowReturn::Flushing,
-            FlowError::Eos => GstFlowReturn::Eos,
-            FlowError::NotNegotiated(..) => GstFlowReturn::NotNegotiated,
-            FlowError::Error(..) => GstFlowReturn::Error,
+            FlowError::Flushing => gst::GST_FLOW_FLUSHING,
+            FlowError::Eos => gst::GST_FLOW_EOS,
+            FlowError::NotNegotiated(..) => gst::GST_FLOW_NOT_NEGOTIATED,
+            FlowError::Error(..) => gst::GST_FLOW_ERROR,
         }
     }
 }

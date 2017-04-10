@@ -177,13 +177,13 @@ impl SinkWrapper {
         }
     }
 
-    fn render(&self, buffer: &Buffer) -> GstFlowReturn {
+    fn render(&self, buffer: &Buffer) -> gst::GstFlowReturn {
         let sink = &mut self.sink.lock().unwrap();
 
         trace!(self.logger, "Rendering buffer {:?}", buffer);
 
         match sink.render(buffer) {
-            Ok(..) => GstFlowReturn::Ok,
+            Ok(..) => gst::GST_FLOW_OK,
             Err(flow_error) => {
                 error!(self.logger, "Failed to render: {:?}", flow_error);
                 match flow_error {
@@ -281,9 +281,9 @@ pub unsafe extern "C" fn sink_stop(ptr: *const SinkWrapper) -> glib::gboolean {
 #[no_mangle]
 pub unsafe extern "C" fn sink_render(ptr: *const SinkWrapper,
                                      buffer: GstRefPtr<Buffer>)
-                                     -> GstFlowReturn {
+                                     -> gst::GstFlowReturn {
     let wrap: &SinkWrapper = &*ptr;
-    panic_to_error!(wrap, GstFlowReturn::Error, {
+    panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
         let buffer: GstRef<Buffer> = GstRef::new(&buffer);
         wrap.render(buffer.as_ref())
     })

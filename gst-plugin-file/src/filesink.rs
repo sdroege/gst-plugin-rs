@@ -51,11 +51,10 @@ impl FileSink {
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
-    let _ = try!(uri.to_file_path()
-        .or_else(|_| {
-            Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+    let _ = try!(uri.to_file_path().or_else(|_| {
+                                                Err(UriError::new(UriErrorKind::UnsupportedProtocol,
                               Some(format!("Unsupported file URI '{}'", uri.as_str()))))
-        }));
+                                            }));
     Ok(())
 }
 
@@ -69,12 +68,11 @@ impl Sink for FileSink {
             return Err(error_msg!(SinkError::Failure, ["Sink already started"]));
         }
 
-        let location = try!(uri.to_file_path()
-            .or_else(|_| {
-                error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
-                Err(error_msg!(SinkError::Failure,
-                               ["Unsupported file URI '{}'", uri.as_str()]))
-            }));
+        let location = try!(uri.to_file_path().or_else(|_| {
+            error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
+            Err(error_msg!(SinkError::Failure,
+                           ["Unsupported file URI '{}'", uri.as_str()]))
+        }));
 
 
         let file = try!(File::create(location.as_path()).or_else(|err| {

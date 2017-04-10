@@ -13,17 +13,6 @@ use num_rational::Rational32;
 
 use gst;
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GstFlowReturn {
-    Ok = 0,
-    NotLinked = -1,
-    Flushing = -2,
-    Eos = -3,
-    NotNegotiated = -4,
-    Error = -5,
-}
-
 pub struct Element(*mut gst::GstElement);
 
 impl Element {

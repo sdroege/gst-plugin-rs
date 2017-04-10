@@ -24,15 +24,15 @@ use httpsrc::HttpSrc;
 
 fn plugin_init(plugin: &Plugin) -> bool {
     source_register(plugin,
-                    &SourceInfo {
-                        name: "rshttpsrc",
-                        long_name: "HTTP/HTTPS Source",
-                        description: "Reads HTTP/HTTPS streams",
-                        classification: "Source/File",
-                        author: "Sebastian Dröge <sebastian@centricular.com>",
+                    SourceInfo {
+                        name: "rshttpsrc".into(),
+                        long_name: "HTTP/HTTPS Source".into(),
+                        description: "Reads HTTP/HTTPS streams".into(),
+                        classification: "Source/File".into(),
+                        author: "Sebastian Dröge <sebastian@centricular.com>".into(),
                         rank: 256 + 100,
                         create_instance: HttpSrc::new_boxed,
-                        protocols: "http:https",
+                        protocols: vec!["http".into(), "https".into()],
                         push_only: true,
                     });
 

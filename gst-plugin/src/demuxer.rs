@@ -247,7 +247,7 @@ impl DemuxerWrapper {
         }
     }
 
-    fn handle_buffer(&self, buffer: GstRc<Buffer>) -> GstFlowReturn {
+    fn handle_buffer(&self, buffer: GstRc<Buffer>) -> gst::GstFlowReturn {
         extern "C" {
             fn gst_rs_demuxer_stream_eos(raw: *mut gst::GstElement, index: u32);
             fn gst_rs_demuxer_add_stream(raw: *mut gst::GstElement,
@@ -262,7 +262,7 @@ impl DemuxerWrapper {
             fn gst_rs_demuxer_stream_push_buffer(raw: *mut gst::GstElement,
                                                  index: u32,
                                                  buffer: *mut gst::GstBuffer)
-                                                 -> GstFlowReturn;
+                                                 -> gst::GstFlowReturn;
         };
 
         let mut res = {
@@ -290,7 +290,7 @@ impl DemuxerWrapper {
 
             match res {
                 HandleBufferResult::NeedMoreData => {
-                    return GstFlowReturn::Ok;
+                    return gst::GST_FLOW_OK;
                 }
                 HandleBufferResult::StreamAdded(stream) => {
                     let stream_id_cstr = CString::new(stream.stream_id.as_bytes()).unwrap();
@@ -323,7 +323,7 @@ impl DemuxerWrapper {
                     let flow_ret = unsafe {
                         gst_rs_demuxer_stream_push_buffer(self.raw, index, buffer.into_ptr())
                     };
-                    if flow_ret != GstFlowReturn::Ok {
+                    if flow_ret != gst::GST_FLOW_OK {
                         return flow_ret;
                     }
                 }
@@ -334,7 +334,7 @@ impl DemuxerWrapper {
                         gst_rs_demuxer_stream_eos(self.raw, index);
                     }
 
-                    return GstFlowReturn::Eos;
+                    return gst::GST_FLOW_EOS;
                 }
                 HandleBufferResult::Again => {
                     // nothing, just call again
@@ -483,10 +483,10 @@ pub unsafe extern "C" fn demuxer_seek(ptr: *mut DemuxerWrapper,
 #[no_mangle]
 pub unsafe extern "C" fn demuxer_handle_buffer(ptr: *mut DemuxerWrapper,
                                                buffer: *mut gst::GstBuffer)
-                                               -> GstFlowReturn {
+                                               -> gst::GstFlowReturn {
     let wrap: &mut DemuxerWrapper = &mut *ptr;
 
-    panic_to_error!(wrap, GstFlowReturn::Error, {
+    panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
         let buffer = GstRc::new_from_owned_ptr(buffer);
         wrap.handle_buffer(buffer)
     })

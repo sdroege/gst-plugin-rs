@@ -153,7 +153,7 @@ impl<'a, T: MiniObject> From<&'a mut T> for GstRc<T> {
 }
 
 #[repr(C)]
-pub struct GstRefPtr<T: MiniObject>(*mut T::PtrType);
+pub struct GstRefPtr<T: MiniObject>(pub *mut T::PtrType);
 
 #[derive(Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GstRef<'a, T: 'a + MiniObject> {

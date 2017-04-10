@@ -26,29 +26,29 @@ use filesink::FileSink;
 
 fn plugin_init(plugin: &Plugin) -> bool {
     source_register(plugin,
-                    &SourceInfo {
-                        name: "rsfilesrc",
-                        long_name: "File Source",
-                        description: "Reads local files",
-                        classification: "Source/File",
-                        author: "Sebastian Dröge <sebastian@centricular.com>",
+                    SourceInfo {
+                        name: "rsfilesrc".into(),
+                        long_name: "File Source".into(),
+                        description: "Reads local files".into(),
+                        classification: "Source/File".into(),
+                        author: "Sebastian Dröge <sebastian@centricular.com>".into(),
                         rank: 256 + 100,
                         create_instance: FileSrc::new_boxed,
-                        protocols: "file",
+                        protocols: vec!["file".into()],
                         push_only: false,
                     });
 
     sink_register(plugin,
                   &SinkInfo {
-                      name: "rsfilesink",
-                      long_name: "File Sink",
-                      description: "Writes to local files",
-                      classification: "Sink/File",
-                      author: "Luis de Bethencourt <luisbg@osg.samsung.com>",
-                      rank: 256 + 100,
-                      create_instance: FileSink::new_boxed,
-                      protocols: "file",
-                  });
+                       name: "rsfilesink",
+                       long_name: "File Sink",
+                       description: "Writes to local files",
+                       classification: "Sink/File",
+                       author: "Luis de Bethencourt <luisbg@osg.samsung.com>",
+                       rank: 256 + 100,
+                       create_instance: FileSink::new_boxed,
+                       protocols: "file",
+                   });
 
     true
 }
