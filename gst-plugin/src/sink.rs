@@ -237,7 +237,10 @@ unsafe fn sink_get_uri(ptr: *const RsSink) -> *mut c_char {
 
     panic_to_error!(wrap, ptr::null_mut(), {
         match wrap.get_uri() {
-            Some(uri_str) => glib::g_strdup(CString::new(uri_str).unwrap().as_ptr()),
+            Some(uri_str) => {
+                let uri_cstr = CString::new(uri_str).unwrap();
+                glib::g_strdup(uri_cstr.as_ptr())
+            }
             None => ptr::null_mut(),
         }
     })

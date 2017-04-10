@@ -78,7 +78,7 @@ impl Caps {
             let name_cstr = CString::new(value.0).unwrap();
             unsafe {
                 let mut gvalue = value.1.to_gvalue();
-                gst::gst_caps_set_value(self.0, name_cstr.as_ptr(), &mut gvalue);
+                gst::gst_caps_set_value(self.0, name_cstr.as_ptr(), &gvalue);
                 gobject::g_value_unset(&mut gvalue);
             }
         }
