@@ -20,7 +20,7 @@ use gst;
 
 pub struct GstDebugDrain {
     category: *mut gst::GstDebugCategory,
-    element: gobject::GWeakRef,
+    element: Box<gobject::GWeakRef>,
 }
 
 impl GstDebugDrain {
@@ -51,12 +51,12 @@ impl GstDebugDrain {
 
         let mut drain = GstDebugDrain {
             category: category,
-            element: unsafe { mem::zeroed() },
+            element: Box::new(unsafe { mem::zeroed() }),
         };
 
         if !element.is_null() {
             unsafe {
-                gobject::g_weak_ref_set(&mut drain.element, element as *mut gobject::GObject);
+                gobject::g_weak_ref_set(&mut *drain.element, element as *mut gobject::GObject);
             }
         }
 
@@ -67,7 +67,7 @@ impl GstDebugDrain {
 impl Drop for GstDebugDrain {
     fn drop(&mut self) {
         unsafe {
-            gobject::g_weak_ref_clear(&mut self.element);
+            gobject::g_weak_ref_clear(&mut *self.element);
         }
     }
 }
@@ -98,7 +98,7 @@ impl Drain for GstDebugDrain {
         let message_cstr = CString::new(fmt::format(record.msg()).as_bytes()).unwrap();
 
         unsafe {
-            let element = gobject::g_weak_ref_get(&self.element as *const gobject::GWeakRef as
+            let element = gobject::g_weak_ref_get(&*self.element as *const gobject::GWeakRef as
                                                   *mut gobject::GWeakRef);
 
             gst::gst_debug_log(self.category,
