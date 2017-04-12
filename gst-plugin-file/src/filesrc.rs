@@ -49,10 +49,12 @@ impl FileSrc {
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
-    let _ = try!(uri.to_file_path().or_else(|_| {
-                                                Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                              Some(format!("Unsupported file URI '{}'", uri.as_str()))))
-                                            }));
+    let _ = try!(uri.to_file_path()
+                     .or_else(|_| {
+                                  Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+                                                    Some(format!("Unsupported file URI '{}'",
+                                                                 uri.as_str()))))
+                              }));
     Ok(())
 }
 
@@ -78,11 +80,13 @@ impl Source for FileSrc {
             return Err(error_msg!(SourceError::Failure, ["Source already started"]));
         }
 
-        let location = try!(uri.to_file_path().or_else(|_| {
-            error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
-            Err(error_msg!(SourceError::Failure,
-                           ["Unsupported file URI '{}'", uri.as_str()]))
-        }));
+        let location =
+            try!(uri.to_file_path()
+                     .or_else(|_| {
+                                  error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
+                                  Err(error_msg!(SourceError::Failure,
+                                                 ["Unsupported file URI '{}'", uri.as_str()]))
+                              }));
 
         let file = try!(File::open(location.as_path()).or_else(|err| {
             error!(self.logger,
@@ -115,20 +119,24 @@ impl Source for FileSrc {
         let logger = self.logger.clone();
 
         let (file, position) = match self.streaming_state {
-            StreamingState::Started { ref mut file, ref mut position } => (file, position),
+            StreamingState::Started {
+                ref mut file,
+                ref mut position,
+            } => (file, position),
             StreamingState::Stopped => {
                 return Err(FlowError::Error(error_msg!(SourceError::Failure, ["Not started yet"])));
             }
         };
 
         if *position != offset {
-            try!(file.seek(SeekFrom::Start(offset)).or_else(|err| {
-                error!(logger, "Failed to seek to {}: {:?}", offset, err);
-                Err(FlowError::Error(error_msg!(SourceError::SeekFailed,
-                                                ["Failed to seek to {}: {}",
-                                                 offset,
-                                                 err.to_string()])))
-            }));
+            try!(file.seek(SeekFrom::Start(offset))
+                     .or_else(|err| {
+                                  error!(logger, "Failed to seek to {}: {:?}", offset, err);
+                                  Err(FlowError::Error(error_msg!(SourceError::SeekFailed,
+                                                                  ["Failed to seek to {}: {}",
+                                                                   offset,
+                                                                   err.to_string()])))
+                              }));
             *position = offset;
         }
 
@@ -143,13 +151,14 @@ impl Source for FileSrc {
 
             let data = map.as_mut_slice();
 
-            try!(file.read(data).or_else(|err| {
-                error!(logger, "Failed to read: {:?}", err);
-                Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
-                                                ["Failed to read at {}: {}",
-                                                 offset,
-                                                 err.to_string()])))
-            }))
+            try!(file.read(data)
+                     .or_else(|err| {
+                                  error!(logger, "Failed to read: {:?}", err);
+                                  Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
+                                                                  ["Failed to read at {}: {}",
+                                                                   offset,
+                                                                   err.to_string()])))
+                              }))
         };
 
         *position += size as u64;

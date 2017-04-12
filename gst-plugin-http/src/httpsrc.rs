@@ -76,11 +76,13 @@ impl HttpSrc {
 
         debug!(self.logger, "Doing new request {:?}", req);
 
-        let response = try!(req.send().or_else(|err| {
-            error!(self.logger, "Request failed: {:?}", err);
-            Err(error_msg!(SourceError::ReadFailed,
-                           ["Failed to fetch {}: {}", uri, err.to_string()]))
-        }));
+        let response =
+            try!(req.send()
+                     .or_else(|err| {
+                                  error!(self.logger, "Request failed: {:?}", err);
+                                  Err(error_msg!(SourceError::ReadFailed,
+                                                 ["Failed to fetch {}: {}", uri, err.to_string()]))
+                              }));
 
         if !response.status().is_success() {
             error!(self.logger, "Request status failed: {:?}", response);
@@ -88,7 +90,10 @@ impl HttpSrc {
                                   ["Failed to fetch {}: {}", uri, response.status()]));
         }
 
-        let size = response.headers().get().map(|&ContentLength(cl)| cl + start);
+        let size = response
+            .headers()
+            .get()
+            .map(|&ContentLength(cl)| cl + start);
 
         let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) =
             response.headers().get() {
@@ -99,10 +104,9 @@ impl HttpSrc {
 
         let seekable = size.is_some() && accept_byte_ranges;
 
-        let position = if let Some(&ContentRange(ContentRangeSpec::Bytes { range: Some((range_start,
-                                                                                 _)),
-                                                                           .. })) = response.headers()
-            .get() {
+        let position = if let Some(&ContentRange(ContentRangeSpec::Bytes {
+                                                     range: Some((range_start, _)), ..
+                                                 })) = response.headers().get() {
             range_start
         } else {
             start
@@ -170,9 +174,12 @@ impl Source for HttpSrc {
 
     fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage> {
         let (position, old_stop, uri) = match self.streaming_state {
-            StreamingState::Started { position, stop, ref uri, .. } => {
-                (position, stop, uri.clone())
-            }
+            StreamingState::Started {
+                position,
+                stop,
+                ref uri,
+                ..
+            } => (position, stop, uri.clone()),
             StreamingState::Stopped => {
                 return Err(error_msg!(SourceError::Failure, ["Not started yet"]));
             }
@@ -192,9 +199,11 @@ impl Source for HttpSrc {
         let logger = self.logger.clone();
 
         let (response, position) = match self.streaming_state {
-            StreamingState::Started { ref mut response, ref mut position, .. } => {
-                (response, position)
-            }
+            StreamingState::Started {
+                ref mut response,
+                ref mut position,
+                ..
+            } => (response, position),
             StreamingState::Stopped => {
                 return Err(FlowError::Error(error_msg!(SourceError::Failure, ["Not started yet"])));
             }
@@ -218,13 +227,15 @@ impl Source for HttpSrc {
 
             let data = map.as_mut_slice();
 
-            try!(response.read(data).or_else(|err| {
-                error!(logger, "Failed to read: {:?}", err);
-                Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
-                                                ["Failed to read at {}: {}",
-                                                 offset,
-                                                 err.to_string()])))
-            }))
+            try!(response
+                     .read(data)
+                     .or_else(|err| {
+                                  error!(logger, "Failed to read: {:?}", err);
+                                  Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
+                                                                  ["Failed to read at {}: {}",
+                                                                   offset,
+                                                                   err.to_string()])))
+                              }))
         };
 
         if size == 0 {

@@ -51,10 +51,12 @@ impl FileSink {
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
-    let _ = try!(uri.to_file_path().or_else(|_| {
-                                                Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                              Some(format!("Unsupported file URI '{}'", uri.as_str()))))
-                                            }));
+    let _ = try!(uri.to_file_path()
+                     .or_else(|_| {
+                                  Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+                                                    Some(format!("Unsupported file URI '{}'",
+                                                                 uri.as_str()))))
+                              }));
     Ok(())
 }
 
@@ -68,11 +70,13 @@ impl Sink for FileSink {
             return Err(error_msg!(SinkError::Failure, ["Sink already started"]));
         }
 
-        let location = try!(uri.to_file_path().or_else(|_| {
-            error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
-            Err(error_msg!(SinkError::Failure,
-                           ["Unsupported file URI '{}'", uri.as_str()]))
-        }));
+        let location =
+            try!(uri.to_file_path()
+                     .or_else(|_| {
+                                  error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
+                                  Err(error_msg!(SinkError::Failure,
+                                                 ["Unsupported file URI '{}'", uri.as_str()]))
+                              }));
 
 
         let file = try!(File::create(location.as_path()).or_else(|err| {
@@ -108,7 +112,10 @@ impl Sink for FileSink {
         trace!(logger, "Rendering {:?}", buffer);
 
         let (file, position) = match self.streaming_state {
-            StreamingState::Started { ref mut file, ref mut position } => (file, position),
+            StreamingState::Started {
+                ref mut file,
+                ref mut position,
+            } => (file, position),
             StreamingState::Stopped => {
                 return Err(FlowError::Error(error_msg!(SinkError::Failure, ["Not started yet"])));
             }
@@ -123,10 +130,12 @@ impl Sink for FileSink {
         };
         let data = map.as_slice();
 
-        try!(file.write_all(data).or_else(|err| {
-            error!(logger, "Failed to write: {}", err);
-            Err(FlowError::Error(error_msg!(SinkError::WriteFailed, ["Failed to write: {}", err])))
-        }));
+        try!(file.write_all(data)
+                 .or_else(|err| {
+                              error!(logger, "Failed to write: {}", err);
+                              Err(FlowError::Error(error_msg!(SinkError::WriteFailed,
+                                                              ["Failed to write: {}", err])))
+                          }));
 
         *position += data.len() as u64;
 

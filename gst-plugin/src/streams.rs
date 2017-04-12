@@ -45,7 +45,8 @@ impl Stream {
                flags: StreamFlags)
                -> Self {
         let stream_id_cstr = CString::new(stream_id).unwrap();
-        let caps = caps.map(|caps| unsafe { caps.as_ptr() }).unwrap_or(ptr::null_mut());
+        let caps = caps.map(|caps| unsafe { caps.as_ptr() })
+            .unwrap_or(ptr::null_mut());
 
         Stream(unsafe {
                    gst::gst_stream_new(stream_id_cstr.as_ptr(),
@@ -93,7 +94,8 @@ impl Stream {
     }
 
     pub fn set_caps(&self, caps: Option<GstRc<Caps>>) {
-        let ptr = caps.map(|caps| unsafe { caps.as_ptr() }).unwrap_or(ptr::null_mut());
+        let ptr = caps.map(|caps| unsafe { caps.as_ptr() })
+            .unwrap_or(ptr::null_mut());
 
         unsafe { gst::gst_stream_set_caps(self.0, ptr) }
     }
@@ -107,7 +109,8 @@ impl Stream {
     }
 
     pub fn set_tags(&self, tags: Option<TagList>) {
-        let ptr = tags.map(|tags| unsafe { tags.as_ptr() }).unwrap_or(ptr::null_mut());
+        let ptr = tags.map(|tags| unsafe { tags.as_ptr() })
+            .unwrap_or(ptr::null_mut());
 
         unsafe { gst::gst_stream_set_tags(self.0, ptr) }
     }

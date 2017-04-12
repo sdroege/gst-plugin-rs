@@ -102,18 +102,24 @@ impl ErrorMessage {
 
 
     pub unsafe fn post(&self, element: *mut gst::GstElement) {
-        let ErrorMessage { error_domain,
-                           error_code,
-                           ref message,
-                           ref debug,
-                           filename,
-                           function,
-                           line } = *self;
+        let ErrorMessage {
+            error_domain,
+            error_code,
+            ref message,
+            ref debug,
+            filename,
+            function,
+            line,
+        } = *self;
 
-        let message_cstr = message.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
+        let message_cstr = message
+            .as_ref()
+            .map(|m| CString::new(m.as_bytes()).unwrap());
         let message_ptr = message_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
 
-        let debug_cstr = debug.as_ref().map(|m| CString::new(m.as_bytes()).unwrap());
+        let debug_cstr = debug
+            .as_ref()
+            .map(|m| CString::new(m.as_bytes()).unwrap());
         let debug_ptr = debug_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
 
         let file_cstr = CString::new(filename.as_bytes()).unwrap();

@@ -44,9 +44,9 @@ impl<T: MiniObject> GstRc<T> {
                 return &mut self.obj;
             }
 
-            self.obj.replace_ptr(gst::gst_mini_object_make_writable(ptr as
-                                                                    *mut gst::GstMiniObject) as
-                                 *mut T::PtrType);
+            self.obj
+                .replace_ptr(gst::gst_mini_object_make_writable(ptr as *mut gst::GstMiniObject) as
+                             *mut T::PtrType);
             assert!(self.is_writable());
 
             &mut self.obj

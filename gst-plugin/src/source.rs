@@ -122,7 +122,10 @@ impl SourceWrapper {
 
     fn get_uri(&self) -> Option<String> {
         let uri_storage = &self.uri.lock().unwrap();
-        uri_storage.0.as_ref().map(|uri| String::from(uri.as_str()))
+        uri_storage
+            .0
+            .as_ref()
+            .map(|uri| String::from(uri.as_str()))
     }
 
     fn is_seekable(&self) -> bool {
@@ -160,10 +163,7 @@ impl SourceWrapper {
             Err(ref msg) => {
                 error!(self.logger, "Failed to start: {:?}", msg);
 
-                self.uri
-                    .lock()
-                    .unwrap()
-                    .1 = false;
+                self.uri.lock().unwrap().1 = false;
                 self.post_message(msg);
                 false
             }
@@ -178,10 +178,7 @@ impl SourceWrapper {
         match source.stop() {
             Ok(..) => {
                 trace!(self.logger, "Stopped successfully");
-                self.uri
-                    .lock()
-                    .unwrap()
-                    .1 = false;
+                self.uri.lock().unwrap().1 = false;
                 true
             }
             Err(ref msg) => {
@@ -434,7 +431,8 @@ unsafe extern "C" fn source_class_init(klass: glib::gpointer, klass_data: glib::
     let source_info = &*(klass_data as *const SourceInfo);
 
     {
-        let gobject_klass = &mut src_klass.parent_class
+        let gobject_klass = &mut src_klass
+                                     .parent_class
                                      .parent_class
                                      .parent_class
                                      .parent_class

@@ -119,7 +119,10 @@ impl SinkWrapper {
 
     fn get_uri(&self) -> Option<String> {
         let uri_storage = &self.uri.lock().unwrap();
-        uri_storage.0.as_ref().map(|uri| String::from(uri.as_str()))
+        uri_storage
+            .0
+            .as_ref()
+            .map(|uri| String::from(uri.as_str()))
     }
 
     fn start(&self) -> bool {
@@ -147,10 +150,7 @@ impl SinkWrapper {
             Err(ref msg) => {
                 error!(self.logger, "Failed to start: {:?}", msg);
 
-                self.uri
-                    .lock()
-                    .unwrap()
-                    .1 = false;
+                self.uri.lock().unwrap().1 = false;
                 self.post_message(msg);
                 false
             }
@@ -165,10 +165,7 @@ impl SinkWrapper {
         match sink.stop() {
             Ok(..) => {
                 trace!(self.logger, "Stopped successfully");
-                self.uri
-                    .lock()
-                    .unwrap()
-                    .1 = false;
+                self.uri.lock().unwrap().1 = false;
                 true
             }
             Err(ref msg) => {
@@ -356,7 +353,8 @@ unsafe extern "C" fn sink_class_init(klass: glib::gpointer, klass_data: glib::gp
     let sink_info = &*(klass_data as *const SinkInfo);
 
     {
-        let gobject_klass = &mut sink_klass.parent_class
+        let gobject_klass = &mut sink_klass
+                                     .parent_class
                                      .parent_class
                                      .parent_class
                                      .parent_class;

@@ -55,7 +55,8 @@ impl Adapter {
                buffer,
                size,
                self.size);
-        self.deque.push_back(Buffer::into_read_mapped_buffer(buffer).unwrap());
+        self.deque
+            .push_back(Buffer::into_read_mapped_buffer(buffer).unwrap());
     }
 
     pub fn clear(&mut self) {
@@ -163,13 +164,18 @@ impl Adapter {
             return Ok(Buffer::new());
         }
 
-        let sub = self.deque.front().and_then(|front| if front.get_size() - self.skip >= size {
-            trace!(LOGGER, "Get buffer of {} bytes, subbuffer of first", size);
-            let new = front.get_buffer().copy_region(self.skip, Some(size)).unwrap();
-            Some(new)
-        } else {
-            None
-        });
+        let sub = self.deque
+            .front()
+            .and_then(|front| if front.get_size() - self.skip >= size {
+                          trace!(LOGGER, "Get buffer of {} bytes, subbuffer of first", size);
+                          let new = front
+                              .get_buffer()
+                              .copy_region(self.skip, Some(size))
+                              .unwrap();
+                          Some(new)
+                      } else {
+                          None
+                      });
 
         if let Some(s) = sub {
             self.flush(size).unwrap();
@@ -179,10 +185,7 @@ impl Adapter {
         trace!(LOGGER, "Get buffer of {} bytes, copy into new buffer", size);
         let mut new = Buffer::new_with_size(size).unwrap();
         {
-            let mut map = new.get_mut()
-                .unwrap()
-                .map_readwrite()
-                .unwrap();
+            let mut map = new.get_mut().unwrap().map_readwrite().unwrap();
             let data = map.as_mut_slice();
             Self::copy_data(&self.deque, self.skip, data, size);
         }
@@ -207,10 +210,7 @@ impl Adapter {
 
         let mut left = size;
         while left > 0 {
-            let front_size = self.deque
-                .front()
-                .unwrap()
-                .get_size() - self.skip;
+            let front_size = self.deque.front().unwrap().get_size() - self.skip;
 
             if front_size <= left {
                 trace!(LOGGER,
