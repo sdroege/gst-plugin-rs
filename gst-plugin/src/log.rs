@@ -8,7 +8,7 @@
 
 use libc::c_char;
 use std::ffi::CString;
-use slog::{Drain, Record, OwnedKeyValueList, Never, Level};
+use slog::{Drain, Record, OwnedKVList, Never, Level};
 use std::fmt;
 use std::ptr;
 use std::mem;
@@ -73,9 +73,10 @@ impl Drop for GstDebugDrain {
 }
 
 impl Drain for GstDebugDrain {
-    type Error = Never;
+    type Ok = ();
+    type Err = Never;
 
-    fn log(&self, record: &Record, _: &OwnedKeyValueList) -> Result<(), Never> {
+    fn log(&self, record: &Record, _: &OwnedKVList) -> Result<(), Never> {
         let level = match record.level() {
             Level::Critical | Level::Error => gst::GST_LEVEL_ERROR,
             Level::Warning => gst::GST_LEVEL_WARNING,
@@ -95,7 +96,7 @@ impl Drain for GstDebugDrain {
         // TODO: Probably want to include module?
         let function_cstr = CString::new(record.function().as_bytes()).unwrap();
 
-        let message_cstr = CString::new(fmt::format(record.msg()).as_bytes()).unwrap();
+        let message_cstr = CString::new(fmt::format(*record.msg()).as_bytes()).unwrap();
 
         unsafe {
             let element = gobject::g_weak_ref_get(&*self.element as *const gobject::GWeakRef as

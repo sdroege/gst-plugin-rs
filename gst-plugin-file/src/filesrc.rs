@@ -17,7 +17,7 @@ use gst_plugin::buffer::*;
 use gst_plugin::log::*;
 use gst_plugin::utils::*;
 
-use slog::*;
+use slog::Logger;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -39,7 +39,7 @@ impl FileSrc {
                                                     "rsfilesrc",
                                                     0,
                                                     "Rust file source"),
-                                 None),
+                                 o!()),
         }
     }
 

@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use url::Url;
 
-use slog::*;
+use slog::Logger;
 
 use plugin::Plugin;
 use utils::*;
@@ -84,7 +84,7 @@ impl SourceWrapper {
                                                     "rssrc",
                                                     0,
                                                     "Rust source base class"),
-                                 None),
+                                 o!()),
             uri: Mutex::new((None, false)),
             uri_validator: source.uri_validator(),
             source: Mutex::new(source),

@@ -26,7 +26,7 @@ use gst_plugin::miniobject::*;
 use gst_plugin::value::Rational32;
 use gst_plugin::bytes::*;
 
-use slog::*;
+use slog::Logger;
 
 const AUDIO_STREAM_ID: u32 = 0;
 const VIDEO_STREAM_ID: u32 = 1;
@@ -177,13 +177,15 @@ impl AudioFormat {
             flavors::SoundFormat::PCM_ALAW => Some(Caps::new_simple("audio/x-alaw", &[])),
             flavors::SoundFormat::PCM_ULAW => Some(Caps::new_simple("audio/x-mulaw", &[])),
             flavors::SoundFormat::AAC => {
-                self.aac_sequence_header.as_ref().map(|header| {
-                    Caps::new_simple("audio/mpeg",
-                                     &[("mpegversion", &4.into()),
-                                       ("framed", &true.into()),
-                                       ("stream-format", &"raw".into()),
-                                       ("codec_data", &header.as_ref().into())])
-                })
+                self.aac_sequence_header
+                    .as_ref()
+                    .map(|header| {
+                             Caps::new_simple("audio/mpeg",
+                                              &[("mpegversion", &4.into()),
+                                                ("framed", &true.into()),
+                                                ("stream-format", &"raw".into()),
+                                                ("codec_data", &header.as_ref().into())])
+                         })
             }
             flavors::SoundFormat::SPEEX => {
                 let header = {
@@ -236,17 +238,20 @@ impl AudioFormat {
         };
 
         if self.rate != 0 {
-            caps.as_mut().map(|c| {
-                                  c.get_mut().unwrap().set_simple(&[("rate",
-                                                                     &(self.rate as i32).into())])
-                              });
+            caps.as_mut()
+                .map(|c| {
+                         c.get_mut()
+                             .unwrap()
+                             .set_simple(&[("rate", &(self.rate as i32).into())])
+                     });
         }
         if self.channels != 0 {
-            caps.as_mut().map(|c| {
-                                  c.get_mut().unwrap().set_simple(&[("channels",
-                                                                     &(self.channels as i32)
-                                                                          .into())])
-                              });
+            caps.as_mut()
+                .map(|c| {
+                         c.get_mut()
+                             .unwrap()
+                             .set_simple(&[("channels", &(self.channels as i32).into())])
+                     });
         }
 
         caps
@@ -273,7 +278,9 @@ impl VideoFormat {
             format: data_header.codec_id,
             width: metadata.as_ref().and_then(|m| m.video_width),
             height: metadata.as_ref().and_then(|m| m.video_height),
-            pixel_aspect_ratio: metadata.as_ref().and_then(|m| m.video_pixel_aspect_ratio),
+            pixel_aspect_ratio: metadata
+                .as_ref()
+                .and_then(|m| m.video_pixel_aspect_ratio),
             framerate: metadata.as_ref().and_then(|m| m.video_framerate),
             bitrate: metadata.as_ref().and_then(|m| m.video_bitrate),
             avc_sequence_header: avc_sequence_header.clone(),
@@ -325,11 +332,13 @@ impl VideoFormat {
             flavors::CodecId::VP6A => Some(Caps::new_simple("video/x-vp6-flash-alpha", &[])),
             flavors::CodecId::SCREEN2 => Some(Caps::new_simple("video/x-flash-screen2", &[])),
             flavors::CodecId::H264 => {
-                self.avc_sequence_header.as_ref().map(|header| {
-                    Caps::new_simple("video/x-h264",
-                                     &[("stream-format", &"avc".into()),
-                                       ("codec_data", &header.as_ref().into())])
-                })
+                self.avc_sequence_header
+                    .as_ref()
+                    .map(|header| {
+                             Caps::new_simple("video/x-h264",
+                                              &[("stream-format", &"avc".into()),
+                                                ("codec_data", &header.as_ref().into())])
+                         })
             }
             flavors::CodecId::H263 => Some(Caps::new_simple("video/x-h263", &[])),
             flavors::CodecId::MPEG4Part2 => {
@@ -344,28 +353,34 @@ impl VideoFormat {
         };
 
         if let (Some(width), Some(height)) = (self.width, self.height) {
-            caps.as_mut().map(|c| {
-                                  c.get_mut().unwrap().set_simple(&[("width",
-                                                                     &(width as i32).into()),
-                                                                    ("height",
-                                                                     &(height as i32).into())])
-                              });
+            caps.as_mut()
+                .map(|c| {
+                         c.get_mut()
+                             .unwrap()
+                             .set_simple(&[("width", &(width as i32).into()),
+                                           ("height", &(height as i32).into())])
+                     });
         }
 
         if let Some(par) = self.pixel_aspect_ratio {
             if *par.numer() != 0 && par.numer() != par.denom() {
-                caps.as_mut().map(|c| {
-                                      c.get_mut().unwrap().set_simple(&[("pixel-aspect-ratio",
-                                                                         &par.into())])
-                                  });
+                caps.as_mut()
+                    .map(|c| {
+                             c.get_mut()
+                                 .unwrap()
+                                 .set_simple(&[("pixel-aspect-ratio", &par.into())])
+                         });
             }
         }
 
         if let Some(fps) = self.framerate {
             if *fps.numer() != 0 {
-                caps.as_mut().map(|c| {
-                                      c.get_mut().unwrap().set_simple(&[("framerate", &fps.into())])
-                                  });
+                caps.as_mut()
+                    .map(|c| {
+                             c.get_mut()
+                                 .unwrap()
+                                 .set_simple(&[("framerate", &fps.into())])
+                         });
             }
         }
 
@@ -498,7 +513,7 @@ impl FlvDemux {
                                                     "rsflvdemux",
                                                     0,
                                                     "Rust FLV demuxer"),
-                                 None),
+                                 o!()),
             state: State::Stopped,
             adapter: Adapter::new(),
             streaming_state: None,
@@ -518,7 +533,9 @@ impl FlvDemux {
 
         self.adapter.flush(15).unwrap();
 
-        let buffer = self.adapter.get_buffer(tag_header.data_size as usize).unwrap();
+        let buffer = self.adapter
+            .get_buffer(tag_header.data_size as usize)
+            .unwrap();
         let map = buffer.map_read().unwrap();
         let data = map.as_slice();
 
@@ -531,11 +548,13 @@ impl FlvDemux {
 
                 let streaming_state = self.streaming_state.as_mut().unwrap();
 
-                let audio_changed = streaming_state.audio
+                let audio_changed = streaming_state
+                    .audio
                     .as_mut()
                     .map(|a| a.update_with_metadata(&metadata))
                     .unwrap_or(false);
-                let video_changed = streaming_state.video
+                let video_changed = streaming_state
+                    .video
                     .as_mut()
                     .map(|v| v.update_with_metadata(&metadata))
                     .unwrap_or(false);
@@ -630,7 +649,9 @@ impl FlvDemux {
         if data_header.sound_format == flavors::SoundFormat::AAC {
             // Not big enough for the AAC packet header, ship!
             if tag_header.data_size < 1 + 1 {
-                self.adapter.flush(15 + tag_header.data_size as usize).unwrap();
+                self.adapter
+                    .flush(15 + tag_header.data_size as usize)
+                    .unwrap();
                 warn!(self.logger,
                       "Too small packet for AAC packet header {}",
                       15 + tag_header.data_size);
@@ -672,7 +693,9 @@ impl FlvDemux {
         let streaming_state = self.streaming_state.as_ref().unwrap();
 
         if streaming_state.audio == None {
-            self.adapter.flush((tag_header.data_size + 15) as usize).unwrap();
+            self.adapter
+                .flush((tag_header.data_size + 15) as usize)
+                .unwrap();
             return Ok(HandleBufferResult::Again);
         }
 
@@ -689,7 +712,9 @@ impl FlvDemux {
         }
 
         if tag_header.data_size < offset {
-            self.adapter.flush((tag_header.data_size - 1) as usize).unwrap();
+            self.adapter
+                .flush((tag_header.data_size - 1) as usize)
+                .unwrap();
             return Ok(HandleBufferResult::Again);
         }
 
@@ -697,8 +722,9 @@ impl FlvDemux {
             self.adapter.flush(offset as usize).unwrap();
         }
 
-        let mut buffer =
-            self.adapter.get_buffer((tag_header.data_size - 1 - offset) as usize).unwrap();
+        let mut buffer = self.adapter
+            .get_buffer((tag_header.data_size - 1 - offset) as usize)
+            .unwrap();
 
         {
             let buffer = buffer.get_mut().unwrap();
@@ -775,7 +801,9 @@ impl FlvDemux {
         if data_header.codec_id == flavors::CodecId::H264 {
             // Not big enough for the AVC packet header, ship!
             if tag_header.data_size < 1 + 4 {
-                self.adapter.flush(15 + tag_header.data_size as usize).unwrap();
+                self.adapter
+                    .flush(15 + tag_header.data_size as usize)
+                    .unwrap();
                 warn!(self.logger,
                       "Too small packet for AVC packet header {}",
                       15 + tag_header.data_size);
@@ -811,7 +839,9 @@ impl FlvDemux {
                         }
                         flavors::AVCPacketType::EndOfSequence => {
                             // Skip
-                            self.adapter.flush(15 + tag_header.data_size as usize).unwrap();
+                            self.adapter
+                                .flush(15 + tag_header.data_size as usize)
+                                .unwrap();
                             return Ok(HandleBufferResult::Again);
                         }
                     }
@@ -822,7 +852,9 @@ impl FlvDemux {
         let streaming_state = self.streaming_state.as_ref().unwrap();
 
         if streaming_state.video == None {
-            self.adapter.flush((tag_header.data_size + 15) as usize).unwrap();
+            self.adapter
+                .flush((tag_header.data_size + 15) as usize)
+                .unwrap();
             return Ok(HandleBufferResult::Again);
         }
 
@@ -843,7 +875,9 @@ impl FlvDemux {
         }
 
         if tag_header.data_size < offset {
-            self.adapter.flush((tag_header.data_size - 1) as usize).unwrap();
+            self.adapter
+                .flush((tag_header.data_size - 1) as usize)
+                .unwrap();
             return Ok(HandleBufferResult::Again);
         }
 
@@ -851,8 +885,9 @@ impl FlvDemux {
             self.adapter.flush(offset as usize).unwrap();
         }
 
-        let mut buffer =
-            self.adapter.get_buffer((tag_header.data_size - 1 - offset) as usize).unwrap();
+        let mut buffer = self.adapter
+            .get_buffer((tag_header.data_size - 1 - offset) as usize)
+            .unwrap();
 
         {
             let buffer = buffer.get_mut().unwrap();
@@ -919,7 +954,11 @@ impl FlvDemux {
 
                 Ok(HandleBufferResult::NeedMoreData)
             }
-            State::Skipping { audio, video, skip_left: 0 } => {
+            State::Skipping {
+                audio,
+                video,
+                skip_left: 0,
+            } => {
                 self.state = State::Streaming;
                 self.streaming_state = Some(StreamingState::new(audio, video));
 
@@ -997,11 +1036,13 @@ impl FlvDemux {
                     let streaming_state = self.streaming_state.as_mut().unwrap();
 
                     if let Some(pts) = buffer.get_pts() {
-                        streaming_state.last_position = streaming_state.last_position
+                        streaming_state.last_position = streaming_state
+                            .last_position
                             .map(|last| cmp::max(last, pts))
                             .or_else(|| Some(pts));
                     } else if let Some(dts) = buffer.get_dts() {
-                        streaming_state.last_position = streaming_state.last_position
+                        streaming_state.last_position = streaming_state
+                            .last_position
                             .map(|last| cmp::max(last, dts))
                             .or_else(|| Some(dts));
                     }

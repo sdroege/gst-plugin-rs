@@ -19,7 +19,7 @@ use gst_plugin::buffer::*;
 use gst_plugin::utils::*;
 use gst_plugin::log::*;
 
-use slog::*;
+use slog::Logger;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -50,7 +50,7 @@ impl HttpSrc {
                                                     "rshttpsink",
                                                     0,
                                                     "Rust http sink"),
-                                 None),
+                                 o!()),
             client: Client::new().unwrap(),
         }
     }

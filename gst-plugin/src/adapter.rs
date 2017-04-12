@@ -11,7 +11,7 @@ use miniobject::*;
 use log::*;
 use std::collections::VecDeque;
 use std::cmp;
-use slog::*;
+use slog::Logger;
 
 lazy_static! {
     static ref LOGGER: Logger = {
@@ -19,7 +19,7 @@ lazy_static! {
                                         "rsadapter",
                                         0,
                                         "Rust buffer adapter"),
-                    None)
+                    o!())
     };
 }
 

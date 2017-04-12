@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use url::Url;
 
-use slog::*;
+use slog::Logger;
 
 use utils::*;
 use error::*;
@@ -81,7 +81,7 @@ impl SinkWrapper {
                                                     "rssink",
                                                     0,
                                                     "Rust sink base class"),
-                                 None),
+                                 o!()),
             uri: Mutex::new((None, false)),
             uri_validator: sink.uri_validator(),
             sink: Mutex::new(sink),

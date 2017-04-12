@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::u32;
 use std::u64;
 
-use slog::*;
+use slog::Logger;
 
 use utils::*;
 use error::*;
@@ -106,7 +106,7 @@ impl DemuxerWrapper {
                                                     "rsdemux",
                                                     0,
                                                     "Rust demuxer base class"),
-                                 None),
+                                 o!()),
             demuxer: Mutex::new(demuxer),
             panicked: AtomicBool::new(false),
         }
