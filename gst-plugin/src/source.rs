@@ -266,10 +266,7 @@ unsafe fn source_get_uri(ptr: *const RsSrc) -> *mut c_char {
 
     panic_to_error!(wrap, ptr::null_mut(), {
         match wrap.get_uri() {
-            Some(uri_str) => {
-                let uri_cstr = CString::new(uri_str).unwrap();
-                glib::g_strdup(uri_cstr.as_ptr())
-            }
+            Some(uri_str) => glib::g_strndup(uri_str.as_ptr() as *const c_char, uri_str.len()),
             None => ptr::null_mut(),
         }
     })

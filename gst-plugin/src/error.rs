@@ -8,6 +8,7 @@
 
 use std::ffi::CString;
 use std::ptr;
+use libc::c_char;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fmt::Error as FmtError;
@@ -112,15 +113,11 @@ impl ErrorMessage {
             line,
         } = *self;
 
-        let message_cstr = message
-            .as_ref()
-            .map(|m| CString::new(m.as_bytes()).unwrap());
-        let message_ptr = message_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
+        let message_ptr = message.as_ref().map_or(ptr::null(), |m| m.as_ptr()) as *const c_char;
+        let message_len = message.as_ref().map_or(0, |m| m.len());
 
-        let debug_cstr = debug
-            .as_ref()
-            .map(|m| CString::new(m.as_bytes()).unwrap());
-        let debug_ptr = debug_cstr.as_ref().map_or(ptr::null(), |m| m.as_ptr());
+        let debug_ptr = debug.as_ref().map_or(ptr::null(), |m| m.as_ptr()) as *const c_char;
+        let debug_len = debug.as_ref().map_or(0, |m| m.len());
 
         let file_cstr = CString::new(filename.as_bytes()).unwrap();
         let file_ptr = file_cstr.as_ptr();
@@ -132,8 +129,8 @@ impl ErrorMessage {
                                       gst::GST_MESSAGE_ERROR,
                                       error_domain,
                                       error_code,
-                                      glib::g_strdup(message_ptr),
-                                      glib::g_strdup(debug_ptr),
+                                      glib::g_strndup(message_ptr, message_len),
+                                      glib::g_strndup(debug_ptr, debug_len),
                                       file_ptr,
                                       function_ptr,
                                       line as i32);
