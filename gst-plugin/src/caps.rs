@@ -13,7 +13,6 @@ use value::*;
 use miniobject::*;
 
 use glib;
-use gobject;
 use gst;
 
 #[derive(Eq)]
@@ -77,9 +76,8 @@ impl Caps {
         for value in values {
             let name_cstr = CString::new(value.0).unwrap();
             unsafe {
-                let mut gvalue = value.1.to_gvalue();
-                gst::gst_caps_set_value(self.0, name_cstr.as_ptr(), &gvalue);
-                gobject::g_value_unset(&mut gvalue);
+                let gvalue = value.1.as_ptr();
+                gst::gst_caps_set_value(self.0, name_cstr.as_ptr(), gvalue);
             }
         }
     }

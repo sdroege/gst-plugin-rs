@@ -330,10 +330,9 @@ unsafe extern "C" fn source_fill(ptr: *mut gst_base::GstBaseSrc,
                                  -> gst::GstFlowReturn {
     let src = &*(ptr as *const RsSrc);
     let wrap: &SourceWrapper = &*src.wrap;
-    let buffer = GstRefPtr(buffer);
 
     panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
-        let mut buffer: GstRef<Buffer> = GstRef::new(&buffer);
+        let mut buffer: GstRef<Buffer> = GstRef::new(buffer);
         wrap.fill(offset, length, buffer.get_mut().unwrap())
     })
 }

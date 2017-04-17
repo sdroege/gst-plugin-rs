@@ -271,10 +271,9 @@ unsafe extern "C" fn sink_render(ptr: *mut gst_base::GstBaseSink,
                                  -> gst::GstFlowReturn {
     let sink = &*(ptr as *const RsSink);
     let wrap: &SinkWrapper = &*sink.wrap;
-    let buffer = GstRefPtr(buffer);
 
     panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
-        let buffer: GstRef<Buffer> = GstRef::new(&buffer);
+        let buffer: GstRef<Buffer> = GstRef::new(buffer);
         wrap.render(buffer.as_ref())
     })
 }

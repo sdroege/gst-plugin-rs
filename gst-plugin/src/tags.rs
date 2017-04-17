@@ -16,15 +16,15 @@ use glib;
 use gobject;
 use gst;
 
-pub trait Tag {
-    type TagType: ValueType;
+pub trait Tag<'a> {
+    type TagType: ValueType<'a>;
     fn tag_name() -> &'static str;
 }
 
 macro_rules! impl_tag(
     ($name:ident, $t:ty, $tag:expr) => {
         pub struct $name;
-        impl Tag for $name {
+        impl<'a> Tag<'a> for $name {
             type TagType = $t;
             fn tag_name() -> &'static str {
                 $tag
@@ -33,16 +33,16 @@ macro_rules! impl_tag(
     };
 );
 
-impl_tag!(Title, String, "title");
-impl_tag!(Album, String, "album");
-impl_tag!(Artist, String, "artist");
-impl_tag!(Encoder, String, "encoder");
-impl_tag!(AudioCodec, String, "audio-codec");
-impl_tag!(VideoCodec, String, "video-codec");
-impl_tag!(SubtitleCodec, String, "subtitle-codec");
-impl_tag!(ContainerFormat, String, "container-format");
+impl_tag!(Title, &'a str, "title");
+impl_tag!(Album, &'a str, "album");
+impl_tag!(Artist, &'a str, "artist");
+impl_tag!(Encoder, &'a str, "encoder");
+impl_tag!(AudioCodec, &'a str, "audio-codec");
+impl_tag!(VideoCodec, &'a str, "video-codec");
+impl_tag!(SubtitleCodec, &'a str, "subtitle-codec");
+impl_tag!(ContainerFormat, &'a str, "container-format");
 // TODO: Should ideally enforce this to be ISO-639
-impl_tag!(LanguageCode, String, "language-code");
+impl_tag!(LanguageCode, &'a str, "language-code");
 impl_tag!(Duration, u64, "duration");
 impl_tag!(NominalBitrate, u32, "nominal-bitrate");
 
@@ -92,12 +92,12 @@ impl TagList {
         unsafe { GstRc::new_from_owned_ptr(gst::gst_tag_list_new_empty()) }
     }
 
-    pub fn add<T: Tag>(&mut self, value: T::TagType, mode: MergeMode)
-        where Value: From<<T as Tag>::TagType>
+    pub fn add<'a, T: Tag<'a>>(&mut self, value: T::TagType, mode: MergeMode)
+        where Value: From<<T as Tag<'a>>::TagType>
     {
         unsafe {
             let v = Value::from(value);
-            let mut gvalue = v.to_gvalue();
+            let mut gvalue = v.into_raw();
             let tag_name = CString::new(T::tag_name()).unwrap();
 
             gst::gst_tag_list_add_value(self.0, mode.to_ffi(), tag_name.as_ptr(), &gvalue);
@@ -106,8 +106,8 @@ impl TagList {
         }
     }
 
-    pub fn get<T: Tag>(&self) -> Option<TypedValue<T::TagType>>
-        where Value: From<<T as Tag>::TagType>
+    pub fn get<'a, T: Tag<'a>>(&self) -> Option<TypedValue<T::TagType>>
+        where Value: From<<T as Tag<'a>>::TagType>
     {
         unsafe {
             let mut gvalue = mem::zeroed();
@@ -119,12 +119,10 @@ impl TagList {
                 return None;
             }
 
-            let res = match Value::from_gvalue(&gvalue) {
-                Some(value) => Some(TypedValue::new(value)),
+            let res = match Value::from_raw(gvalue) {
+                Some(value) => TypedValue::from_value(value),
                 None => None,
             };
-
-            gobject::g_value_unset(&mut gvalue);
 
             res
         }
@@ -194,8 +192,8 @@ mod tests {
             tags.add::<Duration>((1000u64 * 1000 * 1000 * 120).into(), MergeMode::Append);
         }
 
-        assert_eq!(*tags.get::<Title>().unwrap(), "some title");
-        assert_eq!(*tags.get::<Duration>().unwrap(),
+        assert_eq!(tags.get::<Title>().unwrap().get(), "some title");
+        assert_eq!(tags.get::<Duration>().unwrap().get(),
                    (1000u64 * 1000 * 1000 * 120));
     }
 }

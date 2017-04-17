@@ -152,20 +152,17 @@ impl<'a, T: MiniObject> From<&'a mut T> for GstRc<T> {
     }
 }
 
-#[repr(C)]
-pub struct GstRefPtr<T: MiniObject>(pub *mut T::PtrType);
-
 #[derive(Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GstRef<'a, T: 'a + MiniObject> {
     obj: T,
     #[allow(dead_code)]
-    phantom: PhantomData<&'a GstRefPtr<T>>,
+    phantom: PhantomData<&'a T>,
 }
 
 impl<'a, T: MiniObject> GstRef<'a, T> {
-    pub unsafe fn new(ptr: &'a GstRefPtr<T>) -> GstRef<'a, T> {
+    pub unsafe fn new(ptr: *mut T::PtrType) -> GstRef<'a, T> {
         GstRef {
-            obj: T::new_from_ptr(ptr.0 as *mut T::PtrType),
+            obj: T::new_from_ptr(ptr),
             phantom: PhantomData,
         }
     }
