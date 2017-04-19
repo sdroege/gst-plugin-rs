@@ -173,6 +173,12 @@ impl PartialEq for Value {
 }
 impl Eq for Value {}
 
+impl<'a> PartialEq<ValueRef<'a>> for Value {
+    fn eq(&self, other: &ValueRef<'a>) -> bool {
+        self.get().eq(&other.get())
+    }
+}
+
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.get().fmt(f)
@@ -244,6 +250,12 @@ impl<'a> PartialEq for ValueRef<'a> {
     }
 }
 impl<'a> Eq for ValueRef<'a> {}
+
+impl<'a> PartialEq<Value> for ValueRef<'a> {
+    fn eq(&self, other: &Value) -> bool {
+        self.get().eq(&other.get())
+    }
+}
 
 impl<'a> fmt::Debug for ValueRef<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

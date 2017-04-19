@@ -42,6 +42,7 @@ pub mod bytes;
 pub mod tags;
 pub mod streams;
 pub mod miniobject;
+pub mod structure;
 
 pub mod ffi {
     pub use glib;
