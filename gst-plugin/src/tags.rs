@@ -93,10 +93,10 @@ impl TagList {
     }
 
     pub fn add<'a, T: Tag<'a>>(&mut self, value: T::TagType, mode: MergeMode)
-        where Value: From<<T as Tag<'a>>::TagType>
+        where T::TagType: Into<Value>
     {
         unsafe {
-            let v = Value::from(value);
+            let v = value.into();
             let mut gvalue = v.into_raw();
             let tag_name = CString::new(T::tag_name()).unwrap();
 
@@ -107,7 +107,6 @@ impl TagList {
     }
 
     pub fn get<'a, T: Tag<'a>>(&self) -> Option<TypedValue<T::TagType>>
-        where Value: From<<T as Tag<'a>>::TagType>
     {
         unsafe {
             let mut gvalue = mem::zeroed();
@@ -129,7 +128,6 @@ impl TagList {
     }
 
     pub fn get_index<'a, T: Tag<'a>>(&'a self, idx: u32) -> Option<TypedValueRef<'a, T::TagType>>
-        where Value: From<<T as Tag<'a>>::TagType>
     {
         unsafe {
             let tag_name = CString::new(T::tag_name()).unwrap();
