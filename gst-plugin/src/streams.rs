@@ -67,7 +67,7 @@ impl Stream {
             return None;
         }
 
-        Some(unsafe { GstRc::new_from_owned_ptr(ptr) })
+        Some(unsafe { GstRc::from_owned_ptr(ptr) })
     }
 
     pub fn get_stream_flags(&self) -> StreamFlags {
@@ -90,7 +90,7 @@ impl Stream {
             return None;
         }
 
-        Some(unsafe { TagList::new_from_ptr(ptr) })
+        Some(unsafe { TagList::from_ptr(ptr) })
     }
 
     pub fn set_caps(&self, caps: Option<GstRc<Caps>>) {

@@ -28,12 +28,12 @@ impl<T: MiniObject> GstRc<T> {
         GstRc { obj: obj }
     }
 
-    pub unsafe fn new_from_owned_ptr(ptr: *mut T::PtrType) -> Self {
-        Self::new(T::new_from_ptr(ptr), true)
+    pub unsafe fn from_owned_ptr(ptr: *mut T::PtrType) -> Self {
+        Self::new(T::from_ptr(ptr), true)
     }
 
-    pub unsafe fn new_from_unowned_ptr(ptr: *mut T::PtrType) -> Self {
-        Self::new(T::new_from_ptr(ptr), false)
+    pub unsafe fn from_unowned_ptr(ptr: *mut T::PtrType) -> Self {
+        Self::new(T::from_ptr(ptr), false)
     }
 
     pub fn make_mut(&mut self) -> &mut T {
@@ -63,9 +63,9 @@ impl<T: MiniObject> GstRc<T> {
 
     pub fn copy(&self) -> Self {
         unsafe {
-            GstRc::new_from_owned_ptr(gst::gst_mini_object_copy(self.obj.as_ptr() as
-                                                                *const gst::GstMiniObject) as
-                                      *mut T::PtrType)
+            GstRc::from_owned_ptr(gst::gst_mini_object_copy(self.obj.as_ptr() as
+                                                            *const gst::GstMiniObject) as
+                                  *mut T::PtrType)
         }
     }
 
@@ -101,7 +101,7 @@ impl<T: MiniObject> borrow::Borrow<T> for GstRc<T> {
 
 impl<T: MiniObject> Clone for GstRc<T> {
     fn clone(&self) -> GstRc<T> {
-        unsafe { GstRc::new_from_unowned_ptr(self.obj.as_ptr()) }
+        unsafe { GstRc::from_unowned_ptr(self.obj.as_ptr()) }
     }
 }
 
@@ -137,18 +137,18 @@ pub unsafe trait MiniObject {
         ptr
     }
 
-    unsafe fn new_from_ptr(ptr: *mut Self::PtrType) -> Self;
+    unsafe fn from_ptr(ptr: *mut Self::PtrType) -> Self;
 }
 
 impl<'a, T: MiniObject> From<&'a T> for GstRc<T> {
     fn from(f: &'a T) -> GstRc<T> {
-        unsafe { GstRc::new_from_unowned_ptr(f.as_ptr()) }
+        unsafe { GstRc::from_unowned_ptr(f.as_ptr()) }
     }
 }
 
 impl<'a, T: MiniObject> From<&'a mut T> for GstRc<T> {
     fn from(f: &'a mut T) -> GstRc<T> {
-        unsafe { GstRc::new_from_unowned_ptr(f.as_ptr()) }
+        unsafe { GstRc::from_unowned_ptr(f.as_ptr()) }
     }
 }
 
@@ -162,7 +162,7 @@ pub struct GstRef<'a, T: 'a + MiniObject> {
 impl<'a, T: MiniObject> GstRef<'a, T> {
     pub unsafe fn new(ptr: *mut T::PtrType) -> GstRef<'a, T> {
         GstRef {
-            obj: T::new_from_ptr(ptr),
+            obj: T::from_ptr(ptr),
             phantom: PhantomData,
         }
     }
@@ -177,9 +177,9 @@ impl<'a, T: MiniObject> GstRef<'a, T> {
 
     pub fn copy(&self) -> GstRc<T> {
         unsafe {
-            GstRc::new_from_owned_ptr(gst::gst_mini_object_copy(self.obj.as_ptr() as
-                                                                *const gst::GstMiniObject) as
-                                      *mut T::PtrType)
+            GstRc::from_owned_ptr(gst::gst_mini_object_copy(self.obj.as_ptr() as
+                                                            *const gst::GstMiniObject) as
+                                  *mut T::PtrType)
         }
     }
 

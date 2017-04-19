@@ -487,7 +487,7 @@ pub unsafe extern "C" fn demuxer_handle_buffer(ptr: *mut DemuxerWrapper,
     let wrap: &mut DemuxerWrapper = &mut *ptr;
 
     panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
-        let buffer = GstRc::new_from_owned_ptr(buffer);
+        let buffer = GstRc::from_owned_ptr(buffer);
         wrap.handle_buffer(buffer)
     })
 }

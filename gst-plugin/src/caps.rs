@@ -29,18 +29,18 @@ unsafe impl MiniObject for Caps {
         self.0 = ptr
     }
 
-    unsafe fn new_from_ptr(ptr: *mut gst::GstCaps) -> Self {
+    unsafe fn from_ptr(ptr: *mut gst::GstCaps) -> Self {
         Caps(ptr)
     }
 }
 
 impl Caps {
     pub fn new_empty() -> GstRc<Self> {
-        unsafe { GstRc::new_from_owned_ptr(gst::gst_caps_new_empty()) }
+        unsafe { GstRc::from_owned_ptr(gst::gst_caps_new_empty()) }
     }
 
     pub fn new_any() -> GstRc<Self> {
-        unsafe { GstRc::new_from_owned_ptr(gst::gst_caps_new_any()) }
+        unsafe { GstRc::from_owned_ptr(gst::gst_caps_new_any()) }
     }
 
     pub fn new_simple(name: &str, values: &[(&str, &Value)]) -> GstRc<Self> {
@@ -67,7 +67,7 @@ impl Caps {
             if caps_ptr.is_null() {
                 None
             } else {
-                Some(GstRc::new_from_owned_ptr(caps_ptr))
+                Some(GstRc::from_owned_ptr(caps_ptr))
             }
         }
     }

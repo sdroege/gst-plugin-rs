@@ -63,14 +63,14 @@ unsafe impl MiniObject for Buffer {
         self.0 = ptr
     }
 
-    unsafe fn new_from_ptr(ptr: *mut gst::GstBuffer) -> Self {
+    unsafe fn from_ptr(ptr: *mut gst::GstBuffer) -> Self {
         Buffer(ptr)
     }
 }
 
 impl Buffer {
     pub fn new() -> GstRc<Buffer> {
-        unsafe { GstRc::new_from_owned_ptr(gst::gst_buffer_new()) }
+        unsafe { GstRc::from_owned_ptr(gst::gst_buffer_new()) }
     }
 
     pub fn new_with_size(size: usize) -> Option<GstRc<Buffer>> {
@@ -78,7 +78,7 @@ impl Buffer {
         if raw.is_null() {
             None
         } else {
-            Some(unsafe { GstRc::new_from_owned_ptr(raw) })
+            Some(unsafe { GstRc::from_owned_ptr(raw) })
         }
     }
 
@@ -87,7 +87,7 @@ impl Buffer {
         drop(vec);
     }
 
-    pub fn new_from_vec(vec: Vec<u8>) -> Option<GstRc<Buffer>> {
+    pub fn from_vec(vec: Vec<u8>) -> Option<GstRc<Buffer>> {
         let raw = unsafe {
             let mut vec = Box::new(vec);
             let maxsize = vec.capacity();
@@ -106,7 +106,7 @@ impl Buffer {
         if raw.is_null() {
             None
         } else {
-            Some(unsafe { GstRc::new_from_owned_ptr(raw) })
+            Some(unsafe { GstRc::from_owned_ptr(raw) })
         }
     }
 
@@ -164,10 +164,8 @@ impl Buffer {
 
     pub fn append(buffer: GstRc<Buffer>, other: GstRc<Buffer>) -> GstRc<Buffer> {
         unsafe {
-            GstRc::new_from_owned_ptr(gst::gst_buffer_append(buffer.into_ptr() as
-                                                             *mut gst::GstBuffer,
-                                                             other.into_ptr() as
-                                                             *mut gst::GstBuffer))
+            GstRc::from_owned_ptr(gst::gst_buffer_append(buffer.into_ptr() as *mut gst::GstBuffer,
+                                                         other.into_ptr() as *mut gst::GstBuffer))
         }
     }
 
@@ -181,7 +179,7 @@ impl Buffer {
         if raw.is_null() {
             None
         } else {
-            Some(unsafe { GstRc::new_from_owned_ptr(raw) })
+            Some(unsafe { GstRc::from_owned_ptr(raw) })
         }
     }
 
@@ -514,7 +512,7 @@ mod tests {
     fn test_writability() {
         init();
 
-        let mut buffer = Buffer::new_from_vec(vec![1, 2, 3, 4]).unwrap();
+        let mut buffer = Buffer::from_vec(vec![1, 2, 3, 4]).unwrap();
         {
             let data = buffer.map_read().unwrap();
             assert_eq!(data.as_slice(), vec![1, 2, 3, 4].as_slice());

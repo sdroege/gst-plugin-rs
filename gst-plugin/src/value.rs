@@ -27,7 +27,7 @@ use gst;
 pub struct Value(gobject::GValue);
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum ValueRef<'a> {
+pub enum ValueView<'a> {
     Bool(bool),
     Int(i32),
     UInt(u32),
@@ -39,9 +39,9 @@ pub enum ValueRef<'a> {
     Array(Cow<'a, [Value]>),
 }
 
-impl<'a> ValueRef<'a> {
+impl<'a> ValueView<'a> {
     pub fn try_get<T: ValueType<'a>>(&'a self) -> Option<T> {
-        T::from_value_ref(&self)
+        T::from_value_view(&self)
     }
 }
 
@@ -50,8 +50,8 @@ pub trait ValueType<'a>
 {
     fn g_type() -> glib::GType;
 
-    fn from_value(v: &'a Value) -> Option<Self>;
-    fn from_value_ref(v: &'a ValueRef<'a>) -> Option<Self>;
+    fn from_value(v: &'a gobject::GValue) -> Option<Self>;
+    fn from_value_view(v: &'a ValueView<'a>) -> Option<Self>;
 }
 
 lazy_static! {
@@ -75,6 +75,10 @@ impl Value {
         gobject::g_value_copy(ptr, &mut value.0);
 
         Some(value)
+    }
+
+    pub fn from_value_ref<'a>(v: &ValueRef<'a>) -> Value {
+        unsafe { Value::from_ptr(v.0) }.unwrap()
     }
 
     pub unsafe fn from_raw(value: gobject::GValue) -> Option<Value> {
@@ -107,45 +111,46 @@ impl Value {
         v.into()
     }
 
-    pub fn new_from_value_ref(v: ValueRef) -> Value {
+    pub fn from_value_view(v: ValueView) -> Value {
         match v {
-            ValueRef::Bool(v) => Value::from(v),
-            ValueRef::Int(v) => Value::from(v),
-            ValueRef::UInt(v) => Value::from(v),
-            ValueRef::Int64(v) => Value::from(v),
-            ValueRef::UInt64(v) => Value::from(v),
-            ValueRef::Fraction(v) => Value::from(v),
-            ValueRef::String(v) => Value::from(v),
-            ValueRef::Array(v) => Value::from(v),
-            ValueRef::Buffer(v) => Value::from(v),
+            ValueView::Bool(v) => Value::from(v),
+            ValueView::Int(v) => Value::from(v),
+            ValueView::UInt(v) => Value::from(v),
+            ValueView::Int64(v) => Value::from(v),
+            ValueView::UInt64(v) => Value::from(v),
+            ValueView::Fraction(v) => Value::from(v),
+            ValueView::String(v) => Value::from(v),
+            ValueView::Array(v) => Value::from(v),
+            ValueView::Buffer(v) => Value::from(v),
         }
     }
 
-    pub fn get(&self) -> ValueRef {
+    pub fn get(&self) -> ValueView {
         match self.0.g_type {
-            gobject::G_TYPE_BOOLEAN => ValueRef::Bool(bool::from_value(&self).unwrap()),
-            gobject::G_TYPE_INT => ValueRef::Int(i32::from_value(&self).unwrap()),
-            gobject::G_TYPE_UINT => ValueRef::UInt(u32::from_value(&self).unwrap()),
-            gobject::G_TYPE_INT64 => ValueRef::Int64(i64::from_value(&self).unwrap()),
-            gobject::G_TYPE_UINT64 => ValueRef::UInt64(u64::from_value(&self).unwrap()),
+            gobject::G_TYPE_BOOLEAN => ValueView::Bool(bool::from_value(&self.0).unwrap()),
+            gobject::G_TYPE_INT => ValueView::Int(i32::from_value(&self.0).unwrap()),
+            gobject::G_TYPE_UINT => ValueView::UInt(u32::from_value(&self.0).unwrap()),
+            gobject::G_TYPE_INT64 => ValueView::Int64(i64::from_value(&self.0).unwrap()),
+            gobject::G_TYPE_UINT64 => ValueView::UInt64(u64::from_value(&self.0).unwrap()),
             typ if typ == *TYPE_FRACTION => {
-                ValueRef::Fraction(Rational32::from_value(&self).unwrap())
+                ValueView::Fraction(Rational32::from_value(&self.0).unwrap())
             }
             gobject::G_TYPE_STRING => {
-                ValueRef::String(Cow::Borrowed(<&str as ValueType>::from_value(&self).unwrap()))
+                ValueView::String(Cow::Borrowed(<&str as ValueType>::from_value(&self.0).unwrap()))
             }
             typ if typ == *TYPE_GST_VALUE_ARRAY => {
-                ValueRef::Array(Cow::Borrowed(<&[Value] as ValueType>::from_value(&self).unwrap()))
+                ValueView::Array(Cow::Borrowed(<&[Value] as ValueType>::from_value(&self.0)
+                                                   .unwrap()))
             }
             typ if typ == *TYPE_BUFFER => {
-                ValueRef::Buffer(<GstRc<Buffer> as ValueType>::from_value(&self).unwrap())
+                ValueView::Buffer(<GstRc<Buffer> as ValueType>::from_value(&self.0).unwrap())
             }
             _ => unreachable!(),
         }
     }
 
     pub fn try_get<'a, T: ValueType<'a>>(&'a self) -> Option<T> {
-        T::from_value(self)
+        T::from_value(&self.0)
     }
 }
 
@@ -184,6 +189,68 @@ impl Drop for Value {
     }
 }
 
+#[derive(Clone)]
+pub struct ValueRef<'a>(&'a gobject::GValue);
+
+impl<'a> ValueRef<'a> {
+    pub unsafe fn as_ptr(&self) -> *const gobject::GValue {
+        self.0
+    }
+
+    pub fn from_value(v: &'a Value) -> ValueRef<'a> {
+        ValueRef(&v.0)
+    }
+
+    pub unsafe fn from_ptr(ptr: *const gobject::GValue) -> Option<ValueRef<'a>> {
+        if ptr.is_null() || !Value::is_supported_type((*ptr).g_type) {
+            return None;
+        }
+
+        Some(ValueRef(&*ptr))
+    }
+
+    pub fn get(&self) -> ValueView {
+        match self.0.g_type {
+            gobject::G_TYPE_BOOLEAN => ValueView::Bool(bool::from_value(self.0).unwrap()),
+            gobject::G_TYPE_INT => ValueView::Int(i32::from_value(self.0).unwrap()),
+            gobject::G_TYPE_UINT => ValueView::UInt(u32::from_value(self.0).unwrap()),
+            gobject::G_TYPE_INT64 => ValueView::Int64(i64::from_value(self.0).unwrap()),
+            gobject::G_TYPE_UINT64 => ValueView::UInt64(u64::from_value(self.0).unwrap()),
+            typ if typ == *TYPE_FRACTION => {
+                ValueView::Fraction(Rational32::from_value(&self.0).unwrap())
+            }
+            gobject::G_TYPE_STRING => {
+                ValueView::String(Cow::Borrowed(<&str as ValueType>::from_value(self.0).unwrap()))
+            }
+            typ if typ == *TYPE_GST_VALUE_ARRAY => {
+                ValueView::Array(Cow::Borrowed(<&[Value] as ValueType>::from_value(self.0)
+                                                   .unwrap()))
+            }
+            typ if typ == *TYPE_BUFFER => {
+                ValueView::Buffer(<GstRc<Buffer> as ValueType>::from_value(self.0).unwrap())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn try_get<T: ValueType<'a>>(&self) -> Option<T> {
+        T::from_value(self.0)
+    }
+}
+
+impl<'a> PartialEq for ValueRef<'a> {
+    fn eq(&self, other: &ValueRef<'a>) -> bool {
+        self.get().eq(&other.get())
+    }
+}
+impl<'a> Eq for ValueRef<'a> {}
+
+impl<'a> fmt::Debug for ValueRef<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.get().fmt(f)
+    }
+}
+
 macro_rules! impl_value_type_simple(
     ($typ:ty, $variant:ident, $g_type:expr, $getter:expr, $setter:expr) => {
         impl<'a> ValueType<'a> for $typ {
@@ -191,18 +258,18 @@ macro_rules! impl_value_type_simple(
                 $g_type
             }
 
-            fn from_value(value: &'a Value) -> Option<Self> {
-                if value.0.g_type != Self::g_type() {
+            fn from_value(value: &'a gobject::GValue) -> Option<Self> {
+                if value.g_type != Self::g_type() {
                     return None;
                 }
 
                 unsafe {
-                    Some($getter(value))
+                    Some($getter(&value))
                 }
             }
 
-            fn from_value_ref(value_ref: &'a ValueRef<'a>) -> Option<Self> {
-                if let ValueRef::$variant(ref v) = *value_ref {
+            fn from_value_view(value_view: &'a ValueView<'a>) -> Option<Self> {
+                if let ValueView::$variant(ref v) = *value_view {
                     Some(*v)
                 } else {
                     None
@@ -216,7 +283,7 @@ macro_rules! impl_value_type_simple(
                     let mut value = Value(mem::zeroed());
 
                     gobject::g_value_init(&mut value.0, <$typ as ValueType>::g_type());
-                    $setter(&mut value, v);
+                    $setter(&mut value.0, v);
 
                     value
                 }
@@ -228,40 +295,40 @@ macro_rules! impl_value_type_simple(
 impl_value_type_simple!(bool,
                         Bool,
                         gobject::G_TYPE_BOOLEAN,
-                        |value: &Value| !(gobject::g_value_get_boolean(&value.0) == 0),
-                        |value: &mut Value, v| {
-                            gobject::g_value_set_boolean(&mut value.0,
+                        |value: &gobject::GValue| !(gobject::g_value_get_boolean(value) == 0),
+                        |value: &mut gobject::GValue, v| {
+                            gobject::g_value_set_boolean(value,
                                                          if v { glib::GTRUE } else { glib::GFALSE })
                         });
 impl_value_type_simple!(i32,
                         Int,
                         gobject::G_TYPE_INT,
-                        |value: &Value| gobject::g_value_get_int(&value.0),
-                        |value: &mut Value, v| gobject::g_value_set_int(&mut value.0, v));
+                        |value: &gobject::GValue| gobject::g_value_get_int(value),
+                        |value: &mut gobject::GValue, v| gobject::g_value_set_int(value, v));
 impl_value_type_simple!(u32,
                         UInt,
                         gobject::G_TYPE_UINT,
-                        |value: &Value| gobject::g_value_get_uint(&value.0),
-                        |value: &mut Value, v| gobject::g_value_set_uint(&mut value.0, v));
+                        |value: &gobject::GValue| gobject::g_value_get_uint(value),
+                        |value: &mut gobject::GValue, v| gobject::g_value_set_uint(value, v));
 impl_value_type_simple!(i64,
                         Int64,
                         gobject::G_TYPE_INT64,
-                        |value: &Value| gobject::g_value_get_int64(&value.0),
-                        |value: &mut Value, v| gobject::g_value_set_int64(&mut value.0, v));
+                        |value: &gobject::GValue| gobject::g_value_get_int64(value),
+                        |value: &mut gobject::GValue, v| gobject::g_value_set_int64(value, v));
 impl_value_type_simple!(u64,
                         UInt64,
                         gobject::G_TYPE_UINT64,
-                        |value: &Value| gobject::g_value_get_uint64(&value.0),
-                        |value: &mut Value, v| gobject::g_value_set_uint64(&mut value.0, v));
+                        |value: &gobject::GValue| gobject::g_value_get_uint64(value),
+                        |value: &mut gobject::GValue, v| gobject::g_value_set_uint64(value, v));
 impl_value_type_simple!(Rational32,
                         Fraction,
                         *TYPE_FRACTION,
-                        |value: &Value| {
-                            Rational32::new(gst::gst_value_get_fraction_numerator(&value.0),
-                                            gst::gst_value_get_fraction_denominator(&value.0))
+                        |value: &gobject::GValue| {
+                            Rational32::new(gst::gst_value_get_fraction_numerator(value),
+                                            gst::gst_value_get_fraction_denominator(value))
                         },
-                        |value: &mut Value, v: Rational32| {
-                            gst::gst_value_set_fraction(&mut value.0, *v.numer(), *v.denom())
+                        |value: &mut gobject::GValue, v: Rational32| {
+                            gst::gst_value_set_fraction(value, *v.numer(), *v.denom())
                         });
 
 impl<'a> ValueType<'a> for &'a str {
@@ -269,13 +336,13 @@ impl<'a> ValueType<'a> for &'a str {
         gobject::G_TYPE_STRING
     }
 
-    fn from_value(value: &'a Value) -> Option<Self> {
-        if value.0.g_type != Self::g_type() {
+    fn from_value(value: &'a gobject::GValue) -> Option<Self> {
+        if value.g_type != Self::g_type() {
             return None;
         }
 
         unsafe {
-            let s = gobject::g_value_get_string(&value.0);
+            let s = gobject::g_value_get_string(value);
             if s.is_null() {
                 return Some(&"");
             }
@@ -285,8 +352,8 @@ impl<'a> ValueType<'a> for &'a str {
         }
     }
 
-    fn from_value_ref(value_ref: &'a ValueRef<'a>) -> Option<Self> {
-        if let ValueRef::String(ref v) = *value_ref {
+    fn from_value_view(value_view: &'a ValueView<'a>) -> Option<Self> {
+        if let ValueView::String(ref v) = *value_view {
             Some(v.as_ref())
         } else {
             None
@@ -325,19 +392,19 @@ impl<'a> ValueType<'a> for GstRc<Buffer> {
         *TYPE_BUFFER
     }
 
-    fn from_value(value: &'a Value) -> Option<Self> {
-        if value.0.g_type != Self::g_type() {
+    fn from_value(value: &'a gobject::GValue) -> Option<Self> {
+        if value.g_type != Self::g_type() {
             return None;
         }
 
         unsafe {
-            let buffer = gobject::g_value_get_boxed(&value.0) as *mut gst::GstBuffer;
-            Some(GstRc::new_from_unowned_ptr(buffer))
+            let buffer = gobject::g_value_get_boxed(value) as *mut gst::GstBuffer;
+            Some(GstRc::from_unowned_ptr(buffer))
         }
     }
 
-    fn from_value_ref(value_ref: &'a ValueRef<'a>) -> Option<Self> {
-        if let ValueRef::Buffer(ref v) = *value_ref {
+    fn from_value_view(value_view: &'a ValueView<'a>) -> Option<Self> {
+        if let ValueView::Buffer(ref v) = *value_view {
             Some(v.clone())
         } else {
             None
@@ -375,13 +442,13 @@ impl<'a> ValueType<'a> for &'a [Value] {
         *TYPE_GST_VALUE_ARRAY
     }
 
-    fn from_value(value: &'a Value) -> Option<Self> {
-        if value.0.g_type != Self::g_type() {
+    fn from_value(value: &'a gobject::GValue) -> Option<Self> {
+        if value.g_type != Self::g_type() {
             return None;
         }
 
         unsafe {
-            let arr = value.0.data[0] as *const glib::GArray;
+            let arr = value.data[0] as *const glib::GArray;
 
             if arr.is_null() {
                 Some(&[])
@@ -392,8 +459,8 @@ impl<'a> ValueType<'a> for &'a [Value] {
         }
     }
 
-    fn from_value_ref(value_ref: &'a ValueRef<'a>) -> Option<Self> {
-        if let ValueRef::Array(ref v) = *value_ref {
+    fn from_value_view(value_view: &'a ValueView<'a>) -> Option<Self> {
+        if let ValueView::Array(ref v) = *value_view {
             Some(v.as_ref())
         } else {
             None
@@ -448,15 +515,15 @@ impl<'a> From<&'a [Value]> for Value {
     }
 }
 
-impl<'a> From<ValueRef<'a>> for Value {
-    fn from(value_ref: ValueRef<'a>) -> Value {
-        Value::new_from_value_ref(value_ref)
+impl<'a> From<ValueView<'a>> for Value {
+    fn from(value_view: ValueView<'a>) -> Value {
+        Value::from_value_view(value_view)
     }
 }
 
-impl<'a> From<&'a ValueRef<'a>> for Value {
-    fn from(value_ref: &'a ValueRef<'a>) -> Value {
-        Value::new_from_value_ref(value_ref.clone())
+impl<'a> From<&'a ValueView<'a>> for Value {
+    fn from(value_view: &'a ValueView<'a>) -> Value {
+        Value::from_value_view(value_view.clone())
     }
 }
 
@@ -488,6 +555,13 @@ impl<'a, T> TypedValue<T>
                  value: value,
                  phantom: PhantomData,
              })
+    }
+
+    pub fn from_typed_value_ref(v: &'a TypedValueRef<'a, T>) -> TypedValue<T> {
+        TypedValue {
+            value: Value::from_value_ref(&v.value),
+            phantom: PhantomData,
+        }
     }
 
     pub fn get(&'a self) -> T {
@@ -571,6 +645,53 @@ impl<'a> From<&'a Buffer> for TypedValue<GstRc<Buffer>> {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct TypedValueRef<'a, T> {
+    value: ValueRef<'a>,
+    phantom: PhantomData<T>,
+}
+
+impl<'a, T> TypedValueRef<'a, T>
+    where T: ValueType<'a>
+{
+    pub fn from_typed_value(v: &'a TypedValue<T>) -> TypedValueRef<'a, T> {
+        TypedValueRef {
+            value: ValueRef::from_value(&v.value),
+            phantom: PhantomData,
+        }
+    }
+
+    pub fn from_value_ref(value: ValueRef<'a>) -> Option<TypedValueRef<'a, T>> {
+        if value.0.g_type != T::g_type() {
+            return None;
+        }
+
+        Some(TypedValueRef {
+                 value: value,
+                 phantom: PhantomData,
+             })
+    }
+
+    pub fn get(&'a self) -> T {
+        self.value.try_get::<T>().unwrap()
+    }
+
+    pub fn into_value(self) -> ValueRef<'a> {
+        self.value
+    }
+
+    pub unsafe fn as_ptr(&self) -> *const gobject::GValue {
+        self.value.0
+    }
+
+    pub unsafe fn from_ptr(ptr: *const gobject::GValue) -> Option<TypedValueRef<'a, T>> {
+        if let Some(value) = ValueRef::from_ptr(ptr) {
+            return TypedValueRef::from_value_ref(value);
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -583,7 +704,7 @@ mod tests {
                 unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
                 let value = Value::new($value);
-                if let ValueRef::$variant(v) = value.get() {
+                if let ValueView::$variant(v) = value.get() {
                     assert_eq!(v, $value);
                 } else {
                     unreachable!();
@@ -596,13 +717,13 @@ mod tests {
                 }
 
                 let value2 = value.clone();
-                if let ValueRef::$variant(v) = value2.get() {
+                if let ValueView::$variant(v) = value2.get() {
                     assert_eq!(v, $value);
                 } else {
                     unreachable!();
                 }
 
-                let value2 = Value::new_from_value_ref(value.get());
+                let value2 = Value::from_value_view(value.get());
                 assert_eq!(value2, value);
 
                 let value3 = TypedValue::new($value);
@@ -631,7 +752,7 @@ mod tests {
         let orig_v = String::from("foo");
 
         let value = Value::new(orig_v.clone());
-        if let ValueRef::String(v) = value.get() {
+        if let ValueView::String(v) = value.get() {
             assert_eq!(v, orig_v);
         } else {
             unreachable!();
@@ -644,17 +765,17 @@ mod tests {
         }
 
         let value2 = value.clone();
-        if let ValueRef::String(v) = value2.get() {
+        if let ValueView::String(v) = value2.get() {
             assert_eq!(v, orig_v);
         } else {
             unreachable!();
         }
 
-        let value2 = Value::new_from_value_ref(value.get());
+        let value2 = Value::from_value_view(value.get());
         assert_eq!(value2, value);
 
 
-        let value2 = Value::new_from_value_ref(value.get());
+        let value2 = Value::from_value_view(value.get());
         assert_eq!(value2, value);
 
         let value3 = TypedValue::new(orig_v.clone());
@@ -674,7 +795,7 @@ mod tests {
         let orig_v = "foo";
 
         let value = Value::new(orig_v);
-        if let ValueRef::String(v) = value.get() {
+        if let ValueView::String(v) = value.get() {
             assert_eq!(v, orig_v);
         } else {
             unreachable!();
@@ -687,13 +808,13 @@ mod tests {
         }
 
         let value2 = value.clone();
-        if let ValueRef::String(v) = value2.get() {
+        if let ValueView::String(v) = value2.get() {
             assert_eq!(v, orig_v);
         } else {
             unreachable!();
         }
 
-        let value2 = Value::new_from_value_ref(value.get());
+        let value2 = Value::from_value_view(value.get());
         assert_eq!(value2, value);
 
         let value3 = TypedValue::new(orig_v);
@@ -713,7 +834,7 @@ mod tests {
         let orig_v = vec![Value::new("a"), Value::new("b")];
 
         let value = Value::new(orig_v.clone());
-        if let ValueRef::Array(arr) = value.get() {
+        if let ValueView::Array(arr) = value.get() {
             assert_eq!(arr, orig_v.as_slice());
         } else {
             unreachable!();
@@ -725,10 +846,10 @@ mod tests {
             unreachable!();
         }
 
-        let value2 = Value::new_from_value_ref(value.get());
+        let value2 = Value::from_value_view(value.get());
         assert_eq!(value2, value);
 
-        let value2 = Value::new_from_value_ref(value.get());
+        let value2 = Value::from_value_view(value.get());
         assert_eq!(value2, value);
 
         let value3 = TypedValue::new(orig_v.clone());
@@ -748,7 +869,7 @@ mod tests {
         let orig_v = vec![Value::new("a"), Value::new("b")];
 
         let value = Value::new(&orig_v);
-        if let ValueRef::Array(arr) = value.get() {
+        if let ValueView::Array(arr) = value.get() {
             assert_eq!(arr, orig_v.as_slice());
         } else {
             unreachable!();
@@ -760,7 +881,7 @@ mod tests {
             unreachable!();
         }
 
-        let value2 = Value::new_from_value_ref(value.get());
+        let value2 = Value::from_value_view(value.get());
         assert_eq!(value2, value);
 
         let value3 = TypedValue::new(orig_v.as_slice());
@@ -777,10 +898,10 @@ mod tests {
     fn buffer() {
         unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
-        let orig_v = Buffer::new_from_vec(vec![1, 2, 3, 4]).unwrap();
+        let orig_v = Buffer::from_vec(vec![1, 2, 3, 4]).unwrap();
 
         let value = Value::new(orig_v.clone());
-        if let ValueRef::Buffer(buf) = value.get() {
+        if let ValueView::Buffer(buf) = value.get() {
             assert_eq!(buf, orig_v);
         } else {
             unreachable!();
@@ -792,7 +913,7 @@ mod tests {
             unreachable!();
         }
 
-        let value2 = Value::new_from_value_ref(value.get());
+        let value2 = Value::from_value_view(value.get());
         assert_eq!(value2, value);
 
         let value3 = TypedValue::new(&orig_v);

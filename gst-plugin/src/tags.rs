@@ -82,14 +82,14 @@ unsafe impl MiniObject for TagList {
         self.0 = ptr
     }
 
-    unsafe fn new_from_ptr(ptr: *mut gst::GstTagList) -> Self {
+    unsafe fn from_ptr(ptr: *mut gst::GstTagList) -> Self {
         TagList(ptr)
     }
 }
 
 impl TagList {
     pub fn new() -> GstRc<Self> {
-        unsafe { GstRc::new_from_owned_ptr(gst::gst_tag_list_new_empty()) }
+        unsafe { GstRc::from_owned_ptr(gst::gst_tag_list_new_empty()) }
     }
 
     pub fn add<'a, T: Tag<'a>>(&mut self, value: T::TagType, mode: MergeMode)
@@ -121,6 +121,27 @@ impl TagList {
 
             let res = match Value::from_raw(gvalue) {
                 Some(value) => TypedValue::from_value(value),
+                None => None,
+            };
+
+            res
+        }
+    }
+
+    pub fn get_index<'a, T: Tag<'a>>(&'a self, idx: u32) -> Option<TypedValueRef<'a, T::TagType>>
+        where Value: From<<T as Tag<'a>>::TagType>
+    {
+        unsafe {
+            let tag_name = CString::new(T::tag_name()).unwrap();
+
+            let value = gst::gst_tag_list_get_value_index(self.0, tag_name.as_ptr(), idx);
+
+            if value.is_null() {
+                return None;
+            }
+
+            let res = match ValueRef::from_ptr(value) {
+                Some(value) => TypedValueRef::from_value_ref(value),
                 None => None,
             };
 
@@ -194,6 +215,9 @@ mod tests {
 
         assert_eq!(tags.get::<Title>().unwrap().get(), "some title");
         assert_eq!(tags.get::<Duration>().unwrap().get(),
+                   (1000u64 * 1000 * 1000 * 120));
+        assert_eq!(tags.get_index::<Title>(0).unwrap().get(), "some title");
+        assert_eq!(tags.get_index::<Duration>(0).unwrap().get(),
                    (1000u64 * 1000 * 1000 * 120));
     }
 }
