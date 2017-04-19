@@ -9,6 +9,7 @@
 use std::fmt;
 use std::mem;
 use std::ffi::{CStr, CString};
+use std::marker::PhantomData;
 use value::*;
 use miniobject::*;
 
@@ -106,8 +107,7 @@ impl TagList {
         }
     }
 
-    pub fn get<'a, T: Tag<'a>>(&self) -> Option<TypedValue<T::TagType>>
-    {
+    pub fn get<'a, T: Tag<'a>>(&self) -> Option<TypedValue<T::TagType>> {
         unsafe {
             let mut gvalue = mem::zeroed();
             let tag_name = CString::new(T::tag_name()).unwrap();
@@ -127,8 +127,7 @@ impl TagList {
         }
     }
 
-    pub fn get_index<'a, T: Tag<'a>>(&'a self, idx: u32) -> Option<TypedValueRef<'a, T::TagType>>
-    {
+    pub fn get_index<'a, T: Tag<'a>>(&'a self, idx: u32) -> Option<TypedValueRef<'a, T::TagType>> {
         unsafe {
             let tag_name = CString::new(T::tag_name()).unwrap();
 
@@ -145,6 +144,18 @@ impl TagList {
 
             res
         }
+    }
+
+    pub fn get_size<'a, T: Tag<'a>>(&'a self) -> u32 {
+        unsafe {
+            let tag_name = CString::new(T::tag_name()).unwrap();
+
+            gst::gst_tag_list_get_tag_size(self.0, tag_name.as_ptr())
+        }
+    }
+
+    pub fn iter_tag<'a, T: Tag<'a>>(&'a self) -> TagIterator<'a, T> {
+        TagIterator::new(self)
     }
 
     pub fn to_string(&self) -> String {
@@ -172,6 +183,39 @@ impl PartialEq for TagList {
 
 unsafe impl Sync for TagList {}
 unsafe impl Send for TagList {}
+
+pub struct TagIterator<'a, T: Tag<'a>> {
+    taglist: &'a TagList,
+    idx: u32,
+    size: u32,
+    phantom: PhantomData<T>,
+}
+
+impl<'a, T: Tag<'a>> TagIterator<'a, T> {
+    fn new(taglist: &'a TagList) -> TagIterator<'a, T> {
+        TagIterator {
+            taglist: taglist,
+            idx: 0,
+            size: taglist.get_size::<T>(),
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, T: Tag<'a>> Iterator for TagIterator<'a, T> {
+    type Item = TypedValueRef<'a, T::TagType>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.size {
+            return None;
+        }
+
+        let item = self.taglist.get_index::<T>(self.idx);
+        self.idx += 1;
+
+        item
+    }
+}
 
 #[cfg(test)]
 mod tests {
