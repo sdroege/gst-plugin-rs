@@ -118,12 +118,7 @@ impl TagList {
                 return None;
             }
 
-            let res = match Value::from_raw(gvalue) {
-                Some(value) => TypedValue::from_value(value),
-                None => None,
-            };
-
-            res
+            Value::from_raw(gvalue).and_then(TypedValue::from_value)
         }
     }
 
@@ -137,12 +132,7 @@ impl TagList {
                 return None;
             }
 
-            let res = match ValueRef::from_ptr(value) {
-                Some(value) => TypedValueRef::from_value_ref(value),
-                None => None,
-            };
-
-            res
+            ValueRef::from_ptr(value).and_then(TypedValueRef::from_value_ref)
         }
     }
 

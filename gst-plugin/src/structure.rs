@@ -48,10 +48,8 @@ impl Structure {
     }
 
     pub fn get<'a, T: ValueType<'a>>(&'a self, name: &str) -> Option<TypedValueRef<'a, T>> {
-        match self.get_value(name) {
-            Some(value) => TypedValueRef::from_value_ref(value),
-            None => None,
-        }
+        self.get_value(name)
+            .and_then(TypedValueRef::from_value_ref)
     }
 
     pub fn get_value<'a>(&'a self, name: &str) -> Option<ValueRef<'a>> {
@@ -78,7 +76,7 @@ impl Structure {
         }
     }
 
-    pub fn get_name<'a>(&'a self) -> &'a str {
+    pub fn get_name(&self) -> &str {
         unsafe {
             let cstr = CStr::from_ptr(gst::gst_structure_get_name(self.0));
             cstr.to_str().unwrap()
@@ -88,11 +86,7 @@ impl Structure {
     pub fn has_field(&self, field: &str) -> bool {
         unsafe {
             let cstr = CString::new(field).unwrap();
-            if gst::gst_structure_has_field(self.0, cstr.as_ptr()) == glib::GTRUE {
-                true
-            } else {
-                false
-            }
+            gst::gst_structure_has_field(self.0, cstr.as_ptr()) == glib::GTRUE
         }
     }
 
@@ -109,15 +103,15 @@ impl Structure {
         }
     }
 
-    pub fn fields<'a>(&'a self) -> FieldIterator<'a> {
+    pub fn fields(&self) -> FieldIterator {
         FieldIterator::new(self)
     }
 
-    pub fn iter<'a>(&'a self) -> Iter<'a> {
+    pub fn iter(&self) -> Iter {
         Iter::new(self)
     }
 
-    fn get_nth_field_name<'a>(&'a self, idx: u32) -> Option<&'a str> {
+    fn get_nth_field_name(&self, idx: u32) -> Option<&str> {
         unsafe {
             let field_name = gst::gst_structure_nth_field_name(self.0, idx);
             if field_name.is_null() {

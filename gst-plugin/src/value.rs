@@ -41,7 +41,7 @@ pub enum ValueView<'a> {
 
 impl<'a> ValueView<'a> {
     pub fn try_get<T: ValueType<'a>>(&'a self) -> Option<T> {
-        T::from_value_view(&self)
+        T::from_value_view(self)
     }
 }
 
@@ -223,7 +223,7 @@ impl<'a> ValueRef<'a> {
             gobject::G_TYPE_INT64 => ValueView::Int64(i64::from_value(self.0).unwrap()),
             gobject::G_TYPE_UINT64 => ValueView::UInt64(u64::from_value(self.0).unwrap()),
             typ if typ == *TYPE_FRACTION => {
-                ValueView::Fraction(Rational32::from_value(&self.0).unwrap())
+                ValueView::Fraction(Rational32::from_value(self.0).unwrap())
             }
             gobject::G_TYPE_STRING => {
                 ValueView::String(Cow::Borrowed(<&str as ValueType>::from_value(self.0).unwrap()))
@@ -356,7 +356,7 @@ impl<'a> ValueType<'a> for &'a str {
         unsafe {
             let s = gobject::g_value_get_string(value);
             if s.is_null() {
-                return Some(&"");
+                return Some("");
             }
 
             let cstr = CStr::from_ptr(s).to_str().expect("Invalid string");
@@ -488,8 +488,8 @@ impl<'a> From<Cow<'a, [Value]>> for Value {
             gobject::g_value_init(&mut value.0, <&[Value] as ValueType>::g_type());
 
             match v {
-                Cow::Borrowed(ref array) => {
-                    for e in *array {
+                Cow::Borrowed(array) => {
+                    for e in array {
                         gst::gst_value_array_append_value(&mut value.0,
                                                           e.as_ptr() as *mut gobject::GValue);
                     }
