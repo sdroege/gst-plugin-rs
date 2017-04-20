@@ -116,6 +116,22 @@ impl Structure {
     pub fn iter<'a>(&'a self) -> Iter<'a> {
         Iter::new(self)
     }
+
+    fn get_nth_field_name<'a>(&'a self, idx: u32) -> Option<&'a str> {
+        unsafe {
+            let field_name = gst::gst_structure_nth_field_name(self.0, idx);
+            if field_name.is_null() {
+                return None;
+            }
+
+            let cstr = CStr::from_ptr(field_name);
+            Some(cstr.to_str().unwrap())
+        }
+    }
+
+    fn n_fields(&self) -> u32 {
+        unsafe { gst::gst_structure_n_fields(self.0) as u32 }
+    }
 }
 
 impl Clone for Structure {
@@ -152,7 +168,7 @@ pub struct FieldIterator<'a> {
 
 impl<'a> FieldIterator<'a> {
     pub fn new(structure: &'a Structure) -> FieldIterator<'a> {
-        let n_fields = unsafe { gst::gst_structure_n_fields(structure.0) } as u32;
+        let n_fields = structure.n_fields();
 
         FieldIterator {
             structure: structure,
@@ -170,34 +186,49 @@ impl<'a> Iterator for FieldIterator<'a> {
             return None;
         }
 
-        unsafe {
-            let field_name = gst::gst_structure_nth_field_name(self.structure.0, self.idx);
-            if field_name.is_null() {
-                return None;
-            }
+        if let Some(field_name) = self.structure.get_nth_field_name(self.idx) {
             self.idx += 1;
+            Some(field_name)
+        } else {
+            None
+        }
+    }
 
-            let cstr = CStr::from_ptr(field_name);
-            Some(cstr.to_str().unwrap())
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.idx == self.n_fields {
+            return (0, Some(0));
+        }
+
+        let remaining = (self.n_fields - self.idx) as usize;
+
+        (remaining, Some(remaining))
+    }
+}
+
+impl<'a> DoubleEndedIterator for FieldIterator<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.idx == self.n_fields {
+            return None;
+        }
+
+        self.n_fields -= 1;
+        if let Some(field_name) = self.structure.get_nth_field_name(self.n_fields) {
+            Some(field_name)
+        } else {
+            None
         }
     }
 }
 
+impl<'a> ExactSizeIterator for FieldIterator<'a> {}
+
 pub struct Iter<'a> {
-    structure: &'a Structure,
-    idx: u32,
-    n_fields: u32,
+    iter: FieldIterator<'a>,
 }
 
 impl<'a> Iter<'a> {
     pub fn new(structure: &'a Structure) -> Iter<'a> {
-        let n_fields = unsafe { gst::gst_structure_n_fields(structure.0) } as u32;
-
-        Iter {
-            structure: structure,
-            idx: 0,
-            n_fields: n_fields,
-        }
+        Iter { iter: FieldIterator::new(structure) }
     }
 }
 
@@ -205,25 +236,31 @@ impl<'a> Iterator for Iter<'a> {
     type Item = (&'a str, ValueRef<'a>);
 
     fn next(&mut self) -> Option<(&'a str, ValueRef<'a>)> {
-        if self.idx >= self.n_fields {
-            return None;
-        }
-
-        unsafe {
-            let field_name = gst::gst_structure_nth_field_name(self.structure.0, self.idx);
-            if field_name.is_null() {
-                return None;
-            }
-            self.idx += 1;
-
-            let cstr = CStr::from_ptr(field_name);
-            let f = cstr.to_str().unwrap();
-            let v = self.structure.get_value(f);
-
+        if let Some(f) = self.iter.next() {
+            let v = self.iter.structure.get_value(f);
             Some((f, v.unwrap()))
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a> DoubleEndedIterator for Iter<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if let Some(f) = self.iter.next_back() {
+            let v = self.iter.structure.get_value(f);
+            Some((f, v.unwrap()))
+        } else {
+            None
         }
     }
 }
+
+impl<'a> ExactSizeIterator for Iter<'a> {}
 
 #[cfg(test)]
 mod tests {

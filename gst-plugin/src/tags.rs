@@ -215,7 +215,30 @@ impl<'a, T: Tag<'a>> Iterator for TagIterator<'a, T> {
 
         item
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.idx == self.size {
+            return (0, Some(0));
+        }
+
+        let remaining = (self.size - self.idx) as usize;
+
+        (remaining, Some(remaining))
+    }
 }
+
+impl<'a, T: Tag<'a>> DoubleEndedIterator for TagIterator<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.idx == self.size {
+            return None;
+        }
+
+        self.size -= 1;
+        self.taglist.get_index::<T>(self.size)
+    }
+}
+
+impl<'a, T: Tag<'a>> ExactSizeIterator for TagIterator<'a, T> {}
 
 #[cfg(test)]
 mod tests {

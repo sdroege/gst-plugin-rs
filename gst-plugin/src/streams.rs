@@ -199,7 +199,40 @@ impl<'a> Iterator for StreamCollectionIterator<'a> {
                  Stream(gst::gst_object_ref(stream as *mut gst::GstObject) as *mut gst::GstStream)
              })
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.position == self.length {
+            return (0, Some(0));
+        }
+
+        let remaining = (self.length - self.position) as usize;
+
+        (remaining, Some(remaining))
+    }
 }
+
+impl<'a> DoubleEndedIterator for StreamCollectionIterator<'a> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.position == self.length {
+            return None;
+        }
+
+        self.length -= 1;
+
+        let stream =
+            unsafe { gst::gst_stream_collection_get_stream(self.collection.0, self.length) };
+        if stream.is_null() {
+            self.position = self.length;
+            return None;
+        }
+
+        Some(unsafe {
+                 Stream(gst::gst_object_ref(stream as *mut gst::GstObject) as *mut gst::GstStream)
+             })
+    }
+}
+
+impl<'a> ExactSizeIterator for StreamCollectionIterator<'a> {}
 
 impl Clone for StreamCollection {
     fn clone(&self) -> Self {
