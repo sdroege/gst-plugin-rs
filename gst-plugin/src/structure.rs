@@ -20,9 +20,19 @@ use gst;
 pub struct Structure(*mut gst::GstStructure);
 
 impl Structure {
-    pub fn new(name: &str) -> Structure {
+    pub fn new_empty(name: &str) -> Structure {
         let name_cstr = CString::new(name).unwrap();
         Structure(unsafe { gst::gst_structure_new_empty(name_cstr.as_ptr()) })
+    }
+
+    pub fn new(name: &str, values: &[(&str, Value)]) -> Structure {
+        let mut structure = Structure::new_empty(name);
+
+        for &(ref f, ref v) in values {
+            structure.set(f, v.clone());
+        }
+
+        structure
     }
 
     pub fn from_string(s: &str) -> Option<Structure> {
@@ -262,10 +272,10 @@ mod tests {
     use std::ptr;
 
     #[test]
-    fn set_get() {
+    fn new_set_get() {
         unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
-        let mut s = Structure::new("test");
+        let mut s = Structure::new_empty("test");
         assert_eq!(s.get_name(), "test");
 
         s.set("f1", "abc");
@@ -282,5 +292,11 @@ mod tests {
                    vec![("f1", Value::new("abc")),
                         ("f2", Value::new("bcd")),
                         ("f3", Value::new(123i32))]);
+
+        let s2 = Structure::new("test",
+                                &[("f1", "abc".into()),
+                                  ("f2", "bcd".into()),
+                                  ("f3", 123i32.into())]);
+        assert_eq!(s, s2);
     }
 }

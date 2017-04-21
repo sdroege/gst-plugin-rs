@@ -43,7 +43,7 @@ impl Caps {
         unsafe { GstRc::from_owned_ptr(gst::gst_caps_new_any()) }
     }
 
-    pub fn new_simple(name: &str, values: &[(&str, &Value)]) -> GstRc<Self> {
+    pub fn new_simple(name: &str, values: &[(&str, Value)]) -> GstRc<Self> {
         let mut caps = Caps::new_empty();
 
         let name_cstr = CString::new(name).unwrap();
@@ -72,7 +72,7 @@ impl Caps {
         }
     }
 
-    pub fn set_simple(&mut self, values: &[(&str, &Value)]) {
+    pub fn set_simple(&mut self, values: &[(&str, Value)]) {
         for value in values {
             let name_cstr = CString::new(value.0).unwrap();
             unsafe {
@@ -124,11 +124,11 @@ mod tests {
         init();
 
         let caps = Caps::new_simple("foo/bar",
-                                    &[("int", &12.into()),
-                                      ("bool", &true.into()),
-                                      ("string", &"bla".into()),
-                                      ("fraction", &(1, 2).into()),
-                                      ("array", &vec![1.into(), 2.into()].into())]);
+                                    &[("int", 12.into()),
+                                      ("bool", true.into()),
+                                      ("string", "bla".into()),
+                                      ("fraction", (1, 2).into()),
+                                      ("array", vec![1.into(), 2.into()].into())]);
         assert_eq!(caps.to_string(),
                    "foo/bar, int=(int)12, bool=(boolean)true, string=(string)bla, \
                     fraction=(fraction)1/2, array=(int)< 1, 2 >");

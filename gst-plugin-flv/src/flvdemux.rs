@@ -149,7 +149,7 @@ impl AudioFormat {
             flavors::SoundFormat::MP3 |
             flavors::SoundFormat::MP3_8KHZ => {
                 Some(Caps::new_simple("audio/mpeg",
-                                      &[("mpegversion", &1.into()), ("layer", &3.into())]))
+                                      &[("mpegversion", 1i32.into()), ("layer", 3i32.into())]))
             }
             flavors::SoundFormat::PCM_NE |
             flavors::SoundFormat::PCM_LE => {
@@ -157,19 +157,19 @@ impl AudioFormat {
                     // Assume little-endian for "PCM_NE", it's probably more common and we have no
                     // way to know what the endianness of the system creating the stream was
                     Some(Caps::new_simple("audio/x-raw",
-                                          &[("layout", &"interleaved".into()),
+                                          &[("layout", "interleaved".into()),
                                             ("format",
-                                             &if self.width == 8 {
-                                                  "U8".into()
-                                              } else {
-                                                  "S16LE".into()
-                                              })]))
+                                             if self.width == 8 {
+                                                 "U8".into()
+                                             } else {
+                                                 "S16LE".into()
+                                             })]))
                 } else {
                     None
                 }
             }
             flavors::SoundFormat::ADPCM => {
-                Some(Caps::new_simple("audio/x-adpcm", &[("layout", &"swf".into())]))
+                Some(Caps::new_simple("audio/x-adpcm", &[("layout", "swf".into())]))
             }
             flavors::SoundFormat::NELLYMOSER_16KHZ_MONO |
             flavors::SoundFormat::NELLYMOSER_8KHZ_MONO |
@@ -181,10 +181,10 @@ impl AudioFormat {
                     .as_ref()
                     .map(|header| {
                              Caps::new_simple("audio/mpeg",
-                                              &[("mpegversion", &4.into()),
-                                                ("framed", &true.into()),
-                                                ("stream-format", &"raw".into()),
-                                                ("codec_data", &header.as_ref().into())])
+                                              &[("mpegversion", 4i32.into()),
+                                                ("framed", true.into()),
+                                                ("stream-format", "raw".into()),
+                                                ("codec_data", header.as_ref().into())])
                          })
             }
             flavors::SoundFormat::SPEEX => {
@@ -211,7 +211,7 @@ impl AudioFormat {
 
                     data.into_inner()
                 };
-                let header = Buffer::new_from_vec(header).unwrap();
+                let header = Buffer::from_vec(header).unwrap();
 
                 let comment = {
                     let comment_size = 4 + 7 /* nothing */ + 4 + 1;
@@ -225,11 +225,11 @@ impl AudioFormat {
 
                     data.into_inner()
                 };
-                let comment = Buffer::new_from_vec(comment).unwrap();
+                let comment = Buffer::from_vec(comment).unwrap();
 
                 Some(Caps::new_simple("audio/x-speex",
                                       &[("streamheader",
-                                         &vec![header.into(), comment.into()].into())]))
+                                         vec![header.into(), comment.into()].into())]))
             }
             flavors::SoundFormat::DEVICE_SPECIFIC => {
                 // Nobody knows
@@ -242,7 +242,7 @@ impl AudioFormat {
                 .map(|c| {
                          c.get_mut()
                              .unwrap()
-                             .set_simple(&[("rate", &(self.rate as i32).into())])
+                             .set_simple(&[("rate", (self.rate as i32).into())])
                      });
         }
         if self.channels != 0 {
@@ -250,7 +250,7 @@ impl AudioFormat {
                 .map(|c| {
                          c.get_mut()
                              .unwrap()
-                             .set_simple(&[("channels", &(self.channels as i32).into())])
+                             .set_simple(&[("channels", (self.channels as i32).into())])
                      });
         }
 
@@ -325,7 +325,7 @@ impl VideoFormat {
     fn to_caps(&self) -> Option<GstRc<Caps>> {
         let mut caps = match self.format {
             flavors::CodecId::SORENSON_H263 => {
-                Some(Caps::new_simple("video/x-flash-video", &[("flvversion", &1.into())]))
+                Some(Caps::new_simple("video/x-flash-video", &[("flvversion", 1i32.into())]))
             }
             flavors::CodecId::SCREEN => Some(Caps::new_simple("video/x-flash-screen", &[])),
             flavors::CodecId::VP6 => Some(Caps::new_simple("video/x-vp6-flash", &[])),
@@ -336,15 +336,15 @@ impl VideoFormat {
                     .as_ref()
                     .map(|header| {
                              Caps::new_simple("video/x-h264",
-                                              &[("stream-format", &"avc".into()),
-                                                ("codec_data", &header.as_ref().into())])
+                                              &[("stream-format", "avc".into()),
+                                                ("codec_data", header.as_ref().into())])
                          })
             }
             flavors::CodecId::H263 => Some(Caps::new_simple("video/x-h263", &[])),
             flavors::CodecId::MPEG4Part2 => {
                 Some(Caps::new_simple("video/x-h263",
-                                      &[("mpegversion", &4.into()),
-                                        ("systemstream", &false.into())]))
+                                      &[("mpegversion", 4i32.into()),
+                                        ("systemstream", false.into())]))
             }
             flavors::CodecId::JPEG => {
                 // Unused according to spec
@@ -357,8 +357,8 @@ impl VideoFormat {
                 .map(|c| {
                          c.get_mut()
                              .unwrap()
-                             .set_simple(&[("width", &(width as i32).into()),
-                                           ("height", &(height as i32).into())])
+                             .set_simple(&[("width", (width as i32).into()),
+                                           ("height", (height as i32).into())])
                      });
         }
 
@@ -368,7 +368,7 @@ impl VideoFormat {
                     .map(|c| {
                              c.get_mut()
                                  .unwrap()
-                                 .set_simple(&[("pixel-aspect-ratio", &par.into())])
+                                 .set_simple(&[("pixel-aspect-ratio", par.into())])
                          });
             }
         }
@@ -379,7 +379,7 @@ impl VideoFormat {
                     .map(|c| {
                              c.get_mut()
                                  .unwrap()
-                                 .set_simple(&[("framerate", &fps.into())])
+                                 .set_simple(&[("framerate", fps.into())])
                          });
             }
         }
