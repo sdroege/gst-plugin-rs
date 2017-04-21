@@ -11,6 +11,7 @@ use std::ffi::CStr;
 use std::fmt;
 use value::*;
 use miniobject::*;
+use structure::*;
 
 use glib;
 use gst;
@@ -91,6 +92,22 @@ impl Caps {
             s
         }
     }
+
+    pub fn get_structure(&self, idx: u32) -> Option<&Structure> {
+        unsafe {
+            let structure = gst::gst_caps_get_structure(self.0, idx);
+            Structure::from_borrowed_ptr(structure as *mut gst::GstStructure)
+        }
+    }
+
+    pub fn get_mut_structure(&mut self, idx: u32) -> Option<&mut Structure> {
+        unsafe {
+            let structure = gst::gst_caps_get_structure(self.0, idx);
+            Structure::from_borrowed_mut_ptr(structure as *mut gst::GstStructure)
+        }
+    }
+
+    // TODO: All kinds of caps operations
 }
 
 impl fmt::Debug for Caps {
@@ -132,5 +149,15 @@ mod tests {
         assert_eq!(caps.to_string(),
                    "foo/bar, int=(int)12, bool=(boolean)true, string=(string)bla, \
                     fraction=(fraction)1/2, array=(int)< 1, 2 >");
+
+        let s = caps.get_structure(0).unwrap();
+        assert_eq!(s,
+                   OwnedStructure::new("foo/bar",
+                                       &[("int", 12.into()),
+                                         ("bool", true.into()),
+                                         ("string", "bla".into()),
+                                         ("fraction", (1, 2).into()),
+                                         ("array", vec![1.into(), 2.into()].into())])
+                           .as_ref());
     }
 }

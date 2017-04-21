@@ -9,6 +9,8 @@
 use std::fmt;
 use std::ptr;
 use std::ffi::{CStr, CString};
+use std::ops::{Deref, DerefMut};
+use std::borrow::{Borrow, ToOwned, BorrowMut};
 
 use value::*;
 
@@ -16,17 +18,19 @@ use glib;
 use gobject;
 use gst;
 
-#[repr(C)]
-pub struct Structure(*mut gst::GstStructure);
+pub struct OwnedStructure(&'static mut Structure);
 
-impl Structure {
-    pub fn new_empty(name: &str) -> Structure {
+impl OwnedStructure {
+    pub fn new_empty(name: &str) -> OwnedStructure {
         let name_cstr = CString::new(name).unwrap();
-        Structure(unsafe { gst::gst_structure_new_empty(name_cstr.as_ptr()) })
+        OwnedStructure(unsafe {
+                           &mut *(gst::gst_structure_new_empty(name_cstr.as_ptr()) as
+                                  *mut Structure)
+                       })
     }
 
-    pub fn new(name: &str, values: &[(&str, Value)]) -> Structure {
-        let mut structure = Structure::new_empty(name);
+    pub fn new(name: &str, values: &[(&str, Value)]) -> OwnedStructure {
+        let mut structure = OwnedStructure::new_empty(name);
 
         for &(ref f, ref v) in values {
             structure.set(f, v.clone());
@@ -35,21 +39,121 @@ impl Structure {
         structure
     }
 
-    pub fn from_string(s: &str) -> Option<Structure> {
+    pub fn from_string(s: &str) -> Option<OwnedStructure> {
         unsafe {
             let cstr = CString::new(s).unwrap();
             let structure = gst::gst_structure_from_string(cstr.as_ptr(), ptr::null_mut());
             if structure.is_null() {
                 None
             } else {
-                Some(Structure(structure))
+                Some(OwnedStructure(&mut *(structure as *mut Structure)))
             }
         }
+    }
+}
+
+impl Deref for OwnedStructure {
+    type Target = Structure;
+
+    fn deref(&self) -> &Structure {
+        self.0
+    }
+}
+
+impl DerefMut for OwnedStructure {
+    fn deref_mut(&mut self) -> &mut Structure {
+        self.0
+    }
+}
+
+impl AsRef<Structure> for OwnedStructure {
+    fn as_ref(&self) -> &Structure {
+        self.deref()
+    }
+}
+
+impl AsMut<Structure> for OwnedStructure {
+    fn as_mut(&mut self) -> &mut Structure {
+        self.deref_mut()
+    }
+}
+
+impl Clone for OwnedStructure {
+    fn clone(&self) -> Self {
+        OwnedStructure(unsafe { &mut *(gst::gst_structure_copy(&(self.0).0) as *mut Structure) })
+    }
+}
+
+impl Drop for OwnedStructure {
+    fn drop(&mut self) {
+        unsafe { gst::gst_structure_free(&mut (self.0).0) }
+    }
+}
+
+impl fmt::Debug for OwnedStructure {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.to_string())
+    }
+}
+
+impl PartialEq for OwnedStructure {
+    fn eq(&self, other: &OwnedStructure) -> bool {
+        self.as_ref().eq(other)
+    }
+}
+
+impl PartialEq<Structure> for OwnedStructure {
+    fn eq(&self, other: &Structure) -> bool {
+        self.as_ref().eq(other)
+    }
+}
+
+impl Eq for OwnedStructure {}
+
+impl Borrow<Structure> for OwnedStructure {
+    fn borrow(&self) -> &Structure {
+        self.0
+    }
+}
+
+impl BorrowMut<Structure> for OwnedStructure {
+    fn borrow_mut(&mut self) -> &mut Structure {
+        self.0
+    }
+}
+
+impl ToOwned for Structure {
+    type Owned = OwnedStructure;
+
+    fn to_owned(&self) -> OwnedStructure {
+        OwnedStructure(unsafe { &mut *(gst::gst_structure_copy(&self.0) as *mut Structure) })
+    }
+}
+
+#[repr(C)]
+pub struct Structure(gst::GstStructure);
+
+impl Structure {
+    pub unsafe fn from_borrowed_ptr<'a>(ptr: *const gst::GstStructure) -> Option<&'a Structure> {
+        if ptr.is_null() {
+            return None;
+        }
+
+        Some(&*(ptr as *mut Structure))
+    }
+
+    pub unsafe fn from_borrowed_mut_ptr<'a>(ptr: *mut gst::GstStructure)
+                                            -> Option<&'a mut Structure> {
+        if ptr.is_null() {
+            return None;
+        }
+
+        Some(&mut *(ptr as *mut Structure))
     }
 
     pub fn to_string(&self) -> String {
         unsafe {
-            let ptr = gst::gst_structure_to_string(self.0);
+            let ptr = gst::gst_structure_to_string(&self.0);
             let s = CStr::from_ptr(ptr).to_str().unwrap().into();
             glib::g_free(ptr as glib::gpointer);
 
@@ -66,7 +170,7 @@ impl Structure {
         unsafe {
             let name_cstr = CString::new(name).unwrap();
 
-            let value = gst::gst_structure_get_value(self.0, name_cstr.as_ptr());
+            let value = gst::gst_structure_get_value(&self.0, name_cstr.as_ptr());
 
             if value.is_null() {
                 return None;
@@ -81,14 +185,14 @@ impl Structure {
             let name_cstr = CString::new(name).unwrap();
             let mut gvalue = value.into().into_raw();
 
-            gst::gst_structure_take_value(self.0, name_cstr.as_ptr(), &mut gvalue);
+            gst::gst_structure_take_value(&mut self.0, name_cstr.as_ptr(), &mut gvalue);
             gvalue.g_type = gobject::G_TYPE_NONE;
         }
     }
 
     pub fn get_name(&self) -> &str {
         unsafe {
-            let cstr = CStr::from_ptr(gst::gst_structure_get_name(self.0));
+            let cstr = CStr::from_ptr(gst::gst_structure_get_name(&self.0));
             cstr.to_str().unwrap()
         }
     }
@@ -96,20 +200,20 @@ impl Structure {
     pub fn has_field(&self, field: &str) -> bool {
         unsafe {
             let cstr = CString::new(field).unwrap();
-            gst::gst_structure_has_field(self.0, cstr.as_ptr()) == glib::GTRUE
+            gst::gst_structure_has_field(&self.0, cstr.as_ptr()) == glib::GTRUE
         }
     }
 
     pub fn remove_field(&mut self, field: &str) {
         unsafe {
             let cstr = CString::new(field).unwrap();
-            gst::gst_structure_remove_field(self.0, cstr.as_ptr());
+            gst::gst_structure_remove_field(&mut self.0, cstr.as_ptr());
         }
     }
 
     pub fn remove_all_fields(&mut self) {
         unsafe {
-            gst::gst_structure_remove_all_fields(self.0);
+            gst::gst_structure_remove_all_fields(&mut self.0);
         }
     }
 
@@ -123,7 +227,7 @@ impl Structure {
 
     fn get_nth_field_name(&self, idx: u32) -> Option<&str> {
         unsafe {
-            let field_name = gst::gst_structure_nth_field_name(self.0, idx);
+            let field_name = gst::gst_structure_nth_field_name(&self.0, idx);
             if field_name.is_null() {
                 return None;
             }
@@ -134,20 +238,10 @@ impl Structure {
     }
 
     fn n_fields(&self) -> u32 {
-        unsafe { gst::gst_structure_n_fields(self.0) as u32 }
+        unsafe { gst::gst_structure_n_fields(&self.0) as u32 }
     }
-}
 
-impl Clone for Structure {
-    fn clone(&self) -> Self {
-        Structure(unsafe { gst::gst_structure_copy(self.0) })
-    }
-}
-
-impl Drop for Structure {
-    fn drop(&mut self) {
-        unsafe { gst::gst_structure_free(self.0) }
-    }
+    // TODO: Various operations
 }
 
 impl fmt::Debug for Structure {
@@ -158,7 +252,7 @@ impl fmt::Debug for Structure {
 
 impl PartialEq for Structure {
     fn eq(&self, other: &Structure) -> bool {
-        (unsafe { gst::gst_structure_is_equal(self.0, other.0) } == glib::GTRUE)
+        (unsafe { gst::gst_structure_is_equal(&self.0, &other.0) } == glib::GTRUE)
     }
 }
 
@@ -275,7 +369,7 @@ mod tests {
     fn new_set_get() {
         unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
-        let mut s = Structure::new_empty("test");
+        let mut s = OwnedStructure::new_empty("test");
         assert_eq!(s.get_name(), "test");
 
         s.set("f1", "abc");
@@ -293,10 +387,10 @@ mod tests {
                         ("f2", Value::new("bcd")),
                         ("f3", Value::new(123i32))]);
 
-        let s2 = Structure::new("test",
-                                &[("f1", "abc".into()),
-                                  ("f2", "bcd".into()),
-                                  ("f3", 123i32.into())]);
+        let s2 = OwnedStructure::new("test",
+                                     &[("f1", "abc".into()),
+                                       ("f2", "bcd".into()),
+                                       ("f3", 123i32.into())]);
         assert_eq!(s, s2);
     }
 }
