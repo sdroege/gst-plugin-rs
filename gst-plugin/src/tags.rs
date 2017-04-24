@@ -69,23 +69,10 @@ impl MergeMode {
     }
 }
 
-#[derive(Eq)]
-pub struct TagList(*mut gst::GstTagList);
+pub struct TagList(gst::GstTagList);
 
 unsafe impl MiniObject for TagList {
     type PtrType = gst::GstTagList;
-
-    unsafe fn as_ptr(&self) -> *mut gst::GstTagList {
-        self.0
-    }
-
-    unsafe fn replace_ptr(&mut self, ptr: *mut gst::GstTagList) {
-        self.0 = ptr
-    }
-
-    unsafe fn from_ptr(ptr: *mut gst::GstTagList) -> Self {
-        TagList(ptr)
-    }
 }
 
 impl TagList {
@@ -101,7 +88,10 @@ impl TagList {
             let mut gvalue = v.into_raw();
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            gst::gst_tag_list_add_value(self.0, mode.to_ffi(), tag_name.as_ptr(), &gvalue);
+            gst::gst_tag_list_add_value(self.as_mut_ptr(),
+                                        mode.to_ffi(),
+                                        tag_name.as_ptr(),
+                                        &gvalue);
 
             gobject::g_value_unset(&mut gvalue);
         }
@@ -112,7 +102,7 @@ impl TagList {
             let mut gvalue = mem::zeroed();
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            let found = gst::gst_tag_list_copy_value(&mut gvalue, self.0, tag_name.as_ptr());
+            let found = gst::gst_tag_list_copy_value(&mut gvalue, self.as_ptr(), tag_name.as_ptr());
 
             if found == glib::GFALSE {
                 return None;
@@ -126,7 +116,7 @@ impl TagList {
         unsafe {
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            let value = gst::gst_tag_list_get_value_index(self.0, tag_name.as_ptr(), idx);
+            let value = gst::gst_tag_list_get_value_index(self.as_ptr(), tag_name.as_ptr(), idx);
 
             if value.is_null() {
                 return None;
@@ -140,7 +130,7 @@ impl TagList {
         unsafe {
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            gst::gst_tag_list_get_tag_size(self.0, tag_name.as_ptr())
+            gst::gst_tag_list_get_tag_size(self.as_ptr(), tag_name.as_ptr())
         }
     }
 
@@ -150,7 +140,7 @@ impl TagList {
 
     pub fn to_string(&self) -> String {
         unsafe {
-            let ptr = gst::gst_tag_list_to_string(self.0);
+            let ptr = gst::gst_tag_list_to_string(self.as_ptr());
             let s = CStr::from_ptr(ptr).to_str().unwrap().into();
             glib::g_free(ptr as glib::gpointer);
 
@@ -167,7 +157,17 @@ impl fmt::Debug for TagList {
 
 impl PartialEq for TagList {
     fn eq(&self, other: &TagList) -> bool {
-        (unsafe { gst::gst_tag_list_is_equal(self.0, other.0) } == glib::GTRUE)
+        (unsafe { gst::gst_tag_list_is_equal(self.as_ptr(), other.as_ptr()) } == glib::GTRUE)
+    }
+}
+
+impl Eq for TagList {}
+
+impl ToOwned for TagList {
+    type Owned = GstRc<TagList>;
+
+    fn to_owned(&self) -> GstRc<TagList> {
+        unsafe { GstRc::from_unowned_ptr(self.as_ptr()) }
     }
 }
 

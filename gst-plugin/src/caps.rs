@@ -16,23 +16,11 @@ use structure::*;
 use glib;
 use gst;
 
-#[derive(Eq)]
-pub struct Caps(*mut gst::GstCaps);
+#[repr(C)]
+pub struct Caps(gst::GstCaps);
 
 unsafe impl MiniObject for Caps {
     type PtrType = gst::GstCaps;
-
-    unsafe fn as_ptr(&self) -> *mut gst::GstCaps {
-        self.0
-    }
-
-    unsafe fn replace_ptr(&mut self, ptr: *mut gst::GstCaps) {
-        self.0 = ptr
-    }
-
-    unsafe fn from_ptr(ptr: *mut gst::GstCaps) -> Self {
-        Caps(ptr)
-    }
 }
 
 impl Caps {
@@ -51,7 +39,7 @@ impl Caps {
         let structure = unsafe { gst::gst_structure_new_empty(name_cstr.as_ptr()) };
 
         unsafe {
-            gst::gst_caps_append_structure((*caps).0, structure);
+            gst::gst_caps_append_structure(caps.as_mut_ptr(), structure);
         }
 
         caps.get_mut().unwrap().set_simple(values);
@@ -78,14 +66,14 @@ impl Caps {
             let name_cstr = CString::new(value.0).unwrap();
             unsafe {
                 let gvalue = value.1.as_ptr();
-                gst::gst_caps_set_value(self.0, name_cstr.as_ptr(), gvalue);
+                gst::gst_caps_set_value(self.as_mut_ptr(), name_cstr.as_ptr(), gvalue);
             }
         }
     }
 
     pub fn to_string(&self) -> String {
         unsafe {
-            let ptr = gst::gst_caps_to_string(self.0);
+            let ptr = gst::gst_caps_to_string(self.as_ptr());
             let s = CStr::from_ptr(ptr).to_str().unwrap().into();
             glib::g_free(ptr as glib::gpointer);
 
@@ -95,14 +83,14 @@ impl Caps {
 
     pub fn get_structure(&self, idx: u32) -> Option<&Structure> {
         unsafe {
-            let structure = gst::gst_caps_get_structure(self.0, idx);
-            Structure::from_borrowed_ptr(structure as *mut gst::GstStructure)
+            let structure = gst::gst_caps_get_structure(self.as_ptr(), idx);
+            Structure::from_borrowed_ptr(structure as *const gst::GstStructure)
         }
     }
 
     pub fn get_mut_structure(&mut self, idx: u32) -> Option<&mut Structure> {
         unsafe {
-            let structure = gst::gst_caps_get_structure(self.0, idx);
+            let structure = gst::gst_caps_get_structure(self.as_ptr(), idx);
             Structure::from_borrowed_mut_ptr(structure as *mut gst::GstStructure)
         }
     }
@@ -118,7 +106,17 @@ impl fmt::Debug for Caps {
 
 impl PartialEq for Caps {
     fn eq(&self, other: &Caps) -> bool {
-        (unsafe { gst::gst_caps_is_equal(self.0, other.0) } == glib::GTRUE)
+        (unsafe { gst::gst_caps_is_equal(self.as_ptr(), other.as_ptr()) } == glib::GTRUE)
+    }
+}
+
+impl Eq for Caps {}
+
+impl ToOwned for Caps {
+    type Owned = GstRc<Caps>;
+
+    fn to_owned(&self) -> GstRc<Caps> {
+        unsafe { GstRc::from_unowned_ptr(self.as_ptr()) }
     }
 }
 

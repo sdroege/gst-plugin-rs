@@ -321,7 +321,9 @@ impl DemuxerWrapper {
                 }
                 HandleBufferResult::BufferForStream(index, buffer) => {
                     let flow_ret = unsafe {
-                        gst_rs_demuxer_stream_push_buffer(self.raw, index, buffer.into_ptr())
+                        gst_rs_demuxer_stream_push_buffer(self.raw,
+                                                          index,
+                                                          buffer.into_ptr() as *mut gst::GstBuffer)
                     };
                     if flow_ret != gst::GST_FLOW_OK {
                         return flow_ret;

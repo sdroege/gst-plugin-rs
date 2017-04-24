@@ -8,6 +8,7 @@
 
 use std::fmt;
 use std::ptr;
+use std::mem;
 use std::ffi::{CStr, CString};
 use std::ops::{Deref, DerefMut};
 use std::borrow::{Borrow, ToOwned, BorrowMut};
@@ -15,7 +16,6 @@ use std::borrow::{Borrow, ToOwned, BorrowMut};
 use value::*;
 
 use glib;
-use gobject;
 use gst;
 
 pub struct OwnedStructure(&'static mut Structure);
@@ -32,7 +32,7 @@ impl OwnedStructure {
     pub fn new(name: &str, values: &[(&str, Value)]) -> OwnedStructure {
         let mut structure = OwnedStructure::new_empty(name);
 
-        for &(ref f, ref v) in values {
+        for &(f, ref v) in values {
             structure.set(f, v.clone());
         }
 
@@ -49,6 +49,13 @@ impl OwnedStructure {
                 Some(OwnedStructure(&mut *(structure as *mut Structure)))
             }
         }
+    }
+
+    pub unsafe fn into_ptr(self) -> *const gst::GstStructure {
+        let ptr = self.0 as *const Structure as *const gst::GstStructure;
+        mem::forget(self);
+
+        ptr
     }
 }
 
@@ -186,7 +193,7 @@ impl Structure {
             let mut gvalue = value.into().into_raw();
 
             gst::gst_structure_take_value(&mut self.0, name_cstr.as_ptr(), &mut gvalue);
-            gvalue.g_type = gobject::G_TYPE_NONE;
+            mem::forget(gvalue);
         }
     }
 

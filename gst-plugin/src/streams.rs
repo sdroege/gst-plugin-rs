@@ -45,7 +45,7 @@ impl Stream {
                flags: StreamFlags)
                -> Self {
         let stream_id_cstr = CString::new(stream_id).unwrap();
-        let caps = caps.map(|caps| unsafe { caps.as_ptr() })
+        let caps = caps.map(|caps| unsafe { caps.as_mut_ptr() })
             .unwrap_or(ptr::null_mut());
 
         Stream(unsafe {
@@ -60,14 +60,14 @@ impl Stream {
         self.0
     }
 
-    pub fn get_caps(&self) -> Option<GstRc<Caps>> {
+    pub fn get_caps(&self) -> Option<&Caps> {
         let ptr = unsafe { gst::gst_stream_get_caps(self.0) };
 
         if ptr.is_null() {
             return None;
         }
 
-        Some(unsafe { GstRc::from_owned_ptr(ptr) })
+        Some(unsafe { <Caps as MiniObject>::from_ptr(ptr) })
     }
 
     pub fn get_stream_flags(&self) -> StreamFlags {
@@ -83,18 +83,18 @@ impl Stream {
         cstr.to_str().unwrap()
     }
 
-    pub fn get_tags(&self) -> Option<TagList> {
+    pub fn get_tags(&self) -> Option<&TagList> {
         let ptr = unsafe { gst::gst_stream_get_tags(self.0) };
 
         if ptr.is_null() {
             return None;
         }
 
-        Some(unsafe { TagList::from_ptr(ptr) })
+        Some(unsafe { <TagList as MiniObject>::from_ptr(ptr) })
     }
 
     pub fn set_caps(&self, caps: Option<GstRc<Caps>>) {
-        let ptr = caps.map(|caps| unsafe { caps.as_ptr() })
+        let ptr = caps.map(|caps| unsafe { caps.as_mut_ptr() })
             .unwrap_or(ptr::null_mut());
 
         unsafe { gst::gst_stream_set_caps(self.0, ptr) }
@@ -109,7 +109,7 @@ impl Stream {
     }
 
     pub fn set_tags(&self, tags: Option<TagList>) {
-        let ptr = tags.map(|tags| unsafe { tags.as_ptr() })
+        let ptr = tags.map(|tags| unsafe { tags.as_mut_ptr() })
             .unwrap_or(ptr::null_mut());
 
         unsafe { gst::gst_stream_set_tags(self.0, ptr) }

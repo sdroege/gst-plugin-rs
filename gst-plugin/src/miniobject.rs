@@ -6,21 +6,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::{fmt, ops, borrow, ptr};
-use std::marker::PhantomData;
+use std::{fmt, ops, borrow};
+use std::mem;
 
 use glib;
 use gst;
 
 #[derive(Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GstRc<T: MiniObject> {
-    obj: T,
+pub struct GstRc<T: 'static + MiniObject> {
+    obj: &'static T,
 }
 
 impl<T: MiniObject> GstRc<T> {
-    unsafe fn new(obj: T, owned: bool) -> Self {
-        assert!(!obj.as_ptr().is_null());
-
+    unsafe fn new(obj: &'static T, owned: bool) -> Self {
         if !owned {
             gst::gst_mini_object_ref(obj.as_ptr() as *mut gst::GstMiniObject);
         }
@@ -28,11 +26,11 @@ impl<T: MiniObject> GstRc<T> {
         GstRc { obj: obj }
     }
 
-    pub unsafe fn from_owned_ptr(ptr: *mut T::PtrType) -> Self {
+    pub unsafe fn from_owned_ptr(ptr: *const T::PtrType) -> Self {
         Self::new(T::from_ptr(ptr), true)
     }
 
-    pub unsafe fn from_unowned_ptr(ptr: *mut T::PtrType) -> Self {
+    pub unsafe fn from_unowned_ptr(ptr: *const T::PtrType) -> Self {
         Self::new(T::from_ptr(ptr), false)
     }
 
@@ -41,21 +39,21 @@ impl<T: MiniObject> GstRc<T> {
             let ptr = self.obj.as_ptr();
 
             if self.is_writable() {
-                return &mut self.obj;
+                return &mut *(self.obj as *const T as *mut T);
             }
 
-            self.obj
-                .replace_ptr(gst::gst_mini_object_make_writable(ptr as *mut gst::GstMiniObject) as
-                             *mut T::PtrType);
+            self.obj = T::from_ptr(gst::gst_mini_object_make_writable(ptr as
+                                                                      *mut gst::GstMiniObject) as
+                                   *const T::PtrType);
             assert!(self.is_writable());
 
-            &mut self.obj
+            &mut *(self.obj as *const T as *mut T)
         }
     }
 
     pub fn get_mut(&mut self) -> Option<&mut T> {
         if self.is_writable() {
-            Some(&mut self.obj)
+            Some(unsafe { &mut *(self.obj as *const T as *mut T) })
         } else {
             None
         }
@@ -65,7 +63,7 @@ impl<T: MiniObject> GstRc<T> {
         unsafe {
             GstRc::from_owned_ptr(gst::gst_mini_object_copy(self.obj.as_ptr() as
                                                             *const gst::GstMiniObject) as
-                                  *mut T::PtrType)
+                                  *const T::PtrType)
         }
     }
 
@@ -75,29 +73,41 @@ impl<T: MiniObject> GstRc<T> {
          } == glib::GTRUE)
     }
 
-    pub unsafe fn into_ptr(mut self) -> *mut T::PtrType {
-        self.obj.swap_ptr(ptr::null_mut())
+    pub unsafe fn into_ptr(self) -> *const T::PtrType {
+        let ptr = self.obj.as_ptr();
+        mem::forget(self);
+
+        ptr
     }
 }
 
 impl<T: MiniObject> ops::Deref for GstRc<T> {
     type Target = T;
     fn deref(&self) -> &T {
-        &self.obj
+        self.obj
     }
 }
 
 impl<T: MiniObject> AsRef<T> for GstRc<T> {
     fn as_ref(&self) -> &T {
-        &self.obj
+        self.obj
     }
 }
 
 impl<T: MiniObject> borrow::Borrow<T> for GstRc<T> {
     fn borrow(&self) -> &T {
-        &self.obj
+        self.obj
     }
 }
+
+// FIXME: Not generally possible because neither T nor ToOwned are defined here...
+//impl<T: MiniObject> ToOwned for T {
+//    type Owned = GstRc<T>;
+//
+//    fn to_owned(&self) -> GstRc<T> {
+//        unsafe { GstRc::from_unowned_ptr(self.as_ptr()) }
+//    }
+//}
 
 impl<T: MiniObject> Clone for GstRc<T> {
     fn clone(&self) -> GstRc<T> {
@@ -108,9 +118,7 @@ impl<T: MiniObject> Clone for GstRc<T> {
 impl<T: MiniObject> Drop for GstRc<T> {
     fn drop(&mut self) {
         unsafe {
-            if !self.obj.as_ptr().is_null() {
-                gst::gst_mini_object_unref(self.obj.as_ptr() as *mut gst::GstMiniObject);
-            }
+            gst::gst_mini_object_unref(self.obj.as_ptr() as *mut gst::GstMiniObject);
         }
     }
 }
@@ -124,20 +132,26 @@ impl<T: MiniObject + fmt::Display> fmt::Display for GstRc<T> {
     }
 }
 
-// NOTE: Reference counting must not happen in here
-pub unsafe trait MiniObject {
+pub unsafe trait MiniObject
+    where Self: Sized
+{
     type PtrType;
 
-    unsafe fn as_ptr(&self) -> *mut Self::PtrType;
-    unsafe fn replace_ptr(&mut self, ptr: *mut Self::PtrType);
-    unsafe fn swap_ptr(&mut self, new_ptr: *mut Self::PtrType) -> *mut Self::PtrType {
-        let ptr = self.as_ptr();
-        self.replace_ptr(new_ptr);
-
-        ptr
+    unsafe fn as_ptr(&self) -> *const Self::PtrType {
+        self as *const Self as *const Self::PtrType
     }
 
-    unsafe fn from_ptr(ptr: *mut Self::PtrType) -> Self;
+    unsafe fn as_mut_ptr(&self) -> *mut Self::PtrType {
+        self as *const Self as *mut Self::PtrType
+    }
+
+    unsafe fn from_ptr<'a>(ptr: *const Self::PtrType) -> &'a Self {
+        &*(ptr as *const Self)
+    }
+
+    unsafe fn from_mut_ptr<'a>(ptr: *mut Self::PtrType) -> &'a mut Self {
+        &mut *(ptr as *mut Self)
+    }
 }
 
 impl<'a, T: MiniObject> From<&'a T> for GstRc<T> {
@@ -149,72 +163,5 @@ impl<'a, T: MiniObject> From<&'a T> for GstRc<T> {
 impl<'a, T: MiniObject> From<&'a mut T> for GstRc<T> {
     fn from(f: &'a mut T) -> GstRc<T> {
         unsafe { GstRc::from_unowned_ptr(f.as_ptr()) }
-    }
-}
-
-#[derive(Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GstRef<'a, T: 'a + MiniObject> {
-    obj: T,
-    #[allow(dead_code)]
-    phantom: PhantomData<&'a T>,
-}
-
-impl<'a, T: MiniObject> GstRef<'a, T> {
-    pub unsafe fn new(ptr: *mut T::PtrType) -> GstRef<'a, T> {
-        GstRef {
-            obj: T::from_ptr(ptr),
-            phantom: PhantomData,
-        }
-    }
-
-    pub fn get_mut(&mut self) -> Option<&mut T> {
-        if self.is_writable() {
-            Some(&mut self.obj)
-        } else {
-            None
-        }
-    }
-
-    pub fn copy(&self) -> GstRc<T> {
-        unsafe {
-            GstRc::from_owned_ptr(gst::gst_mini_object_copy(self.obj.as_ptr() as
-                                                            *const gst::GstMiniObject) as
-                                  *mut T::PtrType)
-        }
-    }
-
-    fn is_writable(&self) -> bool {
-        (unsafe {
-             gst::gst_mini_object_is_writable(self.as_ptr() as *const gst::GstMiniObject)
-         } == glib::GTRUE)
-    }
-
-    pub unsafe fn into_ptr(mut self) -> *mut T::PtrType {
-        self.obj.swap_ptr(ptr::null_mut())
-    }
-}
-
-impl<'a, T: MiniObject> ops::Deref for GstRef<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        &self.obj
-    }
-}
-
-impl<'a, T: MiniObject> AsRef<T> for GstRef<'a, T> {
-    fn as_ref(&self) -> &T {
-        &self.obj
-    }
-}
-
-impl<'a, T: MiniObject> borrow::Borrow<T> for GstRef<'a, T> {
-    fn borrow(&self) -> &T {
-        &self.obj
-    }
-}
-
-impl<'a, T: MiniObject + fmt::Display> fmt::Display for GstRef<'a, T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.obj.fmt(f)
     }
 }

@@ -89,7 +89,10 @@ impl Value {
     }
 
     pub unsafe fn into_raw(mut self) -> gobject::GValue {
-        mem::replace(&mut self.0, mem::zeroed())
+        let v = mem::replace(&mut self.0, mem::zeroed());
+        mem::forget(self);
+
+        v
     }
 
     fn is_supported_type(typ: glib::GType) -> bool {
@@ -495,11 +498,11 @@ impl<'a> From<Cow<'a, [Value]>> for Value {
                     }
                 }
                 Cow::Owned(array) => {
-                    for mut e in array {
+                    for e in array {
                         gst::gst_value_array_append_and_take_value(&mut value.0,
                                                                    e.as_ptr() as
                                                                    *mut gobject::GValue);
-                        e.0.g_type = gobject::G_TYPE_NONE;
+                        mem::forget(e);
                     }
                 }
             }

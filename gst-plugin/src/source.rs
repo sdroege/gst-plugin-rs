@@ -330,10 +330,10 @@ unsafe extern "C" fn source_fill(ptr: *mut gst_base::GstBaseSrc,
                                  -> gst::GstFlowReturn {
     let src = &*(ptr as *const RsSrc);
     let wrap: &SourceWrapper = &*src.wrap;
+    let buffer: &mut Buffer = <Buffer as MiniObject>::from_mut_ptr(buffer);
 
     panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
-        let mut buffer: GstRef<Buffer> = GstRef::new(buffer);
-        wrap.fill(offset, length, buffer.get_mut().unwrap())
+        wrap.fill(offset, length, buffer)
     })
 }
 
@@ -468,7 +468,7 @@ unsafe extern "C" fn source_class_init(klass: glib::gpointer, klass_data: glib::
         let pad_template = gst::gst_pad_template_new(templ_name.into_raw(),
                                                      gst::GST_PAD_SRC,
                                                      gst::GST_PAD_ALWAYS,
-                                                     caps.as_ptr());
+                                                     caps.as_ptr() as *mut gst::GstCaps);
         gst::gst_element_class_add_pad_template(element_klass, pad_template);
     }
 

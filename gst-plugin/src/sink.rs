@@ -271,10 +271,10 @@ unsafe extern "C" fn sink_render(ptr: *mut gst_base::GstBaseSink,
                                  -> gst::GstFlowReturn {
     let sink = &*(ptr as *const RsSink);
     let wrap: &SinkWrapper = &*sink.wrap;
+    let buffer: &Buffer = Buffer::from_ptr(buffer);
 
     panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
-        let buffer: GstRef<Buffer> = GstRef::new(buffer);
-        wrap.render(buffer.as_ref())
+        wrap.render(buffer)
     })
 }
 
@@ -389,7 +389,7 @@ unsafe extern "C" fn sink_class_init(klass: glib::gpointer, klass_data: glib::gp
         let pad_template = gst::gst_pad_template_new(templ_name.into_raw(),
                                                      gst::GST_PAD_SINK,
                                                      gst::GST_PAD_ALWAYS,
-                                                     caps.as_ptr());
+                                                     caps.as_ptr() as *mut gst::GstCaps);
         gst::gst_element_class_add_pad_template(element_klass, pad_template);
     }
 
