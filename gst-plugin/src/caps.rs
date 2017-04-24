@@ -84,14 +84,22 @@ impl Caps {
     pub fn get_structure(&self, idx: u32) -> Option<&Structure> {
         unsafe {
             let structure = gst::gst_caps_get_structure(self.as_ptr(), idx);
-            Structure::from_borrowed_ptr(structure as *const gst::GstStructure)
+            if structure.is_null() {
+                return None;
+            }
+
+            Some(Structure::from_borrowed_ptr(structure as *const gst::GstStructure))
         }
     }
 
     pub fn get_mut_structure(&mut self, idx: u32) -> Option<&mut Structure> {
         unsafe {
             let structure = gst::gst_caps_get_structure(self.as_ptr(), idx);
-            Structure::from_borrowed_mut_ptr(structure as *mut gst::GstStructure)
+            if structure.is_null() {
+                return None;
+            }
+
+            Some(Structure::from_borrowed_mut_ptr(structure as *mut gst::GstStructure))
         }
     }
 

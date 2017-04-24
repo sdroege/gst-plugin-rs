@@ -141,21 +141,16 @@ impl ToOwned for Structure {
 pub struct Structure(gst::GstStructure);
 
 impl Structure {
-    pub unsafe fn from_borrowed_ptr<'a>(ptr: *const gst::GstStructure) -> Option<&'a Structure> {
-        if ptr.is_null() {
-            return None;
-        }
+    pub unsafe fn from_borrowed_ptr<'a>(ptr: *const gst::GstStructure) -> &'a Structure {
+        assert!(!ptr.is_null());
 
-        Some(&*(ptr as *mut Structure))
+        &*(ptr as *mut Structure)
     }
 
-    pub unsafe fn from_borrowed_mut_ptr<'a>(ptr: *mut gst::GstStructure)
-                                            -> Option<&'a mut Structure> {
-        if ptr.is_null() {
-            return None;
-        }
+    pub unsafe fn from_borrowed_mut_ptr<'a>(ptr: *mut gst::GstStructure) -> &'a mut Structure {
+        assert!(!ptr.is_null());
 
-        Some(&mut *(ptr as *mut Structure))
+        &mut *(ptr as *mut Structure)
     }
 
     pub fn to_string(&self) -> String {

@@ -146,10 +146,12 @@ pub unsafe trait MiniObject
     }
 
     unsafe fn from_ptr<'a>(ptr: *const Self::PtrType) -> &'a Self {
+        assert!(!ptr.is_null());
         &*(ptr as *const Self)
     }
 
     unsafe fn from_mut_ptr<'a>(ptr: *mut Self::PtrType) -> &'a mut Self {
+        assert!(!ptr.is_null());
         &mut *(ptr as *mut Self)
     }
 }
