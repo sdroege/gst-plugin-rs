@@ -156,14 +156,3 @@ pub unsafe trait MiniObject
     }
 }
 
-impl<'a, T: MiniObject> From<&'a T> for GstRc<T> {
-    fn from(f: &'a T) -> GstRc<T> {
-        unsafe { GstRc::from_unowned_ptr(f.as_ptr()) }
-    }
-}
-
-impl<'a, T: MiniObject> From<&'a mut T> for GstRc<T> {
-    fn from(f: &'a mut T) -> GstRc<T> {
-        unsafe { GstRc::from_unowned_ptr(f.as_ptr()) }
-    }
-}
