@@ -8,22 +8,23 @@
 
 use std::{fmt, ops, borrow};
 use std::mem;
+use std::marker::PhantomData;
 
 use glib;
 use gst;
 
 #[derive(Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GstRc<T: 'static + MiniObject> {
-    obj: &'static T,
-}
+pub struct GstRc<T: MiniObject>(*mut T, PhantomData<T>);
 
 impl<T: MiniObject> GstRc<T> {
-    unsafe fn new(obj: &'static T, owned: bool) -> Self {
+    unsafe fn new(obj: *const T, owned: bool) -> Self {
+        assert!(!obj.is_null());
+
         if !owned {
-            gst::gst_mini_object_ref(obj.as_ptr() as *mut gst::GstMiniObject);
+            gst::gst_mini_object_ref((&*obj).as_ptr() as *mut gst::GstMiniObject);
         }
 
-        GstRc { obj: obj }
+        GstRc(obj as *mut T, PhantomData)
     }
 
     pub unsafe fn from_owned_ptr(ptr: *const T::PtrType) -> Self {
@@ -36,24 +37,22 @@ impl<T: MiniObject> GstRc<T> {
 
     pub fn make_mut(&mut self) -> &mut T {
         unsafe {
-            let ptr = self.obj.as_ptr();
-
             if self.is_writable() {
-                return &mut *(self.obj as *const T as *mut T);
+                return &mut *self.0;
             }
 
-            self.obj = T::from_ptr(gst::gst_mini_object_make_writable(ptr as
-                                                                      *mut gst::GstMiniObject) as
-                                   *const T::PtrType);
+            self.0 = T::from_mut_ptr(gst::gst_mini_object_make_writable(self.as_mut_ptr() as
+                                                                        *mut gst::GstMiniObject) as
+                                     *mut T::PtrType);
             assert!(self.is_writable());
 
-            &mut *(self.obj as *const T as *mut T)
+            &mut *self.0
         }
     }
 
     pub fn get_mut(&mut self) -> Option<&mut T> {
         if self.is_writable() {
-            Some(unsafe { &mut *(self.obj as *const T as *mut T) })
+            Some(unsafe { &mut *self.0 })
         } else {
             None
         }
@@ -61,7 +60,7 @@ impl<T: MiniObject> GstRc<T> {
 
     pub fn copy(&self) -> Self {
         unsafe {
-            GstRc::from_owned_ptr(gst::gst_mini_object_copy(self.obj.as_ptr() as
+            GstRc::from_owned_ptr(gst::gst_mini_object_copy(self.as_ptr() as
                                                             *const gst::GstMiniObject) as
                                   *const T::PtrType)
         }
@@ -73,8 +72,8 @@ impl<T: MiniObject> GstRc<T> {
          } == glib::GTRUE)
     }
 
-    pub unsafe fn into_ptr(self) -> *const T::PtrType {
-        let ptr = self.obj.as_ptr();
+    pub unsafe fn into_ptr(self) -> *mut T::PtrType {
+        let ptr = self.as_mut_ptr();
         mem::forget(self);
 
         ptr
@@ -84,19 +83,19 @@ impl<T: MiniObject> GstRc<T> {
 impl<T: MiniObject> ops::Deref for GstRc<T> {
     type Target = T;
     fn deref(&self) -> &T {
-        self.obj
+        self.as_ref()
     }
 }
 
 impl<T: MiniObject> AsRef<T> for GstRc<T> {
     fn as_ref(&self) -> &T {
-        self.obj
+        unsafe { &*self.0 }
     }
 }
 
 impl<T: MiniObject> borrow::Borrow<T> for GstRc<T> {
     fn borrow(&self) -> &T {
-        self.obj
+        self.as_ref()
     }
 }
 
@@ -111,14 +110,14 @@ impl<T: MiniObject> borrow::Borrow<T> for GstRc<T> {
 
 impl<T: MiniObject> Clone for GstRc<T> {
     fn clone(&self) -> GstRc<T> {
-        unsafe { GstRc::from_unowned_ptr(self.obj.as_ptr()) }
+        unsafe { GstRc::from_unowned_ptr(self.as_ptr()) }
     }
 }
 
 impl<T: MiniObject> Drop for GstRc<T> {
     fn drop(&mut self) {
         unsafe {
-            gst::gst_mini_object_unref(self.obj.as_ptr() as *mut gst::GstMiniObject);
+            gst::gst_mini_object_unref(self.as_ptr() as *mut gst::GstMiniObject);
         }
     }
 }
@@ -128,7 +127,7 @@ unsafe impl<T: MiniObject + Send> Send for GstRc<T> {}
 
 impl<T: MiniObject + fmt::Display> fmt::Display for GstRc<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.obj.fmt(f)
+        (unsafe { &*self.0 }).fmt(f)
     }
 }
 
@@ -155,4 +154,3 @@ pub unsafe trait MiniObject
         &mut *(ptr as *mut Self)
     }
 }
-

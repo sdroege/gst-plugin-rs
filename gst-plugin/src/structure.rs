@@ -12,21 +12,22 @@ use std::mem;
 use std::ffi::{CStr, CString};
 use std::ops::{Deref, DerefMut};
 use std::borrow::{Borrow, ToOwned, BorrowMut};
+use std::marker::PhantomData;
 
 use value::*;
 
 use glib;
 use gst;
 
-pub struct OwnedStructure(&'static mut Structure);
+pub struct OwnedStructure(*mut Structure, PhantomData<Structure>);
 
 impl OwnedStructure {
     pub fn new_empty(name: &str) -> OwnedStructure {
         let name_cstr = CString::new(name).unwrap();
         OwnedStructure(unsafe {
-                           &mut *(gst::gst_structure_new_empty(name_cstr.as_ptr()) as
-                                  *mut Structure)
-                       })
+                           gst::gst_structure_new_empty(name_cstr.as_ptr()) as *mut Structure
+                       },
+                       PhantomData)
     }
 
     pub fn new(name: &str, values: &[(&str, Value)]) -> OwnedStructure {
@@ -46,13 +47,13 @@ impl OwnedStructure {
             if structure.is_null() {
                 None
             } else {
-                Some(OwnedStructure(&mut *(structure as *mut Structure)))
+                Some(OwnedStructure(structure as *mut Structure, PhantomData))
             }
         }
     }
 
-    pub unsafe fn into_ptr(self) -> *const gst::GstStructure {
-        let ptr = self.0 as *const Structure as *const gst::GstStructure;
+    pub unsafe fn into_ptr(self) -> *mut gst::GstStructure {
+        let ptr = self.0 as *mut Structure as *mut gst::GstStructure;
         mem::forget(self);
 
         ptr
@@ -63,13 +64,13 @@ impl Deref for OwnedStructure {
     type Target = Structure;
 
     fn deref(&self) -> &Structure {
-        self.0
+        unsafe { &*self.0 }
     }
 }
 
 impl DerefMut for OwnedStructure {
     fn deref_mut(&mut self) -> &mut Structure {
-        self.0
+        unsafe { &mut *self.0 }
     }
 }
 
@@ -87,13 +88,14 @@ impl AsMut<Structure> for OwnedStructure {
 
 impl Clone for OwnedStructure {
     fn clone(&self) -> Self {
-        OwnedStructure(unsafe { &mut *(gst::gst_structure_copy(&(self.0).0) as *mut Structure) })
+        OwnedStructure(unsafe { gst::gst_structure_copy(&(*self.0).0) as *mut Structure },
+                       PhantomData)
     }
 }
 
 impl Drop for OwnedStructure {
     fn drop(&mut self) {
-        unsafe { gst::gst_structure_free(&mut (self.0).0) }
+        unsafe { gst::gst_structure_free(&mut (*self.0).0) }
     }
 }
 
@@ -119,13 +121,13 @@ impl Eq for OwnedStructure {}
 
 impl Borrow<Structure> for OwnedStructure {
     fn borrow(&self) -> &Structure {
-        self.0
+        unsafe { &*self.0 }
     }
 }
 
 impl BorrowMut<Structure> for OwnedStructure {
     fn borrow_mut(&mut self) -> &mut Structure {
-        self.0
+        unsafe { &mut *self.0 }
     }
 }
 
@@ -133,7 +135,8 @@ impl ToOwned for Structure {
     type Owned = OwnedStructure;
 
     fn to_owned(&self) -> OwnedStructure {
-        OwnedStructure(unsafe { &mut *(gst::gst_structure_copy(&self.0) as *mut Structure) })
+        OwnedStructure(unsafe { gst::gst_structure_copy(&self.0) as *mut Structure },
+                       PhantomData)
     }
 }
 
