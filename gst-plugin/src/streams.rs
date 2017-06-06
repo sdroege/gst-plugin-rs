@@ -20,21 +20,21 @@ pub struct StreamCollection(*mut gst::GstStreamCollection);
 
 bitflags! {
     #[repr(C)]
-    pub flags StreamType: u32 {
-        const TYPE_UNKNOWN   = 0b00000001,
-        const TYPE_AUDIO     = 0b00000010,
-        const TYPE_VIDEO     = 0b00000100,
-        const TYPE_CONTAINER = 0b00001000,
-        const TYPE_TEXT      = 0b00010000,
+    pub struct StreamType: u32 {
+        const TYPE_UNKNOWN   = 0b00000001;
+        const TYPE_AUDIO     = 0b00000010;
+        const TYPE_VIDEO     = 0b00000100;
+        const TYPE_CONTAINER = 0b00001000;
+        const TYPE_TEXT      = 0b00010000;
     }
 }
 
 bitflags! {
     #[repr(C)]
-    pub flags StreamFlags: u32 {
-        const FLAG_SPARSE   = 0b00000001,
-        const FLAG_SELECT   = 0b00000010,
-        const FLAG_UNSELECT = 0b00000100,
+    pub struct StreamFlags: u32 {
+        const FLAG_SPARSE   = 0b00000001;
+        const FLAG_SELECT   = 0b00000010;
+        const FLAG_UNSELECT = 0b00000100;
     }
 }
 

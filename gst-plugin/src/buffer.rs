@@ -453,19 +453,19 @@ unsafe impl Send for ReadWriteMappedBuffer {}
 // FIXME: Duplicate of gst::GstBufferFlags with nicer naming
 bitflags! {
     #[repr(C)]
-    pub flags BufferFlags: u32 {
-        const BUFFER_FLAG_LIVE         = 0b0000000000010000,
-        const BUFFER_FLAG_DECODE_ONLY  = 0b0000000000100000,
-        const BUFFER_FLAG_DISCONT      = 0b0000000001000000,
-        const BUFFER_FLAG_RESYNC       = 0b0000000010000000,
-        const BUFFER_FLAG_CORRUPTED    = 0b0000000100000000,
-        const BUFFER_FLAG_MARKER       = 0b0000001000000000,
-        const BUFFER_FLAG_HEADER       = 0b0000010000000000,
-        const BUFFER_FLAG_GAP          = 0b0000100000000000,
-        const BUFFER_FLAG_DROPPABLE    = 0b0001000000000000,
-        const BUFFER_FLAG_DELTA_UNIT   = 0b0010000000000000,
-        const BUFFER_FLAG_TAG_MEMORY   = 0b0100000000000000,
-        const BUFFER_FLAG_SYNC_AFTER   = 0b1000000000000000,
+    pub struct BufferFlags: u32 {
+        const BUFFER_FLAG_LIVE         = 0b0000000000010000;
+        const BUFFER_FLAG_DECODE_ONLY  = 0b0000000000100000;
+        const BUFFER_FLAG_DISCONT      = 0b0000000001000000;
+        const BUFFER_FLAG_RESYNC       = 0b0000000010000000;
+        const BUFFER_FLAG_CORRUPTED    = 0b0000000100000000;
+        const BUFFER_FLAG_MARKER       = 0b0000001000000000;
+        const BUFFER_FLAG_HEADER       = 0b0000010000000000;
+        const BUFFER_FLAG_GAP          = 0b0000100000000000;
+        const BUFFER_FLAG_DROPPABLE    = 0b0001000000000000;
+        const BUFFER_FLAG_DELTA_UNIT   = 0b0010000000000000;
+        const BUFFER_FLAG_TAG_MEMORY   = 0b0100000000000000;
+        const BUFFER_FLAG_SYNC_AFTER   = 0b1000000000000000;
     }
 }
 
