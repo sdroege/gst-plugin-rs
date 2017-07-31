@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::{fmt, ops, borrow};
+use std::{borrow, fmt, ops};
 use std::mem;
 use std::marker::PhantomData;
 
@@ -41,9 +41,10 @@ impl<T: MiniObject> GstRc<T> {
                 return &mut *self.0;
             }
 
-            self.0 = T::from_mut_ptr(gst::gst_mini_object_make_writable(self.as_mut_ptr() as
-                                                                        *mut gst::GstMiniObject) as
-                                     *mut T::PtrType);
+            self.0 = T::from_mut_ptr(
+                gst::gst_mini_object_make_writable(self.as_mut_ptr() as *mut gst::GstMiniObject) as
+                    *mut T::PtrType,
+            );
             assert!(self.is_writable());
 
             &mut *self.0
@@ -60,16 +61,16 @@ impl<T: MiniObject> GstRc<T> {
 
     pub fn copy(&self) -> Self {
         unsafe {
-            GstRc::from_owned_ptr(gst::gst_mini_object_copy(self.as_ptr() as
-                                                            *const gst::GstMiniObject) as
-                                  *const T::PtrType)
+            GstRc::from_owned_ptr(
+                gst::gst_mini_object_copy(self.as_ptr() as *const gst::GstMiniObject) as
+                    *const T::PtrType,
+            )
         }
     }
 
     fn is_writable(&self) -> bool {
-        (unsafe {
-             gst::gst_mini_object_is_writable(self.as_ptr() as *const gst::GstMiniObject)
-         } == glib::GTRUE)
+        (unsafe { gst::gst_mini_object_is_writable(self.as_ptr() as *const gst::GstMiniObject) } ==
+            glib::GTRUE)
     }
 
     pub unsafe fn into_ptr(self) -> *mut T::PtrType {
@@ -132,7 +133,8 @@ impl<T: MiniObject + fmt::Display> fmt::Display for GstRc<T> {
 }
 
 pub unsafe trait MiniObject
-    where Self: Sized
+where
+    Self: Sized,
 {
     type PtrType;
 

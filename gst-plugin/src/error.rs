@@ -81,13 +81,14 @@ pub struct ErrorMessage {
 }
 
 impl ErrorMessage {
-    pub fn new<T: ToGError>(error: &T,
-                            message: Option<Cow<str>>,
-                            debug: Option<Cow<str>>,
-                            filename: &'static str,
-                            function: &'static str,
-                            line: u32)
-                            -> ErrorMessage {
+    pub fn new<T: ToGError>(
+        error: &T,
+        message: Option<Cow<str>>,
+        debug: Option<Cow<str>>,
+        filename: &'static str,
+        function: &'static str,
+        line: u32,
+    ) -> ErrorMessage {
         let (gdomain, gcode) = error.to_gerror();
 
         ErrorMessage {
@@ -125,15 +126,17 @@ impl ErrorMessage {
         let function_cstr = CString::new(function.as_bytes()).unwrap();
         let function_ptr = function_cstr.as_ptr();
 
-        gst::gst_element_message_full(element,
-                                      gst::GST_MESSAGE_ERROR,
-                                      error_domain,
-                                      error_code,
-                                      glib::g_strndup(message_ptr, message_len),
-                                      glib::g_strndup(debug_ptr, debug_len),
-                                      file_ptr,
-                                      function_ptr,
-                                      line as i32);
+        gst::gst_element_message_full(
+            element,
+            gst::GST_MESSAGE_ERROR,
+            error_domain,
+            error_code,
+            glib::g_strndup(message_ptr, message_len),
+            glib::g_strndup(debug_ptr, debug_len),
+            file_ptr,
+            function_ptr,
+            line as i32,
+        );
     }
 }
 
@@ -160,18 +163,18 @@ impl Display for FlowError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match *self {
             FlowError::Flushing | FlowError::Eos => f.write_str(self.description()),
-            FlowError::NotNegotiated(ref m) => {
-                f.write_fmt(format_args!("{}: {} ({})",
-                                         self.description(),
-                                         m.message.as_ref().map_or("None", |s| s.as_str()),
-                                         m.debug.as_ref().map_or("None", |s| s.as_str())))
-            }
-            FlowError::Error(ref m) => {
-                f.write_fmt(format_args!("{}: {} ({})",
-                                         self.description(),
-                                         m.message.as_ref().map_or("None", |s| s.as_str()),
-                                         m.debug.as_ref().map_or("None", |s| s.as_str())))
-            }
+            FlowError::NotNegotiated(ref m) => f.write_fmt(format_args!(
+                "{}: {} ({})",
+                self.description(),
+                m.message.as_ref().map_or("None", |s| s.as_str()),
+                m.debug.as_ref().map_or("None", |s| s.as_str())
+            )),
+            FlowError::Error(ref m) => f.write_fmt(format_args!(
+                "{}: {} ({})",
+                self.description(),
+                m.message.as_ref().map_or("None", |s| s.as_str()),
+                m.debug.as_ref().map_or("None", |s| s.as_str())
+            )),
         }
     }
 }
@@ -220,15 +223,19 @@ impl UriError {
     pub unsafe fn into_gerror(self, err: *mut *mut glib::GError) {
         if let Some(msg) = self.message {
             let cmsg = CString::new(msg.as_str()).unwrap();
-            glib::g_set_error_literal(err,
-                                      gst::gst_uri_error_quark(),
-                                      self.error_kind as i32,
-                                      cmsg.as_ptr());
+            glib::g_set_error_literal(
+                err,
+                gst::gst_uri_error_quark(),
+                self.error_kind as i32,
+                cmsg.as_ptr(),
+            );
         } else {
-            glib::g_set_error_literal(err,
-                                      gst::gst_uri_error_quark(),
-                                      self.error_kind as i32,
-                                      ptr::null());
+            glib::g_set_error_literal(
+                err,
+                gst::gst_uri_error_quark(),
+                self.error_kind as i32,
+                ptr::null(),
+            );
         }
     }
 }

@@ -50,11 +50,13 @@ impl Adapter {
         let size = buffer.get_size();
 
         self.size += size;
-        trace!(LOGGER,
-               "Storing {:?} of size {}, now have size {}",
-               buffer,
-               size,
-               self.size);
+        trace!(
+            LOGGER,
+            "Storing {:?} of size {}, now have size {}",
+            buffer,
+            size,
+            self.size
+        );
         self.deque
             .push_back(Buffer::into_read_mapped_buffer(buffer).unwrap());
     }
@@ -82,11 +84,13 @@ impl Adapter {
             let data_item = item.as_slice();
 
             let to_copy = cmp::min(left, data_item.len() - skip);
-            trace!(LOGGER,
-                   "Copying {} bytes from {:?}, {} more to go",
-                   to_copy,
-                   item,
-                   left - to_copy);
+            trace!(
+                LOGGER,
+                "Copying {} bytes from {:?}, {} more to go",
+                to_copy,
+                item,
+                left - to_copy
+            );
 
             data[idx..idx + to_copy].copy_from_slice(&data_item[skip..skip + to_copy]);
             skip = 0;
@@ -103,10 +107,12 @@ impl Adapter {
         let size = data.len();
 
         if self.size < size {
-            debug!(LOGGER,
-                   "Peeking {} bytes into, not enough data: have {}",
-                   size,
-                   self.size);
+            debug!(
+                LOGGER,
+                "Peeking {} bytes into, not enough data: have {}",
+                size,
+                self.size
+            );
             return Err(AdapterError::NotEnoughData);
         }
 
@@ -121,10 +127,12 @@ impl Adapter {
 
     pub fn peek(&mut self, size: usize) -> Result<&[u8], AdapterError> {
         if self.size < size {
-            debug!(LOGGER,
-                   "Peeking {} bytes, not enough data: have {}",
-                   size,
-                   self.size);
+            debug!(
+                LOGGER,
+                "Peeking {} bytes, not enough data: have {}",
+                size,
+                self.size
+            );
             return Err(AdapterError::NotEnoughData);
         }
 
@@ -153,10 +161,12 @@ impl Adapter {
 
     pub fn get_buffer(&mut self, size: usize) -> Result<GstRc<Buffer>, AdapterError> {
         if self.size < size {
-            debug!(LOGGER,
-                   "Get buffer of {} bytes, not enough data: have {}",
-                   size,
-                   self.size);
+            debug!(
+                LOGGER,
+                "Get buffer of {} bytes, not enough data: have {}",
+                size,
+                self.size
+            );
             return Err(AdapterError::NotEnoughData);
         }
 
@@ -164,18 +174,18 @@ impl Adapter {
             return Ok(Buffer::new());
         }
 
-        let sub = self.deque
-            .front()
-            .and_then(|front| if front.get_size() - self.skip >= size {
-                          trace!(LOGGER, "Get buffer of {} bytes, subbuffer of first", size);
-                          let new = front
-                              .get_buffer()
-                              .copy_region(self.skip, Some(size))
-                              .unwrap();
-                          Some(new)
-                      } else {
-                          None
-                      });
+        let sub = self.deque.front().and_then(
+            |front| if front.get_size() - self.skip >= size {
+                trace!(LOGGER, "Get buffer of {} bytes, subbuffer of first", size);
+                let new = front
+                    .get_buffer()
+                    .copy_region(self.skip, Some(size))
+                    .unwrap();
+                Some(new)
+            } else {
+                None
+            },
+        );
 
         if let Some(s) = sub {
             self.flush(size).unwrap();
@@ -195,10 +205,12 @@ impl Adapter {
 
     pub fn flush(&mut self, size: usize) -> Result<(), AdapterError> {
         if self.size < size {
-            debug!(LOGGER,
-                   "Flush {} bytes, not enough data: have {}",
-                   size,
-                   self.size);
+            debug!(
+                LOGGER,
+                "Flush {} bytes, not enough data: have {}",
+                size,
+                self.size
+            );
             return Err(AdapterError::NotEnoughData);
         }
 
@@ -213,19 +225,23 @@ impl Adapter {
             let front_size = self.deque.front().unwrap().get_size() - self.skip;
 
             if front_size <= left {
-                trace!(LOGGER,
-                       "Flushing whole {:?}, {} more to go",
-                       self.deque.front(),
-                       left - front_size);
+                trace!(
+                    LOGGER,
+                    "Flushing whole {:?}, {} more to go",
+                    self.deque.front(),
+                    left - front_size
+                );
                 self.deque.pop_front();
                 self.size -= front_size;
                 self.skip = 0;
                 left -= front_size;
             } else {
-                trace!(LOGGER,
-                       "Flushing partial {:?}, {} more left",
-                       self.deque.front(),
-                       front_size - left);
+                trace!(
+                    LOGGER,
+                    "Flushing partial {:?}, {} more left",
+                    self.deque.front(),
+                    front_size - left
+                );
                 self.skip += left;
                 self.size -= left;
                 left = 0;

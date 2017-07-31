@@ -10,8 +10,8 @@ use std::u64;
 use std::io::Read;
 use url::Url;
 use reqwest::{Client, Response};
-use reqwest::header::{ContentLength, ContentRange, ContentRangeSpec, Range, ByteRangeSpec,
-                      AcceptRanges, RangeUnit};
+use reqwest::header::{AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, ContentRangeSpec,
+                      Range, RangeUnit};
 
 use gst_plugin::error::*;
 use gst_plugin::source::*;
@@ -46,11 +46,10 @@ impl HttpSrc {
     pub fn new(element: Element) -> HttpSrc {
         HttpSrc {
             streaming_state: StreamingState::Stopped,
-            logger: Logger::root(GstDebugDrain::new(Some(&element),
-                                                    "rshttpsink",
-                                                    0,
-                                                    "Rust http sink"),
-                                 o!()),
+            logger: Logger::root(
+                GstDebugDrain::new(Some(&element), "rshttpsink", 0, "Rust http sink"),
+                o!(),
+            ),
             client: Client::new().unwrap(),
         }
     }
@@ -59,11 +58,12 @@ impl HttpSrc {
         Box::new(HttpSrc::new(element))
     }
 
-    fn do_request(&self,
-                  uri: Url,
-                  start: u64,
-                  stop: Option<u64>)
-                  -> Result<StreamingState, ErrorMessage> {
+    fn do_request(
+        &self,
+        uri: Url,
+        start: u64,
+        stop: Option<u64>,
+    ) -> Result<StreamingState, ErrorMessage> {
         let mut req = self.client.get(uri.clone()).unwrap();
 
         match (start != 0, stop) {
@@ -78,18 +78,20 @@ impl HttpSrc {
 
         debug!(self.logger, "Doing new request {:?}", req);
 
-        let response =
-            try!(req.send()
-                     .or_else(|err| {
-                                  error!(self.logger, "Request failed: {:?}", err);
-                                  Err(error_msg!(SourceError::ReadFailed,
-                                                 ["Failed to fetch {}: {}", uri, err.to_string()]))
-                              }));
+        let response = try!(req.send().or_else(|err| {
+            error!(self.logger, "Request failed: {:?}", err);
+            Err(error_msg!(
+                SourceError::ReadFailed,
+                ["Failed to fetch {}: {}", uri, err.to_string()]
+            ))
+        }));
 
         if !response.status().is_success() {
             error!(self.logger, "Request status failed: {:?}", response);
-            return Err(error_msg!(SourceError::ReadFailed,
-                                  ["Failed to fetch {}: {}", uri, response.status()]));
+            return Err(error_msg!(
+                SourceError::ReadFailed,
+                ["Failed to fetch {}: {}", uri, response.status()]
+            ));
         }
 
         let size = response
@@ -97,8 +99,7 @@ impl HttpSrc {
             .get()
             .map(|&ContentLength(cl)| cl + start);
 
-        let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) =
-            response.headers().get() {
+        let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = response.headers().get() {
             ranges.iter().any(|u| *u == RangeUnit::Bytes)
         } else {
             false
@@ -106,37 +107,45 @@ impl HttpSrc {
 
         let seekable = size.is_some() && accept_byte_ranges;
 
-        let position = if let Some(&ContentRange(ContentRangeSpec::Bytes {
-                                                     range: Some((range_start, _)), ..
-                                                 })) = response.headers().get() {
+        let position = if let Some(
+            &ContentRange(ContentRangeSpec::Bytes {
+                range: Some((range_start, _)),
+                ..
+            }),
+        ) = response.headers().get()
+        {
             range_start
         } else {
             start
         };
 
         if position != start {
-            return Err(error_msg!(SourceError::SeekFailed,
-                                  ["Failed to seek to {}: Got {}", start, position]));
+            return Err(error_msg!(
+                SourceError::SeekFailed,
+                ["Failed to seek to {}: Got {}", start, position]
+            ));
         }
 
         debug!(self.logger, "Request successful: {:?}", response);
 
         Ok(StreamingState::Started {
-               uri: uri,
-               response: response,
-               seekable: seekable,
-               position: 0,
-               size: size,
-               start: start,
-               stop: stop,
-           })
+            uri: uri,
+            response: response,
+            seekable: seekable,
+            position: 0,
+            size: size,
+            start: start,
+            stop: stop,
+        })
     }
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
     if uri.scheme() != "http" && uri.scheme() != "https" {
-        return Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                                 Some(format!("Unsupported URI '{}'", uri.as_str()))));
+        return Err(UriError::new(
+            UriErrorKind::UnsupportedProtocol,
+            Some(format!("Unsupported URI '{}'", uri.as_str())),
+        ));
     }
 
     Ok(())
@@ -207,37 +216,38 @@ impl Source for HttpSrc {
                 ..
             } => (response, position),
             StreamingState::Stopped => {
-                return Err(FlowError::Error(error_msg!(SourceError::Failure, ["Not started yet"])));
+                return Err(FlowError::Error(
+                    error_msg!(SourceError::Failure, ["Not started yet"]),
+                ));
             }
         };
 
         if *position != offset {
-            return Err(FlowError::Error(error_msg!(SourceError::SeekFailed,
-                                                   ["Got unexpected offset {}, expected {}",
-                                                    offset,
-                                                    position])));
+            return Err(FlowError::Error(error_msg!(
+                SourceError::SeekFailed,
+                ["Got unexpected offset {}, expected {}", offset, position]
+            )));
         }
 
         let size = {
             let mut map = match buffer.map_readwrite() {
                 None => {
-                    return Err(FlowError::Error(error_msg!(SourceError::Failure,
-                                                           ["Failed to map buffer"])));
+                    return Err(FlowError::Error(
+                        error_msg!(SourceError::Failure, ["Failed to map buffer"]),
+                    ));
                 }
                 Some(map) => map,
             };
 
             let data = map.as_mut_slice();
 
-            try!(response
-                     .read(data)
-                     .or_else(|err| {
-                                  error!(logger, "Failed to read: {:?}", err);
-                                  Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
-                                                                  ["Failed to read at {}: {}",
-                                                                   offset,
-                                                                   err.to_string()])))
-                              }))
+            try!(response.read(data).or_else(|err| {
+                error!(logger, "Failed to read: {:?}", err);
+                Err(FlowError::Error(error_msg!(
+                    SourceError::ReadFailed,
+                    ["Failed to read at {}: {}", offset, err.to_string()]
+                )))
+            }))
         };
 
         if size == 0 {

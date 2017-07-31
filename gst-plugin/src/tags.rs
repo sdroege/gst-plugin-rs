@@ -81,17 +81,20 @@ impl TagList {
     }
 
     pub fn add<'a, T: Tag<'a>>(&mut self, value: T::TagType, mode: MergeMode)
-        where T::TagType: Into<Value>
+    where
+        T::TagType: Into<Value>,
     {
         unsafe {
             let v = value.into();
             let mut gvalue = v.into_raw();
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            gst::gst_tag_list_add_value(self.as_mut_ptr(),
-                                        mode.to_ffi(),
-                                        tag_name.as_ptr(),
-                                        &gvalue);
+            gst::gst_tag_list_add_value(
+                self.as_mut_ptr(),
+                mode.to_ffi(),
+                tag_name.as_ptr(),
+                &gvalue,
+            );
 
             gobject::g_value_unset(&mut gvalue);
         }
@@ -252,8 +255,10 @@ mod tests {
             tags.add::<Title>("some title".into(), MergeMode::Append);
             tags.add::<Duration>((1000u64 * 1000 * 1000 * 120).into(), MergeMode::Append);
         }
-        assert_eq!(tags.to_string(),
-                   "taglist, title=(string)\"some\\ title\", duration=(guint64)120000000000;");
+        assert_eq!(
+            tags.to_string(),
+            "taglist, title=(string)\"some\\ title\", duration=(guint64)120000000000;"
+        );
     }
 
     #[test]
@@ -269,10 +274,14 @@ mod tests {
         }
 
         assert_eq!(tags.get::<Title>().unwrap().get(), "some title");
-        assert_eq!(tags.get::<Duration>().unwrap().get(),
-                   (1000u64 * 1000 * 1000 * 120));
+        assert_eq!(
+            tags.get::<Duration>().unwrap().get(),
+            (1000u64 * 1000 * 1000 * 120)
+        );
         assert_eq!(tags.get_index::<Title>(0).unwrap().get(), "some title");
-        assert_eq!(tags.get_index::<Duration>(0).unwrap().get(),
-                   (1000u64 * 1000 * 1000 * 120));
+        assert_eq!(
+            tags.get_index::<Duration>(0).unwrap().get(),
+            (1000u64 * 1000 * 1000 * 120)
+        );
     }
 }

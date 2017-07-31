@@ -37,11 +37,10 @@ impl FileSink {
     pub fn new(element: Element) -> FileSink {
         FileSink {
             streaming_state: StreamingState::Stopped,
-            logger: Logger::root(GstDebugDrain::new(Some(&element),
-                                                    "rsfilesink",
-                                                    0,
-                                                    "Rust file sink"),
-                                 o!()),
+            logger: Logger::root(
+                GstDebugDrain::new(Some(&element), "rsfilesink", 0, "Rust file sink"),
+                o!(),
+            ),
         }
     }
 
@@ -51,12 +50,12 @@ impl FileSink {
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
-    let _ = try!(uri.to_file_path()
-                     .or_else(|_| {
-                                  Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                                                    Some(format!("Unsupported file URI '{}'",
-                                                                 uri.as_str()))))
-                              }));
+    let _ = try!(uri.to_file_path().or_else(|_| {
+        Err(UriError::new(
+            UriErrorKind::UnsupportedProtocol,
+            Some(format!("Unsupported file URI '{}'", uri.as_str())),
+        ))
+    }));
     Ok(())
 }
 
@@ -70,23 +69,29 @@ impl Sink for FileSink {
             return Err(error_msg!(SinkError::Failure, ["Sink already started"]));
         }
 
-        let location =
-            try!(uri.to_file_path()
-                     .or_else(|_| {
-                                  error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
-                                  Err(error_msg!(SinkError::Failure,
-                                                 ["Unsupported file URI '{}'", uri.as_str()]))
-                              }));
+        let location = try!(uri.to_file_path().or_else(|_| {
+            error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
+            Err(error_msg!(
+                SinkError::Failure,
+                ["Unsupported file URI '{}'", uri.as_str()]
+            ))
+        }));
 
 
         let file = try!(File::create(location.as_path()).or_else(|err| {
-            error!(self.logger,
-                   "Could not open file for writing: {}",
-                   err.to_string());
-            Err(error_msg!(SinkError::OpenFailed,
-                           ["Could not open file for writing '{}': {}",
-                            location.to_str().unwrap_or("Non-UTF8 path"),
-                            err.to_string()]))
+            error!(
+                self.logger,
+                "Could not open file for writing: {}",
+                err.to_string()
+            );
+            Err(error_msg!(
+                SinkError::OpenFailed,
+                [
+                    "Could not open file for writing '{}': {}",
+                    location.to_str().unwrap_or("Non-UTF8 path"),
+                    err.to_string()
+                ]
+            ))
         }));
 
         debug!(self.logger, "Opened file {:?}", file);
@@ -117,25 +122,29 @@ impl Sink for FileSink {
                 ref mut position,
             } => (file, position),
             StreamingState::Stopped => {
-                return Err(FlowError::Error(error_msg!(SinkError::Failure, ["Not started yet"])));
+                return Err(FlowError::Error(
+                    error_msg!(SinkError::Failure, ["Not started yet"]),
+                ));
             }
         };
 
         let map = match buffer.map_read() {
             None => {
-                return Err(FlowError::Error(error_msg!(SinkError::Failure,
-                                                       ["Failed to map buffer"])));
+                return Err(FlowError::Error(
+                    error_msg!(SinkError::Failure, ["Failed to map buffer"]),
+                ));
             }
             Some(map) => map,
         };
         let data = map.as_slice();
 
-        try!(file.write_all(data)
-                 .or_else(|err| {
-                              error!(logger, "Failed to write: {}", err);
-                              Err(FlowError::Error(error_msg!(SinkError::WriteFailed,
-                                                              ["Failed to write: {}", err])))
-                          }));
+        try!(file.write_all(data).or_else(|err| {
+            error!(logger, "Failed to write: {}", err);
+            Err(FlowError::Error(error_msg!(
+                SinkError::WriteFailed,
+                ["Failed to write: {}", err]
+            )))
+        }));
 
         *position += data.len() as u64;
 

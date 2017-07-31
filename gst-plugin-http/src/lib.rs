@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_type="cdylib"]
+#![crate_type = "cdylib"]
 
 extern crate url;
 #[macro_use]
@@ -23,28 +23,32 @@ mod httpsrc;
 use httpsrc::HttpSrc;
 
 fn plugin_init(plugin: &Plugin) -> bool {
-    source_register(plugin,
-                    SourceInfo {
-                        name: "rshttpsrc".into(),
-                        long_name: "HTTP/HTTPS Source".into(),
-                        description: "Reads HTTP/HTTPS streams".into(),
-                        classification: "Source/File".into(),
-                        author: "Sebastian Dröge <sebastian@centricular.com>".into(),
-                        rank: 256 + 100,
-                        create_instance: HttpSrc::new_boxed,
-                        protocols: vec!["http".into(), "https".into()],
-                        push_only: true,
-                    });
+    source_register(
+        plugin,
+        SourceInfo {
+            name: "rshttpsrc".into(),
+            long_name: "HTTP/HTTPS Source".into(),
+            description: "Reads HTTP/HTTPS streams".into(),
+            classification: "Source/File".into(),
+            author: "Sebastian Dröge <sebastian@centricular.com>".into(),
+            rank: 256 + 100,
+            create_instance: HttpSrc::new_boxed,
+            protocols: vec!["http".into(), "https".into()],
+            push_only: true,
+        },
+    );
 
     true
 }
 
-plugin_define!(b"rshttp\0",
-               b"Rust HTTP Plugin\0",
-               plugin_init,
-               b"1.0\0",
-               b"MIT/X11\0",
-               b"rshttp\0",
-               b"rshttp\0",
-               b"https://github.com/sdroege/rsplugin\0",
-               b"2016-12-08\0");
+plugin_define!(
+    b"rshttp\0",
+    b"Rust HTTP Plugin\0",
+    plugin_init,
+    b"1.0\0",
+    b"MIT/X11\0",
+    b"rshttp\0",
+    b"rshttp\0",
+    b"https://github.com/sdroege/rsplugin\0",
+    b"2016-12-08\0"
+);

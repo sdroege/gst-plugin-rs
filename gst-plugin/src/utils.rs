@@ -78,8 +78,9 @@ pub fn f64_to_fraction(val: f64) -> Option<Rational32> {
 
         // Prevent overflow
         if a != 0 &&
-           (n1 > (i32::MAX as u32) / a || d1 > (i32::MAX as u32) / a ||
-            a * n1 > (i32::MAX as u32) - n0 || a * d1 > (i32::MAX as u32) - d0) {
+            (n1 > (i32::MAX as u32) / a || d1 > (i32::MAX as u32) / a ||
+                a * n1 > (i32::MAX as u32) - n0 || a * d1 > (i32::MAX as u32) - d0)
+        {
             break;
         }
 
@@ -156,8 +157,10 @@ mod tests {
     fn test_f64_to_fraction() {
         assert_eq!(f64_to_fraction(2.0), Some(Rational32::new(2, 1)));
         assert_eq!(f64_to_fraction(2.5), Some(Rational32::new(5, 2)));
-        assert_eq!(f64_to_fraction(0.127659574),
-                   Some(Rational32::new(29013539, 227272723)));
+        assert_eq!(
+            f64_to_fraction(0.127659574),
+            Some(Rational32::new(29013539, 227272723))
+        );
         assert_eq!(f64_to_fraction(29.97), Some(Rational32::new(2997, 100)));
     }
 }

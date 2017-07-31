@@ -88,7 +88,9 @@ impl Caps {
                 return None;
             }
 
-            Some(Structure::from_borrowed_ptr(structure as *const gst::GstStructure))
+            Some(Structure::from_borrowed_ptr(
+                structure as *const gst::GstStructure,
+            ))
         }
     }
 
@@ -99,7 +101,9 @@ impl Caps {
                 return None;
             }
 
-            Some(Structure::from_borrowed_mut_ptr(structure as *mut gst::GstStructure))
+            Some(Structure::from_borrowed_mut_ptr(
+                structure as *mut gst::GstStructure,
+            ))
         }
     }
 
@@ -146,24 +150,35 @@ mod tests {
     fn test_simple() {
         init();
 
-        let caps = Caps::new_simple("foo/bar",
-                                    &[("int", 12.into()),
-                                      ("bool", true.into()),
-                                      ("string", "bla".into()),
-                                      ("fraction", (1, 2).into()),
-                                      ("array", vec![1.into(), 2.into()].into())]);
-        assert_eq!(caps.to_string(),
-                   "foo/bar, int=(int)12, bool=(boolean)true, string=(string)bla, \
-                    fraction=(fraction)1/2, array=(int)< 1, 2 >");
+        let caps = Caps::new_simple(
+            "foo/bar",
+            &[
+                ("int", 12.into()),
+                ("bool", true.into()),
+                ("string", "bla".into()),
+                ("fraction", (1, 2).into()),
+                ("array", vec![1.into(), 2.into()].into()),
+            ],
+        );
+        assert_eq!(
+            caps.to_string(),
+            "foo/bar, int=(int)12, bool=(boolean)true, string=(string)bla, \
+             fraction=(fraction)1/2, array=(int)< 1, 2 >"
+        );
 
         let s = caps.get_structure(0).unwrap();
-        assert_eq!(s,
-                   OwnedStructure::new("foo/bar",
-                                       &[("int", 12.into()),
-                                         ("bool", true.into()),
-                                         ("string", "bla".into()),
-                                         ("fraction", (1, 2).into()),
-                                         ("array", vec![1.into(), 2.into()].into())])
-                           .as_ref());
+        assert_eq!(
+            s,
+            OwnedStructure::new(
+                "foo/bar",
+                &[
+                    ("int", 12.into()),
+                    ("bool", true.into()),
+                    ("string", "bla".into()),
+                    ("fraction", (1, 2).into()),
+                    ("array", vec![1.into(), 2.into()].into())
+                ]
+            ).as_ref()
+        );
     }
 }

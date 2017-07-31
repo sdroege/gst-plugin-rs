@@ -24,7 +24,7 @@ pub struct Buffer(gst::GstBuffer);
 #[derivative(Debug)]
 pub struct ReadBufferMap<'a> {
     buffer: &'a Buffer,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     map_info: gst::GstMapInfo,
 }
 
@@ -32,7 +32,7 @@ pub struct ReadBufferMap<'a> {
 #[derivative(Debug)]
 pub struct ReadWriteBufferMap<'a> {
     buffer: &'a Buffer,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     map_info: gst::GstMapInfo,
 }
 
@@ -40,7 +40,7 @@ pub struct ReadWriteBufferMap<'a> {
 #[derivative(Debug)]
 pub struct ReadMappedBuffer {
     buffer: GstRc<Buffer>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     map_info: gst::GstMapInfo,
 }
 
@@ -48,7 +48,7 @@ pub struct ReadMappedBuffer {
 #[derivative(Debug)]
 pub struct ReadWriteMappedBuffer {
     buffer: GstRc<Buffer>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     map_info: gst::GstMapInfo,
 }
 
@@ -82,13 +82,15 @@ impl Buffer {
             let size = vec.len();
             let data = vec.as_mut_ptr();
             let user_data = Box::into_raw(vec);
-            gst::gst_buffer_new_wrapped_full(gst::GstMemoryFlags::empty(),
-                                             data as glib::gpointer,
-                                             maxsize,
-                                             0,
-                                             size,
-                                             user_data as glib::gpointer,
-                                             Some(Buffer::vec_drop))
+            gst::gst_buffer_new_wrapped_full(
+                gst::GstMemoryFlags::empty(),
+                data as glib::gpointer,
+                maxsize,
+                0,
+                size,
+                user_data as glib::gpointer,
+                Some(Buffer::vec_drop),
+            )
         };
 
         if raw.is_null() {
@@ -101,15 +103,17 @@ impl Buffer {
     pub fn map_read(&self) -> Option<ReadBufferMap> {
         let mut map_info: gst::GstMapInfo = unsafe { mem::zeroed() };
         let res = unsafe {
-            gst::gst_buffer_map(self.as_mut_ptr() as *mut gst::GstBuffer,
-                                &mut map_info,
-                                gst::GST_MAP_READ)
+            gst::gst_buffer_map(
+                self.as_mut_ptr() as *mut gst::GstBuffer,
+                &mut map_info,
+                gst::GST_MAP_READ,
+            )
         };
         if res == glib::GTRUE {
             Some(ReadBufferMap {
-                     buffer: self,
-                     map_info: map_info,
-                 })
+                buffer: self,
+                map_info: map_info,
+            })
         } else {
             None
         }
@@ -122,9 +126,9 @@ impl Buffer {
         };
         if res == glib::GTRUE {
             Some(ReadWriteBufferMap {
-                     buffer: self,
-                     map_info: map_info,
-                 })
+                buffer: self,
+                map_info: map_info,
+            })
         } else {
             None
         }
@@ -136,9 +140,9 @@ impl Buffer {
             unsafe { gst::gst_buffer_map(buffer.as_mut_ptr(), &mut map_info, gst::GST_MAP_READ) };
         if res == glib::GTRUE {
             Some(ReadMappedBuffer {
-                     buffer: buffer,
-                     map_info: map_info,
-                 })
+                buffer: buffer,
+                map_info: map_info,
+            })
         } else {
             None
         }
@@ -151,9 +155,9 @@ impl Buffer {
         };
         if res == glib::GTRUE {
             Some(ReadWriteMappedBuffer {
-                     buffer: buffer,
-                     map_info: map_info,
-                 })
+                buffer: buffer,
+                map_info: map_info,
+            })
         } else {
             None
         }
@@ -161,8 +165,10 @@ impl Buffer {
 
     pub fn append(buffer: GstRc<Buffer>, other: GstRc<Buffer>) -> GstRc<Buffer> {
         unsafe {
-            GstRc::from_owned_ptr(gst::gst_buffer_append(buffer.into_ptr() as *mut gst::GstBuffer,
-                                                         other.into_ptr() as *mut gst::GstBuffer))
+            GstRc::from_owned_ptr(gst::gst_buffer_append(
+                buffer.into_ptr() as *mut gst::GstBuffer,
+                other.into_ptr() as *mut gst::GstBuffer,
+            ))
         }
     }
 
@@ -170,10 +176,12 @@ impl Buffer {
         let size_real = size.unwrap_or(usize::MAX);
 
         let raw = unsafe {
-            gst::gst_buffer_copy_region(self.as_mut_ptr(),
-                                        gst::GST_BUFFER_COPY_ALL,
-                                        offset,
-                                        size_real)
+            gst::gst_buffer_copy_region(
+                self.as_mut_ptr(),
+                gst::GST_BUFFER_COPY_ALL,
+                offset,
+                size_real,
+            )
         };
 
         if raw.is_null() {
@@ -194,7 +202,11 @@ impl Buffer {
             gst::gst_buffer_fill(self.as_mut_ptr(), offset, src as glib::gconstpointer, size)
         };
 
-        if copied == size { Ok(()) } else { Err(copied) }
+        if copied == size {
+            Ok(())
+        } else {
+            Err(copied)
+        }
     }
 
     pub fn copy_to_slice(&self, offset: usize, slice: &mut [u8]) -> Result<(), usize> {
@@ -208,7 +220,11 @@ impl Buffer {
             gst::gst_buffer_extract(self.as_mut_ptr(), offset, dest as glib::gpointer, size)
         };
 
-        if copied == size { Ok(()) } else { Err(copied) }
+        if copied == size {
+            Ok(())
+        } else {
+            Err(copied)
+        }
     }
 
     pub fn get_size(&self) -> usize {
@@ -219,11 +235,13 @@ impl Buffer {
         let mut maxsize: usize = 0;
 
         unsafe {
-            gst::gst_buffer_get_sizes_range(self.as_mut_ptr(),
-                                            0,
-                                            -1,
-                                            ptr::null_mut(),
-                                            &mut maxsize as *mut usize);
+            gst::gst_buffer_get_sizes_range(
+                self.as_mut_ptr(),
+                0,
+                -1,
+                ptr::null_mut(),
+                &mut maxsize as *mut usize,
+            );
         };
 
         maxsize
@@ -270,7 +288,11 @@ impl Buffer {
     pub fn get_pts(&self) -> Option<u64> {
         let pts = self.0.pts;
 
-        if pts == u64::MAX { None } else { Some(pts) }
+        if pts == u64::MAX {
+            None
+        } else {
+            Some(pts)
+        }
     }
 
     pub fn set_pts(&mut self, pts: Option<u64>) {
@@ -281,7 +303,11 @@ impl Buffer {
     pub fn get_dts(&self) -> Option<u64> {
         let dts = self.0.dts;
 
-        if dts == u64::MAX { None } else { Some(dts) }
+        if dts == u64::MAX {
+            None
+        } else {
+            Some(dts)
+        }
     }
 
     pub fn set_dts(&mut self, dts: Option<u64>) {

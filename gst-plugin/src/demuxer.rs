@@ -57,16 +57,18 @@ pub enum HandleBufferResult {
 }
 
 pub trait Demuxer {
-    fn start(&mut self,
-             upstream_size: Option<u64>,
-             random_access: bool)
-             -> Result<(), ErrorMessage>;
+    fn start(
+        &mut self,
+        upstream_size: Option<u64>,
+        random_access: bool,
+    ) -> Result<(), ErrorMessage>;
     fn stop(&mut self) -> Result<(), ErrorMessage>;
 
     fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<SeekResult, ErrorMessage>;
-    fn handle_buffer(&mut self,
-                     buffer: Option<GstRc<Buffer>>)
-                     -> Result<HandleBufferResult, FlowError>;
+    fn handle_buffer(
+        &mut self,
+        buffer: Option<GstRc<Buffer>>,
+    ) -> Result<HandleBufferResult, FlowError>;
     fn end_of_stream(&mut self) -> Result<(), ErrorMessage>;
 
     fn is_seekable(&self) -> bool;
@@ -102,11 +104,15 @@ impl DemuxerWrapper {
     fn new(raw: *mut gst::GstElement, demuxer: Box<Demuxer>) -> DemuxerWrapper {
         DemuxerWrapper {
             raw: raw,
-            logger: Logger::root(GstDebugDrain::new(Some(unsafe { &Element::new(raw) }),
-                                                    "rsdemux",
-                                                    0,
-                                                    "Rust demuxer base class"),
-                                 o!()),
+            logger: Logger::root(
+                GstDebugDrain::new(
+                    Some(unsafe { &Element::new(raw) }),
+                    "rsdemux",
+                    0,
+                    "Rust demuxer base class",
+                ),
+                o!(),
+            ),
             demuxer: Mutex::new(demuxer),
             panicked: AtomicBool::new(false),
         }
@@ -115,10 +121,12 @@ impl DemuxerWrapper {
     fn start(&self, upstream_size: u64, random_access: bool) -> bool {
         let demuxer = &mut self.demuxer.lock().unwrap();
 
-        debug!(self.logger,
-               "Starting with upstream size {} and random access {}",
-               upstream_size,
-               random_access);
+        debug!(
+            self.logger,
+            "Starting with upstream size {} and random access {}",
+            upstream_size,
+            random_access
+        );
 
         let upstream_size = if upstream_size == u64::MAX {
             None
@@ -250,19 +258,24 @@ impl DemuxerWrapper {
     fn handle_buffer(&self, buffer: GstRc<Buffer>) -> gst::GstFlowReturn {
         extern "C" {
             fn gst_rs_demuxer_stream_eos(raw: *mut gst::GstElement, index: u32);
-            fn gst_rs_demuxer_add_stream(raw: *mut gst::GstElement,
-                                         index: u32,
-                                         caps: *const gst::GstCaps,
-                                         stream_id: *const c_char);
+            fn gst_rs_demuxer_add_stream(
+                raw: *mut gst::GstElement,
+                index: u32,
+                caps: *const gst::GstCaps,
+                stream_id: *const c_char,
+            );
             fn gst_rs_demuxer_added_all_streams(raw: *mut gst::GstElement);
             // fn gst_rs_demuxer_remove_all_streams(raw: *mut gst::GstElement);
-            fn gst_rs_demuxer_stream_format_changed(raw: *mut gst::GstElement,
-                                                    index: u32,
-                                                    caps: *const gst::GstCaps);
-            fn gst_rs_demuxer_stream_push_buffer(raw: *mut gst::GstElement,
-                                                 index: u32,
-                                                 buffer: *mut gst::GstBuffer)
-                                                 -> gst::GstFlowReturn;
+            fn gst_rs_demuxer_stream_format_changed(
+                raw: *mut gst::GstElement,
+                index: u32,
+                caps: *const gst::GstCaps,
+            );
+            fn gst_rs_demuxer_stream_push_buffer(
+                raw: *mut gst::GstElement,
+                index: u32,
+                buffer: *mut gst::GstBuffer,
+            ) -> gst::GstFlowReturn;
         };
 
         let mut res = {
@@ -275,8 +288,9 @@ impl DemuxerWrapper {
                 Err(flow_error) => {
                     error!(self.logger, "Failed handling buffer: {:?}", flow_error);
                     match flow_error {
-                        FlowError::NotNegotiated(ref msg) |
-                        FlowError::Error(ref msg) => self.post_message(msg),
+                        FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
+                            self.post_message(msg)
+                        }
                         _ => (),
                     }
                     return flow_error.to_native();
@@ -296,34 +310,40 @@ impl DemuxerWrapper {
                     let stream_id_cstr = CString::new(stream.stream_id.as_bytes()).unwrap();
 
                     unsafe {
-                        gst_rs_demuxer_add_stream(self.raw,
-                                                  stream.index,
-                                                  stream.caps.as_ptr(),
-                                                  stream_id_cstr.as_ptr());
+                        gst_rs_demuxer_add_stream(
+                            self.raw,
+                            stream.index,
+                            stream.caps.as_ptr(),
+                            stream_id_cstr.as_ptr(),
+                        );
                     }
                 }
                 HandleBufferResult::HaveAllStreams => unsafe {
                     gst_rs_demuxer_added_all_streams(self.raw);
                 },
                 HandleBufferResult::StreamChanged(stream) => unsafe {
-                    gst_rs_demuxer_stream_format_changed(self.raw,
-                                                         stream.index,
-                                                         stream.caps.as_ptr());
+                    gst_rs_demuxer_stream_format_changed(
+                        self.raw,
+                        stream.index,
+                        stream.caps.as_ptr(),
+                    );
                 },
-                HandleBufferResult::StreamsChanged(streams) => {
-                    for stream in streams {
-                        unsafe {
-                            gst_rs_demuxer_stream_format_changed(self.raw,
-                                                                 stream.index,
-                                                                 stream.caps.as_ptr());
-                        }
+                HandleBufferResult::StreamsChanged(streams) => for stream in streams {
+                    unsafe {
+                        gst_rs_demuxer_stream_format_changed(
+                            self.raw,
+                            stream.index,
+                            stream.caps.as_ptr(),
+                        );
                     }
-                }
+                },
                 HandleBufferResult::BufferForStream(index, buffer) => {
                     let flow_ret = unsafe {
-                        gst_rs_demuxer_stream_push_buffer(self.raw,
-                                                          index,
-                                                          buffer.into_ptr() as *mut gst::GstBuffer)
+                        gst_rs_demuxer_stream_push_buffer(
+                            self.raw,
+                            index,
+                            buffer.into_ptr() as *mut gst::GstBuffer,
+                        )
                     };
                     if flow_ret != gst::GST_FLOW_OK {
                         return flow_ret;
@@ -352,8 +372,9 @@ impl DemuxerWrapper {
                     Err(flow_error) => {
                         error!(self.logger, "Failed calling again: {:?}", flow_error);
                         match flow_error {
-                            FlowError::NotNegotiated(ref msg) |
-                            FlowError::Error(ref msg) => self.post_message(msg),
+                            FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
+                                self.post_message(msg)
+                            }
                             _ => (),
                         }
                         return flow_error.to_native();
@@ -384,9 +405,10 @@ impl DemuxerWrapper {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn demuxer_new(demuxer: *mut gst::GstElement,
-                                     create_instance: fn(Element) -> Box<Demuxer>)
-                                     -> *mut DemuxerWrapper {
+pub unsafe extern "C" fn demuxer_new(
+    demuxer: *mut gst::GstElement,
+    create_instance: fn(Element) -> Box<Demuxer>,
+) -> *mut DemuxerWrapper {
     let instance = create_instance(Element::new(demuxer));
     Box::into_raw(Box::new(DemuxerWrapper::new(demuxer, instance)))
 }
@@ -397,10 +419,11 @@ pub unsafe extern "C" fn demuxer_drop(ptr: *mut DemuxerWrapper) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn demuxer_start(ptr: *const DemuxerWrapper,
-                                       upstream_size: u64,
-                                       random_access: glib::gboolean)
-                                       -> glib::gboolean {
+pub unsafe extern "C" fn demuxer_start(
+    ptr: *const DemuxerWrapper,
+    upstream_size: u64,
+    random_access: glib::gboolean,
+) -> glib::gboolean {
     let wrap: &DemuxerWrapper = &*ptr;
 
     panic_to_error!(wrap, glib::GFALSE, {
@@ -439,9 +462,10 @@ pub unsafe extern "C" fn demuxer_is_seekable(ptr: *const DemuxerWrapper) -> glib
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn demuxer_get_position(ptr: *const DemuxerWrapper,
-                                              position: *mut u64)
-                                              -> glib::gboolean {
+pub unsafe extern "C" fn demuxer_get_position(
+    ptr: *const DemuxerWrapper,
+    position: *mut u64,
+) -> glib::gboolean {
     let wrap: &DemuxerWrapper = &*ptr;
 
     panic_to_error!(wrap, glib::GFALSE, {
@@ -451,9 +475,10 @@ pub unsafe extern "C" fn demuxer_get_position(ptr: *const DemuxerWrapper,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn demuxer_get_duration(ptr: *const DemuxerWrapper,
-                                              duration: *mut u64)
-                                              -> glib::gboolean {
+pub unsafe extern "C" fn demuxer_get_duration(
+    ptr: *const DemuxerWrapper,
+    duration: *mut u64,
+) -> glib::gboolean {
     let wrap: &DemuxerWrapper = &*ptr;
 
     panic_to_error!(wrap, glib::GFALSE, {
@@ -463,11 +488,12 @@ pub unsafe extern "C" fn demuxer_get_duration(ptr: *const DemuxerWrapper,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn demuxer_seek(ptr: *mut DemuxerWrapper,
-                                      start: u64,
-                                      stop: u64,
-                                      offset: *mut u64)
-                                      -> glib::gboolean {
+pub unsafe extern "C" fn demuxer_seek(
+    ptr: *mut DemuxerWrapper,
+    start: u64,
+    stop: u64,
+    offset: *mut u64,
+) -> glib::gboolean {
 
     let wrap: &mut DemuxerWrapper = &mut *ptr;
 
@@ -483,9 +509,10 @@ pub unsafe extern "C" fn demuxer_seek(ptr: *mut DemuxerWrapper,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn demuxer_handle_buffer(ptr: *mut DemuxerWrapper,
-                                               buffer: *mut gst::GstBuffer)
-                                               -> gst::GstFlowReturn {
+pub unsafe extern "C" fn demuxer_handle_buffer(
+    ptr: *mut DemuxerWrapper,
+    buffer: *mut gst::GstBuffer,
+) -> gst::GstFlowReturn {
     let wrap: &mut DemuxerWrapper = &mut *ptr;
 
     panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
@@ -517,17 +544,18 @@ pub struct DemuxerInfo<'a> {
 
 pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
     extern "C" {
-        fn gst_rs_demuxer_register(plugin: *const gst::GstPlugin,
-                                   name: *const c_char,
-                                   long_name: *const c_char,
-                                   description: *const c_char,
-                                   classification: *const c_char,
-                                   author: *const c_char,
-                                   rank: i32,
-                                   create_instance: *const c_void,
-                                   input_caps: *const gst::GstCaps,
-                                   output_caps: *const gst::GstCaps)
-                                   -> glib::gboolean;
+        fn gst_rs_demuxer_register(
+            plugin: *const gst::GstPlugin,
+            name: *const c_char,
+            long_name: *const c_char,
+            description: *const c_char,
+            classification: *const c_char,
+            author: *const c_char,
+            rank: i32,
+            create_instance: *const c_void,
+            input_caps: *const gst::GstCaps,
+            output_caps: *const gst::GstCaps,
+        ) -> glib::gboolean;
     }
 
     let cname = CString::new(demuxer_info.name).unwrap();
@@ -537,15 +565,17 @@ pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
     let cauthor = CString::new(demuxer_info.author).unwrap();
 
     unsafe {
-        gst_rs_demuxer_register(plugin.as_ptr(),
-                                cname.as_ptr(),
-                                clong_name.as_ptr(),
-                                cdescription.as_ptr(),
-                                cclassification.as_ptr(),
-                                cauthor.as_ptr(),
-                                demuxer_info.rank,
-                                demuxer_info.create_instance as *const c_void,
-                                demuxer_info.input_caps.as_ptr(),
-                                demuxer_info.output_caps.as_ptr());
+        gst_rs_demuxer_register(
+            plugin.as_ptr(),
+            cname.as_ptr(),
+            clong_name.as_ptr(),
+            cdescription.as_ptr(),
+            cclassification.as_ptr(),
+            cauthor.as_ptr(),
+            demuxer_info.rank,
+            demuxer_info.create_instance as *const c_void,
+            demuxer_info.input_caps.as_ptr(),
+            demuxer_info.output_caps.as_ptr(),
+        );
     }
 }

@@ -46,7 +46,8 @@ impl<'a> ValueView<'a> {
 }
 
 pub trait ValueType<'a>
-    where Self: Sized
+where
+    Self: Sized,
 {
     fn g_type() -> glib::GType;
 
@@ -138,13 +139,12 @@ impl Value {
             typ if typ == *TYPE_FRACTION => {
                 ValueView::Fraction(Rational32::from_value(&self.0).unwrap())
             }
-            gobject::G_TYPE_STRING => {
-                ValueView::String(Cow::Borrowed(<&str as ValueType>::from_value(&self.0).unwrap()))
-            }
-            typ if typ == *TYPE_GST_VALUE_ARRAY => {
-                ValueView::Array(Cow::Borrowed(<&[Value] as ValueType>::from_value(&self.0)
-                                                   .unwrap()))
-            }
+            gobject::G_TYPE_STRING => ValueView::String(Cow::Borrowed(
+                <&str as ValueType>::from_value(&self.0).unwrap(),
+            )),
+            typ if typ == *TYPE_GST_VALUE_ARRAY => ValueView::Array(Cow::Borrowed(
+                <&[Value] as ValueType>::from_value(&self.0).unwrap(),
+            )),
             typ if typ == *TYPE_BUFFER => {
                 ValueView::Buffer(<GstRc<Buffer> as ValueType>::from_value(&self.0).unwrap())
             }
@@ -228,13 +228,12 @@ impl<'a> ValueRef<'a> {
             typ if typ == *TYPE_FRACTION => {
                 ValueView::Fraction(Rational32::from_value(self.0).unwrap())
             }
-            gobject::G_TYPE_STRING => {
-                ValueView::String(Cow::Borrowed(<&str as ValueType>::from_value(self.0).unwrap()))
-            }
-            typ if typ == *TYPE_GST_VALUE_ARRAY => {
-                ValueView::Array(Cow::Borrowed(<&[Value] as ValueType>::from_value(self.0)
-                                                   .unwrap()))
-            }
+            gobject::G_TYPE_STRING => ValueView::String(Cow::Borrowed(
+                <&str as ValueType>::from_value(self.0).unwrap(),
+            )),
+            typ if typ == *TYPE_GST_VALUE_ARRAY => ValueView::Array(Cow::Borrowed(
+                <&[Value] as ValueType>::from_value(self.0).unwrap(),
+            )),
             typ if typ == *TYPE_BUFFER => {
                 ValueView::Buffer(<GstRc<Buffer> as ValueType>::from_value(self.0).unwrap())
             }
@@ -335,16 +334,20 @@ impl_value_type_simple!(u64,
                         gobject::G_TYPE_UINT64,
                         |value: &gobject::GValue| gobject::g_value_get_uint64(value),
                         |value: &mut gobject::GValue, v| gobject::g_value_set_uint64(value, v));
-impl_value_type_simple!(Rational32,
-                        Fraction,
-                        *TYPE_FRACTION,
-                        |value: &gobject::GValue| {
-                            Rational32::new(gst::gst_value_get_fraction_numerator(value),
-                                            gst::gst_value_get_fraction_denominator(value))
-                        },
-                        |value: &mut gobject::GValue, v: Rational32| {
-                            gst::gst_value_set_fraction(value, *v.numer(), *v.denom())
-                        });
+impl_value_type_simple!(
+    Rational32,
+    Fraction,
+    *TYPE_FRACTION,
+    |value: &gobject::GValue| {
+        Rational32::new(
+            gst::gst_value_get_fraction_numerator(value),
+            gst::gst_value_get_fraction_denominator(value),
+        )
+    },
+    |value: &mut gobject::GValue, v: Rational32| {
+        gst::gst_value_set_fraction(value, *v.numer(), *v.denom())
+    }
+);
 
 impl<'a> ValueType<'a> for &'a str {
     fn g_type() -> glib::GType {
@@ -469,7 +472,10 @@ impl<'a> ValueType<'a> for &'a [Value] {
                 Some(&[])
             } else {
                 let arr = &*arr;
-                Some(slice::from_raw_parts(arr.data as *const Value, arr.len as usize))
+                Some(slice::from_raw_parts(
+                    arr.data as *const Value,
+                    arr.len as usize,
+                ))
             }
         }
     }
@@ -491,20 +497,19 @@ impl<'a> From<Cow<'a, [Value]>> for Value {
             gobject::g_value_init(&mut value.0, <&[Value] as ValueType>::g_type());
 
             match v {
-                Cow::Borrowed(array) => {
-                    for e in array {
-                        gst::gst_value_array_append_value(&mut value.0,
-                                                          e.as_ptr() as *mut gobject::GValue);
-                    }
-                }
-                Cow::Owned(array) => {
-                    for e in array {
-                        gst::gst_value_array_append_and_take_value(&mut value.0,
-                                                                   e.as_ptr() as
-                                                                   *mut gobject::GValue);
-                        mem::forget(e);
-                    }
-                }
+                Cow::Borrowed(array) => for e in array {
+                    gst::gst_value_array_append_value(
+                        &mut value.0,
+                        e.as_ptr() as *mut gobject::GValue,
+                    );
+                },
+                Cow::Owned(array) => for e in array {
+                    gst::gst_value_array_append_and_take_value(
+                        &mut value.0,
+                        e.as_ptr() as *mut gobject::GValue,
+                    );
+                    mem::forget(e);
+                },
             }
 
             value
@@ -555,7 +560,8 @@ pub struct TypedValue<T> {
 }
 
 impl<'a, T> TypedValue<T>
-    where T: ValueType<'a>
+where
+    T: ValueType<'a>,
 {
     pub fn new<VT: Into<TypedValue<T>>>(v: VT) -> TypedValue<T> {
         v.into()
@@ -567,9 +573,9 @@ impl<'a, T> TypedValue<T>
         }
 
         Some(TypedValue {
-                 value: value,
-                 phantom: PhantomData,
-             })
+            value: value,
+            phantom: PhantomData,
+        })
     }
 
     pub fn from_typed_value_ref(v: &'a TypedValueRef<'a, T>) -> TypedValue<T> {
@@ -611,7 +617,8 @@ impl<'a, T> TypedValue<T>
 }
 
 impl<'a, T> From<T> for TypedValue<T>
-    where T: ValueType<'a> + Into<Value>
+where
+    T: ValueType<'a> + Into<Value>,
 {
     fn from(v: T) -> Self {
         TypedValue::from_value(Value::new(v)).unwrap()
@@ -667,7 +674,8 @@ pub struct TypedValueRef<'a, T> {
 }
 
 impl<'a, T> TypedValueRef<'a, T>
-    where T: ValueType<'a>
+where
+    T: ValueType<'a>,
 {
     pub fn from_typed_value(v: &'a TypedValue<T>) -> TypedValueRef<'a, T> {
         TypedValueRef {
@@ -682,9 +690,9 @@ impl<'a, T> TypedValueRef<'a, T>
         }
 
         Some(TypedValueRef {
-                 value: value,
-                 phantom: PhantomData,
-             })
+            value: value,
+            phantom: PhantomData,
+        })
     }
 
     pub fn get(&'a self) -> T {

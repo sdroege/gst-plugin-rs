@@ -11,7 +11,7 @@ use std::ptr;
 use std::mem;
 use std::ffi::{CStr, CString};
 use std::ops::{Deref, DerefMut};
-use std::borrow::{Borrow, ToOwned, BorrowMut};
+use std::borrow::{Borrow, BorrowMut, ToOwned};
 use std::marker::PhantomData;
 
 use value::*;
@@ -24,10 +24,10 @@ pub struct OwnedStructure(*mut Structure, PhantomData<Structure>);
 impl OwnedStructure {
     pub fn new_empty(name: &str) -> OwnedStructure {
         let name_cstr = CString::new(name).unwrap();
-        OwnedStructure(unsafe {
-                           gst::gst_structure_new_empty(name_cstr.as_ptr()) as *mut Structure
-                       },
-                       PhantomData)
+        OwnedStructure(
+            unsafe { gst::gst_structure_new_empty(name_cstr.as_ptr()) as *mut Structure },
+            PhantomData,
+        )
     }
 
     pub fn new(name: &str, values: &[(&str, Value)]) -> OwnedStructure {
@@ -88,8 +88,10 @@ impl AsMut<Structure> for OwnedStructure {
 
 impl Clone for OwnedStructure {
     fn clone(&self) -> Self {
-        OwnedStructure(unsafe { gst::gst_structure_copy(&(*self.0).0) as *mut Structure },
-                       PhantomData)
+        OwnedStructure(
+            unsafe { gst::gst_structure_copy(&(*self.0).0) as *mut Structure },
+            PhantomData,
+        )
     }
 }
 
@@ -135,8 +137,10 @@ impl ToOwned for Structure {
     type Owned = OwnedStructure;
 
     fn to_owned(&self) -> OwnedStructure {
-        OwnedStructure(unsafe { gst::gst_structure_copy(&self.0) as *mut Structure },
-                       PhantomData)
+        OwnedStructure(
+            unsafe { gst::gst_structure_copy(&self.0) as *mut Structure },
+            PhantomData,
+        )
     }
 }
 
@@ -167,8 +171,7 @@ impl Structure {
     }
 
     pub fn get<'a, T: ValueType<'a>>(&'a self, name: &str) -> Option<TypedValueRef<'a, T>> {
-        self.get_value(name)
-            .and_then(TypedValueRef::from_value_ref)
+        self.get_value(name).and_then(TypedValueRef::from_value_ref)
     }
 
     pub fn get_value<'a>(&'a self, name: &str) -> Option<ValueRef<'a>> {
@@ -331,7 +334,9 @@ pub struct Iter<'a> {
 
 impl<'a> Iter<'a> {
     pub fn new(structure: &'a Structure) -> Iter<'a> {
-        Iter { iter: FieldIterator::new(structure) }
+        Iter {
+            iter: FieldIterator::new(structure),
+        }
     }
 }
 
@@ -385,17 +390,25 @@ mod tests {
         assert_eq!(s.get::<&str>("f2").unwrap().get(), "bcd");
         assert_eq!(s.get::<i32>("f3").unwrap().get(), 123i32);
         assert_eq!(s.fields().collect::<Vec<_>>(), vec!["f1", "f2", "f3"]);
-        assert_eq!(s.iter()
-                       .map(|(f, v)| (f, Value::from_value_ref(&v)))
-                       .collect::<Vec<_>>(),
-                   vec![("f1", Value::new("abc")),
-                        ("f2", Value::new("bcd")),
-                        ("f3", Value::new(123i32))]);
+        assert_eq!(
+            s.iter()
+                .map(|(f, v)| (f, Value::from_value_ref(&v)))
+                .collect::<Vec<_>>(),
+            vec![
+                ("f1", Value::new("abc")),
+                ("f2", Value::new("bcd")),
+                ("f3", Value::new(123i32)),
+            ]
+        );
 
-        let s2 = OwnedStructure::new("test",
-                                     &[("f1", "abc".into()),
-                                       ("f2", "bcd".into()),
-                                       ("f3", 123i32.into())]);
+        let s2 = OwnedStructure::new(
+            "test",
+            &[
+                ("f1", "abc".into()),
+                ("f2", "bcd".into()),
+                ("f3", 123i32.into()),
+            ],
+        );
         assert_eq!(s, s2);
     }
 }

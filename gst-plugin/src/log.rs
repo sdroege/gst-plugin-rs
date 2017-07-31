@@ -8,7 +8,7 @@
 
 use libc::c_char;
 use std::ffi::CString;
-use slog::{Drain, Record, OwnedKVList, Never, Level};
+use slog::{Drain, Level, Never, OwnedKVList, Record};
 use std::fmt;
 use std::ptr;
 use std::mem;
@@ -24,16 +24,18 @@ pub struct GstDebugDrain {
 }
 
 impl GstDebugDrain {
-    pub fn new(element: Option<&Element>,
-               name: &str,
-               color: u32,
-               description: &str)
-               -> GstDebugDrain {
+    pub fn new(
+        element: Option<&Element>,
+        name: &str,
+        color: u32,
+        description: &str,
+    ) -> GstDebugDrain {
         extern "C" {
-            fn _gst_debug_category_new(name: *const c_char,
-                                       color: u32,
-                                       description: *const c_char)
-                                       -> *mut gst::GstDebugCategory;
+            fn _gst_debug_category_new(
+                name: *const c_char,
+                color: u32,
+                description: *const c_char,
+            ) -> *mut gst::GstDebugCategory;
         }
 
         let name_cstr = CString::new(name.as_bytes()).unwrap();
@@ -99,16 +101,19 @@ impl Drain for GstDebugDrain {
         let message_cstr = CString::new(fmt::format(*record.msg()).as_bytes()).unwrap();
 
         unsafe {
-            let element = gobject::g_weak_ref_get(&*self.element as *const gobject::GWeakRef as
-                                                  *mut gobject::GWeakRef);
+            let element = gobject::g_weak_ref_get(
+                &*self.element as *const gobject::GWeakRef as *mut gobject::GWeakRef,
+            );
 
-            gst::gst_debug_log(self.category,
-                               level,
-                               file_cstr.as_ptr(),
-                               function_cstr.as_ptr(),
-                               record.line() as i32,
-                               element as *mut gobject::GObject,
-                               message_cstr.as_ptr());
+            gst::gst_debug_log(
+                self.category,
+                level,
+                file_cstr.as_ptr(),
+                function_cstr.as_ptr(),
+                record.line() as i32,
+                element as *mut gobject::GObject,
+                message_cstr.as_ptr(),
+            );
 
             if !element.is_null() {
                 gst::gst_object_unref(element as *mut gst::GstObject);

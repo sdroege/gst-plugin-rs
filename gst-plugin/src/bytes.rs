@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian, BigEndian};
+pub use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io;
 
 pub trait ReadBytesExtShort: io::Read {
@@ -72,7 +72,11 @@ pub trait ReadBytesExtShort: io::Read {
     }
 }
 
-impl<T> ReadBytesExtShort for T where T: ReadBytesExt {}
+impl<T> ReadBytesExtShort for T
+where
+    T: ReadBytesExt,
+{
+}
 
 pub trait WriteBytesExtShort: WriteBytesExt {
     fn write_u16le(&mut self, n: u16) -> io::Result<()> {
@@ -137,4 +141,8 @@ pub trait WriteBytesExtShort: WriteBytesExt {
     }
 }
 
-impl<T> WriteBytesExtShort for T where T: WriteBytesExt {}
+impl<T> WriteBytesExtShort for T
+where
+    T: WriteBytesExt,
+{
+}

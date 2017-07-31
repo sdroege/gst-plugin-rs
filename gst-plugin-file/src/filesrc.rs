@@ -35,11 +35,10 @@ impl FileSrc {
     pub fn new(element: Element) -> FileSrc {
         FileSrc {
             streaming_state: StreamingState::Stopped,
-            logger: Logger::root(GstDebugDrain::new(Some(&element),
-                                                    "rsfilesrc",
-                                                    0,
-                                                    "Rust file source"),
-                                 o!()),
+            logger: Logger::root(
+                GstDebugDrain::new(Some(&element), "rsfilesrc", 0, "Rust file source"),
+                o!(),
+            ),
         }
     }
 
@@ -49,12 +48,12 @@ impl FileSrc {
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
-    let _ = try!(uri.to_file_path()
-                     .or_else(|_| {
-                                  Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                                                    Some(format!("Unsupported file URI '{}'",
-                                                                 uri.as_str()))))
-                              }));
+    let _ = try!(uri.to_file_path().or_else(|_| {
+        Err(UriError::new(
+            UriErrorKind::UnsupportedProtocol,
+            Some(format!("Unsupported file URI '{}'", uri.as_str())),
+        ))
+    }));
     Ok(())
 }
 
@@ -80,22 +79,28 @@ impl Source for FileSrc {
             return Err(error_msg!(SourceError::Failure, ["Source already started"]));
         }
 
-        let location =
-            try!(uri.to_file_path()
-                     .or_else(|_| {
-                                  error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
-                                  Err(error_msg!(SourceError::Failure,
-                                                 ["Unsupported file URI '{}'", uri.as_str()]))
-                              }));
+        let location = try!(uri.to_file_path().or_else(|_| {
+            error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
+            Err(error_msg!(
+                SourceError::Failure,
+                ["Unsupported file URI '{}'", uri.as_str()]
+            ))
+        }));
 
         let file = try!(File::open(location.as_path()).or_else(|err| {
-            error!(self.logger,
-                   "Could not open file for reading: {}",
-                   err.to_string());
-            Err(error_msg!(SourceError::OpenFailed,
-                           ["Could not open file for reading '{}': {}",
-                            location.to_str().unwrap_or("Non-UTF8 path"),
-                            err.to_string()]))
+            error!(
+                self.logger,
+                "Could not open file for reading: {}",
+                err.to_string()
+            );
+            Err(error_msg!(
+                SourceError::OpenFailed,
+                [
+                    "Could not open file for reading '{}': {}",
+                    location.to_str().unwrap_or("Non-UTF8 path"),
+                    err.to_string()
+                ]
+            ))
         }));
 
         debug!(self.logger, "Opened file {:?}", file);
@@ -124,41 +129,42 @@ impl Source for FileSrc {
                 ref mut position,
             } => (file, position),
             StreamingState::Stopped => {
-                return Err(FlowError::Error(error_msg!(SourceError::Failure, ["Not started yet"])));
+                return Err(FlowError::Error(
+                    error_msg!(SourceError::Failure, ["Not started yet"]),
+                ));
             }
         };
 
         if *position != offset {
-            try!(file.seek(SeekFrom::Start(offset))
-                     .or_else(|err| {
-                                  error!(logger, "Failed to seek to {}: {:?}", offset, err);
-                                  Err(FlowError::Error(error_msg!(SourceError::SeekFailed,
-                                                                  ["Failed to seek to {}: {}",
-                                                                   offset,
-                                                                   err.to_string()])))
-                              }));
+            try!(file.seek(SeekFrom::Start(offset)).or_else(|err| {
+                error!(logger, "Failed to seek to {}: {:?}", offset, err);
+                Err(FlowError::Error(error_msg!(
+                    SourceError::SeekFailed,
+                    ["Failed to seek to {}: {}", offset, err.to_string()]
+                )))
+            }));
             *position = offset;
         }
 
         let size = {
             let mut map = match buffer.map_readwrite() {
                 None => {
-                    return Err(FlowError::Error(error_msg!(SourceError::Failure,
-                                                           ["Failed to map buffer"])));
+                    return Err(FlowError::Error(
+                        error_msg!(SourceError::Failure, ["Failed to map buffer"]),
+                    ));
                 }
                 Some(map) => map,
             };
 
             let data = map.as_mut_slice();
 
-            try!(file.read(data)
-                     .or_else(|err| {
-                                  error!(logger, "Failed to read: {:?}", err);
-                                  Err(FlowError::Error(error_msg!(SourceError::ReadFailed,
-                                                                  ["Failed to read at {}: {}",
-                                                                   offset,
-                                                                   err.to_string()])))
-                              }))
+            try!(file.read(data).or_else(|err| {
+                error!(logger, "Failed to read: {:?}", err);
+                Err(FlowError::Error(error_msg!(
+                    SourceError::ReadFailed,
+                    ["Failed to read at {}: {}", offset, err.to_string()]
+                )))
+            }))
         };
 
         *position += size as u64;

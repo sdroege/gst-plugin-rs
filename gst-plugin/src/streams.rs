@@ -39,21 +39,24 @@ bitflags! {
 }
 
 impl Stream {
-    pub fn new(stream_id: &str,
-               caps: Option<GstRc<Caps>>,
-               t: StreamType,
-               flags: StreamFlags)
-               -> Self {
+    pub fn new(
+        stream_id: &str,
+        caps: Option<GstRc<Caps>>,
+        t: StreamType,
+        flags: StreamFlags,
+    ) -> Self {
         let stream_id_cstr = CString::new(stream_id).unwrap();
         let caps = caps.map(|caps| unsafe { caps.as_mut_ptr() })
             .unwrap_or(ptr::null_mut());
 
         Stream(unsafe {
-                   gst::gst_stream_new(stream_id_cstr.as_ptr(),
-                                       caps,
-                                       mem::transmute(t.bits()),
-                                       mem::transmute(flags.bits()))
-               })
+            gst::gst_stream_new(
+                stream_id_cstr.as_ptr(),
+                caps,
+                mem::transmute(t.bits()),
+                mem::transmute(flags.bits()),
+            )
+        })
     }
 
     pub unsafe fn as_ptr(&self) -> *const gst::GstStream {
@@ -118,7 +121,10 @@ impl Stream {
 
 impl Clone for Stream {
     fn clone(&self) -> Self {
-        unsafe { Stream(gst::gst_object_ref(self.0 as *mut gst::GstObject) as *mut gst::GstStream) }
+        unsafe {
+            Stream(gst::gst_object_ref(self.0 as *mut gst::GstObject) as
+                *mut gst::GstStream)
+        }
     }
 }
 
@@ -131,8 +137,9 @@ impl Drop for Stream {
 impl StreamCollection {
     pub fn new(upstream_id: &str, streams: &[Stream]) -> Self {
         let upstream_id_cstr = CString::new(upstream_id).unwrap();
-        let collection =
-            StreamCollection(unsafe { gst::gst_stream_collection_new(upstream_id_cstr.as_ptr()) });
+        let collection = StreamCollection(unsafe {
+            gst::gst_stream_collection_new(upstream_id_cstr.as_ptr())
+        });
 
         for stream in streams {
             unsafe { gst::gst_stream_collection_add_stream(collection.0, stream.clone().0) };
@@ -196,8 +203,9 @@ impl<'a> Iterator for StreamCollectionIterator<'a> {
         self.position += 1;
 
         Some(unsafe {
-                 Stream(gst::gst_object_ref(stream as *mut gst::GstObject) as *mut gst::GstStream)
-             })
+            Stream(gst::gst_object_ref(stream as *mut gst::GstObject) as
+                *mut gst::GstStream)
+        })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -227,8 +235,9 @@ impl<'a> DoubleEndedIterator for StreamCollectionIterator<'a> {
         }
 
         Some(unsafe {
-                 Stream(gst::gst_object_ref(stream as *mut gst::GstObject) as *mut gst::GstStream)
-             })
+            Stream(gst::gst_object_ref(stream as *mut gst::GstObject) as
+                *mut gst::GstStream)
+        })
     }
 }
 
@@ -238,7 +247,7 @@ impl Clone for StreamCollection {
     fn clone(&self) -> Self {
         unsafe {
             StreamCollection(gst::gst_object_ref(self.0 as *mut gst::GstObject) as
-                             *mut gst::GstStreamCollection)
+                *mut gst::GstStreamCollection)
         }
     }
 }
