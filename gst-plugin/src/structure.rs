@@ -16,8 +16,8 @@ use std::marker::PhantomData;
 
 use value::*;
 
-use glib;
-use gst;
+use glib_ffi;
+use gst_ffi;
 
 pub struct OwnedStructure(*mut Structure, PhantomData<Structure>);
 
@@ -25,7 +25,7 @@ impl OwnedStructure {
     pub fn new_empty(name: &str) -> OwnedStructure {
         let name_cstr = CString::new(name).unwrap();
         OwnedStructure(
-            unsafe { gst::gst_structure_new_empty(name_cstr.as_ptr()) as *mut Structure },
+            unsafe { gst_ffi::gst_structure_new_empty(name_cstr.as_ptr()) as *mut Structure },
             PhantomData,
         )
     }
@@ -43,7 +43,7 @@ impl OwnedStructure {
     pub fn from_string(s: &str) -> Option<OwnedStructure> {
         unsafe {
             let cstr = CString::new(s).unwrap();
-            let structure = gst::gst_structure_from_string(cstr.as_ptr(), ptr::null_mut());
+            let structure = gst_ffi::gst_structure_from_string(cstr.as_ptr(), ptr::null_mut());
             if structure.is_null() {
                 None
             } else {
@@ -52,8 +52,8 @@ impl OwnedStructure {
         }
     }
 
-    pub unsafe fn into_ptr(self) -> *mut gst::GstStructure {
-        let ptr = self.0 as *mut Structure as *mut gst::GstStructure;
+    pub unsafe fn into_ptr(self) -> *mut gst_ffi::GstStructure {
+        let ptr = self.0 as *mut Structure as *mut gst_ffi::GstStructure;
         mem::forget(self);
 
         ptr
@@ -89,7 +89,7 @@ impl AsMut<Structure> for OwnedStructure {
 impl Clone for OwnedStructure {
     fn clone(&self) -> Self {
         OwnedStructure(
-            unsafe { gst::gst_structure_copy(&(*self.0).0) as *mut Structure },
+            unsafe { gst_ffi::gst_structure_copy(&(*self.0).0) as *mut Structure },
             PhantomData,
         )
     }
@@ -97,7 +97,7 @@ impl Clone for OwnedStructure {
 
 impl Drop for OwnedStructure {
     fn drop(&mut self) {
-        unsafe { gst::gst_structure_free(&mut (*self.0).0) }
+        unsafe { gst_ffi::gst_structure_free(&mut (*self.0).0) }
     }
 }
 
@@ -138,23 +138,23 @@ impl ToOwned for Structure {
 
     fn to_owned(&self) -> OwnedStructure {
         OwnedStructure(
-            unsafe { gst::gst_structure_copy(&self.0) as *mut Structure },
+            unsafe { gst_ffi::gst_structure_copy(&self.0) as *mut Structure },
             PhantomData,
         )
     }
 }
 
 #[repr(C)]
-pub struct Structure(gst::GstStructure);
+pub struct Structure(gst_ffi::GstStructure);
 
 impl Structure {
-    pub unsafe fn from_borrowed_ptr<'a>(ptr: *const gst::GstStructure) -> &'a Structure {
+    pub unsafe fn from_borrowed_ptr<'a>(ptr: *const gst_ffi::GstStructure) -> &'a Structure {
         assert!(!ptr.is_null());
 
         &*(ptr as *mut Structure)
     }
 
-    pub unsafe fn from_borrowed_mut_ptr<'a>(ptr: *mut gst::GstStructure) -> &'a mut Structure {
+    pub unsafe fn from_borrowed_mut_ptr<'a>(ptr: *mut gst_ffi::GstStructure) -> &'a mut Structure {
         assert!(!ptr.is_null());
 
         &mut *(ptr as *mut Structure)
@@ -162,9 +162,9 @@ impl Structure {
 
     pub fn to_string(&self) -> String {
         unsafe {
-            let ptr = gst::gst_structure_to_string(&self.0);
+            let ptr = gst_ffi::gst_structure_to_string(&self.0);
             let s = CStr::from_ptr(ptr).to_str().unwrap().into();
-            glib::g_free(ptr as glib::gpointer);
+            glib_ffi::g_free(ptr as glib_ffi::gpointer);
 
             s
         }
@@ -178,7 +178,7 @@ impl Structure {
         unsafe {
             let name_cstr = CString::new(name).unwrap();
 
-            let value = gst::gst_structure_get_value(&self.0, name_cstr.as_ptr());
+            let value = gst_ffi::gst_structure_get_value(&self.0, name_cstr.as_ptr());
 
             if value.is_null() {
                 return None;
@@ -193,14 +193,14 @@ impl Structure {
             let name_cstr = CString::new(name).unwrap();
             let mut gvalue = value.into().into_raw();
 
-            gst::gst_structure_take_value(&mut self.0, name_cstr.as_ptr(), &mut gvalue);
+            gst_ffi::gst_structure_take_value(&mut self.0, name_cstr.as_ptr(), &mut gvalue);
             mem::forget(gvalue);
         }
     }
 
     pub fn get_name(&self) -> &str {
         unsafe {
-            let cstr = CStr::from_ptr(gst::gst_structure_get_name(&self.0));
+            let cstr = CStr::from_ptr(gst_ffi::gst_structure_get_name(&self.0));
             cstr.to_str().unwrap()
         }
     }
@@ -208,20 +208,20 @@ impl Structure {
     pub fn has_field(&self, field: &str) -> bool {
         unsafe {
             let cstr = CString::new(field).unwrap();
-            gst::gst_structure_has_field(&self.0, cstr.as_ptr()) == glib::GTRUE
+            gst_ffi::gst_structure_has_field(&self.0, cstr.as_ptr()) == glib_ffi::GTRUE
         }
     }
 
     pub fn remove_field(&mut self, field: &str) {
         unsafe {
             let cstr = CString::new(field).unwrap();
-            gst::gst_structure_remove_field(&mut self.0, cstr.as_ptr());
+            gst_ffi::gst_structure_remove_field(&mut self.0, cstr.as_ptr());
         }
     }
 
     pub fn remove_all_fields(&mut self) {
         unsafe {
-            gst::gst_structure_remove_all_fields(&mut self.0);
+            gst_ffi::gst_structure_remove_all_fields(&mut self.0);
         }
     }
 
@@ -235,7 +235,7 @@ impl Structure {
 
     fn get_nth_field_name(&self, idx: u32) -> Option<&str> {
         unsafe {
-            let field_name = gst::gst_structure_nth_field_name(&self.0, idx);
+            let field_name = gst_ffi::gst_structure_nth_field_name(&self.0, idx);
             if field_name.is_null() {
                 return None;
             }
@@ -246,7 +246,7 @@ impl Structure {
     }
 
     fn n_fields(&self) -> u32 {
-        unsafe { gst::gst_structure_n_fields(&self.0) as u32 }
+        unsafe { gst_ffi::gst_structure_n_fields(&self.0) as u32 }
     }
 
     // TODO: Various operations
@@ -260,7 +260,7 @@ impl fmt::Debug for Structure {
 
 impl PartialEq for Structure {
     fn eq(&self, other: &Structure) -> bool {
-        (unsafe { gst::gst_structure_is_equal(&self.0, &other.0) } == glib::GTRUE)
+        (unsafe { gst_ffi::gst_structure_is_equal(&self.0, &other.0) } == glib_ffi::GTRUE)
     }
 }
 
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn new_set_get() {
-        unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
+        unsafe { gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
         let mut s = OwnedStructure::new_empty("test");
         assert_eq!(s.get_name(), "test");

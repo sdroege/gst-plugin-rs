@@ -13,33 +13,33 @@ use value::*;
 use miniobject::*;
 use structure::*;
 
-use glib;
-use gst;
+use glib_ffi;
+use gst_ffi;
 
 #[repr(C)]
-pub struct Caps(gst::GstCaps);
+pub struct Caps(gst_ffi::GstCaps);
 
 unsafe impl MiniObject for Caps {
-    type PtrType = gst::GstCaps;
+    type PtrType = gst_ffi::GstCaps;
 }
 
 impl Caps {
     pub fn new_empty() -> GstRc<Self> {
-        unsafe { GstRc::from_owned_ptr(gst::gst_caps_new_empty()) }
+        unsafe { GstRc::from_owned_ptr(gst_ffi::gst_caps_new_empty()) }
     }
 
     pub fn new_any() -> GstRc<Self> {
-        unsafe { GstRc::from_owned_ptr(gst::gst_caps_new_any()) }
+        unsafe { GstRc::from_owned_ptr(gst_ffi::gst_caps_new_any()) }
     }
 
     pub fn new_simple(name: &str, values: &[(&str, Value)]) -> GstRc<Self> {
         let mut caps = Caps::new_empty();
 
         let name_cstr = CString::new(name).unwrap();
-        let structure = unsafe { gst::gst_structure_new_empty(name_cstr.as_ptr()) };
+        let structure = unsafe { gst_ffi::gst_structure_new_empty(name_cstr.as_ptr()) };
 
         unsafe {
-            gst::gst_caps_append_structure(caps.as_mut_ptr(), structure);
+            gst_ffi::gst_caps_append_structure(caps.as_mut_ptr(), structure);
         }
 
         caps.get_mut().unwrap().set_simple(values);
@@ -51,7 +51,7 @@ impl Caps {
         let value_cstr = CString::new(value).unwrap();
 
         unsafe {
-            let caps_ptr = gst::gst_caps_from_string(value_cstr.as_ptr());
+            let caps_ptr = gst_ffi::gst_caps_from_string(value_cstr.as_ptr());
 
             if caps_ptr.is_null() {
                 None
@@ -66,16 +66,16 @@ impl Caps {
             let name_cstr = CString::new(value.0).unwrap();
             unsafe {
                 let gvalue = value.1.as_ptr();
-                gst::gst_caps_set_value(self.as_mut_ptr(), name_cstr.as_ptr(), gvalue);
+                gst_ffi::gst_caps_set_value(self.as_mut_ptr(), name_cstr.as_ptr(), gvalue);
             }
         }
     }
 
     pub fn to_string(&self) -> String {
         unsafe {
-            let ptr = gst::gst_caps_to_string(self.as_ptr());
+            let ptr = gst_ffi::gst_caps_to_string(self.as_ptr());
             let s = CStr::from_ptr(ptr).to_str().unwrap().into();
-            glib::g_free(ptr as glib::gpointer);
+            glib_ffi::g_free(ptr as glib_ffi::gpointer);
 
             s
         }
@@ -83,26 +83,26 @@ impl Caps {
 
     pub fn get_structure(&self, idx: u32) -> Option<&Structure> {
         unsafe {
-            let structure = gst::gst_caps_get_structure(self.as_ptr(), idx);
+            let structure = gst_ffi::gst_caps_get_structure(self.as_ptr(), idx);
             if structure.is_null() {
                 return None;
             }
 
             Some(Structure::from_borrowed_ptr(
-                structure as *const gst::GstStructure,
+                structure as *const gst_ffi::GstStructure,
             ))
         }
     }
 
     pub fn get_mut_structure(&mut self, idx: u32) -> Option<&mut Structure> {
         unsafe {
-            let structure = gst::gst_caps_get_structure(self.as_ptr(), idx);
+            let structure = gst_ffi::gst_caps_get_structure(self.as_ptr(), idx);
             if structure.is_null() {
                 return None;
             }
 
             Some(Structure::from_borrowed_mut_ptr(
-                structure as *mut gst::GstStructure,
+                structure as *mut gst_ffi::GstStructure,
             ))
         }
     }
@@ -118,7 +118,7 @@ impl fmt::Debug for Caps {
 
 impl PartialEq for Caps {
     fn eq(&self, other: &Caps) -> bool {
-        (unsafe { gst::gst_caps_is_equal(self.as_ptr(), other.as_ptr()) } == glib::GTRUE)
+        (unsafe { gst_ffi::gst_caps_is_equal(self.as_ptr(), other.as_ptr()) } == glib_ffi::GTRUE)
     }
 }
 
@@ -142,7 +142,7 @@ mod tests {
 
     fn init() {
         unsafe {
-            gst::gst_init(ptr::null_mut(), ptr::null_mut());
+            gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut());
         }
     }
 

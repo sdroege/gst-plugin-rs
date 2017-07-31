@@ -28,8 +28,8 @@ use log::*;
 use caps::Caps;
 use plugin::Plugin;
 
-use glib;
-use gst;
+use glib_ffi;
+use gst_ffi;
 
 pub type StreamIndex = u32;
 
@@ -94,14 +94,14 @@ impl Stream {
 }
 
 pub struct DemuxerWrapper {
-    raw: *mut gst::GstElement,
+    raw: *mut gst_ffi::GstElement,
     logger: Logger,
     demuxer: Mutex<Box<Demuxer>>,
     panicked: AtomicBool,
 }
 
 impl DemuxerWrapper {
-    fn new(raw: *mut gst::GstElement, demuxer: Box<Demuxer>) -> DemuxerWrapper {
+    fn new(raw: *mut gst_ffi::GstElement, demuxer: Box<Demuxer>) -> DemuxerWrapper {
         DemuxerWrapper {
             raw: raw,
             logger: Logger::root(
@@ -175,44 +175,44 @@ impl DemuxerWrapper {
     }
 
 
-    fn get_position(&self, position: &mut u64) -> glib::gboolean {
+    fn get_position(&self, position: &mut u64) -> glib_ffi::gboolean {
         let demuxer = &self.demuxer.lock().unwrap();
 
         match demuxer.get_position() {
             None => {
                 trace!(self.logger, "Got no position");
                 *position = u64::MAX;
-                glib::GFALSE
+                glib_ffi::GFALSE
             }
             Some(pos) => {
                 trace!(self.logger, "Returning position {}", pos);
                 *position = pos;
-                glib::GTRUE
+                glib_ffi::GTRUE
             }
         }
 
     }
 
-    fn get_duration(&self, duration: &mut u64) -> glib::gboolean {
+    fn get_duration(&self, duration: &mut u64) -> glib_ffi::gboolean {
         let demuxer = &self.demuxer.lock().unwrap();
 
         match demuxer.get_duration() {
             None => {
                 trace!(self.logger, "Got no duration");
                 *duration = u64::MAX;
-                glib::GFALSE
+                glib_ffi::GFALSE
             }
             Some(dur) => {
                 trace!(self.logger, "Returning duration {}", dur);
                 *duration = dur;
-                glib::GTRUE
+                glib_ffi::GTRUE
             }
         }
     }
 
     fn seek(&self, start: u64, stop: u64, offset: &mut u64) -> bool {
         extern "C" {
-            fn gst_rs_demuxer_stream_eos(raw: *mut gst::GstElement, index: u32);
+            fn gst_rs_demuxer_stream_eos(raw: *mut gst_ffi::GstElement, index: u32);
         };
 
         let stop = if stop == u64::MAX { None } else { Some(stop) };
@@ -255,27 +255,27 @@ impl DemuxerWrapper {
         }
     }
 
-    fn handle_buffer(&self, buffer: GstRc<Buffer>) -> gst::GstFlowReturn {
+    fn handle_buffer(&self, buffer: GstRc<Buffer>) -> gst_ffi::GstFlowReturn {
         extern "C" {
-            fn gst_rs_demuxer_stream_eos(raw: *mut gst::GstElement, index: u32);
+            fn gst_rs_demuxer_stream_eos(raw: *mut gst_ffi::GstElement, index: u32);
             fn gst_rs_demuxer_add_stream(
-                raw: *mut gst::GstElement,
+                raw: *mut gst_ffi::GstElement,
                 index: u32,
-                caps: *const gst::GstCaps,
+                caps: *const gst_ffi::GstCaps,
                 stream_id: *const c_char,
             );
-            fn gst_rs_demuxer_added_all_streams(raw: *mut gst::GstElement);
-            // fn gst_rs_demuxer_remove_all_streams(raw: *mut gst::GstElement);
+            fn gst_rs_demuxer_added_all_streams(raw: *mut gst_ffi::GstElement);
+            // fn gst_rs_demuxer_remove_all_streams(raw: *mut gst_ffi::GstElement);
             fn gst_rs_demuxer_stream_format_changed(
-                raw: *mut gst::GstElement,
+                raw: *mut gst_ffi::GstElement,
                 index: u32,
-                caps: *const gst::GstCaps,
+                caps: *const gst_ffi::GstCaps,
             );
             fn gst_rs_demuxer_stream_push_buffer(
-                raw: *mut gst::GstElement,
+                raw: *mut gst_ffi::GstElement,
                 index: u32,
-                buffer: *mut gst::GstBuffer,
-            ) -> gst::GstFlowReturn;
+                buffer: *mut gst_ffi::GstBuffer,
+            ) -> gst_ffi::GstFlowReturn;
         };
 
         let mut res = {
@@ -304,7 +304,7 @@ impl DemuxerWrapper {
 
             match res {
                 HandleBufferResult::NeedMoreData => {
-                    return gst::GST_FLOW_OK;
+                    return gst_ffi::GST_FLOW_OK;
                 }
                 HandleBufferResult::StreamAdded(stream) => {
                     let stream_id_cstr = CString::new(stream.stream_id.as_bytes()).unwrap();
@@ -342,10 +342,10 @@ impl DemuxerWrapper {
                         gst_rs_demuxer_stream_push_buffer(
                             self.raw,
                             index,
-                            buffer.into_ptr() as *mut gst::GstBuffer,
+                            buffer.into_ptr() as *mut gst_ffi::GstBuffer,
                         )
                     };
-                    if flow_ret != gst::GST_FLOW_OK {
+                    if flow_ret != gst_ffi::GST_FLOW_OK {
                         return flow_ret;
                     }
                 }
@@ -356,7 +356,7 @@ impl DemuxerWrapper {
                         gst_rs_demuxer_stream_eos(self.raw, index);
                     }
 
-                    return gst::GST_FLOW_EOS;
+                    return gst_ffi::GST_FLOW_EOS;
                 }
                 HandleBufferResult::Again => {
                     // nothing, just call again
@@ -406,7 +406,7 @@ impl DemuxerWrapper {
 
 #[no_mangle]
 pub unsafe extern "C" fn demuxer_new(
-    demuxer: *mut gst::GstElement,
+    demuxer: *mut gst_ffi::GstElement,
     create_instance: fn(Element) -> Box<Demuxer>,
 ) -> *mut DemuxerWrapper {
     let instance = create_instance(Element::new(demuxer));
@@ -422,41 +422,41 @@ pub unsafe extern "C" fn demuxer_drop(ptr: *mut DemuxerWrapper) {
 pub unsafe extern "C" fn demuxer_start(
     ptr: *const DemuxerWrapper,
     upstream_size: u64,
-    random_access: glib::gboolean,
-) -> glib::gboolean {
+    random_access: glib_ffi::gboolean,
+) -> glib_ffi::gboolean {
     let wrap: &DemuxerWrapper = &*ptr;
 
-    panic_to_error!(wrap, glib::GFALSE, {
-        if wrap.start(upstream_size, random_access != glib::GFALSE) {
-            glib::GTRUE
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
+        if wrap.start(upstream_size, random_access != glib_ffi::GFALSE) {
+            glib_ffi::GTRUE
         } else {
-            glib::GFALSE
+            glib_ffi::GFALSE
         }
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn demuxer_stop(ptr: *const DemuxerWrapper) -> glib::gboolean {
+pub unsafe extern "C" fn demuxer_stop(ptr: *const DemuxerWrapper) -> glib_ffi::gboolean {
     let wrap: &DemuxerWrapper = &*ptr;
 
-    panic_to_error!(wrap, glib::GTRUE, {
+    panic_to_error!(wrap, glib_ffi::GTRUE, {
         if wrap.stop() {
-            glib::GTRUE
+            glib_ffi::GTRUE
         } else {
-            glib::GFALSE
+            glib_ffi::GFALSE
         }
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn demuxer_is_seekable(ptr: *const DemuxerWrapper) -> glib::gboolean {
+pub unsafe extern "C" fn demuxer_is_seekable(ptr: *const DemuxerWrapper) -> glib_ffi::gboolean {
     let wrap: &DemuxerWrapper = &*ptr;
 
-    panic_to_error!(wrap, glib::GFALSE, {
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
         if wrap.is_seekable() {
-            glib::GTRUE
+            glib_ffi::GTRUE
         } else {
-            glib::GFALSE
+            glib_ffi::GFALSE
         }
     })
 }
@@ -465,10 +465,10 @@ pub unsafe extern "C" fn demuxer_is_seekable(ptr: *const DemuxerWrapper) -> glib
 pub unsafe extern "C" fn demuxer_get_position(
     ptr: *const DemuxerWrapper,
     position: *mut u64,
-) -> glib::gboolean {
+) -> glib_ffi::gboolean {
     let wrap: &DemuxerWrapper = &*ptr;
 
-    panic_to_error!(wrap, glib::GFALSE, {
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
         let position = &mut *position;
         wrap.get_position(position)
     })
@@ -478,10 +478,10 @@ pub unsafe extern "C" fn demuxer_get_position(
 pub unsafe extern "C" fn demuxer_get_duration(
     ptr: *const DemuxerWrapper,
     duration: *mut u64,
-) -> glib::gboolean {
+) -> glib_ffi::gboolean {
     let wrap: &DemuxerWrapper = &*ptr;
 
-    panic_to_error!(wrap, glib::GFALSE, {
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
         let duration = &mut *duration;
         wrap.get_duration(duration)
     })
@@ -493,17 +493,17 @@ pub unsafe extern "C" fn demuxer_seek(
     start: u64,
     stop: u64,
     offset: *mut u64,
-) -> glib::gboolean {
+) -> glib_ffi::gboolean {
 
     let wrap: &mut DemuxerWrapper = &mut *ptr;
 
-    panic_to_error!(wrap, glib::GFALSE, {
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
         let offset = &mut *offset;
 
         if wrap.seek(start, stop, offset) {
-            glib::GTRUE
+            glib_ffi::GTRUE
         } else {
-            glib::GFALSE
+            glib_ffi::GFALSE
         }
     })
 }
@@ -511,11 +511,11 @@ pub unsafe extern "C" fn demuxer_seek(
 #[no_mangle]
 pub unsafe extern "C" fn demuxer_handle_buffer(
     ptr: *mut DemuxerWrapper,
-    buffer: *mut gst::GstBuffer,
-) -> gst::GstFlowReturn {
+    buffer: *mut gst_ffi::GstBuffer,
+) -> gst_ffi::GstFlowReturn {
     let wrap: &mut DemuxerWrapper = &mut *ptr;
 
-    panic_to_error!(wrap, gst::GST_FLOW_ERROR, {
+    panic_to_error!(wrap, gst_ffi::GST_FLOW_ERROR, {
         let buffer = GstRc::from_owned_ptr(buffer);
         wrap.handle_buffer(buffer)
     })
@@ -545,7 +545,7 @@ pub struct DemuxerInfo<'a> {
 pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
     extern "C" {
         fn gst_rs_demuxer_register(
-            plugin: *const gst::GstPlugin,
+            plugin: *const gst_ffi::GstPlugin,
             name: *const c_char,
             long_name: *const c_char,
             description: *const c_char,
@@ -553,9 +553,9 @@ pub fn demuxer_register(plugin: &Plugin, demuxer_info: &DemuxerInfo) {
             author: *const c_char,
             rank: i32,
             create_instance: *const c_void,
-            input_caps: *const gst::GstCaps,
-            output_caps: *const gst::GstCaps,
-        ) -> glib::gboolean;
+            input_caps: *const gst_ffi::GstCaps,
+            output_caps: *const gst_ffi::GstCaps,
+        ) -> glib_ffi::gboolean;
     }
 
     let cname = CString::new(demuxer_info.name).unwrap();

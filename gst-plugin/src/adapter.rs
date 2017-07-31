@@ -256,11 +256,11 @@ impl Adapter {
 mod tests {
     use super::*;
     use std::ptr;
-    use gst;
+    use gst_ffi;
 
     fn init() {
         unsafe {
-            gst::gst_init(ptr::null_mut(), ptr::null_mut());
+            gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut());
         }
     }
 

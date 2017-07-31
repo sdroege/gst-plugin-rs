@@ -6,16 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use gst;
+use gst_ffi;
 
-pub struct Plugin(*mut gst::GstPlugin);
+pub struct Plugin(*mut gst_ffi::GstPlugin);
 
 impl Plugin {
-    pub unsafe fn new(plugin: *mut gst::GstPlugin) -> Plugin {
+    pub unsafe fn new(plugin: *mut gst_ffi::GstPlugin) -> Plugin {
         Plugin(plugin)
     }
 
-    pub unsafe fn as_ptr(&self) -> *mut gst::GstPlugin {
+    pub unsafe fn as_ptr(&self) -> *mut gst_ffi::GstPlugin {
         self.0
     }
 }
@@ -27,20 +27,18 @@ macro_rules! plugin_define(
      $package:expr, $origin:expr, $release_datetime:expr) => {
         pub mod plugin_desc {
             use $crate::plugin::Plugin;
-            use $crate::ffi::gst;
-            use $crate::ffi::glib;
 
             // Not using c_char here because it requires the libc crate
             #[allow(non_camel_case_types)]
             type c_char = i8;
 
             #[repr(C)]
-            pub struct GstPluginDesc(gst::GstPluginDesc);
+            pub struct GstPluginDesc($crate::ffi::gst::GstPluginDesc);
             unsafe impl Sync for GstPluginDesc {}
 
             #[no_mangle]
             #[allow(non_upper_case_globals)]
-            pub static gst_plugin_desc: GstPluginDesc = GstPluginDesc(gst::GstPluginDesc {
+            pub static gst_plugin_desc: GstPluginDesc = GstPluginDesc($crate::ffi::gst::GstPluginDesc {
                 major_version: 1,
                 minor_version: 10,
                 name: $name as *const u8 as *const c_char,
@@ -52,14 +50,14 @@ macro_rules! plugin_define(
                 package: $package as *const u8 as *const c_char,
                 origin: $origin as *const u8 as *const c_char,
                 release_datetime: $release_datetime as *const u8 as *const c_char,
-                _gst_reserved: [0 as glib::gpointer; 4],
+                _gst_reserved: [0 as $crate::ffi::glib::gpointer; 4],
             });
 
-            unsafe extern "C" fn plugin_init_trampoline(plugin: *mut gst::GstPlugin) -> glib::gboolean {
+            unsafe extern "C" fn plugin_init_trampoline(plugin: *mut $crate::ffi::gst::GstPlugin) -> $crate::ffi::glib::gboolean {
                 if super::$plugin_init(&Plugin::new(plugin)) {
-                    glib::GTRUE
+                    $crate::ffi::glib::GTRUE
                 } else {
-                    glib::GFALSE
+                    $crate::ffi::glib::GFALSE
                 }
             }
         }

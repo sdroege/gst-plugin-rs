@@ -19,10 +19,12 @@ extern crate byteorder;
 extern crate num_rational;
 #[macro_use]
 extern crate derivative;
-pub extern crate gobject_sys as gobject;
-pub extern crate glib_sys as glib;
-pub extern crate gstreamer_sys as gst;
-pub extern crate gstreamer_base_sys as gst_base;
+pub extern crate gobject_sys as gobject_ffi;
+pub extern crate glib_sys as glib_ffi;
+pub extern crate gstreamer_sys as gst_ffi;
+pub extern crate gstreamer_base_sys as gst_base_ffi;
+
+pub extern crate gstreamer as gst;
 
 #[macro_use]
 pub mod utils;
@@ -45,7 +47,7 @@ pub mod miniobject;
 pub mod structure;
 
 pub mod ffi {
-    pub use glib;
-    pub use gobject;
-    pub use gst;
+    pub use glib_ffi as glib;
+    pub use gobject_ffi as gobject;
+    pub use gst_ffi as gst;
 }

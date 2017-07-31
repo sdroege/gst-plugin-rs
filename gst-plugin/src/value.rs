@@ -19,12 +19,12 @@ pub use num_rational::Rational32;
 use buffer::*;
 use miniobject::*;
 
-use glib;
-use gobject;
-use gst;
+use glib_ffi;
+use gobject_ffi;
+use gst_ffi;
 
 #[repr(C)]
-pub struct Value(gobject::GValue);
+pub struct Value(gobject_ffi::GValue);
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ValueView<'a> {
@@ -49,31 +49,31 @@ pub trait ValueType<'a>
 where
     Self: Sized,
 {
-    fn g_type() -> glib::GType;
+    fn g_type() -> glib_ffi::GType;
 
-    fn from_value(v: &'a gobject::GValue) -> Option<Self>;
+    fn from_value(v: &'a gobject_ffi::GValue) -> Option<Self>;
     fn from_value_view(v: &'a ValueView<'a>) -> Option<Self>;
 }
 
 lazy_static! {
-    static ref TYPE_BUFFER: glib::GType = unsafe { gst::gst_buffer_get_type() };
-    static ref TYPE_FRACTION: glib::GType = unsafe { gst::gst_fraction_get_type() };
-    static ref TYPE_GST_VALUE_ARRAY: glib::GType = unsafe { gst::gst_value_array_get_type() };
+    static ref TYPE_BUFFER: glib_ffi::GType = unsafe { gst_ffi::gst_buffer_get_type() };
+    static ref TYPE_FRACTION: glib_ffi::GType = unsafe { gst_ffi::gst_fraction_get_type() };
+    static ref TYPE_GST_VALUE_ARRAY: glib_ffi::GType = unsafe { gst_ffi::gst_value_array_get_type() };
 }
 
 impl Value {
-    pub unsafe fn as_ptr(&self) -> *const gobject::GValue {
+    pub unsafe fn as_ptr(&self) -> *const gobject_ffi::GValue {
         &self.0
     }
 
-    pub unsafe fn from_ptr(ptr: *const gobject::GValue) -> Option<Value> {
+    pub unsafe fn from_ptr(ptr: *const gobject_ffi::GValue) -> Option<Value> {
         if ptr.is_null() || !Value::is_supported_type((*ptr).g_type) {
             return None;
         }
 
         let mut value = Value(mem::zeroed());
-        gobject::g_value_init(&mut value.0, (*ptr).g_type);
-        gobject::g_value_copy(ptr, &mut value.0);
+        gobject_ffi::g_value_init(&mut value.0, (*ptr).g_type);
+        gobject_ffi::g_value_copy(ptr, &mut value.0);
 
         Some(value)
     }
@@ -82,28 +82,28 @@ impl Value {
         unsafe { Value::from_ptr(v.0) }.unwrap()
     }
 
-    pub unsafe fn from_raw(value: gobject::GValue) -> Option<Value> {
+    pub unsafe fn from_raw(value: gobject_ffi::GValue) -> Option<Value> {
         if !Value::is_supported_type(value.g_type) {
             return None;
         }
         Some(Value(value))
     }
 
-    pub unsafe fn into_raw(mut self) -> gobject::GValue {
+    pub unsafe fn into_raw(mut self) -> gobject_ffi::GValue {
         let v = mem::replace(&mut self.0, mem::zeroed());
         mem::forget(self);
 
         v
     }
 
-    fn is_supported_type(typ: glib::GType) -> bool {
+    fn is_supported_type(typ: glib_ffi::GType) -> bool {
         match typ {
-            gobject::G_TYPE_BOOLEAN |
-            gobject::G_TYPE_INT |
-            gobject::G_TYPE_UINT |
-            gobject::G_TYPE_INT64 |
-            gobject::G_TYPE_UINT64 |
-            gobject::G_TYPE_STRING => true,
+            gobject_ffi::G_TYPE_BOOLEAN |
+            gobject_ffi::G_TYPE_INT |
+            gobject_ffi::G_TYPE_UINT |
+            gobject_ffi::G_TYPE_INT64 |
+            gobject_ffi::G_TYPE_UINT64 |
+            gobject_ffi::G_TYPE_STRING => true,
             typ if typ == *TYPE_FRACTION => true,
             //typ if typ == *TYPE_BUFFER  => true
             typ if typ == *TYPE_GST_VALUE_ARRAY => true,
@@ -131,15 +131,15 @@ impl Value {
 
     pub fn get(&self) -> ValueView {
         match self.0.g_type {
-            gobject::G_TYPE_BOOLEAN => ValueView::Bool(bool::from_value(&self.0).unwrap()),
-            gobject::G_TYPE_INT => ValueView::Int(i32::from_value(&self.0).unwrap()),
-            gobject::G_TYPE_UINT => ValueView::UInt(u32::from_value(&self.0).unwrap()),
-            gobject::G_TYPE_INT64 => ValueView::Int64(i64::from_value(&self.0).unwrap()),
-            gobject::G_TYPE_UINT64 => ValueView::UInt64(u64::from_value(&self.0).unwrap()),
+            gobject_ffi::G_TYPE_BOOLEAN => ValueView::Bool(bool::from_value(&self.0).unwrap()),
+            gobject_ffi::G_TYPE_INT => ValueView::Int(i32::from_value(&self.0).unwrap()),
+            gobject_ffi::G_TYPE_UINT => ValueView::UInt(u32::from_value(&self.0).unwrap()),
+            gobject_ffi::G_TYPE_INT64 => ValueView::Int64(i64::from_value(&self.0).unwrap()),
+            gobject_ffi::G_TYPE_UINT64 => ValueView::UInt64(u64::from_value(&self.0).unwrap()),
             typ if typ == *TYPE_FRACTION => {
                 ValueView::Fraction(Rational32::from_value(&self.0).unwrap())
             }
-            gobject::G_TYPE_STRING => ValueView::String(Cow::Borrowed(
+            gobject_ffi::G_TYPE_STRING => ValueView::String(Cow::Borrowed(
                 <&str as ValueType>::from_value(&self.0).unwrap(),
             )),
             typ if typ == *TYPE_GST_VALUE_ARRAY => ValueView::Array(Cow::Borrowed(
@@ -161,8 +161,8 @@ impl Clone for Value {
     fn clone(&self) -> Self {
         unsafe {
             let mut new_value = Value(mem::zeroed());
-            gobject::g_value_init(&mut new_value.0, self.0.g_type);
-            gobject::g_value_copy(&self.0, &mut new_value.0);
+            gobject_ffi::g_value_init(&mut new_value.0, self.0.g_type);
+            gobject_ffi::g_value_copy(&self.0, &mut new_value.0);
 
             new_value
         }
@@ -191,18 +191,18 @@ impl fmt::Debug for Value {
 impl Drop for Value {
     fn drop(&mut self) {
         unsafe {
-            if self.0.g_type != gobject::G_TYPE_NONE {
-                gobject::g_value_unset(&mut self.0);
+            if self.0.g_type != gobject_ffi::G_TYPE_NONE {
+                gobject_ffi::g_value_unset(&mut self.0);
             }
         }
     }
 }
 
 #[derive(Clone)]
-pub struct ValueRef<'a>(&'a gobject::GValue);
+pub struct ValueRef<'a>(&'a gobject_ffi::GValue);
 
 impl<'a> ValueRef<'a> {
-    pub unsafe fn as_ptr(&self) -> *const gobject::GValue {
+    pub unsafe fn as_ptr(&self) -> *const gobject_ffi::GValue {
         self.0
     }
 
@@ -210,7 +210,7 @@ impl<'a> ValueRef<'a> {
         ValueRef(&v.0)
     }
 
-    pub unsafe fn from_ptr(ptr: *const gobject::GValue) -> Option<ValueRef<'a>> {
+    pub unsafe fn from_ptr(ptr: *const gobject_ffi::GValue) -> Option<ValueRef<'a>> {
         if ptr.is_null() || !Value::is_supported_type((*ptr).g_type) {
             return None;
         }
@@ -220,15 +220,15 @@ impl<'a> ValueRef<'a> {
 
     pub fn get(&self) -> ValueView {
         match self.0.g_type {
-            gobject::G_TYPE_BOOLEAN => ValueView::Bool(bool::from_value(self.0).unwrap()),
-            gobject::G_TYPE_INT => ValueView::Int(i32::from_value(self.0).unwrap()),
-            gobject::G_TYPE_UINT => ValueView::UInt(u32::from_value(self.0).unwrap()),
-            gobject::G_TYPE_INT64 => ValueView::Int64(i64::from_value(self.0).unwrap()),
-            gobject::G_TYPE_UINT64 => ValueView::UInt64(u64::from_value(self.0).unwrap()),
+            gobject_ffi::G_TYPE_BOOLEAN => ValueView::Bool(bool::from_value(self.0).unwrap()),
+            gobject_ffi::G_TYPE_INT => ValueView::Int(i32::from_value(self.0).unwrap()),
+            gobject_ffi::G_TYPE_UINT => ValueView::UInt(u32::from_value(self.0).unwrap()),
+            gobject_ffi::G_TYPE_INT64 => ValueView::Int64(i64::from_value(self.0).unwrap()),
+            gobject_ffi::G_TYPE_UINT64 => ValueView::UInt64(u64::from_value(self.0).unwrap()),
             typ if typ == *TYPE_FRACTION => {
                 ValueView::Fraction(Rational32::from_value(self.0).unwrap())
             }
-            gobject::G_TYPE_STRING => ValueView::String(Cow::Borrowed(
+            gobject_ffi::G_TYPE_STRING => ValueView::String(Cow::Borrowed(
                 <&str as ValueType>::from_value(self.0).unwrap(),
             )),
             typ if typ == *TYPE_GST_VALUE_ARRAY => ValueView::Array(Cow::Borrowed(
@@ -268,11 +268,11 @@ impl<'a> fmt::Debug for ValueRef<'a> {
 macro_rules! impl_value_type_simple(
     ($typ:ty, $variant:ident, $g_type:expr, $getter:expr, $setter:expr) => {
         impl<'a> ValueType<'a> for $typ {
-            fn g_type() -> glib::GType {
+            fn g_type() -> glib_ffi::GType {
                 $g_type
             }
 
-            fn from_value(value: &'a gobject::GValue) -> Option<Self> {
+            fn from_value(value: &'a gobject_ffi::GValue) -> Option<Self> {
                 if value.g_type != Self::g_type() {
                     return None;
                 }
@@ -296,7 +296,7 @@ macro_rules! impl_value_type_simple(
                 unsafe {
                     let mut value = Value(mem::zeroed());
 
-                    gobject::g_value_init(&mut value.0, <$typ as ValueType>::g_type());
+                    gobject_ffi::g_value_init(&mut value.0, <$typ as ValueType>::g_type());
                     $setter(&mut value.0, v);
 
                     value
@@ -308,59 +308,59 @@ macro_rules! impl_value_type_simple(
 
 impl_value_type_simple!(bool,
                         Bool,
-                        gobject::G_TYPE_BOOLEAN,
-                        |value: &gobject::GValue| !(gobject::g_value_get_boolean(value) == 0),
-                        |value: &mut gobject::GValue, v| {
-                            gobject::g_value_set_boolean(value,
-                                                         if v { glib::GTRUE } else { glib::GFALSE })
+                        gobject_ffi::G_TYPE_BOOLEAN,
+                        |value: &gobject_ffi::GValue| !(gobject_ffi::g_value_get_boolean(value) == 0),
+                        |value: &mut gobject_ffi::GValue, v| {
+                            gobject_ffi::g_value_set_boolean(value,
+                                                         if v { glib_ffi::GTRUE } else { glib_ffi::GFALSE })
                         });
 impl_value_type_simple!(i32,
                         Int,
-                        gobject::G_TYPE_INT,
-                        |value: &gobject::GValue| gobject::g_value_get_int(value),
-                        |value: &mut gobject::GValue, v| gobject::g_value_set_int(value, v));
+                        gobject_ffi::G_TYPE_INT,
+                        |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_int(value),
+                        |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_int(value, v));
 impl_value_type_simple!(u32,
                         UInt,
-                        gobject::G_TYPE_UINT,
-                        |value: &gobject::GValue| gobject::g_value_get_uint(value),
-                        |value: &mut gobject::GValue, v| gobject::g_value_set_uint(value, v));
+                        gobject_ffi::G_TYPE_UINT,
+                        |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_uint(value),
+                        |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_uint(value, v));
 impl_value_type_simple!(i64,
                         Int64,
-                        gobject::G_TYPE_INT64,
-                        |value: &gobject::GValue| gobject::g_value_get_int64(value),
-                        |value: &mut gobject::GValue, v| gobject::g_value_set_int64(value, v));
+                        gobject_ffi::G_TYPE_INT64,
+                        |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_int64(value),
+                        |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_int64(value, v));
 impl_value_type_simple!(u64,
                         UInt64,
-                        gobject::G_TYPE_UINT64,
-                        |value: &gobject::GValue| gobject::g_value_get_uint64(value),
-                        |value: &mut gobject::GValue, v| gobject::g_value_set_uint64(value, v));
+                        gobject_ffi::G_TYPE_UINT64,
+                        |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_uint64(value),
+                        |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_uint64(value, v));
 impl_value_type_simple!(
     Rational32,
     Fraction,
     *TYPE_FRACTION,
-    |value: &gobject::GValue| {
+    |value: &gobject_ffi::GValue| {
         Rational32::new(
-            gst::gst_value_get_fraction_numerator(value),
-            gst::gst_value_get_fraction_denominator(value),
+            gst_ffi::gst_value_get_fraction_numerator(value),
+            gst_ffi::gst_value_get_fraction_denominator(value),
         )
     },
-    |value: &mut gobject::GValue, v: Rational32| {
-        gst::gst_value_set_fraction(value, *v.numer(), *v.denom())
+    |value: &mut gobject_ffi::GValue, v: Rational32| {
+        gst_ffi::gst_value_set_fraction(value, *v.numer(), *v.denom())
     }
 );
 
 impl<'a> ValueType<'a> for &'a str {
-    fn g_type() -> glib::GType {
-        gobject::G_TYPE_STRING
+    fn g_type() -> glib_ffi::GType {
+        gobject_ffi::G_TYPE_STRING
     }
 
-    fn from_value(value: &'a gobject::GValue) -> Option<Self> {
+    fn from_value(value: &'a gobject_ffi::GValue) -> Option<Self> {
         if value.g_type != Self::g_type() {
             return None;
         }
 
         unsafe {
-            let s = gobject::g_value_get_string(value);
+            let s = gobject_ffi::g_value_get_string(value);
             if s.is_null() {
                 return Some("");
             }
@@ -384,9 +384,9 @@ impl<'a> From<Cow<'a, str>> for Value {
         unsafe {
             let mut value = Value(mem::zeroed());
 
-            gobject::g_value_init(&mut value.0, <&str as ValueType>::g_type());
-            let v_cstr = glib::g_strndup(v.as_ptr() as *const c_char, v.len());
-            gobject::g_value_take_string(&mut value.0, v_cstr);
+            gobject_ffi::g_value_init(&mut value.0, <&str as ValueType>::g_type());
+            let v_cstr = glib_ffi::g_strndup(v.as_ptr() as *const c_char, v.len());
+            gobject_ffi::g_value_take_string(&mut value.0, v_cstr);
 
             value
         }
@@ -406,17 +406,17 @@ impl<'a> From<&'a str> for Value {
 }
 
 impl<'a> ValueType<'a> for GstRc<Buffer> {
-    fn g_type() -> glib::GType {
+    fn g_type() -> glib_ffi::GType {
         *TYPE_BUFFER
     }
 
-    fn from_value(value: &'a gobject::GValue) -> Option<Self> {
+    fn from_value(value: &'a gobject_ffi::GValue) -> Option<Self> {
         if value.g_type != Self::g_type() {
             return None;
         }
 
         unsafe {
-            let buffer = gobject::g_value_get_boxed(value) as *mut gst::GstBuffer;
+            let buffer = gobject_ffi::g_value_get_boxed(value) as *mut gst_ffi::GstBuffer;
             Some(GstRc::from_unowned_ptr(buffer))
         }
     }
@@ -447,8 +447,8 @@ impl<'a> From<&'a Buffer> for Value {
         unsafe {
             let mut value = Value(mem::zeroed());
 
-            gobject::g_value_init(&mut value.0, <GstRc<Buffer> as ValueType>::g_type());
-            gobject::g_value_set_boxed(&mut value.0, v.as_ptr() as glib::gpointer);
+            gobject_ffi::g_value_init(&mut value.0, <GstRc<Buffer> as ValueType>::g_type());
+            gobject_ffi::g_value_set_boxed(&mut value.0, v.as_ptr() as glib_ffi::gpointer);
 
             value
         }
@@ -456,17 +456,17 @@ impl<'a> From<&'a Buffer> for Value {
 }
 
 impl<'a> ValueType<'a> for &'a [Value] {
-    fn g_type() -> glib::GType {
+    fn g_type() -> glib_ffi::GType {
         *TYPE_GST_VALUE_ARRAY
     }
 
-    fn from_value(value: &'a gobject::GValue) -> Option<Self> {
+    fn from_value(value: &'a gobject_ffi::GValue) -> Option<Self> {
         if value.g_type != Self::g_type() {
             return None;
         }
 
         unsafe {
-            let arr = value.data[0] as *const glib::GArray;
+            let arr = value.data[0] as *const glib_ffi::GArray;
 
             if arr.is_null() {
                 Some(&[])
@@ -494,19 +494,19 @@ impl<'a> From<Cow<'a, [Value]>> for Value {
         unsafe {
             let mut value = Value(mem::zeroed());
 
-            gobject::g_value_init(&mut value.0, <&[Value] as ValueType>::g_type());
+            gobject_ffi::g_value_init(&mut value.0, <&[Value] as ValueType>::g_type());
 
             match v {
                 Cow::Borrowed(array) => for e in array {
-                    gst::gst_value_array_append_value(
+                    gst_ffi::gst_value_array_append_value(
                         &mut value.0,
-                        e.as_ptr() as *mut gobject::GValue,
+                        e.as_ptr() as *mut gobject_ffi::GValue,
                     );
                 },
                 Cow::Owned(array) => for e in array {
-                    gst::gst_value_array_append_and_take_value(
+                    gst_ffi::gst_value_array_append_and_take_value(
                         &mut value.0,
-                        e.as_ptr() as *mut gobject::GValue,
+                        e.as_ptr() as *mut gobject_ffi::GValue,
                     );
                     mem::forget(e);
                 },
@@ -593,25 +593,25 @@ where
         self.value
     }
 
-    pub unsafe fn as_ptr(&self) -> *const gobject::GValue {
+    pub unsafe fn as_ptr(&self) -> *const gobject_ffi::GValue {
         &self.value.0
     }
 
-    pub unsafe fn from_ptr(ptr: *const gobject::GValue) -> Option<TypedValue<T>> {
+    pub unsafe fn from_ptr(ptr: *const gobject_ffi::GValue) -> Option<TypedValue<T>> {
         if let Some(value) = Value::from_ptr(ptr) {
             return TypedValue::from_value(value);
         }
         None
     }
 
-    pub unsafe fn from_raw(value: gobject::GValue) -> Option<TypedValue<T>> {
+    pub unsafe fn from_raw(value: gobject_ffi::GValue) -> Option<TypedValue<T>> {
         if let Some(value) = Value::from_raw(value) {
             return TypedValue::from_value(value);
         }
         None
     }
 
-    pub unsafe fn into_raw(mut self) -> gobject::GValue {
+    pub unsafe fn into_raw(mut self) -> gobject_ffi::GValue {
         mem::replace(&mut self.value.0, mem::zeroed())
     }
 }
@@ -703,11 +703,11 @@ where
         self.value
     }
 
-    pub unsafe fn as_ptr(&self) -> *const gobject::GValue {
+    pub unsafe fn as_ptr(&self) -> *const gobject_ffi::GValue {
         self.value.0
     }
 
-    pub unsafe fn from_ptr(ptr: *const gobject::GValue) -> Option<TypedValueRef<'a, T>> {
+    pub unsafe fn from_ptr(ptr: *const gobject_ffi::GValue) -> Option<TypedValueRef<'a, T>> {
         if let Some(value) = ValueRef::from_ptr(ptr) {
             return TypedValueRef::from_value_ref(value);
         }
@@ -724,7 +724,7 @@ mod tests {
         ($name: ident, $typ:ty, $value:expr, $variant:ident) => {
             #[test]
             fn $name() {
-                unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
+                unsafe { gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
                 let value = Value::new($value);
                 if let ValueView::$variant(v) = value.get() {
@@ -770,7 +770,7 @@ mod tests {
 
     #[test]
     fn string_owned() {
-        unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
+        unsafe { gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
         let orig_v = String::from("foo");
 
@@ -813,7 +813,7 @@ mod tests {
 
     #[test]
     fn string_borrowed() {
-        unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
+        unsafe { gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
         let orig_v = "foo";
 
@@ -852,7 +852,7 @@ mod tests {
 
     #[test]
     fn array_owned() {
-        unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
+        unsafe { gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
         let orig_v = vec![Value::new("a"), Value::new("b")];
 
@@ -887,7 +887,7 @@ mod tests {
 
     #[test]
     fn array_borrowed() {
-        unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
+        unsafe { gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
         let orig_v = vec![Value::new("a"), Value::new("b")];
 
@@ -919,7 +919,7 @@ mod tests {
 
     #[test]
     fn buffer() {
-        unsafe { gst::gst_init(ptr::null_mut(), ptr::null_mut()) };
+        unsafe { gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut()) };
 
         let orig_v = Buffer::from_vec(vec![1, 2, 3, 4]).unwrap();
 

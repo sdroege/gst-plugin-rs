@@ -11,22 +11,22 @@ use std::ffi::CString;
 use std::i32;
 use num_rational::Rational32;
 
-use gst;
+use gst_ffi;
 
-pub struct Element(*mut gst::GstElement);
+pub struct Element(*mut gst_ffi::GstElement);
 
 impl Element {
-    pub unsafe fn new(element: *mut gst::GstElement) -> Element {
+    pub unsafe fn new(element: *mut gst_ffi::GstElement) -> Element {
         if element.is_null() {
             panic!("NULL not allowed");
         }
 
-        gst::gst_object_ref(element as *mut gst::GstObject);
+        gst_ffi::gst_object_ref(element as *mut gst_ffi::GstObject);
 
         Element(element)
     }
 
-    pub unsafe fn as_ptr(&self) -> *mut gst::GstElement {
+    pub unsafe fn as_ptr(&self) -> *mut gst_ffi::GstElement {
         self.0
     }
 }
@@ -34,7 +34,7 @@ impl Element {
 impl Drop for Element {
     fn drop(&mut self) {
         unsafe {
-            gst::gst_object_unref(self.0 as *mut gst::GstObject);
+            gst_ffi::gst_object_unref(self.0 as *mut gst_ffi::GstObject);
         }
     }
 }

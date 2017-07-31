@@ -10,8 +10,8 @@ use std::{borrow, fmt, ops};
 use std::mem;
 use std::marker::PhantomData;
 
-use glib;
-use gst;
+use glib_ffi;
+use gst_ffi;
 
 #[derive(Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GstRc<T: MiniObject>(*mut T, PhantomData<T>);
@@ -21,7 +21,7 @@ impl<T: MiniObject> GstRc<T> {
         assert!(!obj.is_null());
 
         if !owned {
-            gst::gst_mini_object_ref((&*obj).as_ptr() as *mut gst::GstMiniObject);
+            gst_ffi::gst_mini_object_ref((&*obj).as_ptr() as *mut gst_ffi::GstMiniObject);
         }
 
         GstRc(obj as *mut T, PhantomData)
@@ -42,7 +42,7 @@ impl<T: MiniObject> GstRc<T> {
             }
 
             self.0 = T::from_mut_ptr(
-                gst::gst_mini_object_make_writable(self.as_mut_ptr() as *mut gst::GstMiniObject) as
+                gst_ffi::gst_mini_object_make_writable(self.as_mut_ptr() as *mut gst_ffi::GstMiniObject) as
                     *mut T::PtrType,
             );
             assert!(self.is_writable());
@@ -62,15 +62,15 @@ impl<T: MiniObject> GstRc<T> {
     pub fn copy(&self) -> Self {
         unsafe {
             GstRc::from_owned_ptr(
-                gst::gst_mini_object_copy(self.as_ptr() as *const gst::GstMiniObject) as
+                gst_ffi::gst_mini_object_copy(self.as_ptr() as *const gst_ffi::GstMiniObject) as
                     *const T::PtrType,
             )
         }
     }
 
     fn is_writable(&self) -> bool {
-        (unsafe { gst::gst_mini_object_is_writable(self.as_ptr() as *const gst::GstMiniObject) } ==
-            glib::GTRUE)
+        (unsafe { gst_ffi::gst_mini_object_is_writable(self.as_ptr() as *const gst_ffi::GstMiniObject) } ==
+            glib_ffi::GTRUE)
     }
 
     pub unsafe fn into_ptr(self) -> *mut T::PtrType {
@@ -118,7 +118,7 @@ impl<T: MiniObject> Clone for GstRc<T> {
 impl<T: MiniObject> Drop for GstRc<T> {
     fn drop(&mut self) {
         unsafe {
-            gst::gst_mini_object_unref(self.as_ptr() as *mut gst::GstMiniObject);
+            gst_ffi::gst_mini_object_unref(self.as_ptr() as *mut gst_ffi::GstMiniObject);
         }
     }
 }

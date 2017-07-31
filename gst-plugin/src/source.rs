@@ -29,10 +29,10 @@ use miniobject::*;
 use log::*;
 use caps::*;
 
-use glib;
-use gobject;
-use gst;
-use gst_base;
+use glib_ffi;
+use gobject_ffi;
+use gst_ffi;
+use gst_base_ffi;
 
 #[derive(Debug)]
 pub enum SourceError {
@@ -56,7 +56,7 @@ impl ToGError for SourceError {
 }
 
 pub struct SourceWrapper {
-    raw: *mut gst::GstElement,
+    raw: *mut gst_ffi::GstElement,
     logger: Logger,
     uri: Mutex<(Option<Url>, bool)>,
     uri_validator: Box<UriValidator>,
@@ -77,7 +77,7 @@ pub trait Source {
 }
 
 impl SourceWrapper {
-    fn new(raw: *mut gst::GstElement, source: Box<Source>) -> SourceWrapper {
+    fn new(raw: *mut gst_ffi::GstElement, source: Box<Source>) -> SourceWrapper {
         SourceWrapper {
             raw: raw,
             logger: Logger::root(
@@ -194,7 +194,7 @@ impl SourceWrapper {
         }
     }
 
-    fn fill(&self, offset: u64, length: u32, buffer: &mut Buffer) -> gst::GstFlowReturn {
+    fn fill(&self, offset: u64, length: u32, buffer: &mut Buffer) -> gst_ffi::GstFlowReturn {
         let source = &mut self.source.lock().unwrap();
 
         trace!(
@@ -206,7 +206,7 @@ impl SourceWrapper {
         );
 
         match source.fill(offset, length, buffer) {
-            Ok(()) => gst::GST_FLOW_OK,
+            Ok(()) => gst_ffi::GST_FLOW_OK,
             Err(flow_error) => {
                 error!(self.logger, "Failed to fill: {:?}", flow_error);
                 match flow_error {
@@ -245,12 +245,12 @@ impl SourceWrapper {
 unsafe fn source_set_uri(
     ptr: *const RsSrc,
     uri_ptr: *const c_char,
-    cerr: *mut *mut glib::GError,
-) -> glib::gboolean {
+    cerr: *mut *mut glib_ffi::GError,
+) -> glib_ffi::gboolean {
     let src = &*(ptr as *const RsSrc);
     let wrap: &SourceWrapper = &*src.wrap;
 
-    panic_to_error!(wrap, glib::GFALSE, {
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
         let uri_str = if uri_ptr.is_null() {
             None
         } else {
@@ -261,9 +261,9 @@ unsafe fn source_set_uri(
             Err(err) => {
                 error!(wrap.logger, "Failed to set URI {:?}", err);
                 err.into_gerror(cerr);
-                glib::GFALSE
+                glib_ffi::GFALSE
             }
-            Ok(_) => glib::GTRUE,
+            Ok(_) => glib_ffi::GTRUE,
         }
     })
 }
@@ -274,96 +274,96 @@ unsafe fn source_get_uri(ptr: *const RsSrc) -> *mut c_char {
 
     panic_to_error!(wrap, ptr::null_mut(), {
         match wrap.get_uri() {
-            Some(uri_str) => glib::g_strndup(uri_str.as_ptr() as *const c_char, uri_str.len()),
+            Some(uri_str) => glib_ffi::g_strndup(uri_str.as_ptr() as *const c_char, uri_str.len()),
             None => ptr::null_mut(),
         }
     })
 }
 
-unsafe extern "C" fn source_is_seekable(ptr: *mut gst_base::GstBaseSrc) -> glib::gboolean {
+unsafe extern "C" fn source_is_seekable(ptr: *mut gst_base_ffi::GstBaseSrc) -> glib_ffi::gboolean {
     let src = &*(ptr as *const RsSrc);
     let wrap: &SourceWrapper = &*src.wrap;
 
-    panic_to_error!(wrap, glib::GFALSE, {
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
         if wrap.is_seekable() {
-            glib::GTRUE
+            glib_ffi::GTRUE
         } else {
-            glib::GFALSE
+            glib_ffi::GFALSE
         }
     })
 }
 
 unsafe extern "C" fn source_get_size(
-    ptr: *mut gst_base::GstBaseSrc,
+    ptr: *mut gst_base_ffi::GstBaseSrc,
     size: *mut u64,
-) -> glib::gboolean {
+) -> glib_ffi::gboolean {
     let src = &*(ptr as *const RsSrc);
     let wrap: &SourceWrapper = &*src.wrap;
 
-    panic_to_error!(wrap, glib::GFALSE, {
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
         *size = wrap.get_size();
-        glib::GTRUE
+        glib_ffi::GTRUE
     })
 }
 
-unsafe extern "C" fn source_start(ptr: *mut gst_base::GstBaseSrc) -> glib::gboolean {
+unsafe extern "C" fn source_start(ptr: *mut gst_base_ffi::GstBaseSrc) -> glib_ffi::gboolean {
     let src = &*(ptr as *const RsSrc);
     let wrap: &SourceWrapper = &*src.wrap;
 
-    panic_to_error!(wrap, glib::GFALSE, {
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
         if wrap.start() {
-            glib::GTRUE
+            glib_ffi::GTRUE
         } else {
-            glib::GFALSE
+            glib_ffi::GFALSE
         }
     })
 }
 
-unsafe extern "C" fn source_stop(ptr: *mut gst_base::GstBaseSrc) -> glib::gboolean {
+unsafe extern "C" fn source_stop(ptr: *mut gst_base_ffi::GstBaseSrc) -> glib_ffi::gboolean {
     let src = &*(ptr as *const RsSrc);
     let wrap: &SourceWrapper = &*src.wrap;
 
-    panic_to_error!(wrap, glib::GTRUE, {
+    panic_to_error!(wrap, glib_ffi::GTRUE, {
         if wrap.stop() {
-            glib::GTRUE
+            glib_ffi::GTRUE
         } else {
-            glib::GFALSE
+            glib_ffi::GFALSE
         }
     })
 }
 
 unsafe extern "C" fn source_fill(
-    ptr: *mut gst_base::GstBaseSrc,
+    ptr: *mut gst_base_ffi::GstBaseSrc,
     offset: u64,
     length: u32,
-    buffer: *mut gst::GstBuffer,
-) -> gst::GstFlowReturn {
+    buffer: *mut gst_ffi::GstBuffer,
+) -> gst_ffi::GstFlowReturn {
     let src = &*(ptr as *const RsSrc);
     let wrap: &SourceWrapper = &*src.wrap;
     let buffer: &mut Buffer = <Buffer as MiniObject>::from_mut_ptr(buffer);
 
     panic_to_error!(
         wrap,
-        gst::GST_FLOW_ERROR,
+        gst_ffi::GST_FLOW_ERROR,
         { wrap.fill(offset, length, buffer) }
     )
 }
 
 unsafe extern "C" fn source_seek(
-    ptr: *mut gst_base::GstBaseSrc,
-    segment: *mut gst::GstSegment,
-) -> glib::gboolean {
+    ptr: *mut gst_base_ffi::GstBaseSrc,
+    segment: *mut gst_ffi::GstSegment,
+) -> glib_ffi::gboolean {
     let src = &*(ptr as *const RsSrc);
     let wrap: &SourceWrapper = &*src.wrap;
 
     let start = (*segment).start;
     let stop = (*segment).stop;
 
-    panic_to_error!(wrap, glib::GFALSE, {
+    panic_to_error!(wrap, glib_ffi::GFALSE, {
         if wrap.seek(start, if stop == u64::MAX { None } else { Some(stop) }) {
-            glib::GTRUE
+            glib_ffi::GTRUE
         } else {
-            glib::GFALSE
+            glib_ffi::GFALSE
         }
     })
 }
@@ -382,40 +382,40 @@ pub struct SourceInfo {
 
 #[repr(C)]
 struct RsSrc {
-    parent: gst_base::GstPushSrc,
+    parent: gst_base_ffi::GstPushSrc,
     wrap: *mut SourceWrapper,
     source_info: *const SourceInfo,
 }
 
 #[repr(C)]
 struct RsSrcClass {
-    parent_class: gst_base::GstPushSrcClass,
+    parent_class: gst_base_ffi::GstPushSrcClass,
     source_info: *const SourceInfo,
     protocols: *const Vec<*const c_char>,
-    parent_vtable: glib::gconstpointer,
+    parent_vtable: glib_ffi::gconstpointer,
 }
 
-unsafe extern "C" fn source_finalize(obj: *mut gobject::GObject) {
+unsafe extern "C" fn source_finalize(obj: *mut gobject_ffi::GObject) {
     let src = &mut *(obj as *mut RsSrc);
 
     drop(Box::from_raw(src.wrap));
 
     let src_klass = &**(obj as *const *const RsSrcClass);
-    let parent_klass = &*(src_klass.parent_vtable as *const gobject::GObjectClass);
+    let parent_klass = &*(src_klass.parent_vtable as *const gobject_ffi::GObjectClass);
     parent_klass.finalize.map(|f| f(obj));
 }
 
 unsafe extern "C" fn source_set_property(
-    obj: *mut gobject::GObject,
+    obj: *mut gobject_ffi::GObject,
     id: u32,
-    value: *mut gobject::GValue,
-    _pspec: *mut gobject::GParamSpec,
+    value: *mut gobject_ffi::GValue,
+    _pspec: *mut gobject_ffi::GParamSpec,
 ) {
     let src = &*(obj as *const RsSrc);
 
     match id {
         1 => {
-            let uri_ptr = gobject::g_value_get_string(value);
+            let uri_ptr = gobject_ffi::g_value_get_string(value);
             source_set_uri(src, uri_ptr, ptr::null_mut());
         }
         _ => unreachable!(),
@@ -423,23 +423,23 @@ unsafe extern "C" fn source_set_property(
 }
 
 unsafe extern "C" fn source_get_property(
-    obj: *mut gobject::GObject,
+    obj: *mut gobject_ffi::GObject,
     id: u32,
-    value: *mut gobject::GValue,
-    _pspec: *mut gobject::GParamSpec,
+    value: *mut gobject_ffi::GValue,
+    _pspec: *mut gobject_ffi::GParamSpec,
 ) {
     let src = &*(obj as *const RsSrc);
 
     match id {
         1 => {
             let uri_ptr = source_get_uri(src);
-            gobject::g_value_take_string(value, uri_ptr);
+            gobject_ffi::g_value_take_string(value, uri_ptr);
         }
         _ => unreachable!(),
     }
 }
 
-unsafe extern "C" fn source_class_init(klass: glib::gpointer, klass_data: glib::gpointer) {
+unsafe extern "C" fn source_class_init(klass: glib_ffi::gpointer, klass_data: glib_ffi::gpointer) {
     let src_klass = &mut *(klass as *mut RsSrcClass);
     let source_info = &*(klass_data as *const SourceInfo);
 
@@ -458,15 +458,15 @@ unsafe extern "C" fn source_class_init(klass: glib::gpointer, klass_data: glib::
         let nick_cstr = CString::new("URI").unwrap();
         let blurb_cstr = CString::new("URI to read from").unwrap();
 
-        gobject::g_object_class_install_property(
-            klass as *mut gobject::GObjectClass,
+        gobject_ffi::g_object_class_install_property(
+            klass as *mut gobject_ffi::GObjectClass,
             1,
-            gobject::g_param_spec_string(
+            gobject_ffi::g_param_spec_string(
                 name_cstr.as_ptr(),
                 nick_cstr.as_ptr(),
                 blurb_cstr.as_ptr(),
                 ptr::null_mut(),
-                gobject::G_PARAM_READWRITE,
+                gobject_ffi::G_PARAM_READWRITE,
             ),
         );
     }
@@ -479,7 +479,7 @@ unsafe extern "C" fn source_class_init(klass: glib::gpointer, klass_data: glib::
         let description_cstr = CString::new(source_info.classification.clone()).unwrap();
         let author_cstr = CString::new(source_info.author.clone()).unwrap();
 
-        gst::gst_element_class_set_static_metadata(
+        gst_ffi::gst_element_class_set_static_metadata(
             element_klass,
             longname_cstr.into_raw(),
             classification_cstr.into_raw(),
@@ -489,13 +489,13 @@ unsafe extern "C" fn source_class_init(klass: glib::gpointer, klass_data: glib::
 
         let caps = Caps::new_any();
         let templ_name = CString::new("src").unwrap();
-        let pad_template = gst::gst_pad_template_new(
+        let pad_template = gst_ffi::gst_pad_template_new(
             templ_name.into_raw(),
-            gst::GST_PAD_SRC,
-            gst::GST_PAD_ALWAYS,
-            caps.as_ptr() as *mut gst::GstCaps,
+            gst_ffi::GST_PAD_SRC,
+            gst_ffi::GST_PAD_ALWAYS,
+            caps.as_ptr() as *mut gst_ffi::GstCaps,
         );
-        gst::gst_element_class_add_pad_template(element_klass, pad_template);
+        gst_ffi::gst_element_class_add_pad_template(element_klass, pad_template);
     }
 
     {
@@ -516,10 +516,10 @@ unsafe extern "C" fn source_class_init(klass: glib::gpointer, klass_data: glib::
     }
     protocols.push(ptr::null());
     src_klass.protocols = Box::into_raw(protocols) as *const Vec<*const c_char>;
-    src_klass.parent_vtable = gobject::g_type_class_peek_parent(klass);
+    src_klass.parent_vtable = gobject_ffi::g_type_class_peek_parent(klass);
 }
 
-unsafe extern "C" fn source_init(instance: *mut gobject::GTypeInstance, klass: glib::gpointer) {
+unsafe extern "C" fn source_init(instance: *mut gobject_ffi::GTypeInstance, klass: glib_ffi::gpointer) {
     let src = &mut *(instance as *mut RsSrc);
     let src_klass = &*(klass as *const RsSrcClass);
     let source_info = &*src_klass.source_info;
@@ -532,35 +532,35 @@ unsafe extern "C" fn source_init(instance: *mut gobject::GTypeInstance, klass: g
     ));
     src.wrap = Box::into_raw(wrap);
 
-    gst_base::gst_base_src_set_blocksize(&mut src.parent.parent, 4096);
+    gst_base_ffi::gst_base_src_set_blocksize(&mut src.parent.parent, 4096);
 }
 
-unsafe extern "C" fn source_uri_handler_get_type(_type: glib::GType) -> gst::GstURIType {
-    gst::GST_URI_SRC
+unsafe extern "C" fn source_uri_handler_get_type(_type: glib_ffi::GType) -> gst_ffi::GstURIType {
+    gst_ffi::GST_URI_SRC
 }
 
-unsafe extern "C" fn source_uri_handler_get_protocols(type_: glib::GType) -> *const *const c_char {
-    let klass = gobject::g_type_class_peek(type_);
+unsafe extern "C" fn source_uri_handler_get_protocols(type_: glib_ffi::GType) -> *const *const c_char {
+    let klass = gobject_ffi::g_type_class_peek(type_);
     let src_klass = &*(klass as *const RsSrcClass);
     (*src_klass.protocols).as_ptr()
 }
 
 unsafe extern "C" fn source_uri_handler_get_uri(
-    uri_handler: *mut gst::GstURIHandler,
+    uri_handler: *mut gst_ffi::GstURIHandler,
 ) -> *mut c_char {
     source_get_uri(uri_handler as *const RsSrc)
 }
 
 unsafe extern "C" fn source_uri_handler_set_uri(
-    uri_handler: *mut gst::GstURIHandler,
+    uri_handler: *mut gst_ffi::GstURIHandler,
     uri: *const c_char,
-    err: *mut *mut glib::GError,
-) -> glib::gboolean {
+    err: *mut *mut glib_ffi::GError,
+) -> glib_ffi::gboolean {
     source_set_uri(uri_handler as *const RsSrc, uri, err)
 }
 
-unsafe extern "C" fn source_uri_handler_init(iface: glib::gpointer, _iface_data: glib::gpointer) {
-    let uri_handler_iface = &mut *(iface as *mut gst::GstURIHandlerInterface);
+unsafe extern "C" fn source_uri_handler_init(iface: glib_ffi::gpointer, _iface_data: glib_ffi::gpointer) {
+    let uri_handler_iface = &mut *(iface as *mut gst_ffi::GstURIHandlerInterface);
 
     uri_handler_iface.get_type = Some(source_uri_handler_get_type);
     uri_handler_iface.get_protocols = Some(source_uri_handler_get_protocols);
@@ -571,9 +571,9 @@ unsafe extern "C" fn source_uri_handler_init(iface: glib::gpointer, _iface_data:
 pub fn source_register(plugin: &Plugin, source_info: SourceInfo) {
     unsafe {
         let parent_type = if source_info.push_only {
-            gst_base::gst_push_src_get_type()
+            gst_base_ffi::gst_push_src_get_type()
         } else {
-            gst_base::gst_base_src_get_type()
+            gst_base_ffi::gst_base_src_get_type()
         };
         let mut type_name = String::from("RsSrc-");
         type_name.push_str(&source_info.name);
@@ -583,9 +583,9 @@ pub fn source_register(plugin: &Plugin, source_info: SourceInfo) {
         let rank = source_info.rank;
 
         let source_info = Box::new(source_info);
-        let source_info_ptr = Box::into_raw(source_info) as glib::gpointer;
+        let source_info_ptr = Box::into_raw(source_info) as glib_ffi::gpointer;
 
-        let type_info = gobject::GTypeInfo {
+        let type_info = gobject_ffi::GTypeInfo {
             class_size: mem::size_of::<RsSrcClass>() as u16,
             base_init: None,
             base_finalize: None,
@@ -598,20 +598,20 @@ pub fn source_register(plugin: &Plugin, source_info: SourceInfo) {
             value_table: ptr::null(),
         };
 
-        let type_ = gobject::g_type_register_static(
+        let type_ = gobject_ffi::g_type_register_static(
             parent_type,
             type_name_cstr.as_ptr(),
             &type_info,
-            gobject::GTypeFlags::empty(),
+            gobject_ffi::GTypeFlags::empty(),
         );
 
-        let iface_info = gobject::GInterfaceInfo {
+        let iface_info = gobject_ffi::GInterfaceInfo {
             interface_init: Some(source_uri_handler_init),
             interface_finalize: None,
             interface_data: ptr::null_mut(),
         };
-        gobject::g_type_add_interface_static(type_, gst::gst_uri_handler_get_type(), &iface_info);
+        gobject_ffi::g_type_add_interface_static(type_, gst_ffi::gst_uri_handler_get_type(), &iface_info);
 
-        gst::gst_element_register(plugin.as_ptr(), name_cstr.as_ptr(), rank, type_);
+        gst_ffi::gst_element_register(plugin.as_ptr(), name_cstr.as_ptr(), rank, type_);
     }
 }

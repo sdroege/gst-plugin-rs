@@ -16,8 +16,8 @@ use std::borrow::Cow;
 
 use url::Url;
 
-use glib;
-use gst;
+use glib_ffi;
+use gst_ffi;
 
 #[macro_export]
 macro_rules! error_msg(
@@ -61,12 +61,12 @@ pub trait ToGError {
     fn to_gerror(&self) -> (u32, i32);
 }
 
-pub fn gst_library_error_domain() -> glib::GQuark {
-    unsafe { gst::gst_library_error_quark() }
+pub fn gst_library_error_domain() -> glib_ffi::GQuark {
+    unsafe { gst_ffi::gst_library_error_quark() }
 }
 
-pub fn gst_resource_error_domain() -> glib::GQuark {
-    unsafe { gst::gst_resource_error_quark() }
+pub fn gst_resource_error_domain() -> glib_ffi::GQuark {
+    unsafe { gst_ffi::gst_resource_error_quark() }
 }
 
 #[derive(Debug)]
@@ -103,7 +103,7 @@ impl ErrorMessage {
     }
 
 
-    pub unsafe fn post(&self, element: *mut gst::GstElement) {
+    pub unsafe fn post(&self, element: *mut gst_ffi::GstElement) {
         let ErrorMessage {
             error_domain,
             error_code,
@@ -126,13 +126,13 @@ impl ErrorMessage {
         let function_cstr = CString::new(function.as_bytes()).unwrap();
         let function_ptr = function_cstr.as_ptr();
 
-        gst::gst_element_message_full(
+        gst_ffi::gst_element_message_full(
             element,
-            gst::GST_MESSAGE_ERROR,
+            gst_ffi::GST_MESSAGE_ERROR,
             error_domain,
             error_code,
-            glib::g_strndup(message_ptr, message_len),
-            glib::g_strndup(debug_ptr, debug_len),
+            glib_ffi::g_strndup(message_ptr, message_len),
+            glib_ffi::g_strndup(debug_ptr, debug_len),
             file_ptr,
             function_ptr,
             line as i32,
@@ -149,12 +149,12 @@ pub enum FlowError {
 }
 
 impl FlowError {
-    pub fn to_native(&self) -> gst::GstFlowReturn {
+    pub fn to_native(&self) -> gst_ffi::GstFlowReturn {
         match *self {
-            FlowError::Flushing => gst::GST_FLOW_FLUSHING,
-            FlowError::Eos => gst::GST_FLOW_EOS,
-            FlowError::NotNegotiated(..) => gst::GST_FLOW_NOT_NEGOTIATED,
-            FlowError::Error(..) => gst::GST_FLOW_ERROR,
+            FlowError::Flushing => gst_ffi::GST_FLOW_FLUSHING,
+            FlowError::Eos => gst_ffi::GST_FLOW_EOS,
+            FlowError::NotNegotiated(..) => gst_ffi::GST_FLOW_NOT_NEGOTIATED,
+            FlowError::Error(..) => gst_ffi::GST_FLOW_ERROR,
         }
     }
 }
@@ -220,19 +220,19 @@ impl UriError {
         &self.error_kind
     }
 
-    pub unsafe fn into_gerror(self, err: *mut *mut glib::GError) {
+    pub unsafe fn into_gerror(self, err: *mut *mut glib_ffi::GError) {
         if let Some(msg) = self.message {
             let cmsg = CString::new(msg.as_str()).unwrap();
-            glib::g_set_error_literal(
+            glib_ffi::g_set_error_literal(
                 err,
-                gst::gst_uri_error_quark(),
+                gst_ffi::gst_uri_error_quark(),
                 self.error_kind as i32,
                 cmsg.as_ptr(),
             );
         } else {
-            glib::g_set_error_literal(
+            glib_ffi::g_set_error_literal(
                 err,
-                gst::gst_uri_error_quark(),
+                gst_ffi::gst_uri_error_quark(),
                 self.error_kind as i32,
                 ptr::null(),
             );

@@ -15,12 +15,12 @@ use std::mem;
 
 use utils::Element;
 
-use gobject;
-use gst;
+use gobject_ffi;
+use gst_ffi;
 
 pub struct GstDebugDrain {
-    category: *mut gst::GstDebugCategory,
-    element: Box<gobject::GWeakRef>,
+    category: *mut gst_ffi::GstDebugCategory,
+    element: Box<gobject_ffi::GWeakRef>,
 }
 
 impl GstDebugDrain {
@@ -35,7 +35,7 @@ impl GstDebugDrain {
                 name: *const c_char,
                 color: u32,
                 description: *const c_char,
-            ) -> *mut gst::GstDebugCategory;
+            ) -> *mut gst_ffi::GstDebugCategory;
         }
 
         let name_cstr = CString::new(name.as_bytes()).unwrap();
@@ -58,7 +58,7 @@ impl GstDebugDrain {
 
         if !element.is_null() {
             unsafe {
-                gobject::g_weak_ref_set(&mut *drain.element, element as *mut gobject::GObject);
+                gobject_ffi::g_weak_ref_set(&mut *drain.element, element as *mut gobject_ffi::GObject);
             }
         }
 
@@ -69,7 +69,7 @@ impl GstDebugDrain {
 impl Drop for GstDebugDrain {
     fn drop(&mut self) {
         unsafe {
-            gobject::g_weak_ref_clear(&mut *self.element);
+            gobject_ffi::g_weak_ref_clear(&mut *self.element);
         }
     }
 }
@@ -80,14 +80,14 @@ impl Drain for GstDebugDrain {
 
     fn log(&self, record: &Record, _: &OwnedKVList) -> Result<(), Never> {
         let level = match record.level() {
-            Level::Critical | Level::Error => gst::GST_LEVEL_ERROR,
-            Level::Warning => gst::GST_LEVEL_WARNING,
-            Level::Info => gst::GST_LEVEL_INFO,
-            Level::Debug => gst::GST_LEVEL_DEBUG,
-            Level::Trace => gst::GST_LEVEL_TRACE,
+            Level::Critical | Level::Error => gst_ffi::GST_LEVEL_ERROR,
+            Level::Warning => gst_ffi::GST_LEVEL_WARNING,
+            Level::Info => gst_ffi::GST_LEVEL_INFO,
+            Level::Debug => gst_ffi::GST_LEVEL_DEBUG,
+            Level::Trace => gst_ffi::GST_LEVEL_TRACE,
         };
 
-        let threshold = unsafe { gst::gst_debug_category_get_threshold(self.category) };
+        let threshold = unsafe { gst_ffi::gst_debug_category_get_threshold(self.category) };
 
         if level as u32 > threshold as u32 {
             return Ok(());
@@ -101,22 +101,22 @@ impl Drain for GstDebugDrain {
         let message_cstr = CString::new(fmt::format(*record.msg()).as_bytes()).unwrap();
 
         unsafe {
-            let element = gobject::g_weak_ref_get(
-                &*self.element as *const gobject::GWeakRef as *mut gobject::GWeakRef,
+            let element = gobject_ffi::g_weak_ref_get(
+                &*self.element as *const gobject_ffi::GWeakRef as *mut gobject_ffi::GWeakRef,
             );
 
-            gst::gst_debug_log(
+            gst_ffi::gst_debug_log(
                 self.category,
                 level,
                 file_cstr.as_ptr(),
                 function_cstr.as_ptr(),
                 record.line() as i32,
-                element as *mut gobject::GObject,
+                element as *mut gobject_ffi::GObject,
                 message_cstr.as_ptr(),
             );
 
             if !element.is_null() {
-                gst::gst_object_unref(element as *mut gst::GstObject);
+                gst_ffi::gst_object_unref(element as *mut gst_ffi::GstObject);
             }
         }
 

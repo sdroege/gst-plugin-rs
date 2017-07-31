@@ -13,9 +13,9 @@ use std::marker::PhantomData;
 use value::*;
 use miniobject::*;
 
-use glib;
-use gobject;
-use gst;
+use glib_ffi;
+use gobject_ffi;
+use gst_ffi;
 
 pub trait Tag<'a> {
     type TagType: ValueType<'a>;
@@ -57,27 +57,27 @@ pub enum MergeMode {
 }
 
 impl MergeMode {
-    fn to_ffi(&self) -> gst::GstTagMergeMode {
+    fn to_ffi(&self) -> gst_ffi::GstTagMergeMode {
         match *self {
-            MergeMode::ReplaceAll => gst::GST_TAG_MERGE_REPLACE_ALL,
-            MergeMode::Replace => gst::GST_TAG_MERGE_REPLACE,
-            MergeMode::Append => gst::GST_TAG_MERGE_APPEND,
-            MergeMode::Prepend => gst::GST_TAG_MERGE_PREPEND,
-            MergeMode::Keep => gst::GST_TAG_MERGE_KEEP,
-            MergeMode::KeepAll => gst::GST_TAG_MERGE_KEEP_ALL,
+            MergeMode::ReplaceAll => gst_ffi::GST_TAG_MERGE_REPLACE_ALL,
+            MergeMode::Replace => gst_ffi::GST_TAG_MERGE_REPLACE,
+            MergeMode::Append => gst_ffi::GST_TAG_MERGE_APPEND,
+            MergeMode::Prepend => gst_ffi::GST_TAG_MERGE_PREPEND,
+            MergeMode::Keep => gst_ffi::GST_TAG_MERGE_KEEP,
+            MergeMode::KeepAll => gst_ffi::GST_TAG_MERGE_KEEP_ALL,
         }
     }
 }
 
-pub struct TagList(gst::GstTagList);
+pub struct TagList(gst_ffi::GstTagList);
 
 unsafe impl MiniObject for TagList {
-    type PtrType = gst::GstTagList;
+    type PtrType = gst_ffi::GstTagList;
 }
 
 impl TagList {
     pub fn new() -> GstRc<Self> {
-        unsafe { GstRc::from_owned_ptr(gst::gst_tag_list_new_empty()) }
+        unsafe { GstRc::from_owned_ptr(gst_ffi::gst_tag_list_new_empty()) }
     }
 
     pub fn add<'a, T: Tag<'a>>(&mut self, value: T::TagType, mode: MergeMode)
@@ -89,14 +89,14 @@ impl TagList {
             let mut gvalue = v.into_raw();
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            gst::gst_tag_list_add_value(
+            gst_ffi::gst_tag_list_add_value(
                 self.as_mut_ptr(),
                 mode.to_ffi(),
                 tag_name.as_ptr(),
                 &gvalue,
             );
 
-            gobject::g_value_unset(&mut gvalue);
+            gobject_ffi::g_value_unset(&mut gvalue);
         }
     }
 
@@ -105,9 +105,9 @@ impl TagList {
             let mut gvalue = mem::zeroed();
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            let found = gst::gst_tag_list_copy_value(&mut gvalue, self.as_ptr(), tag_name.as_ptr());
+            let found = gst_ffi::gst_tag_list_copy_value(&mut gvalue, self.as_ptr(), tag_name.as_ptr());
 
-            if found == glib::GFALSE {
+            if found == glib_ffi::GFALSE {
                 return None;
             }
 
@@ -119,7 +119,7 @@ impl TagList {
         unsafe {
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            let value = gst::gst_tag_list_get_value_index(self.as_ptr(), tag_name.as_ptr(), idx);
+            let value = gst_ffi::gst_tag_list_get_value_index(self.as_ptr(), tag_name.as_ptr(), idx);
 
             if value.is_null() {
                 return None;
@@ -133,7 +133,7 @@ impl TagList {
         unsafe {
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            gst::gst_tag_list_get_tag_size(self.as_ptr(), tag_name.as_ptr())
+            gst_ffi::gst_tag_list_get_tag_size(self.as_ptr(), tag_name.as_ptr())
         }
     }
 
@@ -143,9 +143,9 @@ impl TagList {
 
     pub fn to_string(&self) -> String {
         unsafe {
-            let ptr = gst::gst_tag_list_to_string(self.as_ptr());
+            let ptr = gst_ffi::gst_tag_list_to_string(self.as_ptr());
             let s = CStr::from_ptr(ptr).to_str().unwrap().into();
-            glib::g_free(ptr as glib::gpointer);
+            glib_ffi::g_free(ptr as glib_ffi::gpointer);
 
             s
         }
@@ -160,7 +160,7 @@ impl fmt::Debug for TagList {
 
 impl PartialEq for TagList {
     fn eq(&self, other: &TagList) -> bool {
-        (unsafe { gst::gst_tag_list_is_equal(self.as_ptr(), other.as_ptr()) } == glib::GTRUE)
+        (unsafe { gst_ffi::gst_tag_list_is_equal(self.as_ptr(), other.as_ptr()) } == glib_ffi::GTRUE)
     }
 }
 
@@ -240,7 +240,7 @@ mod tests {
 
     fn init() {
         unsafe {
-            gst::gst_init(ptr::null_mut(), ptr::null_mut());
+            gst_ffi::gst_init(ptr::null_mut(), ptr::null_mut());
         }
     }
 
