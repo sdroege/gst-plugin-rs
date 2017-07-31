@@ -64,13 +64,15 @@ impl HttpSrc {
                   start: u64,
                   stop: Option<u64>)
                   -> Result<StreamingState, ErrorMessage> {
-        let mut req = self.client.get(uri.clone());
+        let mut req = self.client.get(uri.clone()).unwrap();
 
         match (start != 0, stop) {
             (false, None) => (),
-            (true, None) => req = req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)])),
+            (true, None) => {
+                req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]));
+            }
             (_, Some(stop)) => {
-                req = req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]))
+                req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]));
             }
         }
 
