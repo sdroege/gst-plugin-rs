@@ -120,10 +120,10 @@ impl Source for FileSrc {
     }
 
     fn fill(&mut self, offset: u64, _: u32, buffer: &mut Buffer) -> Result<(), FlowError> {
-        // FIXME: Because we borrow streaming state mutably below
-        let logger = self.logger.clone();
+        let logger = &self.logger;
+        let streaming_state = &mut self.streaming_state;
 
-        let (file, position) = match self.streaming_state {
+        let (file, position) = match *streaming_state {
             StreamingState::Started {
                 ref mut file,
                 ref mut position,
