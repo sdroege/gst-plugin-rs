@@ -8,7 +8,7 @@ Application-side bindings for GStreamer can be found here: https://github.com/sd
 
 ## LICENSE
 
-gst-plugins-rs and all crates container in here are licensed under either of
+gst-plugins-rs and all crates contained in here are licensed under either of
 
  * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
    http://www.apache.org/licenses/LICENSE-2.0)
