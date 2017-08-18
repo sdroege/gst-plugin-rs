@@ -16,6 +16,7 @@ extern crate slog;
 #[macro_use]
 extern crate nom;
 extern crate flavors;
+extern crate muldiv;
 
 use gst_plugin::plugin::*;
 use gst_plugin::demuxer::*;

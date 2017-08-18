@@ -11,6 +11,7 @@ gst-plugin = { path="../gst-plugin" }
 slog = "2.0"
 nom = "3.0"
 flavors = {git = "https://github.com/rust-av/flavors.git"}
+muldiv = "0.1"
 
 [lib]
 name = "gstrsflv"

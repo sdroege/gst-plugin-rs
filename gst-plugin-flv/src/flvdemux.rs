@@ -28,6 +28,8 @@ use gst_plugin::bytes::*;
 
 use slog::Logger;
 
+use muldiv::*;
+
 const AUDIO_STREAM_ID: u32 = 0;
 const VIDEO_STREAM_ID: u32 = 1;
 
@@ -736,7 +738,7 @@ impl FlvDemux {
 
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(Some((tag_header.timestamp as u64) * 1000 * 1000));
+            buffer.set_pts((tag_header.timestamp as u64).mul_div_floor(1000_000, 1));
         }
 
         trace!(
@@ -911,7 +913,7 @@ impl FlvDemux {
             if !is_keyframe {
                 buffer.set_flags(BUFFER_FLAG_DELTA_UNIT);
             }
-            buffer.set_dts(Some((tag_header.timestamp as u64) * 1000 * 1000));
+            buffer.set_dts((tag_header.timestamp as u64).mul_div_floor(1000_000, 1));
 
             // Prevent negative numbers
             let pts = if cts < 0 && tag_header.timestamp < (-cts) as u32 {
@@ -919,7 +921,7 @@ impl FlvDemux {
             } else {
                 ((tag_header.timestamp as i64) + (cts as i64)) as u64
             };
-            buffer.set_pts(Some(pts * 1000 * 1000));
+            buffer.set_pts(pts.mul_div_floor(1000_000, 1));
         }
 
         trace!(
