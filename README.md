@@ -1,4 +1,4 @@
-# gst-plugin-rs
+# gst-plugin-rs [![Build Status](https://travis-ci.org/sdroege/gst-plugin-rs.svg?branch=master)](https://travis-ci.org/sdroege/gst-plugin-rs)
 
 [GStreamer](https://gstreamer.freedesktop.org/) elements built in the [Rust programming language](https://www.rust-lang.org/).
 
