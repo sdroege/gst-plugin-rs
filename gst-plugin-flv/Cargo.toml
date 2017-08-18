@@ -10,7 +10,7 @@ url = "1.1"
 gst-plugin = { path="../gst-plugin" }
 slog = "2.0"
 nom = "3.0"
-flavors = {git = "https://github.com/Geal/flavors.git"}
+flavors = {git = "https://github.com/rust-av/flavors.git"}
 
 [lib]
 name = "gstrsflv"

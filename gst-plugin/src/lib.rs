@@ -24,6 +24,7 @@ pub extern crate glib_sys as glib_ffi;
 pub extern crate gstreamer_sys as gst_ffi;
 pub extern crate gstreamer_base_sys as gst_base_ffi;
 
+pub extern crate glib as glib;
 pub extern crate gstreamer as gst;
 
 #[macro_use]

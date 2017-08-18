@@ -16,7 +16,7 @@ fn main() {
 
     let files = ["src/demuxer.c"];
 
-    let mut config = gcc::Config::new();
+    let mut config = gcc::Build::new();
     config.include("src");
 
     for f in files.iter() {
