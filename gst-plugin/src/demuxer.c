@@ -160,7 +160,7 @@ gst_rs_demuxer_sink_activate (GstPad * pad, GstObject * parent)
   demuxer->upstream_size = -1;
   query = gst_query_new_duration (GST_FORMAT_BYTES);
   if (gst_pad_peer_query (pad, query)) {
-    gst_query_parse_duration (query, NULL, &demuxer->upstream_size);
+    gst_query_parse_duration (query, NULL, (gint64 *) &demuxer->upstream_size);
   }
   gst_query_unref (query);
 
@@ -198,7 +198,7 @@ out:
 }
 
 static GstFlowReturn
-gst_rs_demuxer_sink_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
+gst_rs_demuxer_sink_chain (G_GNUC_UNUSED GstPad * pad, GstObject * parent, GstBuffer * buf)
 {
   GstRsDemuxer *demuxer = GST_RS_DEMUXER (parent);
   GstFlowReturn res;
@@ -252,7 +252,7 @@ gst_rs_demuxer_src_query (GstPad * pad, GstObject * parent, GstQuery * query)
       if (format == GST_FORMAT_TIME) {
         gint64 position;
 
-        if (demuxer_get_position (demuxer->instance, &position)) {
+        if (demuxer_get_position (demuxer->instance, (guint64 *) &position)) {
           GST_DEBUG_OBJECT (demuxer, "Returning position %" GST_TIME_FORMAT,
               GST_TIME_ARGS (position));
           gst_query_set_position (query, format, position);
@@ -270,7 +270,7 @@ gst_rs_demuxer_src_query (GstPad * pad, GstObject * parent, GstQuery * query)
       if (format == GST_FORMAT_TIME) {
         gint64 duration;
 
-        if (demuxer_get_duration (demuxer->instance, &duration)) {
+        if (demuxer_get_duration (demuxer->instance, (guint64 *) &duration)) {
           GST_DEBUG_OBJECT (demuxer, "Returning duration %" GST_TIME_FORMAT,
               GST_TIME_ARGS (duration));
           gst_query_set_duration (query, format, duration);
@@ -291,7 +291,7 @@ gst_rs_demuxer_src_query (GstPad * pad, GstObject * parent, GstQuery * query)
 static gboolean
 gst_rs_demuxer_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
 {
-  GstRsDemuxer *demuxer = GST_RS_DEMUXER (parent);
+  G_GNUC_UNUSED GstRsDemuxer *demuxer = GST_RS_DEMUXER (parent);
   gboolean res = FALSE;
 
   switch (GST_EVENT_TYPE (event)) {
@@ -312,7 +312,7 @@ static GstStateChangeReturn
 gst_rs_demuxer_change_state (GstElement * element, GstStateChange transition)
 {
   GstRsDemuxer *demuxer = GST_RS_DEMUXER (element);
-  GstStateChangeReturn result;
+  GstStateChangeReturn result = GST_STATE_CHANGE_SUCCESS;
 
   GST_DEBUG_OBJECT (demuxer, "Change state %s to %s",
       gst_element_state_get_name (GST_STATE_TRANSITION_CURRENT (transition)),
@@ -361,7 +361,7 @@ gst_rs_demuxer_change_state (GstElement * element, GstStateChange transition)
 }
 
 static void
-gst_rs_demuxer_loop (GstRsDemuxer * demuxer)
+gst_rs_demuxer_loop (G_GNUC_UNUSED GstRsDemuxer * demuxer)
 {
   // TODO
   g_assert_not_reached ();
@@ -441,16 +441,15 @@ gst_rs_demuxer_stream_format_changed (GstRsDemuxer * demuxer, guint32 index,
 void
 gst_rs_demuxer_stream_eos (GstRsDemuxer * demuxer, guint32 index)
 {
-  GstCaps *caps;
   GstEvent *event;
 
-  g_assert (index == -1 || demuxer->srcpads[index] != NULL);
+  g_assert (index == (guint32) -1 || demuxer->srcpads[index] != NULL);
 
   GST_DEBUG_OBJECT (demuxer, "EOS for stream %u", index);
 
   event = gst_event_new_eos ();
-  if (index == -1) {
-    gint i;
+  if (index == (guint32) -1) {
+    guint i;
 
     for (i = 0; i < G_N_ELEMENTS (demuxer->srcpads); i++) {
       if (demuxer->srcpads[i])
@@ -498,13 +497,15 @@ gst_rs_demuxer_remove_all_streams (GstRsDemuxer * demuxer)
 }
 
 static gpointer
-gst_rs_demuxer_init_class (gpointer data)
+gst_rs_demuxer_init_class (G_GNUC_UNUSED gpointer data)
 {
   demuxers = g_hash_table_new (g_direct_hash, g_direct_equal);
   GST_DEBUG_CATEGORY_INIT (gst_rs_demuxer_debug, "rsdemux", 0,
       "Rust demuxer base class");
 
   parent_class = g_type_class_ref (GST_TYPE_ELEMENT);
+
+  return NULL;
 }
 
 gboolean
@@ -523,7 +524,8 @@ gst_rs_demuxer_register (GstPlugin * plugin, const gchar * name,
     NULL,
     sizeof (GstRsDemuxer),
     0,
-    (GInstanceInitFunc) gst_rs_demuxer_init
+    (GInstanceInitFunc) gst_rs_demuxer_init,
+    NULL
   };
   GType type;
   gchar *type_name;
