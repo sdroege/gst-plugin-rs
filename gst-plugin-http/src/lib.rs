@@ -8,12 +8,12 @@
 
 #![crate_type = "cdylib"]
 
-extern crate url;
 #[macro_use]
 extern crate gst_plugin;
 extern crate reqwest;
 #[macro_use]
 extern crate slog;
+extern crate url;
 
 use gst_plugin::plugin::*;
 use gst_plugin::source::*;

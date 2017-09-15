@@ -7,22 +7,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate libc;
-extern crate url;
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate lazy_static;
 extern crate byteorder;
-extern crate num_rational;
 #[macro_use]
 extern crate derivative;
-pub extern crate gobject_sys as gobject_ffi;
+#[macro_use]
+extern crate lazy_static;
+extern crate libc;
+extern crate num_rational;
+#[macro_use]
+extern crate slog;
+extern crate url;
 pub extern crate glib_sys as glib_ffi;
-pub extern crate gstreamer_sys as gst_ffi;
+pub extern crate gobject_sys as gobject_ffi;
 pub extern crate gstreamer_base_sys as gst_base_ffi;
+pub extern crate gstreamer_sys as gst_ffi;
 
 pub extern crate glib as glib;
 pub extern crate gstreamer as gst;

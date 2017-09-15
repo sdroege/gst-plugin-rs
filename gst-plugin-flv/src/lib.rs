@@ -8,15 +8,15 @@
 
 #![crate_type = "cdylib"]
 
-extern crate url;
+extern crate flavors;
 #[macro_use]
 extern crate gst_plugin;
-#[macro_use]
-extern crate slog;
+extern crate muldiv;
 #[macro_use]
 extern crate nom;
-extern crate flavors;
-extern crate muldiv;
+#[macro_use]
+extern crate slog;
+extern crate url;
 
 use gst_plugin::plugin::*;
 use gst_plugin::demuxer::*;

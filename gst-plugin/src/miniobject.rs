@@ -41,10 +41,9 @@ impl<T: MiniObject> GstRc<T> {
                 return &mut *self.0;
             }
 
-            self.0 = T::from_mut_ptr(
-                gst_ffi::gst_mini_object_make_writable(self.as_mut_ptr() as *mut gst_ffi::GstMiniObject) as
-                    *mut T::PtrType,
-            );
+            self.0 = T::from_mut_ptr(gst_ffi::gst_mini_object_make_writable(
+                self.as_mut_ptr() as *mut gst_ffi::GstMiniObject,
+            ) as *mut T::PtrType);
             assert!(self.is_writable());
 
             &mut *self.0
@@ -69,8 +68,9 @@ impl<T: MiniObject> GstRc<T> {
     }
 
     fn is_writable(&self) -> bool {
-        (unsafe { gst_ffi::gst_mini_object_is_writable(self.as_ptr() as *const gst_ffi::GstMiniObject) } ==
-            glib_ffi::GTRUE)
+        (unsafe {
+            gst_ffi::gst_mini_object_is_writable(self.as_ptr() as *const gst_ffi::GstMiniObject)
+        } == glib_ffi::GTRUE)
     }
 
     pub unsafe fn into_ptr(self) -> *mut T::PtrType {

@@ -429,7 +429,10 @@ unsafe extern "C" fn sink_class_init(klass: glib_ffi::gpointer, klass_data: glib
     sink_klass.parent_vtable = gobject_ffi::g_type_class_peek_parent(klass);
 }
 
-unsafe extern "C" fn sink_init(instance: *mut gobject_ffi::GTypeInstance, klass: glib_ffi::gpointer) {
+unsafe extern "C" fn sink_init(
+    instance: *mut gobject_ffi::GTypeInstance,
+    klass: glib_ffi::gpointer,
+) {
     let sink = &mut *(instance as *mut RsSink);
     let sink_klass = &*(klass as *const RsSinkClass);
     let sink_info = &*sink_klass.sink_info;
@@ -449,13 +452,17 @@ unsafe extern "C" fn sink_uri_handler_get_type(_type: glib_ffi::GType) -> gst_ff
     gst_ffi::GST_URI_SINK
 }
 
-unsafe extern "C" fn sink_uri_handler_get_protocols(type_: glib_ffi::GType) -> *const *const c_char {
+unsafe extern "C" fn sink_uri_handler_get_protocols(
+    type_: glib_ffi::GType,
+) -> *const *const c_char {
     let klass = gobject_ffi::g_type_class_peek(type_);
     let sink_klass = &*(klass as *const RsSinkClass);
     (*sink_klass.protocols).as_ptr()
 }
 
-unsafe extern "C" fn sink_uri_handler_get_uri(uri_handler: *mut gst_ffi::GstURIHandler) -> *mut c_char {
+unsafe extern "C" fn sink_uri_handler_get_uri(
+    uri_handler: *mut gst_ffi::GstURIHandler,
+) -> *mut c_char {
     sink_get_uri(uri_handler as *const RsSink)
 }
 
@@ -467,7 +474,10 @@ unsafe extern "C" fn sink_uri_handler_set_uri(
     sink_set_uri(uri_handler as *const RsSink, uri, err)
 }
 
-unsafe extern "C" fn sink_uri_handler_init(iface: glib_ffi::gpointer, _iface_data: glib_ffi::gpointer) {
+unsafe extern "C" fn sink_uri_handler_init(
+    iface: glib_ffi::gpointer,
+    _iface_data: glib_ffi::gpointer,
+) {
     let uri_handler_iface = &mut *(iface as *mut gst_ffi::GstURIHandlerInterface);
 
     uri_handler_iface.get_type = Some(sink_uri_handler_get_type);
@@ -514,7 +524,11 @@ pub fn sink_register(plugin: &Plugin, sink_info: SinkInfo) {
             interface_finalize: None,
             interface_data: ptr::null_mut(),
         };
-        gobject_ffi::g_type_add_interface_static(type_, gst_ffi::gst_uri_handler_get_type(), &iface_info);
+        gobject_ffi::g_type_add_interface_static(
+            type_,
+            gst_ffi::gst_uri_handler_get_type(),
+            &iface_info,
+        );
 
         gst_ffi::gst_element_register(plugin.as_ptr(), name_cstr.as_ptr(), rank, type_);
     }

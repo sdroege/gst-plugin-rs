@@ -306,34 +306,43 @@ macro_rules! impl_value_type_simple(
     };
 );
 
-impl_value_type_simple!(bool,
-                        Bool,
-                        gobject_ffi::G_TYPE_BOOLEAN,
-                        |value: &gobject_ffi::GValue| !(gobject_ffi::g_value_get_boolean(value) == 0),
-                        |value: &mut gobject_ffi::GValue, v| {
-                            gobject_ffi::g_value_set_boolean(value,
-                                                         if v { glib_ffi::GTRUE } else { glib_ffi::GFALSE })
-                        });
-impl_value_type_simple!(i32,
-                        Int,
-                        gobject_ffi::G_TYPE_INT,
-                        |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_int(value),
-                        |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_int(value, v));
-impl_value_type_simple!(u32,
-                        UInt,
-                        gobject_ffi::G_TYPE_UINT,
-                        |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_uint(value),
-                        |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_uint(value, v));
-impl_value_type_simple!(i64,
-                        Int64,
-                        gobject_ffi::G_TYPE_INT64,
-                        |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_int64(value),
-                        |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_int64(value, v));
-impl_value_type_simple!(u64,
-                        UInt64,
-                        gobject_ffi::G_TYPE_UINT64,
-                        |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_uint64(value),
-                        |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_uint64(value, v));
+impl_value_type_simple!(
+    bool,
+    Bool,
+    gobject_ffi::G_TYPE_BOOLEAN,
+    |value: &gobject_ffi::GValue| !(gobject_ffi::g_value_get_boolean(value) == 0),
+    |value: &mut gobject_ffi::GValue, v| {
+        gobject_ffi::g_value_set_boolean(value, if v { glib_ffi::GTRUE } else { glib_ffi::GFALSE })
+    }
+);
+impl_value_type_simple!(
+    i32,
+    Int,
+    gobject_ffi::G_TYPE_INT,
+    |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_int(value),
+    |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_int(value, v)
+);
+impl_value_type_simple!(
+    u32,
+    UInt,
+    gobject_ffi::G_TYPE_UINT,
+    |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_uint(value),
+    |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_uint(value, v)
+);
+impl_value_type_simple!(
+    i64,
+    Int64,
+    gobject_ffi::G_TYPE_INT64,
+    |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_int64(value),
+    |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_int64(value, v)
+);
+impl_value_type_simple!(
+    u64,
+    UInt64,
+    gobject_ffi::G_TYPE_UINT64,
+    |value: &gobject_ffi::GValue| gobject_ffi::g_value_get_uint64(value),
+    |value: &mut gobject_ffi::GValue, v| gobject_ffi::g_value_set_uint64(value, v)
+);
 impl_value_type_simple!(
     Rational32,
     Fraction,

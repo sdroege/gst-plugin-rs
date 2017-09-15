@@ -342,11 +342,9 @@ unsafe extern "C" fn source_fill(
     let wrap: &SourceWrapper = &*src.wrap;
     let buffer: &mut Buffer = <Buffer as MiniObject>::from_mut_ptr(buffer);
 
-    panic_to_error!(
-        wrap,
-        gst_ffi::GST_FLOW_ERROR,
-        { wrap.fill(offset, length, buffer) }
-    )
+    panic_to_error!(wrap, gst_ffi::GST_FLOW_ERROR, {
+        wrap.fill(offset, length, buffer)
+    })
 }
 
 unsafe extern "C" fn source_seek(
@@ -519,7 +517,10 @@ unsafe extern "C" fn source_class_init(klass: glib_ffi::gpointer, klass_data: gl
     src_klass.parent_vtable = gobject_ffi::g_type_class_peek_parent(klass);
 }
 
-unsafe extern "C" fn source_init(instance: *mut gobject_ffi::GTypeInstance, klass: glib_ffi::gpointer) {
+unsafe extern "C" fn source_init(
+    instance: *mut gobject_ffi::GTypeInstance,
+    klass: glib_ffi::gpointer,
+) {
     let src = &mut *(instance as *mut RsSrc);
     let src_klass = &*(klass as *const RsSrcClass);
     let source_info = &*src_klass.source_info;
@@ -539,7 +540,9 @@ unsafe extern "C" fn source_uri_handler_get_type(_type: glib_ffi::GType) -> gst_
     gst_ffi::GST_URI_SRC
 }
 
-unsafe extern "C" fn source_uri_handler_get_protocols(type_: glib_ffi::GType) -> *const *const c_char {
+unsafe extern "C" fn source_uri_handler_get_protocols(
+    type_: glib_ffi::GType,
+) -> *const *const c_char {
     let klass = gobject_ffi::g_type_class_peek(type_);
     let src_klass = &*(klass as *const RsSrcClass);
     (*src_klass.protocols).as_ptr()
@@ -559,7 +562,10 @@ unsafe extern "C" fn source_uri_handler_set_uri(
     source_set_uri(uri_handler as *const RsSrc, uri, err)
 }
 
-unsafe extern "C" fn source_uri_handler_init(iface: glib_ffi::gpointer, _iface_data: glib_ffi::gpointer) {
+unsafe extern "C" fn source_uri_handler_init(
+    iface: glib_ffi::gpointer,
+    _iface_data: glib_ffi::gpointer,
+) {
     let uri_handler_iface = &mut *(iface as *mut gst_ffi::GstURIHandlerInterface);
 
     uri_handler_iface.get_type = Some(source_uri_handler_get_type);
@@ -610,7 +616,11 @@ pub fn source_register(plugin: &Plugin, source_info: SourceInfo) {
             interface_finalize: None,
             interface_data: ptr::null_mut(),
         };
-        gobject_ffi::g_type_add_interface_static(type_, gst_ffi::gst_uri_handler_get_type(), &iface_info);
+        gobject_ffi::g_type_add_interface_static(
+            type_,
+            gst_ffi::gst_uri_handler_get_type(),
+            &iface_info,
+        );
 
         gst_ffi::gst_element_register(plugin.as_ptr(), name_cstr.as_ptr(), rank, type_);
     }

@@ -145,7 +145,6 @@ impl DemuxerWrapper {
                 false
             }
         }
-
     }
     fn stop(&self) -> bool {
         let demuxer = &mut self.demuxer.lock().unwrap();
@@ -190,7 +189,6 @@ impl DemuxerWrapper {
                 glib_ffi::GTRUE
             }
         }
-
     }
 
     fn get_duration(&self, duration: &mut u64) -> glib_ffi::gboolean {
@@ -494,7 +492,6 @@ pub unsafe extern "C" fn demuxer_seek(
     stop: u64,
     offset: *mut u64,
 ) -> glib_ffi::gboolean {
-
     let wrap: &mut DemuxerWrapper = &mut *ptr;
 
     panic_to_error!(wrap, glib_ffi::GFALSE, {

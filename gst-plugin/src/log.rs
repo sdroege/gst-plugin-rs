@@ -58,7 +58,10 @@ impl GstDebugDrain {
 
         if !element.is_null() {
             unsafe {
-                gobject_ffi::g_weak_ref_set(&mut *drain.element, element as *mut gobject_ffi::GObject);
+                gobject_ffi::g_weak_ref_set(
+                    &mut *drain.element,
+                    element as *mut gobject_ffi::GObject,
+                );
             }
         }
 

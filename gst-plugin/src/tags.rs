@@ -105,7 +105,8 @@ impl TagList {
             let mut gvalue = mem::zeroed();
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            let found = gst_ffi::gst_tag_list_copy_value(&mut gvalue, self.as_ptr(), tag_name.as_ptr());
+            let found =
+                gst_ffi::gst_tag_list_copy_value(&mut gvalue, self.as_ptr(), tag_name.as_ptr());
 
             if found == glib_ffi::GFALSE {
                 return None;
@@ -119,7 +120,8 @@ impl TagList {
         unsafe {
             let tag_name = CString::new(T::tag_name()).unwrap();
 
-            let value = gst_ffi::gst_tag_list_get_value_index(self.as_ptr(), tag_name.as_ptr(), idx);
+            let value =
+                gst_ffi::gst_tag_list_get_value_index(self.as_ptr(), tag_name.as_ptr(), idx);
 
             if value.is_null() {
                 return None;
@@ -160,7 +162,8 @@ impl fmt::Debug for TagList {
 
 impl PartialEq for TagList {
     fn eq(&self, other: &TagList) -> bool {
-        (unsafe { gst_ffi::gst_tag_list_is_equal(self.as_ptr(), other.as_ptr()) } == glib_ffi::GTRUE)
+        (unsafe { gst_ffi::gst_tag_list_is_equal(self.as_ptr(), other.as_ptr()) } ==
+            glib_ffi::GTRUE)
     }
 }
 

@@ -74,11 +74,15 @@ impl Stream {
     }
 
     pub fn get_stream_flags(&self) -> StreamFlags {
-        StreamFlags::from_bits_truncate(unsafe { gst_ffi::gst_stream_get_stream_flags(self.0).bits() })
+        StreamFlags::from_bits_truncate(unsafe {
+            gst_ffi::gst_stream_get_stream_flags(self.0).bits()
+        })
     }
 
     pub fn get_stream_type(&self) -> StreamType {
-        StreamType::from_bits_truncate(unsafe { gst_ffi::gst_stream_get_stream_type(self.0).bits() })
+        StreamType::from_bits_truncate(unsafe {
+            gst_ffi::gst_stream_get_stream_type(self.0).bits()
+        })
     }
 
     pub fn get_stream_id(&self) -> &str {
@@ -122,8 +126,10 @@ impl Stream {
 impl Clone for Stream {
     fn clone(&self) -> Self {
         unsafe {
-            Stream(gst_ffi::gst_object_ref(self.0 as *mut gst_ffi::GstObject) as
-                *mut gst_ffi::GstStream)
+            Stream(
+                gst_ffi::gst_object_ref(self.0 as *mut gst_ffi::GstObject) as
+                    *mut gst_ffi::GstStream,
+            )
         }
     }
 }
@@ -161,7 +167,8 @@ impl StreamCollection {
     }
 
     pub fn get_upstream_id(&self) -> &str {
-        let cstr = unsafe { CStr::from_ptr(gst_ffi::gst_stream_collection_get_upstream_id(self.0)) };
+        let cstr =
+            unsafe { CStr::from_ptr(gst_ffi::gst_stream_collection_get_upstream_id(self.0)) };
         cstr.to_str().unwrap()
     }
 
@@ -203,8 +210,10 @@ impl<'a> Iterator for StreamCollectionIterator<'a> {
         self.position += 1;
 
         Some(unsafe {
-            Stream(gst_ffi::gst_object_ref(stream as *mut gst_ffi::GstObject) as
-                *mut gst_ffi::GstStream)
+            Stream(
+                gst_ffi::gst_object_ref(stream as *mut gst_ffi::GstObject) as
+                    *mut gst_ffi::GstStream,
+            )
         })
     }
 
@@ -235,8 +244,10 @@ impl<'a> DoubleEndedIterator for StreamCollectionIterator<'a> {
         }
 
         Some(unsafe {
-            Stream(gst_ffi::gst_object_ref(stream as *mut gst_ffi::GstObject) as
-                *mut gst_ffi::GstStream)
+            Stream(
+                gst_ffi::gst_object_ref(stream as *mut gst_ffi::GstObject) as
+                    *mut gst_ffi::GstStream,
+            )
         })
     }
 }
@@ -246,8 +257,10 @@ impl<'a> ExactSizeIterator for StreamCollectionIterator<'a> {}
 impl Clone for StreamCollection {
     fn clone(&self) -> Self {
         unsafe {
-            StreamCollection(gst_ffi::gst_object_ref(self.0 as *mut gst_ffi::GstObject) as
-                *mut gst_ffi::GstStreamCollection)
+            StreamCollection(
+                gst_ffi::gst_object_ref(self.0 as *mut gst_ffi::GstObject) as
+                    *mut gst_ffi::GstStreamCollection,
+            )
         }
     }
 }
