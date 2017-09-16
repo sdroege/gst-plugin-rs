@@ -11,10 +11,9 @@
 #[macro_use]
 extern crate gst_plugin;
 #[macro_use]
-extern crate slog;
+extern crate gstreamer as gst;
 extern crate url;
 
-use gst_plugin::plugin::*;
 use gst_plugin::source::*;
 use gst_plugin::sink::*;
 
@@ -24,7 +23,7 @@ mod filesink;
 use filesrc::FileSrc;
 use filesink::FileSink;
 
-fn plugin_init(plugin: &Plugin) -> bool {
+fn plugin_init(plugin: &gst::Plugin) -> bool {
     source_register(
         plugin,
         SourceInfo {

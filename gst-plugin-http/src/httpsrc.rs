@@ -15,11 +15,9 @@ use reqwest::header::{AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, 
 
 use gst_plugin::error::*;
 use gst_plugin::source::*;
-use gst_plugin::buffer::*;
-use gst_plugin::utils::*;
-use gst_plugin::log::*;
 
-use slog::Logger;
+use gst;
+use gst::prelude::*;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -38,32 +36,35 @@ enum StreamingState {
 #[derive(Debug)]
 pub struct HttpSrc {
     streaming_state: StreamingState,
-    logger: Logger,
+    cat: gst::DebugCategory,
     client: Client,
 }
 
 impl HttpSrc {
-    pub fn new(element: Element) -> HttpSrc {
+    pub fn new(_src: &RsSrcWrapper) -> HttpSrc {
         HttpSrc {
             streaming_state: StreamingState::Stopped,
-            logger: Logger::root(
-                GstDebugDrain::new(Some(&element), "rshttpsink", 0, "Rust http sink"),
-                o!(),
+            cat: gst::DebugCategory::new(
+                "rshttpsrc",
+                gst::DebugColorFlags::empty(),
+                "Rust HTTP source",
             ),
             client: Client::new().unwrap(),
         }
     }
 
-    pub fn new_boxed(element: Element) -> Box<Source> {
-        Box::new(HttpSrc::new(element))
+    pub fn new_boxed(src: &RsSrcWrapper) -> Box<Source> {
+        Box::new(HttpSrc::new(src))
     }
 
     fn do_request(
         &self,
+        src: &RsSrcWrapper,
         uri: Url,
         start: u64,
         stop: Option<u64>,
     ) -> Result<StreamingState, ErrorMessage> {
+        let cat = self.cat;
         let mut req = self.client.get(uri.clone()).unwrap();
 
         match (start != 0, stop) {
@@ -76,20 +77,20 @@ impl HttpSrc {
             }
         }
 
-        debug!(self.logger, "Doing new request {:?}", req);
+        gst_debug!(cat, obj: src, "Doing new request {:?}", req);
 
         let response = try!(req.send().or_else(|err| {
-            error!(self.logger, "Request failed: {:?}", err);
+            gst_error!(cat, obj: src, "Request failed: {:?}", err);
             Err(error_msg!(
-                SourceError::ReadFailed,
+                gst::ResourceError::Read,
                 ["Failed to fetch {}: {}", uri, err.to_string()]
             ))
         }));
 
         if !response.status().is_success() {
-            error!(self.logger, "Request status failed: {:?}", response);
+            gst_error!(cat, obj: src, "Request status failed: {:?}", response);
             return Err(error_msg!(
-                SourceError::ReadFailed,
+                gst::ResourceError::Read,
                 ["Failed to fetch {}: {}", uri, response.status()]
             ));
         }
@@ -121,12 +122,12 @@ impl HttpSrc {
 
         if position != start {
             return Err(error_msg!(
-                SourceError::SeekFailed,
+                gst::ResourceError::Seek,
                 ["Failed to seek to {}: Got {}", start, position]
             ));
         }
 
-        debug!(self.logger, "Request successful: {:?}", response);
+        gst_debug!(cat, obj: src, "Request successful: {:?}", response);
 
         Ok(StreamingState::Started {
             uri: uri,
@@ -143,8 +144,8 @@ impl HttpSrc {
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
     if uri.scheme() != "http" && uri.scheme() != "https" {
         return Err(UriError::new(
-            UriErrorKind::UnsupportedProtocol,
-            Some(format!("Unsupported URI '{}'", uri.as_str())),
+            gst::URIError::UnsupportedProtocol,
+            format!("Unsupported URI '{}'", uri.as_str()),
         ));
     }
 
@@ -156,34 +157,39 @@ impl Source for HttpSrc {
         Box::new(validate_uri)
     }
 
-    fn is_seekable(&self) -> bool {
+    fn is_seekable(&self, _src: &RsSrcWrapper) -> bool {
         match self.streaming_state {
             StreamingState::Started { seekable, .. } => seekable,
             _ => false,
         }
     }
 
-    fn get_size(&self) -> Option<u64> {
+    fn get_size(&self, _src: &RsSrcWrapper) -> Option<u64> {
         match self.streaming_state {
             StreamingState::Started { size, .. } => size,
             _ => None,
         }
     }
 
-    fn start(&mut self, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, src: &RsSrcWrapper, uri: Url) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
-        self.streaming_state = try!(self.do_request(uri, 0, None));
+        self.streaming_state = try!(self.do_request(src, uri, 0, None));
 
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _src: &RsSrcWrapper) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
     }
 
-    fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage> {
+    fn seek(
+        &mut self,
+        src: &RsSrcWrapper,
+        start: u64,
+        stop: Option<u64>,
+    ) -> Result<(), ErrorMessage> {
         let (position, old_stop, uri) = match self.streaming_state {
             StreamingState::Started {
                 position,
@@ -192,7 +198,7 @@ impl Source for HttpSrc {
                 ..
             } => (position, stop, uri.clone()),
             StreamingState::Stopped => {
-                return Err(error_msg!(SourceError::Failure, ["Not started yet"]));
+                return Err(error_msg!(gst::LibraryError::Failed, ["Not started yet"]));
             }
         };
 
@@ -201,13 +207,19 @@ impl Source for HttpSrc {
         }
 
         self.streaming_state = StreamingState::Stopped;
-        self.streaming_state = try!(self.do_request(uri, start, stop));
+        self.streaming_state = try!(self.do_request(src, uri, start, stop));
 
         Ok(())
     }
 
-    fn fill(&mut self, offset: u64, _: u32, buffer: &mut Buffer) -> Result<(), FlowError> {
-        let logger = self.logger.clone();
+    fn fill(
+        &mut self,
+        src: &RsSrcWrapper,
+        offset: u64,
+        _: u32,
+        buffer: &mut gst::BufferRef,
+    ) -> Result<(), FlowError> {
+        let cat = self.cat;
 
         let (response, position) = match self.streaming_state {
             StreamingState::Started {
@@ -217,24 +229,25 @@ impl Source for HttpSrc {
             } => (response, position),
             StreamingState::Stopped => {
                 return Err(FlowError::Error(
-                    error_msg!(SourceError::Failure, ["Not started yet"]),
+                    error_msg!(gst::LibraryError::Failed, ["Not started yet"]),
                 ));
             }
         };
 
         if *position != offset {
             return Err(FlowError::Error(error_msg!(
-                SourceError::SeekFailed,
+                gst::ResourceError::Seek,
                 ["Got unexpected offset {}, expected {}", offset, position]
             )));
         }
 
         let size = {
-            let mut map = match buffer.map_readwrite() {
+            let mut map = match buffer.map_writable() {
                 None => {
-                    return Err(FlowError::Error(
-                        error_msg!(SourceError::Failure, ["Failed to map buffer"]),
-                    ));
+                    return Err(FlowError::Error(error_msg!(
+                        gst::LibraryError::Failed,
+                        ["Failed to map buffer"]
+                    )));
                 }
                 Some(map) => map,
             };
@@ -242,9 +255,9 @@ impl Source for HttpSrc {
             let data = map.as_mut_slice();
 
             try!(response.read(data).or_else(|err| {
-                error!(logger, "Failed to read: {:?}", err);
+                gst_error!(cat, obj: src, "Failed to read: {:?}", err);
                 Err(FlowError::Error(error_msg!(
-                    SourceError::ReadFailed,
+                    gst::ResourceError::Read,
                     ["Failed to read at {}: {}", offset, err.to_string()]
                 )))
             }))

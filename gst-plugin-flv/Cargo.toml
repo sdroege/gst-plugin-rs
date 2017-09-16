@@ -8,7 +8,8 @@ license = "MIT/Apache-2.0"
 [dependencies]
 url = "1.1"
 gst-plugin = { path="../gst-plugin" }
-slog = "2.0"
+gstreamer = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
+num-rational = { version = "0.1", default-features = false, features = [] }
 nom = "3.0"
 flavors = {git = "https://github.com/rust-av/flavors.git"}
 muldiv = "0.1"

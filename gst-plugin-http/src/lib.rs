@@ -10,19 +10,18 @@
 
 #[macro_use]
 extern crate gst_plugin;
-extern crate reqwest;
 #[macro_use]
-extern crate slog;
+extern crate gstreamer as gst;
+extern crate reqwest;
 extern crate url;
 
-use gst_plugin::plugin::*;
 use gst_plugin::source::*;
 
 mod httpsrc;
 
 use httpsrc::HttpSrc;
 
-fn plugin_init(plugin: &Plugin) -> bool {
+fn plugin_init(plugin: &gst::Plugin) -> bool {
     source_register(
         plugin,
         SourceInfo {

@@ -13,11 +13,9 @@ use url::Url;
 
 use gst_plugin::error::*;
 use gst_plugin::source::*;
-use gst_plugin::buffer::*;
-use gst_plugin::log::*;
-use gst_plugin::utils::*;
 
-use slog::Logger;
+use gst;
+use gst::prelude::*;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -28,30 +26,31 @@ enum StreamingState {
 #[derive(Debug)]
 pub struct FileSrc {
     streaming_state: StreamingState,
-    logger: Logger,
+    cat: gst::DebugCategory,
 }
 
 impl FileSrc {
-    pub fn new(element: Element) -> FileSrc {
+    pub fn new(_src: &RsSrcWrapper) -> FileSrc {
         FileSrc {
             streaming_state: StreamingState::Stopped,
-            logger: Logger::root(
-                GstDebugDrain::new(Some(&element), "rsfilesrc", 0, "Rust file source"),
-                o!(),
+            cat: gst::DebugCategory::new(
+                "rsfilesrc",
+                gst::DebugColorFlags::empty(),
+                "Rust file source",
             ),
         }
     }
 
-    pub fn new_boxed(element: Element) -> Box<Source> {
-        Box::new(FileSrc::new(element))
+    pub fn new_boxed(src: &RsSrcWrapper) -> Box<Source> {
+        Box::new(FileSrc::new(src))
     }
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
     let _ = try!(uri.to_file_path().or_else(|_| {
         Err(UriError::new(
-            UriErrorKind::UnsupportedProtocol,
-            Some(format!("Unsupported file URI '{}'", uri.as_str())),
+            gst::URIError::UnsupportedProtocol,
+            format!("Unsupported file URI '{}'", uri.as_str()),
         ))
     }));
     Ok(())
@@ -62,11 +61,11 @@ impl Source for FileSrc {
         Box::new(validate_uri)
     }
 
-    fn is_seekable(&self) -> bool {
+    fn is_seekable(&self, _src: &RsSrcWrapper) -> bool {
         true
     }
 
-    fn get_size(&self) -> Option<u64> {
+    fn get_size(&self, _src: &RsSrcWrapper) -> Option<u64> {
         if let StreamingState::Started { ref file, .. } = self.streaming_state {
             file.metadata().ok().map(|m| m.len())
         } else {
@@ -74,27 +73,36 @@ impl Source for FileSrc {
         }
     }
 
-    fn start(&mut self, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, src: &RsSrcWrapper, uri: Url) -> Result<(), ErrorMessage> {
         if let StreamingState::Started { .. } = self.streaming_state {
-            return Err(error_msg!(SourceError::Failure, ["Source already started"]));
+            return Err(error_msg!(
+                gst::LibraryError::Failed,
+                ["Source already started"]
+            ));
         }
 
         let location = try!(uri.to_file_path().or_else(|_| {
-            error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
+            gst_error!(
+                self.cat,
+                obj: src,
+                "Unsupported file URI '{}'",
+                uri.as_str()
+            );
             Err(error_msg!(
-                SourceError::Failure,
+                gst::LibraryError::Failed,
                 ["Unsupported file URI '{}'", uri.as_str()]
             ))
         }));
 
         let file = try!(File::open(location.as_path()).or_else(|err| {
-            error!(
-                self.logger,
+            gst_error!(
+                self.cat,
+                obj: src,
                 "Could not open file for reading: {}",
                 err.to_string()
             );
             Err(error_msg!(
-                SourceError::OpenFailed,
+                gst::ResourceError::OpenRead,
                 [
                     "Could not open file for reading '{}': {}",
                     location.to_str().unwrap_or("Non-UTF8 path"),
@@ -103,7 +111,7 @@ impl Source for FileSrc {
             ))
         }));
 
-        debug!(self.logger, "Opened file {:?}", file);
+        gst_debug!(self.cat, obj: src, "Opened file {:?}", file);
 
         self.streaming_state = StreamingState::Started {
             file: file,
@@ -113,14 +121,20 @@ impl Source for FileSrc {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _src: &RsSrcWrapper) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
     }
 
-    fn fill(&mut self, offset: u64, _: u32, buffer: &mut Buffer) -> Result<(), FlowError> {
-        let logger = &self.logger;
+    fn fill(
+        &mut self,
+        src: &RsSrcWrapper,
+        offset: u64,
+        _: u32,
+        buffer: &mut gst::BufferRef,
+    ) -> Result<(), FlowError> {
+        let cat = self.cat;
         let streaming_state = &mut self.streaming_state;
 
         let (file, position) = match *streaming_state {
@@ -130,16 +144,16 @@ impl Source for FileSrc {
             } => (file, position),
             StreamingState::Stopped => {
                 return Err(FlowError::Error(
-                    error_msg!(SourceError::Failure, ["Not started yet"]),
+                    error_msg!(gst::LibraryError::Failed, ["Not started yet"]),
                 ));
             }
         };
 
         if *position != offset {
             try!(file.seek(SeekFrom::Start(offset)).or_else(|err| {
-                error!(logger, "Failed to seek to {}: {:?}", offset, err);
+                gst_error!(cat, obj: src, "Failed to seek to {}: {:?}", offset, err);
                 Err(FlowError::Error(error_msg!(
-                    SourceError::SeekFailed,
+                    gst::ResourceError::Seek,
                     ["Failed to seek to {}: {}", offset, err.to_string()]
                 )))
             }));
@@ -147,11 +161,12 @@ impl Source for FileSrc {
         }
 
         let size = {
-            let mut map = match buffer.map_readwrite() {
+            let mut map = match buffer.map_writable() {
                 None => {
-                    return Err(FlowError::Error(
-                        error_msg!(SourceError::Failure, ["Failed to map buffer"]),
-                    ));
+                    return Err(FlowError::Error(error_msg!(
+                        gst::LibraryError::Failed,
+                        ["Failed to map buffer"]
+                    )));
                 }
                 Some(map) => map,
             };
@@ -159,9 +174,9 @@ impl Source for FileSrc {
             let data = map.as_mut_slice();
 
             try!(file.read(data).or_else(|err| {
-                error!(logger, "Failed to read: {:?}", err);
+                gst_error!(cat, obj: src, "Failed to read: {:?}", err);
                 Err(FlowError::Error(error_msg!(
-                    SourceError::ReadFailed,
+                    gst::ResourceError::Read,
                     ["Failed to read at {}: {}", offset, err.to_string()]
                 )))
             }))
@@ -174,7 +189,7 @@ impl Source for FileSrc {
         Ok(())
     }
 
-    fn seek(&mut self, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
+    fn seek(&mut self, _src: &RsSrcWrapper, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
         Ok(())
     }
 }

@@ -11,22 +11,21 @@
 extern crate flavors;
 #[macro_use]
 extern crate gst_plugin;
+#[macro_use]
+extern crate gstreamer as gst;
 extern crate muldiv;
-#[macro_use]
 extern crate nom;
-#[macro_use]
-extern crate slog;
+extern crate num_rational;
 extern crate url;
 
-use gst_plugin::plugin::*;
 use gst_plugin::demuxer::*;
-use gst_plugin::caps::*;
+use gst::prelude::*;
 
 mod flvdemux;
 
 use flvdemux::FlvDemux;
 
-fn plugin_init(plugin: &Plugin) -> bool {
+fn plugin_init(plugin: &gst::Plugin) -> bool {
     demuxer_register(
         plugin,
         &DemuxerInfo {
@@ -37,8 +36,8 @@ fn plugin_init(plugin: &Plugin) -> bool {
             author: "Sebastian Dröge <sebastian@centricular.com>",
             rank: 256 + 100,
             create_instance: FlvDemux::new_boxed,
-            input_caps: &Caps::new_simple("video/x-flv", &[]),
-            output_caps: &Caps::new_any(),
+            input_caps: &gst::Caps::new_simple("video/x-flv", &[]),
+            output_caps: &gst::Caps::new_any(),
         },
     );
 

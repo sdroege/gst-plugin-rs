@@ -15,11 +15,9 @@ use std::convert::From;
 
 use gst_plugin::error::*;
 use gst_plugin::sink::*;
-use gst_plugin::buffer::*;
-use gst_plugin::utils::*;
-use gst_plugin::log::*;
 
-use slog::Logger;
+use gst;
+use gst::prelude::*;
 
 #[derive(Debug)]
 enum StreamingState {
@@ -30,30 +28,31 @@ enum StreamingState {
 #[derive(Debug)]
 pub struct FileSink {
     streaming_state: StreamingState,
-    logger: Logger,
+    cat: gst::DebugCategory,
 }
 
 impl FileSink {
-    pub fn new(element: Element) -> FileSink {
+    pub fn new(_sink: &RsSinkWrapper) -> FileSink {
         FileSink {
             streaming_state: StreamingState::Stopped,
-            logger: Logger::root(
-                GstDebugDrain::new(Some(&element), "rsfilesink", 0, "Rust file sink"),
-                o!(),
+            cat: gst::DebugCategory::new(
+                "rsfilesink",
+                gst::DebugColorFlags::empty(),
+                "Rust file source",
             ),
         }
     }
 
-    pub fn new_boxed(element: Element) -> Box<Sink> {
-        Box::new(FileSink::new(element))
+    pub fn new_boxed(sink: &RsSinkWrapper) -> Box<Sink> {
+        Box::new(FileSink::new(sink))
     }
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
     let _ = try!(uri.to_file_path().or_else(|_| {
         Err(UriError::new(
-            UriErrorKind::UnsupportedProtocol,
-            Some(format!("Unsupported file URI '{}'", uri.as_str())),
+            gst::URIError::UnsupportedProtocol,
+            format!("Unsupported file URI '{}'", uri.as_str()),
         ))
     }));
     Ok(())
@@ -64,28 +63,37 @@ impl Sink for FileSink {
         Box::new(validate_uri)
     }
 
-    fn start(&mut self, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, sink: &RsSinkWrapper, uri: Url) -> Result<(), ErrorMessage> {
         if let StreamingState::Started { .. } = self.streaming_state {
-            return Err(error_msg!(SinkError::Failure, ["Sink already started"]));
+            return Err(error_msg!(
+                gst::LibraryError::Failed,
+                ["Sink already started"]
+            ));
         }
 
         let location = try!(uri.to_file_path().or_else(|_| {
-            error!(self.logger, "Unsupported file URI '{}'", uri.as_str());
+            gst_error!(
+                self.cat,
+                obj: sink,
+                "Unsupported file URI '{}'",
+                uri.as_str()
+            );
             Err(error_msg!(
-                SinkError::Failure,
+                gst::LibraryError::Failed,
                 ["Unsupported file URI '{}'", uri.as_str()]
             ))
         }));
 
 
         let file = try!(File::create(location.as_path()).or_else(|err| {
-            error!(
-                self.logger,
+            gst_error!(
+                self.cat,
+                obj: sink,
                 "Could not open file for writing: {}",
                 err.to_string()
             );
             Err(error_msg!(
-                SinkError::OpenFailed,
+                gst::ResourceError::OpenWrite,
                 [
                     "Could not open file for writing '{}': {}",
                     location.to_str().unwrap_or("Non-UTF8 path"),
@@ -94,7 +102,7 @@ impl Sink for FileSink {
             ))
         }));
 
-        debug!(self.logger, "Opened file {:?}", file);
+        gst_debug!(self.cat, obj: sink, "Opened file {:?}", file);
 
         self.streaming_state = StreamingState::Started {
             file: file,
@@ -104,17 +112,17 @@ impl Sink for FileSink {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _sink: &RsSinkWrapper) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
     }
 
-    fn render(&mut self, buffer: &Buffer) -> Result<(), FlowError> {
-        let logger = &self.logger;
+    fn render(&mut self, sink: &RsSinkWrapper, buffer: &gst::BufferRef) -> Result<(), FlowError> {
+        let cat = self.cat;
         let streaming_state = &mut self.streaming_state;
 
-        trace!(logger, "Rendering {:?}", buffer);
+        gst_trace!(cat, obj: sink, "Rendering {:?}", buffer);
 
         let (file, position) = match *streaming_state {
             StreamingState::Started {
@@ -123,25 +131,26 @@ impl Sink for FileSink {
             } => (file, position),
             StreamingState::Stopped => {
                 return Err(FlowError::Error(
-                    error_msg!(SinkError::Failure, ["Not started yet"]),
+                    error_msg!(gst::LibraryError::Failed, ["Not started yet"]),
                 ));
             }
         };
 
-        let map = match buffer.map_read() {
+        let map = match buffer.map_readable() {
             None => {
-                return Err(FlowError::Error(
-                    error_msg!(SinkError::Failure, ["Failed to map buffer"]),
-                ));
+                return Err(FlowError::Error(error_msg!(
+                    gst::LibraryError::Failed,
+                    ["Failed to map buffer"]
+                )));
             }
             Some(map) => map,
         };
         let data = map.as_slice();
 
         try!(file.write_all(data).or_else(|err| {
-            error!(logger, "Failed to write: {}", err);
+            gst_error!(cat, obj: sink, "Failed to write: {}", err);
             Err(FlowError::Error(error_msg!(
-                SinkError::WriteFailed,
+                gst::ResourceError::Write,
                 ["Failed to write: {}", err]
             )))
         }));

@@ -6,9 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ffi::CString;
-use std::ptr;
-use libc::c_char;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fmt::Error as FmtError;
@@ -18,6 +15,11 @@ use url::Url;
 
 use glib_ffi;
 use gst_ffi;
+
+use glib;
+use glib::translate::ToGlibPtr;
+use gst;
+use gst::prelude::*;
 
 #[macro_export]
 macro_rules! error_msg(
@@ -57,31 +59,19 @@ macro_rules! error_msg(
     }};
 );
 
-pub trait ToGError {
-    fn to_gerror(&self) -> (u32, i32);
-}
-
-pub fn gst_library_error_domain() -> glib_ffi::GQuark {
-    unsafe { gst_ffi::gst_library_error_quark() }
-}
-
-pub fn gst_resource_error_domain() -> glib_ffi::GQuark {
-    unsafe { gst_ffi::gst_resource_error_quark() }
-}
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ErrorMessage {
-    pub error_domain: u32,
-    pub error_code: i32,
-    pub message: Option<String>,
-    pub debug: Option<String>,
-    pub filename: &'static str,
-    pub function: &'static str,
-    pub line: u32,
+    error_domain: glib_ffi::GQuark,
+    error_code: i32,
+    message: Option<String>,
+    debug: Option<String>,
+    filename: &'static str,
+    function: &'static str,
+    line: u32,
 }
 
 impl ErrorMessage {
-    pub fn new<T: ToGError>(
+    pub fn new<T: gst::MessageErrorDomain>(
         error: &T,
         message: Option<Cow<str>>,
         debug: Option<Cow<str>>,
@@ -89,11 +79,12 @@ impl ErrorMessage {
         function: &'static str,
         line: u32,
     ) -> ErrorMessage {
-        let (gdomain, gcode) = error.to_gerror();
+        let domain = T::domain();
+        let code = error.code();
 
         ErrorMessage {
-            error_domain: gdomain,
-            error_code: gcode,
+            error_domain: domain,
+            error_code: code,
             message: message.map(|m| m.into_owned()),
             debug: debug.map(|d| d.into_owned()),
             filename: filename,
@@ -102,8 +93,7 @@ impl ErrorMessage {
         }
     }
 
-
-    pub unsafe fn post(&self, element: *mut gst_ffi::GstElement) {
+    pub fn post<E: IsA<gst::Element>>(&self, element: &E) {
         let ErrorMessage {
             error_domain,
             error_code,
@@ -114,33 +104,23 @@ impl ErrorMessage {
             line,
         } = *self;
 
-        let message_ptr = message.as_ref().map_or(ptr::null(), |m| m.as_ptr()) as *const c_char;
-        let message_len = message.as_ref().map_or(0, |m| m.len());
-
-        let debug_ptr = debug.as_ref().map_or(ptr::null(), |m| m.as_ptr()) as *const c_char;
-        let debug_len = debug.as_ref().map_or(0, |m| m.len());
-
-        let file_cstr = CString::new(filename.as_bytes()).unwrap();
-        let file_ptr = file_cstr.as_ptr();
-
-        let function_cstr = CString::new(function.as_bytes()).unwrap();
-        let function_ptr = function_cstr.as_ptr();
-
-        gst_ffi::gst_element_message_full(
-            element,
-            gst_ffi::GST_MESSAGE_ERROR,
-            error_domain,
-            error_code,
-            glib_ffi::g_strndup(message_ptr, message_len),
-            glib_ffi::g_strndup(debug_ptr, debug_len),
-            file_ptr,
-            function_ptr,
-            line as i32,
-        );
+        unsafe {
+            gst_ffi::gst_element_message_full(
+                element.to_glib_none().0,
+                gst_ffi::GST_MESSAGE_ERROR,
+                error_domain,
+                error_code,
+                message.to_glib_none().0,
+                debug.to_glib_none().0,
+                filename.to_glib_none().0,
+                function.to_glib_none().0,
+                line as i32,
+            );
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FlowError {
     Flushing,
     Eos,
@@ -149,12 +129,12 @@ pub enum FlowError {
 }
 
 impl FlowError {
-    pub fn to_native(&self) -> gst_ffi::GstFlowReturn {
+    pub fn to_native(&self) -> gst::FlowReturn {
         match *self {
-            FlowError::Flushing => gst_ffi::GST_FLOW_FLUSHING,
-            FlowError::Eos => gst_ffi::GST_FLOW_EOS,
-            FlowError::NotNegotiated(..) => gst_ffi::GST_FLOW_NOT_NEGOTIATED,
-            FlowError::Error(..) => gst_ffi::GST_FLOW_ERROR,
+            FlowError::Flushing => gst::FlowReturn::Flushing,
+            FlowError::Eos => gst::FlowReturn::Eos,
+            FlowError::NotNegotiated(..) => gst::FlowReturn::NotNegotiated,
+            FlowError::Error(..) => gst::FlowReturn::Error,
         }
     }
 }
@@ -190,110 +170,76 @@ impl Error for FlowError {
     }
 }
 
-#[derive(Debug)]
-pub enum UriErrorKind {
-    UnsupportedProtocol = 0,
-    BadUri,
-    BadState,
-    BadReference,
-}
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct UriError {
-    error_kind: UriErrorKind,
-    message: Option<String>,
+    error: gst::URIError,
+    message: String,
 }
 
 impl UriError {
-    pub fn new(error_kind: UriErrorKind, message: Option<String>) -> UriError {
+    pub fn new(error: gst::URIError, message: String) -> UriError {
         UriError {
-            error_kind: error_kind,
+            error: error,
             message: message,
         }
     }
 
-    pub fn message(&self) -> &Option<String> {
+    pub fn message(&self) -> &str {
         &self.message
     }
 
-    pub fn kind(&self) -> &UriErrorKind {
-        &self.error_kind
+    pub fn error(&self) -> gst::URIError {
+        self.error
     }
 
-    pub unsafe fn into_gerror(self, err: *mut *mut glib_ffi::GError) {
-        if let Some(msg) = self.message {
-            let cmsg = CString::new(msg.as_str()).unwrap();
-            glib_ffi::g_set_error_literal(
-                err,
-                gst_ffi::gst_uri_error_quark(),
-                self.error_kind as i32,
-                cmsg.as_ptr(),
-            );
-        } else {
-            glib_ffi::g_set_error_literal(
-                err,
-                gst_ffi::gst_uri_error_quark(),
-                self.error_kind as i32,
-                ptr::null(),
-            );
-        }
+    pub fn into_error(self) -> glib::Error {
+        glib::Error::new(self.error, &self.message)
     }
 }
 
 impl Display for UriError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        match self.message {
-            None => f.write_str(self.description()),
-            Some(ref message) => f.write_fmt(format_args!("{}: {}", self.description(), message)),
-        }
+        f.write_fmt(format_args!("{}: {}", self.description(), self.message))
     }
 }
 
 impl Error for UriError {
     fn description(&self) -> &str {
-        match self.error_kind {
-            UriErrorKind::UnsupportedProtocol => "Unsupported protocol",
-            UriErrorKind::BadUri => "Bad URI",
-            UriErrorKind::BadState => "Bad State",
-            UriErrorKind::BadReference => "Bad Reference",
+        match self.error {
+            gst::URIError::UnsupportedProtocol => "Unsupported protocol",
+            gst::URIError::BadUri => "Bad URI",
+            gst::URIError::BadState => "Bad State",
+            gst::URIError::BadReference => "Bad Reference",
+            _ => "Unknown",
         }
     }
 }
 
 pub type UriValidator = Fn(&Url) -> Result<(), UriError>;
 
-#[derive(Debug)]
-pub struct PanicError;
-
-impl ToGError for PanicError {
-    fn to_gerror(&self) -> (u32, i32) {
-        (gst_library_error_domain(), 1)
-    }
-}
-
 #[macro_export]
 macro_rules! panic_to_error(
-    ($wrap:expr, $ret:expr, $code:block) => {{
+    ($wrap:expr, $element:expr, $ret:expr, $code:block) => {{
         if $wrap.panicked.load(Ordering::Relaxed) {
-            error_msg!(PanicError, ["Panicked"]).post($wrap.raw);
-            return $ret;
-        }
+            error_msg!(gst::LibraryError::Failed, ["Panicked"]).post($element);
+            $ret
+        } else {
+            let result = panic::catch_unwind(AssertUnwindSafe(|| $code));
 
-        let result = panic::catch_unwind(AssertUnwindSafe(|| $code));
-
-        match result {
-            Ok(result) => result,
-            Err(err) => {
-                $wrap.panicked.store(true, Ordering::Relaxed);
-                if let Some(cause) = err.downcast_ref::<&str>() {
-                    error_msg!(PanicError, ["Panicked: {}", cause]).post($wrap.raw);
-                } else if let Some(cause) = err.downcast_ref::<String>() {
-                    error_msg!(PanicError, ["Panicked: {}", cause]).post($wrap.raw);
-                } else {
-                    error_msg!(PanicError, ["Panicked"]).post($wrap.raw);
+            match result {
+                Ok(result) => result,
+                Err(err) => {
+                    $wrap.panicked.store(true, Ordering::Relaxed);
+                    if let Some(cause) = err.downcast_ref::<&str>() {
+                        error_msg!(gst::LibraryError::Failed, ["Panicked: {}", cause]).post($element);
+                    } else if let Some(cause) = err.downcast_ref::<String>() {
+                        error_msg!(gst::LibraryError::Failed, ["Panicked: {}", cause]).post($element);
+                    } else {
+                        error_msg!(gst::LibraryError::Failed, ["Panicked"]).post($element);
+                    }
+                    $ret
                 }
-                $ret
             }
         }
-    }}
+    }};
 );

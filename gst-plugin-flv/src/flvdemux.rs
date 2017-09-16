@@ -16,19 +16,15 @@ use flavors::parser as flavors;
 
 use gst_plugin::error::*;
 use gst_plugin::demuxer::*;
-use gst_plugin::buffer::*;
 use gst_plugin::adapter::*;
-use gst_plugin::utils;
-use gst_plugin::utils::Element;
-use gst_plugin::log::*;
-use gst_plugin::caps::Caps;
-use gst_plugin::miniobject::*;
-use gst_plugin::value::Rational32;
 use gst_plugin::bytes::*;
 
-use slog::Logger;
-
 use muldiv::*;
+
+use gst;
+use gst::prelude::*;
+
+use num_rational::Rational32;
 
 const AUDIO_STREAM_ID: u32 = 0;
 const VIDEO_STREAM_ID: u32 = 1;
@@ -56,8 +52,8 @@ struct StreamingState {
 
     metadata: Option<Metadata>,
 
-    aac_sequence_header: Option<GstRc<Buffer>>,
-    avc_sequence_header: Option<GstRc<Buffer>>,
+    aac_sequence_header: Option<gst::Buffer>,
+    avc_sequence_header: Option<gst::Buffer>,
 }
 
 impl StreamingState {
@@ -83,7 +79,7 @@ struct AudioFormat {
     width: u8,
     channels: u8,
     bitrate: Option<u32>,
-    aac_sequence_header: Option<GstRc<Buffer>>,
+    aac_sequence_header: Option<gst::Buffer>,
 }
 
 // Ignores bitrate
@@ -99,7 +95,7 @@ impl AudioFormat {
     fn new(
         data_header: &flavors::AudioDataHeader,
         metadata: &Option<Metadata>,
-        aac_sequence_header: &Option<GstRc<Buffer>>,
+        aac_sequence_header: &Option<gst::Buffer>,
     ) -> AudioFormat {
         let numeric_rate = match (data_header.sound_format, data_header.sound_rate) {
             (flavors::SoundFormat::NELLYMOSER_16KHZ_MONO, _) => 16000,
@@ -143,55 +139,45 @@ impl AudioFormat {
         changed
     }
 
-    fn to_string(&self) -> Option<String> {
-        self.to_caps().map(|c| c.to_string())
-    }
-
-    fn to_caps(&self) -> Option<GstRc<Caps>> {
+    fn to_caps(&self) -> Option<gst::Caps> {
         let mut caps = match self.format {
-            flavors::SoundFormat::MP3 | flavors::SoundFormat::MP3_8KHZ => Some(Caps::new_simple(
-                "audio/mpeg",
-                &[("mpegversion", 1i32.into()), ("layer", 3i32.into())],
-            )),
+            flavors::SoundFormat::MP3 | flavors::SoundFormat::MP3_8KHZ => Some(
+                gst::Caps::new_simple("audio/mpeg", &[("mpegversion", &1i32), ("layer", &3i32)]),
+            ),
             flavors::SoundFormat::PCM_NE | flavors::SoundFormat::PCM_LE => {
                 if self.rate != 0 && self.channels != 0 {
                     // Assume little-endian for "PCM_NE", it's probably more common and we have no
                     // way to know what the endianness of the system creating the stream was
-                    Some(Caps::new_simple(
+                    Some(gst::Caps::new_simple(
                         "audio/x-raw",
                         &[
-                            ("layout", "interleaved".into()),
-                            (
-                                "format",
-                                if self.width == 8 {
-                                    "U8".into()
-                                } else {
-                                    "S16LE".into()
-                                },
-                            ),
+                            ("layout", &"interleaved"),
+                            ("format", &if self.width == 8 { "U8" } else { "S16LE" }),
                         ],
                     ))
                 } else {
                     None
                 }
             }
-            flavors::SoundFormat::ADPCM => Some(Caps::new_simple(
+            flavors::SoundFormat::ADPCM => Some(gst::Caps::new_simple(
                 "audio/x-adpcm",
-                &[("layout", "swf".into())],
+                &[("layout", &"swf")],
             )),
             flavors::SoundFormat::NELLYMOSER_16KHZ_MONO |
             flavors::SoundFormat::NELLYMOSER_8KHZ_MONO |
-            flavors::SoundFormat::NELLYMOSER => Some(Caps::new_simple("audio/x-nellymoser", &[])),
-            flavors::SoundFormat::PCM_ALAW => Some(Caps::new_simple("audio/x-alaw", &[])),
-            flavors::SoundFormat::PCM_ULAW => Some(Caps::new_simple("audio/x-mulaw", &[])),
+            flavors::SoundFormat::NELLYMOSER => {
+                Some(gst::Caps::new_simple("audio/x-nellymoser", &[]))
+            }
+            flavors::SoundFormat::PCM_ALAW => Some(gst::Caps::new_simple("audio/x-alaw", &[])),
+            flavors::SoundFormat::PCM_ULAW => Some(gst::Caps::new_simple("audio/x-mulaw", &[])),
             flavors::SoundFormat::AAC => self.aac_sequence_header.as_ref().map(|header| {
-                Caps::new_simple(
+                gst::Caps::new_simple(
                     "audio/mpeg",
                     &[
-                        ("mpegversion", 4i32.into()),
-                        ("framed", true.into()),
-                        ("stream-format", "raw".into()),
-                        ("codec_data", header.as_ref().into()),
+                        ("mpegversion", &4i32),
+                        ("framed", &true),
+                        ("stream-format", &"raw"),
+                        ("codec_data", &header),
                     ],
                 )
             }),
@@ -219,7 +205,7 @@ impl AudioFormat {
 
                     data.into_inner()
                 };
-                let header = Buffer::from_vec(header).unwrap();
+                let header = gst::Buffer::from_vec(header).unwrap();
 
                 let comment = {
                     let comment_size = 4 + 7 /* nothing */ + 4 + 1;
@@ -233,11 +219,11 @@ impl AudioFormat {
 
                     data.into_inner()
                 };
-                let comment = Buffer::from_vec(comment).unwrap();
+                let comment = gst::Buffer::from_vec(comment).unwrap();
 
-                Some(Caps::new_simple(
+                Some(gst::Caps::new_simple(
                     "audio/x-speex",
-                    &[("streamheader", vec![header.into(), comment.into()].into())],
+                    &[("streamheader", &gst::Array::new(&[&header, &comment]))],
                 ))
             }
             flavors::SoundFormat::DEVICE_SPECIFIC => {
@@ -250,14 +236,14 @@ impl AudioFormat {
             caps.as_mut().map(|c| {
                 c.get_mut()
                     .unwrap()
-                    .set_simple(&[("rate", (self.rate as i32).into())])
+                    .set_simple(&[("rate", &(self.rate as i32))])
             });
         }
         if self.channels != 0 {
             caps.as_mut().map(|c| {
                 c.get_mut()
                     .unwrap()
-                    .set_simple(&[("channels", (self.channels as i32).into())])
+                    .set_simple(&[("channels", &(self.channels as i32))])
             });
         }
 
@@ -273,14 +259,14 @@ struct VideoFormat {
     pixel_aspect_ratio: Option<Rational32>,
     framerate: Option<Rational32>,
     bitrate: Option<u32>,
-    avc_sequence_header: Option<GstRc<Buffer>>,
+    avc_sequence_header: Option<gst::Buffer>,
 }
 
 impl VideoFormat {
     fn new(
         data_header: &flavors::VideoDataHeader,
         metadata: &Option<Metadata>,
-        avc_sequence_header: &Option<GstRc<Buffer>>,
+        avc_sequence_header: &Option<gst::Buffer>,
     ) -> VideoFormat {
         VideoFormat {
             format: data_header.codec_id,
@@ -324,33 +310,26 @@ impl VideoFormat {
         changed
     }
 
-    fn to_string(&self) -> Option<String> {
-        self.to_caps().map(|caps| caps.to_string())
-    }
-
-    fn to_caps(&self) -> Option<GstRc<Caps>> {
+    fn to_caps(&self) -> Option<gst::Caps> {
         let mut caps = match self.format {
-            flavors::CodecId::SORENSON_H263 => Some(Caps::new_simple(
+            flavors::CodecId::SORENSON_H263 => Some(gst::Caps::new_simple(
                 "video/x-flash-video",
-                &[("flvversion", 1i32.into())],
+                &[("flvversion", &1i32)],
             )),
-            flavors::CodecId::SCREEN => Some(Caps::new_simple("video/x-flash-screen", &[])),
-            flavors::CodecId::VP6 => Some(Caps::new_simple("video/x-vp6-flash", &[])),
-            flavors::CodecId::VP6A => Some(Caps::new_simple("video/x-vp6-flash-alpha", &[])),
-            flavors::CodecId::SCREEN2 => Some(Caps::new_simple("video/x-flash-screen2", &[])),
+            flavors::CodecId::SCREEN => Some(gst::Caps::new_simple("video/x-flash-screen", &[])),
+            flavors::CodecId::VP6 => Some(gst::Caps::new_simple("video/x-vp6-flash", &[])),
+            flavors::CodecId::VP6A => Some(gst::Caps::new_simple("video/x-vp6-flash-alpha", &[])),
+            flavors::CodecId::SCREEN2 => Some(gst::Caps::new_simple("video/x-flash-screen2", &[])),
             flavors::CodecId::H264 => self.avc_sequence_header.as_ref().map(|header| {
-                Caps::new_simple(
+                gst::Caps::new_simple(
                     "video/x-h264",
-                    &[
-                        ("stream-format", "avc".into()),
-                        ("codec_data", header.as_ref().into()),
-                    ],
+                    &[("stream-format", &"avc"), ("codec_data", &header)],
                 )
             }),
-            flavors::CodecId::H263 => Some(Caps::new_simple("video/x-h263", &[])),
-            flavors::CodecId::MPEG4Part2 => Some(Caps::new_simple(
+            flavors::CodecId::H263 => Some(gst::Caps::new_simple("video/x-h263", &[])),
+            flavors::CodecId::MPEG4Part2 => Some(gst::Caps::new_simple(
                 "video/x-h263",
-                &[("mpegversion", 4i32.into()), ("systemstream", false.into())],
+                &[("mpegversion", &4i32), ("systemstream", &false)],
             )),
             flavors::CodecId::JPEG => {
                 // Unused according to spec
@@ -360,19 +339,21 @@ impl VideoFormat {
 
         if let (Some(width), Some(height)) = (self.width, self.height) {
             caps.as_mut().map(|c| {
-                c.get_mut().unwrap().set_simple(&[
-                    ("width", (width as i32).into()),
-                    ("height", (height as i32).into()),
-                ])
+                c.get_mut()
+                    .unwrap()
+                    .set_simple(&[("width", &(width as i32)), ("height", &(height as i32))])
             });
         }
 
         if let Some(par) = self.pixel_aspect_ratio {
             if *par.numer() != 0 && par.numer() != par.denom() {
                 caps.as_mut().map(|c| {
-                    c.get_mut()
-                        .unwrap()
-                        .set_simple(&[("pixel-aspect-ratio", par.into())])
+                    c.get_mut().unwrap().set_simple(&[
+                        (
+                            "pixel-aspect-ratio",
+                            &gst::Fraction::new(*par.numer(), *par.denom()),
+                        ),
+                    ])
                 });
             }
         }
@@ -380,9 +361,9 @@ impl VideoFormat {
         if let Some(fps) = self.framerate {
             if *fps.numer() != 0 {
                 caps.as_mut().map(|c| {
-                    c.get_mut()
-                        .unwrap()
-                        .set_simple(&[("framerate", fps.into())])
+                    c.get_mut().unwrap().set_simple(&[
+                        ("framerate", &gst::Fraction::new(*fps.numer(), *fps.denom())),
+                    ])
                 });
             }
         }
@@ -475,7 +456,7 @@ impl Metadata {
                     metadata.video_height = Some(height as u32);
                 }
                 ("framerate", &flavors::ScriptDataValue::Number(framerate)) if framerate >= 0.0 => {
-                    if let Some(framerate) = utils::f64_to_fraction(framerate) {
+                    if let Some(framerate) = Rational32::approximate_float(framerate) {
                         metadata.video_framerate = Some(framerate);
                     }
                 }
@@ -500,9 +481,8 @@ impl Metadata {
     }
 }
 
-#[derive(Debug)]
 pub struct FlvDemux {
-    logger: Logger,
+    cat: gst::DebugCategory,
     state: State,
     adapter: Adapter,
     // Only in >= State::Streaming
@@ -510,11 +490,12 @@ pub struct FlvDemux {
 }
 
 impl FlvDemux {
-    pub fn new(element: Element) -> FlvDemux {
+    pub fn new(_element: &gst::Element) -> FlvDemux {
         FlvDemux {
-            logger: Logger::root(
-                GstDebugDrain::new(Some(&element), "rsflvdemux", 0, "Rust FLV demuxer"),
-                o!(),
+            cat: gst::DebugCategory::new(
+                "rsflvdemux",
+                gst::DebugColorFlags::empty(),
+                "Rust FLV demuxer",
             ),
             state: State::Stopped,
             adapter: Adapter::new(),
@@ -522,7 +503,7 @@ impl FlvDemux {
         }
     }
 
-    pub fn new_boxed(element: Element) -> Box<Demuxer> {
+    pub fn new_boxed(element: &gst::Element) -> Box<Demuxer> {
         Box::new(FlvDemux::new(element))
     }
 
@@ -539,15 +520,23 @@ impl FlvDemux {
         let buffer = self.adapter
             .get_buffer(tag_header.data_size as usize)
             .unwrap();
-        let map = buffer.map_read().unwrap();
+        let map = buffer.map_readable().unwrap();
         let data = map.as_slice();
 
         match flavors::script_data(data) {
             IResult::Done(_, ref script_data) if script_data.name == "onMetaData" => {
-                trace!(self.logger, "Got script tag: {:?}", script_data);
+                gst_trace!(
+                    self.cat,
+                    /* TODO: obj: demuxer, */ "Got script tag: {:?}",
+                    script_data
+                );
 
                 let metadata = Metadata::new(script_data);
-                debug!(self.logger, "Got metadata: {:?}", metadata);
+                gst_debug!(
+                    self.cat,
+                    /* TODO: obj: demuxer, */ "Got metadata: {:?}",
+                    metadata
+                );
 
                 let streaming_state = self.streaming_state.as_mut().unwrap();
 
@@ -583,7 +572,11 @@ impl FlvDemux {
                 }
             }
             IResult::Done(_, ref script_data) => {
-                trace!(self.logger, "Got script tag: {:?}", script_data);
+                gst_trace!(
+                    self.cat,
+                    /* TODO: obj: demuxer, */ "Got script tag: {:?}",
+                    script_data
+                );
             }
             IResult::Error(_) | IResult::Incomplete(_) => {
                 // ignore
@@ -597,8 +590,11 @@ impl FlvDemux {
         &mut self,
         data_header: &flavors::AudioDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
-        let logger = self.logger.clone();
-        trace!(logger, "Got audio data header: {:?}", data_header);
+        gst_trace!(
+            self.cat,
+            /* TODO: obj: demuxer, */ "Got audio data header: {:?}",
+            data_header
+        );
 
         let streaming_state = self.streaming_state.as_mut().unwrap();
 
@@ -609,7 +605,11 @@ impl FlvDemux {
         );
 
         if streaming_state.audio.as_ref() != Some(&new_audio_format) {
-            debug!(logger, "Got new audio format: {:?}", new_audio_format);
+            gst_debug!(
+                self.cat,
+                /* TODO: obj: demuxer, */ "Got new audio format: {:?}",
+                new_audio_format
+            );
             let new_stream = streaming_state.audio == None;
 
             let caps = new_audio_format.to_caps();
@@ -659,8 +659,8 @@ impl FlvDemux {
                 self.adapter
                     .flush(15 + tag_header.data_size as usize)
                     .unwrap();
-                warn!(
-                    self.logger,
+                gst_warning!(
+                    self.cat, /* TODO: obj: demuxer, */
                     "Too small packet for AAC packet header {}",
                     15 + tag_header.data_size
                 );
@@ -674,15 +674,19 @@ impl FlvDemux {
                     unimplemented!();
                 }
                 IResult::Done(_, header) => {
-                    trace!(self.logger, "Got AAC packet header {:?}", header);
+                    gst_trace!(
+                        self.cat,
+                        /* TODO: obj: demuxer, */ "Got AAC packet header {:?}",
+                        header
+                    );
                     match header.packet_type {
                         flavors::AACPacketType::SequenceHeader => {
                             self.adapter.flush(15 + 1 + 1).unwrap();
                             let buffer = self.adapter
                                 .get_buffer((tag_header.data_size - 1 - 1) as usize)
                                 .unwrap();
-                            debug!(
-                                self.logger,
+                            gst_debug!(
+                                self.cat, /* TODO: obj: demuxer, */
                                 "Got AAC sequence header {:?} of size {}",
                                 buffer,
                                 tag_header.data_size - 1 - 1
@@ -738,11 +742,15 @@ impl FlvDemux {
 
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts((tag_header.timestamp as u64).mul_div_floor(1000_000, 1));
+            buffer.set_pts(
+                (tag_header.timestamp as u64)
+                    .mul_div_floor(1000_000, 1)
+                    .unwrap(),
+            );
         }
 
-        trace!(
-            self.logger,
+        gst_trace!(
+            self.cat, /* TODO: obj: demuxer, */
             "Outputting audio buffer {:?} for tag {:?} of size {}",
             buffer,
             tag_header,
@@ -756,8 +764,11 @@ impl FlvDemux {
         &mut self,
         data_header: &flavors::VideoDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
-        let logger = self.logger.clone();
-        trace!(logger, "Got video data header: {:?}", data_header);
+        gst_trace!(
+            self.cat,
+            /* TODO: obj: demuxer, */ "Got video data header: {:?}",
+            data_header
+        );
 
         let streaming_state = self.streaming_state.as_mut().unwrap();
 
@@ -768,7 +779,11 @@ impl FlvDemux {
         );
 
         if streaming_state.video.as_ref() != Some(&new_video_format) {
-            debug!(logger, "Got new video format: {:?}", new_video_format);
+            gst_debug!(
+                self.cat,
+                /* TODO: obj: demuxer, */ "Got new video format: {:?}",
+                new_video_format
+            );
 
             let new_stream = streaming_state.video == None;
 
@@ -821,8 +836,8 @@ impl FlvDemux {
                 self.adapter
                     .flush(15 + tag_header.data_size as usize)
                     .unwrap();
-                warn!(
-                    self.logger,
+                gst_warning!(
+                    self.cat, /* TODO: obj: demuxer, */
                     "Too small packet for AVC packet header {}",
                     15 + tag_header.data_size
                 );
@@ -836,15 +851,19 @@ impl FlvDemux {
                     unimplemented!();
                 }
                 IResult::Done(_, header) => {
-                    trace!(self.logger, "Got AVC packet header {:?}", header);
+                    gst_trace!(
+                        self.cat,
+                        /* TODO: obj: demuxer, */ "Got AVC packet header {:?}",
+                        header
+                    );
                     match header.packet_type {
                         flavors::AVCPacketType::SequenceHeader => {
                             self.adapter.flush(15 + 1 + 4).unwrap();
                             let buffer = self.adapter
                                 .get_buffer((tag_header.data_size - 1 - 4) as usize)
                                 .unwrap();
-                            debug!(
-                                self.logger,
+                            gst_debug!(
+                                self.cat, /* TODO: obj: demuxer, */
                                 "Got AVC sequence header {:?} of size {}",
                                 buffer,
                                 tag_header.data_size - 1 - 4
@@ -911,9 +930,13 @@ impl FlvDemux {
         {
             let buffer = buffer.get_mut().unwrap();
             if !is_keyframe {
-                buffer.set_flags(BUFFER_FLAG_DELTA_UNIT);
+                buffer.set_flags(gst::BUFFER_FLAG_DELTA_UNIT);
             }
-            buffer.set_dts((tag_header.timestamp as u64).mul_div_floor(1000_000, 1));
+            buffer.set_dts(
+                (tag_header.timestamp as u64)
+                    .mul_div_floor(1000_000, 1)
+                    .unwrap(),
+            );
 
             // Prevent negative numbers
             let pts = if cts < 0 && tag_header.timestamp < (-cts) as u32 {
@@ -921,11 +944,11 @@ impl FlvDemux {
             } else {
                 ((tag_header.timestamp as i64) + (cts as i64)) as u64
             };
-            buffer.set_pts(pts.mul_div_floor(1000_000, 1));
+            buffer.set_pts(pts.mul_div_floor(1000_000, 1).unwrap());
         }
 
-        trace!(
-            self.logger,
+        gst_trace!(
+            self.cat, /* TODO: obj: demuxer, */
             "Outputting video buffer {:?} for tag {:?} of size {}, keyframe: {}",
             buffer,
             tag_header,
@@ -949,7 +972,11 @@ impl FlvDemux {
                             // fall through
                         }
                         IResult::Done(_, ref header) => {
-                            debug!(self.logger, "Found FLV header: {:?}", header);
+                            gst_debug!(
+                                self.cat,
+                                /* TODO: obj: demuxer, */ "Found FLV header: {:?}",
+                                header
+                            );
 
                             let skip = if header.offset < 9 {
                                 0
@@ -1006,7 +1033,11 @@ impl FlvDemux {
                         unimplemented!();
                     }
                     IResult::Done(_, previous_size) => {
-                        trace!(self.logger, "Previous tag size {}", previous_size);
+                        gst_trace!(
+                            self.cat,
+                            /* TODO: obj: demuxer, */ "Previous tag size {}",
+                            previous_size
+                        );
                         // Nothing to do here, we just consume it for now
                     }
                 }
@@ -1020,12 +1051,12 @@ impl FlvDemux {
 
                 let res = match tag_header.tag_type {
                     flavors::TagType::Script => {
-                        trace!(self.logger, "Found script tag");
+                        gst_trace!(self.cat, /* TODO: obj: demuxer, */ "Found script tag");
 
                         self.handle_script_tag(&tag_header)
                     }
                     flavors::TagType::Audio => {
-                        trace!(self.logger, "Found audio tag");
+                        gst_trace!(self.cat, /* TODO: obj: demuxer, */ "Found audio tag");
 
                         let data_header = match flavors::audio_data_header(&data[15..]) {
                             IResult::Error(_) | IResult::Incomplete(_) => {
@@ -1037,7 +1068,7 @@ impl FlvDemux {
                         self.handle_audio_tag(&tag_header, &data_header)
                     }
                     flavors::TagType::Video => {
-                        trace!(self.logger, "Found video tag");
+                        gst_trace!(self.cat, /* TODO: obj: demuxer, */ "Found video tag");
 
                         let data_header = match flavors::video_data_header(&data[15..]) {
                             IResult::Error(_) | IResult::Incomplete(_) => {
@@ -1053,12 +1084,14 @@ impl FlvDemux {
                 if let Ok(HandleBufferResult::BufferForStream(_, ref buffer)) = res {
                     let streaming_state = self.streaming_state.as_mut().unwrap();
 
-                    if let Some(pts) = buffer.get_pts() {
+                    if buffer.get_pts() != gst::CLOCK_TIME_NONE {
+                        let pts = buffer.get_pts();
                         streaming_state.last_position = streaming_state
                             .last_position
                             .map(|last| cmp::max(last, pts))
                             .or_else(|| Some(pts));
-                    } else if let Some(dts) = buffer.get_dts() {
+                    } else if buffer.get_dts() != gst::CLOCK_TIME_NONE {
+                        let dts = buffer.get_dts();
                         streaming_state.last_position = streaming_state
                             .last_position
                             .map(|last| cmp::max(last, dts))
@@ -1097,7 +1130,7 @@ impl Demuxer for FlvDemux {
 
     fn handle_buffer(
         &mut self,
-        buffer: Option<GstRc<Buffer>>,
+        buffer: Option<gst::Buffer>,
     ) -> Result<HandleBufferResult, FlowError> {
         if let Some(buffer) = buffer {
             self.adapter.push(buffer);
