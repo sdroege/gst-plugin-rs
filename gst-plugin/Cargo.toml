@@ -2,7 +2,6 @@
 name = "gst-plugin"
 version = "0.1.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
-build = "build.rs"
 repository = "https://github.com/sdroege/rsplugin/gst-plugin"
 license = "MIT/Apache-2.0"
 
@@ -18,10 +17,6 @@ gstreamer-base-sys = { git = "https://github.com/sdroege/gstreamer-sys", feature
 glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
 gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
-
-[build-dependencies]
-gcc = "0.3"
-pkg-config = "0.3"
 
 [lib]
 name = "gst_plugin"

@@ -28,16 +28,16 @@ use flvdemux::FlvDemux;
 fn plugin_init(plugin: &gst::Plugin) -> bool {
     demuxer_register(
         plugin,
-        &DemuxerInfo {
-            name: "rsflvdemux",
-            long_name: "FLV Demuxer",
-            description: "Demuxes FLV Streams",
-            classification: "Codec/Demuxer",
-            author: "Sebastian Dröge <sebastian@centricular.com>",
+        DemuxerInfo {
+            name: "rsflvdemux".into(),
+            long_name: "FLV Demuxer".into(),
+            description: "Demuxes FLV Streams".into(),
+            classification: "Codec/Demuxer".into(),
+            author: "Sebastian Dröge <sebastian@centricular.com>".into(),
             rank: 256 + 100,
             create_instance: FlvDemux::new_boxed,
-            input_caps: &gst::Caps::new_simple("video/x-flv", &[]),
-            output_caps: &gst::Caps::new_any(),
+            input_caps: gst::Caps::new_simple("video/x-flv", &[]),
+            output_caps: gst::Caps::new_any(),
         },
     );
 

@@ -17,15 +17,25 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use std::u32;
 use std::u64;
+use std::ptr;
+use std::mem;
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
+use std::ops::Deref;
+use std::cmp;
 
 use error::*;
 
 use glib_ffi;
+use gobject_ffi;
 use gst_ffi;
 
 use glib;
 use glib::translate::*;
 use gst;
+use gst::prelude::*;
+use gst_base;
+use gst_base::prelude::*;
 
 pub type StreamIndex = u32;
 
@@ -55,21 +65,28 @@ pub enum HandleBufferResult {
 pub trait Demuxer {
     fn start(
         &mut self,
+        demuxer: &RsDemuxerWrapper,
         upstream_size: Option<u64>,
         random_access: bool,
     ) -> Result<(), ErrorMessage>;
-    fn stop(&mut self) -> Result<(), ErrorMessage>;
+    fn stop(&mut self, demuxer: &RsDemuxerWrapper) -> Result<(), ErrorMessage>;
 
-    fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<SeekResult, ErrorMessage>;
+    fn seek(
+        &mut self,
+        demuxer: &RsDemuxerWrapper,
+        start: u64,
+        stop: Option<u64>,
+    ) -> Result<SeekResult, ErrorMessage>;
     fn handle_buffer(
         &mut self,
+        demuxer: &RsDemuxerWrapper,
         buffer: Option<gst::Buffer>,
     ) -> Result<HandleBufferResult, FlowError>;
-    fn end_of_stream(&mut self) -> Result<(), ErrorMessage>;
+    fn end_of_stream(&mut self, demuxer: &RsDemuxerWrapper) -> Result<(), ErrorMessage>;
 
-    fn is_seekable(&self) -> bool;
-    fn get_position(&self) -> Option<u64>;
-    fn get_duration(&self) -> Option<u64>;
+    fn is_seekable(&self, demuxer: &RsDemuxerWrapper) -> bool;
+    fn get_position(&self, demuxer: &RsDemuxerWrapper) -> Option<u64>;
+    fn get_duration(&self, demuxer: &RsDemuxerWrapper) -> Option<u64>;
 }
 
 #[derive(Debug)]
@@ -90,16 +107,14 @@ impl Stream {
 }
 
 pub struct DemuxerWrapper {
-    raw: *mut gst_ffi::GstElement,
     cat: gst::DebugCategory,
     demuxer: Mutex<Box<Demuxer>>,
     panicked: AtomicBool,
 }
 
 impl DemuxerWrapper {
-    fn new(raw: *mut gst_ffi::GstElement, demuxer: Box<Demuxer>) -> DemuxerWrapper {
+    fn new(demuxer: Box<Demuxer>) -> DemuxerWrapper {
         DemuxerWrapper {
-            raw: raw,
             cat: gst::DebugCategory::new(
                 "rsdemux",
                 gst::DebugColorFlags::empty(),
@@ -110,146 +125,87 @@ impl DemuxerWrapper {
         }
     }
 
-    fn start(&self, upstream_size: u64, random_access: bool) -> bool {
-        let demuxer = &mut self.demuxer.lock().unwrap();
+    fn start(
+        &self,
+        demuxer: &RsDemuxerWrapper,
+        upstream_size: Option<u64>,
+        random_access: bool,
+    ) -> bool {
+        let demuxer_impl = &mut self.demuxer.lock().unwrap();
 
         gst_debug!(
             self.cat,
-            // TODO obj: demuxer
-            "Starting with upstream size {} and random access {}",
+            obj: demuxer,
+            "Starting with upstream size {:?} and random access {}",
             upstream_size,
             random_access
         );
 
-        let upstream_size = if upstream_size == u64::MAX {
-            None
-        } else {
-            Some(upstream_size)
-        };
-
-        match demuxer.start(upstream_size, random_access) {
+        match demuxer_impl.start(demuxer, upstream_size, random_access) {
             Ok(..) => {
-                gst_trace!(
-                    self.cat,
-                    /* TODO obj: demuxer,*/ "Successfully started"
-                );
+                gst_trace!(self.cat, obj: demuxer, "Successfully started",);
                 true
             }
             Err(ref msg) => {
-                gst_error!(
-                    self.cat,
-                    /* TODO obj: demuxer,*/ "Failed to start: {:?}",
-                    msg
-                );
-                self.post_message(msg);
+                gst_error!(self.cat, obj: demuxer, "Failed to start: {:?}", msg);
+                self.post_message(demuxer, msg);
                 false
             }
         }
     }
-    fn stop(&self) -> bool {
-        let demuxer = &mut self.demuxer.lock().unwrap();
+    fn stop(&self, demuxer: &RsDemuxerWrapper) -> bool {
+        let demuxer_impl = &mut self.demuxer.lock().unwrap();
 
-        gst_debug!(self.cat, /* TODO obj: demuxer,*/ "Stopping");
+        gst_debug!(self.cat, obj: demuxer, "Stopping");
 
-        match demuxer.stop() {
+        match demuxer_impl.stop(demuxer) {
             Ok(..) => {
-                gst_trace!(self.cat, /* TODO obj: demuxer,*/ "Successfully stop");
+                gst_trace!(self.cat, obj: demuxer, "Successfully stop");
                 true
             }
             Err(ref msg) => {
-                gst_error!(
-                    self.cat,
-                    /* TODO obj: demuxer,*/ "Failed to stop: {:?}",
-                    msg
-                );
-                self.post_message(msg);
+                gst_error!(self.cat, obj: demuxer, "Failed to stop: {:?}", msg);
+                self.post_message(demuxer, msg);
                 false
             }
         }
     }
 
-    fn is_seekable(&self) -> bool {
-        let demuxer = &self.demuxer.lock().unwrap();
+    fn is_seekable(&self, demuxer: &RsDemuxerWrapper) -> bool {
+        let demuxer_impl = &self.demuxer.lock().unwrap();
 
-        let seekable = demuxer.is_seekable();
-        gst_debug!(
-            self.cat,
-            /* TODO obj: demuxer,*/ "Seekable {}",
-            seekable
-        );
+        let seekable = demuxer_impl.is_seekable(demuxer);
+        gst_debug!(self.cat, obj: demuxer, "Seekable {}", seekable);
 
         seekable
     }
 
 
-    fn get_position(&self, position: &mut u64) -> glib_ffi::gboolean {
-        let demuxer = &self.demuxer.lock().unwrap();
+    fn get_position(&self, demuxer: &RsDemuxerWrapper) -> Option<u64> {
+        let demuxer_impl = &self.demuxer.lock().unwrap();
 
-        match demuxer.get_position() {
-            None => {
-                gst_trace!(self.cat, /* TODO obj: demuxer,*/ "Got no position");
-                *position = u64::MAX;
-                glib_ffi::GFALSE
-            }
-            Some(pos) => {
-                gst_trace!(
-                    self.cat,
-                    /* TODO obj: demuxer,*/ "Returning position {}",
-                    pos
-                );
-                *position = pos;
-                glib_ffi::GTRUE
-            }
-        }
+        demuxer_impl.get_position(demuxer)
     }
 
-    fn get_duration(&self, duration: &mut u64) -> glib_ffi::gboolean {
-        let demuxer = &self.demuxer.lock().unwrap();
+    fn get_duration(&self, demuxer: &RsDemuxerWrapper) -> Option<u64> {
+        let demuxer_impl = &self.demuxer.lock().unwrap();
 
-        match demuxer.get_duration() {
-            None => {
-                gst_trace!(self.cat, /* TODO obj: demuxer,*/ "Got no duration");
-                *duration = u64::MAX;
-                glib_ffi::GFALSE
-            }
-            Some(dur) => {
-                gst_trace!(
-                    self.cat,
-                    /* TODO obj: demuxer,*/ "Returning duration {}",
-                    dur
-                );
-                *duration = dur;
-                glib_ffi::GTRUE
-            }
-        }
+        demuxer_impl.get_duration(demuxer)
     }
 
-    fn seek(&self, start: u64, stop: u64, offset: &mut u64) -> bool {
-        extern "C" {
-            fn gst_rs_demuxer_stream_eos(raw: *mut gst_ffi::GstElement, index: u32);
-        };
-
+    fn seek(&self, demuxer: &RsDemuxerWrapper, start: u64, stop: u64, offset: &mut u64) -> bool {
         let stop = if stop == u64::MAX { None } else { Some(stop) };
 
-        gst_debug!(
-            self.cat,
-            /* TODO obj: demuxer,*/ "Seeking to {:?}-{:?}",
-            start,
-            stop
-        );
+        gst_debug!(self.cat, obj: demuxer, "Seeking to {:?}-{:?}", start, stop);
 
         let res = {
-            let mut demuxer = &mut self.demuxer.lock().unwrap();
+            let mut demuxer_impl = &mut self.demuxer.lock().unwrap();
 
-            match demuxer.seek(start, stop) {
+            match demuxer_impl.seek(demuxer, start, stop) {
                 Ok(res) => res,
                 Err(ref msg) => {
-                    gst_error!(
-                        self.cat,
-                        /* TODO obj: demuxer,*/ "Failed to seek: {:?}",
-                        msg
-                    );
-                    self.post_message(msg);
+                    gst_error!(self.cat, obj: demuxer, "Failed to seek: {:?}", msg);
+                    self.post_message(demuxer, msg);
                     return false;
                 }
             }
@@ -257,70 +213,43 @@ impl DemuxerWrapper {
 
         match res {
             SeekResult::TooEarly => {
-                gst_debug!(self.cat, /* TODO obj: demuxer,*/ "Seeked too early");
+                gst_debug!(self.cat, obj: demuxer, "Seeked too early");
                 false
             }
             SeekResult::Ok(off) => {
-                gst_trace!(self.cat, /* TODO obj: demuxer,*/ "Seeked successfully");
+                gst_trace!(self.cat, obj: demuxer, "Seeked successfully");
                 *offset = off;
                 true
             }
             SeekResult::Eos => {
-                gst_debug!(self.cat, /* TODO obj: demuxer,*/ "Seeked after EOS");
+                gst_debug!(self.cat, obj: demuxer, "Seeked after EOS");
                 *offset = u64::MAX;
 
-                unsafe {
-                    gst_rs_demuxer_stream_eos(self.raw, u32::MAX);
-                }
+                demuxer.stream_eos(None);
 
                 true
             }
         }
     }
 
-    fn handle_buffer(&self, buffer: gst::Buffer) -> gst::FlowReturn {
-        extern "C" {
-            fn gst_rs_demuxer_stream_eos(raw: *mut gst_ffi::GstElement, index: u32);
-            fn gst_rs_demuxer_add_stream(
-                raw: *mut gst_ffi::GstElement,
-                index: u32,
-                caps: *const gst_ffi::GstCaps,
-                stream_id: *const c_char,
-            );
-            fn gst_rs_demuxer_added_all_streams(raw: *mut gst_ffi::GstElement);
-            // fn gst_rs_demuxer_remove_all_streams(raw: *mut gst_ffi::GstElement);
-            fn gst_rs_demuxer_stream_format_changed(
-                raw: *mut gst_ffi::GstElement,
-                index: u32,
-                caps: *const gst_ffi::GstCaps,
-            );
-            fn gst_rs_demuxer_stream_push_buffer(
-                raw: *mut gst_ffi::GstElement,
-                index: u32,
-                buffer: *mut gst_ffi::GstBuffer,
-            ) -> gst_ffi::GstFlowReturn;
-        };
-
+    fn handle_buffer(&self, demuxer: &RsDemuxerWrapper, buffer: gst::Buffer) -> gst::FlowReturn {
         let mut res = {
-            let mut demuxer = &mut self.demuxer.lock().unwrap();
+            let mut demuxer_impl = &mut self.demuxer.lock().unwrap();
 
-            gst_trace!(
-                self.cat,
-                /* TODO obj: demuxer,*/ "Handling buffer {:?}",
-                buffer
-            );
+            gst_trace!(self.cat, obj: demuxer, "Handling buffer {:?}", buffer);
 
-            match demuxer.handle_buffer(Some(buffer)) {
+            match demuxer_impl.handle_buffer(demuxer, Some(buffer)) {
                 Ok(res) => res,
                 Err(flow_error) => {
                     gst_error!(
                         self.cat,
-                        /* TODO obj: demuxer,*/ "Failed handling buffer: {:?}",
+                        obj: demuxer,
+                        "Failed handling buffer: {:?}",
                         flow_error
                     );
                     match flow_error {
                         FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
-                            self.post_message(msg)
+                            self.post_message(demuxer, msg)
                         }
                         _ => (),
                     }
@@ -331,54 +260,33 @@ impl DemuxerWrapper {
 
         // Loop until AllEos, NeedMoreData or error when pushing downstream
         loop {
-            gst_trace!(self.cat, /* TODO obj: demuxer,*/ "Handled {:?}", res);
+            gst_trace!(self.cat, obj: demuxer, "Handled {:?}", res);
 
             match res {
                 HandleBufferResult::NeedMoreData => {
                     return gst::FlowReturn::Ok;
                 }
-                HandleBufferResult::StreamAdded(stream) => unsafe {
-                    gst_rs_demuxer_add_stream(
-                        self.raw,
-                        stream.index,
-                        stream.caps.to_glib_none().0,
-                        stream.stream_id.to_glib_none().0,
-                    );
-                },
-                HandleBufferResult::HaveAllStreams => unsafe {
-                    gst_rs_demuxer_added_all_streams(self.raw);
-                },
-                HandleBufferResult::StreamChanged(stream) => unsafe {
-                    gst_rs_demuxer_stream_format_changed(
-                        self.raw,
-                        stream.index,
-                        stream.caps.to_glib_none().0,
-                    );
-                },
+                HandleBufferResult::StreamAdded(stream) => {
+                    demuxer.add_stream(stream.index, stream.caps, &stream.stream_id);
+                }
+                HandleBufferResult::HaveAllStreams => {
+                    demuxer.added_all_streams();
+                }
+                HandleBufferResult::StreamChanged(stream) => {
+                    demuxer.stream_format_changed(stream.index, stream.caps);
+                }
                 HandleBufferResult::StreamsChanged(streams) => for stream in streams {
-                    unsafe {
-                        gst_rs_demuxer_stream_format_changed(
-                            self.raw,
-                            stream.index,
-                            stream.caps.to_glib_none().0,
-                        );
-                    }
+                    demuxer.stream_format_changed(stream.index, stream.caps);
                 },
                 HandleBufferResult::BufferForStream(index, buffer) => {
-                    let flow_ret = unsafe {
-                        gst_rs_demuxer_stream_push_buffer(self.raw, index, buffer.into_ptr())
-                    };
-                    if flow_ret != gst_ffi::GST_FLOW_OK {
-                        return from_glib(flow_ret);
+                    let flow_ret = demuxer.stream_push_buffer(index, buffer);
+
+                    if flow_ret != gst::FlowReturn::Ok {
+                        return flow_ret;
                     }
                 }
                 HandleBufferResult::Eos(index) => {
-                    let index = index.unwrap_or(u32::MAX);
-
-                    unsafe {
-                        gst_rs_demuxer_stream_eos(self.raw, index);
-                    }
-
+                    demuxer.stream_eos(index);
                     return gst::FlowReturn::Eos;
                 }
                 HandleBufferResult::Again => {
@@ -386,21 +294,22 @@ impl DemuxerWrapper {
                 }
             };
 
-            gst_trace!(self.cat, /* TODO obj: demuxer,*/ "Calling again");
+            gst_trace!(self.cat, obj: demuxer, "Calling again");
 
             res = {
-                let mut demuxer = &mut self.demuxer.lock().unwrap();
-                match demuxer.handle_buffer(None) {
+                let mut demuxer_impl = &mut self.demuxer.lock().unwrap();
+                match demuxer_impl.handle_buffer(demuxer, None) {
                     Ok(res) => res,
                     Err(flow_error) => {
                         gst_error!(
                             self.cat,
-                            /* TODO obj: demuxer,*/ "Failed calling again: {:?}",
+                            obj: demuxer,
+                            "Failed calling again: {:?}",
                             flow_error
                         );
                         match flow_error {
                             FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
-                                self.post_message(msg)
+                                self.post_message(demuxer, msg)
                             }
                             _ => (),
                         }
@@ -411,232 +320,643 @@ impl DemuxerWrapper {
         }
     }
 
-    fn end_of_stream(&self) {
-        let mut demuxer = &mut self.demuxer.lock().unwrap();
+    fn end_of_stream(&self, demuxer: &RsDemuxerWrapper) {
+        let mut demuxer_impl = &mut self.demuxer.lock().unwrap();
 
-        gst_debug!(self.cat, /* TODO obj: demuxer,*/ "End of stream");
-        match demuxer.end_of_stream() {
+        gst_debug!(self.cat, obj: demuxer, "End of stream");
+        match demuxer_impl.end_of_stream(demuxer) {
             Ok(_) => (),
             Err(ref msg) => {
-                gst_error!(
-                    self.cat,
-                    /* TODO obj: demuxer,*/ "Failed end of stream: {:?}",
-                    msg
-                );
-                self.post_message(msg);
+                gst_error!(self.cat, obj: demuxer, "Failed end of stream: {:?}", msg);
+                self.post_message(demuxer, msg);
             }
         }
     }
 
-    fn post_message(&self, msg: &ErrorMessage) {
-        unsafe {
-            msg.post(&gst::Element::from_glib_borrow(self.raw));
-        }
+    fn post_message(&self, demuxer: &RsDemuxerWrapper, msg: &ErrorMessage) {
+        msg.post(demuxer);
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_new(
-    demuxer: *mut gst_ffi::GstElement,
-    create_instance: fn(&gst::Element) -> Box<Demuxer>,
-) -> *mut DemuxerWrapper {
-    let instance = create_instance(&from_glib_borrow(demuxer));
-    Box::into_raw(Box::new(DemuxerWrapper::new(demuxer, instance)))
+pub struct DemuxerInfo {
+    pub name: String,
+    pub long_name: String,
+    pub description: String,
+    pub classification: String,
+    pub author: String,
+    pub rank: u32,
+    pub create_instance: fn(&RsDemuxerWrapper) -> Box<Demuxer>,
+    pub input_caps: gst::Caps,
+    pub output_caps: gst::Caps,
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_drop(ptr: *mut DemuxerWrapper) {
-    let _ = Box::from_raw(ptr);
+struct OrderedPad(pub gst::Pad);
+
+impl Deref for OrderedPad {
+    type Target = gst::Pad;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_start(
-    ptr: *const DemuxerWrapper,
-    upstream_size: u64,
-    random_access: glib_ffi::gboolean,
-) -> glib_ffi::gboolean {
-    let wrap: &DemuxerWrapper = &*ptr;
-
-    panic_to_error!(
-        wrap,
-        &gst::Element::from_glib_borrow(wrap.raw as *mut _),
-        false,
-        { wrap.start(upstream_size, random_access != glib_ffi::GFALSE) }
-    ).to_glib()
+impl AsRef<gst::Pad> for OrderedPad {
+    fn as_ref(&self) -> &gst::Pad {
+        &self.0
+    }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_stop(ptr: *const DemuxerWrapper) -> glib_ffi::gboolean {
-    let wrap: &DemuxerWrapper = &*ptr;
-
-    panic_to_error!(
-        wrap,
-        &gst::Element::from_glib_borrow(wrap.raw as *mut _),
-        glib_ffi::GTRUE,
-        {
-            if wrap.stop() {
-                glib_ffi::GTRUE
-            } else {
-                glib_ffi::GFALSE
-            }
-        }
-    )
+impl PartialEq for OrderedPad {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_name() == other.get_name()
+    }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_is_seekable(ptr: *const DemuxerWrapper) -> glib_ffi::gboolean {
-    let wrap: &DemuxerWrapper = &*ptr;
+impl Eq for OrderedPad {}
 
-    panic_to_error!(
-        wrap,
-        &gst::Element::from_glib_borrow(wrap.raw as *mut _),
-        glib_ffi::GFALSE,
-        {
-            if wrap.is_seekable() {
-                glib_ffi::GTRUE
-            } else {
-                glib_ffi::GFALSE
-            }
-        }
-    )
+impl PartialOrd for OrderedPad {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_get_position(
-    ptr: *const DemuxerWrapper,
-    position: *mut u64,
-) -> glib_ffi::gboolean {
-    let wrap: &DemuxerWrapper = &*ptr;
-
-    panic_to_error!(
-        wrap,
-        &gst::Element::from_glib_borrow(wrap.raw as *mut _),
-        glib_ffi::GFALSE,
-        {
-            let position = &mut *position;
-            wrap.get_position(position)
-        }
-    )
+impl Ord for OrderedPad {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.get_name().cmp(&other.get_name())
+    }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_get_duration(
-    ptr: *const DemuxerWrapper,
-    duration: *mut u64,
-) -> glib_ffi::gboolean {
-    let wrap: &DemuxerWrapper = &*ptr;
+glib_wrapper! {
+    pub struct RsDemuxerWrapper(Object<RsDemuxer>): [gst::Element => gst_ffi::GstElement,
+                                                     gst::Object => gst_ffi::GstObject];
 
-    panic_to_error!(
-        wrap,
-        &gst::Element::from_glib_borrow(wrap.raw as *mut _),
-        glib_ffi::GFALSE,
-        {
-            let duration = &mut *duration;
-            wrap.get_duration(duration)
-        }
-    )
+    match fn {
+        get_type => || rs_demuxer_get_type(),
+    }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_seek(
-    ptr: *mut DemuxerWrapper,
-    start: u64,
-    stop: u64,
-    offset: *mut u64,
-) -> glib_ffi::gboolean {
-    let wrap: &mut DemuxerWrapper = &mut *ptr;
+impl RsDemuxerWrapper {
+    fn get_wrap(&self) -> &DemuxerWrapper {
+        let stash = self.to_glib_none();
+        let demuxer: *mut RsDemuxer = stash.0;
 
-    panic_to_error!(
-        wrap,
-        &gst::Element::from_glib_borrow(wrap.raw as *mut _),
-        glib_ffi::GFALSE,
-        {
-            let offset = &mut *offset;
-
-            if wrap.seek(start, stop, offset) {
-                glib_ffi::GTRUE
-            } else {
-                glib_ffi::GFALSE
-            }
-        }
-    )
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_handle_buffer(
-    ptr: *mut DemuxerWrapper,
-    buffer: *mut gst_ffi::GstBuffer,
-) -> gst_ffi::GstFlowReturn {
-    let wrap: &mut DemuxerWrapper = &mut *ptr;
-
-    panic_to_error!(
-        wrap,
-        &gst::Element::from_glib_borrow(wrap.raw as *mut _),
-        gst::FlowReturn::Error,
-        { wrap.handle_buffer(from_glib_full(buffer)) }
-    ).to_glib()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn demuxer_end_of_stream(ptr: *mut DemuxerWrapper) {
-    let wrap: &mut DemuxerWrapper = &mut *ptr;
-
-    panic_to_error!(
-        wrap,
-        &gst::Element::from_glib_borrow(wrap.raw as *mut _),
-        (),
-        {
-            wrap.end_of_stream();
-        }
-    )
-}
-
-pub struct DemuxerInfo<'a> {
-    pub name: &'a str,
-    pub long_name: &'a str,
-    pub description: &'a str,
-    pub classification: &'a str,
-    pub author: &'a str,
-    pub rank: i32,
-    pub create_instance: fn(&gst::Element) -> Box<Demuxer>,
-    pub input_caps: &'a gst::Caps,
-    pub output_caps: &'a gst::Caps,
-}
-
-pub fn demuxer_register(plugin: &gst::Plugin, demuxer_info: &DemuxerInfo) {
-    extern "C" {
-        fn gst_rs_demuxer_register(
-            plugin: *const gst_ffi::GstPlugin,
-            name: *const c_char,
-            long_name: *const c_char,
-            description: *const c_char,
-            classification: *const c_char,
-            author: *const c_char,
-            rank: i32,
-            create_instance: *const c_void,
-            input_caps: *const gst_ffi::GstCaps,
-            output_caps: *const gst_ffi::GstCaps,
-        ) -> glib_ffi::gboolean;
+        unsafe { &*((*demuxer).wrap) }
     }
 
-    let cname = CString::new(demuxer_info.name).unwrap();
-    let clong_name = CString::new(demuxer_info.long_name).unwrap();
-    let cdescription = CString::new(demuxer_info.description).unwrap();
-    let cclassification = CString::new(demuxer_info.classification).unwrap();
-    let cauthor = CString::new(demuxer_info.author).unwrap();
+    fn get_private(&self) -> &RsDemuxerPrivate {
+        let stash = self.to_glib_none();
+        let demuxer: *mut RsDemuxer = stash.0;
 
-    unsafe {
-        gst_rs_demuxer_register(
-            plugin.to_glib_none().0,
-            cname.as_ptr(),
-            clong_name.as_ptr(),
-            cdescription.as_ptr(),
-            cclassification.as_ptr(),
-            cauthor.as_ptr(),
-            demuxer_info.rank,
-            demuxer_info.create_instance as *const c_void,
-            demuxer_info.input_caps.to_glib_none().0,
-            demuxer_info.output_caps.to_glib_none().0,
+        unsafe { &*((*demuxer).private) }
+    }
+
+    fn change_state(&self, transition: gst::StateChange) -> gst::StateChangeReturn {
+        let mut ret = gst::StateChangeReturn::Success;
+        let wrap = self.get_wrap();
+        let private = self.get_private();
+
+        gst_trace!(wrap.cat, obj: self, "Changing state {:?}", transition);
+
+        match transition {
+            gst::StateChange::ReadyToPaused => {
+                // TODO
+                private.group_id.set(gst::util_group_id_next());
+            }
+            _ => (),
+        }
+
+        ret = self.parent_change_state(transition);
+        if ret == gst::StateChangeReturn::Failure {
+            return ret;
+        }
+
+        match transition {
+            gst::StateChange::PausedToReady => {
+                private.flow_combiner.borrow_mut().clear();
+                let mut srcpads = private.srcpads.borrow_mut();
+                for (_, pad) in srcpads.iter().by_ref() {
+                    self.remove_pad(pad.as_ref()).unwrap();
+                }
+                srcpads.clear();
+            }
+            _ => (),
+        }
+
+        ret
+    }
+
+    fn add_stream(&self, index: u32, caps: gst::Caps, stream_id: &str) {
+        let private = self.get_private();
+
+        let mut srcpads = private.srcpads.borrow_mut();
+        assert!(!srcpads.contains_key(&index));
+
+        let templ = self.get_pad_template("src_%u").unwrap();
+        let name = format!("src_{}", index);
+        let pad = gst::Pad::new_from_template(&templ, Some(name.as_str()));
+        pad.set_query_function(RsDemuxerWrapper::src_query);
+        pad.set_event_function(RsDemuxerWrapper::src_event);
+
+        pad.set_active(true).unwrap();
+
+        let full_stream_id = pad.create_stream_id(self, stream_id).unwrap();
+        pad.push_event(
+            gst::Event::new_stream_start(&full_stream_id)
+                .group_id(private.group_id.get())
+                .build(),
         );
+        pad.push_event(gst::Event::new_caps(&caps).build());
+
+        let mut segment = gst::Segment::default();
+        segment.init(gst::Format::Time);
+        pad.push_event(gst::Event::new_segment(&segment).build());
+
+        private.flow_combiner.borrow_mut().add_pad(&pad);
+        self.add_pad(&pad).unwrap();
+
+        srcpads.insert(index, OrderedPad(pad));
+    }
+
+    fn added_all_streams(&self) {
+        let private = self.get_private();
+
+        self.no_more_pads();
+        private.group_id.set(gst::util_group_id_next());
+    }
+
+    fn stream_format_changed(&self, index: u32, caps: gst::Caps) {
+        let private = self.get_private();
+        let srcpads = private.srcpads.borrow();
+
+        if let Some(pad) = srcpads.get(&index) {
+            pad.push_event(gst::Event::new_caps(&caps).build());
+        }
+    }
+
+    fn stream_eos(&self, index: Option<u32>) {
+        let private = self.get_private();
+        let srcpads = private.srcpads.borrow();
+
+        let event = gst::Event::new_eos().build();
+        match index {
+            Some(index) => if let Some(pad) = srcpads.get(&index) {
+                pad.push_event(event);
+            },
+            None => for (_, pad) in srcpads.iter().by_ref() {
+                pad.push_event(event.clone());
+            },
+        };
+    }
+
+    fn stream_push_buffer(&self, index: u32, buffer: gst::Buffer) -> gst::FlowReturn {
+        let private = self.get_private();
+        let srcpads = private.srcpads.borrow();
+
+        if let Some(pad) = srcpads.get(&index) {
+            private
+                .flow_combiner
+                .borrow_mut()
+                .update_flow(pad.push(buffer))
+        } else {
+            gst::FlowReturn::Error
+        }
+    }
+
+    fn remove_all_streams(&self) {
+        let private = self.get_private();
+        private.flow_combiner.borrow_mut().clear();
+        let mut srcpads = private.srcpads.borrow_mut();
+        for (_, pad) in srcpads.iter().by_ref() {
+            self.remove_pad(pad.as_ref()).unwrap();
+        }
+        srcpads.clear();
+    }
+
+    fn parent_change_state(&self, transition: gst::StateChange) -> gst::StateChangeReturn {
+        unsafe {
+            let stash = self.to_glib_none();
+            let demuxer: *mut RsDemuxer = stash.0;
+            let demuxer_klass = &**(demuxer as *const *const RsDemuxerClass);
+            let parent_klass = &*(demuxer_klass.parent_vtable as *const gst_ffi::GstElementClass);
+
+            parent_klass
+                .change_state
+                .map(|f| {
+                    from_glib(f(self.to_glib_none().0, transition.to_glib()))
+                })
+                .unwrap_or(gst::StateChangeReturn::Failure)
+        }
+    }
+
+    fn sink_activate(_pad: &gst::Pad, parent: &Option<gst::Object>) -> bool {
+        let this = parent
+            .as_ref()
+            .map(|o| o.clone())
+            .unwrap()
+            .downcast::<RsDemuxerWrapper>()
+            .unwrap();
+        let private = this.get_private();
+
+        let mode = {
+            let mut query = gst::Query::new_scheduling();
+            if !private.sinkpad.peer_query(query.get_mut().unwrap()) {
+                return false;
+            }
+
+            // TODO
+            //if (gst_query_has_scheduling_mode_with_flags (query, GST_PAD_MODE_PULL, GST_SCHEDULING_FLAG_SEEKABLE)) {
+            //  GST_DEBUG_OBJECT (demuxer, "Activating in PULL mode");
+            //  mode = GST_PAD_MODE_PULL;
+            //} else {
+            //GST_DEBUG_OBJECT (demuxer, "Activating in PUSH mode");
+            //}
+            gst::PadMode::Push
+        };
+
+        let mut query = gst::Query::new_duration(gst::Format::Bytes);
+        let upstream_size = if private.sinkpad.peer_query(query.get_mut().unwrap()) {
+            use gst::QueryView;
+
+            match query.view() {
+                QueryView::Duration(ref d) => Some(d.get().1 as u64),
+                _ => unreachable!(),
+            }
+        } else {
+            None
+        };
+        private.upstream_size.set(upstream_size);
+
+        match private.sinkpad.activate_mode(mode, true) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+
+    fn sink_activatemode(
+        _pad: &gst::Pad,
+        parent: &Option<gst::Object>,
+        mode: gst::PadMode,
+        active: bool,
+    ) -> bool {
+        let this = parent
+            .as_ref()
+            .map(|o| o.clone())
+            .unwrap()
+            .downcast::<RsDemuxerWrapper>()
+            .unwrap();
+        let private = this.get_private();
+        let wrap = this.get_wrap();
+
+        if active {
+            if !wrap.start(
+                &this,
+                private.upstream_size.get(),
+                mode == gst::PadMode::Pull,
+            ) {
+                return false;
+            }
+
+            if mode == gst::PadMode::Pull {
+                // TODO
+                // private.sinkpad.start_task(...)
+            }
+
+            true
+        } else {
+            if mode == gst::PadMode::Pull {
+                let _ = private.sinkpad.stop_task();
+            }
+
+            wrap.stop(&this)
+        }
+    }
+
+    fn sink_chain(
+        _pad: &gst::Pad,
+        parent: &Option<gst::Object>,
+        buffer: gst::Buffer,
+    ) -> gst::FlowReturn {
+        let this = parent
+            .as_ref()
+            .map(|o| o.clone())
+            .unwrap()
+            .downcast::<RsDemuxerWrapper>()
+            .unwrap();
+        let wrap = this.get_wrap();
+        wrap.handle_buffer(&this, buffer)
+    }
+
+    fn sink_event(pad: &gst::Pad, parent: &Option<gst::Object>, event: gst::Event) -> bool {
+        use gst::EventView;
+
+        let this = parent
+            .as_ref()
+            .map(|o| o.clone())
+            .unwrap()
+            .downcast::<RsDemuxerWrapper>()
+            .unwrap();
+        let wrap = this.get_wrap();
+
+        match event.view() {
+            EventView::Eos(..) => {
+                wrap.end_of_stream(&this);
+                pad.event_default(parent.as_ref(), event)
+            }
+            EventView::Segment(..) => pad.event_default(parent.as_ref(), event),
+            _ => pad.event_default(parent.as_ref(), event),
+        }
+    }
+
+    fn src_query(pad: &gst::Pad, parent: &Option<gst::Object>, query: &mut gst::QueryRef) -> bool {
+        use gst::QueryView;
+
+        let this = parent
+            .as_ref()
+            .map(|o| o.clone())
+            .unwrap()
+            .downcast::<RsDemuxerWrapper>()
+            .unwrap();
+        let wrap = this.get_wrap();
+
+        match query.view_mut() {
+            QueryView::Position(ref mut q) => {
+                let (fmt, _) = q.get();
+                if fmt == gst::Format::Time {
+                    let position = wrap.get_position(&this);
+                    gst_trace!(wrap.cat, obj: &this, "Returning position {:?}", position);
+
+                    match position {
+                        None => return false,
+                        Some(position) => {
+                            q.set(fmt, position as i64);
+                            return true;
+                        }
+                    }
+                } else {
+                    return false;
+                }
+            }
+            QueryView::Duration(ref mut q) => {
+                let (fmt, _) = q.get();
+                if fmt == gst::Format::Time {
+                    let duration = wrap.get_duration(&this);
+                    gst_trace!(wrap.cat, obj: &this, "Returning duration {:?}", duration);
+
+                    match duration {
+                        None => return false,
+                        Some(duration) => {
+                            q.set(fmt, duration as i64);
+                            return true;
+                        }
+                    }
+                } else {
+                    return false;
+                }
+            }
+            _ => (),
+        }
+
+        // FIXME: Have to do it outside the match because otherwise query is already mutably
+        // borrowed by the query view.
+        pad.query_default(parent.as_ref(), query)
+    }
+
+    fn src_event(pad: &gst::Pad, parent: &Option<gst::Object>, event: gst::Event) -> bool {
+        use gst::EventView;
+
+        match event.view() {
+            EventView::Seek(..) => {
+                // TODO: Implement
+                false
+            }
+            _ => pad.event_default(parent.as_ref(), event),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct RsDemuxer {
+    parent: gst_ffi::GstElement,
+    wrap: *mut DemuxerWrapper,
+    private: *mut RsDemuxerPrivate,
+}
+
+#[repr(C)]
+pub struct RsDemuxerClass {
+    parent_class: gst_ffi::GstElementClass,
+    demuxer_info: *const DemuxerInfo,
+    parent_vtable: glib_ffi::gconstpointer,
+}
+
+pub struct RsDemuxerPrivate {
+    sinkpad: gst::Pad,
+    flow_combiner: RefCell<gst_base::FlowCombiner>,
+    upstream_size: Cell<Option<u64>>,
+    group_id: Cell<u32>,
+    srcpads: RefCell<BTreeMap<u32, OrderedPad>>,
+}
+
+unsafe fn rs_demuxer_get_type() -> glib_ffi::GType {
+    use std::sync::{Once, ONCE_INIT};
+
+    static mut TYPE: glib_ffi::GType = gobject_ffi::G_TYPE_INVALID;
+    static ONCE: Once = ONCE_INIT;
+
+    ONCE.call_once(|| {
+        let type_info = gobject_ffi::GTypeInfo {
+            class_size: mem::size_of::<RsDemuxerClass>() as u16,
+            base_init: None,
+            base_finalize: None,
+            class_init: Some(demuxer_class_init),
+            class_finalize: None,
+            class_data: ptr::null_mut(),
+            instance_size: mem::size_of::<RsDemuxer>() as u16,
+            n_preallocs: 0,
+            instance_init: None,
+            value_table: ptr::null(),
+        };
+
+        let type_name = {
+            let mut idx = 0;
+
+            loop {
+                let type_name = CString::new(format!("RsDemuxer-{}", idx)).unwrap();
+                if gobject_ffi::g_type_from_name(type_name.as_ptr()) == gobject_ffi::G_TYPE_INVALID
+                {
+                    break type_name;
+                }
+                idx += 1;
+            }
+        };
+
+        TYPE = gobject_ffi::g_type_register_static(
+            gst_ffi::gst_element_get_type(),
+            type_name.as_ptr(),
+            &type_info,
+            gobject_ffi::GTypeFlags::empty(),
+        );
+    });
+
+    TYPE
+}
+
+unsafe extern "C" fn demuxer_finalize(obj: *mut gobject_ffi::GObject) {
+    let demuxer = &mut *(obj as *mut RsDemuxer);
+
+    drop(Box::from_raw(demuxer.wrap));
+    demuxer.wrap = ptr::null_mut();
+
+    drop(Box::from_raw(demuxer.private));
+    demuxer.private = ptr::null_mut();
+
+    let demuxer_klass = &**(obj as *const *const RsDemuxerClass);
+    let parent_klass = &*(demuxer_klass.parent_vtable as *const gobject_ffi::GObjectClass);
+    parent_klass.finalize.map(|f| f(obj));
+}
+
+unsafe extern "C" fn demuxer_sub_class_init(
+    klass: glib_ffi::gpointer,
+    klass_data: glib_ffi::gpointer,
+) {
+    let demuxer_info = &*(klass_data as *const DemuxerInfo);
+
+    {
+        let element_klass = &mut *(klass as *mut gst_ffi::GstElementClass);
+
+        gst_ffi::gst_element_class_set_metadata(
+            element_klass,
+            demuxer_info.long_name.to_glib_none().0,
+            demuxer_info.classification.to_glib_none().0,
+            demuxer_info.description.to_glib_none().0,
+            demuxer_info.author.to_glib_none().0,
+        );
+
+        let pad_template = gst::PadTemplate::new(
+            "sink",
+            gst::PadDirection::Sink,
+            gst::PadPresence::Always,
+            &demuxer_info.input_caps,
+        );
+        gst_ffi::gst_element_class_add_pad_template(element_klass, pad_template.to_glib_full());
+
+        let pad_template = gst::PadTemplate::new(
+            "src_%u",
+            gst::PadDirection::Src,
+            gst::PadPresence::Sometimes,
+            &demuxer_info.output_caps,
+        );
+        gst_ffi::gst_element_class_add_pad_template(element_klass, pad_template.to_glib_full());
+    }
+
+    {
+        let demuxer_klass = &mut *(klass as *mut RsDemuxerClass);
+
+        demuxer_klass.demuxer_info = demuxer_info;
+    }
+}
+
+unsafe extern "C" fn demuxer_class_init(
+    klass: glib_ffi::gpointer,
+    _klass_data: glib_ffi::gpointer,
+) {
+    {
+        let gobject_klass = &mut *(klass as *mut gobject_ffi::GObjectClass);
+
+        gobject_klass.finalize = Some(demuxer_finalize);
+    }
+
+    {
+        let element_klass = &mut *(klass as *mut gst_ffi::GstElementClass);
+
+        element_klass.change_state = Some(demuxer_change_state);
+    }
+
+    {
+        let demuxer_klass = &mut *(klass as *mut RsDemuxerClass);
+
+        demuxer_klass.parent_vtable = gobject_ffi::g_type_class_peek_parent(klass);
+    }
+}
+
+unsafe extern "C" fn demuxer_change_state(
+    ptr: *mut gst_ffi::GstElement,
+    transition: gst_ffi::GstStateChange,
+) -> gst_ffi::GstStateChangeReturn {
+    let demuxer: &RsDemuxerWrapper = &from_glib_borrow(ptr as *mut RsDemuxer);
+    let wrap = demuxer.get_wrap();
+
+    panic_to_error!(wrap, demuxer, gst::StateChangeReturn::Failure, {
+        demuxer.change_state(from_glib(transition))
+    }).to_glib()
+}
+
+unsafe extern "C" fn demuxer_sub_init(
+    instance: *mut gobject_ffi::GTypeInstance,
+    klass: glib_ffi::gpointer,
+) {
+    let demuxer = &mut *(instance as *mut RsDemuxer);
+    let demuxer_klass = &*(klass as *const RsDemuxerClass);
+    let demuxer_info = &*demuxer_klass.demuxer_info;
+
+    let private = &mut demuxer.private as *mut _;
+
+    let wrap = Box::new(DemuxerWrapper::new((demuxer_info.create_instance)(
+        &RsDemuxerWrapper::from_glib_borrow(instance as *mut _),
+    )));
+    demuxer.wrap = Box::into_raw(wrap);
+
+    let demuxer = &RsDemuxerWrapper::from_glib_borrow(demuxer as *mut _);
+
+    let templ = demuxer.get_pad_template("sink").unwrap();
+    let sinkpad = gst::Pad::new_from_template(&templ, "sink");
+    sinkpad.set_activate_function(RsDemuxerWrapper::sink_activate);
+    sinkpad.set_activatemode_function(RsDemuxerWrapper::sink_activatemode);
+    sinkpad.set_chain_function(RsDemuxerWrapper::sink_chain);
+    sinkpad.set_event_function(RsDemuxerWrapper::sink_event);
+    demuxer.add_pad(&sinkpad).unwrap();
+
+    let private_data = Box::new(RsDemuxerPrivate {
+        sinkpad: sinkpad,
+        flow_combiner: RefCell::new(Default::default()),
+        upstream_size: Cell::new(None),
+        group_id: Cell::new(gst::util_group_id_next()),
+        srcpads: RefCell::new(BTreeMap::new()),
+    });
+    *private = Box::into_raw(private_data);
+}
+
+
+pub fn demuxer_register(plugin: &gst::Plugin, demuxer_info: DemuxerInfo) {
+    unsafe {
+        let parent_type = rs_demuxer_get_type();
+        let type_name = format!("RsDemuxer-{}", demuxer_info.name);
+
+        let name = demuxer_info.name.clone();
+        let rank = demuxer_info.rank;
+
+        let demuxer_info = Box::new(demuxer_info);
+        let demuxer_info_ptr = Box::into_raw(demuxer_info) as glib_ffi::gpointer;
+
+        let type_info = gobject_ffi::GTypeInfo {
+            class_size: mem::size_of::<RsDemuxerClass>() as u16,
+            base_init: None,
+            base_finalize: None,
+            class_init: Some(demuxer_sub_class_init),
+            class_finalize: None,
+            class_data: demuxer_info_ptr,
+            instance_size: mem::size_of::<RsDemuxer>() as u16,
+            n_preallocs: 0,
+            instance_init: Some(demuxer_sub_init),
+            value_table: ptr::null(),
+        };
+
+        let type_ = gobject_ffi::g_type_register_static(
+            parent_type,
+            type_name.to_glib_none().0,
+            &type_info,
+            gobject_ffi::GTypeFlags::empty(),
+        );
+
+        gst::Element::register(plugin, &name, rank, from_glib(type_));
     }
 }

@@ -490,7 +490,7 @@ pub struct FlvDemux {
 }
 
 impl FlvDemux {
-    pub fn new(_element: &gst::Element) -> FlvDemux {
+    pub fn new(_demuxer: &RsDemuxerWrapper) -> FlvDemux {
         FlvDemux {
             cat: gst::DebugCategory::new(
                 "rsflvdemux",
@@ -503,12 +503,13 @@ impl FlvDemux {
         }
     }
 
-    pub fn new_boxed(element: &gst::Element) -> Box<Demuxer> {
-        Box::new(FlvDemux::new(element))
+    pub fn new_boxed(demuxer: &RsDemuxerWrapper) -> Box<Demuxer> {
+        Box::new(Self::new(demuxer))
     }
 
     fn handle_script_tag(
         &mut self,
+        demuxer: &RsDemuxerWrapper,
         tag_header: &flavors::TagHeader,
     ) -> Result<HandleBufferResult, FlowError> {
         if self.adapter.get_available() < (15 + tag_header.data_size) as usize {
@@ -525,18 +526,10 @@ impl FlvDemux {
 
         match flavors::script_data(data) {
             IResult::Done(_, ref script_data) if script_data.name == "onMetaData" => {
-                gst_trace!(
-                    self.cat,
-                    /* TODO: obj: demuxer, */ "Got script tag: {:?}",
-                    script_data
-                );
+                gst_trace!(self.cat, obj: demuxer, "Got script tag: {:?}", script_data);
 
                 let metadata = Metadata::new(script_data);
-                gst_debug!(
-                    self.cat,
-                    /* TODO: obj: demuxer, */ "Got metadata: {:?}",
-                    metadata
-                );
+                gst_debug!(self.cat, obj: demuxer, "Got metadata: {:?}", metadata);
 
                 let streaming_state = self.streaming_state.as_mut().unwrap();
 
@@ -572,11 +565,7 @@ impl FlvDemux {
                 }
             }
             IResult::Done(_, ref script_data) => {
-                gst_trace!(
-                    self.cat,
-                    /* TODO: obj: demuxer, */ "Got script tag: {:?}",
-                    script_data
-                );
+                gst_trace!(self.cat, obj: demuxer, "Got script tag: {:?}", script_data);
             }
             IResult::Error(_) | IResult::Incomplete(_) => {
                 // ignore
@@ -588,11 +577,13 @@ impl FlvDemux {
 
     fn update_audio_stream(
         &mut self,
+        demuxer: &RsDemuxerWrapper,
         data_header: &flavors::AudioDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
         gst_trace!(
             self.cat,
-            /* TODO: obj: demuxer, */ "Got audio data header: {:?}",
+            obj: demuxer,
+            "Got audio data header: {:?}",
             data_header
         );
 
@@ -607,7 +598,8 @@ impl FlvDemux {
         if streaming_state.audio.as_ref() != Some(&new_audio_format) {
             gst_debug!(
                 self.cat,
-                /* TODO: obj: demuxer, */ "Got new audio format: {:?}",
+                obj: demuxer,
+                "Got new audio format: {:?}",
                 new_audio_format
             );
             let new_stream = streaming_state.audio == None;
@@ -639,10 +631,11 @@ impl FlvDemux {
 
     fn handle_audio_tag(
         &mut self,
+        demuxer: &RsDemuxerWrapper,
         tag_header: &flavors::TagHeader,
         data_header: &flavors::AudioDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
-        let res = self.update_audio_stream(data_header);
+        let res = self.update_audio_stream(demuxer, data_header);
         match res {
             Ok(HandleBufferResult::Again) => (),
             _ => return res,
@@ -660,7 +653,8 @@ impl FlvDemux {
                     .flush(15 + tag_header.data_size as usize)
                     .unwrap();
                 gst_warning!(
-                    self.cat, /* TODO: obj: demuxer, */
+                    self.cat,
+                    obj: demuxer,
                     "Too small packet for AAC packet header {}",
                     15 + tag_header.data_size
                 );
@@ -674,11 +668,7 @@ impl FlvDemux {
                     unimplemented!();
                 }
                 IResult::Done(_, header) => {
-                    gst_trace!(
-                        self.cat,
-                        /* TODO: obj: demuxer, */ "Got AAC packet header {:?}",
-                        header
-                    );
+                    gst_trace!(self.cat, obj: demuxer, "Got AAC packet header {:?}", header);
                     match header.packet_type {
                         flavors::AACPacketType::SequenceHeader => {
                             self.adapter.flush(15 + 1 + 1).unwrap();
@@ -686,7 +676,8 @@ impl FlvDemux {
                                 .get_buffer((tag_header.data_size - 1 - 1) as usize)
                                 .unwrap();
                             gst_debug!(
-                                self.cat, /* TODO: obj: demuxer, */
+                                self.cat,
+                                obj: demuxer,
                                 "Got AAC sequence header {:?} of size {}",
                                 buffer,
                                 tag_header.data_size - 1 - 1
@@ -750,7 +741,8 @@ impl FlvDemux {
         }
 
         gst_trace!(
-            self.cat, /* TODO: obj: demuxer, */
+            self.cat,
+            obj: demuxer,
             "Outputting audio buffer {:?} for tag {:?} of size {}",
             buffer,
             tag_header,
@@ -762,11 +754,13 @@ impl FlvDemux {
 
     fn update_video_stream(
         &mut self,
+        demuxer: &RsDemuxerWrapper,
         data_header: &flavors::VideoDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
         gst_trace!(
             self.cat,
-            /* TODO: obj: demuxer, */ "Got video data header: {:?}",
+            obj: demuxer,
+            "Got video data header: {:?}",
             data_header
         );
 
@@ -781,7 +775,8 @@ impl FlvDemux {
         if streaming_state.video.as_ref() != Some(&new_video_format) {
             gst_debug!(
                 self.cat,
-                /* TODO: obj: demuxer, */ "Got new video format: {:?}",
+                obj: demuxer,
+                "Got new video format: {:?}",
                 new_video_format
             );
 
@@ -814,10 +809,11 @@ impl FlvDemux {
 
     fn handle_video_tag(
         &mut self,
+        demuxer: &RsDemuxerWrapper,
         tag_header: &flavors::TagHeader,
         data_header: &flavors::VideoDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
-        let res = self.update_video_stream(data_header);
+        let res = self.update_video_stream(demuxer, data_header);
         match res {
             Ok(HandleBufferResult::Again) => (),
             _ => return res,
@@ -837,7 +833,8 @@ impl FlvDemux {
                     .flush(15 + tag_header.data_size as usize)
                     .unwrap();
                 gst_warning!(
-                    self.cat, /* TODO: obj: demuxer, */
+                    self.cat,
+                    obj: demuxer,
                     "Too small packet for AVC packet header {}",
                     15 + tag_header.data_size
                 );
@@ -851,11 +848,7 @@ impl FlvDemux {
                     unimplemented!();
                 }
                 IResult::Done(_, header) => {
-                    gst_trace!(
-                        self.cat,
-                        /* TODO: obj: demuxer, */ "Got AVC packet header {:?}",
-                        header
-                    );
+                    gst_trace!(self.cat, obj: demuxer, "Got AVC packet header {:?}", header);
                     match header.packet_type {
                         flavors::AVCPacketType::SequenceHeader => {
                             self.adapter.flush(15 + 1 + 4).unwrap();
@@ -863,7 +856,8 @@ impl FlvDemux {
                                 .get_buffer((tag_header.data_size - 1 - 4) as usize)
                                 .unwrap();
                             gst_debug!(
-                                self.cat, /* TODO: obj: demuxer, */
+                                self.cat,
+                                obj: demuxer,
                                 "Got AVC sequence header {:?} of size {}",
                                 buffer,
                                 tag_header.data_size - 1 - 4
@@ -948,7 +942,8 @@ impl FlvDemux {
         }
 
         gst_trace!(
-            self.cat, /* TODO: obj: demuxer, */
+            self.cat,
+            obj: demuxer,
             "Outputting video buffer {:?} for tag {:?} of size {}, keyframe: {}",
             buffer,
             tag_header,
@@ -959,7 +954,10 @@ impl FlvDemux {
         Ok(HandleBufferResult::BufferForStream(VIDEO_STREAM_ID, buffer))
     }
 
-    fn update_state(&mut self) -> Result<HandleBufferResult, FlowError> {
+    fn update_state(
+        &mut self,
+        demuxer: &RsDemuxerWrapper,
+    ) -> Result<HandleBufferResult, FlowError> {
         match self.state {
             State::Stopped => unreachable!(),
             State::NeedHeader => {
@@ -972,11 +970,7 @@ impl FlvDemux {
                             // fall through
                         }
                         IResult::Done(_, ref header) => {
-                            gst_debug!(
-                                self.cat,
-                                /* TODO: obj: demuxer, */ "Found FLV header: {:?}",
-                                header
-                            );
+                            gst_debug!(self.cat, obj: demuxer, "Found FLV header: {:?}", header);
 
                             let skip = if header.offset < 9 {
                                 0
@@ -1035,7 +1029,8 @@ impl FlvDemux {
                     IResult::Done(_, previous_size) => {
                         gst_trace!(
                             self.cat,
-                            /* TODO: obj: demuxer, */ "Previous tag size {}",
+                            obj: demuxer,
+                            "Previous tag size {}",
                             previous_size
                         );
                         // Nothing to do here, we just consume it for now
@@ -1051,12 +1046,12 @@ impl FlvDemux {
 
                 let res = match tag_header.tag_type {
                     flavors::TagType::Script => {
-                        gst_trace!(self.cat, /* TODO: obj: demuxer, */ "Found script tag");
+                        gst_trace!(self.cat, obj: demuxer, "Found script tag");
 
-                        self.handle_script_tag(&tag_header)
+                        self.handle_script_tag(demuxer, &tag_header)
                     }
                     flavors::TagType::Audio => {
-                        gst_trace!(self.cat, /* TODO: obj: demuxer, */ "Found audio tag");
+                        gst_trace!(self.cat, obj: demuxer, "Found audio tag");
 
                         let data_header = match flavors::audio_data_header(&data[15..]) {
                             IResult::Error(_) | IResult::Incomplete(_) => {
@@ -1065,10 +1060,10 @@ impl FlvDemux {
                             IResult::Done(_, data_header) => data_header,
                         };
 
-                        self.handle_audio_tag(&tag_header, &data_header)
+                        self.handle_audio_tag(demuxer, &tag_header, &data_header)
                     }
                     flavors::TagType::Video => {
-                        gst_trace!(self.cat, /* TODO: obj: demuxer, */ "Found video tag");
+                        gst_trace!(self.cat, obj: demuxer, "Found video tag");
 
                         let data_header = match flavors::video_data_header(&data[15..]) {
                             IResult::Error(_) | IResult::Incomplete(_) => {
@@ -1077,7 +1072,7 @@ impl FlvDemux {
                             IResult::Done(_, data_header) => data_header,
                         };
 
-                        self.handle_video_tag(&tag_header, &data_header)
+                        self.handle_video_tag(demuxer, &tag_header, &data_header)
                     }
                 };
 
@@ -1108,6 +1103,7 @@ impl FlvDemux {
 impl Demuxer for FlvDemux {
     fn start(
         &mut self,
+        demuxer: &RsDemuxerWrapper,
         _upstream_size: Option<u64>,
         _random_access: bool,
     ) -> Result<(), ErrorMessage> {
@@ -1116,7 +1112,7 @@ impl Demuxer for FlvDemux {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, demuxer: &RsDemuxerWrapper) -> Result<(), ErrorMessage> {
         self.state = State::Stopped;
         self.adapter.clear();
         self.streaming_state = None;
@@ -1124,31 +1120,37 @@ impl Demuxer for FlvDemux {
         Ok(())
     }
 
-    fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<SeekResult, ErrorMessage> {
+    fn seek(
+        &mut self,
+        demuxer: &RsDemuxerWrapper,
+        start: u64,
+        stop: Option<u64>,
+    ) -> Result<SeekResult, ErrorMessage> {
         unimplemented!();
     }
 
     fn handle_buffer(
         &mut self,
+        demuxer: &RsDemuxerWrapper,
         buffer: Option<gst::Buffer>,
     ) -> Result<HandleBufferResult, FlowError> {
         if let Some(buffer) = buffer {
             self.adapter.push(buffer);
         }
 
-        self.update_state()
+        self.update_state(demuxer)
     }
 
-    fn end_of_stream(&mut self) -> Result<(), ErrorMessage> {
+    fn end_of_stream(&mut self, demuxer: &RsDemuxerWrapper) -> Result<(), ErrorMessage> {
         // nothing to do here, all data we have left is incomplete
         Ok(())
     }
 
-    fn is_seekable(&self) -> bool {
+    fn is_seekable(&self, demuxer: &RsDemuxerWrapper) -> bool {
         false
     }
 
-    fn get_position(&self) -> Option<u64> {
+    fn get_position(&self, demuxer: &RsDemuxerWrapper) -> Option<u64> {
         if let Some(StreamingState { last_position, .. }) = self.streaming_state {
             return last_position;
         }
@@ -1156,7 +1158,7 @@ impl Demuxer for FlvDemux {
         None
     }
 
-    fn get_duration(&self) -> Option<u64> {
+    fn get_duration(&self, demuxer: &RsDemuxerWrapper) -> Option<u64> {
         if let Some(StreamingState {
             metadata: Some(Metadata { duration, .. }),
             ..
