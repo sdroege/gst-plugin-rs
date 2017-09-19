@@ -172,8 +172,14 @@ impl DemuxerWrapper {
         demuxer_impl.get_duration(element)
     }
 
-    fn seek(&self, element: &RsDemuxer, start: u64, stop: u64, offset: &mut u64) -> bool {
-        let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
+    fn seek(
+        &self,
+        demuxer: &Demuxer,
+        element: &RsDemuxer,
+        start: u64,
+        stop: u64,
+        offset: &mut u64,
+    ) -> bool {
         let stop = if stop == u64::MAX { None } else { Some(stop) };
 
         gst_debug!(self.cat, obj: element, "Seeking to {:?}-{:?}", start, stop);
@@ -212,8 +218,12 @@ impl DemuxerWrapper {
         }
     }
 
-    fn handle_buffer(&self, element: &RsDemuxer, buffer: gst::Buffer) -> gst::FlowReturn {
-        let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
+    fn handle_buffer(
+        &self,
+        demuxer: &Demuxer,
+        element: &RsDemuxer,
+        buffer: gst::Buffer,
+    ) -> gst::FlowReturn {
         let mut res = {
             let mut demuxer_impl = &mut self.demuxer.lock().unwrap();
 
@@ -499,18 +509,10 @@ impl Demuxer {
         srcpads.clear();
     }
 
-    fn sink_activate(_pad: &gst::Pad, parent: &Option<gst::Object>) -> bool {
-        let element = parent
-            .as_ref()
-            .map(|o| o.clone())
-            .unwrap()
-            .downcast::<RsElement>()
-            .unwrap();
-        let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
-
+    fn sink_activate(pad: &gst::Pad, _parent: &Option<gst::Object>) -> bool {
         let mode = {
             let mut query = gst::Query::new_scheduling();
-            if !demuxer.sinkpad.peer_query(query.get_mut().unwrap()) {
+            if !pad.peer_query(query.get_mut().unwrap()) {
                 return false;
             }
 
@@ -524,7 +526,7 @@ impl Demuxer {
             gst::PadMode::Push
         };
 
-        match demuxer.sinkpad.activate_mode(mode, true) {
+        match pad.activate_mode(mode, true) {
             Ok(_) => true,
             Err(_) => false,
         }
@@ -590,7 +592,7 @@ impl Demuxer {
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
         let wrap = demuxer.get_wrap();
-        wrap.handle_buffer(&element, buffer)
+        wrap.handle_buffer(demuxer, &element, buffer)
     }
 
     fn sink_event(pad: &gst::Pad, parent: &Option<gst::Object>, event: gst::Event) -> bool {
