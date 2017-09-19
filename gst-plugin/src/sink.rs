@@ -40,7 +40,7 @@ pub struct SinkWrapper {
     panicked: AtomicBool,
 }
 
-pub trait Sink {
+pub trait Sink: Send + 'static {
     fn uri_validator(&self) -> Box<UriValidator>;
 
     fn start(&mut self, sink: &RsSinkWrapper, uri: Url) -> Result<(), ErrorMessage>;

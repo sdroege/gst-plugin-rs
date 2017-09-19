@@ -40,7 +40,7 @@ pub struct SourceWrapper {
     panicked: AtomicBool,
 }
 
-pub trait Source {
+pub trait Source: Send + 'static {
     fn uri_validator(&self) -> Box<UriValidator>;
 
     fn is_seekable(&self, src: &RsSrcWrapper) -> bool;

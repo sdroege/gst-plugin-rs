@@ -12,6 +12,8 @@ extern crate gstreamer_base_sys as gst_base_ffi;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
+#[macro_use]
+extern crate mopa;
 extern crate url;
 pub extern crate glib_sys as glib_ffi;
 pub extern crate gobject_sys as gobject_ffi;
@@ -22,6 +24,12 @@ extern crate gstreamer_base as gst_base;
 pub extern crate glib;
 #[macro_use]
 pub extern crate gstreamer as gst;
+
+macro_rules! callback_guard {
+    () => (
+        let _guard = ::glib::CallbackGuard::new();
+    )
+}
 
 #[macro_use]
 pub mod utils;
@@ -34,3 +42,5 @@ pub mod source;
 pub mod sink;
 pub mod demuxer;
 pub mod bytes;
+
+pub mod element;
