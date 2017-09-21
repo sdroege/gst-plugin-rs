@@ -13,6 +13,7 @@ use std::u64;
 use std::collections::BTreeMap;
 
 use error::*;
+use object::{register_type, ImplTypeStatic};
 use element::*;
 
 use glib;
@@ -92,6 +93,7 @@ impl Stream {
     }
 }
 
+// TODO: Get rid of this wrapper
 pub struct DemuxerWrapper {
     cat: gst::DebugCategory,
     demuxer: Mutex<Box<DemuxerImpl>>,
@@ -384,22 +386,19 @@ impl Demuxer {
         }
     }
 
-    fn class_init(
-        klass: &mut RsElementClass,
-        long_name: &str,
-        classification: &str,
-        description: &str,
-        author: &str,
-        input_caps: &gst::Caps,
-        output_caps: &gst::Caps,
-    ) {
-        klass.set_metadata(long_name, classification, description, author);
+    fn class_init(klass: &mut RsElementClass, demuxer_info: &DemuxerInfo) {
+        klass.set_metadata(
+            &demuxer_info.long_name,
+            &demuxer_info.classification,
+            &demuxer_info.description,
+            &demuxer_info.author,
+        );
 
         let pad_template = gst::PadTemplate::new(
             "sink",
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
-            input_caps,
+            &demuxer_info.input_caps,
         );
         klass.add_pad_template(pad_template);
 
@@ -407,7 +406,7 @@ impl Demuxer {
             "src_%u",
             gst::PadDirection::Src,
             gst::PadPresence::Sometimes,
-            output_caps,
+            &demuxer_info.output_caps,
         );
         klass.add_pad_template(pad_template);
     }
@@ -688,7 +687,7 @@ impl Demuxer {
 impl ElementImpl for Demuxer {
     fn change_state(
         &self,
-        element: &RsElement,
+        element: &gst::Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         let mut ret = gst::StateChangeReturn::Success;
@@ -725,32 +724,34 @@ impl ElementImpl for Demuxer {
     }
 }
 
+struct DemuxerStatic {
+    name: String,
+    demuxer_info: DemuxerInfo,
+}
+
+impl ImplTypeStatic<RsElement> for DemuxerStatic {
+    fn get_name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    fn new(&self, element: &RsElement) -> Box<ElementImpl> {
+        Demuxer::init(element, &self.demuxer_info)
+    }
+
+    fn class_init(&self, klass: &mut RsElementClass) {
+        Demuxer::class_init(klass, &self.demuxer_info);
+    }
+}
+
 pub fn demuxer_register(plugin: &gst::Plugin, demuxer_info: DemuxerInfo) {
     let name = demuxer_info.name.clone();
     let rank = demuxer_info.rank;
 
-    let long_name = demuxer_info.long_name.clone();
-    let classification = demuxer_info.classification.clone();
-    let description = demuxer_info.description.clone();
-    let author = demuxer_info.author.clone();
-    let input_caps = demuxer_info.input_caps.clone();
-    let output_caps = demuxer_info.output_caps.clone();
+    let demuxer_static = DemuxerStatic {
+        name: format!("Demuxer-{}", name),
+        demuxer_info: demuxer_info,
+    };
 
-    element_register(
-        plugin,
-        &name,
-        rank,
-        move |klass| {
-            Demuxer::class_init(
-                klass,
-                &long_name,
-                &classification,
-                &description,
-                &author,
-                &input_caps,
-                &output_caps,
-            )
-        },
-        move |element| Demuxer::init(element, &demuxer_info),
-    );
+    let type_ = register_type(demuxer_static);
+    gst::Element::register(plugin, &name, rank, type_);
 }

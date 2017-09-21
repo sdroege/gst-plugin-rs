@@ -43,4 +43,6 @@ pub mod sink;
 pub mod demuxer;
 pub mod bytes;
 
+pub mod object;
 pub mod element;
+pub mod base_src;
