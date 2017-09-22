@@ -122,7 +122,7 @@ pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType {
             T::glib_type().to_glib(),
             type_name.as_ptr(),
             &type_info,
-            gobject_ffi::GTypeFlags::empty(),
+            gobject_ffi::G_TYPE_FLAG_ABSTRACT,
         );
     });
 
