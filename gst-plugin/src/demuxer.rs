@@ -397,7 +397,7 @@ impl Demuxer {
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
         let mut res = {
-            let mut demuxer_impl = &mut demuxer.imp.lock().unwrap();
+            let demuxer_impl = &mut demuxer.imp.lock().unwrap();
 
             gst_trace!(demuxer.cat, obj: &element, "Handling buffer {:?}", buffer);
 
@@ -460,7 +460,7 @@ impl Demuxer {
             gst_trace!(demuxer.cat, obj: &element, "Calling again");
 
             res = {
-                let mut demuxer_impl = &mut demuxer.imp.lock().unwrap();
+                let demuxer_impl = &mut demuxer.imp.lock().unwrap();
                 match demuxer_impl.handle_buffer(&element, None) {
                     Ok(res) => res,
                     Err(flow_error) => {
@@ -496,7 +496,7 @@ impl Demuxer {
 
         match event.view() {
             EventView::Eos(..) => {
-                let mut demuxer_impl = &mut demuxer.imp.lock().unwrap();
+                let demuxer_impl = &mut demuxer.imp.lock().unwrap();
 
                 gst_debug!(demuxer.cat, obj: &element, "End of stream");
                 match demuxer_impl.end_of_stream(&element) {
@@ -604,7 +604,7 @@ impl Demuxer {
         gst_debug!(self.cat, obj: element, "Seeking to {:?}-{:?}", start, stop);
 
         let res = {
-            let mut demuxer_impl = &mut self.imp.lock().unwrap();
+            let demuxer_impl = &mut self.imp.lock().unwrap();
 
             match demuxer_impl.seek(element, start, stop) {
                 Ok(res) => res,
