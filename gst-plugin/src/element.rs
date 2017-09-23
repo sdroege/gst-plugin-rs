@@ -160,7 +160,7 @@ where
 {
     callback_guard!();
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst::Element = from_glib_borrow(ptr as *mut gst_ffi::GstElement);
+    let wrap: gst::Element = from_glib_borrow(ptr);
     let imp = &*element.imp;
 
     panic_to_error2!(&wrap, &element.panicked, gst::StateChangeReturn::Failure, {
