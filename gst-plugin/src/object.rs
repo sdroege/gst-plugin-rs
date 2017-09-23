@@ -45,7 +45,10 @@ pub trait ImplTypeStatic<T: ObjectType>: Send + Sync + 'static {
     fn get_name(&self) -> &str;
     fn new(&self, &T::RsType) -> T::ImplType;
     fn class_init(&self, &mut ClassStruct<T>);
+    fn type_init(&self, _: &TypeInitToken, _type_: glib::Type) {}
 }
+
+pub struct TypeInitToken(());
 
 pub trait ObjectType: 'static
 where
@@ -87,6 +90,25 @@ impl<T: ObjectType> InstanceStruct<T> {
 pub struct ClassStruct<T: ObjectType> {
     pub parent: T::GlibClassType,
     pub imp_static: *const Box<ImplTypeStatic<T>>,
+    pub interfaces_static: *const Vec<(glib_ffi::GType, glib_ffi::gpointer)>,
+}
+
+impl<T: ObjectType> ClassStruct<T> {
+    pub fn get_interface_static(&self, type_: glib_ffi::GType) -> glib_ffi::gpointer {
+        unsafe {
+            if self.interfaces_static.is_null() {
+                return ptr::null_mut();
+            }
+
+            for &(t, p) in (*self.interfaces_static).iter() {
+                if t == type_ {
+                    return p;
+                }
+            }
+
+            ptr::null_mut()
+        }
+    }
 }
 
 pub unsafe trait ObjectClassStruct {
@@ -415,6 +437,7 @@ unsafe extern "C" fn sub_class_init<T: ObjectType>(
         let klass = &mut *(klass as *mut ClassStruct<T>);
         let imp_static = klass_data as *const Box<ImplTypeStatic<T>>;
         klass.imp_static = imp_static;
+        klass.interfaces_static = Box::into_raw(Box::new(Vec::new()));
 
         (*imp_static).class_init(klass);
     }
@@ -467,6 +490,7 @@ pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type 
         let type_name = format!("{}-{}", T::NAME, imp.get_name());
 
         let imp: Box<ImplTypeStatic<T>> = Box::new(imp);
+        let imp_ptr = Box::into_raw(Box::new(imp));
 
         let type_info = gobject_ffi::GTypeInfo {
             class_size: mem::size_of::<ClassStruct<T>>() as u16,
@@ -474,20 +498,22 @@ pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type 
             base_finalize: None,
             class_init: Some(sub_class_init::<T>),
             class_finalize: None,
-            class_data: Box::into_raw(Box::new(imp)) as glib_ffi::gpointer,
+            class_data: imp_ptr as glib_ffi::gpointer,
             instance_size: mem::size_of::<InstanceStruct<T>>() as u16,
             n_preallocs: 0,
             instance_init: Some(sub_init::<T>),
             value_table: ptr::null(),
         };
 
-        let type_ = gobject_ffi::g_type_register_static(
+        let type_ = from_glib(gobject_ffi::g_type_register_static(
             parent_type,
             type_name.to_glib_none().0,
             &type_info,
             gobject_ffi::GTypeFlags::empty(),
-        );
+        ));
 
-        from_glib(type_)
+        (*imp_ptr).type_init(&TypeInitToken(()), type_);
+
+        type_
     }
 }
