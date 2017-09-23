@@ -121,7 +121,17 @@ unsafe impl ElementClass<RsElement> for gst_ffi::GstElementClass {}
 unsafe impl ObjectClassStruct for gst_ffi::GstElementClass {}
 
 // FIXME: Boilerplate
-impl ObjectImpl for Box<ElementImpl> {}
+impl ObjectImpl for Box<ElementImpl> {
+    fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
+        let imp: &ElementImpl = self.as_ref();
+        imp.set_property(obj, id, value);
+    }
+
+    fn get_property(&self, obj: &glib::Object, id: u32, value: &mut glib::Value) {
+        let imp: &ElementImpl = self.as_ref();
+        imp.get_property(obj, id, value);
+    }
+}
 
 impl ElementImpl for Box<ElementImpl> {
     fn change_state(
