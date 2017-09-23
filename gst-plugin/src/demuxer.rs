@@ -13,7 +13,7 @@ use std::u64;
 use std::collections::BTreeMap;
 
 use error::*;
-use object::{register_type, ImplTypeStatic};
+use object::*;
 use element::*;
 
 use glib;
@@ -637,6 +637,8 @@ impl Demuxer {
         }
     }
 }
+
+impl ObjectImpl for Demuxer {}
 
 impl ElementImpl for Demuxer {
     fn change_state(

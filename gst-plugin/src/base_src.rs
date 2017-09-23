@@ -25,7 +25,9 @@ use gst_base::prelude::*;
 use object::*;
 use element::*;
 
-pub trait BaseSrcImpl: mopa::Any + ElementImpl + Send + Sync + 'static {}
+pub trait BaseSrcImpl
+    : mopa::Any + ObjectImpl + ElementImpl + Send + Sync + 'static {
+}
 
 mopafy!(BaseSrcImpl);
 
@@ -56,6 +58,7 @@ unsafe impl BaseSrcClass<RsBaseSrc> for gst_base_ffi::GstBaseSrcClass {}
 unsafe impl BaseSrcClass<RsBaseSrc> for RsBaseSrcClass {}
 unsafe impl ElementClass<RsBaseSrc> for gst_base_ffi::GstBaseSrcClass {}
 unsafe impl ElementClass<RsBaseSrc> for RsBaseSrcClass {}
+unsafe impl ObjectClassStruct for gst_base_ffi::GstBaseSrcClass {}
 
 // FIXME: Boilerplate
 impl BaseSrcImpl for Box<BaseSrcImpl> {}
@@ -71,6 +74,8 @@ impl ElementImpl for Box<BaseSrcImpl> {
         imp.change_state(element, transition)
     }
 }
+
+impl ObjectImpl for Box<BaseSrcImpl> {}
 
 impl ObjectType for RsBaseSrc {
     const NAME: &'static str = "RsBaseSrc";

@@ -17,6 +17,30 @@ use gobject_ffi;
 use glib;
 use glib::translate::*;
 
+pub trait ObjectImpl: Send + Sync + 'static {
+    fn set_property(&self, _obj: &glib::Object, _id: u32, _value: &glib::Value) {
+        unimplemented!()
+    }
+
+    fn get_property(&self, _obj: &glib::Object, _id: u32, _value: &mut glib::Value) {
+        unimplemented!()
+    }
+
+    fn notify(&self, obj: &glib::Object, id: u32) {
+        unsafe {
+            let stash = obj.to_glib_none();
+            let ptr: *mut gobject_ffi::GObject = stash.0;
+            let klass = *(ptr as *const *const gobject_ffi::GObjectClass);
+            let mut n_pspecs = 0;
+            let pspecs =
+                gobject_ffi::g_object_class_list_properties(klass as *mut _, &mut n_pspecs);
+
+            assert!(n_pspecs > id);
+            gobject_ffi::g_object_notify_by_pspec(ptr, *pspecs.offset(id as isize));
+        }
+    }
+}
+
 pub trait ImplTypeStatic<T: ObjectType>: Send + Sync + 'static {
     fn get_name(&self) -> &str;
     fn new(&self, &T::RsType) -> T::ImplType;
@@ -31,11 +55,19 @@ where
     type GlibType;
     type GlibClassType;
     type RsType: FromGlibPtrBorrow<*mut InstanceStruct<Self>>;
-    type ImplType: 'static;
+    type ImplType: ObjectImpl;
 
     fn glib_type() -> glib::Type;
 
     fn class_init(klass: &mut Self::GlibClassType);
+
+    fn set_property(_obj: &Self::RsType, _id: u32, _value: &glib::Value) {
+        unimplemented!()
+    }
+
+    fn get_property(_obj: &Self::RsType, _id: u32, _value: &mut glib::Value) {
+        unimplemented!()
+    }
 }
 
 #[repr(C)]
@@ -57,6 +89,215 @@ pub struct ClassStruct<T: ObjectType> {
     pub imp_static: *const Box<ImplTypeStatic<T>>,
 }
 
+pub unsafe trait ObjectClassStruct {
+    fn install_properties(&mut self, properties: &[Property]) {
+        if properties.is_empty() {
+            return;
+        }
+
+        let mut pspecs = Vec::with_capacity(properties.len());
+
+        pspecs.push(ptr::null_mut());
+
+        for property in properties {
+            match *property {
+                Property::Boolean(name, nick, description, default, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_boolean(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        default.to_glib(),
+                        mutability.into(),
+                    ));
+                },
+                Property::Int(name, nick, description, (min, max), default, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_int(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        min,
+                        max,
+                        default,
+                        mutability.into(),
+                    ));
+                },
+                Property::Int64(name, nick, description, (min, max), default, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_int64(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        min,
+                        max,
+                        default,
+                        mutability.into(),
+                    ));
+                },
+                Property::UInt(name, nick, description, (min, max), default, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_uint(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        min,
+                        max,
+                        default,
+                        mutability.into(),
+                    ));
+                },
+                Property::UInt64(name, nick, description, (min, max), default, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_uint64(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        min,
+                        max,
+                        default,
+                        mutability.into(),
+                    ));
+                },
+                Property::Float(name, nick, description, (min, max), default, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_float(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        min,
+                        max,
+                        default,
+                        mutability.into(),
+                    ));
+                },
+                Property::Double(name, nick, description, (min, max), default, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_double(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        min,
+                        max,
+                        default,
+                        mutability.into(),
+                    ));
+                },
+                Property::String(name, nick, description, default, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_string(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        default.to_glib_none().0,
+                        mutability.into(),
+                    ));
+                },
+                Property::Boxed(name, nick, description, type_, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_boxed(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        type_.to_glib(),
+                        mutability.into(),
+                    ));
+                },
+                Property::Object(name, nick, description, type_, mutability) => unsafe {
+                    pspecs.push(gobject_ffi::g_param_spec_object(
+                        name.to_glib_none().0,
+                        nick.to_glib_none().0,
+                        description.to_glib_none().0,
+                        type_.to_glib(),
+                        mutability.into(),
+                    ));
+                },
+            }
+        }
+
+        unsafe {
+            gobject_ffi::g_object_class_install_properties(
+                self as *mut _ as *mut gobject_ffi::GObjectClass,
+                pspecs.len() as u32,
+                pspecs.as_mut_ptr(),
+            );
+        }
+    }
+}
+
+unsafe impl<T: ObjectType> ObjectClassStruct for ClassStruct<T> {}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PropertyMutability {
+    Readable,
+    Writable,
+    ReadWrite,
+}
+
+impl Into<gobject_ffi::GParamFlags> for PropertyMutability {
+    fn into(self) -> gobject_ffi::GParamFlags {
+        use self::PropertyMutability::*;
+
+        match self {
+            Readable => gobject_ffi::G_PARAM_READABLE,
+            Writable => gobject_ffi::G_PARAM_WRITABLE,
+            ReadWrite => gobject_ffi::G_PARAM_READWRITE,
+        }
+    }
+}
+
+pub enum Property<'a> {
+    Boolean(&'a str, &'a str, &'a str, bool, PropertyMutability),
+    Int(
+        &'a str,
+        &'a str,
+        &'a str,
+        (i32, i32),
+        i32,
+        PropertyMutability,
+    ),
+    Int64(
+        &'a str,
+        &'a str,
+        &'a str,
+        (i64, i64),
+        i64,
+        PropertyMutability,
+    ),
+    UInt(
+        &'a str,
+        &'a str,
+        &'a str,
+        (u32, u32),
+        u32,
+        PropertyMutability,
+    ),
+    UInt64(
+        &'a str,
+        &'a str,
+        &'a str,
+        (u64, u64),
+        u64,
+        PropertyMutability,
+    ),
+    Float(
+        &'a str,
+        &'a str,
+        &'a str,
+        (f32, f32),
+        f32,
+        PropertyMutability,
+    ),
+    Double(
+        &'a str,
+        &'a str,
+        &'a str,
+        (f64, f64),
+        f64,
+        PropertyMutability,
+    ),
+    String(
+        &'a str,
+        &'a str,
+        &'a str,
+        Option<&'a str>,
+        PropertyMutability,
+    ),
+    Boxed(&'a str, &'a str, &'a str, glib::Type, PropertyMutability),
+    Object(&'a str, &'a str, &'a str, glib::Type, PropertyMutability),
+}
+
 unsafe extern "C" fn class_init<T: ObjectType>(
     klass: glib_ffi::gpointer,
     _klass_data: glib_ffi::gpointer,
@@ -66,6 +307,8 @@ unsafe extern "C" fn class_init<T: ObjectType>(
         let gobject_klass = &mut *(klass as *mut gobject_ffi::GObjectClass);
 
         gobject_klass.finalize = Some(finalize::<T>);
+        gobject_klass.set_property = Some(set_property::<T>);
+        gobject_klass.get_property = Some(get_property::<T>);
     }
 
     T::class_init(&mut *(klass as *mut T::GlibClassType));
@@ -83,6 +326,34 @@ unsafe extern "C" fn finalize<T: ObjectType>(obj: *mut gobject_ffi::GObject) {
     let parent_klass =
         &*(gobject_ffi::g_type_class_peek_parent(parent_klass) as *const gobject_ffi::GObjectClass);
     parent_klass.finalize.map(|f| f(obj));
+}
+
+unsafe extern "C" fn get_property<T: ObjectType>(
+    obj: *mut gobject_ffi::GObject,
+    id: u32,
+    value: *mut gobject_ffi::GValue,
+    _pspec: *mut gobject_ffi::GParamSpec,
+) {
+    callback_guard!();
+    T::get_property(
+        &from_glib_borrow(obj as *mut InstanceStruct<T>),
+        id,
+        &mut *(value as *mut glib::Value),
+    );
+}
+
+unsafe extern "C" fn set_property<T: ObjectType>(
+    obj: *mut gobject_ffi::GObject,
+    id: u32,
+    value: *mut gobject_ffi::GValue,
+    _pspec: *mut gobject_ffi::GParamSpec,
+) {
+    callback_guard!();
+    T::set_property(
+        &from_glib_borrow(obj as *mut InstanceStruct<T>),
+        id,
+        &*(value as *mut glib::Value),
+    );
 }
 
 pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType {
@@ -135,12 +406,46 @@ unsafe extern "C" fn sub_class_init<T: ObjectType>(
 ) {
     callback_guard!();
     {
+        let gobject_klass = &mut *(klass as *mut gobject_ffi::GObjectClass);
+
+        gobject_klass.set_property = Some(sub_set_property::<T>);
+        gobject_klass.get_property = Some(sub_get_property::<T>);
+    }
+    {
         let klass = &mut *(klass as *mut ClassStruct<T>);
         let imp_static = klass_data as *const Box<ImplTypeStatic<T>>;
         klass.imp_static = imp_static;
 
         (*imp_static).class_init(klass);
     }
+}
+
+unsafe extern "C" fn sub_get_property<T: ObjectType>(
+    obj: *mut gobject_ffi::GObject,
+    id: u32,
+    value: *mut gobject_ffi::GValue,
+    _pspec: *mut gobject_ffi::GParamSpec,
+) {
+    callback_guard!();
+    let instance = &*(obj as *mut InstanceStruct<T>);
+    let imp = instance.get_impl();
+    imp.get_property(
+        &from_glib_borrow(obj),
+        id,
+        &mut *(value as *mut glib::Value),
+    );
+}
+
+unsafe extern "C" fn sub_set_property<T: ObjectType>(
+    obj: *mut gobject_ffi::GObject,
+    id: u32,
+    value: *mut gobject_ffi::GValue,
+    _pspec: *mut gobject_ffi::GParamSpec,
+) {
+    callback_guard!();
+    let instance = &*(obj as *mut InstanceStruct<T>);
+    let imp = instance.get_impl();
+    imp.set_property(&from_glib_borrow(obj), id, &*(value as *mut glib::Value));
 }
 
 unsafe extern "C" fn sub_init<T: ObjectType>(
