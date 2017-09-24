@@ -32,7 +32,7 @@ pub struct FileSink {
 }
 
 impl FileSink {
-    pub fn new(_sink: &RsSinkWrapper) -> FileSink {
+    pub fn new(_sink: &RsBaseSink) -> FileSink {
         FileSink {
             streaming_state: StreamingState::Stopped,
             cat: gst::DebugCategory::new(
@@ -43,7 +43,7 @@ impl FileSink {
         }
     }
 
-    pub fn new_boxed(sink: &RsSinkWrapper) -> Box<Sink> {
+    pub fn new_boxed(sink: &RsBaseSink) -> Box<SinkImpl> {
         Box::new(FileSink::new(sink))
     }
 }
@@ -58,12 +58,12 @@ fn validate_uri(uri: &Url) -> Result<(), UriError> {
     Ok(())
 }
 
-impl Sink for FileSink {
+impl SinkImpl for FileSink {
     fn uri_validator(&self) -> Box<UriValidator> {
         Box::new(validate_uri)
     }
 
-    fn start(&mut self, sink: &RsSinkWrapper, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, sink: &RsBaseSink, uri: Url) -> Result<(), ErrorMessage> {
         if let StreamingState::Started { .. } = self.streaming_state {
             return Err(error_msg!(
                 gst::LibraryError::Failed,
@@ -112,13 +112,13 @@ impl Sink for FileSink {
         Ok(())
     }
 
-    fn stop(&mut self, _sink: &RsSinkWrapper) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _sink: &RsBaseSink) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
     }
 
-    fn render(&mut self, sink: &RsSinkWrapper, buffer: &gst::BufferRef) -> Result<(), FlowError> {
+    fn render(&mut self, sink: &RsBaseSink, buffer: &gst::BufferRef) -> Result<(), FlowError> {
         let cat = self.cat;
         let streaming_state = &mut self.streaming_state;
 
