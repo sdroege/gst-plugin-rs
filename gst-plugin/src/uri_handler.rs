@@ -63,6 +63,8 @@ unsafe extern "C" fn uri_handler_get_uri<T: ObjectType>(
     uri_handler: *mut gst_ffi::GstURIHandler,
 ) -> *mut libc::c_char {
     callback_guard!();
+    floating_reference_guard!(uri_handler);
+
     let klass = &**(uri_handler as *const *const ClassStruct<T>);
     let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type()) as
         *const URIHandlerStatic<T>;
@@ -80,6 +82,7 @@ unsafe extern "C" fn uri_handler_set_uri<T: ObjectType>(
     err: *mut *mut glib_ffi::GError,
 ) -> glib_ffi::gboolean {
     callback_guard!();
+    floating_reference_guard!(uri_handler);
 
     let klass = &**(uri_handler as *const *const ClassStruct<T>);
     let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type()) as

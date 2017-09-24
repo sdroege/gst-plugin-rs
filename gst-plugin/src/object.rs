@@ -352,6 +352,7 @@ unsafe extern "C" fn get_property<T: ObjectType>(
     _pspec: *mut gobject_ffi::GParamSpec,
 ) {
     callback_guard!();
+    floating_reference_guard!(obj);
     match T::get_property(&from_glib_borrow(obj as *mut InstanceStruct<T>), id - 1) {
         Ok(v) => {
             gobject_ffi::g_value_unset(value);
@@ -369,6 +370,7 @@ unsafe extern "C" fn set_property<T: ObjectType>(
     _pspec: *mut gobject_ffi::GParamSpec,
 ) {
     callback_guard!();
+    floating_reference_guard!(obj);
     T::set_property(
         &from_glib_borrow(obj as *mut InstanceStruct<T>),
         id - 1,
@@ -456,6 +458,7 @@ unsafe extern "C" fn sub_get_property<T: ObjectType>(
     _pspec: *mut gobject_ffi::GParamSpec,
 ) {
     callback_guard!();
+    floating_reference_guard!(obj);
     let instance = &*(obj as *mut InstanceStruct<T>);
     let imp = instance.get_impl();
 
@@ -476,6 +479,7 @@ unsafe extern "C" fn sub_set_property<T: ObjectType>(
     _pspec: *mut gobject_ffi::GParamSpec,
 ) {
     callback_guard!();
+    floating_reference_guard!(obj);
     let instance = &*(obj as *mut InstanceStruct<T>);
     let imp = instance.get_impl();
     imp.set_property(
@@ -490,8 +494,7 @@ unsafe extern "C" fn sub_init<T: ObjectType>(
     _klass: glib_ffi::gpointer,
 ) {
     callback_guard!();
-    // Get rid of floating reference, if any
-    gobject_ffi::g_object_ref_sink(obj as *mut gobject_ffi::GObject);
+    floating_reference_guard!(obj);
     let instance = &mut *(obj as *mut InstanceStruct<T>);
     let klass = &**(obj as *const *const ClassStruct<T>);
     let rs_instance: T::RsType = from_glib_borrow(obj as *mut InstanceStruct<T>);

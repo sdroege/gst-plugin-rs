@@ -31,6 +31,35 @@ macro_rules! callback_guard {
     )
 }
 
+macro_rules! floating_reference_guard {
+    ($obj:ident) => (
+        let _guard = $crate::FloatingReferenceGuard::new($obj as *mut _);
+    )
+}
+
+pub struct FloatingReferenceGuard(*mut gobject_ffi::GObject);
+
+impl FloatingReferenceGuard {
+    pub fn new(obj: *mut gobject_ffi::GObject) -> Option<FloatingReferenceGuard> {
+        unsafe {
+            if gobject_ffi::g_object_is_floating(obj) != glib_ffi::GFALSE {
+                gobject_ffi::g_object_ref_sink(obj);
+                Some(FloatingReferenceGuard(obj))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+impl Drop for FloatingReferenceGuard {
+    fn drop(&mut self) {
+        unsafe {
+            gobject_ffi::g_object_force_floating(self.0);
+        }
+    }
+}
+
 #[macro_use]
 pub mod utils;
 #[macro_use]

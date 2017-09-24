@@ -194,6 +194,7 @@ where
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
+    floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
     let imp = &*element.imp;
@@ -209,6 +210,7 @@ where
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
+    floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
     let imp = &*element.imp;
@@ -225,6 +227,7 @@ where
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
+    floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
     let imp = &*element.imp;
@@ -244,6 +247,7 @@ where
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
+    floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
     let imp = &*element.imp;
@@ -261,6 +265,7 @@ where
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
+    floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
     let imp = &*element.imp;

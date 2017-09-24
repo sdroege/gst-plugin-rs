@@ -169,6 +169,7 @@ where
     T::ImplType: ElementImpl,
 {
     callback_guard!();
+    floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: gst::Element = from_glib_borrow(ptr);
     let imp = &*element.imp;
