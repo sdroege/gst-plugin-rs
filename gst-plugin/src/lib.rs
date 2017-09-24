@@ -46,4 +46,5 @@ pub mod bytes;
 pub mod object;
 pub mod element;
 pub mod base_src;
+pub mod base_sink;
 pub mod uri_handler;
