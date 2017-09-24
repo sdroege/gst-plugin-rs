@@ -199,7 +199,7 @@ where
     let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
     let imp = &*element.imp;
 
-    panic_to_error2!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_stop<T: ObjectType>(
@@ -215,7 +215,7 @@ where
     let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
     let imp = &*element.imp;
 
-    panic_to_error2!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_render<T: ObjectType>(
@@ -233,7 +233,7 @@ where
     let imp = &*element.imp;
     let buffer = gst::BufferRef::from_ptr(buffer);
 
-    panic_to_error2!(&wrap, &element.panicked, gst::FlowReturn::Error, {
+    panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
         imp.render(&wrap, buffer)
     }).to_glib()
 }
@@ -253,7 +253,7 @@ where
     let imp = &*element.imp;
     let query = gst::QueryRef::from_mut_ptr(query_ptr);
 
-    panic_to_error2!(&wrap, &element.panicked, false, { imp.query(&wrap, query) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.query(&wrap, query) }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_event<T: ObjectType>(
@@ -270,7 +270,7 @@ where
     let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
     let imp = &*element.imp;
 
-    panic_to_error2!(&wrap, &element.panicked, false, {
+    panic_to_error!(&wrap, &element.panicked, false, {
         imp.event(&wrap, &from_glib_none(event_ptr))
     }).to_glib()
 }

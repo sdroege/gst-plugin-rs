@@ -174,7 +174,7 @@ where
     let wrap: gst::Element = from_glib_borrow(ptr);
     let imp = &*element.imp;
 
-    panic_to_error2!(&wrap, &element.panicked, gst::StateChangeReturn::Failure, {
+    panic_to_error!(&wrap, &element.panicked, gst::StateChangeReturn::Failure, {
         imp.change_state(&wrap, from_glib(transition))
     }).to_glib()
 }

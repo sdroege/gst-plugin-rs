@@ -219,33 +219,6 @@ pub type UriValidator = Fn(&Url) -> Result<(), UriError> + Send + Sync + 'static
 
 #[macro_export]
 macro_rules! panic_to_error(
-    ($wrap:expr, $element:expr, $ret:expr, $code:block) => {{
-        if $wrap.panicked.load(Ordering::Relaxed) {
-            error_msg!(gst::LibraryError::Failed, ["Panicked"]).post($element);
-            $ret
-        } else {
-            let result = panic::catch_unwind(AssertUnwindSafe(|| $code));
-
-            match result {
-                Ok(result) => result,
-                Err(err) => {
-                    $wrap.panicked.store(true, Ordering::Relaxed);
-                    if let Some(cause) = err.downcast_ref::<&str>() {
-                        error_msg!(gst::LibraryError::Failed, ["Panicked: {}", cause]).post($element);
-                    } else if let Some(cause) = err.downcast_ref::<String>() {
-                        error_msg!(gst::LibraryError::Failed, ["Panicked: {}", cause]).post($element);
-                    } else {
-                        error_msg!(gst::LibraryError::Failed, ["Panicked"]).post($element);
-                    }
-                    $ret
-                }
-            }
-        }
-    }};
-);
-
-#[macro_export]
-macro_rules! panic_to_error2(
     ($element:expr, $panicked:expr, $ret:expr, $code:block) => {{
         use std::panic::{self, AssertUnwindSafe};
         use std::sync::atomic::Ordering;
