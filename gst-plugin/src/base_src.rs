@@ -27,8 +27,12 @@ use element::*;
 
 pub trait BaseSrcImpl
     : mopa::Any + ObjectImpl + ElementImpl + Send + Sync + 'static {
-    fn start(&self, element: &gst_base::BaseSrc) -> bool;
-    fn stop(&self, element: &gst_base::BaseSrc) -> bool;
+    fn start(&self, _element: &gst_base::BaseSrc) -> bool {
+        true
+    }
+    fn stop(&self, _element: &gst_base::BaseSrc) -> bool {
+        true
+    }
     fn is_seekable(&self, _element: &gst_base::BaseSrc) -> bool {
         false
     }
@@ -216,9 +220,9 @@ impl ObjectImpl for Box<BaseSrcImpl> {
         imp.set_property(obj, id, value);
     }
 
-    fn get_property(&self, obj: &glib::Object, id: u32, value: &mut glib::Value) {
+    fn get_property(&self, obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
         let imp: &BaseSrcImpl = self.as_ref();
-        imp.get_property(obj, id, value);
+        imp.get_property(obj, id)
     }
 }
 

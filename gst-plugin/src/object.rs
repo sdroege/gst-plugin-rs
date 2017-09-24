@@ -22,21 +22,13 @@ pub trait ObjectImpl: Send + Sync + 'static {
         unimplemented!()
     }
 
-    fn get_property(&self, _obj: &glib::Object, _id: u32, _value: &mut glib::Value) {
+    fn get_property(&self, _obj: &glib::Object, _id: u32) -> Result<glib::Value, ()> {
         unimplemented!()
     }
 
-    fn notify(&self, obj: &glib::Object, id: u32) {
+    fn notify(&self, obj: &glib::Object, name: &str) {
         unsafe {
-            let stash = obj.to_glib_none();
-            let ptr: *mut gobject_ffi::GObject = stash.0;
-            let klass = *(ptr as *const *const gobject_ffi::GObjectClass);
-            let mut n_pspecs = 0;
-            let pspecs =
-                gobject_ffi::g_object_class_list_properties(klass as *mut _, &mut n_pspecs);
-
-            assert!(n_pspecs > id);
-            gobject_ffi::g_object_notify_by_pspec(ptr, *pspecs.offset(id as isize));
+            gobject_ffi::g_object_notify(obj.to_glib_none().0, name.to_glib_none().0);
         }
     }
 }
@@ -68,7 +60,7 @@ where
         unimplemented!()
     }
 
-    fn get_property(_obj: &Self::RsType, _id: u32, _value: &mut glib::Value) {
+    fn get_property(_obj: &Self::RsType, _id: u32) -> Result<glib::Value, ()> {
         unimplemented!()
     }
 }
@@ -357,11 +349,14 @@ unsafe extern "C" fn get_property<T: ObjectType>(
     _pspec: *mut gobject_ffi::GParamSpec,
 ) {
     callback_guard!();
-    T::get_property(
-        &from_glib_borrow(obj as *mut InstanceStruct<T>),
-        id,
-        &mut *(value as *mut glib::Value),
-    );
+    match T::get_property(&from_glib_borrow(obj as *mut InstanceStruct<T>), id - 1) {
+        Ok(v) => {
+            gobject_ffi::g_value_unset(value);
+            ptr::write(value, ptr::read(v.to_glib_none().0));
+            mem::forget(v);
+        }
+        Err(_) => unimplemented!(),
+    }
 }
 
 unsafe extern "C" fn set_property<T: ObjectType>(
@@ -373,7 +368,7 @@ unsafe extern "C" fn set_property<T: ObjectType>(
     callback_guard!();
     T::set_property(
         &from_glib_borrow(obj as *mut InstanceStruct<T>),
-        id,
+        id - 1,
         &*(value as *mut glib::Value),
     );
 }
@@ -452,11 +447,15 @@ unsafe extern "C" fn sub_get_property<T: ObjectType>(
     callback_guard!();
     let instance = &*(obj as *mut InstanceStruct<T>);
     let imp = instance.get_impl();
-    imp.get_property(
-        &from_glib_borrow(obj),
-        id,
-        &mut *(value as *mut glib::Value),
-    );
+
+    match imp.get_property(&from_glib_borrow(obj), id - 1) {
+        Ok(v) => {
+            gobject_ffi::g_value_unset(value);
+            ptr::write(value, ptr::read(v.to_glib_none().0));
+            mem::forget(v);
+        }
+        Err(_) => unimplemented!(),
+    }
 }
 
 unsafe extern "C" fn sub_set_property<T: ObjectType>(
@@ -468,7 +467,11 @@ unsafe extern "C" fn sub_set_property<T: ObjectType>(
     callback_guard!();
     let instance = &*(obj as *mut InstanceStruct<T>);
     let imp = instance.get_impl();
-    imp.set_property(&from_glib_borrow(obj), id, &*(value as *mut glib::Value));
+    imp.set_property(
+        &from_glib_borrow(obj),
+        id - 1,
+        &*(value as *mut glib::Value),
+    );
 }
 
 unsafe extern "C" fn sub_init<T: ObjectType>(
@@ -476,6 +479,8 @@ unsafe extern "C" fn sub_init<T: ObjectType>(
     _klass: glib_ffi::gpointer,
 ) {
     callback_guard!();
+    // Get rid of floating reference, if any
+    gobject_ffi::g_object_ref_sink(obj as *mut gobject_ffi::GObject);
     let instance = &mut *(obj as *mut InstanceStruct<T>);
     let klass = &**(obj as *const *const ClassStruct<T>);
     let rs_instance: T::RsType = from_glib_borrow(obj as *mut InstanceStruct<T>);

@@ -5,6 +5,7 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use std::ptr;
 
 use mopa;
 
@@ -26,7 +27,7 @@ pub trait URIHandlerImpl: mopa::Any + Send + Sync + 'static {
 }
 
 pub trait URIHandlerImplStatic<T: ObjectType>: Send + Sync + 'static {
-    fn get_impl(&self, imp: &T::ImplType) -> &URIHandlerImpl;
+    fn get_impl<'a>(&self, imp: &'a T::ImplType) -> &'a URIHandlerImpl;
     fn get_type(&self) -> gst::URIType;
     fn get_protocols(&self) -> Vec<String>;
 }
@@ -122,10 +123,11 @@ pub fn register_uri_handler<T: ObjectType, I: URIHandlerImplStatic<T>>(
     imp: &I,
 ) {
     unsafe {
-        let protocols: Vec<_> = imp.get_protocols()
+        let mut protocols: Vec<_> = imp.get_protocols()
             .iter()
             .map(|s| s.to_glib_full())
             .collect();
+        protocols.push(ptr::null());
 
         let imp = imp as &URIHandlerImplStatic<T> as *const URIHandlerImplStatic<T>;
         let interface_static = Box::new(URIHandlerStatic {

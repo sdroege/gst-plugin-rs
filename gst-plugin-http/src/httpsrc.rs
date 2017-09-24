@@ -41,7 +41,7 @@ pub struct HttpSrc {
 }
 
 impl HttpSrc {
-    pub fn new(_src: &RsSrcWrapper) -> HttpSrc {
+    pub fn new(_src: &RsBaseSrc) -> HttpSrc {
         HttpSrc {
             streaming_state: StreamingState::Stopped,
             cat: gst::DebugCategory::new(
@@ -53,13 +53,13 @@ impl HttpSrc {
         }
     }
 
-    pub fn new_boxed(src: &RsSrcWrapper) -> Box<Source> {
+    pub fn new_boxed(src: &RsBaseSrc) -> Box<SourceImpl> {
         Box::new(HttpSrc::new(src))
     }
 
     fn do_request(
         &self,
-        src: &RsSrcWrapper,
+        src: &RsBaseSrc,
         uri: Url,
         start: u64,
         stop: Option<u64>,
@@ -152,44 +152,39 @@ fn validate_uri(uri: &Url) -> Result<(), UriError> {
     Ok(())
 }
 
-impl Source for HttpSrc {
+impl SourceImpl for HttpSrc {
     fn uri_validator(&self) -> Box<UriValidator> {
         Box::new(validate_uri)
     }
 
-    fn is_seekable(&self, _src: &RsSrcWrapper) -> bool {
+    fn is_seekable(&self, _src: &RsBaseSrc) -> bool {
         match self.streaming_state {
             StreamingState::Started { seekable, .. } => seekable,
             _ => false,
         }
     }
 
-    fn get_size(&self, _src: &RsSrcWrapper) -> Option<u64> {
+    fn get_size(&self, _src: &RsBaseSrc) -> Option<u64> {
         match self.streaming_state {
             StreamingState::Started { size, .. } => size,
             _ => None,
         }
     }
 
-    fn start(&mut self, src: &RsSrcWrapper, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, src: &RsBaseSrc, uri: Url) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
         self.streaming_state = try!(self.do_request(src, uri, 0, None));
 
         Ok(())
     }
 
-    fn stop(&mut self, _src: &RsSrcWrapper) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _src: &RsBaseSrc) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
     }
 
-    fn seek(
-        &mut self,
-        src: &RsSrcWrapper,
-        start: u64,
-        stop: Option<u64>,
-    ) -> Result<(), ErrorMessage> {
+    fn seek(&mut self, src: &RsBaseSrc, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage> {
         let (position, old_stop, uri) = match self.streaming_state {
             StreamingState::Started {
                 position,
@@ -214,7 +209,7 @@ impl Source for HttpSrc {
 
     fn fill(
         &mut self,
-        src: &RsSrcWrapper,
+        src: &RsBaseSrc,
         offset: u64,
         _: u32,
         buffer: &mut gst::BufferRef,

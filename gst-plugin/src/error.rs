@@ -110,8 +110,8 @@ impl ErrorMessage {
                 gst_ffi::GST_MESSAGE_ERROR,
                 error_domain,
                 error_code,
-                message.to_glib_none().0,
-                debug.to_glib_none().0,
+                message.to_glib_full(),
+                debug.to_glib_full(),
                 filename.to_glib_none().0,
                 function.to_glib_none().0,
                 line as i32,
@@ -215,7 +215,7 @@ impl Error for UriError {
     }
 }
 
-pub type UriValidator = Fn(&Url) -> Result<(), UriError>;
+pub type UriValidator = Fn(&Url) -> Result<(), UriError> + Send + Sync + 'static;
 
 #[macro_export]
 macro_rules! panic_to_error(

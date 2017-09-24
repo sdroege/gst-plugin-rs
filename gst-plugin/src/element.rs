@@ -127,9 +127,9 @@ impl ObjectImpl for Box<ElementImpl> {
         imp.set_property(obj, id, value);
     }
 
-    fn get_property(&self, obj: &glib::Object, id: u32, value: &mut glib::Value) {
+    fn get_property(&self, obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
         let imp: &ElementImpl = self.as_ref();
-        imp.get_property(obj, id, value);
+        imp.get_property(obj, id)
     }
 }
 

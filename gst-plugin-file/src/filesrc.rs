@@ -30,7 +30,7 @@ pub struct FileSrc {
 }
 
 impl FileSrc {
-    pub fn new(_src: &RsSrcWrapper) -> FileSrc {
+    pub fn new(_src: &RsBaseSrc) -> FileSrc {
         FileSrc {
             streaming_state: StreamingState::Stopped,
             cat: gst::DebugCategory::new(
@@ -41,7 +41,7 @@ impl FileSrc {
         }
     }
 
-    pub fn new_boxed(src: &RsSrcWrapper) -> Box<Source> {
+    pub fn new_boxed(src: &RsBaseSrc) -> Box<SourceImpl> {
         Box::new(FileSrc::new(src))
     }
 }
@@ -56,16 +56,16 @@ fn validate_uri(uri: &Url) -> Result<(), UriError> {
     Ok(())
 }
 
-impl Source for FileSrc {
+impl SourceImpl for FileSrc {
     fn uri_validator(&self) -> Box<UriValidator> {
         Box::new(validate_uri)
     }
 
-    fn is_seekable(&self, _src: &RsSrcWrapper) -> bool {
+    fn is_seekable(&self, _src: &RsBaseSrc) -> bool {
         true
     }
 
-    fn get_size(&self, _src: &RsSrcWrapper) -> Option<u64> {
+    fn get_size(&self, _src: &RsBaseSrc) -> Option<u64> {
         if let StreamingState::Started { ref file, .. } = self.streaming_state {
             file.metadata().ok().map(|m| m.len())
         } else {
@@ -73,7 +73,7 @@ impl Source for FileSrc {
         }
     }
 
-    fn start(&mut self, src: &RsSrcWrapper, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, src: &RsBaseSrc, uri: Url) -> Result<(), ErrorMessage> {
         if let StreamingState::Started { .. } = self.streaming_state {
             return Err(error_msg!(
                 gst::LibraryError::Failed,
@@ -121,7 +121,7 @@ impl Source for FileSrc {
         Ok(())
     }
 
-    fn stop(&mut self, _src: &RsSrcWrapper) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _src: &RsBaseSrc) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
@@ -129,7 +129,7 @@ impl Source for FileSrc {
 
     fn fill(
         &mut self,
-        src: &RsSrcWrapper,
+        src: &RsBaseSrc,
         offset: u64,
         _: u32,
         buffer: &mut gst::BufferRef,
@@ -189,7 +189,7 @@ impl Source for FileSrc {
         Ok(())
     }
 
-    fn seek(&mut self, _src: &RsSrcWrapper, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
+    fn seek(&mut self, _src: &RsBaseSrc, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
         Ok(())
     }
 }
