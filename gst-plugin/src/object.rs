@@ -10,6 +10,9 @@ use std::ffi::CString;
 use std::ptr;
 use std::mem;
 use std::sync::atomic::AtomicBool;
+use std::any::TypeId;
+use std::collections::BTreeMap;
+use std::sync::Mutex;
 
 use glib_ffi;
 use gobject_ffi;
@@ -373,48 +376,56 @@ unsafe extern "C" fn set_property<T: ObjectType>(
     );
 }
 
+static mut TYPES: *mut Mutex<BTreeMap<TypeId, glib::Type>> = 0 as *mut _;
+
 pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType {
     use std::sync::{Once, ONCE_INIT};
 
-    static mut TYPE: glib_ffi::GType = gobject_ffi::G_TYPE_INVALID;
     static ONCE: Once = ONCE_INIT;
 
     ONCE.call_once(|| {
-        let type_info = gobject_ffi::GTypeInfo {
-            class_size: mem::size_of::<ClassStruct<T>>() as u16,
-            base_init: None,
-            base_finalize: None,
-            class_init: Some(class_init::<T>),
-            class_finalize: None,
-            class_data: ptr::null_mut(),
-            instance_size: mem::size_of::<InstanceStruct<T>>() as u16,
-            n_preallocs: 0,
-            instance_init: None,
-            value_table: ptr::null(),
-        };
-
-        let type_name = {
-            let mut idx = 0;
-
-            loop {
-                let type_name = CString::new(format!("{}-{}", T::NAME, idx)).unwrap();
-                if gobject_ffi::g_type_from_name(type_name.as_ptr()) == gobject_ffi::G_TYPE_INVALID
-                {
-                    break type_name;
-                }
-                idx += 1;
-            }
-        };
-
-        TYPE = gobject_ffi::g_type_register_static(
-            T::glib_type().to_glib(),
-            type_name.as_ptr(),
-            &type_info,
-            gobject_ffi::G_TYPE_FLAG_ABSTRACT,
-        );
+        TYPES = Box::into_raw(Box::new(Mutex::new(BTreeMap::new())));
     });
 
-    TYPE
+    let mut types = (*TYPES).lock().unwrap();
+    types
+        .entry(TypeId::of::<T>())
+        .or_insert_with(|| {
+            let type_info = gobject_ffi::GTypeInfo {
+                class_size: mem::size_of::<ClassStruct<T>>() as u16,
+                base_init: None,
+                base_finalize: None,
+                class_init: Some(class_init::<T>),
+                class_finalize: None,
+                class_data: ptr::null_mut(),
+                instance_size: mem::size_of::<InstanceStruct<T>>() as u16,
+                n_preallocs: 0,
+                instance_init: None,
+                value_table: ptr::null(),
+            };
+
+            let type_name = {
+                let mut idx = 0;
+
+                loop {
+                    let type_name = CString::new(format!("{}-{}", T::NAME, idx)).unwrap();
+                    if gobject_ffi::g_type_from_name(type_name.as_ptr()) ==
+                        gobject_ffi::G_TYPE_INVALID
+                    {
+                        break type_name;
+                    }
+                    idx += 1;
+                }
+            };
+
+            from_glib(gobject_ffi::g_type_register_static(
+                T::glib_type().to_glib(),
+                type_name.as_ptr(),
+                &type_info,
+                gobject_ffi::G_TYPE_FLAG_ABSTRACT,
+            ))
+        })
+        .to_glib()
 }
 
 unsafe extern "C" fn sub_class_init<T: ObjectType>(
