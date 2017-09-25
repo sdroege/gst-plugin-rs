@@ -111,9 +111,7 @@ unsafe impl<T: IsA<gst_base::BaseSink>> BaseSink for T {}
 pub type RsBaseSinkClass = ClassStruct<RsBaseSink>;
 
 // FIXME: Boilerplate
-unsafe impl BaseSinkClass<RsBaseSink> for gst_base_ffi::GstBaseSinkClass {}
 unsafe impl BaseSinkClass<RsBaseSink> for RsBaseSinkClass {}
-unsafe impl ElementClass<RsBaseSink> for gst_base_ffi::GstBaseSinkClass {}
 unsafe impl ElementClass<RsBaseSink> for RsBaseSinkClass {}
 
 #[macro_export]
@@ -162,7 +160,7 @@ impl ObjectType for RsBaseSink {
         unsafe { from_glib(gst_base_ffi::gst_base_sink_get_type()) }
     }
 
-    fn class_init(klass: &mut Self::GlibClassType) {
+    fn class_init(klass: &mut RsBaseSinkClass) {
         ElementClass::override_vfuncs(klass);
         BaseSinkClass::override_vfuncs(klass);
     }

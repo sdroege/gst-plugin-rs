@@ -74,7 +74,7 @@ where
 
     fn glib_type() -> glib::Type;
 
-    fn class_init(klass: &mut Self::GlibClassType);
+    fn class_init(klass: &mut ClassStruct<Self>);
 
     fn set_property(_obj: &Self::RsType, _id: u32, _value: &glib::Value) {
         unimplemented!()
@@ -345,7 +345,7 @@ unsafe extern "C" fn class_init<T: ObjectType>(
         gobject_klass.get_property = Some(get_property::<T>);
     }
 
-    T::class_init(&mut *(klass as *mut T::GlibClassType));
+    T::class_init(&mut *(klass as *mut ClassStruct<T>));
 }
 
 unsafe extern "C" fn finalize<T: ObjectType>(obj: *mut gobject_ffi::GObject) {

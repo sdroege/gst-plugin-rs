@@ -147,9 +147,7 @@ unsafe impl<T: IsA<gst_base::BaseSrc>> BaseSrc for T {}
 pub type RsBaseSrcClass = ClassStruct<RsBaseSrc>;
 
 // FIXME: Boilerplate
-unsafe impl BaseSrcClass<RsBaseSrc> for gst_base_ffi::GstBaseSrcClass {}
 unsafe impl BaseSrcClass<RsBaseSrc> for RsBaseSrcClass {}
-unsafe impl ElementClass<RsBaseSrc> for gst_base_ffi::GstBaseSrcClass {}
 unsafe impl ElementClass<RsBaseSrc> for RsBaseSrcClass {}
 
 #[macro_export]
@@ -218,7 +216,7 @@ impl ObjectType for RsBaseSrc {
         unsafe { from_glib(gst_base_ffi::gst_base_src_get_type()) }
     }
 
-    fn class_init(klass: &mut Self::GlibClassType) {
+    fn class_init(klass: &mut RsBaseSrcClass) {
         ElementClass::override_vfuncs(klass);
         BaseSrcClass::override_vfuncs(klass);
     }

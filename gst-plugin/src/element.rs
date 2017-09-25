@@ -117,7 +117,6 @@ pub type RsElementClass = ClassStruct<RsElement>;
 
 // FIXME: Boilerplate
 unsafe impl ElementClass<RsElement> for RsElementClass {}
-unsafe impl ElementClass<RsElement> for gst_ffi::GstElementClass {}
 
 #[macro_export]
 macro_rules! box_element_impl(
@@ -150,7 +149,7 @@ impl ObjectType for RsElement {
         unsafe { from_glib(gst_ffi::gst_element_get_type()) }
     }
 
-    fn class_init(klass: &mut Self::GlibClassType) {
+    fn class_init(klass: &mut RsElementClass) {
         klass.override_vfuncs();
     }
 }
