@@ -151,7 +151,7 @@ unsafe impl BaseSrcClass<RsBaseSrc> for gst_base_ffi::GstBaseSrcClass {}
 unsafe impl BaseSrcClass<RsBaseSrc> for RsBaseSrcClass {}
 unsafe impl ElementClass<RsBaseSrc> for gst_base_ffi::GstBaseSrcClass {}
 unsafe impl ElementClass<RsBaseSrc> for RsBaseSrcClass {}
-unsafe impl ObjectClassStruct for gst_base_ffi::GstBaseSrcClass {}
+unsafe impl ObjectClass for gst_base_ffi::GstBaseSrcClass {}
 
 // FIXME: Boilerplate
 impl BaseSrcImpl for Box<BaseSrcImpl> {

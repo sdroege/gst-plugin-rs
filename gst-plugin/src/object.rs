@@ -106,7 +106,7 @@ impl<T: ObjectType> ClassStruct<T> {
     }
 }
 
-pub unsafe trait ObjectClassStruct {
+pub unsafe trait ObjectClass {
     fn install_properties(&mut self, properties: &[Property]) {
         if properties.is_empty() {
             return;
@@ -233,7 +233,7 @@ pub unsafe trait ObjectClassStruct {
     }
 }
 
-unsafe impl<T: ObjectType> ObjectClassStruct for ClassStruct<T> {}
+unsafe impl<T: ObjectType> ObjectClass for ClassStruct<T> {}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PropertyMutability {

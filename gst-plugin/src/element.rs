@@ -118,7 +118,7 @@ pub type RsElementClass = ClassStruct<RsElement>;
 // FIXME: Boilerplate
 unsafe impl ElementClass<RsElement> for RsElementClass {}
 unsafe impl ElementClass<RsElement> for gst_ffi::GstElementClass {}
-unsafe impl ObjectClassStruct for gst_ffi::GstElementClass {}
+unsafe impl ObjectClass for gst_ffi::GstElementClass {}
 
 // FIXME: Boilerplate
 impl ObjectImpl for Box<ElementImpl> {

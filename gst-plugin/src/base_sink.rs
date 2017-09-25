@@ -115,7 +115,7 @@ unsafe impl BaseSinkClass<RsBaseSink> for gst_base_ffi::GstBaseSinkClass {}
 unsafe impl BaseSinkClass<RsBaseSink> for RsBaseSinkClass {}
 unsafe impl ElementClass<RsBaseSink> for gst_base_ffi::GstBaseSinkClass {}
 unsafe impl ElementClass<RsBaseSink> for RsBaseSinkClass {}
-unsafe impl ObjectClassStruct for gst_base_ffi::GstBaseSinkClass {}
+unsafe impl ObjectClass for gst_base_ffi::GstBaseSinkClass {}
 
 // FIXME: Boilerplate
 impl BaseSinkImpl for Box<BaseSinkImpl> {
