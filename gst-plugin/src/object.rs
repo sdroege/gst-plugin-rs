@@ -55,32 +55,33 @@ macro_rules! box_object_impl(
 
 pub trait ImplTypeStatic<T: ObjectType>: Send + Sync + 'static {
     fn get_name(&self) -> &str;
-    fn new(&self, &T::RsType) -> T::ImplType;
+    fn new(&self, &T) -> T::ImplType;
+    // FIXME: Needs token, needs to become override_vfuncs()
+    // override_vfuncs() functions need to take token
     fn class_init(&self, &mut ClassStruct<T>);
     fn type_init(&self, _: &TypeInitToken, _type_: glib::Type) {}
 }
 
 pub struct TypeInitToken(());
 
-pub trait ObjectType: 'static
+pub trait ObjectType: FromGlibPtrBorrow<*mut InstanceStruct<Self>> + 'static
 where
     Self: Sized,
 {
     const NAME: &'static str;
     type GlibType;
     type GlibClassType;
-    type RsType: FromGlibPtrBorrow<*mut InstanceStruct<Self>>;
     type ImplType: ObjectImpl;
 
     fn glib_type() -> glib::Type;
 
     fn class_init(klass: &mut ClassStruct<Self>);
 
-    fn set_property(_obj: &Self::RsType, _id: u32, _value: &glib::Value) {
+    fn set_property(_obj: &Self, _id: u32, _value: &glib::Value) {
         unimplemented!()
     }
 
-    fn get_property(_obj: &Self::RsType, _id: u32) -> Result<glib::Value, ()> {
+    fn get_property(_obj: &Self, _id: u32) -> Result<glib::Value, ()> {
         unimplemented!()
     }
 }
@@ -514,7 +515,7 @@ unsafe extern "C" fn sub_init<T: ObjectType>(
     floating_reference_guard!(obj);
     let instance = &mut *(obj as *mut InstanceStruct<T>);
     let klass = &**(obj as *const *const ClassStruct<T>);
-    let rs_instance: T::RsType = from_glib_borrow(obj as *mut InstanceStruct<T>);
+    let rs_instance: T = from_glib_borrow(obj as *mut InstanceStruct<T>);
 
     let imp = (*klass.imp_static).new(&rs_instance);
     instance.imp = Box::into_raw(Box::new(imp));

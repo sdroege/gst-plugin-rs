@@ -80,5 +80,4 @@ pub mod element;
 pub mod base_src;
 #[macro_use]
 pub mod base_sink;
-#[macro_use]
 pub mod uri_handler;

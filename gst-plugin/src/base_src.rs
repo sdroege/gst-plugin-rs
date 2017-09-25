@@ -115,7 +115,7 @@ pub unsafe trait BaseSrc: IsA<gst_base::BaseSrc> {
 
 pub unsafe trait BaseSrcClass<T: ObjectType>
 where
-    T::RsType: IsA<gst_base::BaseSrc>,
+    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl,
 {
     fn override_vfuncs(&mut self) {
@@ -143,6 +143,7 @@ glib_wrapper! {
     }
 }
 
+// FIXME: This is wrong: it must be a basesrc but also backed by ObjectType<T>
 unsafe impl<T: IsA<gst_base::BaseSrc>> BaseSrc for T {}
 pub type RsBaseSrcClass = ClassStruct<RsBaseSrc>;
 
@@ -209,7 +210,6 @@ impl ObjectType for RsBaseSrc {
     const NAME: &'static str = "RsBaseSrc";
     type GlibType = gst_base_ffi::GstBaseSrc;
     type GlibClassType = gst_base_ffi::GstBaseSrcClass;
-    type RsType = RsBaseSrc;
     type ImplType = Box<BaseSrcImpl>;
 
     fn glib_type() -> glib::Type {
@@ -226,7 +226,7 @@ unsafe extern "C" fn base_src_start<T: ObjectType>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSrc>,
+    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl,
 {
     callback_guard!();
@@ -242,7 +242,7 @@ unsafe extern "C" fn base_src_stop<T: ObjectType>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSrc>,
+    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl,
 {
     callback_guard!();
@@ -258,7 +258,7 @@ unsafe extern "C" fn base_src_is_seekable<T: ObjectType>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSrc>,
+    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl,
 {
     callback_guard!();
@@ -275,7 +275,7 @@ unsafe extern "C" fn base_src_get_size<T: ObjectType>(
     size: *mut u64,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSrc>,
+    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl,
 {
     callback_guard!();
@@ -302,7 +302,7 @@ unsafe extern "C" fn base_src_fill<T: ObjectType>(
     buffer: *mut gst_ffi::GstBuffer,
 ) -> gst_ffi::GstFlowReturn
 where
-    T::RsType: IsA<gst_base::BaseSrc>,
+    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl,
 {
     callback_guard!();
@@ -322,7 +322,7 @@ unsafe extern "C" fn base_src_do_seek<T: ObjectType>(
     segment: *mut gst_ffi::GstSegment,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSrc>,
+    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl,
 {
     callback_guard!();
@@ -341,7 +341,7 @@ unsafe extern "C" fn base_src_query<T: ObjectType>(
     query_ptr: *mut gst_ffi::GstQuery,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSrc>,
+    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl,
 {
     callback_guard!();
@@ -359,7 +359,7 @@ unsafe extern "C" fn base_src_event<T: ObjectType>(
     event_ptr: *mut gst_ffi::GstEvent,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSrc>,
+    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl,
 {
     callback_guard!();

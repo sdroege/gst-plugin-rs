@@ -55,7 +55,7 @@ pub unsafe trait Element: IsA<gst::Element> {
 
 pub unsafe trait ElementClass<T: ObjectType>
 where
-    T::RsType: IsA<gst::Element>,
+    T: IsA<gst::Element>,
     T::ImplType: ElementImpl,
 {
     fn add_pad_template(&mut self, pad_template: gst::PadTemplate) {
@@ -142,7 +142,6 @@ impl ObjectType for RsElement {
     const NAME: &'static str = "RsElement";
     type GlibType = gst_ffi::GstElement;
     type GlibClassType = gst_ffi::GstElementClass;
-    type RsType = RsElement;
     type ImplType = Box<ElementImpl>;
 
     fn glib_type() -> glib::Type {
@@ -159,7 +158,7 @@ unsafe extern "C" fn element_change_state<T: ObjectType>(
     transition: gst_ffi::GstStateChange,
 ) -> gst_ffi::GstStateChangeReturn
 where
-    T::RsType: IsA<gst::Element>,
+    T: IsA<gst::Element>,
     T::ImplType: ElementImpl,
 {
     callback_guard!();

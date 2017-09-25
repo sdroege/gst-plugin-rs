@@ -82,7 +82,7 @@ pub unsafe trait BaseSink: IsA<gst_base::BaseSink> {
 
 pub unsafe trait BaseSinkClass<T: ObjectType>
 where
-    T::RsType: IsA<gst_base::BaseSink>,
+    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl,
 {
     fn override_vfuncs(&mut self) {
@@ -153,7 +153,6 @@ impl ObjectType for RsBaseSink {
     const NAME: &'static str = "RsBaseSink";
     type GlibType = gst_base_ffi::GstBaseSink;
     type GlibClassType = gst_base_ffi::GstBaseSinkClass;
-    type RsType = RsBaseSink;
     type ImplType = Box<BaseSinkImpl>;
 
     fn glib_type() -> glib::Type {
@@ -170,7 +169,7 @@ unsafe extern "C" fn base_sink_start<T: ObjectType>(
     ptr: *mut gst_base_ffi::GstBaseSink,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSink>,
+    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
@@ -186,7 +185,7 @@ unsafe extern "C" fn base_sink_stop<T: ObjectType>(
     ptr: *mut gst_base_ffi::GstBaseSink,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSink>,
+    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
@@ -203,7 +202,7 @@ unsafe extern "C" fn base_sink_render<T: ObjectType>(
     buffer: *mut gst_ffi::GstBuffer,
 ) -> gst_ffi::GstFlowReturn
 where
-    T::RsType: IsA<gst_base::BaseSink>,
+    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
@@ -223,7 +222,7 @@ unsafe extern "C" fn base_sink_query<T: ObjectType>(
     query_ptr: *mut gst_ffi::GstQuery,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSink>,
+    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
@@ -241,7 +240,7 @@ unsafe extern "C" fn base_sink_event<T: ObjectType>(
     event_ptr: *mut gst_ffi::GstEvent,
 ) -> glib_ffi::gboolean
 where
-    T::RsType: IsA<gst_base::BaseSink>,
+    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl,
 {
     callback_guard!();
