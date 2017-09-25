@@ -142,7 +142,7 @@ impl<T: ObjectType> ClassStruct<T> {
                 return ptr::null_mut();
             }
 
-            for &(t, p) in (*self.interfaces_static).iter() {
+            for &(t, p) in &(*self.interfaces_static) {
                 if t == type_ {
                     return p;
                 }

@@ -278,7 +278,7 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
         let start = segment.get_start();
         let stop = match segment.get_stop() {
             u64::MAX => None,
-            stop @ _ => Some(stop),
+            stop => Some(stop),
         };
 
         gst_debug!(self.cat, obj: src, "Seeking to {:?}-{:?}", start, stop);

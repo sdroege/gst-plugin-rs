@@ -146,7 +146,7 @@ impl Demuxer {
             flow_combiner: Mutex::new(Default::default()),
             group_id: Mutex::new(gst::util_group_id_next()),
             srcpads: Mutex::new(BTreeMap::new()),
-            imp: Mutex::new(((demuxer_info.create_instance)(demuxer))),
+            imp: Mutex::new((demuxer_info.create_instance)(demuxer)),
         }
     }
 
@@ -345,7 +345,7 @@ impl Demuxer {
     ) -> bool {
         let element = parent
             .as_ref()
-            .map(|o| o.clone())
+            .cloned()
             .unwrap()
             .downcast::<RsElement>()
             .unwrap();
@@ -390,7 +390,7 @@ impl Demuxer {
     ) -> gst::FlowReturn {
         let element = parent
             .as_ref()
-            .map(|o| o.clone())
+            .cloned()
             .unwrap()
             .downcast::<RsElement>()
             .unwrap();
@@ -488,7 +488,7 @@ impl Demuxer {
 
         let element = parent
             .as_ref()
-            .map(|o| o.clone())
+            .cloned()
             .unwrap()
             .downcast::<RsElement>()
             .unwrap();
@@ -523,7 +523,7 @@ impl Demuxer {
 
         let element = parent
             .as_ref()
-            .map(|o| o.clone())
+            .cloned()
             .unwrap()
             .downcast::<RsElement>()
             .unwrap();
@@ -630,7 +630,7 @@ impl Demuxer {
                 gst_debug!(self.cat, obj: element, "Seeked after EOS");
                 *offset = u64::MAX;
 
-                self.stream_eos(&element, None);
+                self.stream_eos(element, None);
 
                 true
             }

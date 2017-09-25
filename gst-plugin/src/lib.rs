@@ -39,14 +39,12 @@ macro_rules! floating_reference_guard {
 pub struct FloatingReferenceGuard(*mut gobject_ffi::GObject);
 
 impl FloatingReferenceGuard {
-    pub fn new(obj: *mut gobject_ffi::GObject) -> Option<FloatingReferenceGuard> {
-        unsafe {
-            if gobject_ffi::g_object_is_floating(obj) != glib_ffi::GFALSE {
-                gobject_ffi::g_object_ref_sink(obj);
-                Some(FloatingReferenceGuard(obj))
-            } else {
-                None
-            }
+    pub unsafe fn new(obj: *mut gobject_ffi::GObject) -> Option<FloatingReferenceGuard> {
+        if gobject_ffi::g_object_is_floating(obj) != glib_ffi::GFALSE {
+            gobject_ffi::g_object_ref_sink(obj);
+            Some(FloatingReferenceGuard(obj))
+        } else {
+            None
         }
     }
 }
