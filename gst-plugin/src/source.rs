@@ -172,10 +172,8 @@ impl ObjectImpl<RsBaseSrc> for Source {
 impl ElementImpl<RsBaseSrc> for Source {}
 
 impl BaseSrcImpl<RsBaseSrc> for Source {
-    fn start(&self, element: &gst_base::BaseSrc) -> bool {
-        let src = element.clone().downcast::<RsBaseSrc>().unwrap();
-
-        gst_debug!(self.cat, obj: &src, "Starting");
+    fn start(&self, src: &RsBaseSrc) -> bool {
+        gst_debug!(self.cat, obj: src, "Starting");
 
         // Don't keep the URI locked while we call start later
         let uri = match *self.uri.lock().unwrap() {
@@ -184,50 +182,49 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
                 uri.clone()
             }
             (None, _) => {
-                gst_error!(self.cat, obj: &src, "No URI given");
-                error_msg!(gst::ResourceError::OpenRead, ["No URI given"]).post(&src);
+                gst_error!(self.cat, obj: src, "No URI given");
+                error_msg!(gst::ResourceError::OpenRead, ["No URI given"]).post(src);
                 return false;
             }
         };
 
         let source_impl = &mut self.imp.lock().unwrap();
-        match source_impl.start(&src, uri) {
+        match source_impl.start(src, uri) {
             Ok(..) => {
-                gst_trace!(self.cat, obj: &src, "Started successfully");
+                gst_trace!(self.cat, obj: src, "Started successfully");
                 true
             }
             Err(ref msg) => {
-                gst_error!(self.cat, obj: &src, "Failed to start: {:?}", msg);
+                gst_error!(self.cat, obj: src, "Failed to start: {:?}", msg);
 
                 self.uri.lock().unwrap().1 = false;
-                msg.post(&src);
+                msg.post(src);
                 false
             }
         }
     }
 
-    fn stop(&self, element: &gst_base::BaseSrc) -> bool {
-        let src = element.clone().downcast::<RsBaseSrc>().unwrap();
+    fn stop(&self, src: &RsBaseSrc) -> bool {
         let source_impl = &mut self.imp.lock().unwrap();
 
-        gst_debug!(self.cat, obj: &src, "Stopping");
+        gst_debug!(self.cat, obj: src, "Stopping");
 
-        match source_impl.stop(&src) {
+        match source_impl.stop(src) {
             Ok(..) => {
-                gst_trace!(self.cat, obj: &src, "Stopped successfully");
+                gst_trace!(self.cat, obj: src, "Stopped successfully");
                 self.uri.lock().unwrap().1 = false;
                 true
             }
             Err(ref msg) => {
-                gst_error!(self.cat, obj: &src, "Failed to stop: {:?}", msg);
+                gst_error!(self.cat, obj: src, "Failed to stop: {:?}", msg);
 
-                msg.post(&src);
+                msg.post(src);
                 false
             }
         }
     }
 
-    fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, src: &RsBaseSrc, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
         match query.view_mut() {
@@ -239,35 +236,34 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
             _ => (),
         }
 
-        element.parent_query(query)
+        src.parent_query(query)
     }
 
     fn fill(
         &self,
-        element: &gst_base::BaseSrc,
+        src: &RsBaseSrc,
         offset: u64,
         length: u32,
         buffer: &mut gst::BufferRef,
     ) -> gst::FlowReturn {
-        let src = element.clone().downcast::<RsBaseSrc>().unwrap();
         let source_impl = &mut self.imp.lock().unwrap();
 
         gst_trace!(
             self.cat,
-            obj: &src,
+            obj: src,
             "Filling buffer {:?} with offset {} and length {}",
             buffer,
             offset,
             length
         );
 
-        match source_impl.fill(&src, offset, length, buffer) {
+        match source_impl.fill(src, offset, length, buffer) {
             Ok(()) => gst::FlowReturn::Ok,
             Err(flow_error) => {
-                gst_error!(self.cat, obj: &src, "Failed to fill: {:?}", flow_error);
+                gst_error!(self.cat, obj: src, "Failed to fill: {:?}", flow_error);
                 match flow_error {
                     FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
-                        msg.post(&src);
+                        msg.post(src);
                     }
                     _ => (),
                 }
@@ -276,8 +272,7 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
         }
     }
 
-    fn do_seek(&self, element: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {
-        let src = element.clone().downcast::<RsBaseSrc>().unwrap();
+    fn do_seek(&self, src: &RsBaseSrc, segment: &mut gst::Segment) -> bool {
         let source_impl = &mut self.imp.lock().unwrap();
 
         let start = segment.get_start();
@@ -286,28 +281,26 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
             stop @ _ => Some(stop),
         };
 
-        gst_debug!(self.cat, obj: &src, "Seeking to {:?}-{:?}", start, stop);
+        gst_debug!(self.cat, obj: src, "Seeking to {:?}-{:?}", start, stop);
 
-        match source_impl.seek(&src, start, stop) {
+        match source_impl.seek(src, start, stop) {
             Ok(..) => true,
             Err(ref msg) => {
-                gst_error!(self.cat, obj: &src, "Failed to seek {:?}", msg);
-                msg.post(&src);
+                gst_error!(self.cat, obj: src, "Failed to seek {:?}", msg);
+                msg.post(src);
                 false
             }
         }
     }
 
-    fn is_seekable(&self, element: &gst_base::BaseSrc) -> bool {
-        let src = element.clone().downcast::<RsBaseSrc>().unwrap();
+    fn is_seekable(&self, src: &RsBaseSrc) -> bool {
         let source_impl = &self.imp.lock().unwrap();
-        source_impl.is_seekable(&src)
+        source_impl.is_seekable(src)
     }
 
-    fn get_size(&self, element: &gst_base::BaseSrc) -> Option<u64> {
-        let src = element.clone().downcast::<RsBaseSrc>().unwrap();
+    fn get_size(&self, src: &RsBaseSrc) -> Option<u64> {
         let source_impl = &self.imp.lock().unwrap();
-        source_impl.get_size(&src)
+        source_impl.get_size(src)
     }
 }
 

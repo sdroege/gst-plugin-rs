@@ -84,7 +84,26 @@ where
     fn get_property(_obj: &Self, _id: u32) -> Result<glib::Value, ()> {
         unimplemented!()
     }
+
+    unsafe fn get_instance(&self) -> *mut InstanceStruct<Self>;
+
+    fn get_impl(&self) -> &Self::ImplType {
+        unsafe { (*self.get_instance()).get_impl() }
+    }
+
+    unsafe fn get_class(&self) -> *const ClassStruct<Self> {
+        (*self.get_instance()).get_class()
+    }
 }
+
+#[macro_export]
+macro_rules! object_type_fns(
+    () => {
+        unsafe fn get_instance(&self) -> *mut InstanceStruct<Self> {
+            self.to_glib_none().0
+        }
+    }
+);
 
 #[repr(C)]
 pub struct InstanceStruct<T: ObjectType> {
@@ -97,13 +116,24 @@ impl<T: ObjectType> InstanceStruct<T> {
     pub fn get_impl(&self) -> &T::ImplType {
         unsafe { &*self.imp }
     }
+
+    pub unsafe fn get_class(&self) -> *const ClassStruct<T> {
+        *(self as *const _ as *const *const ClassStruct<T>)
+    }
 }
 
 #[repr(C)]
 pub struct ClassStruct<T: ObjectType> {
     pub parent: T::GlibClassType,
     pub imp_static: *const Box<ImplTypeStatic<T>>,
+    pub parent_class: *const T::GlibClassType,
     pub interfaces_static: *const Vec<(glib_ffi::GType, glib_ffi::gpointer)>,
+}
+
+impl<T: ObjectType> ClassStruct<T> {
+    pub unsafe fn get_parent_class(&self) -> *const T::GlibClassType {
+        self.parent_class
+    }
 }
 
 impl<T: ObjectType> ClassStruct<T> {
@@ -346,7 +376,13 @@ unsafe extern "C" fn class_init<T: ObjectType>(
         gobject_klass.get_property = Some(get_property::<T>);
     }
 
-    T::class_init(&mut *(klass as *mut ClassStruct<T>));
+    {
+        let klass = &mut *(klass as *mut ClassStruct<T>);
+        klass.parent_class = gobject_ffi::g_type_class_peek_parent(
+            klass as *mut _ as glib_ffi::gpointer,
+        ) as *const T::GlibClassType;
+        T::class_init(klass);
+    }
 }
 
 unsafe extern "C" fn finalize<T: ObjectType>(obj: *mut gobject_ffi::GObject) {

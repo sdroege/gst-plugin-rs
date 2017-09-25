@@ -643,7 +643,7 @@ impl ObjectImpl<RsElement> for Demuxer {}
 impl ElementImpl<RsElement> for Demuxer {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &RsElement,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         let mut ret = gst::StateChangeReturn::Success;

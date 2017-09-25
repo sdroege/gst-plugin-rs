@@ -12,7 +12,6 @@ extern crate gstreamer_base_sys as gst_base_ffi;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
-#[macro_use]
 extern crate mopa;
 extern crate url;
 pub extern crate glib_sys as glib_ffi;
@@ -62,8 +61,8 @@ impl Drop for FloatingReferenceGuard {
 
 // mopafy! macro to work with generic traits over T: ObjectType
 macro_rules! mopafy_object_impl {
-    ($trait:ident) => {
-        impl<T: ObjectType> $trait<T> {
+    ($bound:ident, $trait:ident) => {
+        impl<T: $bound> $trait<T> {
             #[inline]
             pub fn downcast_ref<U: $trait<T>>(&self) -> Option<&U> {
                 if self.is::<U>() {

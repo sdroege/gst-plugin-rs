@@ -21,30 +21,21 @@ use gst::prelude::*;
 
 use object::*;
 
-pub trait ElementImpl<T: ObjectType>
+pub trait ElementImpl<T: Element>
     : ObjectImpl<T> + mopa::Any + Send + Sync + 'static {
-    fn change_state(
-        &self,
-        element: &gst::Element,
-        transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
+    fn change_state(&self, element: &T, transition: gst::StateChange) -> gst::StateChangeReturn {
         element.parent_change_state(transition)
     }
 }
 
-mopafy_object_impl!(ElementImpl);
+mopafy_object_impl!(Element, ElementImpl);
 
-pub unsafe trait Element: IsA<gst::Element> {
+pub unsafe trait Element: IsA<gst::Element> + ObjectType {
     fn parent_change_state(&self, transition: gst::StateChange) -> gst::StateChangeReturn {
         unsafe {
-            // Our class
-            let klass = *(self.to_glib_none().0 as *const glib_ffi::gpointer);
-            // The parent class, RsElement or any other first-level Rust implementation
-            let parent_klass = gobject_ffi::g_type_class_peek_parent(klass);
-            // The actual parent class as defined in C
-            let parent_klass = &*(gobject_ffi::g_type_class_peek_parent(parent_klass) as
-                *const gst_ffi::GstElementClass);
-            parent_klass
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_ffi::GstElementClass;
+            (*parent_klass)
                 .change_state
                 .map(|f| {
                     from_glib(f(self.to_glib_none().0, transition.to_glib()))
@@ -54,9 +45,8 @@ pub unsafe trait Element: IsA<gst::Element> {
     }
 }
 
-pub unsafe trait ElementClass<T: ObjectType>
+pub unsafe trait ElementClass<T: Element>
 where
-    T: IsA<gst::Element>,
     T::ImplType: ElementImpl<T>,
 {
     fn add_pad_template(&mut self, pad_template: gst::PadTemplate) {
@@ -103,17 +93,7 @@ glib_wrapper! {
     }
 }
 
-impl RsElement {
-    pub fn get_impl(&self) -> &ElementImpl<RsElement> {
-        unsafe {
-            let stash = self.to_glib_none();
-            let ptr: *mut InstanceStruct<RsElement> = stash.0;
-            (*ptr).get_impl().as_ref()
-        }
-    }
-}
-
-unsafe impl<T: IsA<gst::Element>> Element for T {}
+unsafe impl<T: IsA<gst::Element> + ObjectType> Element for T {}
 pub type RsElementClass = ClassStruct<RsElement>;
 
 // FIXME: Boilerplate
@@ -124,10 +104,10 @@ macro_rules! box_element_impl(
     ($name:ident) => {
         box_object_impl!($name);
 
-        impl<T: ObjectType> ElementImpl<T> for Box<$name<T>> {
+        impl<T: Element> ElementImpl<T> for Box<$name<T>> {
             fn change_state(
                 &self,
-                element: &gst::Element,
+                element: &T,
                 transition: gst::StateChange,
             ) -> gst::StateChangeReturn {
                 let imp: &$name<T> = self.as_ref();
@@ -152,20 +132,21 @@ impl ObjectType for RsElement {
     fn class_init(klass: &mut RsElementClass) {
         klass.override_vfuncs();
     }
+
+    object_type_fns!();
 }
 
-unsafe extern "C" fn element_change_state<T: ObjectType>(
+unsafe extern "C" fn element_change_state<T: Element>(
     ptr: *mut gst_ffi::GstElement,
     transition: gst_ffi::GstStateChange,
 ) -> gst_ffi::GstStateChangeReturn
 where
-    T: IsA<gst::Element>,
     T::ImplType: ElementImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst::Element = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, gst::StateChangeReturn::Failure, {

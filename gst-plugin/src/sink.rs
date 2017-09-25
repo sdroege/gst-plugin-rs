@@ -158,10 +158,8 @@ impl ObjectImpl<RsBaseSink> for Sink {
 impl ElementImpl<RsBaseSink> for Sink {}
 
 impl BaseSinkImpl<RsBaseSink> for Sink {
-    fn start(&self, element: &gst_base::BaseSink) -> bool {
-        let sink = element.clone().downcast::<RsBaseSink>().unwrap();
-
-        gst_debug!(self.cat, obj: &sink, "Starting");
+    fn start(&self, sink: &RsBaseSink) -> bool {
+        gst_debug!(self.cat, obj: sink, "Starting");
 
         // Don't keep the URI locked while we call start later
         let uri = match *self.uri.lock().unwrap() {
@@ -170,62 +168,60 @@ impl BaseSinkImpl<RsBaseSink> for Sink {
                 uri.clone()
             }
             (None, _) => {
-                gst_error!(self.cat, obj: &sink, "No URI given");
-                error_msg!(gst::ResourceError::OpenRead, ["No URI given"]).post(&sink);
+                gst_error!(self.cat, obj: sink, "No URI given");
+                error_msg!(gst::ResourceError::OpenRead, ["No URI given"]).post(sink);
                 return false;
             }
         };
 
         let sink_impl = &mut self.imp.lock().unwrap();
-        match sink_impl.start(&sink, uri) {
+        match sink_impl.start(sink, uri) {
             Ok(..) => {
-                gst_trace!(self.cat, obj: &sink, "Started successfully");
+                gst_trace!(self.cat, obj: sink, "Started successfully");
                 true
             }
             Err(ref msg) => {
-                gst_error!(self.cat, obj: &sink, "Failed to start: {:?}", msg);
+                gst_error!(self.cat, obj: sink, "Failed to start: {:?}", msg);
 
                 self.uri.lock().unwrap().1 = false;
-                msg.post(&sink);
+                msg.post(sink);
                 false
             }
         }
     }
 
-    fn stop(&self, element: &gst_base::BaseSink) -> bool {
-        let sink = element.clone().downcast::<RsBaseSink>().unwrap();
+    fn stop(&self, sink: &RsBaseSink) -> bool {
         let sink_impl = &mut self.imp.lock().unwrap();
 
-        gst_debug!(self.cat, obj: &sink, "Stopping");
+        gst_debug!(self.cat, obj: sink, "Stopping");
 
-        match sink_impl.stop(&sink) {
+        match sink_impl.stop(sink) {
             Ok(..) => {
-                gst_trace!(self.cat, obj: &sink, "Stopped successfully");
+                gst_trace!(self.cat, obj: sink, "Stopped successfully");
                 self.uri.lock().unwrap().1 = false;
                 true
             }
             Err(ref msg) => {
-                gst_error!(self.cat, obj: &sink, "Failed to stop: {:?}", msg);
+                gst_error!(self.cat, obj: sink, "Failed to stop: {:?}", msg);
 
-                msg.post(&sink);
+                msg.post(sink);
                 false
             }
         }
     }
 
-    fn render(&self, element: &gst_base::BaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn {
-        let sink = element.clone().downcast::<RsBaseSink>().unwrap();
+    fn render(&self, sink: &RsBaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn {
         let sink_impl = &mut self.imp.lock().unwrap();
 
-        gst_trace!(self.cat, obj: &sink, "Rendering buffer {:?}", buffer,);
+        gst_trace!(self.cat, obj: sink, "Rendering buffer {:?}", buffer,);
 
-        match sink_impl.render(&sink, buffer) {
+        match sink_impl.render(sink, buffer) {
             Ok(()) => gst::FlowReturn::Ok,
             Err(flow_error) => {
-                gst_error!(self.cat, obj: &sink, "Failed to render: {:?}", flow_error);
+                gst_error!(self.cat, obj: sink, "Failed to render: {:?}", flow_error);
                 match flow_error {
                     FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
-                        msg.post(&sink);
+                        msg.post(sink);
                     }
                     _ => (),
                 }

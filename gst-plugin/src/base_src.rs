@@ -25,51 +25,47 @@ use gst_base::prelude::*;
 use object::*;
 use element::*;
 
-pub trait BaseSrcImpl<T: ObjectType>
+pub trait BaseSrcImpl<T: BaseSrc>
     : mopa::Any + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
-    fn start(&self, _element: &gst_base::BaseSrc) -> bool {
+    fn start(&self, _element: &T) -> bool {
         true
     }
-    fn stop(&self, _element: &gst_base::BaseSrc) -> bool {
+    fn stop(&self, _element: &T) -> bool {
         true
     }
-    fn is_seekable(&self, _element: &gst_base::BaseSrc) -> bool {
+    fn is_seekable(&self, _element: &T) -> bool {
         false
     }
-    fn get_size(&self, _element: &gst_base::BaseSrc) -> Option<u64> {
+    fn get_size(&self, _element: &T) -> Option<u64> {
         None
     }
     fn fill(
         &self,
-        element: &gst_base::BaseSrc,
+        element: &T,
         offset: u64,
         length: u32,
         buffer: &mut gst::BufferRef,
     ) -> gst::FlowReturn;
-    fn do_seek(&self, element: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {
+    fn do_seek(&self, element: &T, segment: &mut gst::Segment) -> bool {
         element.parent_do_seek(segment)
     }
-    fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
         element.parent_query(query)
     }
-    fn event(&self, element: &gst_base::BaseSrc, event: &gst::Event) -> bool {
+    fn event(&self, element: &T, event: &gst::Event) -> bool {
         element.parent_event(event)
     }
 }
 
-mopafy_object_impl!(BaseSrcImpl);
+mopafy_object_impl!(BaseSrc, BaseSrcImpl);
 
-pub unsafe trait BaseSrc: IsA<gst_base::BaseSrc> {
+pub unsafe trait BaseSrc
+    : IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType {
     fn parent_do_seek(&self, segment: &mut gst::Segment) -> bool {
         unsafe {
-            // Our class
-            let klass = *(self.to_glib_none().0 as *const glib_ffi::gpointer);
-            // The parent class, RsElement or any other first-level Rust implementation
-            let parent_klass = gobject_ffi::g_type_class_peek_parent(klass);
-            // The actual parent class as defined in C
-            let parent_klass = &*(gobject_ffi::g_type_class_peek_parent(parent_klass) as
-                *const gst_base_ffi::GstBaseSrcClass);
-            parent_klass
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
+            (*parent_klass)
                 .do_seek
                 .map(|f| {
                     from_glib(f(self.to_glib_none().0, segment.to_glib_none_mut().0))
@@ -80,14 +76,9 @@ pub unsafe trait BaseSrc: IsA<gst_base::BaseSrc> {
 
     fn parent_query(&self, query: &mut gst::QueryRef) -> bool {
         unsafe {
-            // Our class
-            let klass = *(self.to_glib_none().0 as *const glib_ffi::gpointer);
-            // The parent class, RsElement or any other first-level Rust implementation
-            let parent_klass = gobject_ffi::g_type_class_peek_parent(klass);
-            // The actual parent class as defined in C
-            let parent_klass = &*(gobject_ffi::g_type_class_peek_parent(parent_klass) as
-                *const gst_base_ffi::GstBaseSrcClass);
-            parent_klass
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
+            (*parent_klass)
                 .query
                 .map(|f| from_glib(f(self.to_glib_none().0, query.as_mut_ptr())))
                 .unwrap_or(false)
@@ -96,14 +87,9 @@ pub unsafe trait BaseSrc: IsA<gst_base::BaseSrc> {
 
     fn parent_event(&self, event: &gst::Event) -> bool {
         unsafe {
-            // Our class
-            let klass = *(self.to_glib_none().0 as *const glib_ffi::gpointer);
-            // The parent class, RsElement or any other first-level Rust implementation
-            let parent_klass = gobject_ffi::g_type_class_peek_parent(klass);
-            // The actual parent class as defined in C
-            let parent_klass = &*(gobject_ffi::g_type_class_peek_parent(parent_klass) as
-                *const gst_base_ffi::GstBaseSrcClass);
-            parent_klass
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
+            (*parent_klass)
                 .event
                 .map(|f| {
                     from_glib(f(self.to_glib_none().0, event.to_glib_none().0))
@@ -113,9 +99,8 @@ pub unsafe trait BaseSrc: IsA<gst_base::BaseSrc> {
     }
 }
 
-pub unsafe trait BaseSrcClass<T: ObjectType>
+pub unsafe trait BaseSrcClass<T: BaseSrc>
 where
-    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl<T>,
 {
     fn override_vfuncs(&mut self) {
@@ -144,7 +129,7 @@ glib_wrapper! {
 }
 
 // FIXME: This is wrong: it must be a basesrc but also backed by ObjectType<T>
-unsafe impl<T: IsA<gst_base::BaseSrc>> BaseSrc for T {}
+unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType> BaseSrc for T {}
 pub type RsBaseSrcClass = ClassStruct<RsBaseSrc>;
 
 // FIXME: Boilerplate
@@ -156,30 +141,30 @@ macro_rules! box_base_src_impl(
     ($name:ident) => {
         box_element_impl!($name);
 
-        impl<T: ObjectType> BaseSrcImpl<T> for Box<$name<T>> {
-            fn start(&self, element: &gst_base::BaseSrc) -> bool {
+        impl<T: BaseSrc> BaseSrcImpl<T> for Box<$name<T>> {
+            fn start(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.start(element)
             }
 
-            fn stop(&self, element: &gst_base::BaseSrc) -> bool {
+            fn stop(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.stop(element)
             }
 
-            fn is_seekable(&self, element: &gst_base::BaseSrc) -> bool {
+            fn is_seekable(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.is_seekable(element)
             }
 
-            fn get_size(&self, element: &gst_base::BaseSrc) -> Option<u64> {
+            fn get_size(&self, element: &T) -> Option<u64> {
                 let imp: &$name<T> = self.as_ref();
                 imp.get_size(element)
             }
 
             fn fill(
                 &self,
-                element: &gst_base::BaseSrc,
+                element: &T,
                 offset: u64,
                 length: u32,
                 buffer: &mut gst::BufferRef,
@@ -188,16 +173,16 @@ macro_rules! box_base_src_impl(
                 imp.fill(element, offset, length, buffer)
             }
 
-            fn do_seek(&self, element: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {
+            fn do_seek(&self, element: &T, segment: &mut gst::Segment) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.do_seek(element, segment)
             }
 
-            fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
+            fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.query(element, query)
             }
-            fn event(&self, element: &gst_base::BaseSrc, event: &gst::Event) -> bool {
+            fn event(&self, element: &T, event: &gst::Event) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.event(element, event)
             }
@@ -220,68 +205,66 @@ impl ObjectType for RsBaseSrc {
         ElementClass::override_vfuncs(klass);
         BaseSrcClass::override_vfuncs(klass);
     }
+
+    object_type_fns!();
 }
 
-unsafe extern "C" fn base_src_start<T: ObjectType>(
+unsafe extern "C" fn base_src_start<T: BaseSrc>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSrc = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_src_stop<T: ObjectType>(
+unsafe extern "C" fn base_src_stop<T: BaseSrc>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSrc = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_src_is_seekable<T: ObjectType>(
+unsafe extern "C" fn base_src_is_seekable<T: BaseSrc>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSrc = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.is_seekable(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_src_get_size<T: ObjectType>(
+unsafe extern "C" fn base_src_get_size<T: BaseSrc>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     size: *mut u64,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSrc = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, {
@@ -295,20 +278,19 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_src_fill<T: ObjectType>(
+unsafe extern "C" fn base_src_fill<T: BaseSrc>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     offset: u64,
     length: u32,
     buffer: *mut gst_ffi::GstBuffer,
 ) -> gst_ffi::GstFlowReturn
 where
-    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSrc = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
     let buffer = gst::BufferRef::from_mut_ptr(buffer);
 
@@ -317,18 +299,17 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_src_do_seek<T: ObjectType>(
+unsafe extern "C" fn base_src_do_seek<T: BaseSrc>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     segment: *mut gst_ffi::GstSegment,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSrc = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, {
@@ -336,36 +317,34 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_src_query<T: ObjectType>(
+unsafe extern "C" fn base_src_query<T: BaseSrc>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     query_ptr: *mut gst_ffi::GstQuery,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSrc = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
     let query = gst::QueryRef::from_mut_ptr(query_ptr);
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.query(&wrap, query) }).to_glib()
 }
 
-unsafe extern "C" fn base_src_event<T: ObjectType>(
+unsafe extern "C" fn base_src_event<T: BaseSrc>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     event_ptr: *mut gst_ffi::GstEvent,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSrc>,
     T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSrc = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, {

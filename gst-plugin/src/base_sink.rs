@@ -25,36 +25,32 @@ use gst_base::prelude::*;
 use object::*;
 use element::*;
 
-pub trait BaseSinkImpl<T: ObjectType>
+pub trait BaseSinkImpl<T: BaseSink>
     : mopa::Any + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
-    fn start(&self, _element: &gst_base::BaseSink) -> bool {
+    fn start(&self, _element: &T) -> bool {
         true
     }
-    fn stop(&self, _element: &gst_base::BaseSink) -> bool {
+    fn stop(&self, _element: &T) -> bool {
         true
     }
-    fn render(&self, element: &gst_base::BaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn;
-    fn query(&self, element: &gst_base::BaseSink, query: &mut gst::QueryRef) -> bool {
+    fn render(&self, element: &T, buffer: &gst::BufferRef) -> gst::FlowReturn;
+    fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
         element.parent_query(query)
     }
-    fn event(&self, element: &gst_base::BaseSink, event: &gst::Event) -> bool {
+    fn event(&self, element: &T, event: &gst::Event) -> bool {
         element.parent_event(event)
     }
 }
 
-mopafy_object_impl!(BaseSinkImpl);
+mopafy_object_impl!(BaseSink, BaseSinkImpl);
 
-pub unsafe trait BaseSink: IsA<gst_base::BaseSink> {
+pub unsafe trait BaseSink
+    : IsA<gst::Element> + IsA<gst_base::BaseSink> + ObjectType {
     fn parent_query(&self, query: &mut gst::QueryRef) -> bool {
         unsafe {
-            // Our class
-            let klass = *(self.to_glib_none().0 as *const glib_ffi::gpointer);
-            // The parent class, RsElement or any other first-level Rust implementation
-            let parent_klass = gobject_ffi::g_type_class_peek_parent(klass);
-            // The actual parent class as defined in C
-            let parent_klass = &*(gobject_ffi::g_type_class_peek_parent(parent_klass) as
-                *const gst_base_ffi::GstBaseSinkClass);
-            parent_klass
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSinkClass;
+            (*parent_klass)
                 .query
                 .map(|f| from_glib(f(self.to_glib_none().0, query.as_mut_ptr())))
                 .unwrap_or(false)
@@ -63,14 +59,9 @@ pub unsafe trait BaseSink: IsA<gst_base::BaseSink> {
 
     fn parent_event(&self, event: &gst::Event) -> bool {
         unsafe {
-            // Our class
-            let klass = *(self.to_glib_none().0 as *const glib_ffi::gpointer);
-            // The parent class, RsElement or any other first-level Rust implementation
-            let parent_klass = gobject_ffi::g_type_class_peek_parent(klass);
-            // The actual parent class as defined in C
-            let parent_klass = &*(gobject_ffi::g_type_class_peek_parent(parent_klass) as
-                *const gst_base_ffi::GstBaseSinkClass);
-            parent_klass
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSinkClass;
+            (*parent_klass)
                 .event
                 .map(|f| {
                     from_glib(f(self.to_glib_none().0, event.to_glib_none().0))
@@ -80,9 +71,8 @@ pub unsafe trait BaseSink: IsA<gst_base::BaseSink> {
     }
 }
 
-pub unsafe trait BaseSinkClass<T: ObjectType>
+pub unsafe trait BaseSinkClass<T: BaseSink>
 where
-    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl<T>,
 {
     fn override_vfuncs(&mut self) {
@@ -107,7 +97,7 @@ glib_wrapper! {
     }
 }
 
-unsafe impl<T: IsA<gst_base::BaseSink>> BaseSink for T {}
+unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseSink> + ObjectType> BaseSink for T {}
 pub type RsBaseSinkClass = ClassStruct<RsBaseSink>;
 
 // FIXME: Boilerplate
@@ -119,27 +109,27 @@ macro_rules! box_base_sink_impl(
     ($name:ident) => {
         box_element_impl!($name);
 
-        impl<T: ObjectType> BaseSinkImpl<T> for Box<$name<T>> {
-            fn start(&self, element: &gst_base::BaseSink) -> bool {
+        impl<T: BaseSink> BaseSinkImpl<T> for Box<$name<T>> {
+            fn start(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.start(element)
             }
 
-            fn stop(&self, element: &gst_base::BaseSink) -> bool {
+            fn stop(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.stop(element)
             }
 
-            fn render(&self, element: &gst_base::BaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn {
+            fn render(&self, element: &T, buffer: &gst::BufferRef) -> gst::FlowReturn {
                 let imp: &$name<T> = self.as_ref();
                 imp.render(element, buffer)
             }
 
-            fn query(&self, element: &gst_base::BaseSink, query: &mut gst::QueryRef) -> bool {
+            fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.query(element, query)
             }
-            fn event(&self, element: &gst_base::BaseSink, event: &gst::Event) -> bool {
+            fn event(&self, element: &T, event: &gst::Event) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.event(element, event)
             }
@@ -163,52 +153,51 @@ impl ObjectType for RsBaseSink {
         ElementClass::override_vfuncs(klass);
         BaseSinkClass::override_vfuncs(klass);
     }
+
+    object_type_fns!();
 }
 
-unsafe extern "C" fn base_sink_start<T: ObjectType>(
+unsafe extern "C" fn base_sink_start<T: BaseSink>(
     ptr: *mut gst_base_ffi::GstBaseSink,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_stop<T: ObjectType>(
+unsafe extern "C" fn base_sink_stop<T: BaseSink>(
     ptr: *mut gst_base_ffi::GstBaseSink,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_render<T: ObjectType>(
+unsafe extern "C" fn base_sink_render<T: BaseSink>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     buffer: *mut gst_ffi::GstBuffer,
 ) -> gst_ffi::GstFlowReturn
 where
-    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
     let buffer = gst::BufferRef::from_ptr(buffer);
 
@@ -217,36 +206,34 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_query<T: ObjectType>(
+unsafe extern "C" fn base_sink_query<T: BaseSink>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     query_ptr: *mut gst_ffi::GstQuery,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
     let query = gst::QueryRef::from_mut_ptr(query_ptr);
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.query(&wrap, query) }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_event<T: ObjectType>(
+unsafe extern "C" fn base_sink_event<T: BaseSink>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     event_ptr: *mut gst_ffi::GstEvent,
 ) -> glib_ffi::gboolean
 where
-    T: IsA<gst_base::BaseSink>,
     T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: gst_base::BaseSink = from_glib_borrow(ptr);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, {
