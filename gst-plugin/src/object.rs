@@ -56,12 +56,11 @@ macro_rules! box_object_impl(
 pub trait ImplTypeStatic<T: ObjectType>: Send + Sync + 'static {
     fn get_name(&self) -> &str;
     fn new(&self, &T) -> T::ImplType;
-    // FIXME: Needs token, needs to become override_vfuncs()
-    // override_vfuncs() functions need to take token
     fn class_init(&self, &mut ClassStruct<T>);
     fn type_init(&self, _: &TypeInitToken, _type_: glib::Type) {}
 }
 
+pub struct ClassInitToken(());
 pub struct TypeInitToken(());
 
 pub trait ObjectType: FromGlibPtrBorrow<*mut InstanceStruct<Self>> + 'static
@@ -75,7 +74,7 @@ where
 
     fn glib_type() -> glib::Type;
 
-    fn class_init(klass: &mut ClassStruct<Self>);
+    fn class_init(token: &ClassInitToken, klass: &mut ClassStruct<Self>);
 
     fn set_property(_obj: &Self, _id: u32, _value: &glib::Value) {
         unimplemented!()
@@ -381,7 +380,7 @@ unsafe extern "C" fn class_init<T: ObjectType>(
         klass.parent_class = gobject_ffi::g_type_class_peek_parent(
             klass as *mut _ as glib_ffi::gpointer,
         ) as *const T::GlibClassType;
-        T::class_init(klass);
+        T::class_init(&ClassInitToken(()), klass);
     }
 }
 

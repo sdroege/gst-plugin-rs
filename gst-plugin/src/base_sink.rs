@@ -75,7 +75,7 @@ pub unsafe trait BaseSinkClass<T: BaseSink>
 where
     T::ImplType: BaseSinkImpl<T>,
 {
-    fn override_vfuncs(&mut self) {
+    fn override_vfuncs(&mut self, _: &ClassInitToken) {
         unsafe {
             let klass = &mut *(self as *const Self as *mut gst_base_ffi::GstBaseSinkClass);
             klass.start = Some(base_sink_start::<T>);
@@ -149,9 +149,9 @@ impl ObjectType for RsBaseSink {
         unsafe { from_glib(gst_base_ffi::gst_base_sink_get_type()) }
     }
 
-    fn class_init(klass: &mut RsBaseSinkClass) {
-        ElementClass::override_vfuncs(klass);
-        BaseSinkClass::override_vfuncs(klass);
+    fn class_init(token: &ClassInitToken, klass: &mut RsBaseSinkClass) {
+        ElementClass::override_vfuncs(klass, token);
+        BaseSinkClass::override_vfuncs(klass, token);
     }
 
     object_type_fns!();

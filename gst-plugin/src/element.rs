@@ -76,7 +76,7 @@ where
         }
     }
 
-    fn override_vfuncs(&mut self) {
+    fn override_vfuncs(&mut self, _: &ClassInitToken) {
         unsafe {
             let klass = &mut *(self as *const Self as *mut gst_ffi::GstElementClass);
             klass.change_state = Some(element_change_state::<T>);
@@ -129,8 +129,8 @@ impl ObjectType for RsElement {
         unsafe { from_glib(gst_ffi::gst_element_get_type()) }
     }
 
-    fn class_init(klass: &mut RsElementClass) {
-        klass.override_vfuncs();
+    fn class_init(token: &ClassInitToken, klass: &mut RsElementClass) {
+        klass.override_vfuncs(token);
     }
 
     object_type_fns!();

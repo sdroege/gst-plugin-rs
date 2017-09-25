@@ -103,7 +103,7 @@ pub unsafe trait BaseSrcClass<T: BaseSrc>
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    fn override_vfuncs(&mut self) {
+    fn override_vfuncs(&mut self, _: &ClassInitToken) {
         unsafe {
             let klass = &mut *(self as *const Self as *mut gst_base_ffi::GstBaseSrcClass);
             klass.start = Some(base_src_start::<T>);
@@ -201,9 +201,9 @@ impl ObjectType for RsBaseSrc {
         unsafe { from_glib(gst_base_ffi::gst_base_src_get_type()) }
     }
 
-    fn class_init(klass: &mut RsBaseSrcClass) {
-        ElementClass::override_vfuncs(klass);
-        BaseSrcClass::override_vfuncs(klass);
+    fn class_init(token: &ClassInitToken, klass: &mut RsBaseSrcClass) {
+        ElementClass::override_vfuncs(klass, token);
+        BaseSrcClass::override_vfuncs(klass, token);
     }
 
     object_type_fns!();
