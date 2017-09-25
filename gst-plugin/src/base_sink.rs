@@ -115,59 +115,41 @@ unsafe impl BaseSinkClass<RsBaseSink> for gst_base_ffi::GstBaseSinkClass {}
 unsafe impl BaseSinkClass<RsBaseSink> for RsBaseSinkClass {}
 unsafe impl ElementClass<RsBaseSink> for gst_base_ffi::GstBaseSinkClass {}
 unsafe impl ElementClass<RsBaseSink> for RsBaseSinkClass {}
-unsafe impl ObjectClass for gst_base_ffi::GstBaseSinkClass {}
 
-// FIXME: Boilerplate
-impl BaseSinkImpl for Box<BaseSinkImpl> {
-    fn start(&self, element: &gst_base::BaseSink) -> bool {
-        let imp: &BaseSinkImpl = self.as_ref();
-        imp.start(element)
-    }
+#[macro_export]
+macro_rules! box_base_sink_impl(
+    ($name:ident) => {
+        box_element_impl!($name);
 
-    fn stop(&self, element: &gst_base::BaseSink) -> bool {
-        let imp: &BaseSinkImpl = self.as_ref();
-        imp.stop(element)
-    }
+        impl BaseSinkImpl for Box<$name> {
+            fn start(&self, element: &gst_base::BaseSink) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.start(element)
+            }
 
-    fn render(&self, element: &gst_base::BaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn {
-        let imp: &BaseSinkImpl = self.as_ref();
-        imp.render(element, buffer)
-    }
+            fn stop(&self, element: &gst_base::BaseSink) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.stop(element)
+            }
 
-    fn query(&self, element: &gst_base::BaseSink, query: &mut gst::QueryRef) -> bool {
-        let imp: &BaseSinkImpl = self.as_ref();
-        imp.query(element, query)
-    }
-    fn event(&self, element: &gst_base::BaseSink, event: &gst::Event) -> bool {
-        let imp: &BaseSinkImpl = self.as_ref();
-        imp.event(element, event)
-    }
-}
+            fn render(&self, element: &gst_base::BaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn {
+                let imp: &$name = self.as_ref();
+                imp.render(element, buffer)
+            }
 
-// FIXME: Boilerplate
-impl ElementImpl for Box<BaseSinkImpl> {
-    fn change_state(
-        &self,
-        element: &gst::Element,
-        transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
-        let imp: &BaseSinkImpl = self.as_ref();
-        imp.change_state(element, transition)
-    }
-}
+            fn query(&self, element: &gst_base::BaseSink, query: &mut gst::QueryRef) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.query(element, query)
+            }
+            fn event(&self, element: &gst_base::BaseSink, event: &gst::Event) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.event(element, event)
+            }
+        }
+    };
+);
 
-// FIXME: Boilerplate
-impl ObjectImpl for Box<BaseSinkImpl> {
-    fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
-        let imp: &BaseSinkImpl = self.as_ref();
-        imp.set_property(obj, id, value);
-    }
-
-    fn get_property(&self, obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let imp: &BaseSinkImpl = self.as_ref();
-        imp.get_property(obj, id)
-    }
-}
+box_base_sink_impl!(BaseSinkImpl);
 
 impl ObjectType for RsBaseSink {
     const NAME: &'static str = "RsBaseSink";

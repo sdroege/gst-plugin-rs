@@ -36,6 +36,23 @@ pub trait ObjectImpl: Send + Sync + 'static {
     }
 }
 
+#[macro_export]
+macro_rules! box_object_impl(
+    ($name:ident) => {
+        impl ObjectImpl for Box<$name> {
+            fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
+                let imp: &$name = self.as_ref();
+                imp.set_property(obj, id, value);
+            }
+
+            fn get_property(&self, obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
+                let imp: &$name = self.as_ref();
+                imp.get_property(obj, id)
+            }
+        }
+    };
+);
+
 pub trait ImplTypeStatic<T: ObjectType>: Send + Sync + 'static {
     fn get_name(&self) -> &str;
     fn new(&self, &T::RsType) -> T::ImplType;

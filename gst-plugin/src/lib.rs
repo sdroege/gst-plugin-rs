@@ -72,8 +72,13 @@ pub mod sink;
 pub mod demuxer;
 pub mod bytes;
 
+#[macro_use]
 pub mod object;
+#[macro_use]
 pub mod element;
+#[macro_use]
 pub mod base_src;
+#[macro_use]
 pub mod base_sink;
+#[macro_use]
 pub mod uri_handler;

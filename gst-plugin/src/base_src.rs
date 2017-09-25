@@ -151,80 +151,61 @@ unsafe impl BaseSrcClass<RsBaseSrc> for gst_base_ffi::GstBaseSrcClass {}
 unsafe impl BaseSrcClass<RsBaseSrc> for RsBaseSrcClass {}
 unsafe impl ElementClass<RsBaseSrc> for gst_base_ffi::GstBaseSrcClass {}
 unsafe impl ElementClass<RsBaseSrc> for RsBaseSrcClass {}
-unsafe impl ObjectClass for gst_base_ffi::GstBaseSrcClass {}
 
-// FIXME: Boilerplate
-impl BaseSrcImpl for Box<BaseSrcImpl> {
-    fn start(&self, element: &gst_base::BaseSrc) -> bool {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.start(element)
-    }
+#[macro_export]
+macro_rules! box_base_src_impl(
+    ($name:ident) => {
+        box_element_impl!($name);
 
-    fn stop(&self, element: &gst_base::BaseSrc) -> bool {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.stop(element)
-    }
+        impl BaseSrcImpl for Box<$name> {
+            fn start(&self, element: &gst_base::BaseSrc) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.start(element)
+            }
 
-    fn is_seekable(&self, element: &gst_base::BaseSrc) -> bool {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.is_seekable(element)
-    }
+            fn stop(&self, element: &gst_base::BaseSrc) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.stop(element)
+            }
 
-    fn get_size(&self, element: &gst_base::BaseSrc) -> Option<u64> {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.get_size(element)
-    }
+            fn is_seekable(&self, element: &gst_base::BaseSrc) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.is_seekable(element)
+            }
 
-    fn fill(
-        &self,
-        element: &gst_base::BaseSrc,
-        offset: u64,
-        length: u32,
-        buffer: &mut gst::BufferRef,
-    ) -> gst::FlowReturn {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.fill(element, offset, length, buffer)
-    }
+            fn get_size(&self, element: &gst_base::BaseSrc) -> Option<u64> {
+                let imp: &$name = self.as_ref();
+                imp.get_size(element)
+            }
 
-    fn do_seek(&self, element: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.do_seek(element, segment)
-    }
+            fn fill(
+                &self,
+                element: &gst_base::BaseSrc,
+                offset: u64,
+                length: u32,
+                buffer: &mut gst::BufferRef,
+            ) -> gst::FlowReturn {
+                let imp: &$name = self.as_ref();
+                imp.fill(element, offset, length, buffer)
+            }
 
-    fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.query(element, query)
-    }
-    fn event(&self, element: &gst_base::BaseSrc, event: &gst::Event) -> bool {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.event(element, event)
-    }
-}
+            fn do_seek(&self, element: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.do_seek(element, segment)
+            }
 
-// FIXME: Boilerplate
-impl ElementImpl for Box<BaseSrcImpl> {
-    fn change_state(
-        &self,
-        element: &gst::Element,
-        transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.change_state(element, transition)
-    }
-}
-
-// FIXME: Boilerplate
-impl ObjectImpl for Box<BaseSrcImpl> {
-    fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.set_property(obj, id, value);
-    }
-
-    fn get_property(&self, obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let imp: &BaseSrcImpl = self.as_ref();
-        imp.get_property(obj, id)
-    }
-}
+            fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.query(element, query)
+            }
+            fn event(&self, element: &gst_base::BaseSrc, event: &gst::Event) -> bool {
+                let imp: &$name = self.as_ref();
+                imp.event(element, event)
+            }
+        }
+    };
+);
+box_base_src_impl!(BaseSrcImpl);
 
 impl ObjectType for RsBaseSrc {
     const NAME: &'static str = "RsBaseSrc";
