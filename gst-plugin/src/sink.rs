@@ -86,7 +86,7 @@ impl Sink {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn init(element: &RsBaseSink, sink_info: &SinkInfo) -> Box<BaseSinkImpl> {
+    fn init(element: &RsBaseSink, sink_info: &SinkInfo) -> Box<BaseSinkImpl<RsBaseSink>> {
         element.set_blocksize(4096);
 
         let imp = Self::new(element, sink_info);
@@ -133,7 +133,7 @@ impl Sink {
     }
 }
 
-impl ObjectImpl for Sink {
+impl ObjectImpl<RsBaseSink> for Sink {
     fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
 
@@ -155,9 +155,9 @@ impl ObjectImpl for Sink {
     }
 }
 
-impl ElementImpl for Sink {}
+impl ElementImpl<RsBaseSink> for Sink {}
 
-impl BaseSinkImpl for Sink {
+impl BaseSinkImpl<RsBaseSink> for Sink {
     fn start(&self, element: &gst_base::BaseSink) -> bool {
         let sink = element.clone().downcast::<RsBaseSink>().unwrap();
 
@@ -266,7 +266,7 @@ impl ImplTypeStatic<RsBaseSink> for SinkStatic {
         self.name.as_str()
     }
 
-    fn new(&self, element: &RsBaseSink) -> Box<BaseSinkImpl> {
+    fn new(&self, element: &RsBaseSink) -> Box<BaseSinkImpl<RsBaseSink>> {
         Sink::init(element, &self.sink_info)
     }
 
@@ -280,7 +280,7 @@ impl ImplTypeStatic<RsBaseSink> for SinkStatic {
 }
 
 impl URIHandlerImplStatic<RsBaseSink> for SinkStatic {
-    fn get_impl<'a>(&self, imp: &'a Box<BaseSinkImpl>) -> &'a URIHandlerImpl {
+    fn get_impl<'a>(&self, imp: &'a Box<BaseSinkImpl<RsBaseSink>>) -> &'a URIHandlerImpl {
         imp.downcast_ref::<Sink>().unwrap()
     }
 

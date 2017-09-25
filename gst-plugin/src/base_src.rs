@@ -25,8 +25,8 @@ use gst_base::prelude::*;
 use object::*;
 use element::*;
 
-pub trait BaseSrcImpl
-    : mopa::Any + ObjectImpl + ElementImpl + Send + Sync + 'static {
+pub trait BaseSrcImpl<T: ObjectType>
+    : mopa::Any + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
     fn start(&self, _element: &gst_base::BaseSrc) -> bool {
         true
     }
@@ -57,7 +57,7 @@ pub trait BaseSrcImpl
     }
 }
 
-mopafy!(BaseSrcImpl);
+mopafy_object_impl!(BaseSrcImpl);
 
 pub unsafe trait BaseSrc: IsA<gst_base::BaseSrc> {
     fn parent_do_seek(&self, segment: &mut gst::Segment) -> bool {
@@ -116,7 +116,7 @@ pub unsafe trait BaseSrc: IsA<gst_base::BaseSrc> {
 pub unsafe trait BaseSrcClass<T: ObjectType>
 where
     T: IsA<gst_base::BaseSrc>,
-    T::ImplType: BaseSrcImpl,
+    T::ImplType: BaseSrcImpl<T>,
 {
     fn override_vfuncs(&mut self) {
         unsafe {
@@ -156,24 +156,24 @@ macro_rules! box_base_src_impl(
     ($name:ident) => {
         box_element_impl!($name);
 
-        impl BaseSrcImpl for Box<$name> {
+        impl<T: ObjectType> BaseSrcImpl<T> for Box<$name<T>> {
             fn start(&self, element: &gst_base::BaseSrc) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.start(element)
             }
 
             fn stop(&self, element: &gst_base::BaseSrc) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.stop(element)
             }
 
             fn is_seekable(&self, element: &gst_base::BaseSrc) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.is_seekable(element)
             }
 
             fn get_size(&self, element: &gst_base::BaseSrc) -> Option<u64> {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.get_size(element)
             }
 
@@ -184,21 +184,21 @@ macro_rules! box_base_src_impl(
                 length: u32,
                 buffer: &mut gst::BufferRef,
             ) -> gst::FlowReturn {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.fill(element, offset, length, buffer)
             }
 
             fn do_seek(&self, element: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.do_seek(element, segment)
             }
 
             fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.query(element, query)
             }
             fn event(&self, element: &gst_base::BaseSrc, event: &gst::Event) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.event(element, event)
             }
         }
@@ -210,7 +210,7 @@ impl ObjectType for RsBaseSrc {
     const NAME: &'static str = "RsBaseSrc";
     type GlibType = gst_base_ffi::GstBaseSrc;
     type GlibClassType = gst_base_ffi::GstBaseSrcClass;
-    type ImplType = Box<BaseSrcImpl>;
+    type ImplType = Box<BaseSrcImpl<Self>>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_base_ffi::gst_base_src_get_type()) }
@@ -227,7 +227,7 @@ unsafe extern "C" fn base_src_start<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSrc>,
-    T::ImplType: BaseSrcImpl,
+    T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -243,7 +243,7 @@ unsafe extern "C" fn base_src_stop<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSrc>,
-    T::ImplType: BaseSrcImpl,
+    T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -259,7 +259,7 @@ unsafe extern "C" fn base_src_is_seekable<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSrc>,
-    T::ImplType: BaseSrcImpl,
+    T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -276,7 +276,7 @@ unsafe extern "C" fn base_src_get_size<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSrc>,
-    T::ImplType: BaseSrcImpl,
+    T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -303,7 +303,7 @@ unsafe extern "C" fn base_src_fill<T: ObjectType>(
 ) -> gst_ffi::GstFlowReturn
 where
     T: IsA<gst_base::BaseSrc>,
-    T::ImplType: BaseSrcImpl,
+    T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -323,7 +323,7 @@ unsafe extern "C" fn base_src_do_seek<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSrc>,
-    T::ImplType: BaseSrcImpl,
+    T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -342,7 +342,7 @@ unsafe extern "C" fn base_src_query<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSrc>,
-    T::ImplType: BaseSrcImpl,
+    T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -360,7 +360,7 @@ unsafe extern "C" fn base_src_event<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSrc>,
-    T::ImplType: BaseSrcImpl,
+    T::ImplType: BaseSrcImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);

@@ -25,8 +25,8 @@ use gst_base::prelude::*;
 use object::*;
 use element::*;
 
-pub trait BaseSinkImpl
-    : mopa::Any + ObjectImpl + ElementImpl + Send + Sync + 'static {
+pub trait BaseSinkImpl<T: ObjectType>
+    : mopa::Any + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
     fn start(&self, _element: &gst_base::BaseSink) -> bool {
         true
     }
@@ -42,7 +42,7 @@ pub trait BaseSinkImpl
     }
 }
 
-mopafy!(BaseSinkImpl);
+mopafy_object_impl!(BaseSinkImpl);
 
 pub unsafe trait BaseSink: IsA<gst_base::BaseSink> {
     fn parent_query(&self, query: &mut gst::QueryRef) -> bool {
@@ -83,7 +83,7 @@ pub unsafe trait BaseSink: IsA<gst_base::BaseSink> {
 pub unsafe trait BaseSinkClass<T: ObjectType>
 where
     T: IsA<gst_base::BaseSink>,
-    T::ImplType: BaseSinkImpl,
+    T::ImplType: BaseSinkImpl<T>,
 {
     fn override_vfuncs(&mut self) {
         unsafe {
@@ -119,28 +119,28 @@ macro_rules! box_base_sink_impl(
     ($name:ident) => {
         box_element_impl!($name);
 
-        impl BaseSinkImpl for Box<$name> {
+        impl<T: ObjectType> BaseSinkImpl<T> for Box<$name<T>> {
             fn start(&self, element: &gst_base::BaseSink) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.start(element)
             }
 
             fn stop(&self, element: &gst_base::BaseSink) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.stop(element)
             }
 
             fn render(&self, element: &gst_base::BaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.render(element, buffer)
             }
 
             fn query(&self, element: &gst_base::BaseSink, query: &mut gst::QueryRef) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.query(element, query)
             }
             fn event(&self, element: &gst_base::BaseSink, event: &gst::Event) -> bool {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.event(element, event)
             }
         }
@@ -153,7 +153,7 @@ impl ObjectType for RsBaseSink {
     const NAME: &'static str = "RsBaseSink";
     type GlibType = gst_base_ffi::GstBaseSink;
     type GlibClassType = gst_base_ffi::GstBaseSinkClass;
-    type ImplType = Box<BaseSinkImpl>;
+    type ImplType = Box<BaseSinkImpl<Self>>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_base_ffi::gst_base_sink_get_type()) }
@@ -170,7 +170,7 @@ unsafe extern "C" fn base_sink_start<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSink>,
-    T::ImplType: BaseSinkImpl,
+    T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -186,7 +186,7 @@ unsafe extern "C" fn base_sink_stop<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSink>,
-    T::ImplType: BaseSinkImpl,
+    T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -203,7 +203,7 @@ unsafe extern "C" fn base_sink_render<T: ObjectType>(
 ) -> gst_ffi::GstFlowReturn
 where
     T: IsA<gst_base::BaseSink>,
-    T::ImplType: BaseSinkImpl,
+    T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -223,7 +223,7 @@ unsafe extern "C" fn base_sink_query<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSink>,
-    T::ImplType: BaseSinkImpl,
+    T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -241,7 +241,7 @@ unsafe extern "C" fn base_sink_event<T: ObjectType>(
 ) -> glib_ffi::gboolean
 where
     T: IsA<gst_base::BaseSink>,
-    T::ImplType: BaseSinkImpl,
+    T::ImplType: BaseSinkImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);

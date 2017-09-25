@@ -21,7 +21,8 @@ use gst::prelude::*;
 
 use object::*;
 
-pub trait ElementImpl: ObjectImpl + mopa::Any + Send + Sync + 'static {
+pub trait ElementImpl<T: ObjectType>
+    : ObjectImpl<T> + mopa::Any + Send + Sync + 'static {
     fn change_state(
         &self,
         element: &gst::Element,
@@ -31,7 +32,7 @@ pub trait ElementImpl: ObjectImpl + mopa::Any + Send + Sync + 'static {
     }
 }
 
-mopafy!(ElementImpl);
+mopafy_object_impl!(ElementImpl);
 
 pub unsafe trait Element: IsA<gst::Element> {
     fn parent_change_state(&self, transition: gst::StateChange) -> gst::StateChangeReturn {
@@ -56,7 +57,7 @@ pub unsafe trait Element: IsA<gst::Element> {
 pub unsafe trait ElementClass<T: ObjectType>
 where
     T: IsA<gst::Element>,
-    T::ImplType: ElementImpl,
+    T::ImplType: ElementImpl<T>,
 {
     fn add_pad_template(&mut self, pad_template: gst::PadTemplate) {
         unsafe {
@@ -103,7 +104,7 @@ glib_wrapper! {
 }
 
 impl RsElement {
-    pub fn get_impl(&self) -> &ElementImpl {
+    pub fn get_impl(&self) -> &ElementImpl<RsElement> {
         unsafe {
             let stash = self.to_glib_none();
             let ptr: *mut InstanceStruct<RsElement> = stash.0;
@@ -123,13 +124,13 @@ macro_rules! box_element_impl(
     ($name:ident) => {
         box_object_impl!($name);
 
-        impl ElementImpl for Box<$name> {
+        impl<T: ObjectType> ElementImpl<T> for Box<$name<T>> {
             fn change_state(
                 &self,
                 element: &gst::Element,
                 transition: gst::StateChange,
             ) -> gst::StateChangeReturn {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.change_state(element, transition)
             }
         }
@@ -142,7 +143,7 @@ impl ObjectType for RsElement {
     const NAME: &'static str = "RsElement";
     type GlibType = gst_ffi::GstElement;
     type GlibClassType = gst_ffi::GstElementClass;
-    type ImplType = Box<ElementImpl>;
+    type ImplType = Box<ElementImpl<Self>>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_ffi::gst_element_get_type()) }
@@ -159,7 +160,7 @@ unsafe extern "C" fn element_change_state<T: ObjectType>(
 ) -> gst_ffi::GstStateChangeReturn
 where
     T: IsA<gst::Element>,
-    T::ImplType: ElementImpl,
+    T::ImplType: ElementImpl<T>,
 {
     callback_guard!();
     floating_reference_guard!(ptr);

@@ -60,6 +60,36 @@ impl Drop for FloatingReferenceGuard {
     }
 }
 
+// mopafy! macro to work with generic traits over T: ObjectType
+macro_rules! mopafy_object_impl {
+    ($trait:ident) => {
+        impl<T: ObjectType> $trait<T> {
+            #[inline]
+            pub fn downcast_ref<U: $trait<T>>(&self) -> Option<&U> {
+                if self.is::<U>() {
+                    unsafe {
+                        Some(self.downcast_ref_unchecked())
+                    }
+                } else {
+                    None
+                }
+            }
+
+            #[inline]
+            pub unsafe fn downcast_ref_unchecked<U: $trait<T>>(&self) -> &U {
+                &*(self as *const Self as *const U)
+            }
+
+            #[inline]
+            pub fn is<U: $trait<T>>(&self) -> bool {
+                use std::any::TypeId;
+                use mopa;
+                TypeId::of::<U>() == mopa::Any::get_type_id(self)
+            }
+        }
+    };
+}
+
 #[macro_use]
 pub mod utils;
 #[macro_use]

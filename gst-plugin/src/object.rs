@@ -20,7 +20,7 @@ use gobject_ffi;
 use glib;
 use glib::translate::*;
 
-pub trait ObjectImpl: Send + Sync + 'static {
+pub trait ObjectImpl<T: ObjectType>: Send + Sync + 'static {
     fn set_property(&self, _obj: &glib::Object, _id: u32, _value: &glib::Value) {
         unimplemented!()
     }
@@ -39,14 +39,14 @@ pub trait ObjectImpl: Send + Sync + 'static {
 #[macro_export]
 macro_rules! box_object_impl(
     ($name:ident) => {
-        impl ObjectImpl for Box<$name> {
+        impl<T: ObjectType> ObjectImpl<T> for Box<$name<T>> {
             fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.set_property(obj, id, value);
             }
 
             fn get_property(&self, obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-                let imp: &$name = self.as_ref();
+                let imp: &$name<T> = self.as_ref();
                 imp.get_property(obj, id)
             }
         }
@@ -71,7 +71,7 @@ where
     const NAME: &'static str;
     type GlibType;
     type GlibClassType;
-    type ImplType: ObjectImpl;
+    type ImplType: ObjectImpl<Self>;
 
     fn glib_type() -> glib::Type;
 

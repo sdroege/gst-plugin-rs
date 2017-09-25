@@ -175,7 +175,7 @@ impl Demuxer {
         klass.add_pad_template(pad_template);
     }
 
-    fn init(element: &RsElement, demuxer_info: &DemuxerInfo) -> Box<ElementImpl> {
+    fn init(element: &RsElement, demuxer_info: &DemuxerInfo) -> Box<ElementImpl<RsElement>> {
         let templ = element.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::new_from_template(&templ, "sink");
         sinkpad.set_activate_function(Demuxer::sink_activate);
@@ -638,9 +638,9 @@ impl Demuxer {
     }
 }
 
-impl ObjectImpl for Demuxer {}
+impl ObjectImpl<RsElement> for Demuxer {}
 
-impl ElementImpl for Demuxer {
+impl ElementImpl<RsElement> for Demuxer {
     fn change_state(
         &self,
         element: &gst::Element,
@@ -689,7 +689,7 @@ impl ImplTypeStatic<RsElement> for DemuxerStatic {
         self.name.as_str()
     }
 
-    fn new(&self, element: &RsElement) -> Box<ElementImpl> {
+    fn new(&self, element: &RsElement) -> Box<ElementImpl<RsElement>> {
         Demuxer::init(element, &self.demuxer_info)
     }
 

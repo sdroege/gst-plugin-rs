@@ -100,7 +100,7 @@ impl Source {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn init(element: &RsBaseSrc, source_info: &SourceInfo) -> Box<BaseSrcImpl> {
+    fn init(element: &RsBaseSrc, source_info: &SourceInfo) -> Box<BaseSrcImpl<RsBaseSrc>> {
         element.set_blocksize(4096);
 
         let imp = Self::new(element, source_info);
@@ -147,7 +147,7 @@ impl Source {
     }
 }
 
-impl ObjectImpl for Source {
+impl ObjectImpl<RsBaseSrc> for Source {
     fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
 
@@ -169,9 +169,9 @@ impl ObjectImpl for Source {
     }
 }
 
-impl ElementImpl for Source {}
+impl ElementImpl<RsBaseSrc> for Source {}
 
-impl BaseSrcImpl for Source {
+impl BaseSrcImpl<RsBaseSrc> for Source {
     fn start(&self, element: &gst_base::BaseSrc) -> bool {
         let src = element.clone().downcast::<RsBaseSrc>().unwrap();
 
@@ -343,7 +343,7 @@ impl ImplTypeStatic<RsBaseSrc> for SourceStatic {
         self.name.as_str()
     }
 
-    fn new(&self, element: &RsBaseSrc) -> Box<BaseSrcImpl> {
+    fn new(&self, element: &RsBaseSrc) -> Box<BaseSrcImpl<RsBaseSrc>> {
         Source::init(element, &self.source_info)
     }
 
@@ -357,7 +357,7 @@ impl ImplTypeStatic<RsBaseSrc> for SourceStatic {
 }
 
 impl URIHandlerImplStatic<RsBaseSrc> for SourceStatic {
-    fn get_impl<'a>(&self, imp: &'a Box<BaseSrcImpl>) -> &'a URIHandlerImpl {
+    fn get_impl<'a>(&self, imp: &'a Box<BaseSrcImpl<RsBaseSrc>>) -> &'a URIHandlerImpl {
         imp.downcast_ref::<Source>().unwrap()
     }
 
