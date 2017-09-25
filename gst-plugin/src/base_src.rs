@@ -128,7 +128,6 @@ glib_wrapper! {
     }
 }
 
-// FIXME: This is wrong: it must be a basesrc but also backed by ObjectType<T>
 unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType> BaseSrc for T {}
 pub type RsBaseSrcClass = ClassStruct<RsBaseSrc>;
 
