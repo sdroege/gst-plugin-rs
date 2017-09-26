@@ -179,7 +179,7 @@ macro_rules! box_base_src_impl(
 
             fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
                 let imp: &$name<T> = self.as_ref();
-                imp.query(element, query)
+                BaseSrcImpl::query(imp, element, query)
             }
             fn event(&self, element: &T, event: &gst::Event) -> bool {
                 let imp: &$name<T> = self.as_ref();
@@ -330,7 +330,9 @@ where
     let imp = &*element.imp;
     let query = gst::QueryRef::from_mut_ptr(query_ptr);
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.query(&wrap, query) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        BaseSrcImpl::query(imp, &wrap, query)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_src_event<T: BaseSrc>(

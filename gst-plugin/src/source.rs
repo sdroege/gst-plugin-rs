@@ -236,7 +236,7 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
             _ => (),
         }
 
-        src.parent_query(query)
+        BaseSrc::parent_query(src, query)
     }
 
     fn fill(

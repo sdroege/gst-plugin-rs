@@ -10,6 +10,8 @@ use std::ptr;
 use std::mem;
 use mopa;
 
+use libc;
+
 use glib_ffi;
 use gobject_ffi;
 use gst_ffi;
@@ -26,6 +28,30 @@ pub trait ElementImpl<T: Element>
     fn change_state(&self, element: &T, transition: gst::StateChange) -> gst::StateChangeReturn {
         element.parent_change_state(transition)
     }
+
+    fn request_new_pad(
+        &self,
+        _element: &T,
+        _templ: &gst::PadTemplate,
+        _name: Option<String>,
+        _caps: Option<&gst::CapsRef>,
+    ) -> Option<gst::Pad> {
+        None
+    }
+
+    fn release_pad(&self, _element: &T, _pad: &gst::Pad) {}
+
+    fn send_event(&self, element: &T, event: gst::Event) -> bool {
+        element.parent_send_event(event)
+    }
+
+    fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
+        element.parent_query(query)
+    }
+
+    fn set_context(&self, element: &T, context: &gst::Context) {
+        element.parent_set_context(context)
+    }
 }
 
 mopafy_object_impl!(Element, ElementImpl);
@@ -41,6 +67,39 @@ pub unsafe trait Element: IsA<gst::Element> + ObjectType {
                     from_glib(f(self.to_glib_none().0, transition.to_glib()))
                 })
                 .unwrap_or(gst::StateChangeReturn::Success)
+        }
+    }
+
+    fn parent_send_event(&self, event: gst::Event) -> bool {
+        unsafe {
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_ffi::GstElementClass;
+            (*parent_klass)
+                .send_event
+                .map(|f| from_glib(f(self.to_glib_none().0, event.into_ptr())))
+                .unwrap_or(false)
+        }
+    }
+
+    fn parent_query(&self, query: &mut gst::QueryRef) -> bool {
+        unsafe {
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_ffi::GstElementClass;
+            (*parent_klass)
+                .query
+                .map(|f| from_glib(f(self.to_glib_none().0, query.as_mut_ptr())))
+                .unwrap_or(false)
+        }
+    }
+
+    fn parent_set_context(&self, context: &gst::Context) {
+        unsafe {
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_ffi::GstElementClass;
+            (*parent_klass)
+                .set_context
+                .map(|f| f(self.to_glib_none().0, context.to_glib_none().0))
+                .unwrap_or(())
         }
     }
 }
@@ -80,6 +139,11 @@ where
         unsafe {
             let klass = &mut *(self as *const Self as *mut gst_ffi::GstElementClass);
             klass.change_state = Some(element_change_state::<T>);
+            klass.request_new_pad = Some(element_request_new_pad::<T>);
+            klass.release_pad = Some(element_release_pad::<T>);
+            klass.send_event = Some(element_send_event::<T>);
+            klass.query = Some(element_query::<T>);
+            klass.set_context = Some(element_set_context::<T>);
         }
     }
 }
@@ -112,6 +176,31 @@ macro_rules! box_element_impl(
             ) -> gst::StateChangeReturn {
                 let imp: &$name<T> = self.as_ref();
                 imp.change_state(element, transition)
+            }
+
+            fn request_new_pad(&self, element: &T, templ: &gst::PadTemplate, name: Option<String>, caps: Option<&gst::CapsRef>) -> Option<gst::Pad> {
+                let imp: &$name<T> = self.as_ref();
+                imp.request_new_pad(element, templ, name, caps)
+            }
+
+            fn release_pad(&self, element: &T, pad: &gst::Pad) {
+                let imp: &$name<T> = self.as_ref();
+                imp.release_pad(element, pad)
+            }
+
+            fn send_event(&self, element: &T, event: gst::Event) -> bool {
+                let imp: &$name<T> = self.as_ref();
+                imp.send_event(element, event)
+            }
+
+            fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
+                let imp: &$name<T> = self.as_ref();
+                ElementImpl::query(imp, element, query)
+            }
+
+            fn set_context(&self, element: &T, context: &gst::Context) {
+                let imp: &$name<T> = self.as_ref();
+                imp.set_context(element, context)
             }
         }
     };
@@ -152,4 +241,98 @@ where
     panic_to_error!(&wrap, &element.panicked, gst::StateChangeReturn::Failure, {
         imp.change_state(&wrap, from_glib(transition))
     }).to_glib()
+}
+
+unsafe extern "C" fn element_request_new_pad<T: Element>(
+    ptr: *mut gst_ffi::GstElement,
+    templ: *mut gst_ffi::GstPadTemplate,
+    name: *const libc::c_char,
+    caps: *const gst_ffi::GstCaps,
+) -> *mut gst_ffi::GstPad
+where
+    T::ImplType: ElementImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+    let caps = if caps.is_null() {
+        None
+    } else {
+        Some(gst::CapsRef::from_ptr(caps))
+    };
+
+    panic_to_error!(&wrap, &element.panicked, None, {
+        imp.request_new_pad(&wrap, &from_glib_borrow(templ), from_glib_none(name), caps)
+    }).to_glib_full()
+}
+
+unsafe extern "C" fn element_release_pad<T: Element>(
+    ptr: *mut gst_ffi::GstElement,
+    pad: *mut gst_ffi::GstPad,
+) where
+    T::ImplType: ElementImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+
+    panic_to_error!(&wrap, &element.panicked, (), {
+        imp.release_pad(&wrap, &from_glib_borrow(pad))
+    })
+}
+
+unsafe extern "C" fn element_send_event<T: Element>(
+    ptr: *mut gst_ffi::GstElement,
+    event: *mut gst_ffi::GstEvent,
+) -> glib_ffi::gboolean
+where
+    T::ImplType: ElementImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.send_event(&wrap, from_glib_full(event))
+    }).to_glib()
+}
+
+unsafe extern "C" fn element_query<T: Element>(
+    ptr: *mut gst_ffi::GstElement,
+    query: *mut gst_ffi::GstQuery,
+) -> glib_ffi::gboolean
+where
+    T::ImplType: ElementImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+    let query = gst::QueryRef::from_mut_ptr(query);
+
+    panic_to_error!(&wrap, &element.panicked, false, { imp.query(&wrap, query) }).to_glib()
+}
+
+unsafe extern "C" fn element_set_context<T: Element>(
+    ptr: *mut gst_ffi::GstElement,
+    context: *mut gst_ffi::GstContext,
+) where
+    T::ImplType: ElementImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+
+    panic_to_error!(&wrap, &element.panicked, (), {
+        imp.set_context(&wrap, &from_glib_borrow(context))
+    })
 }
