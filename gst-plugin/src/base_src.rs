@@ -45,10 +45,10 @@ pub trait BaseSrcImpl<T: BaseSrc>
 
     fn fill(
         &self,
-        element: &T,
-        offset: u64,
-        length: u32,
-        buffer: &mut gst::BufferRef,
+        _element: &T,
+        _offset: u64,
+        _length: u32,
+        _buffer: &mut gst::BufferRef,
     ) -> gst::FlowReturn {
         unimplemented!()
     }
