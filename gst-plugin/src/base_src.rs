@@ -30,30 +30,72 @@ pub trait BaseSrcImpl<T: BaseSrc>
     fn start(&self, _element: &T) -> bool {
         true
     }
+
     fn stop(&self, _element: &T) -> bool {
         true
     }
+
     fn is_seekable(&self, _element: &T) -> bool {
         false
     }
+
     fn get_size(&self, _element: &T) -> Option<u64> {
         None
     }
+
     fn fill(
         &self,
         element: &T,
         offset: u64,
         length: u32,
         buffer: &mut gst::BufferRef,
-    ) -> gst::FlowReturn;
+    ) -> gst::FlowReturn {
+        unimplemented!()
+    }
+
+    fn create(
+        &self,
+        element: &T,
+        offset: u64,
+        length: u32,
+    ) -> Result<gst::Buffer, gst::FlowReturn> {
+        element.parent_create(offset, length)
+    }
+
     fn do_seek(&self, element: &T, segment: &mut gst::Segment) -> bool {
         element.parent_do_seek(segment)
     }
+
     fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
         element.parent_query(query)
     }
+
     fn event(&self, element: &T, event: &gst::Event) -> bool {
         element.parent_event(event)
+    }
+
+    fn get_caps(&self, element: &T, filter: Option<&gst::CapsRef>) -> Option<gst::Caps> {
+        element.parent_get_caps(filter)
+    }
+
+    fn negotiate(&self, element: &T) -> bool {
+        element.parent_negotiate()
+    }
+
+    fn set_caps(&self, element: &T, caps: &gst::CapsRef) -> bool {
+        element.parent_set_caps(caps)
+    }
+
+    fn fixate(&self, element: &T, caps: gst::Caps) -> gst::Caps {
+        element.parent_fixate(caps)
+    }
+
+    fn unlock(&self, _element: &T) -> bool {
+        true
+    }
+
+    fn unlock_stop(&self, _element: &T) -> bool {
+        true
     }
 }
 
@@ -61,6 +103,26 @@ mopafy_object_impl!(BaseSrc, BaseSrcImpl);
 
 pub unsafe trait BaseSrc
     : IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType {
+    fn parent_create(&self, offset: u64, length: u32) -> Result<gst::Buffer, gst::FlowReturn> {
+        unsafe {
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
+            (*parent_klass)
+                .create
+                .map(|f| {
+                    let mut buffer: *mut gst_ffi::GstBuffer = ptr::null_mut();
+                    // FIXME: Wrong signature in -sys bindings
+                    // https://github.com/sdroege/gstreamer-sys/issues/3
+                    let buffer_ref = &mut buffer as *mut _ as *mut gst_ffi::GstBuffer;
+                    match from_glib(f(self.to_glib_none().0, offset, length, buffer_ref)) {
+                        gst::FlowReturn::Ok => Ok(from_glib_full(buffer)),
+                        ret => Err(ret),
+                    }
+                })
+                .unwrap_or(Err(gst::FlowReturn::Error))
+        }
+    }
+
     fn parent_do_seek(&self, segment: &mut gst::Segment) -> bool {
         unsafe {
             let klass = self.get_class();
@@ -97,6 +159,57 @@ pub unsafe trait BaseSrc
                 .unwrap_or(false)
         }
     }
+
+    fn parent_get_caps(&self, filter: Option<&gst::CapsRef>) -> Option<gst::Caps> {
+        unsafe {
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
+            let filter_ptr = if let Some(filter) = filter {
+                filter.as_mut_ptr()
+            } else {
+                ptr::null_mut()
+            };
+
+            (*parent_klass)
+                .get_caps
+                .map(|f| from_glib_full(f(self.to_glib_none().0, filter_ptr)))
+                .unwrap_or(None)
+        }
+    }
+
+    fn parent_negotiate(&self) -> bool {
+        unsafe {
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
+            (*parent_klass)
+                .negotiate
+                .map(|f| from_glib(f(self.to_glib_none().0)))
+                .unwrap_or(false)
+        }
+    }
+
+    fn parent_set_caps(&self, caps: &gst::CapsRef) -> bool {
+        unsafe {
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
+            (*parent_klass)
+                .set_caps
+                .map(|f| from_glib(f(self.to_glib_none().0, caps.as_mut_ptr())))
+                .unwrap_or(true)
+        }
+    }
+
+    fn parent_fixate(&self, caps: gst::Caps) -> gst::Caps {
+        unsafe {
+            let klass = self.get_class();
+            let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
+
+            match (*parent_klass).fixate {
+                Some(fixate) => from_glib_full(fixate(self.to_glib_none().0, caps.into_ptr())),
+                None => caps,
+            }
+        }
+    }
 }
 
 pub unsafe trait BaseSrcClass<T: BaseSrc>
@@ -111,9 +224,16 @@ where
             klass.is_seekable = Some(base_src_is_seekable::<T>);
             klass.get_size = Some(base_src_get_size::<T>);
             klass.fill = Some(base_src_fill::<T>);
+            klass.create = Some(base_src_create::<T>);
             klass.do_seek = Some(base_src_do_seek::<T>);
             klass.query = Some(base_src_query::<T>);
             klass.event = Some(base_src_event::<T>);
+            klass.get_caps = Some(base_src_get_caps::<T>);
+            klass.negotiate = Some(base_src_negotiate::<T>);
+            klass.set_caps = Some(base_src_set_caps::<T>);
+            klass.fixate = Some(base_src_fixate::<T>);
+            klass.unlock = Some(base_src_unlock::<T>);
+            klass.unlock_stop = Some(base_src_unlock_stop::<T>);
         }
     }
 }
@@ -172,6 +292,16 @@ macro_rules! box_base_src_impl(
                 imp.fill(element, offset, length, buffer)
             }
 
+            fn create(
+                &self,
+                element: &T,
+                offset: u64,
+                length: u32,
+            ) -> Result<gst::Buffer, gst::FlowReturn> {
+                let imp: &$name<T> = self.as_ref();
+                imp.create(element, offset, length)
+            }
+
             fn do_seek(&self, element: &T, segment: &mut gst::Segment) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.do_seek(element, segment)
@@ -181,9 +311,40 @@ macro_rules! box_base_src_impl(
                 let imp: &$name<T> = self.as_ref();
                 BaseSrcImpl::query(imp, element, query)
             }
+
             fn event(&self, element: &T, event: &gst::Event) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.event(element, event)
+            }
+
+            fn get_caps(&self, element: &T, filter: Option<&gst::CapsRef>) -> Option<gst::Caps> {
+                let imp: &$name<T> = self.as_ref();
+                imp.get_caps(element, filter)
+            }
+
+            fn negotiate(&self, element: &T) -> bool {
+                let imp: &$name<T> = self.as_ref();
+                imp.negotiate(element)
+            }
+
+            fn set_caps(&self, element: &T, caps: &gst::CapsRef) -> bool {
+                let imp: &$name<T> = self.as_ref();
+                imp.set_caps(element, caps)
+            }
+
+            fn fixate(&self, element: &T, caps: gst::Caps) -> gst::Caps {
+                let imp: &$name<T> = self.as_ref();
+                imp.fixate(element, caps)
+            }
+
+            fn unlock(&self, element: &T) -> bool {
+                let imp: &$name<T> = self.as_ref();
+                imp.unlock(element)
+            }
+
+            fn unlock_stop(&self, element: &T) -> bool {
+                let imp: &$name<T> = self.as_ref();
+                imp.unlock(element)
             }
         }
     };
@@ -298,6 +459,35 @@ where
     }).to_glib()
 }
 
+unsafe extern "C" fn base_src_create<T: BaseSrc>(
+    ptr: *mut gst_base_ffi::GstBaseSrc,
+    offset: u64,
+    length: u32,
+    buffer_ptr: *mut gst_ffi::GstBuffer,
+) -> gst_ffi::GstFlowReturn
+where
+    T::ImplType: BaseSrcImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+    // FIXME: Wrong signature in -sys bindings
+    // https://github.com/sdroege/gstreamer-sys/issues/3
+    let buffer_ptr = buffer_ptr as *mut *mut gst_ffi::GstBuffer;
+
+    panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
+        match imp.create(&wrap, offset, length) {
+            Ok(buffer) => {
+                *buffer_ptr = buffer.into_ptr();
+                gst::FlowReturn::Ok
+            }
+            Err(err) => err,
+        }
+    }).to_glib()
+}
+
 unsafe extern "C" fn base_src_do_seek<T: BaseSrc>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     segment: *mut gst_ffi::GstSegment,
@@ -351,4 +541,117 @@ where
     panic_to_error!(&wrap, &element.panicked, false, {
         imp.event(&wrap, &from_glib_none(event_ptr))
     }).to_glib()
+}
+
+unsafe extern "C" fn base_src_get_caps<T: BaseSrc>(
+    ptr: *mut gst_base_ffi::GstBaseSrc,
+    filter: *mut gst_ffi::GstCaps,
+) -> *mut gst_ffi::GstCaps
+where
+    T::ImplType: BaseSrcImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+    let filter = if filter.is_null() {
+        None
+    } else {
+        Some(gst::CapsRef::from_ptr(filter))
+    };
+
+    panic_to_error!(
+        &wrap,
+        &element.panicked,
+        None,
+        { imp.get_caps(&wrap, filter) }
+    ).map(|caps| caps.into_ptr())
+        .unwrap_or(ptr::null_mut())
+}
+
+unsafe extern "C" fn base_src_negotiate<T: BaseSrc>(
+    ptr: *mut gst_base_ffi::GstBaseSrc,
+) -> glib_ffi::gboolean
+where
+    T::ImplType: BaseSrcImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+
+    panic_to_error!(&wrap, &element.panicked, false, { imp.negotiate(&wrap) }).to_glib()
+}
+
+unsafe extern "C" fn base_src_set_caps<T: BaseSrc>(
+    ptr: *mut gst_base_ffi::GstBaseSrc,
+    caps: *mut gst_ffi::GstCaps,
+) -> glib_ffi::gboolean
+where
+    T::ImplType: BaseSrcImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+    let caps = gst::CapsRef::from_ptr(caps);
+
+    panic_to_error!(
+        &wrap,
+        &element.panicked,
+        false,
+        { imp.set_caps(&wrap, caps) }
+    ).to_glib()
+}
+
+unsafe extern "C" fn base_src_fixate<T: BaseSrc>(
+    ptr: *mut gst_base_ffi::GstBaseSrc,
+    caps: *mut gst_ffi::GstCaps,
+) -> *mut gst_ffi::GstCaps
+where
+    T::ImplType: BaseSrcImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+    let caps = from_glib_full(caps);
+
+    panic_to_error!(&wrap, &element.panicked, gst::Caps::new_empty(), {
+        imp.fixate(&wrap, caps)
+    }).into_ptr()
+}
+
+unsafe extern "C" fn base_src_unlock<T: BaseSrc>(
+    ptr: *mut gst_base_ffi::GstBaseSrc,
+) -> glib_ffi::gboolean
+where
+    T::ImplType: BaseSrcImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+
+    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock(&wrap) }).to_glib()
+}
+
+unsafe extern "C" fn base_src_unlock_stop<T: BaseSrc>(
+    ptr: *mut gst_base_ffi::GstBaseSrc,
+) -> glib_ffi::gboolean
+where
+    T::ImplType: BaseSrcImpl<T>,
+{
+    callback_guard!();
+    floating_reference_guard!(ptr);
+    let element = &*(ptr as *mut InstanceStruct<T>);
+    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let imp = &*element.imp;
+
+    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock_stop(&wrap) }).to_glib()
 }
