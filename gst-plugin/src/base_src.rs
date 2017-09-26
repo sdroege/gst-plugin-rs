@@ -8,7 +8,6 @@
 
 use std::ptr;
 use std::mem;
-use mopa;
 
 use glib_ffi;
 use gobject_ffi;
@@ -24,9 +23,10 @@ use gst_base::prelude::*;
 
 use object::*;
 use element::*;
+use anyimpl::*;
 
 pub trait BaseSrcImpl<T: BaseSrc>
-    : mopa::Any + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
+    : AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
     fn start(&self, _element: &T) -> bool {
         true
     }
@@ -99,7 +99,7 @@ pub trait BaseSrcImpl<T: BaseSrc>
     }
 }
 
-mopafy_object_impl!(BaseSrc, BaseSrcImpl);
+any_impl!(BaseSrc, BaseSrcImpl);
 
 pub unsafe trait BaseSrc
     : IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType {

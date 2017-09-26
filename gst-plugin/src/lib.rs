@@ -12,7 +12,6 @@ extern crate gstreamer_base_sys as gst_base_ffi;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
-extern crate mopa;
 extern crate url;
 pub extern crate glib_sys as glib_ffi;
 pub extern crate gobject_sys as gobject_ffi;
@@ -57,35 +56,8 @@ impl Drop for FloatingReferenceGuard {
     }
 }
 
-// mopafy! macro to work with generic traits over T: ObjectType
-macro_rules! mopafy_object_impl {
-    ($bound:ident, $trait:ident) => {
-        impl<T: $bound> $trait<T> {
-            #[inline]
-            pub fn downcast_ref<U: $trait<T>>(&self) -> Option<&U> {
-                if self.is::<U>() {
-                    unsafe {
-                        Some(self.downcast_ref_unchecked())
-                    }
-                } else {
-                    None
-                }
-            }
-
-            #[inline]
-            pub unsafe fn downcast_ref_unchecked<U: $trait<T>>(&self) -> &U {
-                &*(self as *const Self as *const U)
-            }
-
-            #[inline]
-            pub fn is<U: $trait<T>>(&self) -> bool {
-                use std::any::TypeId;
-                use mopa;
-                TypeId::of::<U>() == mopa::Any::get_type_id(self)
-            }
-        }
-    };
-}
+#[macro_use]
+pub mod anyimpl;
 
 #[macro_use]
 pub mod utils;

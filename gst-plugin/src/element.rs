@@ -8,7 +8,6 @@
 
 use std::ptr;
 use std::mem;
-use mopa;
 
 use libc;
 
@@ -22,9 +21,10 @@ use gst;
 use gst::prelude::*;
 
 use object::*;
+use anyimpl::*;
 
 pub trait ElementImpl<T: Element>
-    : ObjectImpl<T> + mopa::Any + Send + Sync + 'static {
+    : ObjectImpl<T> + AnyImpl + Send + Sync + 'static {
     fn change_state(&self, element: &T, transition: gst::StateChange) -> gst::StateChangeReturn {
         element.parent_change_state(transition)
     }
@@ -54,7 +54,7 @@ pub trait ElementImpl<T: Element>
     }
 }
 
-mopafy_object_impl!(Element, ElementImpl);
+any_impl!(Element, ElementImpl);
 
 pub unsafe trait Element: IsA<gst::Element> + ObjectType {
     fn parent_change_state(&self, transition: gst::StateChange) -> gst::StateChangeReturn {

@@ -7,8 +7,6 @@
 // except according to those terms.
 use std::ptr;
 
-use mopa;
-
 use glib_ffi;
 use gobject_ffi;
 use gst_ffi;
@@ -20,11 +18,14 @@ use gst;
 use gst::prelude::*;
 
 use object::*;
+use anyimpl::*;
 
-pub trait URIHandlerImpl: mopa::Any + Send + Sync + 'static {
+pub trait URIHandlerImpl: AnyImpl + Send + Sync + 'static {
     fn get_uri(&self, element: &gst::URIHandler) -> Option<String>;
     fn set_uri(&self, element: &gst::URIHandler, uri: Option<String>) -> Result<(), glib::Error>;
 }
+
+any_impl!(URIHandlerImpl);
 
 pub trait URIHandlerImplStatic<T: ObjectType>: Send + Sync + 'static {
     fn get_impl<'a>(&self, imp: &'a T::ImplType) -> &'a URIHandlerImpl;
