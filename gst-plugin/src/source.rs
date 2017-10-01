@@ -229,7 +229,7 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
 
         match query.view_mut() {
             QueryView::Scheduling(ref mut q) if self.push_only => {
-                q.set(gst::SCHEDULING_FLAG_SEQUENTIAL, 1, -1, 0);
+                q.set(gst::SchedulingFlags::SEQUENTIAL, 1, -1, 0);
                 q.add_scheduling_modes(&[gst::PadMode::Push]);
                 return true;
             }

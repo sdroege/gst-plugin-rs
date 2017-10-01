@@ -924,7 +924,7 @@ impl FlvDemux {
         {
             let buffer = buffer.get_mut().unwrap();
             if !is_keyframe {
-                buffer.set_flags(gst::BUFFER_FLAG_DELTA_UNIT);
+                buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
             }
             buffer.set_dts(
                 (tag_header.timestamp as u64)
