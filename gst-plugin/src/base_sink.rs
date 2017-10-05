@@ -67,7 +67,7 @@ pub trait BaseSinkImpl<T: BaseSink>
         element.parent_query(query)
     }
 
-    fn event(&self, element: &T, event: &gst::Event) -> bool {
+    fn event(&self, element: &T, event: gst::Event) -> bool {
         element.parent_event(event)
     }
 
@@ -107,14 +107,14 @@ pub unsafe trait BaseSink
         }
     }
 
-    fn parent_event(&self, event: &gst::Event) -> bool {
+    fn parent_event(&self, event: gst::Event) -> bool {
         unsafe {
             let klass = self.get_class();
             let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSinkClass;
             (*parent_klass)
                 .event
                 .map(|f| {
-                    from_glib(f(self.to_glib_none().0, event.to_glib_none().0))
+                    from_glib(f(self.to_glib_none().0, event.into_ptr()))
                 })
                 .unwrap_or(false)
         }
@@ -243,7 +243,7 @@ macro_rules! box_base_sink_impl(
                 BaseSinkImpl::query(imp, element, query)
             }
 
-            fn event(&self, element: &T, event: &gst::Event) -> bool {
+            fn event(&self, element: &T, event: gst::Event) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.event(element, event)
             }
@@ -435,7 +435,7 @@ where
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, false, {
-        imp.event(&wrap, &from_glib_none(event_ptr))
+        imp.event(&wrap, from_glib_full(event_ptr))
     }).to_glib()
 }
 
