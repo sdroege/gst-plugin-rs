@@ -158,9 +158,13 @@ impl AudioEcho {
         Box::new(imp)
     }
 
-    fn process<F: Float + ToPrimitive + FromPrimitive>(data: &mut [F], state: &mut State, settings: &Settings) {
-        let delay_frames = (settings.delay as usize) * (state.info.channels() as usize) * (state.info.rate() as usize) /
-            (gst::SECOND as usize);
+    fn process<F: Float + ToPrimitive + FromPrimitive>(
+        data: &mut [F],
+        state: &mut State,
+        settings: &Settings,
+    ) {
+        let delay_frames = (settings.delay as usize) * (state.info.channels() as usize) *
+            (state.info.rate() as usize) / (gst::SECOND as usize);
 
         for (i, (o, e)) in data.iter_mut().zip(state.buffer.iter(delay_frames)) {
             let inp = (*i).to_f64().unwrap();
@@ -228,7 +232,6 @@ impl ObjectImpl<RsBaseTransform> for AudioEcho {
 impl ElementImpl<RsBaseTransform> for AudioEcho {}
 
 impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
-
     fn transform_ip(&self, _element: &RsBaseTransform, buf: &gst::Buffer) -> gst::FlowReturn {
         let mut settings = *self.settings.lock().unwrap();
         settings.delay = cmp::min(settings.max_delay, settings.delay);
@@ -248,11 +251,11 @@ impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
             gst_audio::AUDIO_FORMAT_F64 => {
                 let mut data = map.as_mut_slice().as_mut_slice_of::<f64>().unwrap();
                 Self::process(data, state, &settings);
-            },
+            }
             gst_audio::AUDIO_FORMAT_F32 => {
                 let mut data = map.as_mut_slice().as_mut_slice_of::<f32>().unwrap();
                 Self::process(data, state, &settings);
-            },
+            }
             _ => return gst::FlowReturn::NotNegotiated,
         }
 

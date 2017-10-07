@@ -113,9 +113,7 @@ pub unsafe trait BaseSink
             let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSinkClass;
             (*parent_klass)
                 .event
-                .map(|f| {
-                    from_glib(f(self.to_glib_none().0, event.into_ptr()))
-                })
+                .map(|f| from_glib(f(self.to_glib_none().0, event.into_ptr())))
                 .unwrap_or(false)
         }
     }
