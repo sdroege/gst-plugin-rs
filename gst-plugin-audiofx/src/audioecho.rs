@@ -345,7 +345,6 @@ struct RingBufferIter<'a> {
     buffer_pos: &'a mut usize,
     read_pos: usize,
     write_pos: usize,
-    size: usize,
 }
 
 impl<'a> RingBufferIter<'a> {
@@ -366,7 +365,6 @@ impl<'a> RingBufferIter<'a> {
             buffer_pos: buffer_pos,
             read_pos: read_pos,
             write_pos: write_pos,
-            size: size,
         }
     }
 }
@@ -382,8 +380,9 @@ impl<'a> Iterator for RingBufferIter<'a> {
             (&mut *(w as *mut f64), r)
         };
 
-        self.write_pos = (self.write_pos + 1) % self.size;
-        self.read_pos = (self.read_pos + 1) % self.size;
+        let size = self.buffer.len();
+        self.write_pos = (self.write_pos + 1) % size;
+        self.read_pos = (self.read_pos + 1) % size;
 
         Some(res)
     }
