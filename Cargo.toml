@@ -10,3 +10,7 @@ members = [
 
 [profile.release]
 lto = true
+debug-assertions = false
+opt-level = 3
+debug = true
+panic = 'unwind'
