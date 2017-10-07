@@ -341,7 +341,8 @@ impl RingBuffer {
 }
 
 struct RingBufferIter<'a> {
-    buffer: &'a mut RingBuffer,
+    buffer: &'a mut [f64],
+    buffer_pos: &'a mut usize,
     read_pos: usize,
     write_pos: usize,
     size: usize,
@@ -357,8 +358,12 @@ impl<'a> RingBufferIter<'a> {
         let read_pos = (size - delay + buffer.pos) % size;
         let write_pos = buffer.pos % size;
 
+        let buffer_pos = &mut buffer.pos;
+        let buffer = &mut buffer.buffer;
+
         RingBufferIter {
             buffer: buffer,
+            buffer_pos: buffer_pos,
             read_pos: read_pos,
             write_pos: write_pos,
             size: size,
@@ -371,8 +376,8 @@ impl<'a> Iterator for RingBufferIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let res = unsafe {
-            let r = *self.buffer.buffer.get_unchecked(self.read_pos);
-            let w = self.buffer.buffer.get_unchecked_mut(self.write_pos);
+            let r = *self.buffer.get_unchecked(self.read_pos);
+            let w = self.buffer.get_unchecked_mut(self.write_pos);
             // Cast needed to get from &mut f64 to &'a mut f64
             (&mut *(w as *mut f64), r)
         };
@@ -386,6 +391,6 @@ impl<'a> Iterator for RingBufferIter<'a> {
 
 impl<'a> Drop for RingBufferIter<'a> {
     fn drop(&mut self) {
-        self.buffer.pos = self.write_pos;
+        *self.buffer_pos = self.write_pos;
     }
 }
