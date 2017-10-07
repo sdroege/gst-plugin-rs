@@ -239,7 +239,7 @@ impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
             Some(ref mut state) => state,
         };
 
-        let mut map = match buf.get_mut().unwrap().map_writable() {
+        let mut map = match buf.get_mut().and_then(|b| b.map_writable()) {
             None => return gst::FlowReturn::Error,
             Some(map) => map,
         };
@@ -317,9 +317,8 @@ pub fn register(plugin: &gst::Plugin) {
 }
 
 struct RingBuffer {
-    buffer: Vec<f64>,
+    buffer: Box<[f64]>,
     pos: usize,
-    size: usize,
 }
 
 impl RingBuffer {
@@ -328,9 +327,8 @@ impl RingBuffer {
         buffer.extend(iter::repeat(0.0).take(size as usize));
 
         Self {
-            buffer: buffer,
+            buffer: buffer.into_boxed_slice(),
             pos: 0,
-            size: size,
         }
     }
 
@@ -341,26 +339,26 @@ impl RingBuffer {
 
 struct RingBufferIter<'a> {
     buffer: &'a mut RingBuffer,
-    ptr: *mut f64,
     read_pos: usize,
     write_pos: usize,
+    size: usize,
 }
 
 impl<'a> RingBufferIter<'a> {
     fn new(buffer: &'a mut RingBuffer, delay: usize) -> RingBufferIter<'a> {
-        assert!(buffer.size >= delay);
-        assert_ne!(buffer.size, 0);
+        let size = buffer.buffer.len();
 
-        let ptr = buffer.buffer.as_mut_ptr();
+        assert!(size >= delay);
+        assert_ne!(size, 0);
 
-        let read_pos = (buffer.size - delay + buffer.pos) % buffer.size;
-        let write_pos = buffer.pos % buffer.size;
+        let read_pos = (size - delay + buffer.pos) % size;
+        let write_pos = buffer.pos % size;
 
         RingBufferIter {
             buffer: buffer,
-            ptr: ptr,
             read_pos: read_pos,
             write_pos: write_pos,
+            size: size,
         }
     }
 }
@@ -369,13 +367,17 @@ impl<'a> Iterator for RingBufferIter<'a> {
     type Item = (&'a mut f64, f64);
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let res = (&mut *self.ptr.offset(self.write_pos as isize), *self.ptr.offset(self.read_pos as isize));
-            self.write_pos = (self.write_pos + 1) % self.buffer.size;
-            self.read_pos = (self.read_pos + 1) % self.buffer.size;
+        let res = unsafe {
+            let r = *self.buffer.buffer.get_unchecked(self.read_pos);
+            let w = self.buffer.buffer.get_unchecked_mut(self.write_pos);
+            // Cast needed to get from &mut f64 to &'a mut f64
+            (&mut *(w as *mut f64), r)
+        };
 
-            Some(res)
-        }
+        self.write_pos = (self.write_pos + 1) % self.size;
+        self.read_pos = (self.read_pos + 1) % self.size;
+
+        Some(res)
     }
 }
 
