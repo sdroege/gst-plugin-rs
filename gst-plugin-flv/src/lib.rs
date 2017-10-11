@@ -11,6 +11,7 @@
 extern crate flavors;
 #[macro_use]
 extern crate gst_plugin;
+extern crate gst_plugin_simple;
 #[macro_use]
 extern crate gstreamer as gst;
 extern crate muldiv;
@@ -18,7 +19,7 @@ extern crate nom;
 extern crate num_rational;
 extern crate url;
 
-use gst_plugin::demuxer::*;
+use gst_plugin_simple::demuxer::*;
 use gst::prelude::*;
 
 mod flvdemux;

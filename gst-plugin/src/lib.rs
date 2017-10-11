@@ -12,7 +12,6 @@ extern crate gstreamer_base_sys as gst_base_ffi;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
-extern crate url;
 pub extern crate glib_sys as glib_ffi;
 pub extern crate gobject_sys as gobject_ffi;
 pub extern crate gstreamer_sys as gst_ffi;
@@ -66,9 +65,6 @@ pub mod error;
 pub mod adapter;
 #[macro_use]
 pub mod plugin;
-pub mod source;
-pub mod sink;
-pub mod demuxer;
 pub mod bytes;
 
 #[macro_use]

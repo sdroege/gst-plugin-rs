@@ -12,20 +12,21 @@ use std::sync::Mutex;
 
 use url::Url;
 
-use error::*;
-
 use glib;
 use gst;
 use gst::prelude::*;
 use gst_base;
 use gst_base::prelude::*;
 
-use object::*;
-use element::*;
-use base_src::*;
-use uri_handler::*;
+use gst_plugin::object::*;
+use gst_plugin::element::*;
+use gst_plugin::base_src::*;
+use gst_plugin::uri_handler::*;
+use gst_plugin::error::*;
 
-pub use base_src::RsBaseSrc;
+pub use gst_plugin::base_src::RsBaseSrc;
+
+use UriValidator;
 
 pub trait SourceImpl: Send + 'static {
     fn uri_validator(&self) -> Box<UriValidator>;

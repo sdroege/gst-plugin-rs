@@ -11,8 +11,6 @@ use std::fmt::{Display, Formatter};
 use std::fmt::Error as FmtError;
 use std::borrow::Cow;
 
-use url::Url;
-
 use glib_ffi;
 use gst_ffi;
 
@@ -214,8 +212,6 @@ impl Error for UriError {
         }
     }
 }
-
-pub type UriValidator = Fn(&Url) -> Result<(), UriError> + Send + Sync + 'static;
 
 #[macro_export]
 macro_rules! panic_to_error(

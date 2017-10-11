@@ -2,6 +2,7 @@
 
 members = [
     "gst-plugin",
+    "gst-plugin-simple",
     "gst-plugin-file",
     "gst-plugin-http",
     "gst-plugin-flv",

@@ -14,7 +14,8 @@ use std::io::Write;
 use std::convert::From;
 
 use gst_plugin::error::*;
-use gst_plugin::sink::*;
+use gst_plugin_simple::sink::*;
+use gst_plugin_simple::UriValidator;
 
 use gst;
 use gst::prelude::*;

@@ -12,7 +12,8 @@ use std::fs::File;
 use url::Url;
 
 use gst_plugin::error::*;
-use gst_plugin::source::*;
+use gst_plugin_simple::source::*;
+use gst_plugin_simple::UriValidator;
 
 use gst;
 use gst::prelude::*;

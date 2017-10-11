@@ -10,20 +10,21 @@ use std::sync::Mutex;
 
 use url::Url;
 
-use error::*;
-
 use glib;
 use gst;
 use gst::prelude::*;
 use gst_base;
 use gst_base::prelude::*;
 
-use object::*;
-use element::*;
-use base_sink::*;
-use uri_handler::*;
+use gst_plugin::object::*;
+use gst_plugin::element::*;
+use gst_plugin::base_sink::*;
+use gst_plugin::uri_handler::*;
+use gst_plugin::error::*;
 
-pub use base_sink::RsBaseSink;
+pub use gst_plugin::base_sink::RsBaseSink;
+
+use UriValidator;
 
 pub trait SinkImpl: Send + 'static {
     fn uri_validator(&self) -> Box<UriValidator>;

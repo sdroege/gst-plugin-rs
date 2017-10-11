@@ -2,12 +2,11 @@
 name = "gst-plugin"
 version = "0.1.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
-repository = "https://github.com/sdroege/rsplugin/gst-plugin"
+repository = "https://github.com/sdroege/gst-plugin-rs/gst-plugin"
 license = "MIT/Apache-2.0"
 
 [dependencies]
 libc = "0.2"
-url = "1.1"
 lazy_static = "0.2"
 byteorder = "1.0"
 glib-sys = { git = "https://github.com/gtk-rs/sys" }

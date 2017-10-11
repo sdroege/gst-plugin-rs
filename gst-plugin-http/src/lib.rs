@@ -10,12 +10,13 @@
 
 #[macro_use]
 extern crate gst_plugin;
+extern crate gst_plugin_simple;
 #[macro_use]
 extern crate gstreamer as gst;
 extern crate reqwest;
 extern crate url;
 
-use gst_plugin::source::*;
+use gst_plugin_simple::source::*;
 
 mod httpsrc;
 

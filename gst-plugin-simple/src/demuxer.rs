@@ -12,11 +12,10 @@ use std::u32;
 use std::u64;
 use std::collections::BTreeMap;
 
-use error::*;
-use object::*;
-use element::*;
+use gst_plugin::error::*;
+use gst_plugin::object::*;
+use gst_plugin::element::*;
 
-use glib;
 use gst;
 use gst::prelude::*;
 use gst_base;
@@ -274,7 +273,7 @@ impl Demuxer {
 
     fn sink_activate(pad: &gst::Pad, _parent: &Option<gst::Object>) -> bool {
         let mode = {
-            let mut query = gst::Query::new_scheduling();
+            let query = gst::Query::new_scheduling();
             if !pad.peer_query(query.get_mut().unwrap()) {
                 return false;
             }
@@ -352,7 +351,7 @@ impl Demuxer {
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
         if active {
-            let mut query = gst::Query::new_duration(gst::Format::Bytes);
+            let query = gst::Query::new_duration(gst::Format::Bytes);
             let upstream_size = if demuxer.sinkpad.peer_query(query.get_mut().unwrap()) {
                 use gst::QueryView;
 
