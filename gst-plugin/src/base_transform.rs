@@ -94,12 +94,12 @@ pub trait BaseTransformImpl<T: BaseTransform>
         &self,
         _element: &T,
         _inbuf: &gst::Buffer,
-        _outbuf: &gst::Buffer,
+        _outbuf: &mut gst::BufferRef,
     ) -> gst::FlowReturn {
         unimplemented!();
     }
 
-    fn transform_ip(&self, _element: &T, _buf: &gst::Buffer) -> gst::FlowReturn {
+    fn transform_ip(&self, _element: &T, _buf: &mut gst::BufferRef) -> gst::FlowReturn {
         unimplemented!();
     }
 }
@@ -379,12 +379,12 @@ macro_rules! box_base_transform_impl(
                 imp.src_event(element, event)
             }
 
-            fn transform(&self, element: &T, inbuf: &gst::Buffer, outbuf: &gst::Buffer) -> gst::FlowReturn {
+            fn transform(&self, element: &T, inbuf: &gst::Buffer, outbuf: &mut gst::BufferRef) -> gst::FlowReturn {
                 let imp: &$name<T> = self.as_ref();
                 imp.transform(element, inbuf, outbuf)
             }
 
-            fn transform_ip(&self, element: &T, buf: &gst::Buffer) -> gst::FlowReturn {
+            fn transform_ip(&self, element: &T, buf: &mut gst::BufferRef) -> gst::FlowReturn {
                 let imp: &$name<T> = self.as_ref();
                 imp.transform_ip(element, buf)
             }
@@ -670,7 +670,7 @@ where
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
-        imp.transform(&wrap, &from_glib_borrow(inbuf), &from_glib_borrow(outbuf))
+        imp.transform(&wrap, &from_glib_borrow(inbuf), gst::BufferRef::from_mut_ptr(outbuf))
     }).to_glib()
 }
 
@@ -691,6 +691,6 @@ where
     let buf = buf as *mut gst_ffi::GstBuffer;
 
     panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
-        imp.transform_ip(&wrap, &from_glib_borrow(buf))
+        imp.transform_ip(&wrap, gst::BufferRef::from_mut_ptr(buf))
     }).to_glib()
 }

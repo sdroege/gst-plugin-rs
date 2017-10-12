@@ -232,7 +232,7 @@ impl ObjectImpl<RsBaseTransform> for AudioEcho {
 impl ElementImpl<RsBaseTransform> for AudioEcho {}
 
 impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
-    fn transform_ip(&self, _element: &RsBaseTransform, buf: &gst::Buffer) -> gst::FlowReturn {
+    fn transform_ip(&self, _element: &RsBaseTransform, buf: &mut gst::BufferRef) -> gst::FlowReturn {
         let mut settings = *self.settings.lock().unwrap();
         settings.delay = cmp::min(settings.max_delay, settings.delay);
 
@@ -242,7 +242,7 @@ impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
             Some(ref mut state) => state,
         };
 
-        let mut map = match buf.get_mut().and_then(|b| b.map_writable()) {
+        let mut map = match buf.map_writable() {
             None => return gst::FlowReturn::Error,
             Some(map) => map,
         };
