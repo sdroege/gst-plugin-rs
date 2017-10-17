@@ -44,8 +44,8 @@ unsafe extern "C" fn uri_handler_get_type<T: ObjectType>(
     callback_guard!();
     let klass = gobject_ffi::g_type_class_peek(type_);
     let klass = &*(klass as *const ClassStruct<T>);
-    let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type()) as
-        *const URIHandlerStatic<T>;
+    let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type())
+        as *const URIHandlerStatic<T>;
     (*(*interface_static).imp_static).get_type().to_glib()
 }
 
@@ -55,8 +55,8 @@ unsafe extern "C" fn uri_handler_get_protocols<T: ObjectType>(
     callback_guard!();
     let klass = gobject_ffi::g_type_class_peek(type_);
     let klass = &*(klass as *const ClassStruct<T>);
-    let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type()) as
-        *const URIHandlerStatic<T>;
+    let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type())
+        as *const URIHandlerStatic<T>;
     (*(*interface_static).protocols).as_ptr()
 }
 
@@ -67,8 +67,8 @@ unsafe extern "C" fn uri_handler_get_uri<T: ObjectType>(
     floating_reference_guard!(uri_handler);
 
     let klass = &**(uri_handler as *const *const ClassStruct<T>);
-    let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type()) as
-        *const URIHandlerStatic<T>;
+    let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type())
+        as *const URIHandlerStatic<T>;
 
     let instance = &*(uri_handler as *const InstanceStruct<T>);
     let imp = instance.get_impl();
@@ -86,8 +86,8 @@ unsafe extern "C" fn uri_handler_set_uri<T: ObjectType>(
     floating_reference_guard!(uri_handler);
 
     let klass = &**(uri_handler as *const *const ClassStruct<T>);
-    let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type()) as
-        *const URIHandlerStatic<T>;
+    let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type())
+        as *const URIHandlerStatic<T>;
 
     let instance = &*(uri_handler as *const InstanceStruct<T>);
     let imp = instance.get_impl();

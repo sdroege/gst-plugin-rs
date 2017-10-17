@@ -670,7 +670,11 @@ where
     let imp = &*element.imp;
 
     panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
-        imp.transform(&wrap, &from_glib_borrow(inbuf), gst::BufferRef::from_mut_ptr(outbuf))
+        imp.transform(
+            &wrap,
+            &from_glib_borrow(inbuf),
+            gst::BufferRef::from_mut_ptr(outbuf),
+        )
     }).to_glib()
 }
 

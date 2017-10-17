@@ -85,9 +85,9 @@ struct AudioFormat {
 // Ignores bitrate
 impl PartialEq for AudioFormat {
     fn eq(&self, other: &Self) -> bool {
-        self.format.eq(&other.format) && self.rate.eq(&other.rate) && self.width.eq(&other.width) &&
-            self.channels.eq(&other.channels) &&
-            self.aac_sequence_header.eq(&other.aac_sequence_header)
+        self.format.eq(&other.format) && self.rate.eq(&other.rate) && self.width.eq(&other.width)
+            && self.channels.eq(&other.channels)
+            && self.aac_sequence_header.eq(&other.aac_sequence_header)
     }
 }
 
@@ -375,11 +375,11 @@ impl VideoFormat {
 // Ignores bitrate
 impl PartialEq for VideoFormat {
     fn eq(&self, other: &Self) -> bool {
-        self.format.eq(&other.format) && self.width.eq(&other.width) &&
-            self.height.eq(&other.height) &&
-            self.pixel_aspect_ratio.eq(&other.pixel_aspect_ratio) &&
-            self.framerate.eq(&other.framerate) &&
-            self.avc_sequence_header.eq(&other.avc_sequence_header)
+        self.format.eq(&other.format) && self.width.eq(&other.width)
+            && self.height.eq(&other.height)
+            && self.pixel_aspect_ratio.eq(&other.pixel_aspect_ratio)
+            && self.framerate.eq(&other.framerate)
+            && self.avc_sequence_header.eq(&other.avc_sequence_header)
     }
 }
 
@@ -618,9 +618,9 @@ impl FlvDemux {
             }
         }
 
-        if !streaming_state.got_all_streams && streaming_state.audio != None &&
-            (streaming_state.expect_video && streaming_state.video != None ||
-                !streaming_state.expect_video)
+        if !streaming_state.got_all_streams && streaming_state.audio != None
+            && (streaming_state.expect_video && streaming_state.video != None
+                || !streaming_state.expect_video)
         {
             streaming_state.got_all_streams = true;
             return Ok(HandleBufferResult::HaveAllStreams);
@@ -796,9 +796,9 @@ impl FlvDemux {
             }
         }
 
-        if !streaming_state.got_all_streams && streaming_state.video != None &&
-            (streaming_state.expect_audio && streaming_state.audio != None ||
-                !streaming_state.expect_audio)
+        if !streaming_state.got_all_streams && streaming_state.video != None
+            && (streaming_state.expect_audio && streaming_state.audio != None
+                || !streaming_state.expect_audio)
         {
             streaming_state.got_all_streams = true;
             return Ok(HandleBufferResult::HaveAllStreams);

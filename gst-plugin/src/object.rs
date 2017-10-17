@@ -464,8 +464,8 @@ pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType {
 
                 loop {
                     let type_name = CString::new(format!("{}-{}", T::NAME, idx)).unwrap();
-                    if gobject_ffi::g_type_from_name(type_name.as_ptr()) ==
-                        gobject_ffi::G_TYPE_INVALID
+                    if gobject_ffi::g_type_from_name(type_name.as_ptr())
+                        == gobject_ffi::G_TYPE_INVALID
                     {
                         break type_name;
                     }

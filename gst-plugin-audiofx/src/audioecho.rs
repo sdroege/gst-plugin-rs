@@ -163,8 +163,8 @@ impl AudioEcho {
         state: &mut State,
         settings: &Settings,
     ) {
-        let delay_frames = (settings.delay as usize) * (state.info.channels() as usize) *
-            (state.info.rate() as usize) / (gst::SECOND as usize);
+        let delay_frames = (settings.delay as usize) * (state.info.channels() as usize)
+            * (state.info.rate() as usize) / (gst::SECOND as usize);
 
         for (i, (o, e)) in data.iter_mut().zip(state.buffer.iter(delay_frames)) {
             let inp = (*i).to_f64().unwrap();
@@ -232,7 +232,11 @@ impl ObjectImpl<RsBaseTransform> for AudioEcho {
 impl ElementImpl<RsBaseTransform> for AudioEcho {}
 
 impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
-    fn transform_ip(&self, _element: &RsBaseTransform, buf: &mut gst::BufferRef) -> gst::FlowReturn {
+    fn transform_ip(
+        &self,
+        _element: &RsBaseTransform,
+        buf: &mut gst::BufferRef,
+    ) -> gst::FlowReturn {
         let mut settings = *self.settings.lock().unwrap();
         settings.delay = cmp::min(settings.max_delay, settings.delay);
 

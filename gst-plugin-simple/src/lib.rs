@@ -8,10 +8,10 @@
 
 extern crate glib;
 #[macro_use]
+extern crate gst_plugin;
+#[macro_use]
 extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
-#[macro_use]
-extern crate gst_plugin;
 
 extern crate url;
 
@@ -19,4 +19,8 @@ pub mod source;
 pub mod sink;
 pub mod demuxer;
 
-pub type UriValidator = Fn(&url::Url) -> Result<(), gst_plugin::error::UriError> + Send + Sync + 'static;
+pub type UriValidator = Fn(&url::Url)
+    -> Result<(), gst_plugin::error::UriError>
+                            + Send
+                            + Sync
+                            + 'static;
