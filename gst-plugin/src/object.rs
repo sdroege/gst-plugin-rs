@@ -20,6 +20,8 @@ use gobject_ffi;
 use glib;
 use glib::translate::*;
 
+use properties::*;
+
 pub trait ObjectImpl<T: ObjectType>: Send + Sync + 'static {
     fn set_property(&self, _obj: &glib::Object, _id: u32, _value: &glib::Value) {
         unimplemented!()
@@ -164,110 +166,7 @@ pub unsafe trait ObjectClass {
         pspecs.push(ptr::null_mut());
 
         for property in properties {
-            match *property {
-                Property::Boolean(name, nick, description, default, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_boolean(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        default.to_glib(),
-                        mutability.into(),
-                    ));
-                },
-                Property::Int(name, nick, description, (min, max), default, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_int(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        min,
-                        max,
-                        default,
-                        mutability.into(),
-                    ));
-                },
-                Property::Int64(name, nick, description, (min, max), default, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_int64(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        min,
-                        max,
-                        default,
-                        mutability.into(),
-                    ));
-                },
-                Property::UInt(name, nick, description, (min, max), default, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_uint(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        min,
-                        max,
-                        default,
-                        mutability.into(),
-                    ));
-                },
-                Property::UInt64(name, nick, description, (min, max), default, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_uint64(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        min,
-                        max,
-                        default,
-                        mutability.into(),
-                    ));
-                },
-                Property::Float(name, nick, description, (min, max), default, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_float(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        min,
-                        max,
-                        default,
-                        mutability.into(),
-                    ));
-                },
-                Property::Double(name, nick, description, (min, max), default, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_double(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        min,
-                        max,
-                        default,
-                        mutability.into(),
-                    ));
-                },
-                Property::String(name, nick, description, default, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_string(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        default.to_glib_none().0,
-                        mutability.into(),
-                    ));
-                },
-                Property::Boxed(name, nick, description, type_, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_boxed(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        type_.to_glib(),
-                        mutability.into(),
-                    ));
-                },
-                Property::Object(name, nick, description, type_, mutability) => unsafe {
-                    pspecs.push(gobject_ffi::g_param_spec_object(
-                        name.to_glib_none().0,
-                        nick.to_glib_none().0,
-                        description.to_glib_none().0,
-                        type_.to_glib(),
-                        mutability.into(),
-                    ));
-                },
-            }
+            pspecs.push(property.into());
         }
 
         unsafe {
@@ -281,86 +180,6 @@ pub unsafe trait ObjectClass {
 }
 
 unsafe impl<T: ObjectType> ObjectClass for ClassStruct<T> {}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum PropertyMutability {
-    Readable,
-    Writable,
-    ReadWrite,
-}
-
-impl Into<gobject_ffi::GParamFlags> for PropertyMutability {
-    fn into(self) -> gobject_ffi::GParamFlags {
-        use self::PropertyMutability::*;
-
-        match self {
-            Readable => gobject_ffi::G_PARAM_READABLE,
-            Writable => gobject_ffi::G_PARAM_WRITABLE,
-            ReadWrite => gobject_ffi::G_PARAM_READWRITE,
-        }
-    }
-}
-
-pub enum Property<'a> {
-    Boolean(&'a str, &'a str, &'a str, bool, PropertyMutability),
-    Int(
-        &'a str,
-        &'a str,
-        &'a str,
-        (i32, i32),
-        i32,
-        PropertyMutability,
-    ),
-    Int64(
-        &'a str,
-        &'a str,
-        &'a str,
-        (i64, i64),
-        i64,
-        PropertyMutability,
-    ),
-    UInt(
-        &'a str,
-        &'a str,
-        &'a str,
-        (u32, u32),
-        u32,
-        PropertyMutability,
-    ),
-    UInt64(
-        &'a str,
-        &'a str,
-        &'a str,
-        (u64, u64),
-        u64,
-        PropertyMutability,
-    ),
-    Float(
-        &'a str,
-        &'a str,
-        &'a str,
-        (f32, f32),
-        f32,
-        PropertyMutability,
-    ),
-    Double(
-        &'a str,
-        &'a str,
-        &'a str,
-        (f64, f64),
-        f64,
-        PropertyMutability,
-    ),
-    String(
-        &'a str,
-        &'a str,
-        &'a str,
-        Option<&'a str>,
-        PropertyMutability,
-    ),
-    Boxed(&'a str, &'a str, &'a str, glib::Type, PropertyMutability),
-    Object(&'a str, &'a str, &'a str, glib::Type, PropertyMutability),
-}
 
 unsafe extern "C" fn class_init<T: ObjectType>(
     klass: glib_ffi::gpointer,

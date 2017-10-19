@@ -14,6 +14,7 @@ use gst_base::prelude::*;
 use gst_audio;
 use gst_audio::prelude::*;
 
+use gst_plugin::properties::*;
 use gst_plugin::object::*;
 use gst_plugin::element::*;
 use gst_plugin::base_transform::*;

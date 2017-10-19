@@ -67,6 +67,7 @@ pub mod adapter;
 pub mod plugin;
 pub mod bytes;
 
+pub mod properties;
 #[macro_use]
 pub mod object;
 #[macro_use]

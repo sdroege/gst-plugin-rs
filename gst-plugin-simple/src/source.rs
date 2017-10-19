@@ -19,6 +19,7 @@ use gst_base;
 use gst_base::prelude::*;
 
 use gst_plugin::object::*;
+use gst_plugin::properties::*;
 use gst_plugin::element::*;
 use gst_plugin::base_src::*;
 use gst_plugin::uri_handler::*;
