@@ -50,7 +50,7 @@ impl HttpSrc {
                 gst::DebugColorFlags::empty(),
                 "Rust HTTP source",
             ),
-            client: Client::new().unwrap(),
+            client: Client::new(),
         }
     }
 
@@ -66,7 +66,7 @@ impl HttpSrc {
         stop: Option<u64>,
     ) -> Result<StreamingState, ErrorMessage> {
         let cat = self.cat;
-        let mut req = self.client.get(uri.clone()).unwrap();
+        let mut req = self.client.get(uri.clone());
 
         match (start != 0, stop) {
             (false, None) => (),
