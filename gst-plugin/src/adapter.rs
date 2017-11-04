@@ -8,6 +8,7 @@
 
 use std::collections::VecDeque;
 use std::cmp;
+use std::io;
 
 use gst;
 use gst::prelude::*;
@@ -252,6 +253,27 @@ impl Adapter {
         }
 
         Ok(())
+    }
+}
+
+impl io::Read for Adapter {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
+        let mut len = self.get_available();
+
+        if buf.len() < len {
+            len = buf.len();
+        }
+
+        if self.size == 0 {
+            return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    format!("Missing data: requesting {} but only got {}.",
+                            len, self.size)));
+        }
+
+        Self::copy_data(&self.deque, self.skip, buf, len);
+        self.flush(len);
+        Ok(len)
     }
 }
 
