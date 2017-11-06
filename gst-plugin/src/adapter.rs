@@ -258,21 +258,21 @@ impl Adapter {
 
 impl io::Read for Adapter {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, io::Error> {
-        let mut len = self.get_available();
+        let mut len = self.size;
+
+        if len == 0 {
+            return Err(io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    format!("Missing data: requesting {} but only got {}.",
+                            buf.len(), len)));
+        }
 
         if buf.len() < len {
             len = buf.len();
         }
 
-        if self.size == 0 {
-            return Err(io::Error::new(
-                    io::ErrorKind::WouldBlock,
-                    format!("Missing data: requesting {} but only got {}.",
-                            len, self.size)));
-        }
-
         Self::copy_data(&self.deque, self.skip, buf, len);
-        self.flush(len);
+        self.flush(len).unwrap();
         Ok(len)
     }
 }
