@@ -27,8 +27,8 @@ use byte_slice_cast::*;
 use num_traits::float::Float;
 use num_traits::cast::{FromPrimitive, ToPrimitive};
 
-const DEFAULT_MAX_DELAY: u64 = 1 * gst::SECOND;
-const DEFAULT_DELAY: u64 = 500 * gst::MSECOND;
+const DEFAULT_MAX_DELAY: u64 = 1 * gst::SECOND_VAL;
+const DEFAULT_DELAY: u64 = 500 * gst::MSECOND_VAL;
 const DEFAULT_INTENSITY: f64 = 0.5;
 const DEFAULT_FEEDBACK: f64 = 0.0;
 
@@ -165,7 +165,7 @@ impl AudioEcho {
         settings: &Settings,
     ) {
         let delay_frames = (settings.delay as usize) * (state.info.channels() as usize)
-            * (state.info.rate() as usize) / (gst::SECOND as usize);
+            * (state.info.rate() as usize) / (gst::SECOND_VAL as usize);
 
         for (i, (o, e)) in data.iter_mut().zip(state.buffer.iter(delay_frames)) {
             let inp = (*i).to_f64().unwrap();
@@ -283,7 +283,7 @@ impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
         };
 
         let max_delay = self.settings.lock().unwrap().max_delay;
-        let size = max_delay * (info.rate() as u64) / gst::SECOND;
+        let size = max_delay * (info.rate() as u64) / gst::SECOND_VAL;
         let buffer_size = size * (info.channels() as u64);
 
         *self.state.lock().unwrap() = Some(State {

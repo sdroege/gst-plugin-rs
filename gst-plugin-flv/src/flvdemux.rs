@@ -19,8 +19,6 @@ use gst_plugin::adapter::*;
 use gst_plugin::bytes::*;
 use gst_plugin_simple::demuxer::*;
 
-use muldiv::*;
-
 use gst;
 use gst::prelude::*;
 
@@ -48,7 +46,7 @@ struct StreamingState {
     video: Option<VideoFormat>,
     expect_video: bool,
     got_all_streams: bool,
-    last_position: Option<u64>,
+    last_position: gst::ClockTime,
 
     metadata: Option<Metadata>,
 
@@ -64,7 +62,7 @@ impl StreamingState {
             video: None,
             expect_video: video,
             got_all_streams: false,
-            last_position: None,
+            last_position: gst::CLOCK_TIME_NONE,
             metadata: None,
             aac_sequence_header: None,
             avc_sequence_header: None,
@@ -385,7 +383,7 @@ impl PartialEq for VideoFormat {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct Metadata {
-    duration: Option<u64>,
+    duration: gst::ClockTime,
 
     creation_date: Option<String>,
     creator: Option<String>,
@@ -407,7 +405,7 @@ impl Metadata {
         assert_eq!(script_data.name, "onMetaData");
 
         let mut metadata = Metadata {
-            duration: None,
+            duration: gst::CLOCK_TIME_NONE,
             creation_date: None,
             creator: None,
             title: None,
@@ -432,7 +430,7 @@ impl Metadata {
         for arg in args {
             match (arg.name, &arg.data) {
                 ("duration", &flavors::ScriptDataValue::Number(duration)) => {
-                    metadata.duration = Some((duration * 1000.0 * 1000.0 * 1000.0) as u64);
+                    metadata.duration = ((duration * 1000.0 * 1000.0 * 1000.0) as u64).into();
                 }
                 ("creationdate", &flavors::ScriptDataValue::String(date)) => {
                     metadata.creation_date = Some(String::from(date));
@@ -733,11 +731,7 @@ impl FlvDemux {
 
         {
             let buffer = buffer.get_mut().unwrap();
-            buffer.set_pts(
-                (tag_header.timestamp as u64)
-                    .mul_div_floor(1000_000, 1)
-                    .unwrap(),
-            );
+            buffer.set_pts(gst::ClockTime::from_mseconds(tag_header.timestamp as u64));
         }
 
         gst_trace!(
@@ -926,11 +920,7 @@ impl FlvDemux {
             if !is_keyframe {
                 buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
             }
-            buffer.set_dts(
-                (tag_header.timestamp as u64)
-                    .mul_div_floor(1000_000, 1)
-                    .unwrap(),
-            );
+            buffer.set_dts(gst::ClockTime::from_mseconds(tag_header.timestamp as u64));
 
             // Prevent negative numbers
             let pts = if cts < 0 && tag_header.timestamp < (-cts) as u32 {
@@ -938,7 +928,7 @@ impl FlvDemux {
             } else {
                 ((tag_header.timestamp as i64) + (cts as i64)) as u64
             };
-            buffer.set_pts(pts.mul_div_floor(1000_000, 1).unwrap());
+            buffer.set_pts(gst::ClockTime::from_mseconds(pts));
         }
 
         gst_trace!(
@@ -1080,14 +1070,14 @@ impl FlvDemux {
                         let pts = buffer.get_pts();
                         streaming_state.last_position = streaming_state
                             .last_position
-                            .map(|last| cmp::max(last, pts))
-                            .or_else(|| Some(pts));
+                            .map(|last| cmp::max(last.into(), pts))
+                            .unwrap_or(pts);
                     } else if buffer.get_dts() != gst::CLOCK_TIME_NONE {
                         let dts = buffer.get_dts();
                         streaming_state.last_position = streaming_state
                             .last_position
-                            .map(|last| cmp::max(last, dts))
-                            .or_else(|| Some(dts));
+                            .map(|last| cmp::max(last.into(), dts))
+                            .unwrap_or(dts);
                     }
                 }
 
@@ -1120,8 +1110,8 @@ impl DemuxerImpl for FlvDemux {
     fn seek(
         &mut self,
         demuxer: &RsDemuxer,
-        start: u64,
-        stop: Option<u64>,
+        start: gst::ClockTime,
+        stop: gst::ClockTime,
     ) -> Result<SeekResult, ErrorMessage> {
         unimplemented!();
     }
@@ -1147,15 +1137,15 @@ impl DemuxerImpl for FlvDemux {
         false
     }
 
-    fn get_position(&self, demuxer: &RsDemuxer) -> Option<u64> {
+    fn get_position(&self, demuxer: &RsDemuxer) -> gst::ClockTime {
         if let Some(StreamingState { last_position, .. }) = self.streaming_state {
             return last_position;
         }
 
-        None
+        gst::CLOCK_TIME_NONE
     }
 
-    fn get_duration(&self, demuxer: &RsDemuxer) -> Option<u64> {
+    fn get_duration(&self, demuxer: &RsDemuxer) -> gst::ClockTime {
         if let Some(StreamingState {
             metadata: Some(Metadata { duration, .. }),
             ..
@@ -1164,6 +1154,6 @@ impl DemuxerImpl for FlvDemux {
             return duration;
         }
 
-        None
+        gst::CLOCK_TIME_NONE
     }
 }

@@ -60,8 +60,8 @@ pub trait DemuxerImpl: Send + 'static {
     fn seek(
         &mut self,
         demuxer: &RsDemuxer,
-        start: u64,
-        stop: Option<u64>,
+        start: gst::ClockTime,
+        stop: gst::ClockTime,
     ) -> Result<SeekResult, ErrorMessage>;
     fn handle_buffer(
         &mut self,
@@ -71,8 +71,8 @@ pub trait DemuxerImpl: Send + 'static {
     fn end_of_stream(&mut self, demuxer: &RsDemuxer) -> Result<(), ErrorMessage>;
 
     fn is_seekable(&self, demuxer: &RsDemuxer) -> bool;
-    fn get_position(&self, demuxer: &RsDemuxer) -> Option<u64>;
-    fn get_duration(&self, demuxer: &RsDemuxer) -> Option<u64>;
+    fn get_position(&self, demuxer: &RsDemuxer) -> gst::ClockTime;
+    fn get_duration(&self, demuxer: &RsDemuxer) -> gst::ClockTime;
 }
 
 #[derive(Debug)]
@@ -351,17 +351,11 @@ impl Demuxer {
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
         if active {
-            let mut query = gst::Query::new_duration(gst::Format::Bytes);
-            let upstream_size = if demuxer.sinkpad.peer_query(query.get_mut().unwrap()) {
-                use gst::QueryView;
-
-                match query.view() {
-                    QueryView::Duration(ref d) => Some(d.get().1 as u64),
-                    _ => unreachable!(),
-                }
-            } else {
-                None
-            };
+            let upstream_size = demuxer
+                .sinkpad
+                .peer_query_duration(gst::Format::Bytes)
+                .and_then(|d| d.try_to_bytes())
+                .and_then(|d| d);
 
             if !demuxer.start(&element, upstream_size, mode == gst::PadMode::Pull) {
                 return false;
@@ -530,7 +524,7 @@ impl Demuxer {
 
         match query.view_mut() {
             QueryView::Position(ref mut q) => {
-                let (fmt, _) = q.get();
+                let fmt = q.get_format();
                 if fmt == gst::Format::Time {
                     let demuxer_impl = &demuxer.imp.lock().unwrap();
 
@@ -542,10 +536,10 @@ impl Demuxer {
                         position
                     );
 
-                    match position {
+                    match *position {
                         None => return false,
-                        Some(position) => {
-                            q.set(fmt, position as i64);
+                        Some(_) => {
+                            q.set(position);
                             return true;
                         }
                     }
@@ -554,7 +548,7 @@ impl Demuxer {
                 }
             }
             QueryView::Duration(ref mut q) => {
-                let (fmt, _) = q.get();
+                let fmt = q.get_format();
                 if fmt == gst::Format::Time {
                     let demuxer_impl = &demuxer.imp.lock().unwrap();
 
@@ -566,10 +560,10 @@ impl Demuxer {
                         duration
                     );
 
-                    match duration {
+                    match *duration {
                         None => return false,
-                        Some(duration) => {
-                            q.set(fmt, duration as i64);
+                        Some(_) => {
+                            q.set(duration);
                             return true;
                         }
                     }
@@ -597,9 +591,13 @@ impl Demuxer {
         }
     }
 
-    fn seek(&self, element: &RsDemuxer, start: u64, stop: u64, offset: &mut u64) -> bool {
-        let stop = if stop == u64::MAX { None } else { Some(stop) };
-
+    fn seek(
+        &self,
+        element: &RsDemuxer,
+        start: gst::ClockTime,
+        stop: gst::ClockTime,
+        offset: &mut u64,
+    ) -> bool {
         gst_debug!(self.cat, obj: element, "Seeking to {:?}-{:?}", start, stop);
 
         let res = {
