@@ -88,8 +88,8 @@ pub enum Property<'a> {
         Option<&'a str>,
         PropertyMutability,
     ),
-    Boxed(&'a str, &'a str, &'a str, glib::Type, PropertyMutability),
-    Object(&'a str, &'a str, &'a str, glib::Type, PropertyMutability),
+    Boxed(&'a str, &'a str, &'a str, fn() -> glib::Type, PropertyMutability),
+    Object(&'a str, &'a str, &'a str, fn() -> glib::Type, PropertyMutability),
 }
 
 impl<'a> Into<*mut gobject_ffi::GParamSpec> for &'a Property<'a> {
@@ -180,21 +180,21 @@ impl<'a> Into<*mut gobject_ffi::GParamSpec> for &'a Property<'a> {
                         mutability.into(),
                     )
                 }
-                Property::Boxed(name, nick, description, type_, mutability) => {
+                Property::Boxed(name, nick, description, get_type, mutability) => {
                     gobject_ffi::g_param_spec_boxed(
                         name.to_glib_none().0,
                         nick.to_glib_none().0,
                         description.to_glib_none().0,
-                        type_.to_glib(),
+                        get_type().to_glib(),
                         mutability.into(),
                     )
                 }
-                Property::Object(name, nick, description, type_, mutability) => {
+                Property::Object(name, nick, description, get_type, mutability) => {
                     gobject_ffi::g_param_spec_object(
                         name.to_glib_none().0,
                         nick.to_glib_none().0,
                         description.to_glib_none().0,
-                        type_.to_glib(),
+                        get_type().to_glib(),
                         mutability.into(),
                     )
                 }
