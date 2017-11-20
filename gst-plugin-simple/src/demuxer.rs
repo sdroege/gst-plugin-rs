@@ -46,33 +46,31 @@ pub enum HandleBufferResult {
     Eos(Option<StreamIndex>),
 }
 
-pub type RsDemuxer = RsElement;
-
 pub trait DemuxerImpl: Send + 'static {
     fn start(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         upstream_size: Option<u64>,
         random_access: bool,
     ) -> Result<(), ErrorMessage>;
-    fn stop(&mut self, demuxer: &RsDemuxer) -> Result<(), ErrorMessage>;
+    fn stop(&mut self, demuxer: &Element) -> Result<(), ErrorMessage>;
 
     fn seek(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         start: gst::ClockTime,
         stop: gst::ClockTime,
     ) -> Result<SeekResult, ErrorMessage>;
     fn handle_buffer(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         buffer: Option<gst::Buffer>,
     ) -> Result<HandleBufferResult, FlowError>;
-    fn end_of_stream(&mut self, demuxer: &RsDemuxer) -> Result<(), ErrorMessage>;
+    fn end_of_stream(&mut self, demuxer: &Element) -> Result<(), ErrorMessage>;
 
-    fn is_seekable(&self, demuxer: &RsDemuxer) -> bool;
-    fn get_position(&self, demuxer: &RsDemuxer) -> gst::ClockTime;
-    fn get_duration(&self, demuxer: &RsDemuxer) -> gst::ClockTime;
+    fn is_seekable(&self, demuxer: &Element) -> bool;
+    fn get_position(&self, demuxer: &Element) -> gst::ClockTime;
+    fn get_duration(&self, demuxer: &Element) -> gst::ClockTime;
 }
 
 #[derive(Debug)]
@@ -99,7 +97,7 @@ pub struct DemuxerInfo {
     pub classification: String,
     pub author: String,
     pub rank: u32,
-    pub create_instance: fn(&RsDemuxer) -> Box<DemuxerImpl>,
+    pub create_instance: fn(&Element) -> Box<DemuxerImpl>,
     pub input_caps: gst::Caps,
     pub output_caps: gst::Caps,
 }
@@ -134,7 +132,7 @@ unsafe impl Send for UniqueFlowCombiner {}
 unsafe impl Sync for UniqueFlowCombiner {}
 
 impl Demuxer {
-    fn new(demuxer: &RsDemuxer, sinkpad: gst::Pad, demuxer_info: &DemuxerInfo) -> Self {
+    fn new(element: &Element, sinkpad: gst::Pad, demuxer_info: &DemuxerInfo) -> Self {
         Self {
             cat: gst::DebugCategory::new(
                 "rsdemux",
@@ -145,11 +143,11 @@ impl Demuxer {
             flow_combiner: Mutex::new(Default::default()),
             group_id: Mutex::new(gst::util_group_id_next()),
             srcpads: Mutex::new(BTreeMap::new()),
-            imp: Mutex::new((demuxer_info.create_instance)(demuxer)),
+            imp: Mutex::new((demuxer_info.create_instance)(element)),
         }
     }
 
-    fn class_init(klass: &mut RsElementClass, demuxer_info: &DemuxerInfo) {
+    fn class_init(klass: &mut ElementClass, demuxer_info: &DemuxerInfo) {
         klass.set_metadata(
             &demuxer_info.long_name,
             &demuxer_info.classification,
@@ -174,7 +172,7 @@ impl Demuxer {
         klass.add_pad_template(pad_template);
     }
 
-    fn init(element: &RsElement, demuxer_info: &DemuxerInfo) -> Box<ElementImpl<RsElement>> {
+    fn init(element: &Element, demuxer_info: &DemuxerInfo) -> Box<ElementImpl<Element>> {
         let templ = element.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::new_from_template(&templ, "sink");
         sinkpad.set_activate_function(Demuxer::sink_activate);
@@ -187,7 +185,7 @@ impl Demuxer {
         Box::new(imp)
     }
 
-    fn add_stream(&self, element: &RsElement, index: u32, caps: gst::Caps, stream_id: &str) {
+    fn add_stream(&self, element: &Element, index: u32, caps: gst::Caps, stream_id: &str) {
         let mut srcpads = self.srcpads.lock().unwrap();
         assert!(!srcpads.contains_key(&index));
 
@@ -217,12 +215,12 @@ impl Demuxer {
         srcpads.insert(index, pad);
     }
 
-    fn added_all_streams(&self, element: &RsElement) {
+    fn added_all_streams(&self, element: &Element) {
         element.no_more_pads();
         *self.group_id.lock().unwrap() = gst::util_group_id_next();
     }
 
-    fn stream_format_changed(&self, _element: &RsElement, index: u32, caps: gst::Caps) {
+    fn stream_format_changed(&self, _element: &Element, index: u32, caps: gst::Caps) {
         let srcpads = self.srcpads.lock().unwrap();
 
         if let Some(pad) = srcpads.get(&index) {
@@ -230,7 +228,7 @@ impl Demuxer {
         }
     }
 
-    fn stream_eos(&self, _element: &RsElement, index: Option<u32>) {
+    fn stream_eos(&self, _element: &Element, index: Option<u32>) {
         let srcpads = self.srcpads.lock().unwrap();
 
         let event = gst::Event::new_eos().build();
@@ -246,7 +244,7 @@ impl Demuxer {
 
     fn stream_push_buffer(
         &self,
-        _element: &RsElement,
+        _element: &Element,
         index: u32,
         buffer: gst::Buffer,
     ) -> gst::FlowReturn {
@@ -262,7 +260,7 @@ impl Demuxer {
         }
     }
 
-    fn remove_all_streams(&self, element: &RsElement) {
+    fn remove_all_streams(&self, element: &Element) {
         self.flow_combiner.lock().unwrap().clear();
         let mut srcpads = self.srcpads.lock().unwrap();
         for (_, pad) in srcpads.iter().by_ref() {
@@ -294,7 +292,7 @@ impl Demuxer {
         }
     }
 
-    fn start(&self, element: &RsDemuxer, upstream_size: Option<u64>, random_access: bool) -> bool {
+    fn start(&self, element: &Element, upstream_size: Option<u64>, random_access: bool) -> bool {
         let demuxer_impl = &mut self.imp.lock().unwrap();
 
         gst_debug!(
@@ -318,7 +316,7 @@ impl Demuxer {
         }
     }
 
-    fn stop(&self, element: &RsDemuxer) -> bool {
+    fn stop(&self, element: &Element) -> bool {
         let demuxer_impl = &mut self.imp.lock().unwrap();
 
         gst_debug!(self.cat, obj: element, "Stopping");
@@ -346,7 +344,7 @@ impl Demuxer {
             .as_ref()
             .cloned()
             .unwrap()
-            .downcast::<RsElement>()
+            .downcast::<Element>()
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
@@ -385,7 +383,7 @@ impl Demuxer {
             .as_ref()
             .cloned()
             .unwrap()
-            .downcast::<RsElement>()
+            .downcast::<Element>()
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
@@ -483,7 +481,7 @@ impl Demuxer {
             .as_ref()
             .cloned()
             .unwrap()
-            .downcast::<RsElement>()
+            .downcast::<Element>()
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
@@ -518,7 +516,7 @@ impl Demuxer {
             .as_ref()
             .cloned()
             .unwrap()
-            .downcast::<RsElement>()
+            .downcast::<Element>()
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
@@ -593,7 +591,7 @@ impl Demuxer {
 
     fn seek(
         &self,
-        element: &RsDemuxer,
+        element: &Element,
         start: gst::ClockTime,
         stop: gst::ClockTime,
         offset: &mut u64,
@@ -635,12 +633,12 @@ impl Demuxer {
     }
 }
 
-impl ObjectImpl<RsElement> for Demuxer {}
+impl ObjectImpl<Element> for Demuxer {}
 
-impl ElementImpl<RsElement> for Demuxer {
+impl ElementImpl<Element> for Demuxer {
     fn change_state(
         &self,
-        element: &RsElement,
+        element: &Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         let mut ret = gst::StateChangeReturn::Success;
@@ -681,16 +679,16 @@ struct DemuxerStatic {
     demuxer_info: DemuxerInfo,
 }
 
-impl ImplTypeStatic<RsElement> for DemuxerStatic {
+impl ImplTypeStatic<Element> for DemuxerStatic {
     fn get_name(&self) -> &str {
         self.name.as_str()
     }
 
-    fn new(&self, element: &RsElement) -> Box<ElementImpl<RsElement>> {
+    fn new(&self, element: &Element) -> Box<ElementImpl<Element>> {
         Demuxer::init(element, &self.demuxer_info)
     }
 
-    fn class_init(&self, klass: &mut RsElementClass) {
+    fn class_init(&self, klass: &mut ElementClass) {
         Demuxer::class_init(klass, &self.demuxer_info);
     }
 }

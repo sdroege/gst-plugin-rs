@@ -25,7 +25,7 @@ use object::*;
 use element::*;
 use anyimpl::*;
 
-pub trait BaseSinkImpl<T: BaseSink>
+pub trait BaseSinkImpl<T: BaseSinkBase>
     : AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
     fn start(&self, _element: &T) -> bool {
         true
@@ -92,9 +92,9 @@ pub trait BaseSinkImpl<T: BaseSink>
     }
 }
 
-any_impl!(BaseSink, BaseSinkImpl);
+any_impl!(BaseSinkBase, BaseSinkImpl);
 
-pub unsafe trait BaseSink
+pub unsafe trait BaseSinkBase
     : IsA<gst::Element> + IsA<gst_base::BaseSink> + ObjectType {
     fn parent_query(&self, query: &mut gst::QueryRef) -> bool {
         unsafe {
@@ -159,7 +159,7 @@ pub unsafe trait BaseSink
     }
 }
 
-pub unsafe trait BaseSinkClass<T: BaseSink>
+pub unsafe trait BaseSinkClassExt<T: BaseSinkBase>
 where
     T::ImplType: BaseSinkImpl<T>,
 {
@@ -184,28 +184,28 @@ where
 }
 
 glib_wrapper! {
-    pub struct RsBaseSink(Object<InstanceStruct<RsBaseSink>>): [gst_base::BaseSink => gst_base_ffi::GstBaseSink,
-                                                                gst::Element => gst_ffi::GstElement,
-                                                                gst::Object => gst_ffi::GstObject];
+    pub struct BaseSink(Object<InstanceStruct<BaseSink>>): [gst_base::BaseSink => gst_base_ffi::GstBaseSink,
+                                                            gst::Element => gst_ffi::GstElement,
+                                                            gst::Object => gst_ffi::GstObject];
 
     match fn {
-        get_type => || get_type::<RsBaseSink>(),
+        get_type => || get_type::<BaseSink>(),
     }
 }
 
-unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseSink> + ObjectType> BaseSink for T {}
-pub type RsBaseSinkClass = ClassStruct<RsBaseSink>;
+unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseSink> + ObjectType> BaseSinkBase for T {}
+pub type BaseSinkClass = ClassStruct<BaseSink>;
 
 // FIXME: Boilerplate
-unsafe impl BaseSinkClass<RsBaseSink> for RsBaseSinkClass {}
-unsafe impl ElementClass<RsBaseSink> for RsBaseSinkClass {}
+unsafe impl BaseSinkClassExt<BaseSink> for BaseSinkClass {}
+unsafe impl ElementClassExt<BaseSink> for BaseSinkClass {}
 
 #[macro_export]
 macro_rules! box_base_sink_impl(
     ($name:ident) => {
         box_element_impl!($name);
 
-        impl<T: BaseSink> BaseSinkImpl<T> for Box<$name<T>> {
+        impl<T: BaseSinkBase> BaseSinkImpl<T> for Box<$name<T>> {
             fn start(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.start(element)
@@ -276,7 +276,7 @@ macro_rules! box_base_sink_impl(
 
 box_base_sink_impl!(BaseSinkImpl);
 
-impl ObjectType for RsBaseSink {
+impl ObjectType for BaseSink {
     const NAME: &'static str = "RsBaseSink";
     type GlibType = gst_base_ffi::GstBaseSink;
     type GlibClassType = gst_base_ffi::GstBaseSinkClass;
@@ -286,15 +286,15 @@ impl ObjectType for RsBaseSink {
         unsafe { from_glib(gst_base_ffi::gst_base_sink_get_type()) }
     }
 
-    fn class_init(token: &ClassInitToken, klass: &mut RsBaseSinkClass) {
-        ElementClass::override_vfuncs(klass, token);
-        BaseSinkClass::override_vfuncs(klass, token);
+    fn class_init(token: &ClassInitToken, klass: &mut BaseSinkClass) {
+        ElementClassExt::override_vfuncs(klass, token);
+        BaseSinkClassExt::override_vfuncs(klass, token);
     }
 
     object_type_fns!();
 }
 
-unsafe extern "C" fn base_sink_start<T: BaseSink>(
+unsafe extern "C" fn base_sink_start<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
 ) -> glib_ffi::gboolean
 where
@@ -309,7 +309,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_stop<T: BaseSink>(
+unsafe extern "C" fn base_sink_stop<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
 ) -> glib_ffi::gboolean
 where
@@ -324,7 +324,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_render<T: BaseSink>(
+unsafe extern "C" fn base_sink_render<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     buffer: *mut gst_ffi::GstBuffer,
 ) -> gst_ffi::GstFlowReturn
@@ -343,7 +343,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_prepare<T: BaseSink>(
+unsafe extern "C" fn base_sink_prepare<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     buffer: *mut gst_ffi::GstBuffer,
 ) -> gst_ffi::GstFlowReturn
@@ -362,7 +362,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_render_list<T: BaseSink>(
+unsafe extern "C" fn base_sink_render_list<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     list: *mut gst_ffi::GstBufferList,
 ) -> gst_ffi::GstFlowReturn
@@ -381,7 +381,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_prepare_list<T: BaseSink>(
+unsafe extern "C" fn base_sink_prepare_list<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     list: *mut gst_ffi::GstBufferList,
 ) -> gst_ffi::GstFlowReturn
@@ -400,7 +400,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_query<T: BaseSink>(
+unsafe extern "C" fn base_sink_query<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     query_ptr: *mut gst_ffi::GstQuery,
 ) -> glib_ffi::gboolean
@@ -419,7 +419,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_event<T: BaseSink>(
+unsafe extern "C" fn base_sink_event<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     event_ptr: *mut gst_ffi::GstEvent,
 ) -> glib_ffi::gboolean
@@ -437,7 +437,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_get_caps<T: BaseSink>(
+unsafe extern "C" fn base_sink_get_caps<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     filter: *mut gst_ffi::GstCaps,
 ) -> *mut gst_ffi::GstCaps
@@ -464,7 +464,7 @@ where
         .unwrap_or(ptr::null_mut())
 }
 
-unsafe extern "C" fn base_sink_set_caps<T: BaseSink>(
+unsafe extern "C" fn base_sink_set_caps<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     caps: *mut gst_ffi::GstCaps,
 ) -> glib_ffi::gboolean
@@ -486,7 +486,7 @@ where
     ).to_glib()
 }
 
-unsafe extern "C" fn base_sink_fixate<T: BaseSink>(
+unsafe extern "C" fn base_sink_fixate<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
     caps: *mut gst_ffi::GstCaps,
 ) -> *mut gst_ffi::GstCaps
@@ -505,7 +505,7 @@ where
     }).into_ptr()
 }
 
-unsafe extern "C" fn base_sink_unlock<T: BaseSink>(
+unsafe extern "C" fn base_sink_unlock<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
 ) -> glib_ffi::gboolean
 where
@@ -520,7 +520,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.unlock(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_sink_unlock_stop<T: BaseSink>(
+unsafe extern "C" fn base_sink_unlock_stop<T: BaseSinkBase>(
     ptr: *mut gst_base_ffi::GstBaseSink,
 ) -> glib_ffi::gboolean
 where

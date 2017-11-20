@@ -88,8 +88,20 @@ pub enum Property<'a> {
         Option<&'a str>,
         PropertyMutability,
     ),
-    Boxed(&'a str, &'a str, &'a str, fn() -> glib::Type, PropertyMutability),
-    Object(&'a str, &'a str, &'a str, fn() -> glib::Type, PropertyMutability),
+    Boxed(
+        &'a str,
+        &'a str,
+        &'a str,
+        fn() -> glib::Type,
+        PropertyMutability,
+    ),
+    Object(
+        &'a str,
+        &'a str,
+        &'a str,
+        fn() -> glib::Type,
+        PropertyMutability,
+    ),
 }
 
 impl<'a> Into<*mut gobject_ffi::GParamSpec> for &'a Property<'a> {

@@ -178,9 +178,8 @@ impl Adapter {
             return Ok(gst::Buffer::new());
         }
 
-        let sub = self.deque
-            .front()
-            .and_then(|front| if front.get_size() - self.skip >= size {
+        let sub = self.deque.front().and_then(|front| {
+            if front.get_size() - self.skip >= size {
                 gst_trace!(CAT, "Get buffer of {} bytes, subbuffer of first", size);
                 let new = front
                     .get_buffer()
@@ -189,7 +188,8 @@ impl Adapter {
                 Some(new)
             } else {
                 None
-            });
+            }
+        });
 
         if let Some(s) = sub {
             self.flush(size).unwrap();
@@ -262,9 +262,13 @@ impl io::Read for Adapter {
 
         if len == 0 {
             return Err(io::Error::new(
-                    io::ErrorKind::WouldBlock,
-                    format!("Missing data: requesting {} but only got {}.",
-                            buf.len(), len)));
+                io::ErrorKind::WouldBlock,
+                format!(
+                    "Missing data: requesting {} but only got {}.",
+                    buf.len(),
+                    len
+                ),
+            ));
         }
 
         if buf.len() < len {

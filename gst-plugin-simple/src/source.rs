@@ -25,26 +25,26 @@ use gst_plugin::base_src::*;
 use gst_plugin::uri_handler::*;
 use gst_plugin::error::*;
 
-pub use gst_plugin::base_src::RsBaseSrc;
+pub use gst_plugin::base_src::BaseSrc;
 
 use UriValidator;
 
 pub trait SourceImpl: Send + 'static {
     fn uri_validator(&self) -> Box<UriValidator>;
 
-    fn is_seekable(&self, src: &RsBaseSrc) -> bool;
-    fn get_size(&self, src: &RsBaseSrc) -> Option<u64>;
+    fn is_seekable(&self, src: &BaseSrc) -> bool;
+    fn get_size(&self, src: &BaseSrc) -> Option<u64>;
 
-    fn start(&mut self, src: &RsBaseSrc, uri: Url) -> Result<(), ErrorMessage>;
-    fn stop(&mut self, src: &RsBaseSrc) -> Result<(), ErrorMessage>;
+    fn start(&mut self, src: &BaseSrc, uri: Url) -> Result<(), ErrorMessage>;
+    fn stop(&mut self, src: &BaseSrc) -> Result<(), ErrorMessage>;
     fn fill(
         &mut self,
-        src: &RsBaseSrc,
+        src: &BaseSrc,
         offset: u64,
         length: u32,
         buffer: &mut gst::BufferRef,
     ) -> Result<(), FlowError>;
-    fn seek(&mut self, src: &RsBaseSrc, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage>;
+    fn seek(&mut self, src: &BaseSrc, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage>;
 }
 
 struct Source {
@@ -66,7 +66,7 @@ static PROPERTIES: [Property; 1] = [
 ];
 
 impl Source {
-    fn new(source: &RsBaseSrc, source_info: &SourceInfo) -> Self {
+    fn new(source: &BaseSrc, source_info: &SourceInfo) -> Self {
         let source_impl = (source_info.create_instance)(source);
 
         Self {
@@ -82,7 +82,7 @@ impl Source {
         }
     }
 
-    fn class_init(klass: &mut RsBaseSrcClass, source_info: &SourceInfo) {
+    fn class_init(klass: &mut BaseSrcClass, source_info: &SourceInfo) {
         klass.set_metadata(
             &source_info.long_name,
             &source_info.classification,
@@ -102,7 +102,7 @@ impl Source {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn init(element: &RsBaseSrc, source_info: &SourceInfo) -> Box<BaseSrcImpl<RsBaseSrc>> {
+    fn init(element: &BaseSrc, source_info: &SourceInfo) -> Box<BaseSrcImpl<BaseSrc>> {
         element.set_blocksize(4096);
 
         let imp = Self::new(element, source_info);
@@ -115,7 +115,7 @@ impl Source {
     }
 
     fn set_uri(&self, element: &glib::Object, uri_str: Option<String>) -> Result<(), glib::Error> {
-        let src = element.clone().dynamic_cast::<RsBaseSrc>().unwrap();
+        let src = element.clone().dynamic_cast::<BaseSrc>().unwrap();
 
         let uri_storage = &mut self.uri.lock().unwrap();
 
@@ -149,7 +149,7 @@ impl Source {
     }
 }
 
-impl ObjectImpl<RsBaseSrc> for Source {
+impl ObjectImpl<BaseSrc> for Source {
     fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
 
@@ -171,10 +171,10 @@ impl ObjectImpl<RsBaseSrc> for Source {
     }
 }
 
-impl ElementImpl<RsBaseSrc> for Source {}
+impl ElementImpl<BaseSrc> for Source {}
 
-impl BaseSrcImpl<RsBaseSrc> for Source {
-    fn start(&self, src: &RsBaseSrc) -> bool {
+impl BaseSrcImpl<BaseSrc> for Source {
+    fn start(&self, src: &BaseSrc) -> bool {
         gst_debug!(self.cat, obj: src, "Starting");
 
         // Don't keep the URI locked while we call start later
@@ -206,7 +206,7 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
         }
     }
 
-    fn stop(&self, src: &RsBaseSrc) -> bool {
+    fn stop(&self, src: &BaseSrc) -> bool {
         let source_impl = &mut self.imp.lock().unwrap();
 
         gst_debug!(self.cat, obj: src, "Stopping");
@@ -226,7 +226,7 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
         }
     }
 
-    fn query(&self, src: &RsBaseSrc, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, src: &BaseSrc, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
         match query.view_mut() {
@@ -238,12 +238,12 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
             _ => (),
         }
 
-        BaseSrc::parent_query(src, query)
+        BaseSrcBase::parent_query(src, query)
     }
 
     fn fill(
         &self,
-        src: &RsBaseSrc,
+        src: &BaseSrc,
         offset: u64,
         length: u32,
         buffer: &mut gst::BufferRef,
@@ -274,7 +274,7 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
         }
     }
 
-    fn do_seek(&self, src: &RsBaseSrc, segment: &mut gst::Segment) -> bool {
+    fn do_seek(&self, src: &BaseSrc, segment: &mut gst::Segment) -> bool {
         let source_impl = &mut self.imp.lock().unwrap();
 
         let start = segment.get_start();
@@ -295,12 +295,12 @@ impl BaseSrcImpl<RsBaseSrc> for Source {
         }
     }
 
-    fn is_seekable(&self, src: &RsBaseSrc) -> bool {
+    fn is_seekable(&self, src: &BaseSrc) -> bool {
         let source_impl = &self.imp.lock().unwrap();
         source_impl.is_seekable(src)
     }
 
-    fn get_size(&self, src: &RsBaseSrc) -> Option<u64> {
+    fn get_size(&self, src: &BaseSrc) -> Option<u64> {
         let source_impl = &self.imp.lock().unwrap();
         source_impl.get_size(src)
     }
@@ -323,7 +323,7 @@ pub struct SourceInfo {
     pub classification: String,
     pub author: String,
     pub rank: u32,
-    pub create_instance: fn(&RsBaseSrc) -> Box<SourceImpl>,
+    pub create_instance: fn(&BaseSrc) -> Box<SourceImpl>,
     pub protocols: Vec<String>,
     pub push_only: bool,
 }
@@ -333,16 +333,16 @@ struct SourceStatic {
     source_info: SourceInfo,
 }
 
-impl ImplTypeStatic<RsBaseSrc> for SourceStatic {
+impl ImplTypeStatic<BaseSrc> for SourceStatic {
     fn get_name(&self) -> &str {
         self.name.as_str()
     }
 
-    fn new(&self, element: &RsBaseSrc) -> Box<BaseSrcImpl<RsBaseSrc>> {
+    fn new(&self, element: &BaseSrc) -> Box<BaseSrcImpl<BaseSrc>> {
         Source::init(element, &self.source_info)
     }
 
-    fn class_init(&self, klass: &mut RsBaseSrcClass) {
+    fn class_init(&self, klass: &mut BaseSrcClass) {
         Source::class_init(klass, &self.source_info);
     }
 
@@ -351,8 +351,8 @@ impl ImplTypeStatic<RsBaseSrc> for SourceStatic {
     }
 }
 
-impl URIHandlerImplStatic<RsBaseSrc> for SourceStatic {
-    fn get_impl<'a>(&self, imp: &'a Box<BaseSrcImpl<RsBaseSrc>>) -> &'a URIHandlerImpl {
+impl URIHandlerImplStatic<BaseSrc> for SourceStatic {
+    fn get_impl<'a>(&self, imp: &'a Box<BaseSrcImpl<BaseSrc>>) -> &'a URIHandlerImpl {
         imp.downcast_ref::<Source>().unwrap()
     }
 

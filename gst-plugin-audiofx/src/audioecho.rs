@@ -98,7 +98,7 @@ static PROPERTIES: [Property; 4] = [
 ];
 
 impl AudioEcho {
-    fn new(_transform: &RsBaseTransform) -> Self {
+    fn new(_transform: &BaseTransform) -> Self {
         Self {
             cat: gst::DebugCategory::new(
                 "rsaudiofx",
@@ -110,7 +110,7 @@ impl AudioEcho {
         }
     }
 
-    fn class_init(klass: &mut RsBaseTransformClass) {
+    fn class_init(klass: &mut BaseTransformClass) {
         klass.set_metadata(
             "Audio echo",
             "Filter/Effect/Audio",
@@ -154,7 +154,7 @@ impl AudioEcho {
         klass.configure(BaseTransformMode::AlwaysInPlace, false, false);
     }
 
-    fn init(element: &RsBaseTransform) -> Box<BaseTransformImpl<RsBaseTransform>> {
+    fn init(element: &BaseTransform) -> Box<BaseTransformImpl<BaseTransform>> {
         let imp = Self::new(element);
         Box::new(imp)
     }
@@ -176,7 +176,7 @@ impl AudioEcho {
     }
 }
 
-impl ObjectImpl<RsBaseTransform> for AudioEcho {
+impl ObjectImpl<BaseTransform> for AudioEcho {
     fn set_property(&self, _obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
 
@@ -230,14 +230,10 @@ impl ObjectImpl<RsBaseTransform> for AudioEcho {
     }
 }
 
-impl ElementImpl<RsBaseTransform> for AudioEcho {}
+impl ElementImpl<BaseTransform> for AudioEcho {}
 
-impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
-    fn transform_ip(
-        &self,
-        _element: &RsBaseTransform,
-        buf: &mut gst::BufferRef,
-    ) -> gst::FlowReturn {
+impl BaseTransformImpl<BaseTransform> for AudioEcho {
+    fn transform_ip(&self, _element: &BaseTransform, buf: &mut gst::BufferRef) -> gst::FlowReturn {
         let mut settings = *self.settings.lock().unwrap();
         settings.delay = cmp::min(settings.max_delay, settings.delay);
 
@@ -267,12 +263,7 @@ impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
         gst::FlowReturn::Ok
     }
 
-    fn set_caps(
-        &self,
-        _element: &RsBaseTransform,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> bool {
+    fn set_caps(&self, _element: &BaseTransform, incaps: &gst::Caps, outcaps: &gst::Caps) -> bool {
         if incaps != outcaps {
             return false;
         }
@@ -294,7 +285,7 @@ impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
         true
     }
 
-    fn stop(&self, _element: &RsBaseTransform) -> bool {
+    fn stop(&self, _element: &BaseTransform) -> bool {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
@@ -304,16 +295,16 @@ impl BaseTransformImpl<RsBaseTransform> for AudioEcho {
 
 struct AudioEchoStatic;
 
-impl ImplTypeStatic<RsBaseTransform> for AudioEchoStatic {
+impl ImplTypeStatic<BaseTransform> for AudioEchoStatic {
     fn get_name(&self) -> &str {
         "AudioEcho"
     }
 
-    fn new(&self, element: &RsBaseTransform) -> Box<BaseTransformImpl<RsBaseTransform>> {
+    fn new(&self, element: &BaseTransform) -> Box<BaseTransformImpl<BaseTransform>> {
         AudioEcho::init(element)
     }
 
-    fn class_init(&self, klass: &mut RsBaseTransformClass) {
+    fn class_init(&self, klass: &mut BaseTransformClass) {
         AudioEcho::class_init(klass);
     }
 }

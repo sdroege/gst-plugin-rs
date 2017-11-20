@@ -17,6 +17,7 @@ use flavors::parser as flavors;
 use gst_plugin::error::*;
 use gst_plugin::adapter::*;
 use gst_plugin::bytes::*;
+use gst_plugin::element::*;
 use gst_plugin_simple::demuxer::*;
 
 use gst;
@@ -488,7 +489,7 @@ pub struct FlvDemux {
 }
 
 impl FlvDemux {
-    pub fn new(_demuxer: &RsDemuxer) -> FlvDemux {
+    pub fn new(_demuxer: &Element) -> FlvDemux {
         FlvDemux {
             cat: gst::DebugCategory::new(
                 "rsflvdemux",
@@ -501,13 +502,13 @@ impl FlvDemux {
         }
     }
 
-    pub fn new_boxed(demuxer: &RsDemuxer) -> Box<DemuxerImpl> {
+    pub fn new_boxed(demuxer: &Element) -> Box<DemuxerImpl> {
         Box::new(Self::new(demuxer))
     }
 
     fn handle_script_tag(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         tag_header: &flavors::TagHeader,
     ) -> Result<HandleBufferResult, FlowError> {
         if self.adapter.get_available() < (15 + tag_header.data_size) as usize {
@@ -575,7 +576,7 @@ impl FlvDemux {
 
     fn update_audio_stream(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         data_header: &flavors::AudioDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
         gst_trace!(
@@ -629,7 +630,7 @@ impl FlvDemux {
 
     fn handle_audio_tag(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         tag_header: &flavors::TagHeader,
         data_header: &flavors::AudioDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
@@ -748,7 +749,7 @@ impl FlvDemux {
 
     fn update_video_stream(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         data_header: &flavors::VideoDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
         gst_trace!(
@@ -803,7 +804,7 @@ impl FlvDemux {
 
     fn handle_video_tag(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         tag_header: &flavors::TagHeader,
         data_header: &flavors::VideoDataHeader,
     ) -> Result<HandleBufferResult, FlowError> {
@@ -944,7 +945,7 @@ impl FlvDemux {
         Ok(HandleBufferResult::BufferForStream(VIDEO_STREAM_ID, buffer))
     }
 
-    fn update_state(&mut self, demuxer: &RsDemuxer) -> Result<HandleBufferResult, FlowError> {
+    fn update_state(&mut self, demuxer: &Element) -> Result<HandleBufferResult, FlowError> {
         match self.state {
             State::Stopped => unreachable!(),
             State::NeedHeader => {
@@ -1090,7 +1091,7 @@ impl FlvDemux {
 impl DemuxerImpl for FlvDemux {
     fn start(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         _upstream_size: Option<u64>,
         _random_access: bool,
     ) -> Result<(), ErrorMessage> {
@@ -1099,7 +1100,7 @@ impl DemuxerImpl for FlvDemux {
         Ok(())
     }
 
-    fn stop(&mut self, demuxer: &RsDemuxer) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, demuxer: &Element) -> Result<(), ErrorMessage> {
         self.state = State::Stopped;
         self.adapter.clear();
         self.streaming_state = None;
@@ -1109,7 +1110,7 @@ impl DemuxerImpl for FlvDemux {
 
     fn seek(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         start: gst::ClockTime,
         stop: gst::ClockTime,
     ) -> Result<SeekResult, ErrorMessage> {
@@ -1118,7 +1119,7 @@ impl DemuxerImpl for FlvDemux {
 
     fn handle_buffer(
         &mut self,
-        demuxer: &RsDemuxer,
+        demuxer: &Element,
         buffer: Option<gst::Buffer>,
     ) -> Result<HandleBufferResult, FlowError> {
         if let Some(buffer) = buffer {
@@ -1128,16 +1129,16 @@ impl DemuxerImpl for FlvDemux {
         self.update_state(demuxer)
     }
 
-    fn end_of_stream(&mut self, demuxer: &RsDemuxer) -> Result<(), ErrorMessage> {
+    fn end_of_stream(&mut self, demuxer: &Element) -> Result<(), ErrorMessage> {
         // nothing to do here, all data we have left is incomplete
         Ok(())
     }
 
-    fn is_seekable(&self, demuxer: &RsDemuxer) -> bool {
+    fn is_seekable(&self, demuxer: &Element) -> bool {
         false
     }
 
-    fn get_position(&self, demuxer: &RsDemuxer) -> gst::ClockTime {
+    fn get_position(&self, demuxer: &Element) -> gst::ClockTime {
         if let Some(StreamingState { last_position, .. }) = self.streaming_state {
             return last_position;
         }
@@ -1145,7 +1146,7 @@ impl DemuxerImpl for FlvDemux {
         gst::CLOCK_TIME_NONE
     }
 
-    fn get_duration(&self, demuxer: &RsDemuxer) -> gst::ClockTime {
+    fn get_duration(&self, demuxer: &Element) -> gst::ClockTime {
         if let Some(StreamingState {
             metadata: Some(Metadata { duration, .. }),
             ..

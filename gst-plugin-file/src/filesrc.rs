@@ -31,7 +31,7 @@ pub struct FileSrc {
 }
 
 impl FileSrc {
-    pub fn new(_src: &RsBaseSrc) -> FileSrc {
+    pub fn new(_src: &BaseSrc) -> FileSrc {
         FileSrc {
             streaming_state: StreamingState::Stopped,
             cat: gst::DebugCategory::new(
@@ -42,7 +42,7 @@ impl FileSrc {
         }
     }
 
-    pub fn new_boxed(src: &RsBaseSrc) -> Box<SourceImpl> {
+    pub fn new_boxed(src: &BaseSrc) -> Box<SourceImpl> {
         Box::new(FileSrc::new(src))
     }
 }
@@ -62,11 +62,11 @@ impl SourceImpl for FileSrc {
         Box::new(validate_uri)
     }
 
-    fn is_seekable(&self, _src: &RsBaseSrc) -> bool {
+    fn is_seekable(&self, _src: &BaseSrc) -> bool {
         true
     }
 
-    fn get_size(&self, _src: &RsBaseSrc) -> Option<u64> {
+    fn get_size(&self, _src: &BaseSrc) -> Option<u64> {
         if let StreamingState::Started { ref file, .. } = self.streaming_state {
             file.metadata().ok().map(|m| m.len())
         } else {
@@ -74,7 +74,7 @@ impl SourceImpl for FileSrc {
         }
     }
 
-    fn start(&mut self, src: &RsBaseSrc, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, src: &BaseSrc, uri: Url) -> Result<(), ErrorMessage> {
         if let StreamingState::Started { .. } = self.streaming_state {
             return Err(error_msg!(
                 gst::LibraryError::Failed,
@@ -122,7 +122,7 @@ impl SourceImpl for FileSrc {
         Ok(())
     }
 
-    fn stop(&mut self, _src: &RsBaseSrc) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _src: &BaseSrc) -> Result<(), ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
@@ -130,7 +130,7 @@ impl SourceImpl for FileSrc {
 
     fn fill(
         &mut self,
-        src: &RsBaseSrc,
+        src: &BaseSrc,
         offset: u64,
         _: u32,
         buffer: &mut gst::BufferRef,
@@ -190,7 +190,7 @@ impl SourceImpl for FileSrc {
         Ok(())
     }
 
-    fn seek(&mut self, _src: &RsBaseSrc, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
+    fn seek(&mut self, _src: &BaseSrc, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
         Ok(())
     }
 }

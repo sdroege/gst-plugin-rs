@@ -25,7 +25,7 @@ use object::*;
 use element::*;
 use anyimpl::*;
 
-pub trait BaseSrcImpl<T: BaseSrc>
+pub trait BaseSrcImpl<T: BaseSrcBase>
     : AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
     fn start(&self, _element: &T) -> bool {
         true
@@ -99,9 +99,9 @@ pub trait BaseSrcImpl<T: BaseSrc>
     }
 }
 
-any_impl!(BaseSrc, BaseSrcImpl);
+any_impl!(BaseSrcBase, BaseSrcImpl);
 
-pub unsafe trait BaseSrc
+pub unsafe trait BaseSrcBase
     : IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType {
     fn parent_create(&self, offset: u64, length: u32) -> Result<gst::Buffer, gst::FlowReturn> {
         unsafe {
@@ -212,7 +212,7 @@ pub unsafe trait BaseSrc
     }
 }
 
-pub unsafe trait BaseSrcClass<T: BaseSrc>
+pub unsafe trait BaseSrcClassExt<T: BaseSrcBase>
 where
     T::ImplType: BaseSrcImpl<T>,
 {
@@ -239,28 +239,28 @@ where
 }
 
 glib_wrapper! {
-    pub struct RsBaseSrc(Object<InstanceStruct<RsBaseSrc>>): [gst_base::BaseSrc => gst_base_ffi::GstBaseSrc,
-                                                              gst::Element => gst_ffi::GstElement,
-                                                              gst::Object => gst_ffi::GstObject];
+    pub struct BaseSrc(Object<InstanceStruct<BaseSrc>>): [gst_base::BaseSrc => gst_base_ffi::GstBaseSrc,
+                                                          gst::Element => gst_ffi::GstElement,
+                                                          gst::Object => gst_ffi::GstObject];
 
     match fn {
-        get_type => || get_type::<RsBaseSrc>(),
+        get_type => || get_type::<BaseSrc>(),
     }
 }
 
-unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType> BaseSrc for T {}
-pub type RsBaseSrcClass = ClassStruct<RsBaseSrc>;
+unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType> BaseSrcBase for T {}
+pub type BaseSrcClass = ClassStruct<BaseSrc>;
 
 // FIXME: Boilerplate
-unsafe impl BaseSrcClass<RsBaseSrc> for RsBaseSrcClass {}
-unsafe impl ElementClass<RsBaseSrc> for RsBaseSrcClass {}
+unsafe impl BaseSrcClassExt<BaseSrc> for BaseSrcClass {}
+unsafe impl ElementClassExt<BaseSrc> for BaseSrcClass {}
 
 #[macro_export]
 macro_rules! box_base_src_impl(
     ($name:ident) => {
         box_element_impl!($name);
 
-        impl<T: BaseSrc> BaseSrcImpl<T> for Box<$name<T>> {
+        impl<T: BaseSrcBase> BaseSrcImpl<T> for Box<$name<T>> {
             fn start(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.start(element)
@@ -351,7 +351,7 @@ macro_rules! box_base_src_impl(
 );
 box_base_src_impl!(BaseSrcImpl);
 
-impl ObjectType for RsBaseSrc {
+impl ObjectType for BaseSrc {
     const NAME: &'static str = "RsBaseSrc";
     type GlibType = gst_base_ffi::GstBaseSrc;
     type GlibClassType = gst_base_ffi::GstBaseSrcClass;
@@ -361,15 +361,15 @@ impl ObjectType for RsBaseSrc {
         unsafe { from_glib(gst_base_ffi::gst_base_src_get_type()) }
     }
 
-    fn class_init(token: &ClassInitToken, klass: &mut RsBaseSrcClass) {
-        ElementClass::override_vfuncs(klass, token);
-        BaseSrcClass::override_vfuncs(klass, token);
+    fn class_init(token: &ClassInitToken, klass: &mut BaseSrcClass) {
+        ElementClassExt::override_vfuncs(klass, token);
+        BaseSrcClassExt::override_vfuncs(klass, token);
     }
 
     object_type_fns!();
 }
 
-unsafe extern "C" fn base_src_start<T: BaseSrc>(
+unsafe extern "C" fn base_src_start<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
@@ -384,7 +384,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_src_stop<T: BaseSrc>(
+unsafe extern "C" fn base_src_stop<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
@@ -399,7 +399,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_src_is_seekable<T: BaseSrc>(
+unsafe extern "C" fn base_src_is_seekable<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
@@ -414,7 +414,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.is_seekable(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_src_get_size<T: BaseSrc>(
+unsafe extern "C" fn base_src_get_size<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     size: *mut u64,
 ) -> glib_ffi::gboolean
@@ -438,7 +438,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_src_fill<T: BaseSrc>(
+unsafe extern "C" fn base_src_fill<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     offset: u64,
     length: u32,
@@ -459,7 +459,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_src_create<T: BaseSrc>(
+unsafe extern "C" fn base_src_create<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     offset: u64,
     length: u32,
@@ -488,7 +488,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_src_do_seek<T: BaseSrc>(
+unsafe extern "C" fn base_src_do_seek<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     segment: *mut gst_ffi::GstSegment,
 ) -> glib_ffi::gboolean
@@ -506,7 +506,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_src_query<T: BaseSrc>(
+unsafe extern "C" fn base_src_query<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     query_ptr: *mut gst_ffi::GstQuery,
 ) -> glib_ffi::gboolean
@@ -525,7 +525,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_src_event<T: BaseSrc>(
+unsafe extern "C" fn base_src_event<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     event_ptr: *mut gst_ffi::GstEvent,
 ) -> glib_ffi::gboolean
@@ -543,7 +543,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_src_get_caps<T: BaseSrc>(
+unsafe extern "C" fn base_src_get_caps<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     filter: *mut gst_ffi::GstCaps,
 ) -> *mut gst_ffi::GstCaps
@@ -570,7 +570,7 @@ where
         .unwrap_or(ptr::null_mut())
 }
 
-unsafe extern "C" fn base_src_negotiate<T: BaseSrc>(
+unsafe extern "C" fn base_src_negotiate<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
@@ -585,7 +585,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.negotiate(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_src_set_caps<T: BaseSrc>(
+unsafe extern "C" fn base_src_set_caps<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     caps: *mut gst_ffi::GstCaps,
 ) -> glib_ffi::gboolean
@@ -607,7 +607,7 @@ where
     ).to_glib()
 }
 
-unsafe extern "C" fn base_src_fixate<T: BaseSrc>(
+unsafe extern "C" fn base_src_fixate<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
     caps: *mut gst_ffi::GstCaps,
 ) -> *mut gst_ffi::GstCaps
@@ -626,7 +626,7 @@ where
     }).into_ptr()
 }
 
-unsafe extern "C" fn base_src_unlock<T: BaseSrc>(
+unsafe extern "C" fn base_src_unlock<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where
@@ -641,7 +641,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.unlock(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_src_unlock_stop<T: BaseSrc>(
+unsafe extern "C" fn base_src_unlock_stop<T: BaseSrcBase>(
     ptr: *mut gst_base_ffi::GstBaseSrc,
 ) -> glib_ffi::gboolean
 where

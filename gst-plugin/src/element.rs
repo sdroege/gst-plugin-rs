@@ -23,7 +23,7 @@ use gst::prelude::*;
 use object::*;
 use anyimpl::*;
 
-pub trait ElementImpl<T: Element>
+pub trait ElementImpl<T: ElementBase>
     : ObjectImpl<T> + AnyImpl + Send + Sync + 'static {
     fn change_state(&self, element: &T, transition: gst::StateChange) -> gst::StateChangeReturn {
         element.parent_change_state(transition)
@@ -54,9 +54,9 @@ pub trait ElementImpl<T: Element>
     }
 }
 
-any_impl!(Element, ElementImpl);
+any_impl!(ElementBase, ElementImpl);
 
-pub unsafe trait Element: IsA<gst::Element> + ObjectType {
+pub unsafe trait ElementBase: IsA<gst::Element> + ObjectType {
     fn parent_change_state(&self, transition: gst::StateChange) -> gst::StateChangeReturn {
         unsafe {
             let klass = self.get_class();
@@ -104,7 +104,7 @@ pub unsafe trait Element: IsA<gst::Element> + ObjectType {
     }
 }
 
-pub unsafe trait ElementClass<T: Element>
+pub unsafe trait ElementClassExt<T: ElementBase>
 where
     T::ImplType: ElementImpl<T>,
 {
@@ -149,26 +149,26 @@ where
 }
 
 glib_wrapper! {
-    pub struct RsElement(Object<InstanceStruct<RsElement>>): [gst::Element => gst_ffi::GstElement,
-                                                              gst::Object => gst_ffi::GstObject];
+    pub struct Element(Object<InstanceStruct<Element>>): [gst::Element => gst_ffi::GstElement,
+                                                          gst::Object => gst_ffi::GstObject];
 
     match fn {
-        get_type => || get_type::<RsElement>(),
+        get_type => || get_type::<Element>(),
     }
 }
 
-unsafe impl<T: IsA<gst::Element> + ObjectType> Element for T {}
-pub type RsElementClass = ClassStruct<RsElement>;
+unsafe impl<T: IsA<gst::Element> + ObjectType> ElementBase for T {}
+pub type ElementClass = ClassStruct<Element>;
 
 // FIXME: Boilerplate
-unsafe impl ElementClass<RsElement> for RsElementClass {}
+unsafe impl ElementClassExt<Element> for ElementClass {}
 
 #[macro_export]
 macro_rules! box_element_impl(
     ($name:ident) => {
         box_object_impl!($name);
 
-        impl<T: Element> ElementImpl<T> for Box<$name<T>> {
+        impl<T: ElementBase> ElementImpl<T> for Box<$name<T>> {
             fn change_state(
                 &self,
                 element: &T,
@@ -208,7 +208,7 @@ macro_rules! box_element_impl(
 
 box_element_impl!(ElementImpl);
 
-impl ObjectType for RsElement {
+impl ObjectType for Element {
     const NAME: &'static str = "RsElement";
     type GlibType = gst_ffi::GstElement;
     type GlibClassType = gst_ffi::GstElementClass;
@@ -218,14 +218,14 @@ impl ObjectType for RsElement {
         unsafe { from_glib(gst_ffi::gst_element_get_type()) }
     }
 
-    fn class_init(token: &ClassInitToken, klass: &mut RsElementClass) {
+    fn class_init(token: &ClassInitToken, klass: &mut ElementClass) {
         klass.override_vfuncs(token);
     }
 
     object_type_fns!();
 }
 
-unsafe extern "C" fn element_change_state<T: Element>(
+unsafe extern "C" fn element_change_state<T: ElementBase>(
     ptr: *mut gst_ffi::GstElement,
     transition: gst_ffi::GstStateChange,
 ) -> gst_ffi::GstStateChangeReturn
@@ -243,7 +243,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn element_request_new_pad<T: Element>(
+unsafe extern "C" fn element_request_new_pad<T: ElementBase>(
     ptr: *mut gst_ffi::GstElement,
     templ: *mut gst_ffi::GstPadTemplate,
     name: *const libc::c_char,
@@ -268,7 +268,7 @@ where
     }).to_glib_full()
 }
 
-unsafe extern "C" fn element_release_pad<T: Element>(
+unsafe extern "C" fn element_release_pad<T: ElementBase>(
     ptr: *mut gst_ffi::GstElement,
     pad: *mut gst_ffi::GstPad,
 ) where
@@ -285,7 +285,7 @@ unsafe extern "C" fn element_release_pad<T: Element>(
     })
 }
 
-unsafe extern "C" fn element_send_event<T: Element>(
+unsafe extern "C" fn element_send_event<T: ElementBase>(
     ptr: *mut gst_ffi::GstElement,
     event: *mut gst_ffi::GstEvent,
 ) -> glib_ffi::gboolean
@@ -303,7 +303,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn element_query<T: Element>(
+unsafe extern "C" fn element_query<T: ElementBase>(
     ptr: *mut gst_ffi::GstElement,
     query: *mut gst_ffi::GstQuery,
 ) -> glib_ffi::gboolean
@@ -320,7 +320,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.query(&wrap, query) }).to_glib()
 }
 
-unsafe extern "C" fn element_set_context<T: Element>(
+unsafe extern "C" fn element_set_context<T: ElementBase>(
     ptr: *mut gst_ffi::GstElement,
     context: *mut gst_ffi::GstContext,
 ) where

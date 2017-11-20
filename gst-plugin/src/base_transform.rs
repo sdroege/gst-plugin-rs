@@ -25,7 +25,7 @@ use object::*;
 use element::*;
 use anyimpl::*;
 
-pub trait BaseTransformImpl<T: BaseTransform>
+pub trait BaseTransformImpl<T: BaseTransformBase>
     : AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
     fn start(&self, _element: &T) -> bool {
         true
@@ -104,9 +104,9 @@ pub trait BaseTransformImpl<T: BaseTransform>
     }
 }
 
-any_impl!(BaseTransform, BaseTransformImpl);
+any_impl!(BaseTransformBase, BaseTransformImpl);
 
-pub unsafe trait BaseTransform
+pub unsafe trait BaseTransformBase
     : IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType {
     fn parent_transform_caps(
         &self,
@@ -252,7 +252,7 @@ pub enum BaseTransformMode {
     Both,
 }
 
-pub unsafe trait BaseTransformClass<T: BaseTransform>
+pub unsafe trait BaseTransformClassExt<T: BaseTransformBase>
 where
     T::ImplType: BaseTransformImpl<T>,
 {
@@ -302,28 +302,30 @@ where
 }
 
 glib_wrapper! {
-    pub struct RsBaseTransform(Object<InstanceStruct<RsBaseTransform>>): [gst_base::BaseTransform => gst_base_ffi::GstBaseTransform,
-                                                              gst::Element => gst_ffi::GstElement,
-                                                              gst::Object => gst_ffi::GstObject];
+    pub struct BaseTransform(Object<InstanceStruct<BaseTransform>>): [gst_base::BaseTransform => gst_base_ffi::GstBaseTransform,
+                                                                      gst::Element => gst_ffi::GstElement,
+                                                                      gst::Object => gst_ffi::GstObject];
 
     match fn {
-        get_type => || get_type::<RsBaseTransform>(),
+        get_type => || get_type::<BaseTransform>(),
     }
 }
 
-unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType> BaseTransform for T {}
-pub type RsBaseTransformClass = ClassStruct<RsBaseTransform>;
+unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType> BaseTransformBase
+    for T {
+}
+pub type BaseTransformClass = ClassStruct<BaseTransform>;
 
 // FIXME: Boilerplate
-unsafe impl BaseTransformClass<RsBaseTransform> for RsBaseTransformClass {}
-unsafe impl ElementClass<RsBaseTransform> for RsBaseTransformClass {}
+unsafe impl BaseTransformClassExt<BaseTransform> for BaseTransformClass {}
+unsafe impl ElementClassExt<BaseTransform> for BaseTransformClass {}
 
 #[macro_export]
 macro_rules! box_base_transform_impl(
     ($name:ident) => {
         box_element_impl!($name);
 
-        impl<T: BaseTransform> BaseTransformImpl<T> for Box<$name<T>> {
+        impl<T: BaseTransformBase> BaseTransformImpl<T> for Box<$name<T>> {
             fn start(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.start(element)
@@ -393,7 +395,7 @@ macro_rules! box_base_transform_impl(
 );
 box_base_transform_impl!(BaseTransformImpl);
 
-impl ObjectType for RsBaseTransform {
+impl ObjectType for BaseTransform {
     const NAME: &'static str = "RsBaseTransform";
     type GlibType = gst_base_ffi::GstBaseTransform;
     type GlibClassType = gst_base_ffi::GstBaseTransformClass;
@@ -403,15 +405,15 @@ impl ObjectType for RsBaseTransform {
         unsafe { from_glib(gst_base_ffi::gst_base_transform_get_type()) }
     }
 
-    fn class_init(token: &ClassInitToken, klass: &mut RsBaseTransformClass) {
-        ElementClass::override_vfuncs(klass, token);
-        BaseTransformClass::override_vfuncs(klass, token);
+    fn class_init(token: &ClassInitToken, klass: &mut BaseTransformClass) {
+        ElementClassExt::override_vfuncs(klass, token);
+        BaseTransformClassExt::override_vfuncs(klass, token);
     }
 
     object_type_fns!();
 }
 
-unsafe extern "C" fn base_transform_start<T: BaseTransform>(
+unsafe extern "C" fn base_transform_start<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
 ) -> glib_ffi::gboolean
 where
@@ -426,7 +428,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_stop<T: BaseTransform>(
+unsafe extern "C" fn base_transform_stop<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
 ) -> glib_ffi::gboolean
 where
@@ -441,7 +443,7 @@ where
     panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_transform_caps<T: BaseTransform>(
+unsafe extern "C" fn base_transform_transform_caps<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     direction: gst_ffi::GstPadDirection,
     caps: *mut gst_ffi::GstCaps,
@@ -473,7 +475,7 @@ where
     }).into_ptr()
 }
 
-unsafe extern "C" fn base_transform_fixate_caps<T: BaseTransform>(
+unsafe extern "C" fn base_transform_fixate_caps<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     direction: gst_ffi::GstPadDirection,
     caps: *mut gst_ffi::GstCaps,
@@ -498,7 +500,7 @@ where
     }).into_ptr()
 }
 
-unsafe extern "C" fn base_transform_set_caps<T: BaseTransform>(
+unsafe extern "C" fn base_transform_set_caps<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     incaps: *mut gst_ffi::GstCaps,
     outcaps: *mut gst_ffi::GstCaps,
@@ -517,7 +519,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_accept_caps<T: BaseTransform>(
+unsafe extern "C" fn base_transform_accept_caps<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     direction: gst_ffi::GstPadDirection,
     caps: *mut gst_ffi::GstCaps,
@@ -536,7 +538,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_query<T: BaseTransform>(
+unsafe extern "C" fn base_transform_query<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     direction: gst_ffi::GstPadDirection,
     query: *mut gst_ffi::GstQuery,
@@ -560,7 +562,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_transform_size<T: BaseTransform>(
+unsafe extern "C" fn base_transform_transform_size<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     direction: gst_ffi::GstPadDirection,
     caps: *mut gst_ffi::GstCaps,
@@ -594,7 +596,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_get_unit_size<T: BaseTransform>(
+unsafe extern "C" fn base_transform_get_unit_size<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     caps: *mut gst_ffi::GstCaps,
     size: *mut usize,
@@ -619,7 +621,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_sink_event<T: BaseTransform>(
+unsafe extern "C" fn base_transform_sink_event<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     event: *mut gst_ffi::GstEvent,
 ) -> glib_ffi::gboolean
@@ -637,7 +639,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_src_event<T: BaseTransform>(
+unsafe extern "C" fn base_transform_src_event<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     event: *mut gst_ffi::GstEvent,
 ) -> glib_ffi::gboolean
@@ -655,7 +657,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_transform<T: BaseTransform>(
+unsafe extern "C" fn base_transform_transform<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     inbuf: *mut gst_ffi::GstBuffer,
     outbuf: *mut gst_ffi::GstBuffer,
@@ -678,7 +680,7 @@ where
     }).to_glib()
 }
 
-unsafe extern "C" fn base_transform_transform_ip<T: BaseTransform>(
+unsafe extern "C" fn base_transform_transform_ip<T: BaseTransformBase>(
     ptr: *mut gst_base_ffi::GstBaseTransform,
     buf: *mut *mut gst_ffi::GstBuffer,
 ) -> gst_ffi::GstFlowReturn

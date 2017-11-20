@@ -23,16 +23,16 @@ use gst_plugin::base_sink::*;
 use gst_plugin::uri_handler::*;
 use gst_plugin::error::*;
 
-pub use gst_plugin::base_sink::RsBaseSink;
+pub use gst_plugin::base_sink::BaseSink;
 
 use UriValidator;
 
 pub trait SinkImpl: Send + 'static {
     fn uri_validator(&self) -> Box<UriValidator>;
 
-    fn start(&mut self, sink: &RsBaseSink, uri: Url) -> Result<(), ErrorMessage>;
-    fn stop(&mut self, sink: &RsBaseSink) -> Result<(), ErrorMessage>;
-    fn render(&mut self, sink: &RsBaseSink, buffer: &gst::BufferRef) -> Result<(), FlowError>;
+    fn start(&mut self, sink: &BaseSink, uri: Url) -> Result<(), ErrorMessage>;
+    fn stop(&mut self, sink: &BaseSink) -> Result<(), ErrorMessage>;
+    fn render(&mut self, sink: &BaseSink, buffer: &gst::BufferRef) -> Result<(), FlowError>;
 }
 
 struct Sink {
@@ -53,7 +53,7 @@ static PROPERTIES: [Property; 1] = [
 ];
 
 impl Sink {
-    fn new(sink: &RsBaseSink, sink_info: &SinkInfo) -> Self {
+    fn new(sink: &BaseSink, sink_info: &SinkInfo) -> Self {
         let sink_impl = (sink_info.create_instance)(sink);
 
         Self {
@@ -68,7 +68,7 @@ impl Sink {
         }
     }
 
-    fn class_init(klass: &mut RsBaseSinkClass, sink_info: &SinkInfo) {
+    fn class_init(klass: &mut BaseSinkClass, sink_info: &SinkInfo) {
         klass.set_metadata(
             &sink_info.long_name,
             &sink_info.classification,
@@ -88,7 +88,7 @@ impl Sink {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn init(element: &RsBaseSink, sink_info: &SinkInfo) -> Box<BaseSinkImpl<RsBaseSink>> {
+    fn init(element: &BaseSink, sink_info: &SinkInfo) -> Box<BaseSinkImpl<BaseSink>> {
         element.set_blocksize(4096);
 
         let imp = Self::new(element, sink_info);
@@ -101,7 +101,7 @@ impl Sink {
     }
 
     fn set_uri(&self, element: &glib::Object, uri_str: Option<String>) -> Result<(), glib::Error> {
-        let sink = element.clone().dynamic_cast::<RsBaseSink>().unwrap();
+        let sink = element.clone().dynamic_cast::<BaseSink>().unwrap();
 
         let uri_storage = &mut self.uri.lock().unwrap();
 
@@ -135,7 +135,7 @@ impl Sink {
     }
 }
 
-impl ObjectImpl<RsBaseSink> for Sink {
+impl ObjectImpl<BaseSink> for Sink {
     fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
 
@@ -157,10 +157,10 @@ impl ObjectImpl<RsBaseSink> for Sink {
     }
 }
 
-impl ElementImpl<RsBaseSink> for Sink {}
+impl ElementImpl<BaseSink> for Sink {}
 
-impl BaseSinkImpl<RsBaseSink> for Sink {
-    fn start(&self, sink: &RsBaseSink) -> bool {
+impl BaseSinkImpl<BaseSink> for Sink {
+    fn start(&self, sink: &BaseSink) -> bool {
         gst_debug!(self.cat, obj: sink, "Starting");
 
         // Don't keep the URI locked while we call start later
@@ -192,7 +192,7 @@ impl BaseSinkImpl<RsBaseSink> for Sink {
         }
     }
 
-    fn stop(&self, sink: &RsBaseSink) -> bool {
+    fn stop(&self, sink: &BaseSink) -> bool {
         let sink_impl = &mut self.imp.lock().unwrap();
 
         gst_debug!(self.cat, obj: sink, "Stopping");
@@ -212,7 +212,7 @@ impl BaseSinkImpl<RsBaseSink> for Sink {
         }
     }
 
-    fn render(&self, sink: &RsBaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn {
+    fn render(&self, sink: &BaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn {
         let sink_impl = &mut self.imp.lock().unwrap();
 
         gst_trace!(self.cat, obj: sink, "Rendering buffer {:?}", buffer,);
@@ -250,7 +250,7 @@ pub struct SinkInfo {
     pub classification: String,
     pub author: String,
     pub rank: u32,
-    pub create_instance: fn(&RsBaseSink) -> Box<SinkImpl>,
+    pub create_instance: fn(&BaseSink) -> Box<SinkImpl>,
     pub protocols: Vec<String>,
 }
 
@@ -259,16 +259,16 @@ struct SinkStatic {
     sink_info: SinkInfo,
 }
 
-impl ImplTypeStatic<RsBaseSink> for SinkStatic {
+impl ImplTypeStatic<BaseSink> for SinkStatic {
     fn get_name(&self) -> &str {
         self.name.as_str()
     }
 
-    fn new(&self, element: &RsBaseSink) -> Box<BaseSinkImpl<RsBaseSink>> {
+    fn new(&self, element: &BaseSink) -> Box<BaseSinkImpl<BaseSink>> {
         Sink::init(element, &self.sink_info)
     }
 
-    fn class_init(&self, klass: &mut RsBaseSinkClass) {
+    fn class_init(&self, klass: &mut BaseSinkClass) {
         Sink::class_init(klass, &self.sink_info);
     }
 
@@ -277,8 +277,8 @@ impl ImplTypeStatic<RsBaseSink> for SinkStatic {
     }
 }
 
-impl URIHandlerImplStatic<RsBaseSink> for SinkStatic {
-    fn get_impl<'a>(&self, imp: &'a Box<BaseSinkImpl<RsBaseSink>>) -> &'a URIHandlerImpl {
+impl URIHandlerImplStatic<BaseSink> for SinkStatic {
+    fn get_impl<'a>(&self, imp: &'a Box<BaseSinkImpl<BaseSink>>) -> &'a URIHandlerImpl {
         imp.downcast_ref::<Sink>().unwrap()
     }
 
