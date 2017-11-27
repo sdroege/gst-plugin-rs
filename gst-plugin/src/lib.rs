@@ -73,6 +73,8 @@ pub mod object;
 #[macro_use]
 pub mod element;
 #[macro_use]
+pub mod bin;
+#[macro_use]
 pub mod base_src;
 #[macro_use]
 pub mod base_sink;
