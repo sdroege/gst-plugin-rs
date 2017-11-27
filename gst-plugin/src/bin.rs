@@ -161,13 +161,12 @@ where
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    floating_reference_guard!(element);
     let bin = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*bin.imp;
 
     panic_to_error!(&wrap, &bin.panicked, false, {
-        imp.add_element(&wrap, &from_glib_borrow(element))
+        imp.add_element(&wrap, &from_glib_none(element))
     }).to_glib()
 }
 
@@ -180,13 +179,12 @@ where
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    floating_reference_guard!(element);
     let bin = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*bin.imp;
 
     panic_to_error!(&wrap, &bin.panicked, false, {
-        imp.remove_element(&wrap, &from_glib_borrow(element))
+        imp.remove_element(&wrap, &from_glib_none(element))
     }).to_glib()
 }
 
