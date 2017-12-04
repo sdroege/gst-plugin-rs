@@ -243,8 +243,18 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, gst::StateChangeReturn::Failure, {
-        imp.change_state(&wrap, from_glib(transition))
+    // *Never* fail downwards state changes, this causes bugs in GStreamer
+    // and leads to crashes and deadlocks.
+    let transition = from_glib(transition);
+    let fallback = match transition {
+        gst::StateChange::PlayingToPaused
+        | gst::StateChange::PausedToReady
+        | gst::StateChange::ReadyToNull => gst::StateChangeReturn::Success,
+        _ => gst::StateChangeReturn::Failure,
+    };
+
+    panic_to_error!(&wrap, &element.panicked, fallback, {
+        imp.change_state(&wrap, transition)
     }).to_glib()
 }
 
