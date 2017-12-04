@@ -103,9 +103,9 @@ pub unsafe trait ElementBase: IsA<gst::Element> + ObjectType {
         }
     }
 
-    fn catch_panic<F: FnOnce(&Self) -> T, T>(&self, fallback: T, f: F) -> T {
+    fn catch_panic<T, F: FnOnce(&Self) -> T, G: FnOnce() -> T>(&self, fallback: G, f: F) -> T {
         let panicked = unsafe { &(*self.get_instance()).panicked };
-        panic_to_error!(self, panicked, fallback, { f(self) })
+        panic_to_error!(self, panicked, fallback(), { f(self) })
     }
 }
 
