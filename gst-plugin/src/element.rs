@@ -102,6 +102,11 @@ pub unsafe trait ElementBase: IsA<gst::Element> + ObjectType {
                 .unwrap_or(())
         }
     }
+
+    fn catch_panic<F: FnOnce(&Self) -> T, T>(&self, fallback: T, f: F) -> T {
+        let panicked = unsafe { &(*self.get_instance()).panicked };
+        panic_to_error!(self, panicked, fallback, { f(self) })
+    }
 }
 
 pub unsafe trait ElementClassExt<T: ElementBase>
