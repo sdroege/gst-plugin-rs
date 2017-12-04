@@ -263,9 +263,23 @@ where
         Some(gst::CapsRef::from_ptr(caps))
     };
 
-    panic_to_error!(&wrap, &element.panicked, None, {
+    // XXX: This is effectively unsafe but the best we can do
+    // See https://bugzilla.gnome.org/show_bug.cgi?id=791193
+    let pad = panic_to_error!(&wrap, &element.panicked, None, {
         imp.request_new_pad(&wrap, &from_glib_borrow(templ), from_glib_none(name), caps)
-    }).to_glib_full()
+    });
+
+    // Ensure that the pad is owned by the element now, if a pad was returned
+    if let Some(ref pad) = pad {
+        assert_eq!(
+            pad.get_parent(),
+            Some(gst::Object::from_glib_borrow(
+                ptr as *mut gst_ffi::GstObject
+            ))
+        );
+    }
+
+    pad.to_glib_none().0
 }
 
 unsafe extern "C" fn element_release_pad<T: ElementBase>(
