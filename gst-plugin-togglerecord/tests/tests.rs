@@ -204,9 +204,10 @@ fn recv_buffers(
         match val {
             Left(buffer) => {
                 res.push((
-                    gst::ClockTime::from(
-                        segment.to_running_time(gst::Format::Time, buffer.get_pts().into()),
-                    ),
+                    segment
+                        .to_running_time(buffer.get_pts())
+                        .try_to_time()
+                        .unwrap(),
                     buffer.get_pts(),
                 ));
                 n_buffers += 1;
@@ -222,7 +223,7 @@ fn recv_buffers(
                         let (ts, _) = e.get();
 
                         res.push((
-                            gst::ClockTime::from(segment.to_running_time(gst::Format::Time, ts)),
+                            segment.to_running_time(ts).try_to_time().unwrap(),
                             ts.into(),
                         ));
                         n_buffers += 1;

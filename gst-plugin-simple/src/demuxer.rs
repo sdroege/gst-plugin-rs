@@ -106,7 +106,7 @@ pub struct Demuxer {
     cat: gst::DebugCategory,
     sinkpad: gst::Pad,
     flow_combiner: Mutex<UniqueFlowCombiner>,
-    group_id: Mutex<u32>,
+    group_id: Mutex<gst::GroupId>,
     srcpads: Mutex<BTreeMap<u32, gst::Pad>>,
     imp: Mutex<Box<DemuxerImpl>>,
 }

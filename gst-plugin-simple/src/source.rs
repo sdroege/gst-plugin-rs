@@ -277,11 +277,15 @@ impl BaseSrcImpl<BaseSrc> for Source {
     fn do_seek(&self, src: &BaseSrc, segment: &mut gst::Segment) -> bool {
         let source_impl = &mut self.imp.lock().unwrap();
 
-        let start = segment.get_start();
-        let stop = match segment.get_stop() {
-            u64::MAX => None,
-            stop => Some(stop),
+        if segment.get_format() != gst::Format::Bytes {
+            return false;
+        }
+
+        let start = match segment.get_start().try_to_bytes().unwrap() {
+            None => return false,
+            Some(start) => start,
         };
+        let stop = segment.get_stop().try_to_bytes().unwrap();
 
         gst_debug!(self.cat, obj: src, "Seeking to {:?}-{:?}", start, stop);
 
