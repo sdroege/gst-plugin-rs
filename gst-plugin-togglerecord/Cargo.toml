@@ -1,0 +1,25 @@
+[package]
+name = "gst-plugin-togglerecord"
+version = "0.1.0"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+license = "LGPL-2.1+"
+
+[dependencies]
+glib = { git = "https://github.com/gtk-rs/glib" }
+gstreamer = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
+gst-plugin = { path = "../gst-plugin" }
+gtk = { git = "https://github.com/gtk-rs/gtk", features = ["v3_6"], optional = true }
+gio = { git = "https://github.com/gtk-rs/gio", optional = true }
+send-cell = { version = "0.1", optional = true }
+either = "1.0"
+
+[lib]
+name = "gsttogglerecord"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[[example]]
+name = "gtk-recording"
+path = "examples/gtk_recording.rs"
+required-features = ["gtk", "gio", "send-cell"]
+

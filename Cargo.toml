@@ -7,11 +7,11 @@ members = [
     "gst-plugin-http",
     "gst-plugin-flv",
     "gst-plugin-audiofx",
+    "gst-plugin-togglerecord",
 ]
 
 [profile.release]
 lto = true
-debug-assertions = false
 opt-level = 3
 debug = true
 panic = 'unwind'
