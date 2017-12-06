@@ -45,13 +45,20 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [Property; 1] = [
+static PROPERTIES: [Property; 2] = [
     Property::Boolean(
         "record",
         "Record",
         "Enable/disable recording",
         DEFAULT_RECORD,
         PropertyMutability::ReadWrite,
+    ),
+    Property::Boolean(
+        "recording",
+        "Recording",
+        "Whether recording is currently taking place",
+        DEFAULT_RECORD,
+        PropertyMutability::Readable,
     ),
 ];
 
@@ -321,6 +328,7 @@ impl ToggleRecord {
 
     fn handle_main_stream(
         &self,
+        element: &Element,
         pad: &gst::Pad,
         stream: &Stream,
         is_keyframe: bool,
@@ -456,6 +464,11 @@ impl ToggleRecord {
                 // Then become Stopped and drop this buffer. We always stop right before
                 // a keyframe
                 gst_log!(self.cat, obj: pad, "Dropping buffer (stopped)");
+
+                drop(rec_state);
+                drop(state);
+                self.notify(&element.clone().upcast(), "recording");
+
                 HandleResult::Drop
             }
             RecordingState::Stopped => {
@@ -513,6 +526,11 @@ impl ToggleRecord {
                 );
 
                 gst_log!(self.cat, obj: pad, "Passing buffer (recording)");
+
+                drop(rec_state);
+                drop(state);
+                self.notify(&element.clone().upcast(), "recording");
+
                 HandleResult::Pass
             }
         }
@@ -798,6 +816,7 @@ impl ToggleRecord {
             }
 
             self.handle_main_stream(
+                element,
                 pad,
                 &stream,
                 !buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT),
@@ -968,7 +987,7 @@ impl ToggleRecord {
                 gst_debug!(self.cat, obj: pad, "Handling Gap event {:?}", event);
                 let (pts, duration) = e.get();
                 let handle_result = if stream == self.main_stream {
-                    self.handle_main_stream(pad, &stream, false, pts, duration)
+                    self.handle_main_stream(element, pad, &stream, false, pts, duration)
                 } else {
                     self.handle_secondary_stream(pad, &stream, pts, duration)
                 };
@@ -1242,6 +1261,10 @@ impl ObjectImpl<Element> for ToggleRecord {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.record.to_value())
             }
+            Property::Boolean("recording", ..) => {
+                let rec_state = self.state.lock().unwrap();
+                Ok((rec_state.recording_state == RecordingState::Recording).to_value())
+            }
             _ => unimplemented!(),
         }
     }
@@ -1290,17 +1313,24 @@ impl ElementImpl<Element> for ToggleRecord {
         }
 
         match transition {
-            gst::StateChange::PausedToReady => for s in self.other_streams
-                .lock()
-                .unwrap()
-                .0
-                .iter()
-                .chain(iter::once(&self.main_stream))
-            {
-                let mut state = s.state.lock().unwrap();
+            gst::StateChange::PausedToReady => {
+                for s in self.other_streams
+                    .lock()
+                    .unwrap()
+                    .0
+                    .iter()
+                    .chain(iter::once(&self.main_stream))
+                {
+                    let mut state = s.state.lock().unwrap();
 
-                state.pending_events.clear();
-            },
+                    state.pending_events.clear();
+                }
+
+                let mut rec_state = self.state.lock().unwrap();
+                *rec_state = State::default();
+                drop(rec_state);
+                self.notify(&element.clone().upcast(), "recording");
+            }
             _ => (),
         }
 
