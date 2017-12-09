@@ -132,8 +132,7 @@ fn setup_sender_receiver(
         while let Ok(send_data) = receiver_input.recv() {
             if first {
                 assert!(sinkpad.send_event(gst::Event::new_stream_start("test").build()));
-                let mut segment = gst::Segment::new();
-                segment.init(gst::Format::Time);
+                let segment = gst::FormattedSegment::<gst::ClockTime>::new();
                 assert!(sinkpad.send_event(gst::Event::new_segment(&segment).build()));
 
                 let mut tags = gst::TagList::new();
@@ -195,7 +194,7 @@ fn setup_sender_receiver(
 
 fn recv_buffers(
     receiver_output: &mpsc::Receiver<Either<gst::Buffer, gst::Event>>,
-    segment: &mut gst::Segment,
+    segment: &mut gst::FormattedSegment<gst::ClockTime>,
     wait_buffers: usize,
 ) -> Vec<(gst::ClockTime, gst::ClockTime)> {
     let mut res = Vec::new();
@@ -204,10 +203,7 @@ fn recv_buffers(
         match val {
             Left(buffer) => {
                 res.push((
-                    segment
-                        .to_running_time(buffer.get_pts())
-                        .try_to_time()
-                        .unwrap(),
+                    segment.to_running_time(buffer.get_pts()),
                     buffer.get_pts(),
                 ));
                 n_buffers += 1;
@@ -222,10 +218,7 @@ fn recv_buffers(
                     EventView::Gap(ref e) => {
                         let (ts, _) = e.get();
 
-                        res.push((
-                            segment.to_running_time(ts).try_to_time().unwrap(),
-                            ts.into(),
-                        ));
+                        res.push((segment.to_running_time(ts), ts.into()));
                         n_buffers += 1;
                         if wait_buffers > 0 && n_buffers == wait_buffers {
                             return res;
@@ -235,7 +228,7 @@ fn recv_buffers(
                         return res;
                     }
                     EventView::Segment(ref e) => {
-                        *segment = e.get_segment();
+                        *segment = e.get_segment().downcast().unwrap();
                     }
                     _ => (),
                 }
@@ -288,7 +281,7 @@ fn test_one_stream_open() {
     sender_input.send(SendData::Buffers(10)).unwrap();
     drop(sender_input);
 
-    let mut segment = gst::Segment::new();
+    let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers = recv_buffers(&receiver_output, &mut segment, 0);
     assert_eq!(buffers.len(), 10);
     for (index, &(running_time, pts)) in buffers.iter().enumerate() {
@@ -323,7 +316,7 @@ fn test_one_stream_gaps_open() {
     sender_input.send(SendData::Gaps(5)).unwrap();
     drop(sender_input);
 
-    let mut segment = gst::Segment::new();
+    let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers = recv_buffers(&receiver_output, &mut segment, 0);
     assert_eq!(buffers.len(), 10);
     for (index, &(running_time, pts)) in buffers.iter().enumerate() {
@@ -359,7 +352,7 @@ fn test_one_stream_close_open() {
     sender_input.send(SendData::Buffers(10)).unwrap();
     drop(sender_input);
 
-    let mut segment = gst::Segment::new();
+    let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers = recv_buffers(&receiver_output, &mut segment, 0);
     assert_eq!(buffers.len(), 10);
     for (index, &(running_time, pts)) in buffers.iter().enumerate() {
@@ -396,7 +389,7 @@ fn test_one_stream_open_close() {
     sender_input.send(SendData::Buffers(10)).unwrap();
     drop(sender_input);
 
-    let mut segment = gst::Segment::new();
+    let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers = recv_buffers(&receiver_output, &mut segment, 0);
     assert_eq!(buffers.len(), 10);
     for (index, &(running_time, pts)) in buffers.iter().enumerate() {
@@ -436,7 +429,7 @@ fn test_one_stream_open_close_open() {
     sender_input.send(SendData::Buffers(10)).unwrap();
     drop(sender_input);
 
-    let mut segment = gst::Segment::new();
+    let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers = recv_buffers(&receiver_output, &mut segment, 0);
     assert_eq!(buffers.len(), 20);
     for (index, &(running_time, pts)) in buffers.iter().enumerate() {
@@ -485,7 +478,7 @@ fn test_two_stream_open() {
     receiver_input_done_2.recv().unwrap();
     receiver_input_done_2.recv().unwrap();
 
-    let mut segment_1 = gst::Segment::new();
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_1 = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts)) in buffers_1.iter().enumerate() {
         let index = index as u64;
@@ -495,7 +488,7 @@ fn test_two_stream_open() {
     assert_eq!(buffers_1.len(), 10);
 
     // Last buffer should be dropped from second stream
-    let mut segment_2 = gst::Segment::new();
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_2 = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts)) in buffers_2.iter().enumerate() {
         let index = index as u64;
@@ -539,7 +532,7 @@ fn test_two_stream_open_shift() {
     receiver_input_done_2.recv().unwrap();
     receiver_input_done_2.recv().unwrap();
 
-    let mut segment_1 = gst::Segment::new();
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_1 = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts)) in buffers_1.iter().enumerate() {
         let index = index as u64;
@@ -549,7 +542,7 @@ fn test_two_stream_open_shift() {
     assert_eq!(buffers_1.len(), 10);
 
     // Last buffer should be dropped from second stream
-    let mut segment_2 = gst::Segment::new();
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_2 = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts)) in buffers_2.iter().enumerate() {
         let index = index as u64;
@@ -594,7 +587,7 @@ fn test_two_stream_open_shift_main() {
     receiver_input_done_2.recv().unwrap();
 
     // PTS 5 maps to running time 0 now
-    let mut segment_1 = gst::Segment::new();
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_1 = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts)) in buffers_1.iter().enumerate() {
         let index = index as u64;
@@ -604,7 +597,7 @@ fn test_two_stream_open_shift_main() {
     assert_eq!(buffers_1.len(), 10);
 
     // First and last buffer should be dropped from second stream
-    let mut segment_2 = gst::Segment::new();
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_2 = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts)) in buffers_2.iter().enumerate() {
         let index = index as u64;
@@ -664,7 +657,7 @@ fn test_two_stream_open_close() {
     receiver_input_done_1.recv().unwrap();
     receiver_input_done_2.recv().unwrap();
 
-    let mut segment_1 = gst::Segment::new();
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_1 = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts)) in buffers_1.iter().enumerate() {
         let index = index as u64;
@@ -674,7 +667,7 @@ fn test_two_stream_open_close() {
     assert_eq!(buffers_1.len(), 10);
 
     // Last buffer should be dropped from second stream
-    let mut segment_2 = gst::Segment::new();
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_2 = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts)) in buffers_2.iter().enumerate() {
         let index = index as u64;
@@ -734,7 +727,7 @@ fn test_two_stream_close_open() {
     receiver_input_done_1.recv().unwrap();
     receiver_input_done_2.recv().unwrap();
 
-    let mut segment_1 = gst::Segment::new();
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_1 = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts)) in buffers_1.iter().enumerate() {
         let index = index as u64;
@@ -744,7 +737,7 @@ fn test_two_stream_close_open() {
     assert_eq!(buffers_1.len(), 10);
 
     // Last buffer should be dropped from second stream
-    let mut segment_2 = gst::Segment::new();
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_2 = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts)) in buffers_2.iter().enumerate() {
         let index = index as u64;
@@ -817,7 +810,7 @@ fn test_two_stream_open_close_open() {
     receiver_input_done_2.recv().unwrap();
     receiver_input_done_2.recv().unwrap();
 
-    let mut segment_1 = gst::Segment::new();
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_1 = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts)) in buffers_1.iter().enumerate() {
         let pts_off = if index >= 10 {
@@ -833,7 +826,7 @@ fn test_two_stream_open_close_open() {
     assert_eq!(buffers_1.len(), 20);
 
     // Last buffer should be dropped from second stream
-    let mut segment_2 = gst::Segment::new();
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_2 = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts)) in buffers_2.iter().enumerate() {
         let pts_off = if index >= 10 {
@@ -918,7 +911,7 @@ fn test_two_stream_open_close_open_gaps() {
     receiver_input_done_2.recv().unwrap();
     receiver_input_done_2.recv().unwrap();
 
-    let mut segment_1 = gst::Segment::new();
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_1 = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts)) in buffers_1.iter().enumerate() {
         let pts_off = if index >= 10 {
@@ -934,7 +927,7 @@ fn test_two_stream_open_close_open_gaps() {
     assert_eq!(buffers_1.len(), 20);
 
     // Last buffer should be dropped from second stream
-    let mut segment_2 = gst::Segment::new();
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_2 = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts)) in buffers_2.iter().enumerate() {
         let pts_off = if index >= 10 {
@@ -1020,7 +1013,7 @@ fn test_two_stream_close_open_close_delta() {
     receiver_input_done_2.recv().unwrap();
     receiver_input_done_2.recv().unwrap();
 
-    let mut segment_1 = gst::Segment::new();
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_1 = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts)) in buffers_1.iter().enumerate() {
         let index = index as u64;
@@ -1030,7 +1023,7 @@ fn test_two_stream_close_open_close_delta() {
     assert_eq!(buffers_1.len(), 10);
 
     // Last buffer should be dropped from second stream
-    let mut segment_2 = gst::Segment::new();
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_2 = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts)) in buffers_2.iter().enumerate() {
         let index = index as u64;
@@ -1117,7 +1110,7 @@ fn test_three_stream_open_close_open() {
     receiver_input_done_2.recv().unwrap();
     receiver_input_done_3.recv().unwrap();
 
-    let mut segment_1 = gst::Segment::new();
+    let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_1 = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts)) in buffers_1.iter().enumerate() {
         let pts_off = if index >= 10 {
@@ -1133,7 +1126,7 @@ fn test_three_stream_open_close_open() {
     assert_eq!(buffers_1.len(), 20);
 
     // Last buffer should be dropped from second stream
-    let mut segment_2 = gst::Segment::new();
+    let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_2 = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts)) in buffers_2.iter().enumerate() {
         let pts_off = if index >= 10 {
@@ -1148,7 +1141,7 @@ fn test_three_stream_open_close_open() {
     }
     assert_eq!(buffers_2.len(), 20);
 
-    let mut segment_3 = gst::Segment::new();
+    let mut segment_3 = gst::FormattedSegment::<gst::ClockTime>::new();
     let buffers_3 = recv_buffers(&receiver_output_3, &mut segment_3, 0);
     for (index, &(running_time, pts)) in buffers_3.iter().enumerate() {
         let pts_off = if index >= 10 {

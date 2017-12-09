@@ -88,8 +88,8 @@ impl Stream {
 }
 
 struct StreamState {
-    in_segment: gst::Segment,
-    out_segment: gst::Segment,
+    in_segment: gst::FormattedSegment<gst::ClockTime>,
+    out_segment: gst::FormattedSegment<gst::ClockTime>,
     segment_seqnum: gst::Seqnum,
     current_running_time: gst::ClockTime,
     eos: bool,
@@ -101,8 +101,8 @@ struct StreamState {
 impl Default for StreamState {
     fn default() -> Self {
         Self {
-            in_segment: gst::Segment::new(),
-            out_segment: gst::Segment::new(),
+            in_segment: gst::FormattedSegment::new(),
+            out_segment: gst::FormattedSegment::new(),
             segment_seqnum: gst::util_seqnum_next(),
             current_running_time: gst::CLOCK_TIME_NONE,
             eos: false,
@@ -343,30 +343,14 @@ impl ToggleRecord {
             dts_or_pts
         };
 
-        dts_or_pts = cmp::max(
-            state.in_segment.get_start().try_to_time().unwrap(),
-            dts_or_pts,
-        );
-        dts_or_pts_end = cmp::max(
-            state.in_segment.get_start().try_to_time().unwrap(),
-            dts_or_pts_end,
-        );
-        if state.in_segment.get_stop().try_to_time().unwrap().is_some() {
-            dts_or_pts = cmp::min(
-                state.in_segment.get_stop().try_to_time().unwrap(),
-                dts_or_pts,
-            );
-            dts_or_pts_end = cmp::min(
-                state.in_segment.get_stop().try_to_time().unwrap(),
-                dts_or_pts_end,
-            );
+        dts_or_pts = cmp::max(state.in_segment.get_start(), dts_or_pts);
+        dts_or_pts_end = cmp::max(state.in_segment.get_start(), dts_or_pts_end);
+        if state.in_segment.get_stop().is_some() {
+            dts_or_pts = cmp::min(state.in_segment.get_stop(), dts_or_pts);
+            dts_or_pts_end = cmp::min(state.in_segment.get_stop(), dts_or_pts_end);
         }
 
-        let mut current_running_time = state
-            .in_segment
-            .to_running_time(dts_or_pts)
-            .try_to_time()
-            .unwrap();
+        let mut current_running_time = state.in_segment.to_running_time(dts_or_pts);
         current_running_time = cmp::max(current_running_time, state.current_running_time);
         state.current_running_time = current_running_time;
 
@@ -376,11 +360,7 @@ impl ToggleRecord {
         // get the wrong state
         self.main_stream_cond.notify_all();
 
-        let current_running_time_end = state
-            .in_segment
-            .to_running_time(dts_or_pts_end)
-            .try_to_time()
-            .unwrap();
+        let current_running_time_end = state.in_segment.to_running_time(dts_or_pts_end);
 
         gst_log!(
             self.cat,
@@ -552,40 +532,32 @@ impl ToggleRecord {
             pts
         };
 
-        pts = cmp::max(state.in_segment.get_start().try_to_time().unwrap(), pts);
-        if state.in_segment.get_stop().try_to_time().unwrap().is_some()
-            && pts >= state.in_segment.get_stop().try_to_time().unwrap()
-        {
+        pts = cmp::max(state.in_segment.get_start(), pts);
+        if state.in_segment.get_stop().is_some() && pts >= state.in_segment.get_stop() {
             state.current_running_time = state
                 .in_segment
-                .to_running_time(state.in_segment.get_stop())
-                .try_to_time()
-                .unwrap();
+                .to_running_time(state.in_segment.get_stop());
             state.eos = true;
             gst_debug!(
                 self.cat,
                 obj: pad,
                 "After segment end {} >= {}, EOS",
                 pts,
-                state.in_segment.get_stop().try_to_time().unwrap()
+                state.in_segment.get_stop()
             );
 
             return HandleResult::Eos;
         }
-        pts_end = cmp::max(state.in_segment.get_start().try_to_time().unwrap(), pts_end);
-        if state.in_segment.get_stop().try_to_time().unwrap().is_some() {
-            pts_end = cmp::min(state.in_segment.get_stop().try_to_time().unwrap(), pts_end);
+        pts_end = cmp::max(state.in_segment.get_start(), pts_end);
+        if state.in_segment.get_stop().is_some() {
+            pts_end = cmp::min(state.in_segment.get_stop(), pts_end);
         }
 
-        let mut current_running_time = state.in_segment.to_running_time(pts).try_to_time().unwrap();
+        let mut current_running_time = state.in_segment.to_running_time(pts);
         current_running_time = cmp::max(current_running_time, state.current_running_time);
         state.current_running_time = current_running_time;
 
-        let current_running_time_end = state
-            .in_segment
-            .to_running_time(pts_end)
-            .try_to_time()
-            .unwrap();
+        let current_running_time_end = state.in_segment.to_running_time(pts_end);
         gst_log!(
             self.cat,
             obj: pad,
@@ -762,18 +734,6 @@ impl ToggleRecord {
 
         {
             let state = stream.state.lock().unwrap();
-            if state.in_segment.get_format() != gst::Format::Time {
-                gst_element_error!(
-                    element,
-                    gst::StreamError::Format,
-                    [
-                        "Only Time segments supported, got {:?}",
-                        state.in_segment.get_format()
-                    ]
-                );
-                return gst::FlowReturn::Error;
-            }
-
             if state.eos {
                 return gst::FlowReturn::Eos;
             }
@@ -856,10 +816,8 @@ impl ToggleRecord {
                 // recording_duration
 
                 state.out_segment = state.in_segment.clone();
-                let offset: u64 = rec_state.running_time_offset.into();
-                let res = state
-                    .out_segment
-                    .offset_running_time(gst::Format::Time, -(offset as i64));
+                let offset = rec_state.running_time_offset.unwrap_or(0);
+                let res = state.out_segment.offset_running_time(-(offset as i64));
                 assert!(res);
                 events.push(
                     gst::Event::new_segment(&state.out_segment)
@@ -881,11 +839,7 @@ impl ToggleRecord {
 
             events.append(&mut state.pending_events);
 
-            let out_running_time = state
-                .out_segment
-                .to_running_time(buffer.get_pts())
-                .try_to_time()
-                .unwrap();
+            let out_running_time = state.out_segment.to_running_time(buffer.get_pts());
 
             // Unlock before pushing
             drop(state);
@@ -950,18 +904,21 @@ impl ToggleRecord {
             EventView::Segment(e) => {
                 let mut state = stream.state.lock().unwrap();
 
-                let segment = e.get_segment();
-                if segment.get_format() != gst::Format::Time {
-                    gst_element_error!(
-                        element,
-                        gst::StreamError::Format,
-                        [
-                            "Only Time segments supported, got {:?}",
-                            segment.get_format()
-                        ]
-                    );
-                    return false;
-                }
+                let segment = match e.get_segment().downcast::<gst::ClockTime>() {
+                    Err(segment) => {
+                        gst_element_error!(
+                            element,
+                            gst::StreamError::Format,
+                            [
+                                "Only Time segments supported, got {:?}",
+                                segment.get_format()
+                            ]
+                        );
+                        return false;
+                    }
+                    Ok(segment) => segment,
+                };
+
                 if (segment.get_rate() - 1.0).abs() > f64::EPSILON {
                     gst_element_error!(
                         element,
@@ -974,7 +931,7 @@ impl ToggleRecord {
                     return false;
                 }
 
-                state.in_segment = e.get_segment();
+                state.in_segment = segment;
                 state.segment_seqnum = event.get_seqnum();
                 state.segment_pending = true;
                 state.current_running_time = gst::CLOCK_TIME_NONE;
@@ -1165,8 +1122,8 @@ impl ToggleRecord {
                 let format = q.get_format();
                 q.set(
                     false,
-                    gst::FormatValue::new(format, -1),
-                    gst::FormatValue::new(format, -1),
+                    gst::GenericFormattedValue::new(format, -1),
+                    gst::GenericFormattedValue::new(format, -1),
                 );
 
                 gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());

@@ -205,8 +205,7 @@ impl Demuxer {
         );
         pad.push_event(gst::Event::new_caps(&caps).build());
 
-        let mut segment = gst::Segment::default();
-        segment.init(gst::Format::Time);
+        let segment = gst::FormattedSegment::<gst::ClockTime>::default();
         pad.push_event(gst::Event::new_segment(&segment).build());
 
         self.flow_combiner.lock().unwrap().add_pad(&pad);
@@ -351,9 +350,8 @@ impl Demuxer {
         if active {
             let upstream_size = demuxer
                 .sinkpad
-                .peer_query_duration(gst::Format::Bytes)
-                .and_then(|d| d.try_to_bytes())
-                .and_then(|d| d);
+                .peer_query_duration::<gst::format::Bytes>()
+                .and_then(|v| v.0);
 
             if !demuxer.start(&element, upstream_size, mode == gst::PadMode::Pull) {
                 return false;
