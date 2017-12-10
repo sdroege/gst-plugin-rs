@@ -408,13 +408,9 @@ impl ToggleRecord {
                     drop(state);
                     if settings_changed {
                         gst_debug!(self.cat, obj: pad, "Requesting a new keyframe");
-                        stream.sinkpad.push_event(
-                            gst_video::new_upstream_force_key_unit_event(
-                                gst::CLOCK_TIME_NONE,
-                                true,
-                                0,
-                            ).build(),
-                        );
+                        stream
+                            .sinkpad
+                            .push_event(gst_video::new_upstream_force_key_unit_event().build());
                     }
 
                     return HandleResult::Pass;
@@ -485,13 +481,9 @@ impl ToggleRecord {
                     drop(state);
                     if settings_changed {
                         gst_debug!(self.cat, obj: pad, "Requesting a new keyframe");
-                        stream.sinkpad.push_event(
-                            gst_video::new_upstream_force_key_unit_event(
-                                gst::CLOCK_TIME_NONE,
-                                true,
-                                0,
-                            ).build(),
-                        );
+                        stream
+                            .sinkpad
+                            .push_event(gst_video::new_upstream_force_key_unit_event().build());
                     }
 
                     return HandleResult::Drop;
