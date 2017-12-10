@@ -391,18 +391,6 @@ impl ToggleRecord {
             _ => false,
         };
 
-        if settings_changed {
-            drop(rec_state);
-            drop(state);
-            gst_debug!(self.cat, obj: pad, "Requesting a new keyframe");
-            stream.sinkpad.push_event(
-                gst_video::new_upstream_force_key_unit_event(gst::CLOCK_TIME_NONE, true, 0).build(),
-            );
-
-            state = stream.state.lock().unwrap();
-            rec_state = self.state.lock().unwrap();
-        }
-
         match rec_state.recording_state {
             RecordingState::Recording => {
                 // Remember where we stopped last, in case of EOS
@@ -415,6 +403,20 @@ impl ToggleRecord {
                     // Remember where we stopped last, in case of EOS
                     rec_state.last_recording_stop = current_running_time_end;
                     gst_log!(self.cat, obj: pad, "Passing non-keyframe buffer (stopping)");
+
+                    drop(rec_state);
+                    drop(state);
+                    if settings_changed {
+                        gst_debug!(self.cat, obj: pad, "Requesting a new keyframe");
+                        stream.sinkpad.push_event(
+                            gst_video::new_upstream_force_key_unit_event(
+                                gst::CLOCK_TIME_NONE,
+                                true,
+                                0,
+                            ).build(),
+                        );
+                    }
+
                     return HandleResult::Pass;
                 }
 
@@ -478,6 +480,20 @@ impl ToggleRecord {
                         obj: pad,
                         "Dropping non-keyframe buffer (starting)"
                     );
+
+                    drop(rec_state);
+                    drop(state);
+                    if settings_changed {
+                        gst_debug!(self.cat, obj: pad, "Requesting a new keyframe");
+                        stream.sinkpad.push_event(
+                            gst_video::new_upstream_force_key_unit_event(
+                                gst::CLOCK_TIME_NONE,
+                                true,
+                                0,
+                            ).build(),
+                        );
+                    }
+
                     return HandleResult::Drop;
                 }
 
