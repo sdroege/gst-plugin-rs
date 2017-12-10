@@ -19,6 +19,7 @@ use glib;
 use glib::prelude::*;
 use gst;
 use gst::prelude::*;
+use gst_video;
 
 use gst_plugin::properties::*;
 use gst_plugin::object::*;
@@ -376,16 +377,30 @@ impl ToggleRecord {
 
         // First check if we have to update our recording state
         let mut rec_state = self.state.lock().unwrap();
-        match rec_state.recording_state {
-            RecordingState::Recording => if !settings.record {
+        let settings_changed = match rec_state.recording_state {
+            RecordingState::Recording if !settings.record => {
                 gst_debug!(self.cat, obj: pad, "Stopping recording");
                 rec_state.recording_state = RecordingState::Stopping;
-            },
-            RecordingState::Stopped => if settings.record {
+                true
+            }
+            RecordingState::Stopped if settings.record => {
                 gst_debug!(self.cat, obj: pad, "Starting recording");
                 rec_state.recording_state = RecordingState::Starting;
-            },
-            _ => (),
+                true
+            }
+            _ => false,
+        };
+
+        if settings_changed {
+            drop(rec_state);
+            drop(state);
+            gst_debug!(self.cat, obj: pad, "Requesting a new keyframe");
+            stream.sinkpad.push_event(
+                gst_video::new_upstream_force_key_unit_event(gst::CLOCK_TIME_NONE, true, 0).build(),
+            );
+
+            state = stream.state.lock().unwrap();
+            rec_state = self.state.lock().unwrap();
         }
 
         match rec_state.recording_state {
