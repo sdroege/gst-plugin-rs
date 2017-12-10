@@ -205,14 +205,14 @@ fn create_ui(app: &gtk::Application) {
     hbox.pack_start(&position_label, true, true, 5);
     let recorded_duration_label = gtk::Label::new("Recorded: 00:00:00");
     hbox.pack_start(&recorded_duration_label, true, true, 5);
-    vbox.pack_start(&hbox, true, true, 5);
+    vbox.pack_start(&hbox, false, false, 5);
 
     let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     let record_button = gtk::Button::new_with_label("Record");
     hbox.pack_start(&record_button, true, true, 5);
     let finish_button = gtk::Button::new_with_label("Finish");
     hbox.pack_start(&finish_button, true, true, 5);
-    vbox.pack_start(&hbox, true, true, 5);
+    vbox.pack_start(&hbox, false, false, 5);
 
     window.add(&vbox);
     window.show_all();
@@ -221,18 +221,18 @@ fn create_ui(app: &gtk::Application) {
 
     let video_sink_clone = video_sink.clone();
     let togglerecord_clone = togglerecord.clone();
-    gtk::timeout_add(500, move || {
+    gtk::timeout_add(100, move || {
         let video_sink = &video_sink_clone;
         let togglerecord = &togglerecord_clone;
 
         let position = video_sink.query_position::<gst::ClockTime>().unwrap_or(0.into());
-        position_label.set_text(&format!("Position: {:.0}", position));
+        position_label.set_text(&format!("Position: {:.1}", position));
 
         let recording_duration = togglerecord
                 .get_static_pad("src")
                 .unwrap()
                 .query_position::<gst::ClockTime>().unwrap_or(0.into());
-        recorded_duration_label.set_text(&format!("Recorded: {:.0}", recording_duration));
+        recorded_duration_label.set_text(&format!("Recorded: {:.1}", recording_duration));
 
         glib::Continue(true)
     });
