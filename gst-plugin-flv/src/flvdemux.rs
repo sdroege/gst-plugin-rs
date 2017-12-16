@@ -162,9 +162,9 @@ impl AudioFormat {
                 "audio/x-adpcm",
                 &[("layout", &"swf")],
             )),
-            flavors::SoundFormat::NELLYMOSER_16KHZ_MONO |
-            flavors::SoundFormat::NELLYMOSER_8KHZ_MONO |
-            flavors::SoundFormat::NELLYMOSER => {
+            flavors::SoundFormat::NELLYMOSER_16KHZ_MONO
+            | flavors::SoundFormat::NELLYMOSER_8KHZ_MONO
+            | flavors::SoundFormat::NELLYMOSER => {
                 Some(gst::Caps::new_simple("audio/x-nellymoser", &[]))
             }
             flavors::SoundFormat::PCM_ALAW => Some(gst::Caps::new_simple("audio/x-alaw", &[])),
@@ -420,8 +420,8 @@ impl Metadata {
         };
 
         let args = match script_data.arguments {
-            flavors::ScriptDataValue::Object(ref objects) |
-            flavors::ScriptDataValue::ECMAArray(ref objects) => objects,
+            flavors::ScriptDataValue::Object(ref objects)
+            | flavors::ScriptDataValue::ECMAArray(ref objects) => objects,
             _ => return metadata,
         };
 

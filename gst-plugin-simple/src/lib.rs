@@ -19,8 +19,7 @@ pub mod source;
 pub mod sink;
 pub mod demuxer;
 
-pub type UriValidator = Fn(&url::Url)
-    -> Result<(), gst_plugin::error::UriError>
+pub type UriValidator = Fn(&url::Url) -> Result<(), gst_plugin::error::UriError>
                             + Send
                             + Sync
                             + 'static;
