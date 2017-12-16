@@ -228,7 +228,7 @@ fn recv_buffers(
                         return res;
                     }
                     EventView::Segment(ref e) => {
-                        *segment = e.get_segment().downcast().unwrap();
+                        *segment = e.get_segment().clone().downcast().unwrap();
                     }
                     _ => (),
                 }
