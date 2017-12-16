@@ -927,7 +927,7 @@ impl ToggleRecord {
             EventView::Segment(e) => {
                 let mut state = stream.state.lock().unwrap();
 
-                let segment = match e.get_segment().downcast::<gst::ClockTime>() {
+                let segment = match e.get_segment().clone().downcast::<gst::ClockTime>() {
                     Err(segment) => {
                         gst_element_error!(
                             element,

@@ -183,7 +183,7 @@ impl Adapter {
                 gst_trace!(CAT, "Get buffer of {} bytes, subbuffer of first", size);
                 let new = front
                     .get_buffer()
-                    .copy_region(self.skip, Some(size))
+                    .copy_region(*gst::BUFFER_COPY_ALL, self.skip, Some(size))
                     .unwrap();
                 Some(new)
             } else {
