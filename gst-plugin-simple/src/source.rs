@@ -136,12 +136,10 @@ impl Source {
                     uri_storage.0 = Some(uri);
                     Ok(())
                 }
-                Err(err) => Err(
-                    UriError::new(
-                        gst::URIError::BadUri,
-                        format!("Failed to parse URI '{}': {}", uri_str, err),
-                    ).into_error(),
-                ),
+                Err(err) => Err(UriError::new(
+                    gst::URIError::BadUri,
+                    format!("Failed to parse URI '{}': {}", uri_str, err),
+                ).into_error()),
             }
         } else {
             Ok(())

@@ -63,9 +63,7 @@ pub unsafe trait ElementBase: IsA<gst::Element> + ObjectType {
             let parent_klass = (*klass).get_parent_class() as *const gst_ffi::GstElementClass;
             (*parent_klass)
                 .change_state
-                .map(|f| {
-                    from_glib(f(self.to_glib_none().0, transition.to_glib()))
-                })
+                .map(|f| from_glib(f(self.to_glib_none().0, transition.to_glib())))
                 .unwrap_or(gst::StateChangeReturn::Success)
         }
     }
@@ -346,7 +344,9 @@ where
     let imp = &*element.imp;
     let query = gst::QueryRef::from_mut_ptr(query);
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.query(&wrap, query) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.query(&wrap, query)
+    }).to_glib()
 }
 
 unsafe extern "C" fn element_set_context<T: ElementBase>(

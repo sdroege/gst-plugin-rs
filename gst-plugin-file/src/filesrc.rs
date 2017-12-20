@@ -48,12 +48,10 @@ impl FileSrc {
 }
 
 fn validate_uri(uri: &Url) -> Result<(), UriError> {
-    let _ = try!(uri.to_file_path().or_else(|_| {
-        Err(UriError::new(
-            gst::URIError::UnsupportedProtocol,
-            format!("Unsupported file URI '{}'", uri.as_str()),
-        ))
-    }));
+    let _ = try!(uri.to_file_path().or_else(|_| Err(UriError::new(
+        gst::URIError::UnsupportedProtocol,
+        format!("Unsupported file URI '{}'", uri.as_str()),
+    ))));
     Ok(())
 }
 
@@ -144,9 +142,10 @@ impl SourceImpl for FileSrc {
                 ref mut position,
             } => (file, position),
             StreamingState::Stopped => {
-                return Err(FlowError::Error(
-                    error_msg!(gst::LibraryError::Failed, ["Not started yet"]),
-                ));
+                return Err(FlowError::Error(error_msg!(
+                    gst::LibraryError::Failed,
+                    ["Not started yet"]
+                )));
             }
         };
 

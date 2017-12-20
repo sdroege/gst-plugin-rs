@@ -46,9 +46,7 @@ pub unsafe trait BinBase: IsA<gst::Element> + IsA<gst::Bin> + ObjectType {
             let parent_klass = (*klass).get_parent_class() as *const gst_ffi::GstBinClass;
             (*parent_klass)
                 .add_element
-                .map(|f| {
-                    from_glib(f(self.to_glib_none().0, element.to_glib_none().0))
-                })
+                .map(|f| from_glib(f(self.to_glib_none().0, element.to_glib_none().0)))
                 .unwrap_or(false)
         }
     }
@@ -59,9 +57,7 @@ pub unsafe trait BinBase: IsA<gst::Element> + IsA<gst::Bin> + ObjectType {
             let parent_klass = (*klass).get_parent_class() as *const gst_ffi::GstBinClass;
             (*parent_klass)
                 .remove_element
-                .map(|f| {
-                    from_glib(f(self.to_glib_none().0, element.to_glib_none().0))
-                })
+                .map(|f| from_glib(f(self.to_glib_none().0, element.to_glib_none().0)))
                 .unwrap_or(false)
         }
     }

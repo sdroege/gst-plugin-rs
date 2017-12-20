@@ -306,7 +306,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.start(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_stop<T: BaseSinkBase>(
@@ -321,7 +323,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.stop(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_render<T: BaseSinkBase>(
@@ -455,12 +459,9 @@ where
         Some(gst::CapsRef::from_ptr(filter))
     };
 
-    panic_to_error!(
-        &wrap,
-        &element.panicked,
-        None,
-        { imp.get_caps(&wrap, filter) }
-    ).map(|caps| caps.into_ptr())
+    panic_to_error!(&wrap, &element.panicked, None, {
+        imp.get_caps(&wrap, filter)
+    }).map(|caps| caps.into_ptr())
         .unwrap_or(ptr::null_mut())
 }
 
@@ -478,12 +479,9 @@ where
     let imp = &*element.imp;
     let caps = gst::CapsRef::from_ptr(caps);
 
-    panic_to_error!(
-        &wrap,
-        &element.panicked,
-        false,
-        { imp.set_caps(&wrap, caps) }
-    ).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.set_caps(&wrap, caps)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_fixate<T: BaseSinkBase>(
@@ -517,7 +515,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.unlock(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_unlock_stop<T: BaseSinkBase>(
@@ -532,5 +532,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock_stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.unlock_stop(&wrap)
+    }).to_glib()
 }

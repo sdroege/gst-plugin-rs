@@ -202,10 +202,7 @@ fn recv_buffers(
     while let Ok(val) = receiver_output.recv() {
         match val {
             Left(buffer) => {
-                res.push((
-                    segment.to_running_time(buffer.get_pts()),
-                    buffer.get_pts(),
-                ));
+                res.push((segment.to_running_time(buffer.get_pts()), buffer.get_pts()));
                 n_buffers += 1;
                 if wait_buffers > 0 && n_buffers == wait_buffers {
                     return res;

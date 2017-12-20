@@ -222,9 +222,10 @@ impl SourceImpl for HttpSrc {
                 ..
             } => (response, position),
             StreamingState::Stopped => {
-                return Err(FlowError::Error(
-                    error_msg!(gst::LibraryError::Failed, ["Not started yet"]),
-                ));
+                return Err(FlowError::Error(error_msg!(
+                    gst::LibraryError::Failed,
+                    ["Not started yet"]
+                )));
             }
         };
 

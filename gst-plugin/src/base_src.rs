@@ -129,9 +129,7 @@ pub unsafe trait BaseSrcBase
             let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
             (*parent_klass)
                 .do_seek
-                .map(|f| {
-                    from_glib(f(self.to_glib_none().0, segment.to_glib_none_mut().0))
-                })
+                .map(|f| from_glib(f(self.to_glib_none().0, segment.to_glib_none_mut().0)))
                 .unwrap_or(false)
         }
     }
@@ -153,9 +151,7 @@ pub unsafe trait BaseSrcBase
             let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
             (*parent_klass)
                 .event
-                .map(|f| {
-                    from_glib(f(self.to_glib_none().0, event.to_glib_none().0))
-                })
+                .map(|f| from_glib(f(self.to_glib_none().0, event.to_glib_none().0)))
                 .unwrap_or(false)
         }
     }
@@ -381,7 +377,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.start(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_src_stop<T: BaseSrcBase>(
@@ -396,7 +394,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.stop(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_src_is_seekable<T: BaseSrcBase>(
@@ -411,7 +411,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.is_seekable(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.is_seekable(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_src_get_size<T: BaseSrcBase>(
@@ -561,12 +563,9 @@ where
         Some(gst::CapsRef::from_ptr(filter))
     };
 
-    panic_to_error!(
-        &wrap,
-        &element.panicked,
-        None,
-        { imp.get_caps(&wrap, filter) }
-    ).map(|caps| caps.into_ptr())
+    panic_to_error!(&wrap, &element.panicked, None, {
+        imp.get_caps(&wrap, filter)
+    }).map(|caps| caps.into_ptr())
         .unwrap_or(ptr::null_mut())
 }
 
@@ -582,7 +581,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.negotiate(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.negotiate(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_src_set_caps<T: BaseSrcBase>(
@@ -599,12 +600,9 @@ where
     let imp = &*element.imp;
     let caps = gst::CapsRef::from_ptr(caps);
 
-    panic_to_error!(
-        &wrap,
-        &element.panicked,
-        false,
-        { imp.set_caps(&wrap, caps) }
-    ).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.set_caps(&wrap, caps)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_src_fixate<T: BaseSrcBase>(
@@ -638,7 +636,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.unlock(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_src_unlock_stop<T: BaseSrcBase>(
@@ -653,5 +653,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock_stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.unlock_stop(&wrap)
+    }).to_glib()
 }

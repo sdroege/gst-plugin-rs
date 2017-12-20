@@ -425,7 +425,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.start(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_transform_stop<T: BaseTransformBase>(
@@ -440,7 +442,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, {
+        imp.stop(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_transform_transform_caps<T: BaseTransformBase>(
@@ -464,7 +468,6 @@ where
         } else {
             Some(from_glib_borrow(filter))
         };
-
 
         imp.transform_caps(
             &wrap,
