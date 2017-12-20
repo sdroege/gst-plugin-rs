@@ -128,7 +128,7 @@ impl Source {
 
         if uri_storage.1 {
             return Err(
-                UriError::new(gst::URIError::BadState, "Already started".to_string()).into_error(),
+                UriError::new(gst::URIError::BadState, "Already started".to_string()).into(),
             );
         }
 
@@ -137,14 +137,14 @@ impl Source {
         if let Some(uri_str) = uri_str {
             match Url::parse(uri_str.as_str()) {
                 Ok(uri) => {
-                    try!((self.uri_validator)(&uri).map_err(|e| e.into_error()));
+                    try!((self.uri_validator)(&uri).map_err(|e| e.into()));
                     uri_storage.0 = Some(uri);
                     Ok(())
                 }
                 Err(err) => Err(UriError::new(
                     gst::URIError::BadUri,
                     format!("Failed to parse URI '{}': {}", uri_str, err),
-                ).into_error()),
+                ).into()),
             }
         } else {
             Ok(())
@@ -275,7 +275,7 @@ impl BaseSrcImpl<BaseSrc> for Source {
                     }
                     _ => (),
                 }
-                flow_error.to_native()
+                flow_error.into()
             }
         }
     }

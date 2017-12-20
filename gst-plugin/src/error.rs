@@ -18,7 +18,7 @@ use glib::translate::ToGlibPtr;
 use gst;
 use gst::prelude::*;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FlowError {
     Flushing,
     Eos,
@@ -26,8 +26,14 @@ pub enum FlowError {
     Error(gst::ErrorMessage),
 }
 
-impl FlowError {
-    pub fn to_native(&self) -> gst::FlowReturn {
+impl Into<gst::FlowReturn> for FlowError {
+    fn into(self) -> gst::FlowReturn {
+        (&self).into()
+    }
+}
+
+impl<'a> Into<gst::FlowReturn> for &'a FlowError {
+    fn into(self) -> gst::FlowReturn {
         match *self {
             FlowError::Flushing => gst::FlowReturn::Flushing,
             FlowError::Eos => gst::FlowReturn::Eos,
@@ -67,10 +73,10 @@ pub struct UriError {
 }
 
 impl UriError {
-    pub fn new(error: gst::URIError, message: String) -> UriError {
+    pub fn new<T: Into<String>>(error: gst::URIError, message: T) -> UriError {
         UriError {
             error: error,
-            message: message,
+            message: message.into(),
         }
     }
 
@@ -81,8 +87,16 @@ impl UriError {
     pub fn error(&self) -> gst::URIError {
         self.error
     }
+}
 
-    pub fn into_error(self) -> glib::Error {
+impl Into<glib::Error> for UriError {
+    fn into(self) -> glib::Error {
+        (&self).into()
+    }
+}
+
+impl<'a> Into<glib::Error> for &'a UriError {
+    fn into(self) -> glib::Error {
         glib::Error::new(self.error, &self.message)
     }
 }

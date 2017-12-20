@@ -405,7 +405,7 @@ impl Demuxer {
                         }
                         _ => (),
                     }
-                    return flow_error.to_native();
+                    return flow_error.into();
                 }
             }
         };
@@ -465,7 +465,7 @@ impl Demuxer {
                             }
                             _ => (),
                         }
-                        return flow_error.to_native();
+                        return flow_error.into();
                     }
                 }
             }
