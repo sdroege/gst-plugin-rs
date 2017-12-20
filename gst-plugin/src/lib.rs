@@ -59,8 +59,6 @@ impl Drop for FloatingReferenceGuard {
 pub mod anyimpl;
 
 #[macro_use]
-pub mod utils;
-#[macro_use]
 pub mod error;
 pub mod adapter;
 #[macro_use]
