@@ -11,14 +11,12 @@ use std::fs::File;
 use url::Url;
 
 use std::io::Write;
-use std::convert::From;
 
 use gst_plugin::error::*;
 use gst_plugin_simple::sink::*;
 use gst_plugin_simple::UriValidator;
 
 use gst;
-use gst::prelude::*;
 
 #[derive(Debug)]
 enum StreamingState {

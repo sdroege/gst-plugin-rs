@@ -271,7 +271,7 @@ impl ToggleRecord {
             .downcast::<Element>()
             .unwrap();
         let togglerecord = element.get_impl().downcast_ref::<ToggleRecord>().unwrap();
-        element.catch_panic(fallback, |element| f(togglerecord, &element))
+        element.catch_panic(fallback, |element| f(togglerecord, element))
     }
 
     fn set_pad_functions(sinkpad: &gst::Pad, srcpad: &gst::Pad) {

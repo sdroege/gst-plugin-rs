@@ -13,7 +13,6 @@ use std::fmt;
 use std::error::Error;
 
 use gst;
-use gst::prelude::*;
 
 lazy_static! {
     static ref CAT: gst::DebugCategory = {
@@ -25,6 +24,7 @@ lazy_static! {
     };
 }
 
+#[derive(Default, Debug)]
 pub struct Adapter {
     deque: VecDeque<gst::MappedBuffer<gst::buffer::Readable>>,
     size: usize,

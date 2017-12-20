@@ -18,7 +18,6 @@ use gst_plugin_simple::source::*;
 use gst_plugin_simple::UriValidator;
 
 use gst;
-use gst::prelude::*;
 
 #[derive(Debug)]
 enum StreamingState {

@@ -10,13 +10,8 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fmt::Error as FmtError;
 
-use glib_ffi;
-use gst_ffi;
-
 use glib;
-use glib::translate::ToGlibPtr;
 use gst;
-use gst::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FlowError {

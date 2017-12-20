@@ -9,10 +9,7 @@
 use glib;
 use gst;
 use gst::prelude::*;
-use gst_base;
-use gst_base::prelude::*;
 use gst_audio;
-use gst_audio::prelude::*;
 
 use gst_plugin::properties::*;
 use gst_plugin::object::*;
@@ -27,7 +24,7 @@ use byte_slice_cast::*;
 use num_traits::float::Float;
 use num_traits::cast::{FromPrimitive, ToPrimitive};
 
-const DEFAULT_MAX_DELAY: u64 = 1 * gst::SECOND_VAL;
+const DEFAULT_MAX_DELAY: u64 = gst::SECOND_VAL;
 const DEFAULT_DELAY: u64 = 500 * gst::MSECOND_VAL;
 const DEFAULT_INTENSITY: f64 = 0.5;
 const DEFAULT_FEEDBACK: f64 = 0.0;

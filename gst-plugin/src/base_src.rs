@@ -19,7 +19,6 @@ use glib::translate::*;
 use gst;
 use gst::prelude::*;
 use gst_base;
-use gst_base::prelude::*;
 
 use object::*;
 use element::*;

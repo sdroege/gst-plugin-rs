@@ -20,7 +20,6 @@ extern crate num_rational;
 extern crate url;
 
 use gst_plugin_simple::demuxer::*;
-use gst::prelude::*;
 
 mod flvdemux;
 

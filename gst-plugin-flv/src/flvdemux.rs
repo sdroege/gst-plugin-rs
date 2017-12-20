@@ -21,7 +21,6 @@ use gst_plugin::element::*;
 use gst_plugin_simple::demuxer::*;
 
 use gst;
-use gst::prelude::*;
 
 use num_rational::Rational32;
 
@@ -97,14 +96,14 @@ impl AudioFormat {
         aac_sequence_header: &Option<gst::Buffer>,
     ) -> AudioFormat {
         let numeric_rate = match (data_header.sound_format, data_header.sound_rate) {
-            (flavors::SoundFormat::NELLYMOSER_16KHZ_MONO, _) => 16000,
-            (flavors::SoundFormat::NELLYMOSER_8KHZ_MONO, _) => 8000,
-            (flavors::SoundFormat::MP3_8KHZ, _) => 8000,
-            (flavors::SoundFormat::SPEEX, _) => 16000,
-            (_, flavors::SoundRate::_5_5KHZ) => 5512,
-            (_, flavors::SoundRate::_11KHZ) => 11025,
-            (_, flavors::SoundRate::_22KHZ) => 22050,
-            (_, flavors::SoundRate::_44KHZ) => 44100,
+            (flavors::SoundFormat::NELLYMOSER_16KHZ_MONO, _) => 16_000,
+            (flavors::SoundFormat::NELLYMOSER_8KHZ_MONO, _) => 8_000,
+            (flavors::SoundFormat::MP3_8KHZ, _) => 8_000,
+            (flavors::SoundFormat::SPEEX, _) => 16_000,
+            (_, flavors::SoundRate::_5_5KHZ) => 5_512,
+            (_, flavors::SoundRate::_11KHZ) => 11_025,
+            (_, flavors::SoundRate::_22KHZ) => 22_050,
+            (_, flavors::SoundRate::_44KHZ) => 44_100,
         };
 
         let numeric_width = match data_header.sound_size {
@@ -188,7 +187,7 @@ impl AudioFormat {
                     data.write_all(&[0; 14]).unwrap();
                     data.write_u32le(1).unwrap(); // version
                     data.write_u32le(80).unwrap(); // header size
-                    data.write_u32le(16000).unwrap(); // sample rate
+                    data.write_u32le(16_000).unwrap(); // sample rate
                     data.write_u32le(1).unwrap(); // mode = wideband
                     data.write_u32le(4).unwrap(); // mode bitstream version
                     data.write_u32le(1).unwrap(); // channels
@@ -1026,9 +1025,7 @@ impl FlvDemux {
                 }
 
                 let tag_header = match flavors::tag_header(&data[4..]) {
-                    IResult::Error(_) | IResult::Incomplete(_) => {
-                        unimplemented!();
-                    }
+                    IResult::Error(_) | IResult::Incomplete(_) => unimplemented!(),
                     IResult::Done(_, tag_header) => tag_header,
                 };
 
@@ -1042,9 +1039,7 @@ impl FlvDemux {
                         gst_trace!(self.cat, obj: demuxer, "Found audio tag");
 
                         let data_header = match flavors::audio_data_header(&data[15..]) {
-                            IResult::Error(_) | IResult::Incomplete(_) => {
-                                unimplemented!();
-                            }
+                            IResult::Error(_) | IResult::Incomplete(_) => unimplemented!(),
                             IResult::Done(_, data_header) => data_header,
                         };
 
@@ -1054,9 +1049,7 @@ impl FlvDemux {
                         gst_trace!(self.cat, obj: demuxer, "Found video tag");
 
                         let data_header = match flavors::video_data_header(&data[15..]) {
-                            IResult::Error(_) | IResult::Incomplete(_) => {
-                                unimplemented!();
-                            }
+                            IResult::Error(_) | IResult::Incomplete(_) => unimplemented!(),
                             IResult::Done(_, data_header) => data_header,
                         };
 

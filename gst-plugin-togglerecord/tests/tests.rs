@@ -173,10 +173,9 @@ fn setup_sender_receiver(
                     i += 1;
                 },
                 SendData::Gaps(n) => for _ in 0..n {
-                    let event = gst::Event::new_gap(
-                        (offset + i * 20 * gst::MSECOND).into(),
-                        (20 * gst::MSECOND).into(),
-                    ).build();
+                    let event =
+                        gst::Event::new_gap(offset + i * 20 * gst::MSECOND, 20 * gst::MSECOND)
+                            .build();
                     let _ = sinkpad.send_event(event);
                     i += 1;
                 },
@@ -215,7 +214,7 @@ fn recv_buffers(
                     EventView::Gap(ref e) => {
                         let (ts, _) = e.get();
 
-                        res.push((segment.to_running_time(ts), ts.into()));
+                        res.push((segment.to_running_time(ts), ts));
                         n_buffers += 1;
                         if wait_buffers > 0 && n_buffers == wait_buffers {
                             return res;
@@ -433,7 +432,7 @@ fn test_one_stream_open_close_open() {
         let pts_off = if index >= 10 {
             10 * 20 * gst::MSECOND
         } else {
-            0 * gst::MSECOND
+            0.into()
         };
 
         let index = index as u64;
@@ -813,7 +812,7 @@ fn test_two_stream_open_close_open() {
         let pts_off = if index >= 10 {
             10 * 20 * gst::MSECOND
         } else {
-            0 * gst::MSECOND
+            0.into()
         };
 
         let index = index as u64;
@@ -829,7 +828,7 @@ fn test_two_stream_open_close_open() {
         let pts_off = if index >= 10 {
             10 * 20 * gst::MSECOND
         } else {
-            0 * gst::MSECOND
+            0.into()
         };
 
         let index = index as u64;
@@ -914,7 +913,7 @@ fn test_two_stream_open_close_open_gaps() {
         let pts_off = if index >= 10 {
             10 * 20 * gst::MSECOND
         } else {
-            0 * gst::MSECOND
+            0.into()
         };
 
         let index = index as u64;
@@ -930,7 +929,7 @@ fn test_two_stream_open_close_open_gaps() {
         let pts_off = if index >= 10 {
             10 * 20 * gst::MSECOND
         } else {
-            0 * gst::MSECOND
+            0.into()
         };
 
         let index = index as u64;
@@ -1113,7 +1112,7 @@ fn test_three_stream_open_close_open() {
         let pts_off = if index >= 10 {
             10 * 20 * gst::MSECOND
         } else {
-            0 * gst::MSECOND
+            0.into()
         };
 
         let index = index as u64;
@@ -1129,7 +1128,7 @@ fn test_three_stream_open_close_open() {
         let pts_off = if index >= 10 {
             10 * 20 * gst::MSECOND
         } else {
-            0 * gst::MSECOND
+            0.into()
         };
 
         let index = index as u64;
@@ -1144,7 +1143,7 @@ fn test_three_stream_open_close_open() {
         let pts_off = if index >= 10 {
             10 * 20 * gst::MSECOND
         } else {
-            0 * gst::MSECOND
+            0.into()
         };
 
         let index = index as u64;

@@ -15,7 +15,6 @@ use libc;
 use glib;
 use glib::translate::*;
 use gst;
-use gst::prelude::*;
 
 use object::*;
 use anyimpl::*;

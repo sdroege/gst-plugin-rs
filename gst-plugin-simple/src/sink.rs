@@ -13,7 +13,6 @@ use url::Url;
 use glib;
 use gst;
 use gst::prelude::*;
-use gst_base;
 use gst_base::prelude::*;
 
 use gst_plugin::object::*;

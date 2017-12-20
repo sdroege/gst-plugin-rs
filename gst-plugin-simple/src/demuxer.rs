@@ -19,7 +19,6 @@ use gst_plugin::element::*;
 use gst;
 use gst::prelude::*;
 use gst_base;
-use gst_base::prelude::*;
 
 pub type StreamIndex = u32;
 
