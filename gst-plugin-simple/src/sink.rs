@@ -30,8 +30,8 @@ use UriValidator;
 pub trait SinkImpl: Send + 'static {
     fn uri_validator(&self) -> Box<UriValidator>;
 
-    fn start(&mut self, sink: &BaseSink, uri: Url) -> Result<(), ErrorMessage>;
-    fn stop(&mut self, sink: &BaseSink) -> Result<(), ErrorMessage>;
+    fn start(&mut self, sink: &BaseSink, uri: Url) -> Result<(), gst::ErrorMessage>;
+    fn stop(&mut self, sink: &BaseSink) -> Result<(), gst::ErrorMessage>;
     fn render(&mut self, sink: &BaseSink, buffer: &gst::BufferRef) -> Result<(), FlowError>;
 }
 
@@ -169,7 +169,10 @@ impl BaseSinkImpl<BaseSink> for Sink {
             }
             (None, _) => {
                 gst_error!(self.cat, obj: sink, "No URI given");
-                error_msg!(gst::ResourceError::OpenRead, ["No URI given"]).post(sink);
+                sink.post_error_message(&gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["No URI given"]
+                ));
                 return false;
             }
         };
@@ -184,7 +187,7 @@ impl BaseSinkImpl<BaseSink> for Sink {
                 gst_error!(self.cat, obj: sink, "Failed to start: {:?}", msg);
 
                 self.uri.lock().unwrap().1 = false;
-                msg.post(sink);
+                sink.post_error_message(msg);
                 false
             }
         }
@@ -204,7 +207,7 @@ impl BaseSinkImpl<BaseSink> for Sink {
             Err(ref msg) => {
                 gst_error!(self.cat, obj: sink, "Failed to stop: {:?}", msg);
 
-                msg.post(sink);
+                sink.post_error_message(msg);
                 false
             }
         }
@@ -221,7 +224,7 @@ impl BaseSinkImpl<BaseSink> for Sink {
                 gst_error!(self.cat, obj: sink, "Failed to render: {:?}", flow_error);
                 match flow_error {
                     FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
-                        msg.post(sink);
+                        sink.post_error_message(msg);
                     }
                     _ => (),
                 }

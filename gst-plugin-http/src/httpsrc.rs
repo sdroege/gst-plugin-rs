@@ -64,7 +64,7 @@ impl HttpSrc {
         uri: Url,
         start: u64,
         stop: Option<u64>,
-    ) -> Result<StreamingState, ErrorMessage> {
+    ) -> Result<StreamingState, gst::ErrorMessage> {
         let cat = self.cat;
         let mut req = self.client.get(uri.clone());
 
@@ -82,7 +82,7 @@ impl HttpSrc {
 
         let response = try!(req.send().or_else(|err| {
             gst_error!(cat, obj: src, "Request failed: {:?}", err);
-            Err(error_msg!(
+            Err(gst_error_msg!(
                 gst::ResourceError::Read,
                 ["Failed to fetch {}: {}", uri, err.to_string()]
             ))
@@ -90,7 +90,7 @@ impl HttpSrc {
 
         if !response.status().is_success() {
             gst_error!(cat, obj: src, "Request status failed: {:?}", response);
-            return Err(error_msg!(
+            return Err(gst_error_msg!(
                 gst::ResourceError::Read,
                 ["Failed to fetch {}: {}", uri, response.status()]
             ));
@@ -120,7 +120,7 @@ impl HttpSrc {
         };
 
         if position != start {
-            return Err(error_msg!(
+            return Err(gst_error_msg!(
                 gst::ResourceError::Seek,
                 ["Failed to seek to {}: Got {}", start, position]
             ));
@@ -170,20 +170,25 @@ impl SourceImpl for HttpSrc {
         }
     }
 
-    fn start(&mut self, src: &BaseSrc, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, src: &BaseSrc, uri: Url) -> Result<(), gst::ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
         self.streaming_state = try!(self.do_request(src, uri, 0, None));
 
         Ok(())
     }
 
-    fn stop(&mut self, _src: &BaseSrc) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _src: &BaseSrc) -> Result<(), gst::ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
     }
 
-    fn seek(&mut self, src: &BaseSrc, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage> {
+    fn seek(
+        &mut self,
+        src: &BaseSrc,
+        start: u64,
+        stop: Option<u64>,
+    ) -> Result<(), gst::ErrorMessage> {
         let (position, old_stop, uri) = match self.streaming_state {
             StreamingState::Started {
                 position,
@@ -192,7 +197,10 @@ impl SourceImpl for HttpSrc {
                 ..
             } => (position, stop, uri.clone()),
             StreamingState::Stopped => {
-                return Err(error_msg!(gst::LibraryError::Failed, ["Not started yet"]));
+                return Err(gst_error_msg!(
+                    gst::LibraryError::Failed,
+                    ["Not started yet"]
+                ));
             }
         };
 
@@ -222,7 +230,7 @@ impl SourceImpl for HttpSrc {
                 ..
             } => (response, position),
             StreamingState::Stopped => {
-                return Err(FlowError::Error(error_msg!(
+                return Err(FlowError::Error(gst_error_msg!(
                     gst::LibraryError::Failed,
                     ["Not started yet"]
                 )));
@@ -230,7 +238,7 @@ impl SourceImpl for HttpSrc {
         };
 
         if *position != offset {
-            return Err(FlowError::Error(error_msg!(
+            return Err(FlowError::Error(gst_error_msg!(
                 gst::ResourceError::Seek,
                 ["Got unexpected offset {}, expected {}", offset, position]
             )));
@@ -239,7 +247,7 @@ impl SourceImpl for HttpSrc {
         let size = {
             let mut map = match buffer.map_writable() {
                 None => {
-                    return Err(FlowError::Error(error_msg!(
+                    return Err(FlowError::Error(gst_error_msg!(
                         gst::LibraryError::Failed,
                         ["Failed to map buffer"]
                     )));
@@ -251,7 +259,7 @@ impl SourceImpl for HttpSrc {
 
             try!(response.read(data).or_else(|err| {
                 gst_error!(cat, obj: src, "Failed to read: {:?}", err);
-                Err(FlowError::Error(error_msg!(
+                Err(FlowError::Error(gst_error_msg!(
                     gst::ResourceError::Read,
                     ["Failed to read at {}: {}", offset, err.to_string()]
                 )))

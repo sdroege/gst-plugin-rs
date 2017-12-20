@@ -1094,13 +1094,13 @@ impl DemuxerImpl for FlvDemux {
         demuxer: &Element,
         _upstream_size: Option<u64>,
         _random_access: bool,
-    ) -> Result<(), ErrorMessage> {
+    ) -> Result<(), gst::ErrorMessage> {
         self.state = State::NeedHeader;
 
         Ok(())
     }
 
-    fn stop(&mut self, demuxer: &Element) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, demuxer: &Element) -> Result<(), gst::ErrorMessage> {
         self.state = State::Stopped;
         self.adapter.clear();
         self.streaming_state = None;
@@ -1113,7 +1113,7 @@ impl DemuxerImpl for FlvDemux {
         demuxer: &Element,
         start: gst::ClockTime,
         stop: gst::ClockTime,
-    ) -> Result<SeekResult, ErrorMessage> {
+    ) -> Result<SeekResult, gst::ErrorMessage> {
         unimplemented!();
     }
 
@@ -1129,7 +1129,7 @@ impl DemuxerImpl for FlvDemux {
         self.update_state(demuxer)
     }
 
-    fn end_of_stream(&mut self, demuxer: &Element) -> Result<(), ErrorMessage> {
+    fn end_of_stream(&mut self, demuxer: &Element) -> Result<(), gst::ErrorMessage> {
         // nothing to do here, all data we have left is incomplete
         Ok(())
     }

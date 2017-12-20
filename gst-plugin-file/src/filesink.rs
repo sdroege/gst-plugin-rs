@@ -62,9 +62,9 @@ impl SinkImpl for FileSink {
         Box::new(validate_uri)
     }
 
-    fn start(&mut self, sink: &BaseSink, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, sink: &BaseSink, uri: Url) -> Result<(), gst::ErrorMessage> {
         if let StreamingState::Started { .. } = self.streaming_state {
-            return Err(error_msg!(
+            return Err(gst_error_msg!(
                 gst::LibraryError::Failed,
                 ["Sink already started"]
             ));
@@ -77,7 +77,7 @@ impl SinkImpl for FileSink {
                 "Unsupported file URI '{}'",
                 uri.as_str()
             );
-            Err(error_msg!(
+            Err(gst_error_msg!(
                 gst::LibraryError::Failed,
                 ["Unsupported file URI '{}'", uri.as_str()]
             ))
@@ -90,7 +90,7 @@ impl SinkImpl for FileSink {
                 "Could not open file for writing: {}",
                 err.to_string()
             );
-            Err(error_msg!(
+            Err(gst_error_msg!(
                 gst::ResourceError::OpenWrite,
                 [
                     "Could not open file for writing '{}': {}",
@@ -110,7 +110,7 @@ impl SinkImpl for FileSink {
         Ok(())
     }
 
-    fn stop(&mut self, _sink: &BaseSink) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _sink: &BaseSink) -> Result<(), gst::ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
@@ -128,7 +128,7 @@ impl SinkImpl for FileSink {
                 ref mut position,
             } => (file, position),
             StreamingState::Stopped => {
-                return Err(FlowError::Error(error_msg!(
+                return Err(FlowError::Error(gst_error_msg!(
                     gst::LibraryError::Failed,
                     ["Not started yet"]
                 )));
@@ -137,7 +137,7 @@ impl SinkImpl for FileSink {
 
         let map = match buffer.map_readable() {
             None => {
-                return Err(FlowError::Error(error_msg!(
+                return Err(FlowError::Error(gst_error_msg!(
                     gst::LibraryError::Failed,
                     ["Failed to map buffer"]
                 )));
@@ -148,7 +148,7 @@ impl SinkImpl for FileSink {
 
         try!(file.write_all(data).or_else(|err| {
             gst_error!(cat, obj: sink, "Failed to write: {}", err);
-            Err(FlowError::Error(error_msg!(
+            Err(FlowError::Error(gst_error_msg!(
                 gst::ResourceError::Write,
                 ["Failed to write: {}", err]
             )))

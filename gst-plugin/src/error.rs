@@ -9,7 +9,6 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fmt::Error as FmtError;
-use std::borrow::Cow;
 
 use glib_ffi;
 use gst_ffi;
@@ -19,111 +18,12 @@ use glib::translate::ToGlibPtr;
 use gst;
 use gst::prelude::*;
 
-#[macro_export]
-macro_rules! error_msg(
-// Plain strings
-    ($err:expr, ($msg:expr), [$dbg:expr]) =>  {
-        ErrorMessage::new(&$err, Some(From::from($msg)),
-                          Some(From::from($dbg)),
-                          file!(), module_path!(), line!())
-    };
-    ($err:expr, ($msg:expr)) => {
-        ErrorMessage::new(&$err, Some(From::from($msg)),
-                          None,
-                          file!(), module_path!(), line!())
-    };
-    ($err:expr, [$dbg:expr]) => {
-        ErrorMessage::new(&$err, None,
-                          Some(From::from($dbg)),
-                          file!(), module_path!(), line!())
-    };
-
-// Format strings
-    ($err:expr, ($($msg:tt)*), [$($dbg:tt)*]) =>  { {
-        ErrorMessage::new(&$err, Some(From::from(format!($($msg)*))),
-                          From::from(Some(format!($($dbg)*))),
-                          file!(), module_path!(), line!())
-    }};
-    ($err:expr, ($($msg:tt)*)) =>  { {
-        ErrorMessage::new(&$err, Some(From::from(format!($($msg)*))),
-                          None,
-                          file!(), module_path!(), line!())
-    }};
-
-    ($err:expr, [$($dbg:tt)*]) =>  { {
-        ErrorMessage::new(&$err, None,
-                          Some(From::from(format!($($dbg)*))),
-                          file!(), module_path!(), line!())
-    }};
-);
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct ErrorMessage {
-    error_domain: glib_ffi::GQuark,
-    error_code: i32,
-    message: Option<String>,
-    debug: Option<String>,
-    filename: &'static str,
-    function: &'static str,
-    line: u32,
-}
-
-impl ErrorMessage {
-    pub fn new<T: gst::MessageErrorDomain>(
-        error: &T,
-        message: Option<Cow<str>>,
-        debug: Option<Cow<str>>,
-        filename: &'static str,
-        function: &'static str,
-        line: u32,
-    ) -> ErrorMessage {
-        let domain = T::domain();
-        let code = error.code();
-
-        ErrorMessage {
-            error_domain: domain,
-            error_code: code,
-            message: message.map(|m| m.into_owned()),
-            debug: debug.map(|d| d.into_owned()),
-            filename: filename,
-            function: function,
-            line: line,
-        }
-    }
-
-    pub fn post<E: IsA<gst::Element>>(&self, element: &E) {
-        let ErrorMessage {
-            error_domain,
-            error_code,
-            ref message,
-            ref debug,
-            filename,
-            function,
-            line,
-        } = *self;
-
-        unsafe {
-            gst_ffi::gst_element_message_full(
-                element.to_glib_none().0,
-                gst_ffi::GST_MESSAGE_ERROR,
-                error_domain,
-                error_code,
-                message.to_glib_full(),
-                debug.to_glib_full(),
-                filename.to_glib_none().0,
-                function.to_glib_none().0,
-                line as i32,
-            );
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum FlowError {
     Flushing,
     Eos,
-    NotNegotiated(ErrorMessage),
-    Error(ErrorMessage),
+    NotNegotiated(gst::ErrorMessage),
+    Error(gst::ErrorMessage),
 }
 
 impl FlowError {
@@ -141,18 +41,10 @@ impl Display for FlowError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match *self {
             FlowError::Flushing | FlowError::Eos => f.write_str(self.description()),
-            FlowError::NotNegotiated(ref m) => f.write_fmt(format_args!(
-                "{}: {} ({})",
-                self.description(),
-                m.message.as_ref().map_or("None", |s| s.as_str()),
-                m.debug.as_ref().map_or("None", |s| s.as_str())
-            )),
-            FlowError::Error(ref m) => f.write_fmt(format_args!(
-                "{}: {} ({})",
-                self.description(),
-                m.message.as_ref().map_or("None", |s| s.as_str()),
-                m.debug.as_ref().map_or("None", |s| s.as_str())
-            )),
+            FlowError::NotNegotiated(ref m) => {
+                f.write_fmt(format_args!("{}: {}", self.description(), m))
+            }
+            FlowError::Error(ref m) => f.write_fmt(format_args!("{}: {}", self.description(), m)),
         }
     }
 }
@@ -218,10 +110,9 @@ macro_rules! panic_to_error(
     ($element:expr, $panicked:expr, $ret:expr, $code:block) => {{
         use std::panic::{self, AssertUnwindSafe};
         use std::sync::atomic::Ordering;
-        use $crate::error::ErrorMessage;
 
         if $panicked.load(Ordering::Relaxed) {
-            error_msg!(gst::LibraryError::Failed, ["Panicked"]).post($element);
+            $element.post_error_message(&gst_error_msg!(gst::LibraryError::Failed, ["Panicked"]));
             $ret
         } else {
             let result = panic::catch_unwind(AssertUnwindSafe(|| $code));
@@ -231,11 +122,11 @@ macro_rules! panic_to_error(
                 Err(err) => {
                     $panicked.store(true, Ordering::Relaxed);
                     if let Some(cause) = err.downcast_ref::<&str>() {
-                        error_msg!(gst::LibraryError::Failed, ["Panicked: {}", cause]).post($element);
+                        $element.post_error_message(&gst_error_msg!(gst::LibraryError::Failed, ["Panicked: {}", cause]));
                     } else if let Some(cause) = err.downcast_ref::<String>() {
-                        error_msg!(gst::LibraryError::Failed, ["Panicked: {}", cause]).post($element);
+                        $element.post_error_message(&gst_error_msg!(gst::LibraryError::Failed, ["Panicked: {}", cause]));
                     } else {
-                        error_msg!(gst::LibraryError::Failed, ["Panicked"]).post($element);
+                        $element.post_error_message(&gst_error_msg!(gst::LibraryError::Failed, ["Panicked"]));
                     }
                     $ret
                 }

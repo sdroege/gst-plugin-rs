@@ -52,21 +52,21 @@ pub trait DemuxerImpl: Send + 'static {
         demuxer: &Element,
         upstream_size: Option<u64>,
         random_access: bool,
-    ) -> Result<(), ErrorMessage>;
-    fn stop(&mut self, demuxer: &Element) -> Result<(), ErrorMessage>;
+    ) -> Result<(), gst::ErrorMessage>;
+    fn stop(&mut self, demuxer: &Element) -> Result<(), gst::ErrorMessage>;
 
     fn seek(
         &mut self,
         demuxer: &Element,
         start: gst::ClockTime,
         stop: gst::ClockTime,
-    ) -> Result<SeekResult, ErrorMessage>;
+    ) -> Result<SeekResult, gst::ErrorMessage>;
     fn handle_buffer(
         &mut self,
         demuxer: &Element,
         buffer: Option<gst::Buffer>,
     ) -> Result<HandleBufferResult, FlowError>;
-    fn end_of_stream(&mut self, demuxer: &Element) -> Result<(), ErrorMessage>;
+    fn end_of_stream(&mut self, demuxer: &Element) -> Result<(), gst::ErrorMessage>;
 
     fn is_seekable(&self, demuxer: &Element) -> bool;
     fn get_position(&self, demuxer: &Element) -> gst::ClockTime;
@@ -309,7 +309,7 @@ impl Demuxer {
             }
             Err(ref msg) => {
                 gst_error!(self.cat, obj: element, "Failed to start: {:?}", msg);
-                msg.post(element);
+                element.post_error_message(msg);
                 false
             }
         }
@@ -327,7 +327,7 @@ impl Demuxer {
             }
             Err(ref msg) => {
                 gst_error!(self.cat, obj: element, "Failed to stop: {:?}", msg);
-                msg.post(element);
+                element.post_error_message(msg);
                 false
             }
         }
@@ -401,7 +401,7 @@ impl Demuxer {
                     );
                     match flow_error {
                         FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
-                            msg.post(&element)
+                            element.post_error_message(msg);
                         }
                         _ => (),
                     }
@@ -461,7 +461,7 @@ impl Demuxer {
                         );
                         match flow_error {
                             FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
-                                msg.post(&element)
+                                element.post_error_message(msg);
                             }
                             _ => (),
                         }
@@ -497,7 +497,7 @@ impl Demuxer {
                             "Failed end of stream: {:?}",
                             msg
                         );
-                        msg.post(&element);
+                        element.post_error_message(msg);
                     }
                 }
                 pad.event_default(parent.as_ref(), event)
@@ -603,7 +603,7 @@ impl Demuxer {
                 Ok(res) => res,
                 Err(ref msg) => {
                     gst_error!(self.cat, obj: element, "Failed to seek: {:?}", msg);
-                    msg.post(element);
+                    element.post_error_message(msg);
                     return false;
                 }
             }

@@ -72,9 +72,9 @@ impl SourceImpl for FileSrc {
         }
     }
 
-    fn start(&mut self, src: &BaseSrc, uri: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, src: &BaseSrc, uri: Url) -> Result<(), gst::ErrorMessage> {
         if let StreamingState::Started { .. } = self.streaming_state {
-            return Err(error_msg!(
+            return Err(gst_error_msg!(
                 gst::LibraryError::Failed,
                 ["Source already started"]
             ));
@@ -87,7 +87,7 @@ impl SourceImpl for FileSrc {
                 "Unsupported file URI '{}'",
                 uri.as_str()
             );
-            Err(error_msg!(
+            Err(gst_error_msg!(
                 gst::LibraryError::Failed,
                 ["Unsupported file URI '{}'", uri.as_str()]
             ))
@@ -100,7 +100,7 @@ impl SourceImpl for FileSrc {
                 "Could not open file for reading: {}",
                 err.to_string()
             );
-            Err(error_msg!(
+            Err(gst_error_msg!(
                 gst::ResourceError::OpenRead,
                 [
                     "Could not open file for reading '{}': {}",
@@ -120,7 +120,7 @@ impl SourceImpl for FileSrc {
         Ok(())
     }
 
-    fn stop(&mut self, _src: &BaseSrc) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _src: &BaseSrc) -> Result<(), gst::ErrorMessage> {
         self.streaming_state = StreamingState::Stopped;
 
         Ok(())
@@ -142,7 +142,7 @@ impl SourceImpl for FileSrc {
                 ref mut position,
             } => (file, position),
             StreamingState::Stopped => {
-                return Err(FlowError::Error(error_msg!(
+                return Err(FlowError::Error(gst_error_msg!(
                     gst::LibraryError::Failed,
                     ["Not started yet"]
                 )));
@@ -152,7 +152,7 @@ impl SourceImpl for FileSrc {
         if *position != offset {
             try!(file.seek(SeekFrom::Start(offset)).or_else(|err| {
                 gst_error!(cat, obj: src, "Failed to seek to {}: {:?}", offset, err);
-                Err(FlowError::Error(error_msg!(
+                Err(FlowError::Error(gst_error_msg!(
                     gst::ResourceError::Seek,
                     ["Failed to seek to {}: {}", offset, err.to_string()]
                 )))
@@ -163,7 +163,7 @@ impl SourceImpl for FileSrc {
         let size = {
             let mut map = match buffer.map_writable() {
                 None => {
-                    return Err(FlowError::Error(error_msg!(
+                    return Err(FlowError::Error(gst_error_msg!(
                         gst::LibraryError::Failed,
                         ["Failed to map buffer"]
                     )));
@@ -175,7 +175,7 @@ impl SourceImpl for FileSrc {
 
             try!(file.read(data).or_else(|err| {
                 gst_error!(cat, obj: src, "Failed to read: {:?}", err);
-                Err(FlowError::Error(error_msg!(
+                Err(FlowError::Error(gst_error_msg!(
                     gst::ResourceError::Read,
                     ["Failed to read at {}: {}", offset, err.to_string()]
                 )))
@@ -189,7 +189,7 @@ impl SourceImpl for FileSrc {
         Ok(())
     }
 
-    fn seek(&mut self, _src: &BaseSrc, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
+    fn seek(&mut self, _src: &BaseSrc, _: u64, _: Option<u64>) -> Result<(), gst::ErrorMessage> {
         Ok(())
     }
 }

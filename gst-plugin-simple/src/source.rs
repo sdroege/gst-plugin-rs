@@ -35,8 +35,8 @@ pub trait SourceImpl: Send + 'static {
     fn is_seekable(&self, src: &BaseSrc) -> bool;
     fn get_size(&self, src: &BaseSrc) -> Option<u64>;
 
-    fn start(&mut self, src: &BaseSrc, uri: Url) -> Result<(), ErrorMessage>;
-    fn stop(&mut self, src: &BaseSrc) -> Result<(), ErrorMessage>;
+    fn start(&mut self, src: &BaseSrc, uri: Url) -> Result<(), gst::ErrorMessage>;
+    fn stop(&mut self, src: &BaseSrc) -> Result<(), gst::ErrorMessage>;
     fn fill(
         &mut self,
         src: &BaseSrc,
@@ -44,7 +44,12 @@ pub trait SourceImpl: Send + 'static {
         length: u32,
         buffer: &mut gst::BufferRef,
     ) -> Result<(), FlowError>;
-    fn seek(&mut self, src: &BaseSrc, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage>;
+    fn seek(
+        &mut self,
+        src: &BaseSrc,
+        start: u64,
+        stop: Option<u64>,
+    ) -> Result<(), gst::ErrorMessage>;
 }
 
 struct Source {
@@ -183,7 +188,10 @@ impl BaseSrcImpl<BaseSrc> for Source {
             }
             (None, _) => {
                 gst_error!(self.cat, obj: src, "No URI given");
-                error_msg!(gst::ResourceError::OpenRead, ["No URI given"]).post(src);
+                src.post_error_message(&gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["No URI given"]
+                ));
                 return false;
             }
         };
@@ -198,7 +206,7 @@ impl BaseSrcImpl<BaseSrc> for Source {
                 gst_error!(self.cat, obj: src, "Failed to start: {:?}", msg);
 
                 self.uri.lock().unwrap().1 = false;
-                msg.post(src);
+                src.post_error_message(msg);
                 false
             }
         }
@@ -218,7 +226,7 @@ impl BaseSrcImpl<BaseSrc> for Source {
             Err(ref msg) => {
                 gst_error!(self.cat, obj: src, "Failed to stop: {:?}", msg);
 
-                msg.post(src);
+                src.post_error_message(msg);
                 false
             }
         }
@@ -263,7 +271,7 @@ impl BaseSrcImpl<BaseSrc> for Source {
                 gst_error!(self.cat, obj: src, "Failed to fill: {:?}", flow_error);
                 match flow_error {
                     FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
-                        msg.post(src);
+                        src.post_error_message(msg);
                     }
                     _ => (),
                 }
@@ -292,7 +300,7 @@ impl BaseSrcImpl<BaseSrc> for Source {
             Ok(..) => true,
             Err(ref msg) => {
                 gst_error!(self.cat, obj: src, "Failed to seek {:?}", msg);
-                msg.post(src);
+                src.post_error_message(msg);
                 false
             }
         }
