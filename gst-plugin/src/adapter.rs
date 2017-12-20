@@ -9,6 +9,8 @@
 use std::collections::VecDeque;
 use std::cmp;
 use std::io;
+use std::fmt;
+use std::error::Error;
 
 use gst;
 use gst::prelude::*;
@@ -33,6 +35,18 @@ pub struct Adapter {
 #[derive(Debug, PartialEq, Eq)]
 pub enum AdapterError {
     NotEnoughData,
+}
+
+impl fmt::Display for AdapterError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Not enough data")
+    }
+}
+
+impl Error for AdapterError {
+    fn description(&self) -> &str {
+        "Not enough data"
+    }
 }
 
 impl Adapter {
