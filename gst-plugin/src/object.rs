@@ -231,7 +231,7 @@ unsafe extern "C" fn get_property<T: ObjectType>(
             ptr::write(value, ptr::read(v.to_glib_none().0));
             mem::forget(v);
         }
-        Err(_) => unimplemented!(),
+        Err(()) => eprintln!("Failed to get property"),
     }
 }
 
@@ -340,7 +340,7 @@ unsafe extern "C" fn sub_get_property<T: ObjectType>(
             ptr::write(value, ptr::read(v.to_glib_none().0));
             mem::forget(v);
         }
-        Err(_) => unimplemented!(),
+        Err(()) => eprintln!("Failed to get property"),
     }
 }
 
