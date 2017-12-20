@@ -11,7 +11,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::fs::File;
 use url::Url;
 
-use gst_plugin::error::*;
+use gst_plugin_simple::error::*;
 use gst_plugin_simple::source::*;
 use gst_plugin_simple::UriValidator;
 

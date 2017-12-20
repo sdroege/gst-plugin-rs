@@ -12,9 +12,10 @@ use std::u32;
 use std::u64;
 use std::collections::BTreeMap;
 
-use gst_plugin::error::*;
 use gst_plugin::object::*;
 use gst_plugin::element::*;
+
+use error::*;
 
 use gst;
 use gst::prelude::*;

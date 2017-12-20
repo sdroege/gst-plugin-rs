@@ -13,7 +13,7 @@ use reqwest::{Client, Response};
 use reqwest::header::{AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, ContentRangeSpec,
                       Range, RangeUnit};
 
-use gst_plugin::error::*;
+use gst_plugin_simple::error::*;
 use gst_plugin_simple::source::*;
 use gst_plugin_simple::UriValidator;
 

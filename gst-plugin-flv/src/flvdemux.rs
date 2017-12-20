@@ -14,11 +14,11 @@ use nom::IResult;
 
 use flavors::parser as flavors;
 
-use gst_plugin::error::*;
 use gst_plugin::adapter::*;
 use gst_plugin::bytes::*;
 use gst_plugin::element::*;
 use gst_plugin_simple::demuxer::*;
+use gst_plugin_simple::error::*;
 
 use gst;
 

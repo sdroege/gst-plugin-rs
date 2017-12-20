@@ -12,7 +12,7 @@ use url::Url;
 
 use std::io::Write;
 
-use gst_plugin::error::*;
+use gst_plugin_simple::error::*;
 use gst_plugin_simple::sink::*;
 use gst_plugin_simple::UriValidator;
 

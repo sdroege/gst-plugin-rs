@@ -17,8 +17,6 @@ extern crate url;
 pub mod source;
 pub mod sink;
 pub mod demuxer;
+pub mod error;
 
-pub type UriValidator = Fn(&url::Url) -> Result<(), gst_plugin::error::UriError>
-                            + Send
-                            + Sync
-                            + 'static;
+pub type UriValidator = Fn(&url::Url) -> Result<(), error::UriError> + Send + Sync + 'static;
