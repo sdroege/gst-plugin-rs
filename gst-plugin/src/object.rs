@@ -177,6 +177,99 @@ pub unsafe trait ObjectClass {
             );
         }
     }
+
+    fn add_signal(&mut self, name: &str, arg_types: &[glib::Type], ret_type: glib::Type) {
+        let arg_types = arg_types.iter().map(|t| t.to_glib()).collect::<Vec<_>>();
+        unsafe {
+            gobject_ffi::g_signal_newv(
+                name.to_glib_none().0,
+                *(self as *mut _ as *mut glib_ffi::GType),
+                gobject_ffi::G_SIGNAL_RUN_LAST,
+                ptr::null_mut(),
+                None,
+                ptr::null_mut(),
+                None,
+                ret_type.to_glib(),
+                arg_types.len() as u32,
+                arg_types.as_ptr() as *mut _,
+            );
+        }
+    }
+
+    fn add_signal_with_accumulator<F>(
+        &mut self,
+        name: &str,
+        arg_types: &[glib::Type],
+        ret_type: glib::Type,
+        accumulator: F,
+    ) where
+        F: Fn(&mut glib::Value, &glib::Value) -> bool + Send + Sync + 'static,
+    {
+        let arg_types = arg_types.iter().map(|t| t.to_glib()).collect::<Vec<_>>();
+
+        let accumulator: Box<
+            Box<Fn(&mut glib::Value, &glib::Value) -> bool + Send + Sync + 'static>,
+        > = Box::new(Box::new(accumulator));
+
+        unsafe extern "C" fn accumulator_trampoline(
+            _ihint: *mut gobject_ffi::GSignalInvocationHint,
+            return_accu: *mut gobject_ffi::GValue,
+            handler_return: *const gobject_ffi::GValue,
+            data: glib_ffi::gpointer,
+        ) -> glib_ffi::gboolean {
+            callback_guard!();
+            let accumulator: &&(Fn(&mut glib::Value, &glib::Value) -> bool
+                                    + Send
+                                    + Sync
+                                    + 'static) = mem::transmute(data);
+            accumulator(
+                &mut *(return_accu as *mut glib::Value),
+                &*(handler_return as *const glib::Value),
+            ).to_glib()
+        }
+
+        unsafe {
+            gobject_ffi::g_signal_newv(
+                name.to_glib_none().0,
+                *(self as *mut _ as *mut glib_ffi::GType),
+                gobject_ffi::G_SIGNAL_RUN_LAST,
+                ptr::null_mut(),
+                Some(accumulator_trampoline),
+                Box::into_raw(accumulator) as glib_ffi::gpointer,
+                None,
+                ret_type.to_glib(),
+                arg_types.len() as u32,
+                arg_types.as_ptr() as *mut _,
+            );
+        }
+    }
+
+    fn add_action_signal<F>(
+        &mut self,
+        name: &str,
+        arg_types: &[glib::Type],
+        ret_type: glib::Type,
+        handler: F,
+    ) where
+        F: Fn(&[glib::Value]) -> Option<glib::Value> + Send + Sync + 'static,
+    {
+        let arg_types = arg_types.iter().map(|t| t.to_glib()).collect::<Vec<_>>();
+        let handler = glib::Closure::new(handler);
+        unsafe {
+            gobject_ffi::g_signal_newv(
+                name.to_glib_none().0,
+                *(self as *mut _ as *mut glib_ffi::GType),
+                gobject_ffi::G_SIGNAL_RUN_LAST | gobject_ffi::G_SIGNAL_ACTION,
+                handler.to_glib_none().0,
+                None,
+                ptr::null_mut(),
+                None,
+                ret_type.to_glib(),
+                arg_types.len() as u32,
+                arg_types.as_ptr() as *mut _,
+            );
+        }
+    }
 }
 
 unsafe impl<T: ObjectType> ObjectClass for ClassStruct<T> {}
