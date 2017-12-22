@@ -8,7 +8,7 @@ repository = "https://github.com/sdroege/gst-plugin-rs/gst-plugin"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 homepage = "https://gstreamer.freedesktop.org"
-documentation = "https://sdroege.github.io/rustdoc/gst-plugin/gst_plugin_rs"
+documentation = "https://sdroege.github.io/rustdoc/gst-plugin/gst_plugin/"
 keywords = ["gstreamer", "multimedia", "audio", "video", "gnome"]
 
 [dependencies]
