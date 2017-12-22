@@ -7,10 +7,10 @@ license = "MIT/Apache-2.0"
 
 [dependencies]
 url = "1.1"
-gst-plugin = { path="../gst-plugin" }
+gst-plugin = { version = "0.1", path="../gst-plugin" }
 gst-plugin-simple = { path="../gst-plugin-simple" }
 reqwest = "0.8"
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
+gstreamer = { version = "0.10", features = ["v1_10"] }
 
 [lib]
 name = "gstrshttp"

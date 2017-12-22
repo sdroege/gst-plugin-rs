@@ -6,11 +6,11 @@ repository = "https://github.com/sdroege/gst-plugin-rs"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-gst-plugin = { path="../gst-plugin" }
-glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
-gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
-gstreamer-audio = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
+gst-plugin = { version = "0.1", path="../gst-plugin" }
+glib = "0.4"
+gstreamer = { version = "0.10", features = ["v1_10"] }
+gstreamer-base = { version = "0.10", features = ["v1_10"] }
+gstreamer-audio = { version = "0.10", features = ["v1_10"] }
 byte-slice-cast = "0.1"
 num-traits = "0.1"
 
