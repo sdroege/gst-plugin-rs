@@ -8,7 +8,8 @@ Application-side bindings for GStreamer can be found here: https://github.com/sd
 
 ## LICENSE
 
-gst-plugin-rs and all crates contained in here are licensed under either of
+gst-plugin-rs and all crates contained in here that are not listed below are
+licensed under either of
 
  * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
    http://www.apache.org/licenses/LICENSE-2.0)
@@ -16,6 +17,10 @@ gst-plugin-rs and all crates contained in here are licensed under either of
    http://opensource.org/licenses/MIT)
 
 at your option.
+
+gst-plugin-togglerecord is licensed under the Lesser General Public License
+([LICENSE-LGPLv2](LICENSE-LGPLv2)) version 2.1 or (at your option) any later
+version.
 
 GStreamer itself is licensed under the Lesser General Public License version
 2.1 or (at your option) any later version:
