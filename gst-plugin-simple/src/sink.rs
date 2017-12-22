@@ -168,10 +168,7 @@ impl BaseSinkImpl<BaseSink> for Sink {
             }
             (None, _) => {
                 gst_error!(self.cat, obj: sink, "No URI given");
-                sink.post_error_message(&gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["No URI given"]
-                ));
+                gst_element_error!(sink, gst::ResourceError::OpenRead, ["No URI given"]);
                 return false;
             }
         };
