@@ -187,10 +187,7 @@ impl BaseSrcImpl<BaseSrc> for Source {
             }
             (None, _) => {
                 gst_error!(self.cat, obj: src, "No URI given");
-                src.post_error_message(&gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["No URI given"]
-                ));
+                gst_element_error!(src, gst::ResourceError::OpenRead, ["No URI given"]);
                 return false;
             }
         };
