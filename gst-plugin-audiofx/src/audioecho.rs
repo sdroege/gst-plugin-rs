@@ -98,9 +98,9 @@ impl AudioEcho {
     fn new(_transform: &BaseTransform) -> Self {
         Self {
             cat: gst::DebugCategory::new(
-                "rsaudiofx",
+                "rsaudioecho",
                 gst::DebugColorFlags::empty(),
-                "Rust audiofx effect",
+                "Rust audioecho effect",
             ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(None),
@@ -180,7 +180,9 @@ impl ObjectImpl<BaseTransform> for AudioEcho {
         match *prop {
             Property::UInt64("max-delay", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_delay = value.get().unwrap();
+                if self.state.lock().unwrap().is_none() {
+                    settings.max_delay = value.get().unwrap();
+                }
             }
             Property::UInt64("delay", ..) => {
                 let mut settings = self.settings.lock().unwrap();
@@ -204,11 +206,7 @@ impl ObjectImpl<BaseTransform> for AudioEcho {
         match *prop {
             Property::UInt64("max-delay", ..) => {
                 let settings = self.settings.lock().unwrap();
-                if self.state.lock().unwrap().is_none() {
-                    Ok(settings.max_delay.to_value())
-                } else {
-                    Err(())
-                }
+                Ok(settings.max_delay.to_value())
             }
             Property::UInt64("delay", ..) => {
                 let settings = self.settings.lock().unwrap();
