@@ -471,7 +471,8 @@ where
         imp.transform_caps(
             &wrap,
             from_glib(direction),
-            from_glib_full(caps),
+            // FIXME: Should be &from_glib_borrow()
+            from_glib_none(caps),
             filter.as_ref(),
         )
     }).into_ptr()
