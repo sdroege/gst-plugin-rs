@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.1.2] - 2018-01-03
+### Fixed
+- BaseTransform::transform_caps() caps parameter is not owned when chainging
+  to the parent class' implementation either
+
 ## [0.1.1] - 2018-01-03
 ### Fixed
 - BaseTransform::transform_caps() caps parameter is not owned
