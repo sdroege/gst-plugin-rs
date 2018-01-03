@@ -38,7 +38,7 @@ pub trait BaseTransformImpl<T: BaseTransformBase>
         &self,
         element: &T,
         direction: gst::PadDirection,
-        caps: gst::Caps,
+        caps: &gst::Caps,
         filter: Option<&gst::Caps>,
     ) -> gst::Caps {
         element.parent_transform_caps(direction, caps, filter)
@@ -110,7 +110,7 @@ pub unsafe trait BaseTransformBase
     fn parent_transform_caps(
         &self,
         direction: gst::PadDirection,
-        caps: gst::Caps,
+        caps: &gst::Caps,
         filter: Option<&gst::Caps>,
     ) -> gst::Caps {
         unsafe {
@@ -124,7 +124,7 @@ pub unsafe trait BaseTransformBase
                     caps.to_glib_none().0,
                     filter.to_glib_none().0,
                 )),
-                None => caps,
+                None => caps.clone(),
             }
         }
     }
@@ -335,7 +335,7 @@ macro_rules! box_base_transform_impl(
                 imp.stop(element)
             }
 
-            fn transform_caps(&self, element: &T, direction: gst::PadDirection, caps: gst::Caps, filter: Option<&gst::Caps>) -> gst::Caps {
+            fn transform_caps(&self, element: &T, direction: gst::PadDirection, caps: &gst::Caps, filter: Option<&gst::Caps>) -> gst::Caps {
                 let imp: &$name<T> = self.as_ref();
                 imp.transform_caps(element, direction, caps, filter)
             }
@@ -471,8 +471,7 @@ where
         imp.transform_caps(
             &wrap,
             from_glib(direction),
-            // FIXME: Should be &from_glib_borrow()
-            from_glib_none(caps),
+            &from_glib_borrow(caps),
             filter.as_ref(),
         )
     }).into_ptr()
