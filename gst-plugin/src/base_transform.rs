@@ -121,7 +121,7 @@ pub unsafe trait BaseTransformBase
                 Some(f) => from_glib_full(f(
                     self.to_glib_none().0,
                     direction.to_glib(),
-                    caps.into_ptr(),
+                    caps.to_glib_none().0,
                     filter.to_glib_none().0,
                 )),
                 None => caps,
