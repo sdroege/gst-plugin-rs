@@ -6,8 +6,8 @@ license = "LGPL-2.1+"
 
 [dependencies]
 glib = "0.4"
-gstreamer = { version = "0.10", features = ["v1_10"] }
-gstreamer-video = { version = "0.10", features = ["v1_10"] }
+gstreamer = "0.10"
+gstreamer-video = "0.10"
 gst-plugin = { version = "0.1", path = "../gst-plugin" }
 gtk = { version = "0.3", features = ["v3_6"], optional = true }
 gio = { version = "0.3", optional = true }

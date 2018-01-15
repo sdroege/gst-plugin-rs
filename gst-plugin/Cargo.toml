@@ -17,11 +17,11 @@ lazy_static = "1.0"
 byteorder = "1.0"
 glib-sys = "0.5"
 gobject-sys = "0.5"
-gstreamer-sys = { version = "0.4", features = ["v1_10"] }
-gstreamer-base-sys = { version = "0.4", features = ["v1_10"] }
+gstreamer-sys = "0.4"
+gstreamer-base-sys = "0.4"
 glib = "0.4"
-gstreamer = { version = "0.10", features = ["v1_10"] }
-gstreamer-base = { version = "0.10" }
+gstreamer = "0.10"
+gstreamer-base = "0.10"
 
 [lib]
 name = "gst_plugin"

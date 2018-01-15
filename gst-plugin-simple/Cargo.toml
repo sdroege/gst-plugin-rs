@@ -9,8 +9,8 @@ license = "MIT/Apache-2.0"
 url = "1.1"
 glib = "0.4"
 gst-plugin = { version = "0.1", path="../gst-plugin" }
-gstreamer = { version = "0.10", features = ["v1_10"] }
-gstreamer-base = { version = "0.10", features = ["v1_10"] }
+gstreamer = "0.10"
+gstreamer-base = "0.10"
 
 [lib]
 name = "gst_plugin_simple"
