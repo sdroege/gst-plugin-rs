@@ -101,6 +101,10 @@ pub trait BaseTransformImpl<T: BaseTransformBase>
     fn transform_ip(&self, _element: &T, _buf: &mut gst::BufferRef) -> gst::FlowReturn {
         unimplemented!();
     }
+
+    fn transform_ip_passthrough(&self, _element: &T, _buf: &gst::BufferRef) -> gst::FlowReturn {
+        unimplemented!();
+    }
 }
 
 any_impl!(BaseTransformBase, BaseTransformImpl);
@@ -388,6 +392,11 @@ macro_rules! box_base_transform_impl(
             fn transform_ip(&self, element: &T, buf: &mut gst::BufferRef) -> gst::FlowReturn {
                 let imp: &$name<T> = self.as_ref();
                 imp.transform_ip(element, buf)
+            }
+
+            fn transform_ip_passthrough(&self, element: &T, buf: &gst::BufferRef) -> gst::FlowReturn {
+                let imp: &$name<T> = self.as_ref();
+                imp.transform_ip_passthrough(element, buf)
             }
         }
     };
@@ -700,6 +709,10 @@ where
     let buf = buf as *mut gst_ffi::GstBuffer;
 
     panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
-        imp.transform_ip(&wrap, gst::BufferRef::from_mut_ptr(buf))
+        if from_glib(gst_base_ffi::gst_base_transform_is_passthrough(ptr)) {
+            imp.transform_ip_passthrough(&wrap, gst::BufferRef::from_ptr(buf))
+        } else {
+            imp.transform_ip(&wrap, gst::BufferRef::from_mut_ptr(buf))
+        }
     }).to_glib()
 }
