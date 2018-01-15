@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.1.3] - 2018-01-15
+### Fixed
+- Only require GStreamer >= 1.8, not >= 1.10. We didn't use any 1.10 API
+  anymore since quite a while
+- Don't call BaseTransform::transform_ip in passthrough mode with a mutable
+  reference, but call a new transform_ip_passthrough with an immutable
+  reference. The mutable reference would've failed all mutable operations.
+
 ## [0.1.2] - 2018-01-03
 ### Fixed
 - BaseTransform::transform_caps() caps parameter is not owned when chainging
