@@ -26,7 +26,7 @@ macro_rules! plugin_define(
             #[allow(non_upper_case_globals)]
             pub static gst_plugin_desc: GstPluginDesc = GstPluginDesc($crate::gst_ffi::GstPluginDesc {
                 major_version: 1,
-                minor_version: 10,
+                minor_version: 8,
                 name: $name as *const u8 as *const c_char,
                 description: $description as *const u8 as *const c_char,
                 plugin_init: Some(plugin_init_trampoline),
