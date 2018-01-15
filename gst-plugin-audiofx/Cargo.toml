@@ -8,9 +8,9 @@ license = "MIT/Apache-2.0"
 [dependencies]
 gst-plugin = { path="../gst-plugin" }
 glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
-gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
-gstreamer-audio = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
+gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
+gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
+gstreamer-audio = { git = "https://github.com/sdroege/gstreamer-rs" }
 byte-slice-cast = "0.1"
 num-traits = "0.1"
 

@@ -17,10 +17,10 @@ lazy_static = "1.0"
 byteorder = "1.0"
 glib-sys = { git = "https://github.com/gtk-rs/sys" }
 gobject-sys = { git = "https://github.com/gtk-rs/sys" }
-gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys", features = ["v1_10"] }
-gstreamer-base-sys = { git = "https://github.com/sdroege/gstreamer-sys", features = ["v1_10"] }
+gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys" }
+gstreamer-base-sys = { git = "https://github.com/sdroege/gstreamer-sys" }
 glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs", features = ["v1_10"] }
+gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
 gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
 
 [lib]
