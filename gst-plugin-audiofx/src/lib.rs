@@ -12,6 +12,7 @@ extern crate byte_slice_cast;
 extern crate glib;
 #[macro_use]
 extern crate gst_plugin;
+#[macro_use]
 extern crate gstreamer as gst;
 extern crate gstreamer_audio as gst_audio;
 extern crate gstreamer_base as gst_base;

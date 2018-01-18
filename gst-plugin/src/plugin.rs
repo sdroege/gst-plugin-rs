@@ -40,7 +40,24 @@ macro_rules! plugin_define(
             });
 
             unsafe extern "C" fn plugin_init_trampoline(plugin: *mut $crate::gst_ffi::GstPlugin) -> $crate::glib_ffi::gboolean {
-                super::$plugin_init(&from_glib_borrow(plugin)).to_glib()
+                use std::panic::{self, AssertUnwindSafe};
+
+                let result = panic::catch_unwind(AssertUnwindSafe(|| super::$plugin_init(&from_glib_borrow(plugin)).to_glib()));
+                match result {
+                    Ok(result) => result,
+                    Err(err) => {
+                        let cat = $crate::gst::DebugCategory::get("GST_PLUGIN_LOADING").unwrap();
+                        if let Some(cause) = err.downcast_ref::<&str>() {
+                            gst_error!(cat, "Failed to initialize plugin due to panic: {}", cause);
+                        } else if let Some(cause) = err.downcast_ref::<String>() {
+                            gst_error!(cat, "Failed to initialize plugin due to panic: {}", cause);
+                        } else {
+                            gst_error!(cat, "Failed to initialize plugin due to panic");
+                        }
+
+                        $crate::glib_ffi::GFALSE
+                    }
+                }
             }
         }
     };
