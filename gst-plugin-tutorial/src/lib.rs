@@ -11,15 +11,21 @@ extern crate glib;
 extern crate gst_plugin;
 #[macro_use]
 extern crate gstreamer as gst;
+extern crate gstreamer_audio as gst_audio;
 extern crate gstreamer_base as gst_base;
 extern crate gstreamer_video as gst_video;
 
+extern crate byte_slice_cast;
+extern crate num_traits;
+
 mod rgb2gray;
+mod sinesrc;
 
 // Plugin entry point that should register all elements provided by this plugin,
 // and everything else that this plugin might provide (e.g. typefinders or device providers).
 fn plugin_init(plugin: &gst::Plugin) -> bool {
     rgb2gray::register(plugin);
+    sinesrc::register(plugin);
     true
 }
 
