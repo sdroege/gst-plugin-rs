@@ -12,7 +12,7 @@ API builds upon the [application-side GStreamer bindings](https://github.com/sdr
 Check the README.md of that repository also for details about how to set-up
 your development environment.
 
-Various example plugins can be found in the [GIT repository](https://github.com/sdroege/gst-plugin-rs/).
+Various example plugins can be found in the [GIT repository](https://github.com/sdroege/gst-plugin-rs/). A blog post series about writing GStreamer plugins/elements can be found [here](https://coaxion.net/blog/2018/01/how-to-write-gstreamer-elements-in-rust-part-1-a-video-filter-for-converting-rgb-to-grayscale/).
 
 For background and motivation, see the [announcement
 blogpost](https://coaxion.net/blog/2016/05/writing-gstreamer-plugins-and-elements-in-rust/)
