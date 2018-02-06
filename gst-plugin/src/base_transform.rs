@@ -62,7 +62,12 @@ pub trait BaseTransformImpl<T: BaseTransformBase>
         element.parent_accept_caps(direction, caps)
     }
 
-    fn query(&self, element: &T, direction: gst::PadDirection, query: &mut gst::QueryRef) -> bool {
+    fn query(
+        &self,
+        element: &T,
+        direction: gst::PadDirection,
+        query: &mut gst::QueryView,
+    ) -> bool {
         element.parent_query(direction, query)
     }
 
@@ -173,8 +178,13 @@ pub unsafe trait BaseTransformBase
         }
     }
 
-    fn parent_query(&self, direction: gst::PadDirection, query: &mut gst::QueryRef) -> bool {
+    fn parent_query(
+        &self,
+        direction: gst::PadDirection,
+        query: &mut gst::QueryView,
+    ) -> bool {
         unsafe {
+            let query: &mut gst::Query = query.into();
             let klass = self.get_class();
             let parent_klass =
                 (*klass).get_parent_class() as *const gst_base_ffi::GstBaseTransformClass;
@@ -359,7 +369,7 @@ macro_rules! box_base_transform_impl(
                 imp.accept_caps(element, direction, caps)
             }
 
-            fn query(&self, element: &T, direction: gst::PadDirection, query: &mut gst::QueryRef) -> bool {
+            fn query(&self, element: &T, direction: gst::PadDirection, query: &mut gst::QueryView) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 BaseTransformImpl::query(imp, element, direction, query)
             }
@@ -568,7 +578,7 @@ where
             imp,
             &wrap,
             from_glib(direction),
-            gst::QueryRef::from_mut_ptr(query),
+            &mut gst::Query::from_glib_none(query).into(),
         )
     }).to_glib()
 }

@@ -9,8 +9,12 @@ license = "MIT/Apache-2.0"
 url = "1.1"
 glib = { git = "https://github.com/gtk-rs/glib" }
 gst-plugin = { path="../gst-plugin" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
-gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
+
+# Temporary (preview Query changes)
+#gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
+#gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
+gstreamer = { git = "https://github.com/fengalin/gstreamer-rs", branch = "query_deref" }
+gstreamer-base = { git = "https://github.com/fengalin/gstreamer-rs", branch = "query_deref" }
 
 [lib]
 name = "gst_plugin_simple"

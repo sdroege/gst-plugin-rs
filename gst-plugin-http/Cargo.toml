@@ -10,7 +10,10 @@ url = "1.1"
 gst-plugin = { path="../gst-plugin" }
 gst-plugin-simple = { path="../gst-plugin-simple" }
 reqwest = "0.8"
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
+
+# Temporary (preview Query changes)
+#gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
+gstreamer = { git = "https://github.com/fengalin/gstreamer-rs", branch = "query_deref" }
 
 [lib]
 name = "gstrshttp"
