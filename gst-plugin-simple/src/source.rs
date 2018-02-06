@@ -228,10 +228,10 @@ impl BaseSrcImpl<BaseSrc> for Source {
         }
     }
 
-    fn query(&self, src: &BaseSrc, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, src: &BaseSrc, query: &mut gst::QueryView) -> bool {
         use gst::QueryView;
 
-        match query.view_mut() {
+        match *query {
             QueryView::Scheduling(ref mut q) if self.push_only => {
                 q.set(gst::SchedulingFlags::SEQUENTIAL, 1, -1, 0);
                 q.add_scheduling_modes(&[gst::PadMode::Push]);

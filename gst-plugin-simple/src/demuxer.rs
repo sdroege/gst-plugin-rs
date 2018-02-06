@@ -271,7 +271,7 @@ impl Demuxer {
     fn sink_activate(pad: &gst::Pad, _parent: &Option<gst::Object>) -> bool {
         let mode = {
             let mut query = gst::Query::new_scheduling();
-            if !pad.peer_query(query.get_mut().unwrap()) {
+            if !pad.peer_query(&mut query) {
                 return false;
             }
 
@@ -507,7 +507,7 @@ impl Demuxer {
         }
     }
 
-    fn src_query(pad: &gst::Pad, parent: &Option<gst::Object>, query: &mut gst::QueryRef) -> bool {
+    fn src_query(pad: &gst::Pad, parent: &Option<gst::Object>, query: &mut gst::QueryView) -> bool {
         use gst::QueryView;
 
         let element = parent
@@ -518,7 +518,7 @@ impl Demuxer {
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
-        match query.view_mut() {
+        match *query {
             QueryView::Position(ref mut q) => {
                 let fmt = q.get_format();
                 if fmt == gst::Format::Time {
@@ -572,7 +572,7 @@ impl Demuxer {
 
         // FIXME: Have to do it outside the match because otherwise query is already mutably
         // borrowed by the query view.
-        pad.query_default(parent.as_ref(), query)
+        pad.query_default(parent.as_ref(), query.into())
     }
 
     fn src_event(pad: &gst::Pad, parent: &Option<gst::Object>, event: gst::Event) -> bool {

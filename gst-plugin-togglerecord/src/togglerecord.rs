@@ -1039,7 +1039,7 @@ impl ToggleRecord {
         }
     }
 
-    fn sink_query(&self, pad: &gst::Pad, element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn sink_query(&self, pad: &gst::Pad, element: &Element, query: &mut gst::QueryView) -> bool {
         let stream = match self.pads.lock().unwrap().get(pad) {
             None => {
                 gst_element_error!(
@@ -1054,7 +1054,7 @@ impl ToggleRecord {
 
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
 
-        stream.srcpad.peer_query(query)
+        stream.srcpad.peer_query(query.into())
     }
 
     fn src_event(&self, pad: &gst::Pad, element: &Element, mut event: gst::Event) -> bool {
@@ -1099,7 +1099,7 @@ impl ToggleRecord {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(&self, pad: &gst::Pad, element: &Element, query: &mut gst::QueryView) -> bool {
         use gst::QueryView;
 
         let stream = match self.pads.lock().unwrap().get(pad) {
@@ -1115,30 +1115,25 @@ impl ToggleRecord {
         };
 
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
-        match query.view_mut() {
+        match *query {
             QueryView::Scheduling(ref mut q) => {
                 let mut new_query = gst::Query::new_scheduling();
-                let res = stream.sinkpad.peer_query(new_query.get_mut().unwrap());
+                let res = stream.sinkpad.peer_query(&mut new_query);
                 if !res {
                     return res;
                 }
 
                 gst_log!(self.cat, obj: pad, "Downstream returned {:?}", new_query);
 
-                match new_query.view() {
-                    QueryView::Scheduling(ref n) => {
-                        let (flags, min, max, align) = n.get_result();
-                        q.set(flags, min, max, align);
-                        q.add_scheduling_modes(&n.get_scheduling_modes()
-                            .iter()
-                            .cloned()
-                            .filter(|m| m != &gst::PadMode::Pull)
-                            .collect::<Vec<_>>());
-                        gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());
-                        return true;
-                    }
-                    _ => unreachable!(),
-                }
+                let (flags, min, max, align) = new_query.get_result();
+                q.set(flags, min, max, align);
+                q.add_scheduling_modes(&new_query.get_scheduling_modes()
+                    .iter()
+                    .cloned()
+                    .filter(|m| m != &gst::PadMode::Pull)
+                    .collect::<Vec<_>>());
+                gst_log!(self.cat, obj: pad, "Returning {:?}", &q);
+                return true;
             }
             QueryView::Seeking(ref mut q) => {
                 // Seeking is not possible here
@@ -1149,7 +1144,7 @@ impl ToggleRecord {
                     gst::GenericFormattedValue::new(format, -1),
                 );
 
-                gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());
+                gst_log!(self.cat, obj: pad, "Returning {:?}", &q);
                 return true;
             }
             // Position and duration is always the current recording position
@@ -1186,8 +1181,8 @@ impl ToggleRecord {
             _ => (),
         };
 
-        gst_log!(self.cat, obj: pad, "Forwarding query {:?}", query);
-        stream.sinkpad.peer_query(query)
+        gst_log!(self.cat, obj: pad, "Forwarding query {:?}", &query);
+        stream.sinkpad.peer_query(query.into())
     }
 
     fn iterate_internal_links(&self, pad: &gst::Pad, element: &Element) -> gst::Iterator<gst::Pad> {

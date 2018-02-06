@@ -62,7 +62,7 @@ pub trait BaseSinkImpl<T: BaseSinkBase>
         gst::FlowReturn::Ok
     }
 
-    fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, element: &T, query: &mut gst::QueryView) -> bool {
         element.parent_query(query)
     }
 
@@ -95,8 +95,9 @@ any_impl!(BaseSinkBase, BaseSinkImpl);
 
 pub unsafe trait BaseSinkBase
     : IsA<gst::Element> + IsA<gst_base::BaseSink> + ObjectType {
-    fn parent_query(&self, query: &mut gst::QueryRef) -> bool {
+    fn parent_query(&self, query: &mut gst::QueryView) -> bool {
         unsafe {
+            let query: &mut gst::Query = query.into();
             let klass = self.get_class();
             let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSinkClass;
             (*parent_klass)
@@ -235,7 +236,7 @@ macro_rules! box_base_sink_impl(
                 imp.prepare_list(element, list)
             }
 
-            fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
+            fn query(&self, element: &T, query: &mut gst::QueryView) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 BaseSinkImpl::query(imp, element, query)
             }
@@ -415,10 +416,10 @@ where
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
-    let query = gst::QueryRef::from_mut_ptr(query_ptr);
+    let mut query: gst::QueryView = gst::Query::from_glib_none(query_ptr).into();
 
     panic_to_error!(&wrap, &element.panicked, false, {
-        BaseSinkImpl::query(imp, &wrap, query)
+        BaseSinkImpl::query(imp, &wrap, &mut query)
     }).to_glib()
 }
 

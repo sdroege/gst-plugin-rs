@@ -65,7 +65,7 @@ pub trait BaseSrcImpl<T: BaseSrcBase>
         element.parent_do_seek(segment)
     }
 
-    fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, element: &T, query: &mut gst::QueryView) -> bool {
         element.parent_query(query)
     }
 
@@ -133,8 +133,9 @@ pub unsafe trait BaseSrcBase
         }
     }
 
-    fn parent_query(&self, query: &mut gst::QueryRef) -> bool {
+    fn parent_query(&self, query: &mut gst::QueryView) -> bool {
         unsafe {
+            let query: &mut gst::Query = query.into();
             let klass = self.get_class();
             let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
             (*parent_klass)
@@ -302,7 +303,7 @@ macro_rules! box_base_src_impl(
                 imp.do_seek(element, segment)
             }
 
-            fn query(&self, element: &T, query: &mut gst::QueryRef) -> bool {
+            fn query(&self, element: &T, query: &mut gst::QueryView) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 BaseSrcImpl::query(imp, element, query)
             }
@@ -519,10 +520,10 @@ where
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
-    let query = gst::QueryRef::from_mut_ptr(query_ptr);
+    let mut query: gst::QueryView = gst::Query::from_glib_none(query_ptr).into();
 
     panic_to_error!(&wrap, &element.panicked, false, {
-        BaseSrcImpl::query(imp, &wrap, query)
+        BaseSrcImpl::query(imp, &wrap, &mut query)
     }).to_glib()
 }
 
