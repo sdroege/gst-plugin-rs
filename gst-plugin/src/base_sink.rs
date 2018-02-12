@@ -267,7 +267,7 @@ macro_rules! box_base_sink_impl(
 
             fn unlock_stop(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
-                imp.unlock(element)
+                imp.unlock_stop(element)
             }
         }
     };
