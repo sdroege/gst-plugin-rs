@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.1.4] - 2018-02-12
+### Fixed
+- Fix BaseSrc::unlock_stop() and the same in BaseSink. It was calling unlock()
+  instead of unlock_stop() before, making it rather useless.
+
 ## [0.1.3] - 2018-01-15
 ### Fixed
 - Only require GStreamer >= 1.8, not >= 1.10. We didn't use any 1.10 API
