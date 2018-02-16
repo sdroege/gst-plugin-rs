@@ -271,7 +271,7 @@ impl Demuxer {
     fn sink_activate(pad: &gst::Pad, _parent: &Option<gst::Object>) -> bool {
         let mode = {
             let mut query = gst::Query::new_scheduling();
-            if !pad.peer_query(query.get_mut().unwrap()) {
+            if !pad.peer_query(&mut query) {
                 return false;
             }
 

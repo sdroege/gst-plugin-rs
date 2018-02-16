@@ -1118,27 +1118,22 @@ impl ToggleRecord {
         match query.view_mut() {
             QueryView::Scheduling(ref mut q) => {
                 let mut new_query = gst::Query::new_scheduling();
-                let res = stream.sinkpad.peer_query(new_query.get_mut().unwrap());
+                let res = stream.sinkpad.peer_query(&mut new_query);
                 if !res {
                     return res;
                 }
 
                 gst_log!(self.cat, obj: pad, "Downstream returned {:?}", new_query);
 
-                match new_query.view() {
-                    QueryView::Scheduling(ref n) => {
-                        let (flags, min, max, align) = n.get_result();
-                        q.set(flags, min, max, align);
-                        q.add_scheduling_modes(&n.get_scheduling_modes()
-                            .iter()
-                            .cloned()
-                            .filter(|m| m != &gst::PadMode::Pull)
-                            .collect::<Vec<_>>());
-                        gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());
-                        return true;
-                    }
-                    _ => unreachable!(),
-                }
+                let (flags, min, max, align) = new_query.get_result();
+                q.set(flags, min, max, align);
+                q.add_scheduling_modes(&new_query.get_scheduling_modes()
+                    .iter()
+                    .cloned()
+                    .filter(|m| m != &gst::PadMode::Pull)
+                    .collect::<Vec<_>>());
+                gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());
+                return true;
             }
             QueryView::Seeking(ref mut q) => {
                 // Seeking is not possible here
