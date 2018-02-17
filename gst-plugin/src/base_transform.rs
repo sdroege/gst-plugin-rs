@@ -427,7 +427,6 @@ unsafe extern "C" fn base_transform_start<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -444,7 +443,6 @@ unsafe extern "C" fn base_transform_stop<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -464,7 +462,6 @@ unsafe extern "C" fn base_transform_transform_caps<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -495,7 +492,6 @@ unsafe extern "C" fn base_transform_fixate_caps<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -519,7 +515,6 @@ unsafe extern "C" fn base_transform_set_caps<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -538,7 +533,6 @@ unsafe extern "C" fn base_transform_accept_caps<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -557,7 +551,6 @@ unsafe extern "C" fn base_transform_query<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -584,7 +577,6 @@ unsafe extern "C" fn base_transform_transform_size<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -615,7 +607,6 @@ unsafe extern "C" fn base_transform_get_unit_size<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -639,7 +630,6 @@ unsafe extern "C" fn base_transform_sink_event<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -657,7 +647,6 @@ unsafe extern "C" fn base_transform_src_event<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -676,7 +665,6 @@ unsafe extern "C" fn base_transform_transform<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -698,7 +686,6 @@ unsafe extern "C" fn base_transform_transform_ip<T: BaseTransformBase>(
 where
     T::ImplType: BaseTransformImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);

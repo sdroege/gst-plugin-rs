@@ -370,7 +370,6 @@ unsafe extern "C" fn base_src_start<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -387,7 +386,6 @@ unsafe extern "C" fn base_src_stop<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -404,7 +402,6 @@ unsafe extern "C" fn base_src_is_seekable<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -422,7 +419,6 @@ unsafe extern "C" fn base_src_get_size<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -448,7 +444,6 @@ unsafe extern "C" fn base_src_fill<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -469,7 +464,6 @@ unsafe extern "C" fn base_src_create<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -496,7 +490,6 @@ unsafe extern "C" fn base_src_do_seek<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -514,7 +507,6 @@ unsafe extern "C" fn base_src_query<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -533,7 +525,6 @@ unsafe extern "C" fn base_src_event<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -551,7 +542,6 @@ unsafe extern "C" fn base_src_get_caps<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -574,7 +564,6 @@ unsafe extern "C" fn base_src_negotiate<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -592,7 +581,6 @@ unsafe extern "C" fn base_src_set_caps<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -611,7 +599,6 @@ unsafe extern "C" fn base_src_fixate<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -629,7 +616,6 @@ unsafe extern "C" fn base_src_unlock<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -646,7 +632,6 @@ unsafe extern "C" fn base_src_unlock_stop<T: BaseSrcBase>(
 where
     T::ImplType: BaseSrcImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);

@@ -22,12 +22,6 @@ pub extern crate glib;
 #[macro_use]
 pub extern crate gstreamer as gst;
 
-macro_rules! callback_guard {
-    () => (
-        let _guard = ::glib::CallbackGuard::new();
-    )
-}
-
 macro_rules! floating_reference_guard {
     ($obj:ident) => (
         let _guard = $crate::FloatingReferenceGuard::new($obj as *mut _);

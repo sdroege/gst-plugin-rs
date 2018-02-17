@@ -40,7 +40,6 @@ struct URIHandlerStatic<T: ObjectType> {
 unsafe extern "C" fn uri_handler_get_type<T: ObjectType>(
     type_: glib_ffi::GType,
 ) -> gst_ffi::GstURIType {
-    callback_guard!();
     let klass = gobject_ffi::g_type_class_peek(type_);
     let klass = &*(klass as *const ClassStruct<T>);
     let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type())
@@ -51,7 +50,6 @@ unsafe extern "C" fn uri_handler_get_type<T: ObjectType>(
 unsafe extern "C" fn uri_handler_get_protocols<T: ObjectType>(
     type_: glib_ffi::GType,
 ) -> *const *const libc::c_char {
-    callback_guard!();
     let klass = gobject_ffi::g_type_class_peek(type_);
     let klass = &*(klass as *const ClassStruct<T>);
     let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type())
@@ -62,7 +60,6 @@ unsafe extern "C" fn uri_handler_get_protocols<T: ObjectType>(
 unsafe extern "C" fn uri_handler_get_uri<T: ObjectType>(
     uri_handler: *mut gst_ffi::GstURIHandler,
 ) -> *mut libc::c_char {
-    callback_guard!();
     floating_reference_guard!(uri_handler);
 
     let klass = &**(uri_handler as *const *const ClassStruct<T>);
@@ -81,7 +78,6 @@ unsafe extern "C" fn uri_handler_set_uri<T: ObjectType>(
     uri: *const libc::c_char,
     err: *mut *mut glib_ffi::GError,
 ) -> glib_ffi::gboolean {
-    callback_guard!();
     floating_reference_guard!(uri_handler);
 
     let klass = &**(uri_handler as *const *const ClassStruct<T>);
@@ -105,7 +101,6 @@ unsafe extern "C" fn uri_handler_init<T: ObjectType>(
     iface: glib_ffi::gpointer,
     iface_data: glib_ffi::gpointer,
 ) {
-    callback_guard!();
     let uri_handler_iface = &mut *(iface as *mut gst_ffi::GstURIHandlerInterface);
 
     let iface_type = (*(iface as *const gobject_ffi::GTypeInterface)).g_type;

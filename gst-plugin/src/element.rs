@@ -235,7 +235,6 @@ unsafe extern "C" fn element_change_state<T: ElementBase>(
 where
     T::ImplType: ElementImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -265,7 +264,6 @@ unsafe extern "C" fn element_request_new_pad<T: ElementBase>(
 where
     T::ImplType: ElementImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -301,7 +299,6 @@ unsafe extern "C" fn element_release_pad<T: ElementBase>(
 ) where
     T::ImplType: ElementImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -319,7 +316,6 @@ unsafe extern "C" fn element_send_event<T: ElementBase>(
 where
     T::ImplType: ElementImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -337,7 +333,6 @@ unsafe extern "C" fn element_query<T: ElementBase>(
 where
     T::ImplType: ElementImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -355,7 +350,6 @@ unsafe extern "C" fn element_set_context<T: ElementBase>(
 ) where
     T::ImplType: ElementImpl<T>,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
