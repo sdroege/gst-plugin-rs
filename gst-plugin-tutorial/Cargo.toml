@@ -13,7 +13,7 @@ gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
 gstreamer-video = { git = "https://github.com/sdroege/gstreamer-rs" }
 gstreamer-audio = { git = "https://github.com/sdroege/gstreamer-rs" }
 byte-slice-cast = "0.1"
-num-traits = "0.1"
+num-traits = "0.2"
 
 [lib]
 name = "gstrstutorial"
