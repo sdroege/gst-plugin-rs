@@ -315,7 +315,8 @@ glib_wrapper! {
 }
 
 unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType> BaseTransformBase
-    for T {
+    for T
+{
 }
 pub type BaseTransformClass = ClassStruct<BaseTransform>;
 
@@ -432,9 +433,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, {
-        imp.start(&wrap)
-    }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_transform_stop<T: BaseTransformBase>(
@@ -448,9 +447,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, {
-        imp.stop(&wrap)
-    }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_transform_transform_caps<T: BaseTransformBase>(

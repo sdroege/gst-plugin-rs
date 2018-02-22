@@ -8,19 +8,19 @@
 // except according to those terms.
 
 extern crate byteorder;
+pub extern crate glib_sys as glib_ffi;
+pub extern crate gobject_sys as gobject_ffi;
 extern crate gstreamer_base_sys as gst_base_ffi;
+pub extern crate gstreamer_sys as gst_ffi;
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;
-pub extern crate glib_sys as glib_ffi;
-pub extern crate gobject_sys as gobject_ffi;
-pub extern crate gstreamer_sys as gst_ffi;
 
-extern crate gstreamer_base as gst_base;
 #[macro_use]
 pub extern crate glib;
 #[macro_use]
 pub extern crate gstreamer as gst;
+extern crate gstreamer_base as gst_base;
 
 macro_rules! floating_reference_guard {
     ($obj:ident) => (

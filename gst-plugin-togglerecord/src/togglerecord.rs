@@ -1127,7 +1127,8 @@ impl ToggleRecord {
 
                 let (flags, min, max, align) = new_query.get_result();
                 q.set(flags, min, max, align);
-                q.add_scheduling_modes(&new_query.get_scheduling_modes()
+                q.add_scheduling_modes(&new_query
+                    .get_scheduling_modes()
                     .iter()
                     .cloned()
                     .filter(|m| m != &gst::PadMode::Pull)

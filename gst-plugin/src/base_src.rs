@@ -375,9 +375,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, {
-        imp.start(&wrap)
-    }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_src_stop<T: BaseSrcBase>(
@@ -391,9 +389,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, {
-        imp.stop(&wrap)
-    }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_src_is_seekable<T: BaseSrcBase>(
@@ -407,9 +403,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, {
-        imp.is_seekable(&wrap)
-    }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.is_seekable(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_src_get_size<T: BaseSrcBase>(
@@ -569,9 +563,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, {
-        imp.negotiate(&wrap)
-    }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.negotiate(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_src_set_caps<T: BaseSrcBase>(
@@ -621,9 +613,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, {
-        imp.unlock(&wrap)
-    }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_src_unlock_stop<T: BaseSrcBase>(
@@ -637,7 +627,5 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
     let imp = &*element.imp;
 
-    panic_to_error!(&wrap, &element.panicked, false, {
-        imp.unlock_stop(&wrap)
-    }).to_glib()
+    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock_stop(&wrap) }).to_glib()
 }

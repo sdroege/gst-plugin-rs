@@ -54,7 +54,8 @@ glib_wrapper! {
 }
 
 unsafe impl<T: IsA<gst::Element> + IsA<gst::Bin> + IsA<gst::Pipeline> + ObjectType> PipelineBase
-    for T {
+    for T
+{
 }
 pub type PipelineClass = ClassStruct<Pipeline>;
 
