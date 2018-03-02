@@ -299,6 +299,7 @@ unsafe extern "C" fn base_sink_start<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -313,6 +314,7 @@ unsafe extern "C" fn base_sink_stop<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -328,6 +330,7 @@ unsafe extern "C" fn base_sink_render<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -346,6 +349,7 @@ unsafe extern "C" fn base_sink_prepare<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -364,6 +368,7 @@ unsafe extern "C" fn base_sink_render_list<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -382,6 +387,7 @@ unsafe extern "C" fn base_sink_prepare_list<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -400,6 +406,7 @@ unsafe extern "C" fn base_sink_query<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -418,6 +425,7 @@ unsafe extern "C" fn base_sink_event<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -435,6 +443,7 @@ unsafe extern "C" fn base_sink_get_caps<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -458,6 +467,7 @@ unsafe extern "C" fn base_sink_set_caps<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -476,6 +486,7 @@ unsafe extern "C" fn base_sink_fixate<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -493,6 +504,7 @@ unsafe extern "C" fn base_sink_unlock<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -507,6 +519,7 @@ unsafe extern "C" fn base_sink_unlock_stop<T: BaseSinkBase>(
 where
     T::ImplType: BaseSinkImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);

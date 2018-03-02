@@ -155,6 +155,7 @@ unsafe extern "C" fn bin_add_element<T: BinBase>(
 where
     T::ImplType: BinImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let bin = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -172,6 +173,7 @@ unsafe extern "C" fn bin_remove_element<T: BinBase>(
 where
     T::ImplType: BinImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let bin = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
@@ -188,6 +190,7 @@ unsafe extern "C" fn bin_handle_message<T: BinBase>(
 ) where
     T::ImplType: BinImpl<T>,
 {
+    callback_guard!();
     floating_reference_guard!(ptr);
     let bin = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
