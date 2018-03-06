@@ -64,6 +64,9 @@ unsafe impl PipelineClassExt<Pipeline> for PipelineClass {}
 unsafe impl BinClassExt<Pipeline> for PipelineClass {}
 unsafe impl ElementClassExt<Pipeline> for PipelineClass {}
 
+unsafe impl Send for Pipeline {}
+unsafe impl Sync for Pipeline {}
+
 #[macro_export]
 macro_rules! box_pipeline_impl(
     ($name:ident) => {

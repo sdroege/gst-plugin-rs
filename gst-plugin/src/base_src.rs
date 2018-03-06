@@ -250,6 +250,9 @@ pub type BaseSrcClass = ClassStruct<BaseSrc>;
 unsafe impl BaseSrcClassExt<BaseSrc> for BaseSrcClass {}
 unsafe impl ElementClassExt<BaseSrc> for BaseSrcClass {}
 
+unsafe impl Send for BaseSrc {}
+unsafe impl Sync for BaseSrc {}
+
 #[macro_export]
 macro_rules! box_base_src_impl(
     ($name:ident) => {

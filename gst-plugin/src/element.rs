@@ -166,6 +166,9 @@ pub type ElementClass = ClassStruct<Element>;
 // FIXME: Boilerplate
 unsafe impl ElementClassExt<Element> for ElementClass {}
 
+unsafe impl Send for Element {}
+unsafe impl Sync for Element {}
+
 #[macro_export]
 macro_rules! box_element_impl(
     ($name:ident) => {

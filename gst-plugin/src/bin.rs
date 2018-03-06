@@ -105,6 +105,9 @@ pub type BinClass = ClassStruct<Bin>;
 unsafe impl BinClassExt<Bin> for BinClass {}
 unsafe impl ElementClassExt<Bin> for BinClass {}
 
+unsafe impl Send for Bin {}
+unsafe impl Sync for Bin {}
+
 #[macro_export]
 macro_rules! box_bin_impl(
     ($name:ident) => {

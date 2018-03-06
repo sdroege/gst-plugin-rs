@@ -324,6 +324,9 @@ pub type BaseTransformClass = ClassStruct<BaseTransform>;
 unsafe impl BaseTransformClassExt<BaseTransform> for BaseTransformClass {}
 unsafe impl ElementClassExt<BaseTransform> for BaseTransformClass {}
 
+unsafe impl Send for BaseTransform {}
+unsafe impl Sync for BaseTransform {}
+
 #[macro_export]
 macro_rules! box_base_transform_impl(
     ($name:ident) => {

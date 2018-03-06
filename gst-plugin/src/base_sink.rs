@@ -199,6 +199,9 @@ pub type BaseSinkClass = ClassStruct<BaseSink>;
 unsafe impl BaseSinkClassExt<BaseSink> for BaseSinkClass {}
 unsafe impl ElementClassExt<BaseSink> for BaseSinkClass {}
 
+unsafe impl Send for BaseSink {}
+unsafe impl Sync for BaseSink {}
+
 #[macro_export]
 macro_rules! box_base_sink_impl(
     ($name:ident) => {
