@@ -1,0 +1,16 @@
+[package]
+name = "gst-plugin-threadshare"
+version = "0.1.0"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+license = "LGPL-2.1+"
+
+[dependencies]
+glib = { git = "https://github.com/gtk-rs/glib" }
+gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
+gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
+tokio = { git = "https://github.com/tokio-rs/tokio" }
+
+[lib]
+name = "gstthreadshare"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
