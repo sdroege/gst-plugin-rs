@@ -23,6 +23,13 @@ extern crate gst_plugin;
 #[macro_use]
 extern crate gstreamer as gst;
 
+extern crate futures;
+extern crate tokio;
+extern crate tokio_reactor;
+
+#[macro_use]
+extern crate lazy_static;
+
 mod udpsrc;
 
 fn plugin_init(plugin: &gst::Plugin) -> bool {
