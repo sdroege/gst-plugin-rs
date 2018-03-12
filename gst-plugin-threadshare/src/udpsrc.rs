@@ -38,6 +38,8 @@ use tokio::net;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
+use either::Either;
+
 lazy_static!{
     static ref CONTEXTS: Mutex<HashMap<String, Weak<IOContextInner>>> = Mutex::new(HashMap::new());
     static ref CONTEXT_CAT: gst::DebugCategory = gst::DebugCategory::new(
@@ -55,53 +57,122 @@ lazy_static!{
 // Our own simplified implementation of reactor::Background to allow hooking into its internals
 const RUNNING: usize = 0;
 const SHUTDOWN_NOW: usize = 1;
-const SHUTDOWN: usize = 2;
 
 struct IOContextRunner {
     name: String,
-    reactor: reactor::Reactor,
     shutdown: Arc<atomic::AtomicUsize>,
+    pending_futures: Option<Arc<Mutex<Vec<Box<Future<Item = (), Error = ()> + Send + 'static>>>>>,
 }
 
 impl IOContextRunner {
+    fn start_single_threaded(
+        name: &str,
+        reactor: reactor::Reactor,
+    ) -> (IOContextExecutor, IOContextShutdown) {
+        let handle = reactor.handle().clone();
+        let handle2 = reactor.handle().clone();
+        let shutdown = Arc::new(atomic::AtomicUsize::new(RUNNING));
+        let shutdown_clone = shutdown.clone();
+        let name_clone = name.into();
+
+        let pending_futures = Arc::new(Mutex::new(Vec::new()));
+        let pending_futures_clone = pending_futures.clone();
+
+        let mut runner = IOContextRunner {
+            shutdown: shutdown_clone,
+            name: name_clone,
+            pending_futures: Some(pending_futures),
+        };
+        let join = thread::spawn(move || {
+            runner.run(reactor);
+        });
+
+        let executor = IOContextExecutor {
+            handle: handle,
+            pending_futures: pending_futures_clone,
+        };
+
+        let shutdown = IOContextShutdown {
+            name: name.into(),
+            shutdown: shutdown,
+            handle: handle2,
+            join: Some(join),
+        };
+
+        (executor, shutdown)
+    }
+
     fn start(name: &str, reactor: reactor::Reactor) -> IOContextShutdown {
         let handle = reactor.handle().clone();
         let shutdown = Arc::new(atomic::AtomicUsize::new(RUNNING));
         let shutdown_clone = shutdown.clone();
         let name_clone = name.into();
+
+        let mut runner = IOContextRunner {
+            shutdown: shutdown_clone,
+            name: name_clone,
+            pending_futures: None,
+        };
         let join = thread::spawn(move || {
-            let mut runner = IOContextRunner {
-                reactor: reactor,
-                shutdown: shutdown_clone,
-                name: name_clone,
-            };
-            runner.run();
+            runner.run(reactor);
         });
 
-        IOContextShutdown {
+        let shutdown = IOContextShutdown {
             name: name.into(),
             shutdown: shutdown,
             handle: handle,
             join: Some(join),
-        }
+        };
+
+        shutdown
     }
 
-    fn run(&mut self) {
+    fn run(&mut self, reactor: reactor::Reactor) {
         gst_debug!(CONTEXT_CAT, "Started reactor thread '{}'", self.name);
-        loop {
-            if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
-                break;
-            }
 
-            gst_trace!(CONTEXT_CAT, "Turning reactor '{}'", self.name);
-            self.reactor.turn(None).unwrap();
+        if let Some(ref pending_futures) = self.pending_futures {
+            use tokio::executor::current_thread;
+
+            reactor.set_fallback().unwrap();
+            let handle = reactor.handle();
+            let mut enter = ::tokio_executor::enter().unwrap();
+            let mut current_thread = current_thread::CurrentThread::new_with_park(reactor);
+
+            ::tokio_reactor::with_default(&handle, &mut enter, |enter| loop {
+                if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
+                    break;
+                }
+
+                {
+                    let mut pending_futures =
+                        self.pending_futures.as_ref().unwrap().lock().unwrap();
+                    while let Some(future) = pending_futures.pop() {
+                        current_thread.spawn(future);
+                    }
+                }
+
+                gst_trace!(CONTEXT_CAT, "Turning current thread '{}'", self.name);
+                current_thread.enter(enter).turn(None).unwrap();
+                gst_trace!(CONTEXT_CAT, "Turned current thread '{}'", self.name);
+            });
+        } else {
+            let mut reactor = reactor;
+
+            loop {
+                if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
+                    break;
+                }
+
+                gst_trace!(CONTEXT_CAT, "Turning reactor '{}'", self.name);
+                reactor.turn(None).unwrap();
+                gst_trace!(CONTEXT_CAT, "Turned reactor '{}'", self.name);
+            }
         }
     }
 }
 
 impl Drop for IOContextRunner {
     fn drop(&mut self) {
-        self.shutdown.store(SHUTDOWN, atomic::Ordering::SeqCst);
         gst_debug!(CONTEXT_CAT, "Shut down reactor thread '{}'", self.name);
     }
 }
@@ -115,20 +186,33 @@ struct IOContextShutdown {
 
 impl Drop for IOContextShutdown {
     fn drop(&mut self) {
+        use tokio_executor::park::Unpark;
+
         gst_debug!(CONTEXT_CAT, "Shutting down reactor thread '{}'", self.name);
         self.shutdown.store(SHUTDOWN_NOW, atomic::Ordering::SeqCst);
-        loop {
-            use tokio_executor::park::Unpark;
-
-            // XXX: Not nice but good enough
-            gst_trace!(CONTEXT_CAT, "Waiting for reactor '{}' shutdown", self.name);
-            self.handle.unpark();
-            thread::yield_now();
-            if self.shutdown.load(atomic::Ordering::SeqCst) == SHUTDOWN {
-                break;
-            }
-        }
+        gst_trace!(CONTEXT_CAT, "Waiting for reactor '{}' shutdown", self.name);
+        // After being unparked, the next turn() is guaranteed to finish immediately,
+        // as such there is no race condition between checking for shutdown and setting
+        // shutdown.
+        self.handle.unpark();
         let _ = self.join.take().unwrap().join();
+    }
+}
+
+struct IOContextExecutor {
+    handle: reactor::Handle,
+    pending_futures: Arc<Mutex<Vec<Box<Future<Item = (), Error = ()> + Send + 'static>>>>,
+}
+
+impl IOContextExecutor {
+    fn spawn<F>(&self, future: F)
+    where
+        F: Future<Item = (), Error = ()> + Send + 'static,
+    {
+        use tokio_executor::park::Unpark;
+
+        self.pending_futures.lock().unwrap().push(Box::new(future));
+        self.handle.unpark();
     }
 }
 
@@ -137,7 +221,7 @@ struct IOContext(Arc<IOContextInner>);
 
 struct IOContextInner {
     name: String,
-    pool: thread_pool::ThreadPool,
+    pool: Either<thread_pool::ThreadPool, IOContextExecutor>,
     // Only used for dropping
     _shutdown: IOContextShutdown,
 }
@@ -151,7 +235,7 @@ impl Drop for IOContextInner {
 }
 
 impl IOContext {
-    fn new(name: &str, n_threads: usize) -> Self {
+    fn new(name: &str, n_threads: isize) -> Self {
         let mut contexts = CONTEXTS.lock().unwrap();
         if let Some(context) = contexts.get(name) {
             if let Some(context) = context.upgrade() {
@@ -162,21 +246,27 @@ impl IOContext {
 
         let reactor = reactor::Reactor::new().unwrap();
 
-        let handle = reactor.handle().clone();
+        let (pool, shutdown) = if n_threads >= 0 {
+            let handle = reactor.handle().clone();
 
-        let mut pool_builder = thread_pool::Builder::new();
-        pool_builder.around_worker(move |w, enter| {
-            ::tokio_reactor::with_default(&handle, enter, |_| {
-                w.run();
+            let shutdown = IOContextRunner::start(name, reactor);
+
+            let mut pool_builder = thread_pool::Builder::new();
+            pool_builder.around_worker(move |w, enter| {
+                ::tokio_reactor::with_default(&handle, enter, |_| {
+                    w.run();
+                });
             });
-        });
 
-        if n_threads > 0 {
-            pool_builder.pool_size(n_threads);
-        }
-        let pool = pool_builder.build();
+            if n_threads > 0 {
+                pool_builder.pool_size(n_threads as usize);
+            }
+            (Either::Left(pool_builder.build()), shutdown)
+        } else {
+            let (executor, shutdown) = IOContextRunner::start_single_threaded(name, reactor);
 
-        let shutdown = IOContextRunner::start(name, reactor);
+            (Either::Right(executor), shutdown)
+        };
 
         let context = Arc::new(IOContextInner {
             name: name.into(),
@@ -193,7 +283,10 @@ impl IOContext {
     where
         F: Future<Item = (), Error = ()> + Send + 'static,
     {
-        self.0.pool.spawn(future);
+        match self.0.pool {
+            Either::Left(ref pool) => pool.spawn(future),
+            Either::Right(ref pool) => pool.spawn(future),
+        }
     }
 }
 
@@ -458,7 +551,7 @@ const DEFAULT_PORT: u32 = 5000;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_MTU: u32 = 1500;
 const DEFAULT_CONTEXT: &'static str = "";
-const DEFAULT_CONTEXT_THREADS: u32 = 0;
+const DEFAULT_CONTEXT_THREADS: i32 = 0;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -467,7 +560,7 @@ struct Settings {
     caps: Option<gst::Caps>,
     mtu: u32,
     context: String,
-    context_threads: u32,
+    context_threads: i32,
 }
 
 impl Default for Settings {
@@ -521,11 +614,11 @@ static PROPERTIES: [Property; 6] = [
         Some(DEFAULT_CONTEXT),
         PropertyMutability::ReadWrite,
     ),
-    Property::UInt(
+    Property::Int(
         "context-threads",
         "Context Threads",
         "Number of threads for the context thread-pool if we create it",
-        (0, u16::MAX as u32),
+        (-1, u16::MAX as i32),
         DEFAULT_CONTEXT_THREADS,
         PropertyMutability::ReadWrite,
     ),
@@ -665,7 +758,7 @@ impl UdpSrc {
         // TODO: Error handling
         let mut state = self.state.lock().unwrap();
 
-        let io_context = IOContext::new(&settings.context, settings.context_threads as usize);
+        let io_context = IOContext::new(&settings.context, settings.context_threads as isize);
 
         let addr: IpAddr = match settings.address {
             None => return Err(()),
@@ -829,7 +922,7 @@ impl ObjectImpl<Element> for UdpSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::UInt("context-threads", ..) => {
+            Property::Int("context-threads", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_threads = value.get().unwrap();
             }
@@ -861,7 +954,7 @@ impl ObjectImpl<Element> for UdpSrc {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
-            Property::UInt("context-threads", ..) => {
+            Property::Int("context-threads", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context_threads.to_value())
             }

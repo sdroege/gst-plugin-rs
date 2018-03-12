@@ -28,6 +28,8 @@ extern crate tokio;
 extern crate tokio_executor;
 extern crate tokio_reactor;
 
+extern crate either;
+
 #[macro_use]
 extern crate lazy_static;
 
