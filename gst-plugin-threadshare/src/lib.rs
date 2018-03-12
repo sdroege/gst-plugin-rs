@@ -25,6 +25,7 @@ extern crate gstreamer as gst;
 
 extern crate futures;
 extern crate tokio;
+extern crate tokio_executor;
 extern crate tokio_reactor;
 
 #[macro_use]
