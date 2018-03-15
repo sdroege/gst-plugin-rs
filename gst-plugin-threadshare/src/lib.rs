@@ -33,6 +33,8 @@ extern crate either;
 #[macro_use]
 extern crate lazy_static;
 
+mod iocontext;
+mod udpsocket;
 mod udpsrc;
 
 fn plugin_init(plugin: &gst::Plugin) -> bool {

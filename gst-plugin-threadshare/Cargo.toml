@@ -19,3 +19,9 @@ either = "1.0"
 name = "gstthreadshare"
 crate-type = ["cdylib"]
 path = "src/lib.rs"
+
+[profile.release]
+lto = true
+opt-level = 3
+debug = true
+panic = 'unwind'
