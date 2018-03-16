@@ -14,6 +14,7 @@ tokio-executor = { git = "https://github.com/tokio-rs/tokio" }
 futures = "0.1"
 lazy_static = "1.0"
 either = "1.0"
+rand = "0.4"
 
 [lib]
 name = "gstthreadshare"

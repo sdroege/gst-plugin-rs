@@ -29,6 +29,10 @@ use std::u16;
 
 use tokio::net;
 
+use either::Either;
+
+use rand;
+
 use iocontext::*;
 use udpsocket::*;
 
@@ -293,8 +297,8 @@ impl UdpSrc {
         if state.need_initial_events {
             gst_debug!(self.cat, obj: element, "Pushing initial events");
 
-            // TODO: Invent a stream id
-            events.push(gst::Event::new_stream_start("meh").build());
+            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+            events.push(gst::Event::new_stream_start(&stream_id).build());
             if let Some(ref caps) = self.settings.lock().unwrap().caps {
                 events.push(gst::Event::new_caps(&caps).build());
                 state.configured_caps = Some(caps.clone());
@@ -310,8 +314,38 @@ impl UdpSrc {
             self.src_pad.push_event(event);
         }
 
-        // TODO: Error handling
-        self.src_pad.push(buffer).into_result().map(|_| ())
+        match self.src_pad.push(buffer).into_result() {
+            Ok(_) => {
+                gst_log!(self.cat, obj: element, "Successfully pushed buffer");
+                Ok(())
+            }
+            Err(gst::FlowError::Flushing) => {
+                gst_debug!(self.cat, obj: element, "Flushing");
+                let state = self.state.lock().unwrap();
+                if let Some(ref socket) = state.socket {
+                    socket.pause();
+                }
+                Ok(())
+            }
+            Err(gst::FlowError::Eos) => {
+                gst_debug!(self.cat, obj: element, "EOS");
+                let state = self.state.lock().unwrap();
+                if let Some(ref socket) = state.socket {
+                    socket.pause();
+                }
+                Ok(())
+            }
+            Err(err) => {
+                gst_error!(self.cat, obj: element, "Got error {}", err);
+                gst_element_error!(
+                    element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+                Err(gst::FlowError::CustomError)
+            }
+        }
     }
 
     fn prepare(&self, element: &Element) -> Result<(), ()> {
@@ -321,9 +355,9 @@ impl UdpSrc {
 
         let settings = self.settings.lock().unwrap().clone();
 
-        // TODO: Error handling
         let mut state = self.state.lock().unwrap();
 
+        // TODO: Error handling
         let io_context = IOContext::new(
             &settings.context,
             settings.context_threads as isize,
@@ -388,10 +422,37 @@ impl UdpSrc {
         let socket = Socket::new(&element.clone().upcast(), socket, buffer_pool);
 
         let element_clone = element.clone();
-        socket.schedule(&io_context, move |buffer| {
-            let udpsrc = element_clone.get_impl().downcast_ref::<UdpSrc>().unwrap();
-            udpsrc.push_buffer(&element_clone, buffer)
-        });
+        let element_clone2 = element.clone();
+        socket.schedule(
+            &io_context,
+            move |buffer| {
+                let udpsrc = element_clone.get_impl().downcast_ref::<UdpSrc>().unwrap();
+                udpsrc.push_buffer(&element_clone, buffer)
+            },
+            move |err| {
+                let udpsrc = element_clone2.get_impl().downcast_ref::<UdpSrc>().unwrap();
+                gst_error!(udpsrc.cat, obj: &element_clone2, "Got error {}", err);
+                match err {
+                    Either::Left(gst::FlowError::CustomError) => (),
+                    Either::Left(err) => {
+                        gst_element_error!(
+                            element_clone2,
+                            gst::StreamError::Failed,
+                            ("Internal data stream error"),
+                            ["streaming stopped, reason {}", err]
+                        );
+                    }
+                    Either::Right(err) => {
+                        gst_element_error!(
+                            element_clone2,
+                            gst::StreamError::Failed,
+                            ("I/O error"),
+                            ["streaming stopped, I/O error {}", err]
+                        );
+                    }
+                }
+            },
+        );
 
         state.socket = Some(socket);
         state.io_context = Some(io_context);

@@ -30,6 +30,8 @@ extern crate tokio_reactor;
 
 extern crate either;
 
+extern crate rand;
+
 #[macro_use]
 extern crate lazy_static;
 

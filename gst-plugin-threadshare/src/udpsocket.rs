@@ -15,16 +15,18 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
+use std::io;
 
 use gst;
 use gst::prelude::*;
 
 use futures::{Async, Future, IntoFuture, Poll, Stream};
-use futures::{future, task};
+use futures::task;
 use futures::sync::oneshot;
 use tokio::net;
+
+use either::Either;
 
 use iocontext::*;
 
@@ -34,30 +36,6 @@ lazy_static!{
                 gst::DebugColorFlags::empty(),
                 "Thread-sharing Socket",
             );
-}
-
-// FIXME: Workaround for https://github.com/tokio-rs/tokio/issues/207
-struct YieldOnce<E>(Option<()>, PhantomData<E>);
-
-impl<E> YieldOnce<E> {
-    fn new() -> YieldOnce<E> {
-        YieldOnce(None, PhantomData)
-    }
-}
-
-impl<E> Future for YieldOnce<E> {
-    type Item = ();
-    type Error = E;
-
-    fn poll(&mut self) -> Poll<(), E> {
-        if let Some(_) = self.0.take() {
-            Ok(Async::Ready(()))
-        } else {
-            self.0 = Some(());
-            task::current().notify();
-            Ok(Async::NotReady)
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -100,11 +78,13 @@ impl Socket {
         })))
     }
 
-    pub fn schedule<F: Fn(gst::Buffer) -> Result<(), gst::FlowError> + Send + 'static>(
-        &self,
-        io_context: &IOContext,
-        func: F,
-    ) {
+    pub fn schedule<U, F, G>(&self, io_context: &IOContext, func: F, err_func: G)
+    where
+        F: Fn(gst::Buffer) -> U + Send + 'static,
+        U: IntoFuture<Item = (), Error = gst::FlowError> + 'static,
+        <U as IntoFuture>::Future: Send + 'static,
+        G: FnOnce(Either<gst::FlowError, io::Error>) + Send + 'static,
+    {
         // Ready->Paused
         //
         // Need to wait for a possible shutdown to finish first
@@ -128,17 +108,19 @@ impl Socket {
         let element_clone = inner.element.clone();
         io_context.spawn(
             stream
-                .for_each(move |buffer| {
-                    let res = func(buffer);
-                    match res {
-                        Ok(()) => future::Either::A(Ok(()).into_future()),
-                        //Ok(()) => future::Either::A(YieldOnce::new()),
-                        Err(err) => future::Either::B(Err(err).into_future()),
-                    }
-                })
+                .for_each(move |buffer| func(buffer).into_future().map_err(Either::Left))
                 .then(move |res| {
-                    gst_debug!(SOCKET_CAT, obj: &element_clone, "Socket finished {:?}", res);
-                    // TODO: Do something with errors here?
+                    gst_debug!(
+                        SOCKET_CAT,
+                        obj: &element_clone,
+                        "Socket finished: {:?}",
+                        res
+                    );
+
+                    if let Err(err) = res {
+                        err_func(err);
+                    }
+
                     let _ = sender.send(());
 
                     Ok(())
@@ -232,7 +214,7 @@ struct SocketStream(Socket, Option<gst::MappedBuffer<gst::buffer::Writable>>);
 
 impl Stream for SocketStream {
     type Item = gst::Buffer;
-    type Error = gst::FlowError;
+    type Error = Either<gst::FlowError, io::Error>;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         let mut inner = (self.0).0.lock().unwrap();
@@ -258,7 +240,7 @@ impl Stream for SocketStream {
                     }
                     Err(err) => {
                         gst_debug!(SOCKET_CAT, obj: &inner.element, "Failed to acquire buffer {:?}", err);
-                        return Err(err.into_result().unwrap_err());
+                        return Err(Either::Left(err.into_result().unwrap_err()));
                     }
                 },
             };
@@ -271,7 +253,7 @@ impl Stream for SocketStream {
                 }
                 Err(err) => {
                     gst_debug!(SOCKET_CAT, obj: &inner.element, "Read error {:?}", err);
-                    return Err(gst::FlowError::Error);
+                    return Err(Either::Right(err));
                 }
                 Ok(Async::Ready(len)) => {
                     let time = inner.clock.as_ref().unwrap().get_time();
@@ -290,8 +272,6 @@ impl Stream for SocketStream {
             }
             buffer.set_dts(time);
         }
-
-        // TODO: Only ever poll the second again in Xms, using tokio-timer
 
         Ok(Async::Ready(Some(buffer)))
     }
