@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
 use std::sync::atomic;
 use std::thread;
+use std::io;
 
 use futures::Future;
 use tokio::executor::thread_pool;
@@ -245,16 +246,16 @@ impl Drop for IOContextInner {
 }
 
 impl IOContext {
-    pub fn new(name: &str, n_threads: isize, wait: u32) -> Self {
+    pub fn new(name: &str, n_threads: isize, wait: u32) -> Result<Self, io::Error> {
         let mut contexts = CONTEXTS.lock().unwrap();
         if let Some(context) = contexts.get(name) {
             if let Some(context) = context.upgrade() {
                 gst_debug!(CONTEXT_CAT, "Reusing existing context '{}'", name);
-                return IOContext(context);
+                return Ok(IOContext(context));
             }
         }
 
-        let reactor = reactor::Reactor::new().unwrap();
+        let reactor = reactor::Reactor::new()?;
 
         let (pool, shutdown) = if n_threads >= 0 {
             let handle = reactor.handle().clone();
@@ -286,7 +287,7 @@ impl IOContext {
         contexts.insert(name.into(), Arc::downgrade(&context));
 
         gst_debug!(CONTEXT_CAT, "Created new context '{}'", name);
-        IOContext(context)
+        Ok(IOContext(context))
     }
 
     pub fn spawn<F>(&self, future: F)

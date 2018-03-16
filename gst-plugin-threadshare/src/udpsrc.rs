@@ -348,7 +348,7 @@ impl UdpSrc {
         }
     }
 
-    fn prepare(&self, element: &Element) -> Result<(), ()> {
+    fn prepare(&self, element: &Element) -> Result<(), gst::ErrorMessage> {
         use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
         gst_debug!(self.cat, obj: element, "Preparing");
@@ -357,17 +357,31 @@ impl UdpSrc {
 
         let mut state = self.state.lock().unwrap();
 
-        // TODO: Error handling
         let io_context = IOContext::new(
             &settings.context,
             settings.context_threads as isize,
             settings.context_wait,
-        );
+        ).map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Failed to create IO context: {}", err]
+            )
+        })?;
 
         let addr: IpAddr = match settings.address {
-            None => return Err(()),
+            None => {
+                return Err(gst_error_msg!(
+                    gst::ResourceError::Settings,
+                    ["No address set"]
+                ))
+            }
             Some(ref addr) => match addr.parse() {
-                Err(_) => return Err(()),
+                Err(err) => {
+                    return Err(gst_error_msg!(
+                        gst::ResourceError::Settings,
+                        ["Invalid address '{}' set: {}", addr, err]
+                    ))
+                }
                 Ok(addr) => addr,
             },
         };
@@ -391,17 +405,32 @@ impl UdpSrc {
                 addr
             );
 
-            let socket = net::UdpSocket::bind(&saddr).unwrap();
+            let socket = net::UdpSocket::bind(&saddr).map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to bind socket: {}", err]
+                )
+            })?;
 
             // TODO: Multicast interface configuration, going to be tricky
             match addr {
                 IpAddr::V4(addr) => {
                     socket
                         .join_multicast_v4(&addr, &Ipv4Addr::new(0, 0, 0, 0))
-                        .unwrap();
+                        .map_err(|err| {
+                            gst_error_msg!(
+                                gst::ResourceError::OpenRead,
+                                ["Failed to join multicast group: {}", err]
+                            )
+                        })?;
                 }
                 IpAddr::V6(addr) => {
-                    socket.join_multicast_v6(&addr, 0).unwrap();
+                    socket.join_multicast_v6(&addr, 0).map_err(|err| {
+                        gst_error_msg!(
+                            gst::ResourceError::OpenRead,
+                            ["Failed to join multicast group: {}", err]
+                        )
+                    })?;
                 }
             }
 
@@ -409,7 +438,12 @@ impl UdpSrc {
         } else {
             let saddr = SocketAddr::new(addr, port as u16);
             gst_debug!(self.cat, obj: element, "Binding to {:?}", saddr);
-            let socket = net::UdpSocket::bind(&saddr).unwrap();
+            let socket = net::UdpSocket::bind(&saddr).map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to bind socket: {}", err]
+                )
+            })?;
 
             socket
         };
@@ -417,42 +451,51 @@ impl UdpSrc {
         let buffer_pool = gst::BufferPool::new();
         let mut config = buffer_pool.get_config();
         config.set_params(None, settings.mtu, 0, 0);
-        buffer_pool.set_config(config).unwrap();
+        buffer_pool.set_config(config).map_err(|_| {
+            gst_error_msg!(
+                gst::ResourceError::Settings,
+                ["Failed to configure buffer pool"]
+            )
+        })?;
 
         let socket = Socket::new(&element.clone().upcast(), socket, buffer_pool);
 
         let element_clone = element.clone();
         let element_clone2 = element.clone();
-        socket.schedule(
-            &io_context,
-            move |buffer| {
-                let udpsrc = element_clone.get_impl().downcast_ref::<UdpSrc>().unwrap();
-                udpsrc.push_buffer(&element_clone, buffer)
-            },
-            move |err| {
-                let udpsrc = element_clone2.get_impl().downcast_ref::<UdpSrc>().unwrap();
-                gst_error!(udpsrc.cat, obj: &element_clone2, "Got error {}", err);
-                match err {
-                    Either::Left(gst::FlowError::CustomError) => (),
-                    Either::Left(err) => {
-                        gst_element_error!(
-                            element_clone2,
-                            gst::StreamError::Failed,
-                            ("Internal data stream error"),
-                            ["streaming stopped, reason {}", err]
-                        );
+        socket
+            .schedule(
+                &io_context,
+                move |buffer| {
+                    let udpsrc = element_clone.get_impl().downcast_ref::<UdpSrc>().unwrap();
+                    udpsrc.push_buffer(&element_clone, buffer)
+                },
+                move |err| {
+                    let udpsrc = element_clone2.get_impl().downcast_ref::<UdpSrc>().unwrap();
+                    gst_error!(udpsrc.cat, obj: &element_clone2, "Got error {}", err);
+                    match err {
+                        Either::Left(gst::FlowError::CustomError) => (),
+                        Either::Left(err) => {
+                            gst_element_error!(
+                                element_clone2,
+                                gst::StreamError::Failed,
+                                ("Internal data stream error"),
+                                ["streaming stopped, reason {}", err]
+                            );
+                        }
+                        Either::Right(err) => {
+                            gst_element_error!(
+                                element_clone2,
+                                gst::StreamError::Failed,
+                                ("I/O error"),
+                                ["streaming stopped, I/O error {}", err]
+                            );
+                        }
                     }
-                    Either::Right(err) => {
-                        gst_element_error!(
-                            element_clone2,
-                            gst::StreamError::Failed,
-                            ("I/O error"),
-                            ["streaming stopped, I/O error {}", err]
-                        );
-                    }
-                }
-            },
-        );
+                },
+            )
+            .map_err(|_| {
+                gst_error_msg!(gst::ResourceError::OpenRead, ["Failed to schedule socket"])
+            })?;
 
         state.socket = Some(socket);
         state.io_context = Some(io_context);
@@ -588,7 +631,10 @@ impl ElementImpl<Element> for UdpSrc {
 
         match transition {
             gst::StateChange::NullToReady => match self.prepare(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
+                Err(err) => {
+                    element.post_error_message(&err);
+                    return gst::StateChangeReturn::Failure;
+                }
                 Ok(_) => (),
             },
             gst::StateChange::PlayingToPaused => match self.stop(element) {

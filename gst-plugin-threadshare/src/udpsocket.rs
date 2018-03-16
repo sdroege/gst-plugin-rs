@@ -78,7 +78,7 @@ impl Socket {
         })))
     }
 
-    pub fn schedule<U, F, G>(&self, io_context: &IOContext, func: F, err_func: G)
+    pub fn schedule<U, F, G>(&self, io_context: &IOContext, func: F, err_func: G) -> Result<(), ()>
     where
         F: Fn(gst::Buffer) -> U + Send + 'static,
         U: IntoFuture<Item = (), Error = gst::FlowError> + 'static,
@@ -95,12 +95,15 @@ impl Socket {
         gst_debug!(SOCKET_CAT, obj: &inner.element, "Scheduling socket");
         if inner.state == SocketState::Scheduled {
             gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket already scheduled");
-            return;
+            return Ok(());
         }
 
         assert_eq!(inner.state, SocketState::Unscheduled);
         inner.state = SocketState::Scheduled;
-        inner.buffer_pool.set_active(true).unwrap();
+        if let Err(_) = inner.buffer_pool.set_active(true) {
+            gst_error!(SOCKET_CAT, obj: &inner.element, "Failed to activate buffer pool");
+            return Err(());
+        }
 
         let (sender, receiver) = oneshot::channel::<()>();
         inner.shutdown_receiver = Some(receiver);
@@ -126,6 +129,7 @@ impl Socket {
                     Ok(())
                 }),
         );
+        Ok(())
     }
 
     pub fn unpause(&self, clock: gst::Clock, base_time: gst::ClockTime) {
@@ -195,11 +199,11 @@ impl Socket {
         gst_debug!(SOCKET_CAT, obj: &inner.element, "Waiting for socket to shut down");
         drop(inner);
 
-        shutdown_receiver.wait().unwrap();
+        shutdown_receiver.wait().expect("Already shut down");
 
         let mut inner = self.0.lock().unwrap();
         inner.state = SocketState::Unscheduled;
-        inner.buffer_pool.set_active(false).unwrap();
+        let _ = inner.buffer_pool.set_active(false);
         gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket shut down");
     }
 }
