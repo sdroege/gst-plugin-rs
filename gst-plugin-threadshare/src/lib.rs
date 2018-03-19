@@ -36,11 +36,15 @@ extern crate rand;
 extern crate lazy_static;
 
 mod iocontext;
+
 mod udpsocket;
 mod udpsrc;
 
+mod queue;
+
 fn plugin_init(plugin: &gst::Plugin) -> bool {
     udpsrc::register(plugin);
+    queue::register(plugin);
     true
 }
 
