@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 categories = ["multimedia"]
 description = "Infrastructure for writing GStreamer plugins in Rust"
