@@ -15,13 +15,13 @@ keywords = ["gstreamer", "multimedia", "audio", "video", "gnome"]
 libc = "0.2"
 lazy_static = "1.0"
 byteorder = "1.0"
-glib-sys = { git = "https://github.com/gtk-rs/sys" }
-gobject-sys = { git = "https://github.com/gtk-rs/sys" }
-gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys" }
-gstreamer-base-sys = { git = "https://github.com/sdroege/gstreamer-sys" }
-glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
-gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
+glib-sys = "0.6"
+gobject-sys = "0.6"
+gstreamer-sys = "0.5"
+gstreamer-base-sys = "0.5"
+glib = "0.5"
+gstreamer = "0.11"
+gstreamer-base = "0.11"
 
 [lib]
 name = "gst_plugin"
