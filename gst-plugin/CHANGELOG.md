@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.2.0] - 2018-03-20
+### Changed
+- Update to gstreamer-rs 0.11
+- BaseTransform::transform_caps() takes caps by reference instead of value
+
+### Added
+- Send+Sync impls for all wrapper types
+
 ## [0.1.4] - 2018-02-12
 ### Fixed
 - Fix BaseSrc::unlock_stop() and the same in BaseSink. It was calling unlock()
