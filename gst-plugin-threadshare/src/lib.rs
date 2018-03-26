@@ -40,6 +40,7 @@ mod iocontext;
 mod udpsocket;
 mod udpsrc;
 
+mod dataqueue;
 mod queue;
 
 fn plugin_init(plugin: &gst::Plugin) -> bool {
