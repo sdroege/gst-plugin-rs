@@ -30,12 +30,12 @@ use either::Either;
 
 use iocontext::*;
 
-lazy_static!{
+lazy_static! {
     static ref SOCKET_CAT: gst::DebugCategory = gst::DebugCategory::new(
-                "ts-socket",
-                gst::DebugColorFlags::empty(),
-                "Thread-sharing Socket",
-            );
+        "ts-socket",
+        gst::DebugColorFlags::empty(),
+        "Thread-sharing Socket",
+    );
 }
 
 #[derive(Clone)]

@@ -27,6 +27,9 @@ use gst_plugin::element::*;
 use std::sync::Mutex;
 use std::u16;
 
+use futures;
+use futures::{Future, IntoFuture, Stream};
+use futures::future;
 use tokio::net;
 
 use either::Either;
@@ -127,18 +130,22 @@ static PROPERTIES: [Property; 7] = [
 
 struct State {
     io_context: Option<IOContext>,
+    pending_future_id: Option<PendingFutureId>,
     socket: Option<Socket>,
     need_initial_events: bool,
     configured_caps: Option<gst::Caps>,
+    pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
 }
 
 impl Default for State {
     fn default() -> State {
         State {
             io_context: None,
+            pending_future_id: None,
             socket: None,
             need_initial_events: true,
             configured_caps: None,
+            pending_future_cancel: None,
         }
     }
 }
@@ -291,7 +298,34 @@ impl UdpSrc {
         ret
     }
 
-    fn push_buffer(&self, element: &Element, buffer: gst::Buffer) -> Result<(), gst::FlowError> {
+    fn create_io_context_event(state: &State) -> Option<gst::Event> {
+        if let (&Some(ref pending_future_id), &Some(ref io_context)) =
+            (&state.pending_future_id, &state.io_context)
+        {
+            let s = gst::Structure::new(
+                "ts-io-context",
+                &[
+                    ("io-context", &glib::AnySendValue::new(io_context.clone())),
+                    (
+                        "pending-future-id",
+                        &glib::AnySendValue::new(*pending_future_id),
+                    ),
+                ],
+            );
+            Some(gst::Event::new_custom_downstream_sticky(s).build())
+        } else {
+            None
+        }
+    }
+
+    fn push_buffer(
+        &self,
+        element: &Element,
+        buffer: gst::Buffer,
+    ) -> future::Either<
+        Box<Future<Item = (), Error = gst::FlowError> + Send + 'static>,
+        future::FutureResult<(), gst::FlowError>,
+    > {
         let mut events = Vec::new();
         let mut state = self.state.lock().unwrap();
         if state.need_initial_events {
@@ -306,7 +340,18 @@ impl UdpSrc {
             events.push(
                 gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
             );
+
+            if let Some(event) = Self::create_io_context_event(&state) {
+                events.push(event);
+
+                // Get rid of reconfigure flag
+                self.src_pad.check_reconfigure();
+            }
             state.need_initial_events = false;
+        } else if self.src_pad.check_reconfigure() {
+            if let Some(event) = Self::create_io_context_event(&state) {
+                events.push(event);
+            }
         }
         drop(state);
 
@@ -314,7 +359,7 @@ impl UdpSrc {
             self.src_pad.push_event(event);
         }
 
-        match self.src_pad.push(buffer).into_result() {
+        let res = match self.src_pad.push(buffer).into_result() {
             Ok(_) => {
                 gst_log!(self.cat, obj: element, "Successfully pushed buffer");
                 Ok(())
@@ -345,6 +390,51 @@ impl UdpSrc {
                 );
                 Err(gst::FlowError::CustomError)
             }
+        };
+
+        match res {
+            Ok(()) => {
+                let mut state = self.state.lock().unwrap();
+
+                let State {
+                    ref pending_future_id,
+                    ref io_context,
+                    ref mut pending_future_cancel,
+                    ..
+                } = *state;
+
+                if let (&Some(ref pending_future_id), &Some(ref io_context)) =
+                    (pending_future_id, io_context)
+                {
+                    let pending_futures = io_context.drain_pending_futures(*pending_future_id);
+
+                    if !pending_futures.is_empty() {
+                        gst_log!(
+                            self.cat,
+                            obj: element,
+                            "Scheduling {} pending futures",
+                            pending_futures.len()
+                        );
+
+                        let (sender, receiver) = futures::sync::oneshot::channel();
+                        *pending_future_cancel = Some(sender);
+
+                        let future = pending_futures
+                            .for_each(|_| Ok(()))
+                            .select(receiver.then(|_| Ok(())))
+                            .then(|_| Ok(()));
+
+                        future::Either::A(Box::new(future))
+                    } else {
+                        *pending_future_cancel = None;
+                        future::Either::B(Ok(()).into_future())
+                    }
+                } else {
+                    *pending_future_cancel = None;
+                    future::Either::B(Ok(()).into_future())
+                }
+            }
+            Err(err) => future::Either::B(Err(err).into_future()),
         }
     }
 
@@ -497,8 +587,17 @@ impl UdpSrc {
                 gst_error_msg!(gst::ResourceError::OpenRead, ["Failed to schedule socket"])
             })?;
 
+        let pending_future_id = io_context.acquire_pending_future_id();
+        gst_debug!(
+            self.cat,
+            obj: element,
+            "Got pending future id {:?}",
+            pending_future_id
+        );
+
         state.socket = Some(socket);
         state.io_context = Some(io_context);
+        state.pending_future_id = Some(pending_future_id);
 
         gst_debug!(self.cat, obj: element, "Prepared");
 
@@ -512,6 +611,12 @@ impl UdpSrc {
 
         if let Some(ref socket) = state.socket {
             socket.shutdown();
+        }
+
+        if let (&Some(ref pending_future_id), &Some(ref io_context)) =
+            (&state.pending_future_id, &state.io_context)
+        {
+            io_context.release_pending_future_id(*pending_future_id);
         }
 
         *state = State::default();
@@ -535,11 +640,12 @@ impl UdpSrc {
 
     fn stop(&self, element: &Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Stopping");
-        let state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
 
         if let Some(ref socket) = state.socket {
             socket.pause();
         }
+        let _ = state.pending_future_cancel.take();
 
         gst_debug!(self.cat, obj: element, "Stopped");
 

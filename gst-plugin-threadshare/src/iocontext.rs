@@ -20,8 +20,10 @@ use std::sync::{Arc, Mutex, Weak};
 use std::sync::atomic;
 use std::thread;
 use std::io;
+use std::mem;
 
-use futures::Future;
+use futures::{Future, Stream};
+use futures::stream::futures_unordered::FuturesUnordered;
 use tokio::executor::thread_pool;
 use tokio::reactor;
 
@@ -29,13 +31,13 @@ use gst;
 
 use either::Either;
 
-lazy_static!{
+lazy_static! {
     static ref CONTEXTS: Mutex<HashMap<String, Weak<IOContextInner>>> = Mutex::new(HashMap::new());
     static ref CONTEXT_CAT: gst::DebugCategory = gst::DebugCategory::new(
-                "ts-context",
-                gst::DebugColorFlags::empty(),
-                "Thread-sharing Context",
-            );
+        "ts-context",
+        gst::DebugColorFlags::empty(),
+        "Thread-sharing Context",
+    );
 }
 
 // Our own simplified implementation of reactor::Background to allow hooking into its internals
@@ -235,6 +237,10 @@ struct IOContextInner {
     pool: Either<thread_pool::ThreadPool, IOContextExecutor>,
     // Only used for dropping
     _shutdown: IOContextShutdown,
+    pending_futures: Mutex<(
+        u64,
+        HashMap<u64, FuturesUnordered<Box<Future<Item = (), Error = ()> + Send + 'static>>>,
+    )>,
 }
 
 impl Drop for IOContextInner {
@@ -283,6 +289,7 @@ impl IOContext {
             name: name.into(),
             pool,
             _shutdown: shutdown,
+            pending_futures: Mutex::new((0, HashMap::new())),
         });
         contexts.insert(name.into(), Arc::downgrade(&context));
 
@@ -299,4 +306,42 @@ impl IOContext {
             Either::Right(ref pool) => pool.spawn(future),
         }
     }
+
+    pub fn acquire_pending_future_id(&self) -> PendingFutureId {
+        let mut pending_futures = self.0.pending_futures.lock().unwrap();
+        let id = pending_futures.0;
+        pending_futures.0 += 1;
+        pending_futures.1.insert(id, FuturesUnordered::new());
+
+        PendingFutureId(id)
+    }
+
+    pub fn release_pending_future_id(&self, id: PendingFutureId) {
+        let mut pending_futures = self.0.pending_futures.lock().unwrap();
+        if let Some(fs) = pending_futures.1.remove(&id.0) {
+            self.spawn(fs.for_each(|_| Ok(())));
+        }
+    }
+
+    pub fn add_pending_future<F>(&self, id: PendingFutureId, future: F)
+    where
+        F: Future<Item = (), Error = ()> + Send + 'static,
+    {
+        let mut pending_futures = self.0.pending_futures.lock().unwrap();
+        let fs = pending_futures.1.get_mut(&id.0).unwrap();
+        fs.push(Box::new(future))
+    }
+
+    pub fn drain_pending_futures(
+        &self,
+        id: PendingFutureId,
+    ) -> FuturesUnordered<Box<Future<Item = (), Error = ()> + Send + 'static>> {
+        let mut pending_futures = self.0.pending_futures.lock().unwrap();
+        let fs = pending_futures.1.get_mut(&id.0).unwrap();
+
+        mem::replace(fs, FuturesUnordered::new())
+    }
 }
+
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+pub struct PendingFutureId(u64);
