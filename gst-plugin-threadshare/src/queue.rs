@@ -154,21 +154,6 @@ impl DataQueueItem {
             DataQueueItem::Event(_) => None,
         }
     }
-
-    fn timestamp_end(&self) -> Option<u64> {
-        match *self {
-            DataQueueItem::Buffer(ref buffer) => buffer
-                .get_dts_or_pts()
-                .map(|ts| ts + buffer.get_duration().unwrap_or(0)),
-            DataQueueItem::BufferList(ref list) => list.iter()
-                .filter_map(|b| {
-                    b.get_dts_or_pts()
-                        .map(|ts| (ts + b.get_duration().unwrap_or(0)))
-                })
-                .last(),
-            DataQueueItem::Event(_) => None,
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -363,32 +348,26 @@ impl DataQueue {
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Pushing item {:?}", item);
 
         let (count, bytes) = item.size();
-        let ts_end = item.timestamp_end();
         let ts = inner.queue.iter().filter_map(|i| i.timestamp()).next();
 
         if let Some(max) = inner.max_size_buffers {
-            if max <= inner.cur_size_buffers + count {
-                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (buffers): {} <= {}", max, inner.cur_size_buffers + count);
+            if max <= inner.cur_size_buffers {
+                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (buffers): {} <= {}", max, inner.cur_size_buffers);
                 return Err(item);
             }
         }
 
         if let Some(max) = inner.max_size_bytes {
-            if max <= inner.cur_size_bytes + bytes {
-                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (bytes): {} <= {}", max, inner.cur_size_bytes + bytes);
+            if max <= inner.cur_size_bytes {
+                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (bytes): {} <= {}", max, inner.cur_size_bytes);
                 return Err(item);
             }
         }
 
         // FIXME: Use running time
-        if let (Some(max), Some(ts), Some(ts_end)) = (inner.max_size_time, ts, ts_end) {
-            let level = if ts > ts_end {
-                ts - ts_end
-            } else {
-                ts_end - ts
-            };
-            if max <= level {
-                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (time): {} <= {}", max, level);
+        if let (Some(max), Some(ts)) = (inner.max_size_time, ts) {
+            if max <= ts {
+                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (time): {} <= {}", max, ts);
                 return Err(item);
             }
         }
