@@ -42,10 +42,12 @@ mod udpsrc;
 
 mod dataqueue;
 mod queue;
+mod proxy;
 
 fn plugin_init(plugin: &gst::Plugin) -> bool {
     udpsrc::register(plugin);
     queue::register(plugin);
+    proxy::register(plugin);
     true
 }
 
