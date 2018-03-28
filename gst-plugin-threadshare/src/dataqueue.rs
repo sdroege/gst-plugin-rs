@@ -251,7 +251,8 @@ impl DataQueue {
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Pushing item {:?}", item);
 
         let (count, bytes) = item.size();
-        let ts = inner.queue.iter().filter_map(|i| i.timestamp()).next();
+        let queue_ts = inner.queue.iter().filter_map(|i| i.timestamp()).next();
+        let ts = item.timestamp();
 
         if let Some(max) = inner.max_size_buffers {
             if max <= inner.cur_size_buffers {
@@ -268,9 +269,15 @@ impl DataQueue {
         }
 
         // FIXME: Use running time
-        if let (Some(max), Some(ts)) = (inner.max_size_time, ts) {
-            if max <= ts {
-                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (time): {} <= {}", max, ts);
+        if let (Some(max), Some(queue_ts), Some(ts)) = (inner.max_size_time, queue_ts, ts) {
+            let level = if queue_ts > ts {
+                queue_ts - ts
+            } else {
+                ts - queue_ts
+            };
+
+            if max <= level {
+                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (time): {} <= {}", max, level);
                 return Err(item);
             }
         }
