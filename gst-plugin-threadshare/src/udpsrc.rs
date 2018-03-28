@@ -607,19 +607,27 @@ impl UdpSrc {
     fn unprepare(&self, element: &Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Unpreparing");
 
-        let mut state = self.state.lock().unwrap();
+        // FIXME: The IO Context has to be alive longer than the queue,
+        // otherwise the queue can't finish any remaining work
+        let (mut socket, io_context) = {
+            let mut state = self.state.lock().unwrap();
 
-        if let Some(ref socket) = state.socket {
+            if let (&Some(ref pending_future_id), &Some(ref io_context)) =
+                (&state.pending_future_id, &state.io_context)
+            {
+                io_context.release_pending_future_id(*pending_future_id);
+            }
+
+            let socket = state.socket.take();
+            let io_context = state.io_context.take();
+            *state = State::default();
+            (socket, io_context)
+        };
+
+        if let Some(ref socket) = socket.take() {
             socket.shutdown();
         }
-
-        if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-            (&state.pending_future_id, &state.io_context)
-        {
-            io_context.release_pending_future_id(*pending_future_id);
-        }
-
-        *state = State::default();
+        drop(io_context);
 
         gst_debug!(self.cat, obj: element, "Unprepared");
         Ok(())

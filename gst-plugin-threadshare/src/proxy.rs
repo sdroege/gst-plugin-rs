@@ -426,7 +426,13 @@ impl ProxySink {
                             "Trying to empty pending queue"
                         );
 
-                        let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
+                        let mut queue = match state.queue {
+                            Some(ref queue) => queue.0.lock().unwrap(),
+                            None => {
+                                return Ok(Async::Ready(()));
+                            }
+                        };
+
                         let SharedQueueInner {
                             ref mut pending_queue,
                             ref queue,
@@ -1161,24 +1167,38 @@ impl ProxySrc {
     fn unprepare(&self, element: &Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Unpreparing");
 
-        let mut state = self.state.lock().unwrap();
-        if let Some(ref queue) = state.queue {
-            let queue = queue.0.lock().unwrap();
+        // FIXME: The IO Context has to be alive longer than the queue,
+        // otherwise the queue can't finish any remaining work
+        let (mut queue, io_context) = {
+            let mut state = self.state.lock().unwrap();
 
-            if let Some(ref queue) = queue.queue {
-                queue.shutdown();
+            if let (&Some(ref pending_future_id), &Some(ref io_context)) =
+                (&state.pending_future_id, &state.io_context)
+            {
+                io_context.release_pending_future_id(*pending_future_id);
             }
-        }
 
-        if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-            (&state.pending_future_id, &state.io_context)
-        {
-            io_context.release_pending_future_id(*pending_future_id);
-        }
+            let queue = if let Some(ref queue) = state.queue.take() {
+                let mut queue = queue.0.lock().unwrap();
+                queue.queue.take()
+            } else {
+                None
+            };
 
-        *state = StateSrc::default();
+            let io_context = state.io_context.take();
+
+            *state = StateSrc::default();
+
+            (queue, io_context)
+        };
+
+        if let Some(ref queue) = queue.take() {
+            queue.shutdown();
+        }
+        drop(io_context);
 
         gst_debug!(self.cat, obj: element, "Unprepared");
+
         Ok(())
     }
 
