@@ -123,7 +123,6 @@ impl IOContextRunner {
         if let Some(ref pending_futures) = self.pending_futures {
             use tokio::executor::current_thread;
 
-            reactor.set_fallback().unwrap();
             let handle = reactor.handle();
             let mut enter = ::tokio_executor::enter().unwrap();
             let mut current_thread = current_thread::CurrentThread::new_with_park(reactor);
