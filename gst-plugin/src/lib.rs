@@ -22,6 +22,8 @@ pub extern crate glib;
 pub extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
 
+use std::ptr;
+
 macro_rules! callback_guard {
     () => (
         let _guard = ::glib::CallbackGuard::new();
@@ -34,13 +36,14 @@ macro_rules! floating_reference_guard {
     )
 }
 
-pub struct FloatingReferenceGuard(*mut gobject_ffi::GObject);
+pub struct FloatingReferenceGuard(ptr::NonNull<gobject_ffi::GObject>);
 
 impl FloatingReferenceGuard {
     pub unsafe fn new(obj: *mut gobject_ffi::GObject) -> Option<FloatingReferenceGuard> {
+        assert!(!obj.is_null());
         if gobject_ffi::g_object_is_floating(obj) != glib_ffi::GFALSE {
             gobject_ffi::g_object_ref_sink(obj);
-            Some(FloatingReferenceGuard(obj))
+            Some(FloatingReferenceGuard(ptr::NonNull::new_unchecked(obj)))
         } else {
             None
         }
@@ -50,7 +53,7 @@ impl FloatingReferenceGuard {
 impl Drop for FloatingReferenceGuard {
     fn drop(&mut self) {
         unsafe {
-            gobject_ffi::g_object_force_floating(self.0);
+            gobject_ffi::g_object_force_floating(self.0.as_ptr());
         }
     }
 }

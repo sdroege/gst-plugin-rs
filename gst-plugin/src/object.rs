@@ -109,13 +109,13 @@ macro_rules! object_type_fns(
 #[repr(C)]
 pub struct InstanceStruct<T: ObjectType> {
     pub parent: T::GlibType,
-    pub imp: *const T::ImplType,
+    pub imp: ptr::NonNull<T::ImplType>,
     pub panicked: AtomicBool,
 }
 
 impl<T: ObjectType> InstanceStruct<T> {
     pub fn get_impl(&self) -> &T::ImplType {
-        unsafe { &*self.imp }
+        unsafe { self.imp.as_ref() }
     }
 
     pub unsafe fn get_class(&self) -> *const ClassStruct<T> {
@@ -126,14 +126,14 @@ impl<T: ObjectType> InstanceStruct<T> {
 #[repr(C)]
 pub struct ClassStruct<T: ObjectType> {
     pub parent: T::GlibClassType,
-    pub imp_static: *const Box<ImplTypeStatic<T>>,
-    pub parent_class: *const T::GlibClassType,
+    pub imp_static: ptr::NonNull<Box<ImplTypeStatic<T>>>,
+    pub parent_class: ptr::NonNull<T::GlibClassType>,
     pub interfaces_static: *const Vec<(glib_ffi::GType, glib_ffi::gpointer)>,
 }
 
 impl<T: ObjectType> ClassStruct<T> {
-    pub unsafe fn get_parent_class(&self) -> *const T::GlibClassType {
-        self.parent_class
+    pub fn get_parent_class(&self) -> *const T::GlibClassType {
+        self.parent_class.as_ptr()
     }
 }
 
@@ -289,9 +289,11 @@ unsafe extern "C" fn class_init<T: ObjectType>(
 
     {
         let klass = &mut *(klass as *mut ClassStruct<T>);
-        klass.parent_class = gobject_ffi::g_type_class_peek_parent(
+        let parent_class = gobject_ffi::g_type_class_peek_parent(
             klass as *mut _ as glib_ffi::gpointer,
-        ) as *const T::GlibClassType;
+        ) as *mut T::GlibClassType;
+        assert!(!parent_class.is_null());
+        klass.parent_class = ptr::NonNull::new_unchecked(parent_class);
         T::class_init(&ClassInitToken(()), klass);
     }
 }
@@ -300,8 +302,8 @@ unsafe extern "C" fn finalize<T: ObjectType>(obj: *mut gobject_ffi::GObject) {
     callback_guard!();
     let instance = &mut *(obj as *mut InstanceStruct<T>);
 
-    drop(Box::from_raw(instance.imp as *mut T::ImplType));
-    instance.imp = ptr::null_mut();
+    drop(Box::from_raw(instance.imp.as_ptr()));
+    instance.imp = ptr::NonNull::dangling();
 
     let klass = *(obj as *const glib_ffi::gpointer);
     let parent_klass = gobject_ffi::g_type_class_peek_parent(klass);
@@ -407,9 +409,10 @@ unsafe extern "C" fn sub_class_init<T: ObjectType>(
         gobject_klass.get_property = Some(sub_get_property::<T>);
     }
     {
+        assert!(!klass_data.is_null());
         let klass = &mut *(klass as *mut ClassStruct<T>);
-        let imp_static = klass_data as *const Box<ImplTypeStatic<T>>;
-        klass.imp_static = imp_static;
+        let imp_static = klass_data as *mut Box<ImplTypeStatic<T>>;
+        klass.imp_static = ptr::NonNull::new_unchecked(imp_static);
         klass.interfaces_static = Box::into_raw(Box::new(Vec::new()));
 
         (*imp_static).class_init(klass);
@@ -464,8 +467,8 @@ unsafe extern "C" fn sub_init<T: ObjectType>(
     let klass = &**(obj as *const *const ClassStruct<T>);
     let rs_instance: T = from_glib_borrow(obj as *mut InstanceStruct<T>);
 
-    let imp = (*klass.imp_static).new(&rs_instance);
-    instance.imp = Box::into_raw(Box::new(imp));
+    let imp = klass.imp_static.as_ref().new(&rs_instance);
+    instance.imp = ptr::NonNull::new_unchecked(Box::into_raw(Box::new(imp)));
 }
 
 pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type {

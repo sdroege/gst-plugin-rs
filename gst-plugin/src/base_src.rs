@@ -377,7 +377,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
 }
@@ -392,7 +392,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
 }
@@ -407,7 +407,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.is_seekable(&wrap) }).to_glib()
 }
@@ -423,7 +423,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, {
         match imp.get_size(&wrap) {
@@ -449,7 +449,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
     let buffer = gst::BufferRef::from_mut_ptr(buffer);
 
     panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
@@ -470,7 +470,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
     // FIXME: Wrong signature in -sys bindings
     // https://github.com/sdroege/gstreamer-sys/issues/3
     let buffer_ptr = buffer_ptr as *mut *mut gst_ffi::GstBuffer;
@@ -497,7 +497,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, {
         imp.do_seek(&wrap, &mut from_glib_borrow(segment))
@@ -515,7 +515,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
     let query = gst::QueryRef::from_mut_ptr(query_ptr);
 
     panic_to_error!(&wrap, &element.panicked, false, {
@@ -534,7 +534,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, {
         imp.event(&wrap, &from_glib_none(event_ptr))
@@ -552,7 +552,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
     let filter = if filter.is_null() {
         None
     } else {
@@ -575,7 +575,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.negotiate(&wrap) }).to_glib()
 }
@@ -591,7 +591,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
     let caps = gst::CapsRef::from_ptr(caps);
 
     panic_to_error!(&wrap, &element.panicked, false, {
@@ -610,7 +610,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
     let caps = from_glib_full(caps);
 
     panic_to_error!(&wrap, &element.panicked, gst::Caps::new_empty(), {
@@ -628,7 +628,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.unlock(&wrap) }).to_glib()
 }
@@ -643,7 +643,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.unlock_stop(&wrap) }).to_glib()
 }

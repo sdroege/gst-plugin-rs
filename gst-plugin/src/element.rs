@@ -242,7 +242,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     // *Never* fail downwards state changes, this causes bugs in GStreamer
     // and leads to crashes and deadlocks.
@@ -272,7 +272,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
     let caps = if caps.is_null() {
         None
     } else {
@@ -308,7 +308,7 @@ unsafe extern "C" fn element_release_pad<T: ElementBase>(
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, (), {
         imp.release_pad(&wrap, &from_glib_borrow(pad))
@@ -326,7 +326,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, false, {
         imp.send_event(&wrap, from_glib_full(event))
@@ -344,7 +344,7 @@ where
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
     let query = gst::QueryRef::from_mut_ptr(query);
 
     panic_to_error!(&wrap, &element.panicked, false, { imp.query(&wrap, query) }).to_glib()
@@ -360,7 +360,7 @@ unsafe extern "C" fn element_set_context<T: ElementBase>(
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*element.imp;
+    let imp = element.imp.as_ref();
 
     panic_to_error!(&wrap, &element.panicked, (), {
         imp.set_context(&wrap, &from_glib_borrow(context))

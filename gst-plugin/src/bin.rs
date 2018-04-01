@@ -162,7 +162,7 @@ where
     floating_reference_guard!(ptr);
     let bin = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*bin.imp;
+    let imp = bin.imp.as_ref();
 
     panic_to_error!(&wrap, &bin.panicked, false, {
         imp.add_element(&wrap, &from_glib_none(element))
@@ -180,7 +180,7 @@ where
     floating_reference_guard!(ptr);
     let bin = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*bin.imp;
+    let imp = bin.imp.as_ref();
 
     panic_to_error!(&wrap, &bin.panicked, false, {
         imp.remove_element(&wrap, &from_glib_none(element))
@@ -197,7 +197,7 @@ unsafe extern "C" fn bin_handle_message<T: BinBase>(
     floating_reference_guard!(ptr);
     let bin = &*(ptr as *mut InstanceStruct<T>);
     let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = &*bin.imp;
+    let imp = bin.imp.as_ref();
 
     panic_to_error!(&wrap, &bin.panicked, (), {
         imp.handle_message(&wrap, from_glib_full(message))
