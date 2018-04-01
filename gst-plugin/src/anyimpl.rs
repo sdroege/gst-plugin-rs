@@ -26,9 +26,7 @@ macro_rules! any_impl {
             #[inline]
             pub fn downcast_ref<U: $trait<T>>(&self) -> Option<&U> {
                 if self.is::<U>() {
-                    unsafe {
-                        Some(self.downcast_ref_unchecked())
-                    }
+                    unsafe { Some(self.downcast_ref_unchecked()) }
                 } else {
                     None
                 }
@@ -52,9 +50,7 @@ macro_rules! any_impl {
             #[inline]
             pub fn downcast_ref<U: $trait>(&self) -> Option<&U> {
                 if self.is::<U>() {
-                    unsafe {
-                        Some(self.downcast_ref_unchecked())
-                    }
+                    unsafe { Some(self.downcast_ref_unchecked()) }
                 } else {
                     None
                 }

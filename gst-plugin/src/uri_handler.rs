@@ -11,13 +11,13 @@ use glib_ffi;
 use gobject_ffi;
 use gst_ffi;
 
-use libc;
 use glib;
 use glib::translate::*;
 use gst;
+use libc;
 
-use object::*;
 use anyimpl::*;
+use object::*;
 
 pub trait URIHandlerImpl: AnyImpl + Send + Sync + 'static {
     fn get_uri(&self, element: &gst::URIHandler) -> Option<String>;

@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ptr;
 use std::mem;
+use std::ptr;
 
 use libc;
 
@@ -20,11 +20,10 @@ use glib::translate::*;
 use gst;
 use gst::prelude::*;
 
-use object::*;
 use anyimpl::*;
+use object::*;
 
-pub trait ElementImpl<T: ElementBase>
-    : ObjectImpl<T> + AnyImpl + Send + Sync + 'static {
+pub trait ElementImpl<T: ElementBase>: ObjectImpl<T> + AnyImpl + Send + Sync + 'static {
     fn change_state(&self, element: &T, transition: gst::StateChange) -> gst::StateChangeReturn {
         element.parent_change_state(transition)
     }

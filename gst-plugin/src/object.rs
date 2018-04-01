@@ -6,13 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ffi::CString;
-use std::ptr;
-use std::mem;
-use std::sync::atomic::AtomicBool;
 use std::any::TypeId;
 use std::collections::BTreeMap;
+use std::ffi::CString;
+use std::mem;
+use std::ptr;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 
 use glib_ffi;
 use gobject_ffi;

@@ -6,13 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ptr;
 use std::mem;
+use std::ptr;
 
 use glib_ffi;
 use gobject_ffi;
-use gst_ffi;
 use gst_base_ffi;
+use gst_ffi;
 
 use glib;
 use glib::translate::*;
@@ -20,12 +20,13 @@ use gst;
 use gst::prelude::*;
 use gst_base;
 
-use object::*;
-use element::*;
 use anyimpl::*;
+use element::*;
+use object::*;
 
-pub trait BaseSrcImpl<T: BaseSrcBase>
-    : AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
+pub trait BaseSrcImpl<T: BaseSrcBase>:
+    AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
+{
     fn start(&self, _element: &T) -> bool {
         true
     }
@@ -100,8 +101,9 @@ pub trait BaseSrcImpl<T: BaseSrcBase>
 
 any_impl!(BaseSrcBase, BaseSrcImpl);
 
-pub unsafe trait BaseSrcBase
-    : IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType {
+pub unsafe trait BaseSrcBase:
+    IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType
+{
     fn parent_create(&self, offset: u64, length: u32) -> Result<gst::Buffer, gst::FlowReturn> {
         unsafe {
             let klass = self.get_class();

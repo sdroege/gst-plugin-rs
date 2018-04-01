@@ -6,11 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::collections::VecDeque;
 use std::cmp;
-use std::io;
-use std::fmt;
+use std::collections::VecDeque;
 use std::error::Error;
+use std::fmt;
+use std::io;
 
 use gst;
 

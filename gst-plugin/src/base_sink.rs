@@ -6,13 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ptr;
 use std::mem;
+use std::ptr;
 
 use glib_ffi;
 use gobject_ffi;
-use gst_ffi;
 use gst_base_ffi;
+use gst_ffi;
 
 use glib;
 use glib::translate::*;
@@ -20,12 +20,13 @@ use gst;
 use gst::prelude::*;
 use gst_base;
 
-use object::*;
-use element::*;
 use anyimpl::*;
+use element::*;
+use object::*;
 
-pub trait BaseSinkImpl<T: BaseSinkBase>
-    : AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
+pub trait BaseSinkImpl<T: BaseSinkBase>:
+    AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
+{
     fn start(&self, _element: &T) -> bool {
         true
     }
@@ -93,8 +94,9 @@ pub trait BaseSinkImpl<T: BaseSinkBase>
 
 any_impl!(BaseSinkBase, BaseSinkImpl);
 
-pub unsafe trait BaseSinkBase
-    : IsA<gst::Element> + IsA<gst_base::BaseSink> + ObjectType {
+pub unsafe trait BaseSinkBase:
+    IsA<gst::Element> + IsA<gst_base::BaseSink> + ObjectType
+{
     fn parent_query(&self, query: &mut gst::QueryRef) -> bool {
         unsafe {
             let klass = self.get_class();

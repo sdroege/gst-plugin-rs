@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ptr;
 use std::mem;
+use std::ptr;
 
 use glib_ffi;
 use gobject_ffi;
@@ -18,12 +18,13 @@ use glib::translate::*;
 use gst;
 use gst::prelude::*;
 
-use object::*;
-use element::*;
 use anyimpl::*;
+use element::*;
+use object::*;
 
-pub trait BinImpl<T: BinBase>
-    : AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
+pub trait BinImpl<T: BinBase>:
+    AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
+{
     fn add_element(&self, bin: &T, element: &gst::Element) -> bool {
         bin.parent_add_element(element)
     }

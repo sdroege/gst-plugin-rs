@@ -6,13 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ptr;
 use std::mem;
+use std::ptr;
 
 use glib_ffi;
 use gobject_ffi;
-use gst_ffi;
 use gst_base_ffi;
+use gst_ffi;
 
 use glib;
 use glib::translate::*;
@@ -20,12 +20,13 @@ use gst;
 use gst::prelude::*;
 use gst_base;
 
-use object::*;
-use element::*;
 use anyimpl::*;
+use element::*;
+use object::*;
 
-pub trait BaseTransformImpl<T: BaseTransformBase>
-    : AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static {
+pub trait BaseTransformImpl<T: BaseTransformBase>:
+    AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
+{
     fn start(&self, _element: &T) -> bool {
         true
     }
@@ -109,8 +110,9 @@ pub trait BaseTransformImpl<T: BaseTransformBase>
 
 any_impl!(BaseTransformBase, BaseTransformImpl);
 
-pub unsafe trait BaseTransformBase
-    : IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType {
+pub unsafe trait BaseTransformBase:
+    IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType
+{
     fn parent_transform_caps(
         &self,
         direction: gst::PadDirection,

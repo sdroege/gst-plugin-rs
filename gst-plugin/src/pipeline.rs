@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::ptr;
 use std::mem;
+use std::ptr;
 
 use glib_ffi;
 use gobject_ffi;
@@ -18,20 +18,21 @@ use glib::translate::*;
 use gst;
 use gst::prelude::*;
 
-use object::*;
-use element::*;
-use bin::*;
 use anyimpl::*;
+use bin::*;
+use element::*;
+use object::*;
 
-pub trait PipelineImpl<T: PipelineBase>
-    : AnyImpl + ObjectImpl<T> + ElementImpl<T> + BinImpl<T> + Send + Sync + 'static
-    {
+pub trait PipelineImpl<T: PipelineBase>:
+    AnyImpl + ObjectImpl<T> + ElementImpl<T> + BinImpl<T> + Send + Sync + 'static
+{
 }
 
 any_impl!(PipelineBase, PipelineImpl);
 
-pub unsafe trait PipelineBase
-    : IsA<gst::Element> + IsA<gst::Bin> + IsA<gst::Pipeline> + ObjectType {
+pub unsafe trait PipelineBase:
+    IsA<gst::Element> + IsA<gst::Bin> + IsA<gst::Pipeline> + ObjectType
+{
 }
 
 pub unsafe trait PipelineClassExt<T: PipelineBase>

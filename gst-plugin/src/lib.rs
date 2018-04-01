@@ -25,15 +25,15 @@ extern crate gstreamer_base as gst_base;
 use std::ptr;
 
 macro_rules! callback_guard {
-    () => (
+    () => {
         let _guard = ::glib::CallbackGuard::new();
-    )
+    };
 }
 
 macro_rules! floating_reference_guard {
-    ($obj:ident) => (
+    ($obj:ident) => {
         let _guard = $crate::FloatingReferenceGuard::new($obj as *mut _);
-    )
+    };
 }
 
 pub struct FloatingReferenceGuard(ptr::NonNull<gobject_ffi::GObject>);
