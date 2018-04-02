@@ -16,16 +16,17 @@
 // Boston, MA 02110-1335, USA.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, Weak};
-use std::sync::atomic;
-use std::thread;
 use std::io;
 use std::mem;
+use std::sync::atomic;
+use std::sync::{Arc, Mutex, Weak};
+use std::thread;
 
-use futures::{Future, Stream};
 use futures::stream::futures_unordered::FuturesUnordered;
+use futures::{Future, Stream};
 use tokio::executor::thread_pool;
 use tokio::reactor;
+use tokio_timer::timer;
 
 use gst;
 
@@ -125,35 +126,39 @@ impl IOContextRunner {
 
             let handle = reactor.handle();
             let mut enter = ::tokio_executor::enter().unwrap();
-            let mut current_thread = current_thread::CurrentThread::new_with_park(reactor);
+            let timer = timer::Timer::new(reactor);
+            let timer_handle = timer.handle();
+            let mut current_thread = current_thread::CurrentThread::new_with_park(timer);
 
-            ::tokio_reactor::with_default(&handle, &mut enter, |enter| loop {
-                let now = time::Instant::now();
+            ::tokio_reactor::with_default(&handle, &mut enter, |mut enter| {
+                ::tokio_timer::with_default(&timer_handle, &mut enter, |enter| loop {
+                    let now = time::Instant::now();
 
-                if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
-                    break;
-                }
-
-                {
-                    let mut pending_futures = pending_futures.lock().unwrap();
-                    while let Some(future) = pending_futures.pop() {
-                        current_thread.spawn(future);
+                    if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
+                        break;
                     }
-                }
 
-                gst_trace!(CONTEXT_CAT, "Turning current thread '{}'", self.name);
-                current_thread.enter(enter).turn(None).unwrap();
-                gst_trace!(CONTEXT_CAT, "Turned current thread '{}'", self.name);
+                    {
+                        let mut pending_futures = pending_futures.lock().unwrap();
+                        while let Some(future) = pending_futures.pop() {
+                            current_thread.spawn(future);
+                        }
+                    }
 
-                let elapsed = now.elapsed();
-                if elapsed < wait {
-                    gst_trace!(
-                        CONTEXT_CAT,
-                        "Waiting for {:?} before polling again",
-                        wait - elapsed
-                    );
-                    thread::sleep(wait - elapsed);
-                }
+                    gst_trace!(CONTEXT_CAT, "Turning current thread '{}'", self.name);
+                    current_thread.enter(enter).turn(None).unwrap();
+                    gst_trace!(CONTEXT_CAT, "Turned current thread '{}'", self.name);
+
+                    let elapsed = now.elapsed();
+                    if elapsed < wait {
+                        gst_trace!(
+                            CONTEXT_CAT,
+                            "Waiting for {:?} before polling again",
+                            wait - elapsed
+                        );
+                        thread::sleep(wait - elapsed);
+                    }
+                })
             });
         } else {
             let mut reactor = reactor;
@@ -265,14 +270,33 @@ impl IOContext {
         let (pool, shutdown) = if n_threads >= 0 {
             let handle = reactor.handle().clone();
 
+            let timers = Arc::new(Mutex::new(HashMap::<_, timer::Handle>::new()));
+            let t1 = timers.clone();
+
             let shutdown = IOContextRunner::start(name, wait, reactor);
 
             let mut pool_builder = thread_pool::Builder::new();
-            pool_builder.around_worker(move |w, enter| {
-                ::tokio_reactor::with_default(&handle, enter, |_| {
-                    w.run();
+            pool_builder
+                .around_worker(move |w, enter| {
+                    let timer_handle = t1.lock().unwrap().get(w.id()).unwrap().clone();
+
+                    ::tokio_reactor::with_default(&handle, enter, |enter| {
+                        timer::with_default(&timer_handle, enter, |_| {
+                            w.run();
+                        });
+                    });
+                })
+                .custom_park(move |worker_id| {
+                    // Create a new timer
+                    let timer = timer::Timer::new(::tokio_threadpool::park::DefaultPark::new());
+
+                    timers
+                        .lock()
+                        .unwrap()
+                        .insert(worker_id.clone(), timer.handle());
+
+                    timer
                 });
-            });
 
             if n_threads > 0 {
                 pool_builder.pool_size(n_threads as usize);
