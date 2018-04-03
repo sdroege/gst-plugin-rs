@@ -51,6 +51,7 @@ fn plugin_init(plugin: &gst::Plugin) -> bool {
     udpsrc::register(plugin);
     queue::register(plugin);
     proxy::register(plugin);
+    appsrc::register(plugin);
     true
 }
 
