@@ -20,23 +20,23 @@ use glib::prelude::*;
 use gst;
 use gst::prelude::*;
 
-use gst_plugin::properties::*;
-use gst_plugin::object::*;
 use gst_plugin::element::*;
+use gst_plugin::object::*;
+use gst_plugin::properties::*;
 
+use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::{u16, u32, u64};
-use std::collections::VecDeque;
 
 use futures;
 use futures::future;
-use futures::{Async, Future, IntoFuture, Stream};
 use futures::task;
+use futures::{Async, Future, IntoFuture, Stream};
 
 use tokio::executor;
 
-use iocontext::*;
 use dataqueue::*;
+use iocontext::*;
 
 const DEFAULT_MAX_SIZE_BUFFERS: u32 = 200;
 const DEFAULT_MAX_SIZE_BYTES: u32 = 1024 * 1024;

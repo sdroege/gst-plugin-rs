@@ -18,13 +18,13 @@
 use gst;
 use gst::prelude::*;
 
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::{u32, u64};
-use std::collections::VecDeque;
 
-use futures::{Async, Future, IntoFuture, Poll, Stream};
-use futures::task;
 use futures::sync::oneshot;
+use futures::task;
+use futures::{Async, Future, IntoFuture, Poll, Stream};
 
 use iocontext::*;
 

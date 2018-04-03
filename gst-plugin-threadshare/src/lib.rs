@@ -27,6 +27,8 @@ extern crate futures;
 extern crate tokio;
 extern crate tokio_executor;
 extern crate tokio_reactor;
+extern crate tokio_threadpool;
+extern crate tokio_timer;
 
 extern crate either;
 
@@ -40,9 +42,10 @@ mod iocontext;
 mod udpsocket;
 mod udpsrc;
 
+mod appsrc;
 mod dataqueue;
-mod queue;
 mod proxy;
+mod queue;
 
 fn plugin_init(plugin: &gst::Plugin) -> bool {
     udpsrc::register(plugin);

@@ -20,24 +20,24 @@ use glib::prelude::*;
 use gst;
 use gst::prelude::*;
 
-use gst_plugin::properties::*;
-use gst_plugin::object::*;
 use gst_plugin::element::*;
+use gst_plugin::object::*;
+use gst_plugin::properties::*;
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, Weak};
 use std::{u16, u32, u64};
-use std::collections::VecDeque;
 
 use futures;
 use futures::future;
-use futures::{Async, Future, IntoFuture, Stream};
 use futures::task;
+use futures::{Async, Future, IntoFuture, Stream};
 
 use tokio::executor;
 
-use iocontext::*;
 use dataqueue::*;
+use iocontext::*;
 
 lazy_static! {
     static ref CONTEXTS: Mutex<HashMap<String, Weak<Mutex<SharedQueueInner>>>> =
@@ -1323,7 +1323,7 @@ impl ElementImpl<Element> for ProxySrc {
                 }
                 Ok(_) => (),
             },
-            gst::StateChange::PausedToReady => match self.stop(element) {
+            gst::StateChange::PlayingToPaused => match self.stop(element) {
                 Err(_) => return gst::StateChangeReturn::Failure,
                 Ok(_) => (),
             },
@@ -1334,13 +1334,16 @@ impl ElementImpl<Element> for ProxySrc {
             _ => (),
         }
 
-        let ret = element.parent_change_state(transition);
+        let mut ret = element.parent_change_state(transition);
         if ret == gst::StateChangeReturn::Failure {
             return ret;
         }
 
         match transition {
-            gst::StateChange::ReadyToPaused => match self.start(element) {
+            gst::StateChange::ReadyToPaused => {
+                ret = gst::StateChangeReturn::NoPreroll;
+            }
+            gst::StateChange::PausedToPlaying => match self.start(element) {
                 Err(_) => return gst::StateChangeReturn::Failure,
                 Ok(_) => (),
             },

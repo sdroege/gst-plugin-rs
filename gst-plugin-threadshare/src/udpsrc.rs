@@ -20,16 +20,16 @@ use glib::prelude::*;
 use gst;
 use gst::prelude::*;
 
-use gst_plugin::properties::*;
-use gst_plugin::object::*;
 use gst_plugin::element::*;
+use gst_plugin::object::*;
+use gst_plugin::properties::*;
 
 use std::sync::Mutex;
 use std::u16;
 
 use futures;
-use futures::{Future, IntoFuture, Stream};
 use futures::future;
+use futures::{Future, IntoFuture, Stream};
 use tokio::net;
 
 use either::Either;

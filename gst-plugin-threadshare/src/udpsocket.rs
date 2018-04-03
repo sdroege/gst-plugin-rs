@@ -15,15 +15,15 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use std::sync::{Arc, Mutex};
 use std::io;
+use std::sync::{Arc, Mutex};
 
 use gst;
 use gst::prelude::*;
 
-use futures::{Async, Future, IntoFuture, Poll, Stream};
-use futures::task;
 use futures::sync::oneshot;
+use futures::task;
+use futures::{Async, Future, IntoFuture, Poll, Stream};
 use tokio::net;
 
 use either::Either;
