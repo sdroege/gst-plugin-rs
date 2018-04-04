@@ -465,6 +465,7 @@ impl AppSrc {
                 if let (&Some(ref pending_future_id), &Some(ref io_context)) =
                     (pending_future_id, io_context)
                 {
+                    // FIXME: This should all go into a helper function
                     let pending_futures = io_context.drain_pending_futures(*pending_future_id);
 
                     if !pending_futures.is_empty() {
