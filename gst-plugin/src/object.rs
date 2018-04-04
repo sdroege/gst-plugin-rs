@@ -496,7 +496,7 @@ pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type 
             parent_type,
             type_name.to_glib_none().0,
             &type_info,
-            gobject_ffi::GTypeFlags::empty(),
+            0,
         ));
 
         (*imp_ptr).type_init(&TypeInitToken(()), type_);
