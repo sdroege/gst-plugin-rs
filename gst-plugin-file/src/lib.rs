@@ -15,14 +15,14 @@ extern crate gst_plugin_simple;
 extern crate gstreamer as gst;
 extern crate url;
 
-use gst_plugin_simple::source::*;
 use gst_plugin_simple::sink::*;
+use gst_plugin_simple::source::*;
 
-mod filesrc;
 mod filesink;
+mod filesrc;
 
-use filesrc::FileSrc;
 use filesink::FileSink;
+use filesrc::FileSrc;
 
 fn plugin_init(plugin: &gst::Plugin) -> bool {
     source_register(

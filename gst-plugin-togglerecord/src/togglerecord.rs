@@ -21,15 +21,15 @@ use gst;
 use gst::prelude::*;
 use gst_video;
 
-use gst_plugin::properties::*;
-use gst_plugin::object::*;
 use gst_plugin::element::*;
+use gst_plugin::object::*;
+use gst_plugin::properties::*;
 
-use std::sync::{Arc, Condvar, Mutex};
-use std::collections::HashMap;
-use std::iter;
 use std::cmp;
+use std::collections::HashMap;
 use std::f64;
+use std::iter;
+use std::sync::{Arc, Condvar, Mutex};
 
 const DEFAULT_RECORD: bool = false;
 

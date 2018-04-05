@@ -6,16 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::u64;
-use std::io::Read;
-use url::Url;
-use reqwest::{Client, Response};
 use reqwest::header::{AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, ContentRangeSpec,
                       Range, RangeUnit};
+use reqwest::{Client, Response};
+use std::io::Read;
+use std::u64;
+use url::Url;
 
+use gst_plugin_simple::UriValidator;
 use gst_plugin_simple::error::*;
 use gst_plugin_simple::source::*;
-use gst_plugin_simple::UriValidator;
 
 use gst;
 

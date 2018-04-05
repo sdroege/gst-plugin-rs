@@ -7,8 +7,8 @@
 // except according to those terms.
 
 use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::fmt::Error as FmtError;
+use std::fmt::{Display, Formatter};
 
 use glib;
 use gst;

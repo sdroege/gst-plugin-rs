@@ -14,9 +14,9 @@ extern crate gstreamer_base as gst_base;
 
 extern crate url;
 
-pub mod source;
-pub mod sink;
 pub mod demuxer;
 pub mod error;
+pub mod sink;
+pub mod source;
 
 pub type UriValidator = Fn(&url::Url) -> Result<(), error::UriError> + Send + Sync + 'static;

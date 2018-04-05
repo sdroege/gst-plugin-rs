@@ -9,22 +9,22 @@
 use glib;
 use gst;
 use gst::prelude::*;
-use gst_base::prelude::*;
 use gst_audio;
+use gst_base::prelude::*;
 
 use byte_slice_cast::*;
 
-use gst_plugin::properties::*;
-use gst_plugin::object::*;
-use gst_plugin::element::*;
 use gst_plugin::base_src::*;
+use gst_plugin::element::*;
+use gst_plugin::object::*;
+use gst_plugin::properties::*;
 
-use std::{i32, u32};
-use std::sync::Mutex;
 use std::ops::Rem;
+use std::sync::Mutex;
+use std::{i32, u32};
 
-use num_traits::float::Float;
 use num_traits::cast::NumCast;
+use num_traits::float::Float;
 
 // Default values of properties
 const DEFAULT_SAMPLES_PER_BUFFER: u32 = 1024;

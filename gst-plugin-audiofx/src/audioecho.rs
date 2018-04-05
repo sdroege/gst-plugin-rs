@@ -11,18 +11,18 @@ use gst;
 use gst::prelude::*;
 use gst_audio;
 
-use gst_plugin::properties::*;
-use gst_plugin::object::*;
-use gst_plugin::element::*;
 use gst_plugin::base_transform::*;
+use gst_plugin::element::*;
+use gst_plugin::object::*;
+use gst_plugin::properties::*;
 
-use std::{cmp, iter, i32, u64};
 use std::sync::Mutex;
+use std::{cmp, iter, i32, u64};
 
 use byte_slice_cast::*;
 
-use num_traits::float::Float;
 use num_traits::cast::{FromPrimitive, ToPrimitive};
+use num_traits::float::Float;
 
 const DEFAULT_MAX_DELAY: u64 = gst::SECOND_VAL;
 const DEFAULT_DELAY: u64 = 500 * gst::MSECOND_VAL;
