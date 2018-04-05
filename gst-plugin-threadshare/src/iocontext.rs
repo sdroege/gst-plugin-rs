@@ -22,7 +22,9 @@ use std::sync::atomic;
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 
+use futures::future;
 use futures::stream::futures_unordered::FuturesUnordered;
+use futures::sync::oneshot;
 use futures::{Future, Stream};
 use tokio::executor::thread_pool;
 use tokio::reactor;
@@ -355,16 +357,40 @@ impl IOContext {
         fs.push(Box::new(future))
     }
 
-    pub fn drain_pending_futures(
+    pub fn drain_pending_futures<E: Send + 'static>(
         &self,
         id: PendingFutureId,
-    ) -> FuturesUnordered<Box<Future<Item = (), Error = ()> + Send + 'static>> {
+    ) -> (Option<oneshot::Sender<()>>, PendingFuturesFuture<E>) {
         let mut pending_futures = self.0.pending_futures.lock().unwrap();
         let fs = pending_futures.1.get_mut(&id.0).unwrap();
 
-        mem::replace(fs, FuturesUnordered::new())
+        let pending_futures = mem::replace(fs, FuturesUnordered::new());
+
+        if !pending_futures.is_empty() {
+            gst_log!(
+                CONTEXT_CAT,
+                "Scheduling {} pending futures for context '{}' with pending future id {:?}",
+                pending_futures.len(),
+                self.0.name,
+                id,
+            );
+
+            let (sender, receiver) = oneshot::channel();
+
+            let future = pending_futures
+                .for_each(|_| Ok(()))
+                .select(receiver.then(|_| Ok(())))
+                .then(|_| Ok(()));
+
+            (Some(sender), future::Either::A(Box::new(future)))
+        } else {
+            (None, future::Either::B(future::ok(())))
+        }
     }
 }
+
+pub type PendingFuturesFuture<E> =
+    future::Either<Box<Future<Item = (), Error = E> + Send + 'static>, future::FutureResult<(), E>>;
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct PendingFutureId(u64);

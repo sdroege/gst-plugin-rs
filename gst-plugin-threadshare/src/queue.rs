@@ -31,7 +31,7 @@ use std::{u16, u32, u64};
 use futures;
 use futures::future;
 use futures::task;
-use futures::{Async, Future, IntoFuture, Stream};
+use futures::{Async, Future};
 
 use tokio::executor;
 
@@ -637,46 +637,22 @@ impl Queue {
             Ok(()) => {
                 let mut state = self.state.lock().unwrap();
 
-                let State {
-                    ref pending_future_id,
-                    ref io_context,
+                if let State {
+                    io_context: Some(ref io_context),
+                    pending_future_id: Some(ref pending_future_id),
                     ref mut pending_future_cancel,
                     ..
-                } = *state;
-
-                if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-                    (pending_future_id, io_context)
+                } = *state
                 {
-                    // FIXME: This should all go into a helper function
-                    let pending_futures = io_context.drain_pending_futures(*pending_future_id);
+                    let (cancel, future) = io_context.drain_pending_futures(*pending_future_id);
+                    *pending_future_cancel = cancel;
 
-                    if !pending_futures.is_empty() {
-                        gst_log!(
-                            self.cat,
-                            obj: element,
-                            "Scheduling {} pending futures",
-                            pending_futures.len()
-                        );
-
-                        let (sender, receiver) = futures::sync::oneshot::channel();
-                        *pending_future_cancel = Some(sender);
-
-                        let future = pending_futures
-                            .for_each(|_| Ok(()))
-                            .select(receiver.then(|_| Ok(())))
-                            .then(|_| Ok(()));
-
-                        future::Either::A(Box::new(future))
-                    } else {
-                        *pending_future_cancel = None;
-                        future::Either::B(Ok(()).into_future())
-                    }
+                    future
                 } else {
-                    *pending_future_cancel = None;
-                    future::Either::B(Ok(()).into_future())
+                    future::Either::B(future::ok(()))
                 }
             }
-            Err(err) => future::Either::B(Err(err).into_future()),
+            Err(err) => future::Either::B(future::err(err)),
         }
     }
 
