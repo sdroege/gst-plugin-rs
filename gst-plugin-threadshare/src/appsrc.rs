@@ -225,21 +225,6 @@ impl AppSrc {
         })
     }
 
-    fn catch_panic_pad_function<T, F: FnOnce(&Self, &Element) -> T, G: FnOnce() -> T>(
-        parent: &Option<gst::Object>,
-        fallback: G,
-        f: F,
-    ) -> T {
-        let element = parent
-            .as_ref()
-            .cloned()
-            .unwrap()
-            .downcast::<Element>()
-            .unwrap();
-        let src = element.get_impl().downcast_ref::<AppSrc>().unwrap();
-        element.catch_panic(fallback, |element| f(src, element))
-    }
-
     fn create_io_context_event(state: &State) -> Option<gst::Event> {
         if let (&Some(ref pending_future_id), &Some(ref io_context)) =
             (&state.pending_future_id, &state.io_context)

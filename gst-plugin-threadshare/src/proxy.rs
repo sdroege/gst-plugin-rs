@@ -355,21 +355,6 @@ impl ProxySink {
         })
     }
 
-    fn catch_panic_pad_function<T, F: FnOnce(&Self, &Element) -> T, G: FnOnce() -> T>(
-        parent: &Option<gst::Object>,
-        fallback: G,
-        f: F,
-    ) -> T {
-        let element = parent
-            .as_ref()
-            .cloned()
-            .unwrap()
-            .downcast::<Element>()
-            .unwrap();
-        let sink = element.get_impl().downcast_ref::<ProxySink>().unwrap();
-        element.catch_panic(fallback, |element| f(sink, element))
-    }
-
     fn enqueue_item(
         &self,
         _pad: &gst::Pad,

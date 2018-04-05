@@ -210,21 +210,6 @@ impl UdpSrc {
         })
     }
 
-    fn catch_panic_pad_function<T, F: FnOnce(&Self, &Element) -> T, G: FnOnce() -> T>(
-        parent: &Option<gst::Object>,
-        fallback: G,
-        f: F,
-    ) -> T {
-        let element = parent
-            .as_ref()
-            .cloned()
-            .unwrap()
-            .downcast::<Element>()
-            .unwrap();
-        let udpsrc = element.get_impl().downcast_ref::<UdpSrc>().unwrap();
-        element.catch_panic(fallback, |element| f(udpsrc, element))
-    }
-
     fn src_event(&self, pad: &gst::Pad, element: &Element, event: gst::Event) -> bool {
         use gst::EventView;
 
