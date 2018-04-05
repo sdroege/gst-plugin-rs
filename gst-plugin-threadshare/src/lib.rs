@@ -17,6 +17,9 @@
 
 #![crate_type = "cdylib"]
 
+extern crate glib_sys as glib_ffi;
+extern crate gstreamer_sys as gst_ffi;
+
 extern crate glib;
 #[macro_use]
 extern crate gst_plugin;
@@ -66,3 +69,38 @@ plugin_define!(
     b"https://github.com/sdroege/gst-plugin-threadshare\0",
     b"2018-03-01\0"
 );
+
+pub fn set_element_flags<T: glib::IsA<gst::Object> + glib::IsA<gst::Element>>(
+    element: &T,
+    flags: gst::ElementFlags,
+) {
+    unsafe {
+        use glib::translate::ToGlib;
+        use gst_ffi;
+
+        let ptr: *mut gst_ffi::GstObject = element.to_glib_none().0;
+        let _guard = MutexGuard::lock(&(*ptr).lock);
+        (*ptr).flags |= flags.to_glib();
+    }
+}
+
+struct MutexGuard<'a>(&'a glib_ffi::GMutex);
+
+impl<'a> MutexGuard<'a> {
+    pub fn lock(mutex: &'a glib_ffi::GMutex) -> Self {
+        use glib::translate::mut_override;
+        unsafe {
+            glib_ffi::g_mutex_lock(mut_override(mutex));
+        }
+        MutexGuard(mutex)
+    }
+}
+
+impl<'a> Drop for MutexGuard<'a> {
+    fn drop(&mut self) {
+        use glib::translate::mut_override;
+        unsafe {
+            glib_ffi::g_mutex_unlock(mut_override(self.0));
+        }
+    }
+}

@@ -343,6 +343,8 @@ impl ProxySink {
 
         element.add_pad(&sink_pad).unwrap();
 
+        ::set_element_flags(element, gst::ElementFlags::SINK);
+
         Box::new(Self {
             cat: gst::DebugCategory::new(
                 "ts-proxysink",
@@ -541,6 +543,9 @@ impl ProxySink {
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
+            EventView::Eos(..) => {
+                let _ = element.post_message(&gst::Message::new_eos().src(Some(element)).build());
+            }
             EventView::FlushStart(..) => {
                 let _ = self.stop(element);
             }
@@ -772,6 +777,8 @@ impl ProxySrc {
             )
         });
         element.add_pad(&src_pad).unwrap();
+
+        ::set_element_flags(element, gst::ElementFlags::SOURCE);
 
         Box::new(Self {
             cat: gst::DebugCategory::new(

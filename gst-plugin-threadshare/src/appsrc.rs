@@ -213,6 +213,8 @@ impl AppSrc {
         });
         element.add_pad(&src_pad).unwrap();
 
+        ::set_element_flags(element, gst::ElementFlags::SOURCE);
+
         Box::new(Self {
             cat: gst::DebugCategory::new(
                 "ts-appsrc",
