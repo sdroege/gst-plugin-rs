@@ -21,7 +21,7 @@ use glib::prelude::*;
 extern crate gstreamer as gst;
 use gst::prelude::*;
 
-use std::{env, thread, time};
+use std::env;
 
 fn main() {
     gst::init().unwrap();
@@ -56,40 +56,6 @@ fn main() {
     let n_threads: i32 = args[3].parse().unwrap();
     let n_groups: u32 = args[4].parse().unwrap();
     let wait: u32 = args[5].parse().unwrap();
-
-    if source == "udpsrc" || source == "ts-udpsrc" {
-        // Start our thread that just sends packets forever to the ports
-
-        thread::spawn(move || {
-            use std::net;
-            use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-
-            let buffer = [0; 160];
-            let socket = net::UdpSocket::bind("0.0.0.0:0").unwrap();
-
-            let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-            let destinations = (40000..(40000 + n_streams))
-                .map(|port| SocketAddr::new(ipaddr, port))
-                .collect::<Vec<_>>();
-
-            let wait = time::Duration::from_millis(wait as u64);
-
-            thread::sleep(time::Duration::from_millis(1000));
-
-            loop {
-                let now = time::Instant::now();
-
-                for dest in &destinations {
-                    socket.send_to(&buffer, dest).unwrap();
-                }
-
-                let elapsed = now.elapsed();
-                if elapsed < wait {
-                    thread::sleep(wait - elapsed);
-                }
-            }
-        });
-    }
 
     let l = glib::MainLoop::new(None, false);
     let pipeline = gst::Pipeline::new(None);

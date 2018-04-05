@@ -35,3 +35,6 @@ panic = 'unwind'
 name = "udpsrc-benchmark"
 path = "examples/udpsrc_benchmark.rs"
 
+[[example]]
+name = "udpsrc-benchmark-sender"
+path = "examples/udpsrc_benchmark_sender.rs"
