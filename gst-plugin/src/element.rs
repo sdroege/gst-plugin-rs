@@ -53,6 +53,33 @@ pub trait ElementImpl<T: ElementBase>: ObjectImpl<T> + AnyImpl + Send + Sync + '
     }
 }
 
+use std::any::Any;
+
+pub trait ElementImplExt<T> {
+    fn catch_panic_pad_function<R, F: FnOnce(&Self, &T) -> R, G: FnOnce() -> R>(
+            parent: &Option<gst::Object>,
+            fallback: G,
+            f: F,
+        ) -> R;
+}
+
+impl<S: ElementImpl<T>, T: ObjectType + glib::IsA<gst::Element> + glib::IsA<gst::Object>> ElementImplExt<T> for S {
+    fn catch_panic_pad_function<R, F: FnOnce(&Self, &T) -> R, G: FnOnce() -> R>(
+        parent: &Option<gst::Object>,
+        fallback: G,
+        f: F,
+    ) -> R {
+        let element = parent
+            .as_ref()
+            .cloned()
+            .unwrap()
+            .downcast::<T>()
+            .unwrap();
+        let imp = Any::downcast_ref::<Self>(element.get_impl()).unwrap();
+        element.catch_panic(fallback, |element| f(imp, element))
+    }
+}
+
 any_impl!(ElementBase, ElementImpl);
 
 pub unsafe trait ElementBase: IsA<gst::Element> + ObjectType {

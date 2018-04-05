@@ -259,21 +259,6 @@ impl ToggleRecord {
         Box::new(imp)
     }
 
-    fn catch_panic_pad_function<T, F: FnOnce(&Self, &Element) -> T, G: FnOnce() -> T>(
-        parent: &Option<gst::Object>,
-        fallback: G,
-        f: F,
-    ) -> T {
-        let element = parent
-            .as_ref()
-            .cloned()
-            .unwrap()
-            .downcast::<Element>()
-            .unwrap();
-        let togglerecord = element.get_impl().downcast_ref::<ToggleRecord>().unwrap();
-        element.catch_panic(fallback, |element| f(togglerecord, element))
-    }
-
     fn set_pad_functions(sinkpad: &gst::Pad, srcpad: &gst::Pad) {
         sinkpad.set_chain_function(|pad, parent, buffer| {
             ToggleRecord::catch_panic_pad_function(
