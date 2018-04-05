@@ -70,8 +70,11 @@ impl<S: ElementImpl<T>, T: ObjectType + glib::IsA<gst::Element> + glib::IsA<gst:
         fallback: G,
         f: F,
     ) -> R {
+        // FIXME: Does this work for element subclasses?
         let element = parent.as_ref().cloned().unwrap().downcast::<T>().unwrap();
-        let imp = Any::downcast_ref::<Self>(element.get_impl()).unwrap();
+        let imp = element.get_impl();
+        let imp = Any::downcast_ref::<Box<ElementImpl<T> + 'static>>(imp).unwrap();
+        let imp = imp.downcast_ref::<S>().unwrap();
         element.catch_panic(fallback, |element| f(imp, element))
     }
 }
