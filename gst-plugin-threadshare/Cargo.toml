@@ -30,3 +30,8 @@ lto = true
 opt-level = 3
 debug = true
 panic = 'unwind'
+
+[[example]]
+name = "udpsrc-benchmark"
+path = "examples/udpsrc_benchmark.rs"
+
