@@ -134,6 +134,8 @@ impl IOContextRunner {
 
             ::tokio_reactor::with_default(&handle, &mut enter, |mut enter| {
                 ::tokio_timer::with_default(&timer_handle, &mut enter, |enter| loop {
+                    use tokio::executor::current_thread::Turn;
+
                     let now = time::Instant::now();
 
                     if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
@@ -148,7 +150,11 @@ impl IOContextRunner {
                     }
 
                     gst_trace!(CONTEXT_CAT, "Turning current thread '{}'", self.name);
-                    current_thread.enter(enter).turn(None).unwrap();
+                    while let Turn(true) = current_thread
+                        .enter(enter)
+                        .turn(Some(time::Duration::from_millis(0)))
+                        .unwrap()
+                    {}
                     gst_trace!(CONTEXT_CAT, "Turned current thread '{}'", self.name);
 
                     let elapsed = now.elapsed();
@@ -277,6 +283,7 @@ impl IOContext {
 
             let shutdown = IOContextRunner::start(name, wait, reactor);
 
+            // FIXME: The executor threads are not throttled at all, only the reactor
             let mut pool_builder = thread_pool::Builder::new();
             pool_builder
                 .around_worker(move |w, enter| {
