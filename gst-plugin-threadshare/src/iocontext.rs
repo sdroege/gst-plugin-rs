@@ -134,8 +134,6 @@ impl IOContextRunner {
 
             ::tokio_reactor::with_default(&handle, &mut enter, |mut enter| {
                 ::tokio_timer::with_default(&timer_handle, &mut enter, |enter| loop {
-                    use tokio::executor::current_thread::Turn;
-
                     let now = time::Instant::now();
 
                     if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
@@ -150,10 +148,11 @@ impl IOContextRunner {
                     }
 
                     gst_trace!(CONTEXT_CAT, "Turning current thread '{}'", self.name);
-                    while let Turn(true) = current_thread
+                    while current_thread
                         .enter(enter)
                         .turn(Some(time::Duration::from_millis(0)))
                         .unwrap()
+                        .has_polled()
                     {}
                     gst_trace!(CONTEXT_CAT, "Turned current thread '{}'", self.name);
 
