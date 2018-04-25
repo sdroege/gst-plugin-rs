@@ -25,10 +25,12 @@ use object::*;
 
 pub trait PipelineImpl<T: PipelineBase>:
     AnyImpl + ObjectImpl<T> + ElementImpl<T> + BinImpl<T> + Send + Sync + 'static
+where
+    T::InstanceStructType: PanicPoison
 {
 }
 
-any_impl!(PipelineBase, PipelineImpl);
+any_impl!(PipelineBase, PipelineImpl, PanicPoison);
 
 pub unsafe trait PipelineBase:
     IsA<gst::Element> + IsA<gst::Bin> + IsA<gst::Pipeline> + ObjectType
@@ -38,16 +40,18 @@ pub unsafe trait PipelineBase:
 pub unsafe trait PipelineClassExt<T: PipelineBase>
 where
     T::ImplType: PipelineImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     fn override_vfuncs(&mut self, _: &ClassInitToken) {}
 }
 
 glib_wrapper! {
-    pub struct Pipeline(Object<InstanceStruct<Pipeline>>): [gst::Pipeline => gst_ffi::GstPipeline,
-                                                            gst::Bin => gst_ffi::GstBin,
-                                                            gst::Element => gst_ffi::GstElement,
-                                                            gst::Object => gst_ffi::GstObject,
-                                                            gst::ChildProxy => gst_ffi::GstChildProxy];
+    pub struct Pipeline(Object<ElementInstanceStruct<Pipeline>>):
+        [gst::Pipeline => gst_ffi::GstPipeline,
+         gst::Bin => gst_ffi::GstBin,
+         gst::Element => gst_ffi::GstElement,
+         gst::Object => gst_ffi::GstObject,
+         gst::ChildProxy => gst_ffi::GstChildProxy];
 
     match fn {
         get_type => || get_type::<Pipeline>(),
@@ -73,7 +77,10 @@ macro_rules! box_pipeline_impl(
     ($name:ident) => {
         box_bin_impl!($name);
 
-        impl<T: PipelineBase> PipelineImpl<T> for Box<$name<T>> {
+        impl<T: PipelineBase> PipelineImpl<T> for Box<$name<T>>
+        where
+            T::InstanceStructType: PanicPoison
+        {
         }
     };
 );
@@ -84,6 +91,7 @@ impl ObjectType for Pipeline {
     type GlibType = gst_ffi::GstPipeline;
     type GlibClassType = gst_ffi::GstPipelineClass;
     type ImplType = Box<PipelineImpl<Self>>;
+    type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_ffi::gst_pipeline_get_type()) }

@@ -22,44 +22,17 @@ pub extern crate glib;
 pub extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
 
-use std::ptr;
-
-macro_rules! callback_guard {
-    () => {
-        let _guard = ::glib::CallbackGuard::new();
-    };
-}
-
-macro_rules! floating_reference_guard {
-    ($obj:ident) => {
-        let _guard = $crate::FloatingReferenceGuard::new($obj as *mut _);
-    };
-}
-
-pub struct FloatingReferenceGuard(ptr::NonNull<gobject_ffi::GObject>);
-
-impl FloatingReferenceGuard {
-    pub unsafe fn new(obj: *mut gobject_ffi::GObject) -> Option<FloatingReferenceGuard> {
-        assert!(!obj.is_null());
-        if gobject_ffi::g_object_is_floating(obj) != glib_ffi::GFALSE {
-            gobject_ffi::g_object_ref_sink(obj);
-            Some(FloatingReferenceGuard(ptr::NonNull::new_unchecked(obj)))
-        } else {
-            None
-        }
-    }
-}
-
-impl Drop for FloatingReferenceGuard {
-    fn drop(&mut self) {
-        unsafe {
-            gobject_ffi::g_object_force_floating(self.0.as_ptr());
-        }
-    }
-}
+#[macro_use]
+extern crate gobject_subclass;
 
 #[macro_use]
-pub mod anyimpl;
+pub use gobject_subclass::anyimpl;
+pub use gobject_subclass::properties;
+
+#[macro_use]
+pub use gobject_subclass::guard;
+
+pub mod object;
 
 #[macro_use]
 pub mod error;
@@ -68,9 +41,6 @@ pub mod adapter;
 pub mod plugin;
 pub mod bytes;
 
-pub mod properties;
-#[macro_use]
-pub mod object;
 #[macro_use]
 pub mod element;
 #[macro_use]
