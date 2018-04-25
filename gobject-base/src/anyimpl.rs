@@ -20,6 +20,7 @@ impl<T: Any> AnyImpl for T {
     }
 }
 
+#[macro_export]
 macro_rules! any_impl {
     ($bound:ident, $trait:ident) => {
         impl<T: $bound> $trait<T> {
