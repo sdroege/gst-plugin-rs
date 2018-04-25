@@ -10,11 +10,11 @@ gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys" }
 glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
 gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
-tokio = { git = "https://github.com/sdroege/tokio", branch = "fair-turn" }
-tokio-reactor = { git = "https://github.com/sdroege/tokio", branch = "fair-turn" }
-tokio-executor = { git = "https://github.com/sdroege/tokio", branch = "fair-turn" }
-tokio-timer = { git = "https://github.com/sdroege/tokio", branch = "fair-turn" }
-tokio-threadpool = { git = "https://github.com/sdroege/tokio", branch = "fair-turn" }
+tokio = { git = "https://github.com/tokio-rs/tokio" }
+tokio-reactor = { git = "https://github.com/tokio-rs/tokio" }
+tokio-executor = { git = "https://github.com/tokio-rs/tokio" }
+tokio-timer = { git = "https://github.com/tokio-rs/tokio" }
+tokio-threadpool = { git = "https://github.com/tokio-rs/tokio" }
 futures = "0.1"
 lazy_static = "1.0"
 either = "1.0"
