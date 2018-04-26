@@ -27,11 +27,12 @@ extern crate gobject_base;
 
 #[macro_use]
 pub use gobject_base::anyimpl;
-pub use gobject_base::object;
 pub use gobject_base::properties;
 
 #[macro_use]
 pub use gobject_base::guard;
+
+pub mod object;
 
 #[macro_use]
 pub mod error;

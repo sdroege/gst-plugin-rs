@@ -12,7 +12,6 @@ use std::ffi::CString;
 use std::mem;
 use std::ptr;
 use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
 
 use glib_ffi;
 use gobject_ffi;
@@ -65,14 +64,18 @@ pub trait ImplTypeStatic<T: ObjectType>: Send + Sync + 'static {
 pub struct ClassInitToken(());
 pub struct TypeInitToken(());
 
-pub trait ObjectType: FromGlibPtrBorrow<*mut InstanceStruct<Self>> + 'static
-where
-    Self: Sized,
+pub trait ObjectType
+where Self: Sized + 'static
 {
+    // TODO: where do I leave:
+    // FromGlibPtrBorrow<*mut InstanceStruct<Self>> + 'static
+
     const NAME: &'static str;
+    type InstanceStructType: Instance<Self> + 'static;
     type GlibType;
     type GlibClassType;
     type ImplType: ObjectImpl<Self>;
+
 
     fn glib_type() -> glib::Type;
 
@@ -86,13 +89,14 @@ where
         unimplemented!()
     }
 
-    unsafe fn get_instance(&self) -> *mut InstanceStruct<Self>;
+    unsafe fn get_instance(&self) -> *mut Self::InstanceStructType;
 
-    fn get_impl(&self) -> &Self::ImplType {
+
+    fn get_impl(&self) -> &Self::ImplType{
         unsafe { (*self.get_instance()).get_impl() }
     }
 
-    unsafe fn get_class(&self) -> *const ClassStruct<Self> {
+    unsafe fn get_class(&self) -> *const ClassStruct<Self>{
         (*self.get_instance()).get_class()
     }
 }
@@ -100,28 +104,77 @@ where
 #[macro_export]
 macro_rules! object_type_fns(
     () => {
-        unsafe fn get_instance(&self) -> *mut InstanceStruct<Self> {
+        unsafe fn get_instance(&self) -> *mut Self::InstanceStructType {
             self.to_glib_none().0
         }
     }
 );
 
-#[repr(C)]
-pub struct InstanceStruct<T: ObjectType> {
-    pub parent: T::GlibType,
-    pub imp: ptr::NonNull<T::ImplType>,
-    pub panicked: AtomicBool,
+
+pub trait Instance<T: ObjectType>
+{
+    fn parent(&self) -> &T::GlibType;
+
+    fn get_impl(&self) -> &T::ImplType;
+    fn get_impl_ptr(&self) -> *mut T::ImplType;
+
+    fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>);
+
+
+
+
+
+    unsafe fn get_class(&self) -> *const ClassStruct<T>;
 }
 
-impl<T: ObjectType> InstanceStruct<T> {
-    pub fn get_impl(&self) -> &T::ImplType {
-        unsafe { self.imp.as_ref() }
-    }
+// #[repr(C)]
+// pub struct InstanceStruct<T: ObjectType>
+// {
+//     _parent: T::GlibType,
+//
+//     _imp: ptr::NonNull<T::ImplType>,
+//
+//     pub panicked: AtomicBool,
+// }
+//
+// #[repr(C)]
+// pub struct InstanceStruct<T>
+// where
+//     T: ObjectType<Instance<T>> + Sized + 'static
+// {
+//     pub parent: T::GlibType,
+//     pub imp: ptr::NonNull<T::ImplType>,
+//
+//     pub panicked: AtomicBool,
+//
+// }
 
-    pub unsafe fn get_class(&self) -> *const ClassStruct<T> {
-        *(self as *const _ as *const *const ClassStruct<T>)
-    }
-}
+// impl<T: ObjectType> Instance<T> for InstanceStruct<T>
+// {
+//     fn get_impl(&self) -> &T::ImplType {
+//         unsafe { self._imp.as_ref() }
+//     }
+//
+//     fn get_impl_ptr(&self) -> *mut T::ImplType {
+//         self._imp.as_ptr()
+//     }
+//
+//     fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>){
+//         self._imp = imp;
+//     }
+//
+//     fn parent(&self) -> &T::GlibType{
+//         &self._parent
+//     }
+//
+//
+//
+//
+//     unsafe fn get_class(&self) -> *const ClassStruct<T> {
+//         *(self as *const _ as *const *const ClassStruct<T>)
+//     }
+//
+// }
 
 #[repr(C)]
 pub struct ClassStruct<T: ObjectType> {
@@ -277,7 +330,9 @@ unsafe impl<T: ObjectType> ObjectClass for ClassStruct<T> {}
 unsafe extern "C" fn class_init<T: ObjectType>(
     klass: glib_ffi::gpointer,
     _klass_data: glib_ffi::gpointer,
-) {
+)
+where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
+{
     callback_guard!();
     {
         let gobject_klass = &mut *(klass as *mut gobject_ffi::GObjectClass);
@@ -300,10 +355,10 @@ unsafe extern "C" fn class_init<T: ObjectType>(
 
 unsafe extern "C" fn finalize<T: ObjectType>(obj: *mut gobject_ffi::GObject) {
     callback_guard!();
-    let instance = &mut *(obj as *mut InstanceStruct<T>);
+    let instance = &mut *(obj as *mut T::InstanceStructType);
 
-    drop(Box::from_raw(instance.imp.as_ptr()));
-    instance.imp = ptr::NonNull::dangling();
+    drop(Box::from_raw(instance.get_impl_ptr()));
+    instance.set_impl(ptr::NonNull::dangling());
 
     let klass = *(obj as *const glib_ffi::gpointer);
     let parent_klass = gobject_ffi::g_type_class_peek_parent(klass);
@@ -317,10 +372,12 @@ unsafe extern "C" fn get_property<T: ObjectType>(
     id: u32,
     value: *mut gobject_ffi::GValue,
     _pspec: *mut gobject_ffi::GParamSpec,
-) {
+)
+where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
+{
     callback_guard!();
     floating_reference_guard!(obj);
-    match T::get_property(&from_glib_borrow(obj as *mut InstanceStruct<T>), id - 1) {
+    match T::get_property(&from_glib_borrow(obj as *mut T::InstanceStructType), id - 1) {
         Ok(v) => {
             gobject_ffi::g_value_unset(value);
             ptr::write(value, ptr::read(v.to_glib_none().0));
@@ -335,11 +392,13 @@ unsafe extern "C" fn set_property<T: ObjectType>(
     id: u32,
     value: *mut gobject_ffi::GValue,
     _pspec: *mut gobject_ffi::GParamSpec,
-) {
+)
+where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
+{
     callback_guard!();
     floating_reference_guard!(obj);
     T::set_property(
-        &from_glib_borrow(obj as *mut InstanceStruct<T>),
+        &from_glib_borrow(obj as *mut T::InstanceStructType),
         id - 1,
         &*(value as *mut glib::Value),
     );
@@ -347,7 +406,9 @@ unsafe extern "C" fn set_property<T: ObjectType>(
 
 static mut TYPES: *mut Mutex<BTreeMap<TypeId, glib::Type>> = 0 as *mut _;
 
-pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType {
+pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType
+where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
+ {
     use std::sync::{Once, ONCE_INIT};
 
     static ONCE: Once = ONCE_INIT;
@@ -367,7 +428,7 @@ pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType {
                 class_init: Some(class_init::<T>),
                 class_finalize: None,
                 class_data: ptr::null_mut(),
-                instance_size: mem::size_of::<InstanceStruct<T>>() as u16,
+                instance_size: mem::size_of::<T::InstanceStructType>() as u16,
                 n_preallocs: 0,
                 instance_init: None,
                 value_table: ptr::null(),
@@ -427,7 +488,7 @@ unsafe extern "C" fn sub_get_property<T: ObjectType>(
 ) {
     callback_guard!();
     floating_reference_guard!(obj);
-    let instance = &*(obj as *mut InstanceStruct<T>);
+    let instance = &*(obj as *mut T::InstanceStructType);
     let imp = instance.get_impl();
 
     match imp.get_property(&from_glib_borrow(obj), id - 1) {
@@ -448,7 +509,7 @@ unsafe extern "C" fn sub_set_property<T: ObjectType>(
 ) {
     callback_guard!();
     floating_reference_guard!(obj);
-    let instance = &*(obj as *mut InstanceStruct<T>);
+    let instance = &*(obj as *mut T::InstanceStructType);
     let imp = instance.get_impl();
     imp.set_property(
         &from_glib_borrow(obj),
@@ -460,18 +521,22 @@ unsafe extern "C" fn sub_set_property<T: ObjectType>(
 unsafe extern "C" fn sub_init<T: ObjectType>(
     obj: *mut gobject_ffi::GTypeInstance,
     _klass: glib_ffi::gpointer,
-) {
+)
+where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
+{
     callback_guard!();
     floating_reference_guard!(obj);
-    let instance = &mut *(obj as *mut InstanceStruct<T>);
+    let instance = &mut *(obj as *mut T::InstanceStructType);
     let klass = &**(obj as *const *const ClassStruct<T>);
-    let rs_instance: T = from_glib_borrow(obj as *mut InstanceStruct<T>);
+    let rs_instance: T = from_glib_borrow(obj as *mut T::InstanceStructType);
 
     let imp = klass.imp_static.as_ref().new(&rs_instance);
-    instance.imp = ptr::NonNull::new_unchecked(Box::into_raw(Box::new(imp)));
+    instance.set_impl(ptr::NonNull::new_unchecked(Box::into_raw(Box::new(imp))));
 }
 
-pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type {
+pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type
+where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
+{
     unsafe {
         let parent_type = get_type::<T>();
         let type_name = format!("{}-{}", T::NAME, imp.get_name());
@@ -486,7 +551,7 @@ pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type 
             class_init: Some(sub_class_init::<T>),
             class_finalize: None,
             class_data: imp_ptr as glib_ffi::gpointer,
-            instance_size: mem::size_of::<InstanceStruct<T>>() as u16,
+            instance_size: mem::size_of::<T::InstanceStructType>() as u16,
             n_preallocs: 0,
             instance_init: Some(sub_init::<T>),
             value_table: ptr::null(),
