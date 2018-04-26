@@ -24,7 +24,10 @@ use gst::prelude::*;
 use anyimpl::*;
 use object::*;
 
-pub trait ElementImpl<T: ElementBase>: ObjectImpl<T> + AnyImpl + Send + Sync + 'static {
+pub trait ElementImpl<T: ElementBase>: ObjectImpl<T> + AnyImpl + Send + Sync + 'static
+where
+    T::InstanceStructType: PanicPoison
+{
     fn change_state(&self, element: &T, transition: gst::StateChange) -> gst::StateChangeReturn {
         element.parent_change_state(transition)
     }
@@ -65,8 +68,7 @@ pub trait ElementImplExt<T> {
 impl<S: ElementImpl<T>, T: ObjectType + glib::IsA<gst::Element> + glib::IsA<gst::Object>>
     ElementImplExt<T> for S
 where
-T: FromGlibPtrBorrow<*mut InstanceStruct<T>>,
-<T as ObjectType>::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison
 {
     fn catch_panic_pad_function<R, F: FnOnce(&Self, &T) -> R, G: FnOnce() -> R>(
         parent: &Option<gst::Object>,
@@ -86,8 +88,7 @@ any_impl!(ElementBase, ElementImpl);
 
 pub unsafe trait ElementBase: IsA<gst::Element> + ObjectType
 where
-    Self: FromGlibPtrBorrow<*mut InstanceStruct<Self>>,
-    <Self as ObjectType>::InstanceStructType: PanicPoison
+    Self::InstanceStructType: PanicPoison
 {
     fn parent_change_state(&self, transition: gst::StateChange) -> gst::StateChangeReturn {
         unsafe {
@@ -134,7 +135,6 @@ where
     }
 
     fn catch_panic<T, F: FnOnce(&Self) -> T, G: FnOnce() -> T>(&self, fallback: G, f: F) -> T
-    where Self: FromGlibPtrBorrow<*mut InstanceStruct<Self>>
     {
         let panicked = unsafe { &(*self.get_instance()).panicked() };
         panic_to_error!(self, panicked, fallback(), { f(self) })
@@ -144,6 +144,7 @@ where
 pub unsafe trait ElementClassExt<T: ElementBase>
 where
     T::ImplType: ElementImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     fn add_pad_template(&mut self, pad_template: gst::PadTemplate) {
         unsafe {
@@ -173,8 +174,6 @@ where
     }
 
     fn override_vfuncs(&mut self, _: &ClassInitToken)
-    where
-        T: FromGlibPtrBorrow<*mut InstanceStruct<T>>
     {
         unsafe {
             let klass = &mut *(self as *const Self as *mut gst_ffi::GstElementClass);
@@ -198,7 +197,7 @@ glib_wrapper! {
 }
 
 unsafe impl<T: IsA<gst::Element> + ObjectType> ElementBase for T
-where Self: FromGlibPtrBorrow<*mut InstanceStruct<Self>>{}
+where Self::InstanceStructType: PanicPoison{}
 
 pub type ElementClass = ClassStruct<Element>;
 
@@ -213,7 +212,10 @@ macro_rules! box_element_impl(
     ($name:ident) => {
         box_object_impl!($name);
 
-        impl<T: ElementBase> ElementImpl<T> for Box<$name<T>> {
+        impl<T: ElementBase> ElementImpl<T> for Box<$name<T>>
+        where
+            T::InstanceStructType: PanicPoison
+        {
             fn change_state(
                 &self,
                 element: &T,
@@ -254,8 +256,6 @@ macro_rules! box_element_impl(
 box_element_impl!(ElementImpl);
 
 impl ObjectType for Element
-where
-    Self: FromGlibPtrBorrow<*mut InstanceStruct<Self>>
 {
     const NAME: &'static str = "RsElement";
     type GlibType = gst_ffi::GstElement;
@@ -280,12 +280,12 @@ unsafe extern "C" fn element_change_state<T: ElementBase>(
 ) -> gst_ffi::GstStateChangeReturn
 where
     T::ImplType: ElementImpl<T>,
-    T: FromGlibPtrBorrow<*mut InstanceStruct<T>>
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
 
     // *Never* fail downwards state changes, this causes bugs in GStreamer
@@ -311,12 +311,12 @@ unsafe extern "C" fn element_request_new_pad<T: ElementBase>(
 ) -> *mut gst_ffi::GstPad
 where
     T::ImplType: ElementImpl<T>,
-    T: FromGlibPtrBorrow<*mut InstanceStruct<T>>
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
     let caps = if caps.is_null() {
         None
@@ -348,12 +348,12 @@ unsafe extern "C" fn element_release_pad<T: ElementBase>(
     pad: *mut gst_ffi::GstPad,
 )where
     T::ImplType: ElementImpl<T>,
-    T: FromGlibPtrBorrow<*mut InstanceStruct<T>>
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
 
     panic_to_error!(&wrap, &element.panicked(), (), {
@@ -367,12 +367,12 @@ unsafe extern "C" fn element_send_event<T: ElementBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: ElementImpl<T>,
-    T: FromGlibPtrBorrow<*mut InstanceStruct<T>>
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
 
     panic_to_error!(&wrap, &element.panicked(), false, {
@@ -386,12 +386,12 @@ unsafe extern "C" fn element_query<T: ElementBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: ElementImpl<T>,
-    T: FromGlibPtrBorrow<*mut InstanceStruct<T>>
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
     let query = gst::QueryRef::from_mut_ptr(query);
 
@@ -403,12 +403,12 @@ unsafe extern "C" fn element_set_context<T: ElementBase>(
     context: *mut gst_ffi::GstContext,
 )where
     T::ImplType: ElementImpl<T>,
-    T: FromGlibPtrBorrow<*mut InstanceStruct<T>>
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
 
     panic_to_error!(&wrap, &element.panicked(), (), {

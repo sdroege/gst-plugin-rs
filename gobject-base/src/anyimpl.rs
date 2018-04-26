@@ -22,8 +22,14 @@ impl<T: Any> AnyImpl for T {
 
 #[macro_export]
 macro_rules! any_impl {
-    ($bound:ident, $trait:ident) => {
-        impl<T: $bound> $trait<T> {
+    ($bound:ident, $trait:ident, $constraints:ident) => {
+        impl<T: $bound> $trait<T>
+    };
+    ($constraints:ident) => {
+        where $constraints
+    };
+    ($bound:ident, $trait:ident, $constraints:ident) => {
+         {
             #[inline]
             pub fn downcast_ref<U: $trait<T>>(&self) -> Option<&U> {
                 if self.is::<U>() {

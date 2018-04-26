@@ -64,12 +64,11 @@ pub trait ImplTypeStatic<T: ObjectType>: Send + Sync + 'static {
 pub struct ClassInitToken(());
 pub struct TypeInitToken(());
 
-pub trait ObjectType
-where Self: Sized + 'static
-{
-    // TODO: where do I leave:
-    // FromGlibPtrBorrow<*mut InstanceStruct<Self>> + 'static
 
+pub trait ObjectType: FromGlibPtrBorrow<*mut <Self as ObjectType>::InstanceStructType>
+where Self: Sized + 'static,
+      <Self as ObjectType>::InstanceStructType: Instance<Self>
+{
     const NAME: &'static str;
     type InstanceStructType: Instance<Self> + 'static;
     type GlibType;
@@ -120,61 +119,9 @@ pub trait Instance<T: ObjectType>
 
     fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>);
 
-
-
-
-
     unsafe fn get_class(&self) -> *const ClassStruct<T>;
 }
 
-// #[repr(C)]
-// pub struct InstanceStruct<T: ObjectType>
-// {
-//     _parent: T::GlibType,
-//
-//     _imp: ptr::NonNull<T::ImplType>,
-//
-//     pub panicked: AtomicBool,
-// }
-//
-// #[repr(C)]
-// pub struct InstanceStruct<T>
-// where
-//     T: ObjectType<Instance<T>> + Sized + 'static
-// {
-//     pub parent: T::GlibType,
-//     pub imp: ptr::NonNull<T::ImplType>,
-//
-//     pub panicked: AtomicBool,
-//
-// }
-
-// impl<T: ObjectType> Instance<T> for InstanceStruct<T>
-// {
-//     fn get_impl(&self) -> &T::ImplType {
-//         unsafe { self._imp.as_ref() }
-//     }
-//
-//     fn get_impl_ptr(&self) -> *mut T::ImplType {
-//         self._imp.as_ptr()
-//     }
-//
-//     fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>){
-//         self._imp = imp;
-//     }
-//
-//     fn parent(&self) -> &T::GlibType{
-//         &self._parent
-//     }
-//
-//
-//
-//
-//     unsafe fn get_class(&self) -> *const ClassStruct<T> {
-//         *(self as *const _ as *const *const ClassStruct<T>)
-//     }
-//
-// }
 
 #[repr(C)]
 pub struct ClassStruct<T: ObjectType> {
@@ -331,7 +278,6 @@ unsafe extern "C" fn class_init<T: ObjectType>(
     klass: glib_ffi::gpointer,
     _klass_data: glib_ffi::gpointer,
 )
-where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
 {
     callback_guard!();
     {
@@ -373,7 +319,6 @@ unsafe extern "C" fn get_property<T: ObjectType>(
     value: *mut gobject_ffi::GValue,
     _pspec: *mut gobject_ffi::GParamSpec,
 )
-where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
 {
     callback_guard!();
     floating_reference_guard!(obj);
@@ -393,7 +338,6 @@ unsafe extern "C" fn set_property<T: ObjectType>(
     value: *mut gobject_ffi::GValue,
     _pspec: *mut gobject_ffi::GParamSpec,
 )
-where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
 {
     callback_guard!();
     floating_reference_guard!(obj);
@@ -407,8 +351,7 @@ where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
 static mut TYPES: *mut Mutex<BTreeMap<TypeId, glib::Type>> = 0 as *mut _;
 
 pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType
-where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
- {
+{
     use std::sync::{Once, ONCE_INIT};
 
     static ONCE: Once = ONCE_INIT;
@@ -522,7 +465,6 @@ unsafe extern "C" fn sub_init<T: ObjectType>(
     obj: *mut gobject_ffi::GTypeInstance,
     _klass: glib_ffi::gpointer,
 )
-where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
 {
     callback_guard!();
     floating_reference_guard!(obj);
@@ -535,7 +477,6 @@ where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
 }
 
 pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type
-where T: FromGlibPtrBorrow<*mut <T as ObjectType>::InstanceStructType>
 {
     unsafe {
         let parent_type = get_type::<T>();
