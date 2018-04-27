@@ -69,7 +69,7 @@ unsafe extern "C" fn uri_handler_get_uri<T: ObjectType>(
     let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type())
         as *const URIHandlerStatic<T>;
 
-    let instance = &*(uri_handler as *const InstanceStruct<T>);
+    let instance = &*(uri_handler as *const T::InstanceStructType);
     let imp = instance.get_impl();
     let imp = (*(*interface_static).imp_static).get_impl(imp);
 
@@ -88,7 +88,7 @@ unsafe extern "C" fn uri_handler_set_uri<T: ObjectType>(
     let interface_static = klass.get_interface_static(gst_ffi::gst_uri_handler_get_type())
         as *const URIHandlerStatic<T>;
 
-    let instance = &*(uri_handler as *const InstanceStruct<T>);
+    let instance = &*(uri_handler as *const T::InstanceStructType);
     let imp = instance.get_impl();
     let imp = (*(*interface_static).imp_static).get_impl(imp);
 

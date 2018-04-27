@@ -93,10 +93,11 @@ where
 }
 
 glib_wrapper! {
-    pub struct Bin(Object<InstanceStruct<Bin>>): [gst::Bin => gst_ffi::GstBin,
-                                                  gst::Element => gst_ffi::GstElement,
-                                                  gst::Object => gst_ffi::GstObject,
-                                                  gst::ChildProxy => gst_ffi::GstChildProxy];
+    pub struct Bin(Object<ElementInstanceStruct<Bin>>):
+        [gst::Bin => gst_ffi::GstBin,
+         gst::Element => gst_ffi::GstElement,
+         gst::Object => gst_ffi::GstObject,
+         gst::ChildProxy => gst_ffi::GstChildProxy];
 
     match fn {
         get_type => || get_type::<Bin>(),
@@ -146,7 +147,7 @@ impl ObjectType for Bin {
     type GlibType = gst_ffi::GstBin;
     type GlibClassType = gst_ffi::GstBinClass;
     type ImplType = Box<BinImpl<Self>>;
-    type InstanceStructType = InstanceStruct<Self>;
+    type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_ffi::gst_bin_get_type()) }

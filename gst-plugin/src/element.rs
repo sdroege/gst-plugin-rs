@@ -188,8 +188,9 @@ where
 }
 
 glib_wrapper! {
-    pub struct Element(Object<InstanceStruct<Element>>): [gst::Element => gst_ffi::GstElement,
-                                                          gst::Object => gst_ffi::GstObject];
+    pub struct Element(Object<ElementInstanceStruct<Element>>):
+        [gst::Element => gst_ffi::GstElement,
+         gst::Object => gst_ffi::GstObject];
 
     match fn {
         get_type => || get_type::<Element>(),
@@ -261,7 +262,7 @@ impl ObjectType for Element
     type GlibType = gst_ffi::GstElement;
     type GlibClassType = gst_ffi::GstElementClass;
     type ImplType = Box<ElementImpl<Self>>;
-    type InstanceStructType = InstanceStruct<Self>;
+    type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_ffi::gst_element_get_type()) }

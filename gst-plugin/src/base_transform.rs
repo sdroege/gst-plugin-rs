@@ -312,9 +312,10 @@ where
 }
 
 glib_wrapper! {
-    pub struct BaseTransform(Object<InstanceStruct<BaseTransform>>): [gst_base::BaseTransform => gst_base_ffi::GstBaseTransform,
-                                                                      gst::Element => gst_ffi::GstElement,
-                                                                      gst::Object => gst_ffi::GstObject];
+    pub struct BaseTransform(Object<ElementInstanceStruct<BaseTransform>>):
+        [gst_base::BaseTransform => gst_base_ffi::GstBaseTransform,
+         gst::Element => gst_ffi::GstElement,
+         gst::Object => gst_ffi::GstObject];
 
     match fn {
         get_type => || get_type::<BaseTransform>(),
@@ -424,7 +425,7 @@ impl ObjectType for BaseTransform {
     type GlibType = gst_base_ffi::GstBaseTransform;
     type GlibClassType = gst_base_ffi::GstBaseTransformClass;
     type ImplType = Box<BaseTransformImpl<Self>>;
-    type InstanceStructType = InstanceStruct<Self>;
+    type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_base_ffi::gst_base_transform_get_type()) }

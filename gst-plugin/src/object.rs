@@ -5,7 +5,7 @@ pub use gobject_base::object::*;
 
 
 #[repr(C)]
-pub struct InstanceStruct<T: ObjectType>
+pub struct ElementInstanceStruct<T: ObjectType>
 {
     _parent: T::GlibType,
     _imp: ptr::NonNull<T::ImplType>,
@@ -18,7 +18,7 @@ pub trait PanicPoison{
 }
 
 
-impl<T: ObjectType> Instance<T> for InstanceStruct<T>
+impl<T: ObjectType> Instance<T> for ElementInstanceStruct<T>
 {
     fn parent(&self) -> &T::GlibType{
         &self._parent
@@ -42,7 +42,7 @@ impl<T: ObjectType> Instance<T> for InstanceStruct<T>
 }
 
 
-impl<T: ObjectType> PanicPoison for InstanceStruct<T>
+impl<T: ObjectType> PanicPoison for ElementInstanceStruct<T>
 {
     fn panicked(&self) -> &AtomicBool{
         &self._panicked

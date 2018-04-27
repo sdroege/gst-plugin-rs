@@ -239,9 +239,10 @@ where
 }
 
 glib_wrapper! {
-    pub struct BaseSrc(Object<InstanceStruct<BaseSrc>>): [gst_base::BaseSrc => gst_base_ffi::GstBaseSrc,
-                                                          gst::Element => gst_ffi::GstElement,
-                                                          gst::Object => gst_ffi::GstObject];
+    pub struct BaseSrc(Object<ElementInstanceStruct<BaseSrc>>):
+        [gst_base::BaseSrc => gst_base_ffi::GstBaseSrc,
+         gst::Element => gst_ffi::GstElement,
+         gst::Object => gst_ffi::GstObject];
 
     match fn {
         get_type => || get_type::<BaseSrc>(),
@@ -362,7 +363,7 @@ impl ObjectType for BaseSrc {
     type GlibType = gst_base_ffi::GstBaseSrc;
     type GlibClassType = gst_base_ffi::GstBaseSrcClass;
     type ImplType = Box<BaseSrcImpl<Self>>;
-    type InstanceStructType = InstanceStruct<Self>;
+    type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_base_ffi::gst_base_src_get_type()) }

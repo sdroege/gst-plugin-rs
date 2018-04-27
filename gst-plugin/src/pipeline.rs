@@ -46,11 +46,12 @@ where
 }
 
 glib_wrapper! {
-    pub struct Pipeline(Object<InstanceStruct<Pipeline>>): [gst::Pipeline => gst_ffi::GstPipeline,
-                                                            gst::Bin => gst_ffi::GstBin,
-                                                            gst::Element => gst_ffi::GstElement,
-                                                            gst::Object => gst_ffi::GstObject,
-                                                            gst::ChildProxy => gst_ffi::GstChildProxy];
+    pub struct Pipeline(Object<ElementInstanceStruct<Pipeline>>):
+        [gst::Pipeline => gst_ffi::GstPipeline,
+         gst::Bin => gst_ffi::GstBin,
+         gst::Element => gst_ffi::GstElement,
+         gst::Object => gst_ffi::GstObject,
+         gst::ChildProxy => gst_ffi::GstChildProxy];
 
     match fn {
         get_type => || get_type::<Pipeline>(),
@@ -90,7 +91,7 @@ impl ObjectType for Pipeline {
     type GlibType = gst_ffi::GstPipeline;
     type GlibClassType = gst_ffi::GstPipelineClass;
     type ImplType = Box<PipelineImpl<Self>>;
-    type InstanceStructType = InstanceStruct<Self>;
+    type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_ffi::gst_pipeline_get_type()) }

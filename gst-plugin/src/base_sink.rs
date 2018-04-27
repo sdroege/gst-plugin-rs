@@ -188,9 +188,10 @@ where
 }
 
 glib_wrapper! {
-    pub struct BaseSink(Object<InstanceStruct<BaseSink>>): [gst_base::BaseSink => gst_base_ffi::GstBaseSink,
-                                                            gst::Element => gst_ffi::GstElement,
-                                                            gst::Object => gst_ffi::GstObject];
+    pub struct BaseSink(Object<ElementInstanceStruct<BaseSink>>):
+        [gst_base::BaseSink => gst_base_ffi::GstBaseSink,
+         gst::Element => gst_ffi::GstElement,
+         gst::Object => gst_ffi::GstObject];
 
     match fn {
         get_type => || get_type::<BaseSink>(),
@@ -291,7 +292,7 @@ impl ObjectType for BaseSink {
     type GlibType = gst_base_ffi::GstBaseSink;
     type GlibClassType = gst_base_ffi::GstBaseSinkClass;
     type ImplType = Box<BaseSinkImpl<Self>>;
-    type InstanceStructType = InstanceStruct<Self>;
+    type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_base_ffi::gst_base_sink_get_type()) }

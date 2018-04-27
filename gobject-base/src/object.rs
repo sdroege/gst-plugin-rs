@@ -140,6 +140,13 @@ pub trait Instance<T: ObjectType>
     unsafe fn get_class(&self) -> *const ClassStruct<T>;
 }
 
+#[repr(C)]
+pub struct InstanceStruct<T: ObjectType>
+{
+    _parent: T::GlibType,
+    _imp: ptr::NonNull<T::ImplType>,
+}
+
 
 #[repr(C)]
 pub struct ClassStruct<T: ObjectType> {
