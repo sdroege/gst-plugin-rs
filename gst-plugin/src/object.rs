@@ -4,7 +4,6 @@ use std::sync::atomic::AtomicBool;
 pub use gobject_base::object::*;
 
 
-
 #[repr(C)]
 pub struct InstanceStruct<T: ObjectType>
 {
@@ -21,6 +20,10 @@ pub trait PanicPoison{
 
 impl<T: ObjectType> Instance<T> for InstanceStruct<T>
 {
+    fn parent(&self) -> &T::GlibType{
+        &self._parent
+    }
+
     fn get_impl(&self) -> &T::ImplType {
         unsafe { self._imp.as_ref() }
     }
@@ -29,18 +32,13 @@ impl<T: ObjectType> Instance<T> for InstanceStruct<T>
         self._imp.as_ptr()
     }
 
-    fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>){
+    unsafe fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>){
         self._imp = imp;
-    }
-
-    fn parent(&self) -> &T::GlibType{
-        &self._parent
     }
 
     unsafe fn get_class(&self) -> *const ClassStruct<T> {
         *(self as *const _ as *const *const ClassStruct<T>)
     }
-
 }
 
 

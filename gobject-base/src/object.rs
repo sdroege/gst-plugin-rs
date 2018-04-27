@@ -132,9 +132,10 @@ pub trait Instance<T: ObjectType>
     fn parent(&self) -> &T::GlibType;
 
     fn get_impl(&self) -> &T::ImplType;
+
     fn get_impl_ptr(&self) -> *mut T::ImplType;
 
-    fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>);
+    unsafe fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>);
 
     unsafe fn get_class(&self) -> *const ClassStruct<T>;
 }
