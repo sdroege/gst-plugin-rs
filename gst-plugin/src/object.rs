@@ -15,7 +15,7 @@ pub struct InstanceStruct<T: ObjectType>
 }
 
 pub trait PanicPoison{
-    fn panicked(&mut self) -> &mut AtomicBool;
+    fn panicked(&self) -> &AtomicBool;
 }
 
 
@@ -46,8 +46,8 @@ impl<T: ObjectType> Instance<T> for InstanceStruct<T>
 
 impl<T: ObjectType> PanicPoison for InstanceStruct<T>
 {
-    fn panicked(&mut self) -> &mut AtomicBool{
-        self._panicked
+    fn panicked(&self) -> &AtomicBool{
+        &self._panicked
     }
 
 }

@@ -84,7 +84,7 @@ where
     }
 }
 
-any_impl!(ElementBase, ElementImpl);
+any_impl!(ElementBase, ElementImpl, PanicPoison);
 
 pub unsafe trait ElementBase: IsA<gst::Element> + ObjectType
 where
@@ -210,7 +210,7 @@ unsafe impl Sync for Element {}
 #[macro_export]
 macro_rules! box_element_impl(
     ($name:ident) => {
-        box_object_impl!($name);
+        box_object_impl!($name, PanicPoison);
 
         impl<T: ElementBase> ElementImpl<T> for Box<$name<T>>
         where

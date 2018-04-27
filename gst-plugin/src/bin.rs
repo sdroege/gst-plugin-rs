@@ -24,6 +24,8 @@ use object::*;
 
 pub trait BinImpl<T: BinBase>:
     AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
+where
+    T::InstanceStructType: PanicPoison
 {
     fn add_element(&self, bin: &T, element: &gst::Element) -> bool {
         bin.parent_add_element(element)
@@ -38,7 +40,7 @@ pub trait BinImpl<T: BinBase>:
     }
 }
 
-any_impl!(BinBase, BinImpl);
+any_impl!(BinBase, BinImpl, PanicPoison);
 
 pub unsafe trait BinBase: IsA<gst::Element> + IsA<gst::Bin> + ObjectType {
     fn parent_add_element(&self, element: &gst::Element) -> bool {
@@ -77,6 +79,8 @@ pub unsafe trait BinBase: IsA<gst::Element> + IsA<gst::Bin> + ObjectType {
 pub unsafe trait BinClassExt<T: BinBase>
 where
     T::ImplType: BinImpl<T>,
+    T::InstanceStructType: PanicPoison
+
 {
     fn override_vfuncs(&mut self, _: &ClassInitToken) {
         unsafe {
@@ -114,7 +118,10 @@ macro_rules! box_bin_impl(
     ($name:ident) => {
         box_element_impl!($name);
 
-        impl<T: BinBase> BinImpl<T> for Box<$name<T>> {
+        impl<T: BinBase> BinImpl<T> for Box<$name<T>>
+        where
+            T::InstanceStructType: PanicPoison
+        {
             fn add_element(&self, bin: &T, element: &gst::Element) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.add_element(bin, element)
@@ -139,6 +146,7 @@ impl ObjectType for Bin {
     type GlibType = gst_ffi::GstBin;
     type GlibClassType = gst_ffi::GstBinClass;
     type ImplType = Box<BinImpl<Self>>;
+    type InstanceStructType = InstanceStruct<Self>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_ffi::gst_bin_get_type()) }
@@ -158,14 +166,15 @@ unsafe extern "C" fn bin_add_element<T: BinBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BinImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let bin = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = bin.imp.as_ref();
+    let bin = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = bin.get_impl();
 
-    panic_to_error!(&wrap, &bin.panicked, false, {
+    panic_to_error!(&wrap, &bin.panicked(), false, {
         imp.add_element(&wrap, &from_glib_none(element))
     }).to_glib()
 }
@@ -176,14 +185,15 @@ unsafe extern "C" fn bin_remove_element<T: BinBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BinImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let bin = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = bin.imp.as_ref();
+    let bin = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = bin.get_impl();
 
-    panic_to_error!(&wrap, &bin.panicked, false, {
+    panic_to_error!(&wrap, &bin.panicked(), false, {
         imp.remove_element(&wrap, &from_glib_none(element))
     }).to_glib()
 }
@@ -193,14 +203,15 @@ unsafe extern "C" fn bin_handle_message<T: BinBase>(
     message: *mut gst_ffi::GstMessage,
 ) where
     T::ImplType: BinImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let bin = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = bin.imp.as_ref();
+    let bin = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = bin.get_impl();
 
-    panic_to_error!(&wrap, &bin.panicked, (), {
+    panic_to_error!(&wrap, &bin.panicked(), (), {
         imp.handle_message(&wrap, from_glib_full(message))
     });
 }
