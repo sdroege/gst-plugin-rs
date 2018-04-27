@@ -84,7 +84,7 @@ pub struct TypeInitToken(());
 
 pub trait ObjectType: FromGlibPtrBorrow<*mut <Self as ObjectType>::InstanceStructType>
 where Self: Sized + 'static,
-      <Self as ObjectType>::InstanceStructType: Instance<Self>
+      Self::InstanceStructType: Instance<Self>
 {
     const NAME: &'static str;
     type InstanceStructType: Instance<Self> + 'static;
