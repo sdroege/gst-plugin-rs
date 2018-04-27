@@ -37,26 +37,15 @@ pub trait ObjectImpl<T: ObjectType>: Send + Sync + 'static {
     }
 }
 
+// warning: constraints is defined as a repetition to minimize code duplication.
+// multiple items will generate invalide code.
 #[macro_export]
 macro_rules! box_object_impl(
-    ($name:ident, $constraint:ident) => {
+    ($name:ident, $($constraint:ident)*) => {
         impl<T: ObjectType> ObjectImpl<T> for Box<$name<T>>
-        where
-            T::InstanceStructType: $constraint
-        {
-            fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
-                let imp: &$name<T> = self.as_ref();
-                imp.set_property(obj, id, value);
-            }
-
-            fn get_property(&self, obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-                let imp: &$name<T> = self.as_ref();
-                imp.get_property(obj, id)
-            }
-        }
-    };
-    ($name:ident) => {
-        impl<T: ObjectType> ObjectImpl<T> for Box<$name<T>>
+        $(
+            where T::InstanceStructType: $constraint
+        )*
         {
             fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
                 let imp: &$name<T> = self.as_ref();

@@ -20,37 +20,17 @@ impl<T: Any> AnyImpl for T {
     }
 }
 
+// warning: constraints is defined as a repetition to minimize code duplication.
+// multiple items will generate invalide code.
 #[macro_export]
 macro_rules! any_impl {
-    ($bound:ident, $trait:ident, $constraints:ident) => {
+
+    ($bound:ident, $trait:ident, $($constraint:ident)*) => {
         impl<T: $bound> $trait<T>
-        where T::InstanceStructType: $constraints
-         {
-            #[inline]
-            pub fn downcast_ref<U: $trait<T>>(&self) -> Option<&U> {
-                if self.is::<U>() {
-                    unsafe { Some(self.downcast_ref_unchecked()) }
-                } else {
-                    None
-                }
-            }
-
-            #[inline]
-            pub unsafe fn downcast_ref_unchecked<U: $trait<T>>(&self) -> &U {
-                &*(self as *const Self as *const U)
-            }
-
-            #[inline]
-            pub fn is<U: $trait<T>>(&self) -> bool {
-                use std::any::TypeId;
-                TypeId::of::<U>() == $crate::anyimpl::AnyImpl::get_type_id(self)
-            }
-        }
-    };
-
-    ($bound:ident, $trait:ident) => {
-        impl<T: $bound> $trait<T>
-         {
+        $(
+            where T::InstanceStructType: $constraint
+        )*
+        {
             #[inline]
             pub fn downcast_ref<U: $trait<T>>(&self) -> Option<&U> {
                 if self.is::<U>() {
