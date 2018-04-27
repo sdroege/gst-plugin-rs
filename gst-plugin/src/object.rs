@@ -28,10 +28,6 @@ impl<T: ObjectType> Instance<T> for ElementInstanceStruct<T>
         unsafe { self._imp.as_ref() }
     }
 
-    fn get_impl_ptr(&self) -> *mut T::ImplType {
-        self._imp.as_ptr()
-    }
-
     unsafe fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>){
         self._imp = imp;
     }
