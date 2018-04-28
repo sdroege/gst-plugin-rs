@@ -1,8 +1,8 @@
 [package]
-name = "gobject-base"
+name = "gobject-subclass"
 version = "0.1.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
-repository = "https://github.com/sdroege/gst-plugin-rs/tree/master/gobject-base"
+repository = "https://github.com/sdroege/gst-plugin-rs/tree/master/gobject-subclass"
 license = "MIT/Apache-2.0"
 
 [dependencies]
@@ -14,5 +14,5 @@ gobject-sys = { git = "https://github.com/gtk-rs/sys" }
 glib = { git = "https://github.com/gtk-rs/glib" }
 
 [lib]
-name = "gobject_base"
+name = "gobject_subclass"
 path = "src/lib.rs"
