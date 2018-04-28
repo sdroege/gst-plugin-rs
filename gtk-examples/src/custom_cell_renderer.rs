@@ -14,9 +14,9 @@ use cell_renderer::*;
 pub trait CellRendererCustomImpl: Send + 'static {
     // fn uri_validator(&self) -> Box<UriValidator>;
     //
-    // fn start(&mut self, sink: &CellRenderer, uri: Url) -> Result<(), gst::ErrorMessage>;
-    // fn stop(&mut self, sink: &CellRenderer) -> Result<(), gst::ErrorMessage>;
-    // fn render(&mut self, sink: &CellRenderer, buffer: &gst::BufferRef) -> Result<(), FlowError>;
+    // fn start(&mut self, renderer: &CellRenderer, uri: Url) -> Result<(), gst::ErrorMessage>;
+    // fn stop(&mut self, renderer: &CellRenderer) -> Result<(), gst::ErrorMessage>;
+    // fn render(&mut self, renderer: &CellRenderer, buffer: &gst::BufferRef) -> Result<(), FlowError>;
 }
 
 struct CellRendererCustom {
@@ -30,24 +30,24 @@ static PROPERTIES: [Property; 0] = [
 ];
 
 impl CellRendererCustom {
-    fn new(sink: &CellRenderer, sink_info: &CellRendererCustomInfo) -> Self {
-        let sink_impl = (sink_info.create_instance)(sink);
+    fn new(renderer: &CellRenderer, renderer_info: &CellRendererCustomInfo) -> Self {
+        let renderer_impl = (renderer_info.create_instance)(renderer);
 
         Self {
 
-            imp: Mutex::new(sink_impl),
+            imp: Mutex::new(renderer_impl),
         }
     }
 
-    fn class_init(klass: &mut CellRendererClass, sink_info: &CellRendererCustomInfo) {
+    fn class_init(klass: &mut CellRendererClass, renderer_info: &CellRendererCustomInfo) {
 
 
         klass.install_properties(&PROPERTIES);
     }
 
-    fn init(element: &CellRenderer, sink_info: &SinkInfo) -> Box<CellRendererImpl<CellRenderer>> {
+    fn init(element: &CellRenderer, renderer_info: &CellRendererCustomInfo) -> Box<CellRendererImpl<CellRenderer>> {
 
-        let imp = Self::new(element, sink_info);
+        let imp = Self::new(element, renderer_info);
         Box::new(imp)
     }
 
@@ -73,8 +73,8 @@ impl ObjectImpl<CellRenderer> for CellRendererCustom {
 }
 
 impl CellRendererImpl<CellRenderer> for CellRendererCustom {
-    // fn start(&self, sink: &CellRenderer) -> bool {
-    //     gst_debug!(self.cat, obj: sink, "Starting");
+    // fn start(&self, renderer: &CellRenderer) -> bool {
+    //     gst_debug!(self.cat, obj: renderer, "Starting");
     //
     //     // Don't keep the URI locked while we call start later
     //     let uri = match *self.uri.lock().unwrap() {
@@ -83,60 +83,60 @@ impl CellRendererImpl<CellRenderer> for CellRendererCustom {
     //             uri.clone()
     //         }
     //         (None, _) => {
-    //             gst_error!(self.cat, obj: sink, "No URI given");
-    //             gst_element_error!(sink, gst::ResourceError::OpenRead, ["No URI given"]);
+    //             gst_error!(self.cat, obj: renderer, "No URI given");
+    //             gst_element_error!(renderer, gst::ResourceError::OpenRead, ["No URI given"]);
     //             return false;
     //         }
     //     };
     //
-    //     let sink_impl = &mut self.imp.lock().unwrap();
-    //     match sink_impl.start(sink, uri) {
+    //     let renderer_impl = &mut self.imp.lock().unwrap();
+    //     match renderer_impl.start(renderer, uri) {
     //         Ok(..) => {
-    //             gst_trace!(self.cat, obj: sink, "Started successfully");
+    //             gst_trace!(self.cat, obj: renderer, "Started successfully");
     //             true
     //         }
     //         Err(ref msg) => {
-    //             gst_error!(self.cat, obj: sink, "Failed to start: {:?}", msg);
+    //             gst_error!(self.cat, obj: renderer, "Failed to start: {:?}", msg);
     //
     //             self.uri.lock().unwrap().1 = false;
-    //             sink.post_error_message(msg);
+    //             renderer.post_error_message(msg);
     //             false
     //         }
     //     }
     // }
     //
-    // fn stop(&self, sink: &CellRenderer) -> bool {
-    //     let sink_impl = &mut self.imp.lock().unwrap();
+    // fn stop(&self, renderer: &CellRenderer) -> bool {
+    //     let renderer_impl = &mut self.imp.lock().unwrap();
     //
-    //     gst_debug!(self.cat, obj: sink, "Stopping");
+    //     gst_debug!(self.cat, obj: renderer, "Stopping");
     //
-    //     match sink_impl.stop(sink) {
+    //     match renderer_impl.stop(renderer) {
     //         Ok(..) => {
-    //             gst_trace!(self.cat, obj: sink, "Stopped successfully");
+    //             gst_trace!(self.cat, obj: renderer, "Stopped successfully");
     //             self.uri.lock().unwrap().1 = false;
     //             true
     //         }
     //         Err(ref msg) => {
-    //             gst_error!(self.cat, obj: sink, "Failed to stop: {:?}", msg);
+    //             gst_error!(self.cat, obj: renderer, "Failed to stop: {:?}", msg);
     //
-    //             sink.post_error_message(msg);
+    //             renderer.post_error_message(msg);
     //             false
     //         }
     //     }
     // }
     //
-    // fn render(&self, sink: &CellRenderer, buffer: &gst::BufferRef) -> gst::FlowReturn {
-    //     let sink_impl = &mut self.imp.lock().unwrap();
+    // fn render(&self, renderer: &CellRenderer, buffer: &gst::BufferRef) -> gst::FlowReturn {
+    //     let renderer_impl = &mut self.imp.lock().unwrap();
     //
-    //     gst_trace!(self.cat, obj: sink, "Rendering buffer {:?}", buffer,);
+    //     gst_trace!(self.cat, obj: renderer, "Rendering buffer {:?}", buffer,);
     //
-    //     match sink_impl.render(sink, buffer) {
+    //     match renderer_impl.render(renderer, buffer) {
     //         Ok(()) => gst::FlowReturn::Ok,
     //         Err(flow_error) => {
-    //             gst_error!(self.cat, obj: sink, "Failed to render: {:?}", flow_error);
+    //             gst_error!(self.cat, obj: renderer, "Failed to render: {:?}", flow_error);
     //             match flow_error {
     //                 FlowError::NotNegotiated(ref msg) | FlowError::Error(ref msg) => {
-    //                     sink.post_error_message(msg);
+    //                     renderer.post_error_message(msg);
     //                 }
     //                 _ => (),
     //             }
@@ -159,7 +159,7 @@ pub struct CellRendererCustomInfo {
 
 struct CellRendererCustomStatic {
     name: String,
-    sink_info: SinkInfo,
+    renderer_info: CellRendererCustomInfo,
 }
 
 impl ImplTypeStatic<CellRenderer> for CellRendererCustomStatic {
@@ -168,11 +168,11 @@ impl ImplTypeStatic<CellRenderer> for CellRendererCustomStatic {
     }
 
     fn new(&self, element: &CellRenderer) -> Box<CellRendererImpl<CellRenderer>> {
-        CellRendererCustom::init(element, &self.sink_info)
+        CellRendererCustom::init(element, &self.renderer_info)
     }
 
     fn class_init(&self, klass: &mut CellRendererClass) {
-        CellRendererCustom::class_init(klass, &self.sink_info);
+        CellRendererCustom::class_init(klass, &self.renderer_info);
     }
 
     fn type_init(&self, token: &TypeInitToken, type_: glib::Type) {
@@ -181,15 +181,15 @@ impl ImplTypeStatic<CellRenderer> for CellRendererCustomStatic {
 }
 
 
-// pub fn sink_register(plugin: &gst::Plugin, sink_info: SinkInfo) {
-//     let name = sink_info.name.clone();
-//     let rank = sink_info.rank;
+// pub fn renderer_register(plugin: &gst::Plugin, renderer_info: CellRendererCustomInfo) {
+//     let name = renderer_info.name.clone();
+//     let rank = renderer_info.rank;
 //
-//     let sink_static = SinkStatic {
-//         name: format!("Sink-{}", name),
-//         sink_info: sink_info,
+//     let renderer_static = CellRendererCustomStatic {
+//         name: format!("CellRendererCustom-{}", name),
+//         renderer_info: renderer_info,
 //     };
 //
-//     let type_ = register_type(sink_static);
+//     let type_ = register_type(renderer_static);
 //     gst::Element::register(plugin, &name, rank, type_);
 // }
