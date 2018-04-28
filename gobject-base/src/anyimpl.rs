@@ -25,7 +25,7 @@ impl<T: Any> AnyImpl for T {
 #[macro_export]
 macro_rules! any_impl {
 
-    ($bound:ident, $trait:ident, $($constraint:ident)*) => {
+    ($bound:ident, $trait:ident $(, $constraint:ident)*) => {
         impl<T: $bound> $trait<T>
         $(
             where T::InstanceStructType: $constraint

@@ -41,7 +41,7 @@ pub trait ObjectImpl<T: ObjectType>: Send + Sync + 'static {
 // multiple items will generate invalide code.
 #[macro_export]
 macro_rules! box_object_impl(
-    ($name:ident, $($constraint:ident)*) => {
+    ($name:ident $(, $constraint:ident)*) => {
         impl<T: ObjectType> ObjectImpl<T> for Box<$name<T>>
         $(
             where T::InstanceStructType: $constraint
