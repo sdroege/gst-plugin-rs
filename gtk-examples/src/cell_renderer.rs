@@ -32,8 +32,14 @@ use gobject_subclass::properties::*;
 
 pub trait CellRendererImpl<T: CellRendererBase>: ObjectImpl<T> + AnyImpl + Send + Sync + 'static
 {
-    fn set_context(&self, cell_renderer: &T, context: &gtk::IMContext) {
-        cell_renderer.parent_set_context(context)
+    fn render(&self, cell_renderer: &T,
+                     cr: &cairo::Context,
+                     widget: &gtk::Widget,
+                     background_area: &gtk::Rectangle,
+                     cell_area: &gtk::Rectangle,
+                     flags: gtk::CellRendererState)
+    {
+        cell_renderer.render(cr, widget, background_area, cell_area, flags)
     }
 }
 
@@ -67,13 +73,23 @@ any_impl!(CellRendererBase, CellRendererImpl);
 pub unsafe trait CellRendererBase: IsA<gtk::CellRenderer> + ObjectType
 {
 
-    fn parent_set_context(&self, context: &gtk::IMContext) {
+    fn parent_render(&self, cr: &cairo::Context,
+                            widget: &gtk::Widget,
+                            background_area: &gtk::Rectangle,
+                            cell_area: &gtk::Rectangle,
+                            flags: gtk::CellRendererState)
+    {
         unsafe {
             let klass = self.get_class();
             let parent_klass = (*klass).get_parent_class() as *const gtk_ffi::GtkCellRendererClass;
             (*parent_klass)
-                .set_context
-                .map(|f| f(self.to_glib_none().0, context.to_glib_none().0))
+                .render
+                .map(|f| f(self.to_glib_none().0,
+                           cr.to_glib_none().0,
+                           widget.to_glib_none().0,
+                           background_area.to_glib_none().0,
+                           cell_area.to_glib_none().0,
+                           flags.to_glib()))
                 .unwrap_or(())
         }
     }
@@ -89,7 +105,7 @@ where
     {
         unsafe {
             let klass = &mut *(self as *const Self as *mut gtk_ffi::GtkCellRendererClass);
-            klass.set_context = Some(cell_renderer_set_context::<T>);
+            klass.render = Some(cell_renderer_render::<T>);
         }
     }
 }
@@ -120,9 +136,15 @@ macro_rules! box_cell_renderer_impl(
 
         impl<T: CellRendererBase> CellRendererImpl<T> for Box<$name<T>>
         {
-            fn set_context(&self, cell_renderer: &T, context: &gtk::IMContext) {
+            fn render(&self, cell_renderer: &T,
+                             cr: &cairo::Context,
+                             widget: &gtk::Widget,
+                             background_area: &gtk::Rectangle,
+                             cell_area: &gtk::Rectangle,
+                             flags: gtk::CellRendererState)
+            {
                 let imp: &$name<T> = self.as_ref();
-                imp.set_context(cell_renderer, context)
+                imp.render(cell_renderer, cr, widget, background_area, cell_area, flags)
             }
         }
     };
@@ -150,9 +172,13 @@ impl ObjectType for CellRenderer
 }
 
 
-unsafe extern "C" fn cell_renderer_set_context<T: CellRendererBase>(
+unsafe extern "C" fn cell_renderer_render<T: CellRendererBase>(
     ptr: *mut gtk_ffi::GtkCellRenderer,
-    context: *mut gtk_ffi::GtkIMContext,
+    cr: *mut cairo_ffi::cairo_t,
+    widget: *mut gtk_ffi::GtkWidget,
+    background_area: *const gdk_ffi::GdkRectangle,
+    cell_area: *const gdk_ffi::GdkRectangle,
+    flags: gtk_ffi::GtkCellRendererState
 )where
     T::ImplType: CellRendererImpl<T>
 {
@@ -162,5 +188,9 @@ unsafe extern "C" fn cell_renderer_set_context<T: CellRendererBase>(
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = cell_renderer.get_impl();
 
-    imp.set_context(&wrap, &from_glib_borrow(context))
+    imp.render(&wrap, &from_glib_borrow(cr),
+                      &from_glib_borrow(widget),
+                      &from_glib_borrow(background_area),
+                      &from_glib_borrow(cell_area),
+                      from_glib(flags))
 }
