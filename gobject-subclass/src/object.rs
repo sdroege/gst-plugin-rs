@@ -135,6 +135,25 @@ pub struct InstanceStruct<T: ObjectType>
 }
 
 
+impl<T: ObjectType> Instance<T> for InstanceStruct<T>
+{
+    fn parent(&self) -> &T::GlibType{
+        &self._parent
+    }
+
+    fn get_impl(&self) -> &T::ImplType {
+        unsafe { self._imp.as_ref() }
+    }
+
+    unsafe fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>){
+        self._imp = imp;
+    }
+
+    unsafe fn get_class(&self) -> *const ClassStruct<T> {
+        *(self as *const _ as *const *const ClassStruct<T>)
+    }
+}
+
 #[repr(C)]
 pub struct ClassStruct<T: ObjectType> {
     pub parent: T::GlibClassType,
