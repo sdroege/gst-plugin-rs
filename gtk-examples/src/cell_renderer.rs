@@ -39,11 +39,13 @@ pub trait CellRendererImpl<T: CellRendererBase>: ObjectImpl<T> + AnyImpl + Send 
                      cell_area: &gtk::Rectangle,
                      flags: gtk::CellRendererState)
     {
-        cell_renderer.render(cr, widget, background_area, cell_area, flags)
+        cell_renderer.parent_render(cr, widget, background_area, cell_area, flags)
     }
 }
 
 pub trait CellRendererImplExt<T> {
+
+
     // fn catch_panic_pad_function<R, F: FnOnce(&Self, &T) -> R, G: FnOnce() -> R>(
     //     parent: &Option<gtk::Object>,
     //     fallback: G,
@@ -54,6 +56,8 @@ pub trait CellRendererImplExt<T> {
 impl<S: CellRendererImpl<T>, T: ObjectType + glib::IsA<gtk::CellRenderer>>
     CellRendererImplExt<T> for S
 {
+
+
     // fn catch_panic_pad_function<R, F: FnOnce(&Self, &T) -> R, G: FnOnce() -> R>(
     //     parent: &Option<gtk::Object>,
     //     fallback: G,
@@ -172,6 +176,20 @@ impl ObjectType for CellRenderer
 }
 
 
+// This will create a new C type. But where do I put the ::new()?
+
+#[no_mangle]
+pub unsafe extern "C" fn cell_renderer_thread_new<T: CellRendererBase>()
+     -> *mut T::InstanceStructType
+where
+    T::ImplType: CellRendererImpl<T>
+{
+    callback_guard!();
+    let this = gobject_ffi::g_object_newv(T::glib_type().to_glib(), 0, ptr::null_mut());
+    this as *mut T::InstanceStructType
+}
+
+#[no_mangle]
 unsafe extern "C" fn cell_renderer_render<T: CellRendererBase>(
     ptr: *mut gtk_ffi::GtkCellRenderer,
     cr: *mut cairo_ffi::cairo_t,

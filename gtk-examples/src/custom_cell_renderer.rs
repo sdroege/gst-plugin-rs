@@ -19,7 +19,7 @@ pub trait CellRendererCustomImpl: Send + 'static {
     // fn render(&mut self, renderer: &CellRenderer, buffer: &gst::BufferRef) -> Result<(), FlowError>;
 }
 
-struct CellRendererCustom {
+pub struct CellRendererCustom {
     // cat: gst::DebugCategory,
     // uri: Mutex<(Option<Url>, bool)>,
     // uri_validator: Box<UriValidator>,
@@ -30,7 +30,7 @@ static PROPERTIES: [Property; 0] = [
 ];
 
 impl CellRendererCustom {
-    fn new(renderer: &CellRenderer, renderer_info: &CellRendererCustomInfo) -> Self {
+    pub fn new(renderer: &CellRenderer, renderer_info: &CellRendererCustomInfo) -> Self {
         let renderer_impl = (renderer_info.create_instance)(renderer);
 
         Self {
