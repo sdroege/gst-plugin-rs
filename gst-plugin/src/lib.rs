@@ -23,14 +23,14 @@ pub extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
 
 #[macro_use]
-extern crate gobject_base;
+extern crate gobject_subclass;
 
 #[macro_use]
-pub use gobject_base::anyimpl;
-pub use gobject_base::properties;
+pub use gobject_subclass::anyimpl;
+pub use gobject_subclass::properties;
 
 #[macro_use]
-pub use gobject_base::guard;
+pub use gobject_subclass::guard;
 
 pub mod object;
 
