@@ -51,7 +51,7 @@ pub trait CellRendererImplExt<T> {
     // ) -> R;
 }
 
-impl<S: CellRendererImpl<T>, T: ObjectType + glib::IsA<gtk::CellRenderer> + glib::IsA<gtk::Object>>
+impl<S: CellRendererImpl<T>, T: ObjectType + glib::IsA<gtk::CellRenderer>>
     CellRendererImplExt<T> for S
 {
     // fn catch_panic_pad_function<R, F: FnOnce(&Self, &T) -> R, G: FnOnce() -> R>(
