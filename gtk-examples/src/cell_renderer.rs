@@ -182,7 +182,7 @@ impl ObjectType for CellRenderer
 // This will create a new C type. But where do I put the ::new()?
 
 #[no_mangle]
-pub unsafe extern "C" fn cell_renderer_thread_new<T: CellRendererBase>()
+pub unsafe extern "C" fn cell_renderer_new<T: CellRendererBase>()
      -> *mut T::InstanceStructType
 where
     T::ImplType: CellRendererImpl<T>

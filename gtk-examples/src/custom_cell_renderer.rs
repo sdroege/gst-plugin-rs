@@ -1,5 +1,9 @@
 
-use std::sync::Mutex;
+use std::sync::{
+    Mutex,
+    Once,
+    ONCE_INIT
+};
 
 use glib;
 use gtk;
@@ -23,21 +27,32 @@ pub struct CellRendererCustom {
     // cat: gst::DebugCategory,
     // uri: Mutex<(Option<Url>, bool)>,
     // uri_validator: Box<UriValidator>,
-    imp: Mutex<Box<CellRendererCustomImpl>>,
+    //imp: Mutex<Box<CellRendererCustomImpl>>,
 }
 
 static PROPERTIES: [Property; 0] = [
 ];
 
 impl CellRendererCustom {
-    pub fn new(renderer: &CellRenderer) -> Self {
-        let renderer_impl = (renderer_info.create_instance)(renderer);
+    pub fn new() -> Self {
 
-        Self {
+        static ONCE: Once = ONCE_INIT;
+        ONCE.call_once(|| {
+            let static_instance = CellRendererCustomStatic::default();
+            register_type(static_instance);
+        });
+        // let renderer_impl = (renderer_info.create_instance)(renderer);
 
-            imp: Mutex::new(renderer_impl),
-        }
+        // Self {
+        //
+        //     // imp: Mutex::new(renderer_impl),
+        // }
     }
+
+    //     pub fn new() -> CellRendererThread {
+    //         println!("CellRendererThread::new");
+    //         unsafe { from_glib_full(cell_renderer_thread_new()) }
+    //     }
 
     fn class_init(klass: &mut CellRendererClass) {
 
@@ -45,16 +60,19 @@ impl CellRendererCustom {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn init(renderer: &CellRenderer) -> Box<CellRendererImpl<CellRenderer>> {
-
-        let imp = Self::new(renderer);
-        Box::new(imp)
+    fn init(renderer: &CellRenderer)// -> Box<CellRendererImpl<CellRenderer>>
+    {
+        //
+        // let imp = Self::new(renderer);
+        // Box::new(imp)
     }
-
-
 }
 
-impl ObjectImpl<CellRenderer> for CellRendererCustom {
+impl ObjectImpl<CellRenderer> for CellRendererCustom{
+
+
+
+
     fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
 
@@ -73,6 +91,7 @@ impl ObjectImpl<CellRenderer> for CellRendererCustom {
 }
 
 impl CellRendererImpl<CellRenderer> for CellRendererCustom {
+
 
     // fn render(&self, renderer: &CellRenderer, buffer: &gst::BufferRef) -> gst::FlowReturn {
     //     let renderer_impl = &mut self.imp.lock().unwrap();
@@ -95,6 +114,7 @@ impl CellRendererImpl<CellRenderer> for CellRendererCustom {
     // }
 }
 
+#[derive(Default)]
 pub struct CellRendererCustomStatic{
 
 }
