@@ -30,8 +30,13 @@ use gobject_subclass::properties::*;
 
 
 
-pub trait CellRendererImpl<T: CellRendererBase>: ObjectImpl<T> + AnyImpl + Send + Sync + 'static
+pub trait CellRendererImpl<T: CellRendererBase>: ObjectImpl<T> + AnyImpl + 'static
 {
+
+    // fn new(){
+    //
+    // }
+
     fn render(&self, cell_renderer: &T,
                      cr: &cairo::Context,
                      widget: &gtk::Widget,
@@ -130,8 +135,6 @@ pub type CellRendererClass = ClassStruct<CellRenderer>;
 // FIXME: Boilerplate
 unsafe impl CellRendererClassExt<CellRenderer> for CellRendererClass {}
 
-unsafe impl Send for CellRenderer {}
-unsafe impl Sync for CellRenderer {}
 
 #[macro_export]
 macro_rules! box_cell_renderer_impl(

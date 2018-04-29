@@ -11,7 +11,7 @@ use gobject_subclass::properties::*;
 use cell_renderer::*;
 
 
-pub trait CellRendererCustomImpl: Send + 'static {
+pub trait CellRendererCustomImpl: 'static {
     // fn uri_validator(&self) -> Box<UriValidator>;
     //
     // fn start(&mut self, renderer: &CellRenderer, uri: Url) -> Result<(), gst::ErrorMessage>;
@@ -30,7 +30,7 @@ static PROPERTIES: [Property; 0] = [
 ];
 
 impl CellRendererCustom {
-    pub fn new(renderer: &CellRenderer, renderer_info: &CellRendererCustomInfo) -> Self {
+    pub fn new(renderer: &CellRenderer) -> Self {
         let renderer_impl = (renderer_info.create_instance)(renderer);
 
         Self {
@@ -39,15 +39,15 @@ impl CellRendererCustom {
         }
     }
 
-    fn class_init(klass: &mut CellRendererClass, renderer_info: &CellRendererCustomInfo) {
+    fn class_init(klass: &mut CellRendererClass) {
 
 
         klass.install_properties(&PROPERTIES);
     }
 
-    fn init(element: &CellRenderer, renderer_info: &CellRendererCustomInfo) -> Box<CellRendererImpl<CellRenderer>> {
+    fn init(renderer: &CellRenderer) -> Box<CellRendererImpl<CellRenderer>> {
 
-        let imp = Self::new(element, renderer_info);
+        let imp = Self::new(renderer);
         Box::new(imp)
     }
 
@@ -73,58 +73,7 @@ impl ObjectImpl<CellRenderer> for CellRendererCustom {
 }
 
 impl CellRendererImpl<CellRenderer> for CellRendererCustom {
-    // fn start(&self, renderer: &CellRenderer) -> bool {
-    //     gst_debug!(self.cat, obj: renderer, "Starting");
-    //
-    //     // Don't keep the URI locked while we call start later
-    //     let uri = match *self.uri.lock().unwrap() {
-    //         (Some(ref uri), ref mut started) => {
-    //             *started = true;
-    //             uri.clone()
-    //         }
-    //         (None, _) => {
-    //             gst_error!(self.cat, obj: renderer, "No URI given");
-    //             gst_element_error!(renderer, gst::ResourceError::OpenRead, ["No URI given"]);
-    //             return false;
-    //         }
-    //     };
-    //
-    //     let renderer_impl = &mut self.imp.lock().unwrap();
-    //     match renderer_impl.start(renderer, uri) {
-    //         Ok(..) => {
-    //             gst_trace!(self.cat, obj: renderer, "Started successfully");
-    //             true
-    //         }
-    //         Err(ref msg) => {
-    //             gst_error!(self.cat, obj: renderer, "Failed to start: {:?}", msg);
-    //
-    //             self.uri.lock().unwrap().1 = false;
-    //             renderer.post_error_message(msg);
-    //             false
-    //         }
-    //     }
-    // }
-    //
-    // fn stop(&self, renderer: &CellRenderer) -> bool {
-    //     let renderer_impl = &mut self.imp.lock().unwrap();
-    //
-    //     gst_debug!(self.cat, obj: renderer, "Stopping");
-    //
-    //     match renderer_impl.stop(renderer) {
-    //         Ok(..) => {
-    //             gst_trace!(self.cat, obj: renderer, "Stopped successfully");
-    //             self.uri.lock().unwrap().1 = false;
-    //             true
-    //         }
-    //         Err(ref msg) => {
-    //             gst_error!(self.cat, obj: renderer, "Failed to stop: {:?}", msg);
-    //
-    //             renderer.post_error_message(msg);
-    //             false
-    //         }
-    //     }
-    // }
-    //
+
     // fn render(&self, renderer: &CellRenderer, buffer: &gst::BufferRef) -> gst::FlowReturn {
     //     let renderer_impl = &mut self.imp.lock().unwrap();
     //
@@ -146,33 +95,21 @@ impl CellRendererImpl<CellRenderer> for CellRendererCustom {
     // }
 }
 
-pub struct CellRendererCustomInfo {
-    pub name: String,
-    pub long_name: String,
-    pub description: String,
-    pub classification: String,
-    pub author: String,
-    pub rank: u32,
-    pub create_instance: fn(&CellRenderer) -> Box<CellRendererCustomImpl>,
-    pub protocols: Vec<String>,
-}
+pub struct CellRendererCustomStatic{
 
-struct CellRendererCustomStatic {
-    name: String,
-    renderer_info: CellRendererCustomInfo,
 }
 
 impl ImplTypeStatic<CellRenderer> for CellRendererCustomStatic {
     fn get_name(&self) -> &str {
-        self.name.as_str()
+        "CellRendererCustom"
     }
 
-    fn new(&self, element: &CellRenderer) -> Box<CellRendererImpl<CellRenderer>> {
-        CellRendererCustom::init(element, &self.renderer_info)
+    fn new(&self, renderer: &CellRenderer) -> Box<CellRendererImpl<CellRenderer>> {
+        CellRendererCustom::init(renderer)
     }
 
     fn class_init(&self, klass: &mut CellRendererClass) {
-        CellRendererCustom::class_init(klass, &self.renderer_info);
+        CellRendererCustom::class_init(klass);
     }
 
     fn type_init(&self, token: &TypeInitToken, type_: glib::Type) {
