@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "gobject-subclass",
     "gst-plugin",
     "gst-plugin-simple",
     "gst-plugin-file",

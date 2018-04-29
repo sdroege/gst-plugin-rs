@@ -20,9 +20,17 @@ impl<T: Any> AnyImpl for T {
     }
 }
 
+// warning: constraints is defined as a repetition to minimize code duplication.
+// multiple items will generate invalide code.
+#[macro_export]
 macro_rules! any_impl {
-    ($bound:ident, $trait:ident) => {
-        impl<T: $bound> $trait<T> {
+
+    ($bound:ident, $trait:ident $(, $constraint:ident)*) => {
+        impl<T: $bound> $trait<T>
+        $(
+            where T::InstanceStructType: $constraint
+        )*
+        {
             #[inline]
             pub fn downcast_ref<U: $trait<T>>(&self) -> Option<&U> {
                 if self.is::<U>() {

@@ -26,6 +26,8 @@ use object::*;
 
 pub trait BaseSinkImpl<T: BaseSinkBase>:
     AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
+where
+    T::InstanceStructType: PanicPoison
 {
     fn start(&self, _element: &T) -> bool {
         true
@@ -92,7 +94,7 @@ pub trait BaseSinkImpl<T: BaseSinkBase>:
     }
 }
 
-any_impl!(BaseSinkBase, BaseSinkImpl);
+any_impl!(BaseSinkBase, BaseSinkImpl, PanicPoison);
 
 pub unsafe trait BaseSinkBase:
     IsA<gst::Element> + IsA<gst_base::BaseSink> + ObjectType
@@ -163,6 +165,7 @@ pub unsafe trait BaseSinkBase:
 pub unsafe trait BaseSinkClassExt<T: BaseSinkBase>
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     fn override_vfuncs(&mut self, _: &ClassInitToken) {
         unsafe {
@@ -185,9 +188,10 @@ where
 }
 
 glib_wrapper! {
-    pub struct BaseSink(Object<InstanceStruct<BaseSink>>): [gst_base::BaseSink => gst_base_ffi::GstBaseSink,
-                                                            gst::Element => gst_ffi::GstElement,
-                                                            gst::Object => gst_ffi::GstObject];
+    pub struct BaseSink(Object<ElementInstanceStruct<BaseSink>>):
+        [gst_base::BaseSink => gst_base_ffi::GstBaseSink,
+         gst::Element => gst_ffi::GstElement,
+         gst::Object => gst_ffi::GstObject];
 
     match fn {
         get_type => || get_type::<BaseSink>(),
@@ -209,7 +213,10 @@ macro_rules! box_base_sink_impl(
     ($name:ident) => {
         box_element_impl!($name);
 
-        impl<T: BaseSinkBase> BaseSinkImpl<T> for Box<$name<T>> {
+        impl<T: BaseSinkBase> BaseSinkImpl<T> for Box<$name<T>>
+        where
+            T::InstanceStructType: PanicPoison
+        {
             fn start(&self, element: &T) -> bool {
                 let imp: &$name<T> = self.as_ref();
                 imp.start(element)
@@ -285,6 +292,7 @@ impl ObjectType for BaseSink {
     type GlibType = gst_base_ffi::GstBaseSink;
     type GlibClassType = gst_base_ffi::GstBaseSinkClass;
     type ImplType = Box<BaseSinkImpl<Self>>;
+    type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn glib_type() -> glib::Type {
         unsafe { from_glib(gst_base_ffi::gst_base_sink_get_type()) }
@@ -303,14 +311,15 @@ unsafe extern "C" fn base_sink_start<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.start(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked(), false, { imp.start(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_stop<T: BaseSinkBase>(
@@ -318,14 +327,15 @@ unsafe extern "C" fn base_sink_stop<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked(), false, { imp.stop(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_render<T: BaseSinkBase>(
@@ -334,15 +344,16 @@ unsafe extern "C" fn base_sink_render<T: BaseSinkBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
     let buffer = gst::BufferRef::from_ptr(buffer);
 
-    panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
+    panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {
         imp.render(&wrap, buffer)
     }).to_glib()
 }
@@ -353,15 +364,16 @@ unsafe extern "C" fn base_sink_prepare<T: BaseSinkBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
     let buffer = gst::BufferRef::from_ptr(buffer);
 
-    panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
+    panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {
         imp.prepare(&wrap, buffer)
     }).to_glib()
 }
@@ -372,15 +384,16 @@ unsafe extern "C" fn base_sink_render_list<T: BaseSinkBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
     let list = gst::BufferListRef::from_ptr(list);
 
-    panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
+    panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {
         imp.render_list(&wrap, list)
     }).to_glib()
 }
@@ -391,15 +404,16 @@ unsafe extern "C" fn base_sink_prepare_list<T: BaseSinkBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
     let list = gst::BufferListRef::from_ptr(list);
 
-    panic_to_error!(&wrap, &element.panicked, gst::FlowReturn::Error, {
+    panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {
         imp.prepare_list(&wrap, list)
     }).to_glib()
 }
@@ -410,15 +424,16 @@ unsafe extern "C" fn base_sink_query<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
     let query = gst::QueryRef::from_mut_ptr(query_ptr);
 
-    panic_to_error!(&wrap, &element.panicked, false, {
+    panic_to_error!(&wrap, &element.panicked(), false, {
         BaseSinkImpl::query(imp, &wrap, query)
     }).to_glib()
 }
@@ -429,14 +444,15 @@ unsafe extern "C" fn base_sink_event<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
 
-    panic_to_error!(&wrap, &element.panicked, false, {
+    panic_to_error!(&wrap, &element.panicked(), false, {
         imp.event(&wrap, from_glib_full(event_ptr))
     }).to_glib()
 }
@@ -447,19 +463,20 @@ unsafe extern "C" fn base_sink_get_caps<T: BaseSinkBase>(
 ) -> *mut gst_ffi::GstCaps
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
     let filter = if filter.is_null() {
         None
     } else {
         Some(gst::CapsRef::from_ptr(filter))
     };
 
-    panic_to_error!(&wrap, &element.panicked, None, {
+    panic_to_error!(&wrap, &element.panicked(), None, {
         imp.get_caps(&wrap, filter)
     }).map(|caps| caps.into_ptr())
         .unwrap_or(ptr::null_mut())
@@ -471,15 +488,16 @@ unsafe extern "C" fn base_sink_set_caps<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
     let caps = gst::CapsRef::from_ptr(caps);
 
-    panic_to_error!(&wrap, &element.panicked, false, {
+    panic_to_error!(&wrap, &element.panicked(), false, {
         imp.set_caps(&wrap, caps)
     }).to_glib()
 }
@@ -490,15 +508,16 @@ unsafe extern "C" fn base_sink_fixate<T: BaseSinkBase>(
 ) -> *mut gst_ffi::GstCaps
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
     let caps = from_glib_full(caps);
 
-    panic_to_error!(&wrap, &element.panicked, gst::Caps::new_empty(), {
+    panic_to_error!(&wrap, &element.panicked(), gst::Caps::new_empty(), {
         imp.fixate(&wrap, caps)
     }).into_ptr()
 }
@@ -508,14 +527,15 @@ unsafe extern "C" fn base_sink_unlock<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked(), false, { imp.unlock(&wrap) }).to_glib()
 }
 
 unsafe extern "C" fn base_sink_unlock_stop<T: BaseSinkBase>(
@@ -523,12 +543,13 @@ unsafe extern "C" fn base_sink_unlock_stop<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
+    T::InstanceStructType: PanicPoison
 {
     callback_guard!();
     floating_reference_guard!(ptr);
-    let element = &*(ptr as *mut InstanceStruct<T>);
-    let wrap: T = from_glib_borrow(ptr as *mut InstanceStruct<T>);
-    let imp = element.imp.as_ref();
+    let element = &*(ptr as *mut T::InstanceStructType);
+    let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
+    let imp = element.get_impl();
 
-    panic_to_error!(&wrap, &element.panicked, false, { imp.unlock_stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked(), false, { imp.unlock_stop(&wrap) }).to_glib()
 }
