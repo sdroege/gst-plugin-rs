@@ -21,7 +21,7 @@ use glib::translate::*;
 
 use properties::*;
 
-pub trait ObjectImpl<T: ObjectType>: Send + Sync + 'static {
+pub trait ObjectImpl<T: ObjectType>: 'static {
     fn set_property(&self, _obj: &glib::Object, _id: u32, _value: &glib::Value) {
         unimplemented!()
     }
@@ -60,7 +60,7 @@ macro_rules! box_object_impl(
     };
 );
 
-pub trait ImplTypeStatic<T: ObjectType>: Send + Sync + 'static {
+pub trait ImplTypeStatic<T: ObjectType>: 'static {
     fn get_name(&self) -> &str;
     fn new(&self, &T) -> T::ImplType;
     fn class_init(&self, &mut ClassStruct<T>);
