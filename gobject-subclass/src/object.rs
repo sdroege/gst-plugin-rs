@@ -21,7 +21,7 @@ use glib::translate::*;
 
 use properties::*;
 
-pub trait ObjectImpl<T: ObjectType>: Send + Sync + 'static {
+pub trait ObjectImpl<T: ObjectType>: 'static {
     fn set_property(&self, _obj: &glib::Object, _id: u32, _value: &glib::Value) {
         unimplemented!()
     }
