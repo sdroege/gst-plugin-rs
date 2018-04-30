@@ -6,6 +6,7 @@ use std::sync::{
 };
 
 use glib;
+use glib::prelude::*;
 use gtk;
 use gtk::prelude::*;
 
@@ -34,19 +35,23 @@ static PROPERTIES: [Property; 0] = [
 ];
 
 impl CellRendererCustom {
-    pub fn new() -> Self {
+    pub fn new() -> CellRenderer {
+        use glib::object::Downcast;
 
         static ONCE: Once = ONCE_INIT;
+        static mut type_: glib::Type = glib::Type::Invalid;
+
         ONCE.call_once(|| {
             let static_instance = CellRendererCustomStatic::default();
-            register_type(static_instance);
+            let t = register_type(static_instance);
+            unsafe {
+                type_ = t;
+            }
         });
-        // let renderer_impl = (renderer_info.create_instance)(renderer);
 
-        // Self {
-        //
-        //     // imp: Mutex::new(renderer_impl),
-        // }
+        unsafe {
+            glib::Object::new(type_, &[]).unwrap().downcast_unchecked()
+        }
     }
 
     //     pub fn new() -> CellRendererThread {
@@ -60,11 +65,10 @@ impl CellRendererCustom {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn init(renderer: &CellRenderer)// -> Box<CellRendererImpl<CellRenderer>>
+    fn init(renderer: &CellRenderer) -> Box<CellRendererImpl<CellRenderer>>
     {
-        //
-        // let imp = Self::new(renderer);
-        // Box::new(imp)
+        let imp = Self { };
+        Box::new(imp)
     }
 }
 
