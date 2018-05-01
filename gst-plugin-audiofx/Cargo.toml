@@ -1,12 +1,12 @@
 [package]
 name = "gst-plugin-audiofx"
-version = "0.1.0"
+version = "0.3.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://github.com/sdroege/gst-plugin-rs"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-gobject-subclass = { path="../gobject-subclass" }
+gobject-subclass = { git = "https://github.com/sdroege/gobject-subclass" }
 gst-plugin = { path="../gst-plugin" }
 glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
