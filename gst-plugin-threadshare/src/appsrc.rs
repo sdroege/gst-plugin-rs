@@ -20,9 +20,8 @@ use glib::prelude::*;
 use gst;
 use gst::prelude::*;
 
+use gobject_subclass::object::*;
 use gst_plugin::element::*;
-use gst_plugin::object::*;
-use gst_plugin::properties::*;
 
 use std::sync::Mutex;
 use std::{u16, u32};
