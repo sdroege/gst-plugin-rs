@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub extern crate glib_sys as glib_ffi;
-pub extern crate gobject_sys as gobject_ffi;
+extern crate glib_sys as glib_ffi;
+extern crate gobject_sys as gobject_ffi;
 
 extern crate libc;
 
@@ -18,7 +18,6 @@ pub mod anyimpl;
 
 #[macro_use]
 pub mod guard;
-pub use guard::FloatingReferenceGuard;
 
 pub mod properties;
 #[macro_use]

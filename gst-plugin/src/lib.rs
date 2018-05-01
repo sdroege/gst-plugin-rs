@@ -6,12 +6,13 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
 extern crate byteorder;
+
 pub extern crate glib_sys as glib_ffi;
 pub extern crate gobject_sys as gobject_ffi;
-extern crate gstreamer_base_sys as gst_base_ffi;
 pub extern crate gstreamer_sys as gst_ffi;
+extern crate gstreamer_base_sys as gst_base_ffi;
+
 #[macro_use]
 extern crate lazy_static;
 extern crate libc;

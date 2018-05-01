@@ -14,14 +14,14 @@ use gobject_ffi;
 #[macro_export]
 macro_rules! callback_guard {
     () => {
-        let _guard = ::glib::CallbackGuard::new();
+        let _guard = $crate::glib::CallbackGuard::new();
     };
 }
 
 #[macro_export]
 macro_rules! floating_reference_guard {
     ($obj:ident) => {
-        let _guard = $crate::FloatingReferenceGuard::new($obj as *mut _);
+        let _guard = $crate::guard::FloatingReferenceGuard::new($obj as *mut _);
     };
 }
 
