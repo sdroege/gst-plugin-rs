@@ -8,7 +8,6 @@
 
 use std::ptr;
 
-use glib;
 use glib_ffi;
 use gobject_ffi;
 

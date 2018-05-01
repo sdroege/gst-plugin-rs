@@ -6,15 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate byteorder;
 pub extern crate glib_sys as glib_ffi;
 pub extern crate gobject_sys as gobject_ffi;
 
-#[macro_use]
-extern crate lazy_static;
 extern crate libc;
 
-#[macro_use]
 pub extern crate glib;
 
 #[macro_use]
