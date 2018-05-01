@@ -1,42 +1,23 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
 use std::ptr;
 use std::mem;
-use std::ffi::CString;
 
-use gio;
 use glib;
 use gtk;
-use gdk;
 use cairo;
-use glib::prelude::*;
-
 use glib::translate::*;
-use gtk::prelude::*;
 use glib_ffi;
 use gobject_ffi;
 use cairo_ffi;
 use gtk_ffi;
 use gdk_ffi;
-use glib::object::Downcast;
 use glib::IsA;
 
 use gobject_subclass::object::*;
 use gobject_subclass::anyimpl::*;
-use gobject_subclass::properties::*;
-
-
 
 
 pub trait CellRendererImpl<T: CellRendererBase>: ObjectImpl<T> + AnyImpl + 'static
 {
-
-    // fn new(){
-    //
-    // }
-
     fn render(&self, cell_renderer: &T,
                      cr: &cairo::Context,
                      widget: &gtk::Widget,
@@ -50,31 +31,11 @@ pub trait CellRendererImpl<T: CellRendererBase>: ObjectImpl<T> + AnyImpl + 'stat
 
 pub trait CellRendererImplExt<T> {
 
-
-    // fn catch_panic_pad_function<R, F: FnOnce(&Self, &T) -> R, G: FnOnce() -> R>(
-    //     parent: &Option<gtk::Object>,
-    //     fallback: G,
-    //     f: F,
-    // ) -> R;
 }
 
 impl<S: CellRendererImpl<T>, T: ObjectType + glib::IsA<gtk::CellRenderer>>
     CellRendererImplExt<T> for S
 {
-
-
-    // fn catch_panic_pad_function<R, F: FnOnce(&Self, &T) -> R, G: FnOnce() -> R>(
-    //     parent: &Option<gtk::Object>,
-    //     fallback: G,
-    //     f: F,
-    // ) -> R {
-    //     // FIXME: Does this work for cell_renderer subclasses?
-    //     let cell_renderer = parent.as_ref().cloned().unwrap().downcast::<T>().unwrap();
-    //     let imp = cell_renderer.get_impl();
-    //     let imp = Any::downcast_ref::<Box<CellRendererImpl<T> + 'static>>(imp).unwrap();
-    //     let imp = imp.downcast_ref::<S>().unwrap();
-    //     cell_renderer.catch_panic(fallback, |cell_renderer| f(imp, cell_renderer))
-    // }
 }
 
 any_impl!(CellRendererBase, CellRendererImpl);
@@ -159,6 +120,8 @@ macro_rules! box_cell_renderer_impl(
 
 box_cell_renderer_impl!(CellRendererImpl);
 
+
+
 impl ObjectType for CellRenderer
 {
     const NAME: &'static str = "RsCellRenderer";
@@ -179,20 +142,7 @@ impl ObjectType for CellRenderer
 }
 
 
-// This will create a new C type. But where do I put the ::new()?
 
-#[no_mangle]
-pub unsafe extern "C" fn cell_renderer_new<T: CellRendererBase>()
-     -> *mut T::InstanceStructType
-where
-    T::ImplType: CellRendererImpl<T>
-{
-    callback_guard!();
-    let this = gobject_ffi::g_object_newv(T::glib_type().to_glib(), 0, ptr::null_mut());
-    this as *mut T::InstanceStructType
-}
-
-#[no_mangle]
 unsafe extern "C" fn cell_renderer_render<T: CellRendererBase>(
     ptr: *mut gtk_ffi::GtkCellRenderer,
     cr: *mut cairo_ffi::cairo_t,

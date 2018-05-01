@@ -1,6 +1,5 @@
 
 use std::sync::{
-    Mutex,
     Once,
     ONCE_INIT
 };
@@ -11,7 +10,6 @@ use glib::prelude::*;
 use gtk;
 use gtk::prelude::*;
 use cairo;
-use pango;
 
 use gobject_subclass::object::*;
 use gobject_subclass::properties::*;
@@ -74,10 +72,9 @@ impl CellRendererCustom {
 
 }
 
-impl ObjectImpl<CellRenderer> for CellRendererCustom{
-
-
-    fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
+impl ObjectImpl<CellRenderer> for CellRendererCustom
+{
+    fn set_property(&self, _obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
 
         match *prop {
@@ -89,7 +86,7 @@ impl ObjectImpl<CellRenderer> for CellRendererCustom{
         }
     }
 
-    fn get_property(&self, obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id as usize];
 
         match *prop {
@@ -107,9 +104,9 @@ impl CellRendererImpl<CellRenderer> for CellRendererCustom {
         renderer: &CellRenderer,
         cr: &cairo::Context,
         widget: &gtk::Widget,
-        background_area: &gtk::Rectangle,
+        _background_area: &gtk::Rectangle,
         cell_area: &gtk::Rectangle,
-        flags: gtk::CellRendererState,
+        _flags: gtk::CellRendererState,
     ){
 
         let layout = widget.create_pango_layout(self.text.borrow().as_str()).unwrap();
@@ -146,7 +143,7 @@ impl ImplTypeStatic<CellRenderer> for CellRendererCustomStatic {
         CellRendererCustom::class_init(klass);
     }
 
-    fn type_init(&self, token: &TypeInitToken, type_: glib::Type) {
+    fn type_init(&self, _token: &TypeInitToken, _type: glib::Type) {
 
     }
 }
