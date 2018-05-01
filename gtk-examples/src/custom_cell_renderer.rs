@@ -93,9 +93,9 @@ impl ObjectImpl<CellRenderer> for CellRendererCustom{
         let prop = &PROPERTIES[id as usize];
 
         match *prop {
-            // Property::String("text", ..) => {
-            //     self.text.unwrap_or("".to_string())
-            // },
+            Property::String("text", ..) => {
+                Ok(self.text.borrow().clone().to_value())
+            },
             _ => unimplemented!(),
         }
     }
