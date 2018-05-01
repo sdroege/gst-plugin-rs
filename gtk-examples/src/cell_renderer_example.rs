@@ -9,6 +9,7 @@ extern crate gdk;
 extern crate glib;
 
 extern crate cairo;
+extern crate pango;
 extern crate glib_sys as glib_ffi;
 extern crate gobject_sys as gobject_ffi;
 extern crate gtk_sys as gtk_ffi;

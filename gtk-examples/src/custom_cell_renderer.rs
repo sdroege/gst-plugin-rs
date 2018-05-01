@@ -4,13 +4,14 @@ use std::sync::{
     Once,
     ONCE_INIT
 };
-use std::cell::Cell;
+use std::cell::RefCell;
 
 use glib;
 use glib::prelude::*;
 use gtk;
 use gtk::prelude::*;
 use cairo;
+use pango;
 
 use gobject_subclass::object::*;
 use gobject_subclass::properties::*;
@@ -23,7 +24,7 @@ pub trait CellRendererCustomImpl: 'static {
 
 
 pub struct CellRendererCustom {
-    text: Cell<Option<String>>
+    text: RefCell<String>
 }
 
 static PROPERTIES: [Property; 1] = [
@@ -66,10 +67,11 @@ impl CellRendererCustom {
     fn init(_renderer: &CellRenderer) -> Box<CellRendererImpl<CellRenderer>>
     {
         let imp = Self {
-            text: Cell::new(None)
+            text: RefCell::new("".to_string())
         };
         Box::new(imp)
     }
+
 }
 
 impl ObjectImpl<CellRenderer> for CellRendererCustom{
@@ -81,7 +83,7 @@ impl ObjectImpl<CellRenderer> for CellRendererCustom{
         match *prop {
             Property::String("text", ..) => {
                 let text: String = value.get().unwrap();
-                self.text.set(Some(text));
+                self.text.replace(text);
             },
             _ => unimplemented!(),
         }
@@ -102,14 +104,25 @@ impl ObjectImpl<CellRenderer> for CellRendererCustom{
 impl CellRendererImpl<CellRenderer> for CellRendererCustom {
 
     fn render(&self,
-        _renderer: &CellRenderer,
+        renderer: &CellRenderer,
         cr: &cairo::Context,
         widget: &gtk::Widget,
         background_area: &gtk::Rectangle,
         cell_area: &gtk::Rectangle,
         flags: gtk::CellRendererState,
     ){
-        print!("waaah",);
+
+        let layout = widget.create_pango_layout(self.text.borrow().as_str()).unwrap();
+        let sc = widget.get_style_context().unwrap();
+        let (padx, pady) = renderer.get_padding();
+
+        cr.save();
+        cr.rectangle(cell_area.x.into(), cell_area.y.into(), cell_area.width.into(), cell_area.height.into());
+        cr.clip();
+
+        gtk::render_layout(&sc, cr, (cell_area.x + padx).into(), (cell_area.y + pady).into(), &layout);
+
+        cr.restore();
     }
 
 
