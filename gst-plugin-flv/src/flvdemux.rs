@@ -346,12 +346,10 @@ impl VideoFormat {
         if let Some(par) = self.pixel_aspect_ratio {
             if *par.numer() != 0 && par.numer() != par.denom() {
                 caps.as_mut().map(|c| {
-                    c.get_mut().unwrap().set_simple(&[
-                        (
-                            "pixel-aspect-ratio",
-                            &gst::Fraction::new(*par.numer(), *par.denom()),
-                        ),
-                    ])
+                    c.get_mut().unwrap().set_simple(&[(
+                        "pixel-aspect-ratio",
+                        &gst::Fraction::new(*par.numer(), *par.denom()),
+                    )])
                 });
             }
         }
@@ -359,9 +357,10 @@ impl VideoFormat {
         if let Some(fps) = self.framerate {
             if *fps.numer() != 0 {
                 caps.as_mut().map(|c| {
-                    c.get_mut().unwrap().set_simple(&[
-                        ("framerate", &gst::Fraction::new(*fps.numer(), *fps.denom())),
-                    ])
+                    c.get_mut().unwrap().set_simple(&[(
+                        "framerate",
+                        &gst::Fraction::new(*fps.numer(), *fps.denom()),
+                    )])
                 });
             }
         }

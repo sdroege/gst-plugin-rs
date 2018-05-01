@@ -27,7 +27,7 @@ use object::*;
 pub trait BaseSrcImpl<T: BaseSrcBase>:
     AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
 where
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn start(&self, _element: &T) -> bool {
         true
@@ -214,7 +214,7 @@ pub unsafe trait BaseSrcBase:
 pub unsafe trait BaseSrcClassExt<T: BaseSrcBase>
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn override_vfuncs(&mut self, _: &ClassInitToken) {
         unsafe {
@@ -382,7 +382,7 @@ unsafe extern "C" fn base_src_start<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -398,7 +398,7 @@ unsafe extern "C" fn base_src_stop<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -414,7 +414,7 @@ unsafe extern "C" fn base_src_is_seekable<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -422,7 +422,9 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
 
-    panic_to_error!(&wrap, &element.panicked(), false, { imp.is_seekable(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked(), false, {
+        imp.is_seekable(&wrap)
+    }).to_glib()
 }
 
 unsafe extern "C" fn base_src_get_size<T: BaseSrcBase>(
@@ -431,7 +433,7 @@ unsafe extern "C" fn base_src_get_size<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -458,7 +460,7 @@ unsafe extern "C" fn base_src_fill<T: BaseSrcBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -480,7 +482,7 @@ unsafe extern "C" fn base_src_create<T: BaseSrcBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -508,7 +510,7 @@ unsafe extern "C" fn base_src_do_seek<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -527,7 +529,7 @@ unsafe extern "C" fn base_src_query<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -547,7 +549,7 @@ unsafe extern "C" fn base_src_event<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -566,7 +568,7 @@ unsafe extern "C" fn base_src_get_caps<T: BaseSrcBase>(
 ) -> *mut gst_ffi::GstCaps
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -590,7 +592,7 @@ unsafe extern "C" fn base_src_negotiate<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -607,7 +609,7 @@ unsafe extern "C" fn base_src_set_caps<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -627,7 +629,7 @@ unsafe extern "C" fn base_src_fixate<T: BaseSrcBase>(
 ) -> *mut gst_ffi::GstCaps
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -646,7 +648,7 @@ unsafe extern "C" fn base_src_unlock<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -662,7 +664,7 @@ unsafe extern "C" fn base_src_unlock_stop<T: BaseSrcBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSrcImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -670,5 +672,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
 
-    panic_to_error!(&wrap, &element.panicked(), false, { imp.unlock_stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked(), false, {
+        imp.unlock_stop(&wrap)
+    }).to_glib()
 }

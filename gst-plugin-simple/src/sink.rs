@@ -41,15 +41,13 @@ struct Sink {
     imp: Mutex<Box<SinkImpl>>,
 }
 
-static PROPERTIES: [Property; 1] = [
-    Property::String(
-        "uri",
-        "URI",
-        "URI to read from",
-        None,
-        PropertyMutability::ReadWrite,
-    ),
-];
+static PROPERTIES: [Property; 1] = [Property::String(
+    "uri",
+    "URI",
+    "URI to read from",
+    None,
+    PropertyMutability::ReadWrite,
+)];
 
 impl Sink {
     fn new(sink: &BaseSink, sink_info: &SinkInfo) -> Self {

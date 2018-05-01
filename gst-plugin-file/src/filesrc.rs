@@ -11,9 +11,9 @@ use std::io::{Read, Seek, SeekFrom};
 use std::u64;
 use url::Url;
 
-use gst_plugin_simple::UriValidator;
 use gst_plugin_simple::error::*;
 use gst_plugin_simple::source::*;
+use gst_plugin_simple::UriValidator;
 
 use gst;
 
@@ -104,7 +104,7 @@ impl SourceImpl for FileSrc {
                 [
                     "Could not open file for reading '{}': {}",
                     location.to_str().unwrap_or("Non-UTF8 path"),
-                    err.to_string()
+                    err.to_string(),
                 ]
             ))
         }));

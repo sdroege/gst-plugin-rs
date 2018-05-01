@@ -27,7 +27,7 @@ use object::*;
 pub trait BaseTransformImpl<T: BaseTransformBase>:
     AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
 where
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn start(&self, _element: &T) -> bool {
         true
@@ -115,7 +115,7 @@ any_impl!(BaseTransformBase, BaseTransformImpl, PanicPoison);
 pub unsafe trait BaseTransformBase:
     IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType
 where
-    Self::InstanceStructType: PanicPoison
+    Self::InstanceStructType: PanicPoison,
 {
     fn parent_transform_caps(
         &self,
@@ -264,7 +264,7 @@ pub enum BaseTransformMode {
 pub unsafe trait BaseTransformClassExt<T: BaseTransformBase>
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn configure(
         &mut self,
@@ -325,7 +325,7 @@ glib_wrapper! {
 unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType> BaseTransformBase
     for T
 where
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
 }
 pub type BaseTransformClass = ClassStruct<BaseTransform>;
@@ -444,7 +444,7 @@ unsafe extern "C" fn base_transform_start<T: BaseTransformBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -460,7 +460,7 @@ unsafe extern "C" fn base_transform_stop<T: BaseTransformBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -479,7 +479,7 @@ unsafe extern "C" fn base_transform_transform_caps<T: BaseTransformBase>(
 ) -> *mut gst_ffi::GstCaps
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -511,7 +511,7 @@ unsafe extern "C" fn base_transform_fixate_caps<T: BaseTransformBase>(
 ) -> *mut gst_ffi::GstCaps
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -536,7 +536,7 @@ unsafe extern "C" fn base_transform_set_caps<T: BaseTransformBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -556,7 +556,7 @@ unsafe extern "C" fn base_transform_accept_caps<T: BaseTransformBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -576,7 +576,7 @@ unsafe extern "C" fn base_transform_query<T: BaseTransformBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -604,7 +604,7 @@ unsafe extern "C" fn base_transform_transform_size<T: BaseTransformBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -636,7 +636,7 @@ unsafe extern "C" fn base_transform_get_unit_size<T: BaseTransformBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -661,7 +661,7 @@ unsafe extern "C" fn base_transform_sink_event<T: BaseTransformBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -680,7 +680,7 @@ unsafe extern "C" fn base_transform_src_event<T: BaseTransformBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -700,7 +700,7 @@ unsafe extern "C" fn base_transform_transform<T: BaseTransformBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -723,7 +723,7 @@ unsafe extern "C" fn base_transform_transform_ip<T: BaseTransformBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseTransformImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);

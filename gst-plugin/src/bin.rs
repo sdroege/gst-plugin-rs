@@ -25,7 +25,7 @@ use object::*;
 pub trait BinImpl<T: BinBase>:
     AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
 where
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn add_element(&self, bin: &T, element: &gst::Element) -> bool {
         bin.parent_add_element(element)
@@ -79,8 +79,7 @@ pub unsafe trait BinBase: IsA<gst::Element> + IsA<gst::Bin> + ObjectType {
 pub unsafe trait BinClassExt<T: BinBase>
 where
     T::ImplType: BinImpl<T>,
-    T::InstanceStructType: PanicPoison
-
+    T::InstanceStructType: PanicPoison,
 {
     fn override_vfuncs(&mut self, _: &ClassInitToken) {
         unsafe {
@@ -167,7 +166,7 @@ unsafe extern "C" fn bin_add_element<T: BinBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BinImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -186,7 +185,7 @@ unsafe extern "C" fn bin_remove_element<T: BinBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BinImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -204,7 +203,7 @@ unsafe extern "C" fn bin_handle_message<T: BinBase>(
     message: *mut gst_ffi::GstMessage,
 ) where
     T::ImplType: BinImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);

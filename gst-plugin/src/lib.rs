@@ -26,9 +26,15 @@ extern crate gstreamer_base as gst_base;
 extern crate gobject_subclass;
 
 #[macro_use]
+#[macro_use]
+#[macro_use]
+#[macro_use]
 pub use gobject_subclass::anyimpl;
 pub use gobject_subclass::properties;
 
+#[macro_use]
+#[macro_use]
+#[macro_use]
 #[macro_use]
 pub use gobject_subclass::guard;
 

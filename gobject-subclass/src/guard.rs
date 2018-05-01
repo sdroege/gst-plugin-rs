@@ -8,9 +8,9 @@
 
 use std::ptr;
 
+use glib;
 use glib_ffi;
 use gobject_ffi;
-use glib;
 
 #[macro_export]
 macro_rules! callback_guard {

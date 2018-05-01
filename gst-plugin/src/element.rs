@@ -26,7 +26,7 @@ use object::*;
 
 pub trait ElementImpl<T: ElementBase>: ObjectImpl<T> + AnyImpl + Send + Sync + 'static
 where
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn change_state(&self, element: &T, transition: gst::StateChange) -> gst::StateChangeReturn {
         element.parent_change_state(transition)
@@ -68,7 +68,7 @@ pub trait ElementImplExt<T> {
 impl<S: ElementImpl<T>, T: ObjectType + glib::IsA<gst::Element> + glib::IsA<gst::Object>>
     ElementImplExt<T> for S
 where
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn catch_panic_pad_function<R, F: FnOnce(&Self, &T) -> R, G: FnOnce() -> R>(
         parent: &Option<gst::Object>,
@@ -88,7 +88,7 @@ any_impl!(ElementBase, ElementImpl, PanicPoison);
 
 pub unsafe trait ElementBase: IsA<gst::Element> + ObjectType
 where
-    Self::InstanceStructType: PanicPoison
+    Self::InstanceStructType: PanicPoison,
 {
     fn parent_change_state(&self, transition: gst::StateChange) -> gst::StateChangeReturn {
         unsafe {
@@ -134,8 +134,7 @@ where
         }
     }
 
-    fn catch_panic<T, F: FnOnce(&Self) -> T, G: FnOnce() -> T>(&self, fallback: G, f: F) -> T
-    {
+    fn catch_panic<T, F: FnOnce(&Self) -> T, G: FnOnce() -> T>(&self, fallback: G, f: F) -> T {
         let panicked = unsafe { &(*self.get_instance()).panicked() };
         panic_to_error!(self, panicked, fallback(), { f(self) })
     }
@@ -144,7 +143,7 @@ where
 pub unsafe trait ElementClassExt<T: ElementBase>
 where
     T::ImplType: ElementImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn add_pad_template(&mut self, pad_template: gst::PadTemplate) {
         unsafe {
@@ -173,8 +172,7 @@ where
         }
     }
 
-    fn override_vfuncs(&mut self, _: &ClassInitToken)
-    {
+    fn override_vfuncs(&mut self, _: &ClassInitToken) {
         unsafe {
             let klass = &mut *(self as *const Self as *mut gst_ffi::GstElementClass);
             klass.change_state = Some(element_change_state::<T>);
@@ -198,7 +196,10 @@ glib_wrapper! {
 }
 
 unsafe impl<T: IsA<gst::Element> + ObjectType> ElementBase for T
-where Self::InstanceStructType: PanicPoison{}
+where
+    Self::InstanceStructType: PanicPoison,
+{
+}
 
 pub type ElementClass = ClassStruct<Element>;
 
@@ -256,8 +257,7 @@ macro_rules! box_element_impl(
 
 box_element_impl!(ElementImpl);
 
-impl ObjectType for Element
-{
+impl ObjectType for Element {
     const NAME: &'static str = "RsElement";
     type GlibType = gst_ffi::GstElement;
     type GlibClassType = gst_ffi::GstElementClass;
@@ -281,7 +281,7 @@ unsafe extern "C" fn element_change_state<T: ElementBase>(
 ) -> gst_ffi::GstStateChangeReturn
 where
     T::ImplType: ElementImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -312,7 +312,7 @@ unsafe extern "C" fn element_request_new_pad<T: ElementBase>(
 ) -> *mut gst_ffi::GstPad
 where
     T::ImplType: ElementImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -347,9 +347,9 @@ where
 unsafe extern "C" fn element_release_pad<T: ElementBase>(
     ptr: *mut gst_ffi::GstElement,
     pad: *mut gst_ffi::GstPad,
-)where
+) where
     T::ImplType: ElementImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -368,7 +368,7 @@ unsafe extern "C" fn element_send_event<T: ElementBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: ElementImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -387,7 +387,7 @@ unsafe extern "C" fn element_query<T: ElementBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: ElementImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -396,15 +396,17 @@ where
     let imp = element.get_impl();
     let query = gst::QueryRef::from_mut_ptr(query);
 
-    panic_to_error!(&wrap, &element.panicked(), false, { imp.query(&wrap, query) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked(), false, {
+        imp.query(&wrap, query)
+    }).to_glib()
 }
 
 unsafe extern "C" fn element_set_context<T: ElementBase>(
     ptr: *mut gst_ffi::GstElement,
     context: *mut gst_ffi::GstContext,
-)where
+) where
     T::ImplType: ElementImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);

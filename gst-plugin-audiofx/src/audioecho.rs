@@ -17,7 +17,7 @@ use gst_plugin::object::*;
 use gst_plugin::properties::*;
 
 use std::sync::Mutex;
-use std::{cmp, iter, i32, u64};
+use std::{cmp, i32, iter, u64};
 
 use byte_slice_cast::*;
 

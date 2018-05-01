@@ -27,7 +27,7 @@ use object::*;
 pub trait BaseSinkImpl<T: BaseSinkBase>:
     AnyImpl + ObjectImpl<T> + ElementImpl<T> + Send + Sync + 'static
 where
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn start(&self, _element: &T) -> bool {
         true
@@ -165,7 +165,7 @@ pub unsafe trait BaseSinkBase:
 pub unsafe trait BaseSinkClassExt<T: BaseSinkBase>
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn override_vfuncs(&mut self, _: &ClassInitToken) {
         unsafe {
@@ -311,7 +311,7 @@ unsafe extern "C" fn base_sink_start<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -327,7 +327,7 @@ unsafe extern "C" fn base_sink_stop<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -344,7 +344,7 @@ unsafe extern "C" fn base_sink_render<T: BaseSinkBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -364,7 +364,7 @@ unsafe extern "C" fn base_sink_prepare<T: BaseSinkBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -384,7 +384,7 @@ unsafe extern "C" fn base_sink_render_list<T: BaseSinkBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -404,7 +404,7 @@ unsafe extern "C" fn base_sink_prepare_list<T: BaseSinkBase>(
 ) -> gst_ffi::GstFlowReturn
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -424,7 +424,7 @@ unsafe extern "C" fn base_sink_query<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -444,7 +444,7 @@ unsafe extern "C" fn base_sink_event<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -463,7 +463,7 @@ unsafe extern "C" fn base_sink_get_caps<T: BaseSinkBase>(
 ) -> *mut gst_ffi::GstCaps
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -488,7 +488,7 @@ unsafe extern "C" fn base_sink_set_caps<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -508,7 +508,7 @@ unsafe extern "C" fn base_sink_fixate<T: BaseSinkBase>(
 ) -> *mut gst_ffi::GstCaps
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -527,7 +527,7 @@ unsafe extern "C" fn base_sink_unlock<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -543,7 +543,7 @@ unsafe extern "C" fn base_sink_unlock_stop<T: BaseSinkBase>(
 ) -> glib_ffi::gboolean
 where
     T::ImplType: BaseSinkImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     callback_guard!();
     floating_reference_guard!(ptr);
@@ -551,5 +551,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
 
-    panic_to_error!(&wrap, &element.panicked(), false, { imp.unlock_stop(&wrap) }).to_glib()
+    panic_to_error!(&wrap, &element.panicked(), false, {
+        imp.unlock_stop(&wrap)
+    }).to_glib()
 }

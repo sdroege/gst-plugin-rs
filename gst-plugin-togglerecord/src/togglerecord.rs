@@ -919,7 +919,7 @@ impl ToggleRecord {
                             gst::StreamError::Format,
                             [
                                 "Only Time segments supported, got {:?}",
-                                segment.get_format()
+                                segment.get_format(),
                             ]
                         );
                         return false;
@@ -933,7 +933,7 @@ impl ToggleRecord {
                         gst::StreamError::Format,
                         [
                             "Only rate==1.0 segments supported, got {:?}",
-                            segment.get_rate()
+                            segment.get_rate(),
                         ]
                     );
                     return false;

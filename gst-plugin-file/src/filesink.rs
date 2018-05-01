@@ -12,9 +12,9 @@ use url::Url;
 
 use std::io::Write;
 
-use gst_plugin_simple::UriValidator;
 use gst_plugin_simple::error::*;
 use gst_plugin_simple::sink::*;
+use gst_plugin_simple::UriValidator;
 
 use gst;
 
@@ -93,7 +93,7 @@ impl SinkImpl for FileSink {
                 [
                     "Could not open file for writing '{}': {}",
                     location.to_str().unwrap_or("Non-UTF8 path"),
-                    err.to_string()
+                    err.to_string(),
                 ]
             ))
         }));

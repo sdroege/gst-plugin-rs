@@ -70,17 +70,16 @@ pub trait ImplTypeStatic<T: ObjectType>: Send + Sync + 'static {
 pub struct ClassInitToken(());
 pub struct TypeInitToken(());
 
-
 pub trait ObjectType: FromGlibPtrBorrow<*mut <Self as ObjectType>::InstanceStructType>
-where Self: Sized + 'static,
-      Self::InstanceStructType: Instance<Self>
+where
+    Self: Sized + 'static,
+    Self::InstanceStructType: Instance<Self>,
 {
     const NAME: &'static str;
     type InstanceStructType: Instance<Self> + 'static;
     type GlibType;
     type GlibClassType;
     type ImplType: ObjectImpl<Self>;
-
 
     fn glib_type() -> glib::Type;
 
@@ -96,12 +95,11 @@ where Self: Sized + 'static,
 
     unsafe fn get_instance(&self) -> *mut Self::InstanceStructType;
 
-
-    fn get_impl(&self) -> &Self::ImplType{
+    fn get_impl(&self) -> &Self::ImplType {
         unsafe { (*self.get_instance()).get_impl() }
     }
 
-    unsafe fn get_class(&self) -> *const ClassStruct<Self>{
+    unsafe fn get_class(&self) -> *const ClassStruct<Self> {
         (*self.get_instance()).get_class()
     }
 }
@@ -115,29 +113,24 @@ macro_rules! object_type_fns(
     }
 );
 
-
-pub trait Instance<T: ObjectType>
-{
+pub trait Instance<T: ObjectType> {
     fn parent(&self) -> &T::GlibType;
 
     fn get_impl(&self) -> &T::ImplType;
 
-    unsafe fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>);
+    unsafe fn set_impl(&mut self, imp: ptr::NonNull<T::ImplType>);
 
     unsafe fn get_class(&self) -> *const ClassStruct<T>;
 }
 
 #[repr(C)]
-pub struct InstanceStruct<T: ObjectType>
-{
+pub struct InstanceStruct<T: ObjectType> {
     _parent: T::GlibType,
     _imp: ptr::NonNull<T::ImplType>,
 }
 
-
-impl<T: ObjectType> Instance<T> for InstanceStruct<T>
-{
-    fn parent(&self) -> &T::GlibType{
+impl<T: ObjectType> Instance<T> for InstanceStruct<T> {
+    fn parent(&self) -> &T::GlibType {
         &self._parent
     }
 
@@ -145,7 +138,7 @@ impl<T: ObjectType> Instance<T> for InstanceStruct<T>
         unsafe { self._imp.as_ref() }
     }
 
-    unsafe fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>){
+    unsafe fn set_impl(&mut self, imp: ptr::NonNull<T::ImplType>) {
         self._imp = imp;
     }
 
@@ -308,8 +301,7 @@ unsafe impl<T: ObjectType> ObjectClass for ClassStruct<T> {}
 unsafe extern "C" fn class_init<T: ObjectType>(
     klass: glib_ffi::gpointer,
     _klass_data: glib_ffi::gpointer,
-)
-{
+) {
     callback_guard!();
     {
         let gobject_klass = &mut *(klass as *mut gobject_ffi::GObjectClass);
@@ -349,8 +341,7 @@ unsafe extern "C" fn get_property<T: ObjectType>(
     id: u32,
     value: *mut gobject_ffi::GValue,
     _pspec: *mut gobject_ffi::GParamSpec,
-)
-{
+) {
     callback_guard!();
     floating_reference_guard!(obj);
     match T::get_property(&from_glib_borrow(obj as *mut T::InstanceStructType), id - 1) {
@@ -368,8 +359,7 @@ unsafe extern "C" fn set_property<T: ObjectType>(
     id: u32,
     value: *mut gobject_ffi::GValue,
     _pspec: *mut gobject_ffi::GParamSpec,
-)
-{
+) {
     callback_guard!();
     floating_reference_guard!(obj);
     T::set_property(
@@ -381,8 +371,7 @@ unsafe extern "C" fn set_property<T: ObjectType>(
 
 static mut TYPES: *mut Mutex<BTreeMap<TypeId, glib::Type>> = 0 as *mut _;
 
-pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType
-{
+pub unsafe fn get_type<T: ObjectType>() -> glib_ffi::GType {
     use std::sync::{Once, ONCE_INIT};
 
     static ONCE: Once = ONCE_INIT;
@@ -495,8 +484,7 @@ unsafe extern "C" fn sub_set_property<T: ObjectType>(
 unsafe extern "C" fn sub_init<T: ObjectType>(
     obj: *mut gobject_ffi::GTypeInstance,
     _klass: glib_ffi::gpointer,
-)
-{
+) {
     callback_guard!();
     floating_reference_guard!(obj);
     let instance = &mut *(obj as *mut T::InstanceStructType);
@@ -507,8 +495,7 @@ unsafe extern "C" fn sub_init<T: ObjectType>(
     instance.set_impl(ptr::NonNull::new_unchecked(Box::into_raw(Box::new(imp))));
 }
 
-pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type
-{
+pub fn register_type<T: ObjectType, I: ImplTypeStatic<T>>(imp: I) -> glib::Type {
     unsafe {
         let parent_type = get_type::<T>();
         let type_name = format!("{}-{}", T::NAME, imp.get_name());

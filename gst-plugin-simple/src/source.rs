@@ -59,15 +59,13 @@ struct Source {
     push_only: bool,
 }
 
-static PROPERTIES: [Property; 1] = [
-    Property::String(
-        "uri",
-        "URI",
-        "URI to read from",
-        None,
-        PropertyMutability::ReadWrite,
-    ),
-];
+static PROPERTIES: [Property; 1] = [Property::String(
+    "uri",
+    "URI",
+    "URI to read from",
+    None,
+    PropertyMutability::ReadWrite,
+)];
 
 impl Source {
     fn new(source: &BaseSrc, source_info: &SourceInfo) -> Self {

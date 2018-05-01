@@ -26,7 +26,7 @@ use object::*;
 pub trait PipelineImpl<T: PipelineBase>:
     AnyImpl + ObjectImpl<T> + ElementImpl<T> + BinImpl<T> + Send + Sync + 'static
 where
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
 }
 
@@ -40,7 +40,7 @@ pub unsafe trait PipelineBase:
 pub unsafe trait PipelineClassExt<T: PipelineBase>
 where
     T::ImplType: PipelineImpl<T>,
-    T::InstanceStructType: PanicPoison
+    T::InstanceStructType: PanicPoison,
 {
     fn override_vfuncs(&mut self, _: &ClassInitToken) {}
 }

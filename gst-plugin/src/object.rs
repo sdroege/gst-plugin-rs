@@ -3,24 +3,20 @@ use std::sync::atomic::AtomicBool;
 
 pub use gobject_subclass::object::*;
 
-
 #[repr(C)]
-pub struct ElementInstanceStruct<T: ObjectType>
-{
+pub struct ElementInstanceStruct<T: ObjectType> {
     _parent: T::GlibType,
     _imp: ptr::NonNull<T::ImplType>,
 
     _panicked: AtomicBool,
 }
 
-pub trait PanicPoison{
+pub trait PanicPoison {
     fn panicked(&self) -> &AtomicBool;
 }
 
-
-impl<T: ObjectType> Instance<T> for ElementInstanceStruct<T>
-{
-    fn parent(&self) -> &T::GlibType{
+impl<T: ObjectType> Instance<T> for ElementInstanceStruct<T> {
+    fn parent(&self) -> &T::GlibType {
         &self._parent
     }
 
@@ -28,7 +24,7 @@ impl<T: ObjectType> Instance<T> for ElementInstanceStruct<T>
         unsafe { self._imp.as_ref() }
     }
 
-    unsafe fn set_impl(&mut self, imp:ptr::NonNull<T::ImplType>){
+    unsafe fn set_impl(&mut self, imp: ptr::NonNull<T::ImplType>) {
         self._imp = imp;
     }
 
@@ -37,11 +33,8 @@ impl<T: ObjectType> Instance<T> for ElementInstanceStruct<T>
     }
 }
 
-
-impl<T: ObjectType> PanicPoison for ElementInstanceStruct<T>
-{
-    fn panicked(&self) -> &AtomicBool{
+impl<T: ObjectType> PanicPoison for ElementInstanceStruct<T> {
+    fn panicked(&self) -> &AtomicBool {
         &self._panicked
     }
-
 }
