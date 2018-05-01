@@ -10,6 +10,7 @@
 
 extern crate byte_slice_cast;
 extern crate glib;
+extern crate gobject_subclass;
 #[macro_use]
 extern crate gst_plugin;
 #[macro_use]

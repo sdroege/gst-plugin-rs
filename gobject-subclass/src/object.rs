@@ -19,7 +19,7 @@ use gobject_ffi;
 use glib;
 use glib::translate::*;
 
-use properties::*;
+pub use properties::*;
 
 pub trait ObjectImpl<T: ObjectType>: 'static {
     fn set_property(&self, _obj: &glib::Object, _id: u32, _value: &glib::Value) {

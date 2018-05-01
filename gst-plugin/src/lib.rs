@@ -10,8 +10,8 @@ extern crate byteorder;
 
 pub extern crate glib_sys as glib_ffi;
 pub extern crate gobject_sys as gobject_ffi;
-pub extern crate gstreamer_sys as gst_ffi;
 extern crate gstreamer_base_sys as gst_base_ffi;
+pub extern crate gstreamer_sys as gst_ffi;
 
 #[macro_use]
 extern crate lazy_static;
@@ -25,10 +25,6 @@ extern crate gstreamer_base as gst_base;
 
 #[macro_use]
 extern crate gobject_subclass;
-
-pub use gobject_subclass::anyimpl;
-pub use gobject_subclass::guard;
-pub use gobject_subclass::properties;
 
 pub mod object;
 

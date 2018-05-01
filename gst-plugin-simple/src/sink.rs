@@ -15,14 +15,15 @@ use gst;
 use gst::prelude::*;
 use gst_base::prelude::*;
 
-use error::*;
+use gobject_subclass::object::*;
+
 use gst_plugin::base_sink::*;
 use gst_plugin::element::*;
-use gst_plugin::object::*;
-use gst_plugin::properties::*;
 use gst_plugin::uri_handler::*;
 
 pub use gst_plugin::base_sink::BaseSink;
+
+use error::*;
 
 use UriValidator;
 

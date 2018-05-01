@@ -11,10 +11,9 @@ use gst;
 use gst::prelude::*;
 use gst_video;
 
+use gobject_subclass::object::*;
 use gst_plugin::base_transform::*;
 use gst_plugin::element::*;
-use gst_plugin::object::*;
-use gst_plugin::properties::*;
 
 use std::i32;
 use std::sync::Mutex;

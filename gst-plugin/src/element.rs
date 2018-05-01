@@ -21,7 +21,9 @@ use glib::translate::*;
 use gst;
 use gst::prelude::*;
 
-use anyimpl::*;
+use gobject_subclass::anyimpl::*;
+use gobject_subclass::object::*;
+
 use object::*;
 
 pub trait ElementImpl<T: ElementBase>: ObjectImpl<T> + AnyImpl + Send + Sync + 'static

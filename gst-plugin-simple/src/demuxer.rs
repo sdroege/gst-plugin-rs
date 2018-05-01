@@ -12,8 +12,8 @@ use std::collections::BTreeMap;
 use std::u32;
 use std::u64;
 
+use gobject_subclass::object::*;
 use gst_plugin::element::*;
-use gst_plugin::object::*;
 
 use error::*;
 

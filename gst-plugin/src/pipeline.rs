@@ -18,7 +18,9 @@ use glib::translate::*;
 use gst;
 use gst::prelude::*;
 
-use anyimpl::*;
+use gobject_subclass::anyimpl::*;
+use gobject_subclass::object::*;
+
 use bin::*;
 use element::*;
 use object::*;

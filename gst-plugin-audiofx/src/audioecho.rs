@@ -13,8 +13,8 @@ use gst_audio;
 
 use gst_plugin::base_transform::*;
 use gst_plugin::element::*;
-use gst_plugin::object::*;
-use gst_plugin::properties::*;
+
+use gobject_subclass::object::*;
 
 use std::sync::Mutex;
 use std::{cmp, i32, iter, u64};

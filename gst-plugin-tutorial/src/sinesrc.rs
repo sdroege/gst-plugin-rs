@@ -14,10 +14,9 @@ use gst_base::prelude::*;
 
 use byte_slice_cast::*;
 
+use gobject_subclass::object::*;
 use gst_plugin::base_src::*;
 use gst_plugin::element::*;
-use gst_plugin::object::*;
-use gst_plugin::properties::*;
 
 use std::ops::Rem;
 use std::sync::Mutex;

@@ -1,7 +1,7 @@
 use std::ptr;
 use std::sync::atomic::AtomicBool;
 
-pub use gobject_subclass::object::*;
+use gobject_subclass::object::*;
 
 #[repr(C)]
 pub struct ElementInstanceStruct<T: ObjectType> {

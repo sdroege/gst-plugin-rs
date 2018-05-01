@@ -20,7 +20,9 @@ use gst;
 use gst::prelude::*;
 use gst_base;
 
-use anyimpl::*;
+use gobject_subclass::anyimpl::*;
+use gobject_subclass::object::*;
+
 use element::*;
 use object::*;
 

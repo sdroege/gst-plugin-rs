@@ -7,6 +7,7 @@
 // except according to those terms.
 
 extern crate glib;
+extern crate gobject_subclass;
 extern crate gst_plugin;
 #[macro_use]
 extern crate gstreamer as gst;
