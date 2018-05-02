@@ -15,7 +15,7 @@ pub trait PanicPoison {
     fn panicked(&self) -> &AtomicBool;
 }
 
-impl<T: ObjectType> Instance<T> for ElementInstanceStruct<T> {
+unsafe impl<T: ObjectType> Instance<T> for ElementInstanceStruct<T> {
     fn parent(&self) -> &T::GlibType {
         &self._parent
     }
