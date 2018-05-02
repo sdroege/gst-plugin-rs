@@ -2,7 +2,7 @@
 name = "gst-plugin"
 version = "0.3.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
-categories = ["multimedia"]
+categories = ["multimedia", "api-bindings"]
 description = "Infrastructure for writing GStreamer plugins in Rust"
 repository = "https://github.com/sdroege/gst-plugin-rs/tree/master/gst-plugin"
 license = "MIT/Apache-2.0"
