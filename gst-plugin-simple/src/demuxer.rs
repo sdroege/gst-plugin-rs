@@ -14,8 +14,7 @@ use std::u64;
 
 use gobject_subclass::object::*;
 use gst_plugin::element::*;
-
-use error::*;
+use gst_plugin::error::*;
 
 use gst;
 use gst::prelude::*;

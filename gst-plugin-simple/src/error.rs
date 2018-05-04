@@ -13,54 +13,6 @@ use std::fmt::{Display, Formatter};
 use glib;
 use gst;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FlowError {
-    Flushing,
-    Eos,
-    NotNegotiated(gst::ErrorMessage),
-    Error(gst::ErrorMessage),
-}
-
-impl Into<gst::FlowReturn> for FlowError {
-    fn into(self) -> gst::FlowReturn {
-        (&self).into()
-    }
-}
-
-impl<'a> Into<gst::FlowReturn> for &'a FlowError {
-    fn into(self) -> gst::FlowReturn {
-        match *self {
-            FlowError::Flushing => gst::FlowReturn::Flushing,
-            FlowError::Eos => gst::FlowReturn::Eos,
-            FlowError::NotNegotiated(..) => gst::FlowReturn::NotNegotiated,
-            FlowError::Error(..) => gst::FlowReturn::Error,
-        }
-    }
-}
-
-impl Display for FlowError {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        match *self {
-            FlowError::Flushing | FlowError::Eos => f.write_str(self.description()),
-            FlowError::NotNegotiated(ref m) => {
-                f.write_fmt(format_args!("{}: {}", self.description(), m))
-            }
-            FlowError::Error(ref m) => f.write_fmt(format_args!("{}: {}", self.description(), m)),
-        }
-    }
-}
-
-impl Error for FlowError {
-    fn description(&self) -> &str {
-        match *self {
-            FlowError::Flushing => "Flushing",
-            FlowError::Eos => "Eos",
-            FlowError::NotNegotiated(..) => "Not Negotiated",
-            FlowError::Error(..) => "Error",
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct UriError {
     error: gst::URIError,

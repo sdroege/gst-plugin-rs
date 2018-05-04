@@ -6,6 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::error::Error;
+use std::fmt::Error as FmtError;
+use std::fmt::{Display, Formatter};
+
+use gst;
+
 #[macro_export]
 macro_rules! panic_to_error(
     ($element:expr, $panicked:expr, $ret:expr, $code:block) => {{
@@ -35,3 +41,51 @@ macro_rules! panic_to_error(
         }
     }};
 );
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FlowError {
+    Flushing,
+    Eos,
+    NotNegotiated(gst::ErrorMessage),
+    Error(gst::ErrorMessage),
+}
+
+impl Into<gst::FlowReturn> for FlowError {
+    fn into(self) -> gst::FlowReturn {
+        (&self).into()
+    }
+}
+
+impl<'a> Into<gst::FlowReturn> for &'a FlowError {
+    fn into(self) -> gst::FlowReturn {
+        match *self {
+            FlowError::Flushing => gst::FlowReturn::Flushing,
+            FlowError::Eos => gst::FlowReturn::Eos,
+            FlowError::NotNegotiated(..) => gst::FlowReturn::NotNegotiated,
+            FlowError::Error(..) => gst::FlowReturn::Error,
+        }
+    }
+}
+
+impl Display for FlowError {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        match *self {
+            FlowError::Flushing | FlowError::Eos => f.write_str(self.description()),
+            FlowError::NotNegotiated(ref m) => {
+                f.write_fmt(format_args!("{}: {}", self.description(), m))
+            }
+            FlowError::Error(ref m) => f.write_fmt(format_args!("{}: {}", self.description(), m)),
+        }
+    }
+}
+
+impl Error for FlowError {
+    fn description(&self) -> &str {
+        match *self {
+            FlowError::Flushing => "Flushing",
+            FlowError::Eos => "Eos",
+            FlowError::NotNegotiated(..) => "Not Negotiated",
+            FlowError::Error(..) => "Error",
+        }
+    }
+}

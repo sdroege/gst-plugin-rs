@@ -22,6 +22,7 @@ use gobject_subclass::object::*;
 use gst_plugin::base_src::*;
 use gst_plugin::element::*;
 use gst_plugin::uri_handler::*;
+use gst_plugin::error::*;
 
 pub use gst_plugin::base_src::BaseSrc;
 
