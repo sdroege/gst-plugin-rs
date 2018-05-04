@@ -206,6 +206,7 @@ pub type BaseSinkClass = ClassStruct<BaseSink>;
 // FIXME: Boilerplate
 unsafe impl BaseSinkClassExt<BaseSink> for BaseSinkClass {}
 unsafe impl ElementClassExt<BaseSink> for BaseSinkClass {}
+unsafe impl ObjectClassExt<BaseSink> for BaseSinkClass {}
 
 unsafe impl Send for BaseSink {}
 unsafe impl Sync for BaseSink {}
@@ -291,14 +292,9 @@ box_base_sink_impl!(BaseSinkImpl);
 
 impl ObjectType for BaseSink {
     const NAME: &'static str = "RsBaseSink";
-    type GlibType = gst_base_ffi::GstBaseSink;
-    type GlibClassType = gst_base_ffi::GstBaseSinkClass;
+    type ParentType = gst_base::BaseSink;
     type ImplType = Box<BaseSinkImpl<Self>>;
     type InstanceStructType = ElementInstanceStruct<Self>;
-
-    fn glib_type() -> glib::Type {
-        unsafe { from_glib(gst_base_ffi::gst_base_sink_get_type()) }
-    }
 
     fn class_init(token: &ClassInitToken, klass: &mut BaseSinkClass) {
         ElementClassExt::override_vfuncs(klass, token);

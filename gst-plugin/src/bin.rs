@@ -111,6 +111,7 @@ pub type BinClass = ClassStruct<Bin>;
 // FIXME: Boilerplate
 unsafe impl BinClassExt<Bin> for BinClass {}
 unsafe impl ElementClassExt<Bin> for BinClass {}
+unsafe impl ObjectClassExt<Bin> for BinClass {}
 
 unsafe impl Send for Bin {}
 unsafe impl Sync for Bin {}
@@ -145,14 +146,9 @@ box_bin_impl!(BinImpl);
 
 impl ObjectType for Bin {
     const NAME: &'static str = "RsBin";
-    type GlibType = gst_ffi::GstBin;
-    type GlibClassType = gst_ffi::GstBinClass;
+    type ParentType = gst::Bin;
     type ImplType = Box<BinImpl<Self>>;
     type InstanceStructType = ElementInstanceStruct<Self>;
-
-    fn glib_type() -> glib::Type {
-        unsafe { from_glib(gst_ffi::gst_bin_get_type()) }
-    }
 
     fn class_init(token: &ClassInitToken, klass: &mut BinClass) {
         ElementClassExt::override_vfuncs(klass, token);

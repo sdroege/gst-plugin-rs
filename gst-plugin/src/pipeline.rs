@@ -70,6 +70,7 @@ pub type PipelineClass = ClassStruct<Pipeline>;
 unsafe impl PipelineClassExt<Pipeline> for PipelineClass {}
 unsafe impl BinClassExt<Pipeline> for PipelineClass {}
 unsafe impl ElementClassExt<Pipeline> for PipelineClass {}
+unsafe impl ObjectClassExt<Pipeline> for PipelineClass {}
 
 unsafe impl Send for Pipeline {}
 unsafe impl Sync for Pipeline {}
@@ -90,16 +91,12 @@ box_pipeline_impl!(PipelineImpl);
 
 impl ObjectType for Pipeline {
     const NAME: &'static str = "RsPipeline";
-    type GlibType = gst_ffi::GstPipeline;
-    type GlibClassType = gst_ffi::GstPipelineClass;
+    type ParentType = gst::Pipeline;
     type ImplType = Box<PipelineImpl<Self>>;
     type InstanceStructType = ElementInstanceStruct<Self>;
 
-    fn glib_type() -> glib::Type {
-        unsafe { from_glib(gst_ffi::gst_pipeline_get_type()) }
-    }
-
     fn class_init(token: &ClassInitToken, klass: &mut PipelineClass) {
+        ObjectClassExt::override_vfuncs(klass, token);
         ElementClassExt::override_vfuncs(klass, token);
         BinClassExt::override_vfuncs(klass, token);
         PipelineClassExt::override_vfuncs(klass, token);

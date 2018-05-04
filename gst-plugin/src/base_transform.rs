@@ -335,6 +335,7 @@ pub type BaseTransformClass = ClassStruct<BaseTransform>;
 // FIXME: Boilerplate
 unsafe impl BaseTransformClassExt<BaseTransform> for BaseTransformClass {}
 unsafe impl ElementClassExt<BaseTransform> for BaseTransformClass {}
+unsafe impl ObjectClassExt<BaseTransform> for BaseTransformClass {}
 
 unsafe impl Send for BaseTransform {}
 unsafe impl Sync for BaseTransform {}
@@ -424,14 +425,9 @@ box_base_transform_impl!(BaseTransformImpl);
 
 impl ObjectType for BaseTransform {
     const NAME: &'static str = "RsBaseTransform";
-    type GlibType = gst_base_ffi::GstBaseTransform;
-    type GlibClassType = gst_base_ffi::GstBaseTransformClass;
+    type ParentType = gst_base::BaseTransform;
     type ImplType = Box<BaseTransformImpl<Self>>;
     type InstanceStructType = ElementInstanceStruct<Self>;
-
-    fn glib_type() -> glib::Type {
-        unsafe { from_glib(gst_base_ffi::gst_base_transform_get_type()) }
-    }
 
     fn class_init(token: &ClassInitToken, klass: &mut BaseTransformClass) {
         ElementClassExt::override_vfuncs(klass, token);

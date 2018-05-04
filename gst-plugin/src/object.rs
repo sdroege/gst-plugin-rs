@@ -2,10 +2,11 @@ use std::ptr;
 use std::sync::atomic::AtomicBool;
 
 use gobject_subclass::object::*;
+use glib::wrapper::Wrapper;
 
 #[repr(C)]
 pub struct ElementInstanceStruct<T: ObjectType> {
-    _parent: T::GlibType,
+    _parent: <T::ParentType as Wrapper>::GlibType,
     _imp: ptr::NonNull<T::ImplType>,
 
     _panicked: AtomicBool,
@@ -16,7 +17,7 @@ pub trait PanicPoison {
 }
 
 unsafe impl<T: ObjectType> Instance<T> for ElementInstanceStruct<T> {
-    fn parent(&self) -> &T::GlibType {
+    fn parent(&self) -> &<T::ParentType as Wrapper>::GlibType {
         &self._parent
     }
 

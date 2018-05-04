@@ -207,6 +207,7 @@ pub type ElementClass = ClassStruct<Element>;
 
 // FIXME: Boilerplate
 unsafe impl ElementClassExt<Element> for ElementClass {}
+unsafe impl ObjectClassExt<Element> for ElementClass {}
 
 unsafe impl Send for Element {}
 unsafe impl Sync for Element {}
@@ -261,17 +262,13 @@ box_element_impl!(ElementImpl);
 
 impl ObjectType for Element {
     const NAME: &'static str = "RsElement";
-    type GlibType = gst_ffi::GstElement;
-    type GlibClassType = gst_ffi::GstElementClass;
+    type ParentType = gst::Element;
     type ImplType = Box<ElementImpl<Self>>;
     type InstanceStructType = ElementInstanceStruct<Self>;
 
-    fn glib_type() -> glib::Type {
-        unsafe { from_glib(gst_ffi::gst_element_get_type()) }
-    }
-
     fn class_init(token: &ClassInitToken, klass: &mut ElementClass) {
-        klass.override_vfuncs(token);
+        ObjectClassExt::override_vfuncs(klass, token);
+        ElementClassExt::override_vfuncs(klass, token);
     }
 
     object_type_fns!();

@@ -257,6 +257,7 @@ pub type BaseSrcClass = ClassStruct<BaseSrc>;
 // FIXME: Boilerplate
 unsafe impl BaseSrcClassExt<BaseSrc> for BaseSrcClass {}
 unsafe impl ElementClassExt<BaseSrc> for BaseSrcClass {}
+unsafe impl ObjectClassExt<BaseSrc> for BaseSrcClass {}
 
 unsafe impl Send for BaseSrc {}
 unsafe impl Sync for BaseSrc {}
@@ -362,16 +363,12 @@ box_base_src_impl!(BaseSrcImpl);
 
 impl ObjectType for BaseSrc {
     const NAME: &'static str = "RsBaseSrc";
-    type GlibType = gst_base_ffi::GstBaseSrc;
-    type GlibClassType = gst_base_ffi::GstBaseSrcClass;
+    type ParentType = gst_base::BaseSrc;
     type ImplType = Box<BaseSrcImpl<Self>>;
     type InstanceStructType = ElementInstanceStruct<Self>;
 
-    fn glib_type() -> glib::Type {
-        unsafe { from_glib(gst_base_ffi::gst_base_src_get_type()) }
-    }
-
     fn class_init(token: &ClassInitToken, klass: &mut BaseSrcClass) {
+        ObjectClassExt::override_vfuncs(klass, token);
         ElementClassExt::override_vfuncs(klass, token);
         BaseSrcClassExt::override_vfuncs(klass, token);
     }
