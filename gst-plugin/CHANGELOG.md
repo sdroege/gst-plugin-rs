@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.2.1] - 2018-05-09
+### Fixed
+- Fix memory leak in ElementClass::add_pad_template() related to floating
+  reference handling.
+
 ## [0.2.0] - 2018-03-20
 ### Changed
 - Update to gstreamer-rs 0.11
