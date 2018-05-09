@@ -151,7 +151,7 @@ where
         unsafe {
             gst_ffi::gst_element_class_add_pad_template(
                 self as *const Self as *mut gst_ffi::GstElementClass,
-                pad_template.to_glib_full(),
+                pad_template.to_glib_none().0,
             );
         }
     }
