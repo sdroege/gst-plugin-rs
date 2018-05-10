@@ -317,6 +317,13 @@ impl UdpSrc {
         if state.need_initial_events {
             gst_debug!(self.cat, obj: element, "Pushing initial events");
 
+            if let Some(event) = Self::create_io_context_event(&state) {
+                events.push(event);
+
+                // Get rid of reconfigure flag
+                self.src_pad.check_reconfigure();
+            }
+
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
             events.push(gst::Event::new_stream_start(&stream_id).build());
             if let Some(ref caps) = self.settings.lock().unwrap().caps {
@@ -327,12 +334,6 @@ impl UdpSrc {
                 gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
             );
 
-            if let Some(event) = Self::create_io_context_event(&state) {
-                events.push(event);
-
-                // Get rid of reconfigure flag
-                self.src_pad.check_reconfigure();
-            }
             state.need_initial_events = false;
         } else if self.src_pad.check_reconfigure() {
             if let Some(event) = Self::create_io_context_event(&state) {
