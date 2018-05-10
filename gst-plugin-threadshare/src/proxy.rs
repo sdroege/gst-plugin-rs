@@ -586,12 +586,10 @@ impl ProxySink {
         true
     }
 
-    fn sink_query(&self, pad: &gst::Pad, _element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn sink_query(&self, pad: &gst::Pad, element: &Element, query: &mut gst::QueryRef) -> bool {
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
 
-        // FIXME: How can we do this?
-        gst_log!(self.cat, obj: pad, "Dropping query {:?}", query);
-        false
+        pad.query_default(element, query)
     }
 
     fn prepare(&self, element: &Element) -> Result<(), gst::ErrorMessage> {
