@@ -13,7 +13,7 @@ gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
 num-rational = { version = "0.1", default-features = false, features = [] }
 nom = "3.0"
 flavors = {git = "https://github.com/rust-av/flavors.git"}
-muldiv = "0.1"
+muldiv = "0.2"
 
 [lib]
 name = "gstrsflv"
