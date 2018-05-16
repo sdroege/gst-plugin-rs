@@ -123,7 +123,7 @@ struct State {
     io_context_in: Option<IOContext>,
     pending_future_id_in: Option<PendingFutureId>,
     queue: Option<DataQueue>,
-    pending_queue: Option<(Option<task::Task>, VecDeque<DataQueueItem>)>,
+    pending_queue: Option<(Option<task::Task>, bool, VecDeque<DataQueueItem>)>,
     last_ret: gst::FlowReturn,
     pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
 }
@@ -292,9 +292,23 @@ impl Queue {
                 Err(item)
             };
             if let Err(item) = item {
-                if pending_queue.is_none() {
-                    *pending_queue = Some((None, VecDeque::new()));
-                    pending_queue.as_mut().unwrap().1.push_back(item);
+                if pending_queue
+                    .as_ref()
+                    .map(|(_, scheduled, _)| !scheduled)
+                    .unwrap_or(true)
+                {
+                    if pending_queue.is_none() {
+                        *pending_queue = Some((None, false, VecDeque::new()));
+                    }
+
+                    let schedule_now = match item {
+                        DataQueueItem::Event(ref ev) if ev.get_type() != gst::EventType::Eos => {
+                            false
+                        }
+                        _ => true,
+                    };
+
+                    pending_queue.as_mut().unwrap().2.push_back(item);
 
                     gst_log!(
                         self.cat,
@@ -302,79 +316,90 @@ impl Queue {
                         "Queue is full - Pushing first item on pending queue"
                     );
 
-                    let element_clone = element.clone();
-                    let future = future::poll_fn(move || {
-                        let queue = element_clone.get_impl().downcast_ref::<Queue>().unwrap();
-                        let mut state = queue.state.lock().unwrap();
+                    if schedule_now {
+                        gst_log!(self.cat, obj: element, "Scheduling pending queue now");
 
-                        let State {
-                            queue: ref dq,
-                            ref mut pending_queue,
-                            ..
-                        } = *state;
+                        pending_queue.as_mut().unwrap().1 = true;
 
-                        if dq.is_none() {
-                            return Ok(Async::Ready(()));
-                        }
+                        let element_clone = element.clone();
+                        let future = future::poll_fn(move || {
+                            let queue = element_clone.get_impl().downcast_ref::<Queue>().unwrap();
+                            let mut state = queue.state.lock().unwrap();
 
-                        gst_log!(
-                            queue.cat,
-                            obj: &element_clone,
-                            "Trying to empty pending queue"
-                        );
-                        let res = if let Some((ref mut task, ref mut items)) = *pending_queue {
-                            let mut failed_item = None;
-                            for item in items.drain(..) {
-                                if let Err(item) = dq.as_ref().unwrap().push(item) {
-                                    failed_item = Some(item);
-                                    break;
-                                }
+                            let State {
+                                queue: ref dq,
+                                ref mut pending_queue,
+                                ..
+                            } = *state;
+
+                            if dq.is_none() {
+                                return Ok(Async::Ready(()));
                             }
 
-                            if let Some(item) = failed_item {
-                                items.push_front(item);
-                                *task = Some(task::current());
-                                gst_log!(
-                                    queue.cat,
-                                    obj: &element_clone,
-                                    "Waiting for more queue space"
-                                );
-                                Ok(Async::NotReady)
+                            gst_log!(
+                                queue.cat,
+                                obj: &element_clone,
+                                "Trying to empty pending queue"
+                            );
+                            let res = if let Some((ref mut task, _, ref mut items)) = *pending_queue
+                            {
+                                let mut failed_item = None;
+                                for item in items.drain(..) {
+                                    if let Err(item) = dq.as_ref().unwrap().push(item) {
+                                        failed_item = Some(item);
+                                        break;
+                                    }
+                                }
+
+                                if let Some(item) = failed_item {
+                                    items.push_front(item);
+                                    *task = Some(task::current());
+                                    gst_log!(
+                                        queue.cat,
+                                        obj: &element_clone,
+                                        "Waiting for more queue space"
+                                    );
+                                    Ok(Async::NotReady)
+                                } else {
+                                    gst_log!(
+                                        queue.cat,
+                                        obj: &element_clone,
+                                        "Pending queue is empty now"
+                                    );
+                                    Ok(Async::Ready(()))
+                                }
                             } else {
                                 gst_log!(
                                     queue.cat,
                                     obj: &element_clone,
-                                    "Pending queue is empty now"
+                                    "Flushing, dropping pending queue"
                                 );
                                 Ok(Async::Ready(()))
+                            };
+
+                            if res == Ok(Async::Ready(())) {
+                                *pending_queue = None;
                             }
+
+                            res
+                        });
+
+                        if let (Some(io_context_in), Some(pending_future_id_in)) =
+                            (io_context_in.as_ref(), pending_future_id_in.as_ref())
+                        {
+                            io_context_in.add_pending_future(*pending_future_id_in, future);
+                            None
                         } else {
-                            gst_log!(
-                                queue.cat,
-                                obj: &element_clone,
-                                "Flushing, dropping pending queue"
-                            );
-                            Ok(Async::Ready(()))
-                        };
-
-                        if res == Ok(Async::Ready(())) {
-                            *pending_queue = None;
+                            Some(future)
                         }
-
-                        res
-                    });
-
-                    if let (Some(io_context_in), Some(pending_future_id_in)) =
-                        (io_context_in.as_ref(), pending_future_id_in.as_ref())
-                    {
-                        io_context_in.add_pending_future(*pending_future_id_in, future);
-                        None
                     } else {
-                        Some(future)
+                        gst_log!(self.cat, obj: element, "Scheduling pending queue later");
+
+                        None
                     }
                 } else {
                     assert!(io_context_in.is_some());
-                    pending_queue.as_mut().unwrap().1.push_back(item);
+                    pending_queue.as_mut().unwrap().2.push_back(item);
 
                     None
                 }
@@ -562,7 +587,7 @@ impl Queue {
     > {
         let event = {
             let state = self.state.lock().unwrap();
-            if let Some((Some(ref task), _)) = state.pending_queue {
+            if let Some((Some(ref task), _, _)) = state.pending_queue {
                 task.notify();
             }
 
@@ -793,7 +818,7 @@ impl Queue {
             queue.pause();
             queue.clear(&self.src_pad);
         }
-        if let Some((Some(task), _)) = state.pending_queue.take() {
+        if let Some((Some(task), _, _)) = state.pending_queue.take() {
             task.notify();
         }
         let _ = state.pending_future_cancel.take();

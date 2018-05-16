@@ -215,7 +215,7 @@ impl Drop for SharedQueue {
             let mut inner = self.0.lock().unwrap();
             assert!(inner.have_sink);
             inner.have_sink = false;
-            if let Some((Some(task), _)) = inner.pending_queue.take() {
+            if let Some((Some(task), _, _)) = inner.pending_queue.take() {
                 task.notify();
             }
         } else {
@@ -232,7 +232,7 @@ struct SharedQueueInner {
     name: String,
     queue: Option<DataQueue>,
     last_ret: gst::FlowReturn,
-    pending_queue: Option<(Option<task::Task>, VecDeque<DataQueueItem>)>,
+    pending_queue: Option<(Option<task::Task>, bool, VecDeque<DataQueueItem>)>,
     pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
     have_sink: bool,
     have_src: bool,
@@ -388,9 +388,24 @@ impl ProxySink {
             };
 
             if let Err(item) = item {
-                if queue.pending_queue.is_none() {
-                    queue.pending_queue = Some((None, VecDeque::new()));
-                    queue.pending_queue.as_mut().unwrap().1.push_back(item);
+                if queue
+                    .pending_queue
+                    .as_ref()
+                    .map(|(_, scheduled, _)| !scheduled)
+                    .unwrap_or(true)
+                {
+                    if queue.pending_queue.is_none() {
+                        queue.pending_queue = Some((None, false, VecDeque::new()));
+                    }
+
+                    let schedule_now = match item {
+                        DataQueueItem::Event(ref ev) if ev.get_type() != gst::EventType::Eos => {
+                            false
+                        }
+                        _ => true,
+                    };
+
+                    queue.pending_queue.as_mut().unwrap().2.push_back(item);
 
                     gst_log!(
                         self.cat,
@@ -398,95 +413,105 @@ impl ProxySink {
                         "Proxy is full - Pushing first item on pending queue"
                     );
 
-                    let element_clone = element.clone();
-                    let future = future::poll_fn(move || {
-                        let sink = element_clone
-                            .get_impl()
-                            .downcast_ref::<ProxySink>()
-                            .unwrap();
-                        let state = sink.state.lock().unwrap();
+                    if schedule_now {
+                        gst_log!(self.cat, obj: element, "Scheduling pending queue now");
 
-                        gst_log!(
-                            sink.cat,
-                            obj: &element_clone,
-                            "Trying to empty pending queue"
-                        );
+                        queue.pending_queue.as_mut().unwrap().1 = true;
 
-                        let mut queue = match state.queue {
-                            Some(ref queue) => queue.0.lock().unwrap(),
-                            None => {
-                                return Ok(Async::Ready(()));
-                            }
-                        };
+                        let element_clone = element.clone();
+                        let future = future::poll_fn(move || {
+                            let sink = element_clone
+                                .get_impl()
+                                .downcast_ref::<ProxySink>()
+                                .unwrap();
+                            let state = sink.state.lock().unwrap();
 
-                        let SharedQueueInner {
-                            ref mut pending_queue,
-                            ref queue,
-                            ..
-                        } = *queue;
+                            gst_log!(
+                                sink.cat,
+                                obj: &element_clone,
+                                "Trying to empty pending queue"
+                            );
 
-                        let res = if let Some((ref mut task, ref mut items)) = *pending_queue {
-                            if let &Some(ref queue) = queue {
-                                let mut failed_item = None;
-                                for item in items.drain(..) {
-                                    if let Err(item) = queue.push(item) {
-                                        failed_item = Some(item);
-                                        break;
-                                    }
+                            let mut queue = match state.queue {
+                                Some(ref queue) => queue.0.lock().unwrap(),
+                                None => {
+                                    return Ok(Async::Ready(()));
                                 }
+                            };
 
-                                if let Some(item) = failed_item {
-                                    items.push_front(item);
-                                    *task = Some(task::current());
-                                    gst_log!(
-                                        sink.cat,
-                                        obj: &element_clone,
-                                        "Waiting for more queue space"
-                                    );
-                                    Ok(Async::NotReady)
+                            let SharedQueueInner {
+                                ref mut pending_queue,
+                                ref queue,
+                                ..
+                            } = *queue;
+
+                            let res = if let Some((ref mut task, _, ref mut items)) = *pending_queue
+                            {
+                                if let &Some(ref queue) = queue {
+                                    let mut failed_item = None;
+                                    for item in items.drain(..) {
+                                        if let Err(item) = queue.push(item) {
+                                            failed_item = Some(item);
+                                            break;
+                                        }
+                                    }
+
+                                    if let Some(item) = failed_item {
+                                        items.push_front(item);
+                                        *task = Some(task::current());
+                                        gst_log!(
+                                            sink.cat,
+                                            obj: &element_clone,
+                                            "Waiting for more queue space"
+                                        );
+                                        Ok(Async::NotReady)
+                                    } else {
+                                        gst_log!(
+                                            sink.cat,
+                                            obj: &element_clone,
+                                            "Pending queue is empty now"
+                                        );
+                                        Ok(Async::Ready(()))
+                                    }
                                 } else {
                                     gst_log!(
                                         sink.cat,
                                         obj: &element_clone,
-                                        "Pending queue is empty now"
+                                        "Waiting for queue to be allocated"
                                     );
-                                    Ok(Async::Ready(()))
+                                    Ok(Async::NotReady)
                                 }
                             } else {
                                 gst_log!(
                                     sink.cat,
                                     obj: &element_clone,
-                                    "Waiting for queue to be allocated"
+                                    "Flushing, dropping pending queue"
                                 );
-                                Ok(Async::NotReady)
+                                Ok(Async::Ready(()))
+                            };
+
+                            if res == Ok(Async::Ready(())) {
+                                *pending_queue = None;
                             }
+
+                            res
+                        });
+
+                        if let (Some(io_context), Some(pending_future_id)) =
+                            (io_context.as_ref(), pending_future_id.as_ref())
+                        {
+                            io_context.add_pending_future(*pending_future_id, future);
+                            None
                         } else {
-                            gst_log!(
-                                sink.cat,
-                                obj: &element_clone,
-                                "Flushing, dropping pending queue"
-                            );
-                            Ok(Async::Ready(()))
-                        };
-
-                        if res == Ok(Async::Ready(())) {
-                            *pending_queue = None;
+                            Some(future)
                         }
-
-                        res
-                    });
-
-                    if let (Some(io_context), Some(pending_future_id)) =
-                        (io_context.as_ref(), pending_future_id.as_ref())
-                    {
-                        io_context.add_pending_future(*pending_future_id, future);
-                        None
                     } else {
-                        Some(future)
+                        gst_log!(self.cat, obj: element, "Scheduling pending queue later");
+
+                        None
                     }
                 } else {
-                    assert!(io_context.is_some());
-                    queue.pending_queue.as_mut().unwrap().1.push_back(item);
+                    queue.pending_queue.as_mut().unwrap().2.push_back(item);
 
                     None
                 }
@@ -645,7 +670,7 @@ impl ProxySink {
 
         let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
 
-        if let Some((Some(task), _)) = queue.pending_queue.take() {
+        if let Some((Some(task), _, _)) = queue.pending_queue.take() {
             task.notify();
         }
         queue.last_ret = gst::FlowReturn::Flushing;
@@ -908,7 +933,7 @@ impl ProxySrc {
         let event = {
             let state = self.state.lock().unwrap();
             let queue = state.queue.as_ref().unwrap().0.lock().unwrap();
-            if let Some((Some(ref task), _)) = queue.pending_queue {
+            if let Some((Some(ref task), _, _)) = queue.pending_queue {
                 task.notify();
             }
 
