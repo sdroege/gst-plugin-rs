@@ -377,14 +377,33 @@ impl ProxySink {
 
             let mut queue = queue.0.lock().unwrap();
 
-            let item = if queue.pending_queue.is_none() {
-                // The source might not have started yet
-                match queue.queue {
-                    Some(ref queue) => queue.push(item),
-                    None => Err(item),
+            let item = {
+                let SharedQueueInner {
+                    ref mut pending_queue,
+                    ref queue,
+                    ..
+                } = *queue;
+
+                match (pending_queue, queue) {
+                    (None, Some(ref queue)) => queue.push(item),
+                    (Some((_, false, ref mut items)), Some(ref queue)) => {
+                        let mut failed_item = None;
+                        while let Some(item) = items.pop_front() {
+                            if let Err(item) = queue.push(item) {
+                                failed_item = Some(item);
+                            }
+                        }
+
+                        if let Some(failed_item) = failed_item {
+                            items.push_front(failed_item);
+
+                            Err(item)
+                        } else {
+                            queue.push(item)
+                        }
+                    }
+                    _ => Err(item),
                 }
-            } else {
-                Err(item)
             };
 
             if let Err(item) = item {

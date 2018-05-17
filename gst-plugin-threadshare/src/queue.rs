@@ -286,11 +286,27 @@ impl Queue {
                 Some(ref queue) => queue,
             };
 
-            let item = if pending_queue.is_none() {
-                queue.push(item)
-            } else {
-                Err(item)
+            let item = match pending_queue {
+                None => queue.push(item),
+                Some((_, false, ref mut items)) => {
+                    let mut failed_item = None;
+                    while let Some(item) = items.pop_front() {
+                        if let Err(item) = queue.push(item) {
+                            failed_item = Some(item);
+                        }
+                    }
+
+                    if let Some(failed_item) = failed_item {
+                        items.push_front(failed_item);
+
+                        Err(item)
+                    } else {
+                        queue.push(item)
+                    }
+                }
+                _ => Err(item),
             };
+
             if let Err(item) = item {
                 if pending_queue
                     .as_ref()
