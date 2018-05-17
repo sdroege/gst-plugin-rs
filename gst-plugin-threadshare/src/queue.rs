@@ -344,15 +344,14 @@ impl Queue {
                             let res = if let Some((ref mut task, _, ref mut items)) = *pending_queue
                             {
                                 let mut failed_item = None;
-                                for item in items.drain(..) {
+                                while let Some(item) = items.pop_front() {
                                     if let Err(item) = dq.as_ref().unwrap().push(item) {
                                         failed_item = Some(item);
-                                        break;
                                     }
                                 }
 
-                                if let Some(item) = failed_item {
-                                    items.push_front(item);
+                                if let Some(failed_item) = failed_item {
+                                    items.push_front(failed_item);
                                     *task = Some(task::current());
                                     gst_log!(
                                         queue.cat,

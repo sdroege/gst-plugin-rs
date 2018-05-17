@@ -449,15 +449,14 @@ impl ProxySink {
                             {
                                 if let &Some(ref queue) = queue {
                                     let mut failed_item = None;
-                                    for item in items.drain(..) {
+                                    while let Some(item) = items.pop_front() {
                                         if let Err(item) = queue.push(item) {
                                             failed_item = Some(item);
-                                            break;
                                         }
                                     }
 
-                                    if let Some(item) = failed_item {
-                                        items.push_front(item);
+                                    if let Some(failed_item) = failed_item {
+                                        items.push_front(failed_item);
                                         *task = Some(task::current());
                                         gst_log!(
                                             sink.cat,
