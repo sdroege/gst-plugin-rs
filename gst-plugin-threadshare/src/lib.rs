@@ -41,6 +41,8 @@ extern crate rand;
 #[macro_use]
 extern crate lazy_static;
 
+extern crate net2;
+
 mod iocontext;
 
 mod udpsocket;

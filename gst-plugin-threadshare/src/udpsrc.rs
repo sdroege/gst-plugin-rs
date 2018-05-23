@@ -35,11 +35,14 @@ use either::Either;
 
 use rand;
 
+use net2;
+
 use iocontext::*;
 use udpsocket::*;
 
 const DEFAULT_ADDRESS: Option<&'static str> = Some("127.0.0.1");
 const DEFAULT_PORT: u32 = 5000;
+const DEFAULT_REUSE: bool = true;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_MTU: u32 = 1500;
 const DEFAULT_CONTEXT: &'static str = "";
@@ -50,6 +53,7 @@ const DEFAULT_CONTEXT_WAIT: u32 = 0;
 struct Settings {
     address: Option<String>,
     port: u32,
+    reuse: bool,
     caps: Option<gst::Caps>,
     mtu: u32,
     context: String,
@@ -62,6 +66,7 @@ impl Default for Settings {
         Settings {
             address: DEFAULT_ADDRESS.map(Into::into),
             port: DEFAULT_PORT,
+            reuse: DEFAULT_REUSE,
             caps: DEFAULT_CAPS,
             mtu: DEFAULT_MTU,
             context: DEFAULT_CONTEXT.into(),
@@ -71,7 +76,7 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [Property; 7] = [
+static PROPERTIES: [Property; 8] = [
     Property::String(
         "address",
         "Address",
@@ -85,6 +90,13 @@ static PROPERTIES: [Property; 7] = [
         "Port to listen on",
         (0, u16::MAX as u32),
         DEFAULT_PORT,
+        PropertyMutability::ReadWrite,
+    ),
+    Property::Boolean(
+        "reuse",
+        "Reuse",
+        "Allow reuse of the port",
+        DEFAULT_REUSE,
         PropertyMutability::ReadWrite,
     ),
     Property::Boxed(
@@ -442,6 +454,7 @@ impl UdpSrc {
 
         // TODO: TTL, multicast loopback, etc
         let socket = if addr.is_multicast() {
+
             // TODO: Use ::unspecified() constructor once stable
             let bind_addr = if addr.is_ipv4() {
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))
@@ -458,10 +471,47 @@ impl UdpSrc {
                 addr
             );
 
-            let socket = net::UdpSocket::bind(&saddr).map_err(|err| {
+            let builder = if bind_addr.is_ipv4() {
+                net2::UdpBuilder::new_v4()
+            } else {
+                net2::UdpBuilder::new_v6()
+            }.map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to create socket: {}", err]
+                )
+            })?;
+
+            builder.reuse_address(settings.reuse).map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to set reuse_address: {}", err]
+                )
+            })?;
+
+            #[cfg(unix)]
+            {
+                use net2::unix::UnixUdpBuilderExt;
+
+                builder.reuse_port(settings.reuse).map_err(|err| {
+                    gst_error_msg!(
+                        gst::ResourceError::OpenRead,
+                        ["Failed to set reuse_port: {}", err]
+                    )
+                })?;
+            }
+
+            let socket = builder.bind(&saddr).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to bind socket: {}", err]
+                )
+            })?;
+
+            let socket = net::UdpSocket::from_std(socket, io_context.handle()).map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to setup socket for tokio: {}", err]
                 )
             })?;
 
@@ -637,6 +687,10 @@ impl ObjectImpl<Element> for UdpSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.port = value.get().unwrap();
             }
+            Property::Boolean("reuse", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.reuse = value.get().unwrap();
+            }
             Property::Boxed("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.caps = value.get();
@@ -672,6 +726,10 @@ impl ObjectImpl<Element> for UdpSrc {
             Property::UInt("port", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.port.to_value())
+            }
+            Property::Boolean("reuse", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                Ok(settings.reuse.to_value())
             }
             Property::Boxed("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();

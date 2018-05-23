@@ -246,6 +246,7 @@ pub struct IOContext(Arc<IOContextInner>);
 struct IOContextInner {
     name: String,
     pool: Either<thread_pool::ThreadPool, IOContextExecutor>,
+    handle: reactor::Handle,
     // Only used for dropping
     _shutdown: IOContextShutdown,
     pending_futures: Mutex<(
@@ -274,12 +275,12 @@ impl IOContext {
 
         let reactor = reactor::Reactor::new()?;
 
+        let handle = reactor.handle().clone();
         let (pool, shutdown) = if n_threads >= 0 {
-            let handle = reactor.handle().clone();
-
             let timers = Arc::new(Mutex::new(HashMap::<_, timer::Handle>::new()));
             let t1 = timers.clone();
 
+            let handle = handle.clone();
             let shutdown = IOContextRunner::start(name, wait, reactor);
 
             // FIXME: The executor threads are not throttled at all, only the reactor
@@ -319,6 +320,7 @@ impl IOContext {
         let context = Arc::new(IOContextInner {
             name: name.into(),
             pool,
+            handle,
             _shutdown: shutdown,
             pending_futures: Mutex::new((0, HashMap::new())),
         });
@@ -336,6 +338,10 @@ impl IOContext {
             Either::Left(ref pool) => pool.spawn(future),
             Either::Right(ref pool) => pool.spawn(future),
         }
+    }
+
+    pub fn handle(&self) -> &reactor::Handle {
+        &self.0.handle
     }
 
     pub fn acquire_pending_future_id(&self) -> PendingFutureId {
