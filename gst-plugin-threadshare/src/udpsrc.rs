@@ -453,8 +453,7 @@ impl UdpSrc {
         let port = settings.port;
 
         // TODO: TTL, multicast loopback, etc
-        let socket = if addr.is_multicast() {
-
+        let saddr = if addr.is_multicast() {
             // TODO: Use ::unspecified() constructor once stable
             let bind_addr = if addr.is_ipv4() {
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))
@@ -471,50 +470,59 @@ impl UdpSrc {
                 addr
             );
 
-            let builder = if bind_addr.is_ipv4() {
-                net2::UdpBuilder::new_v4()
-            } else {
-                net2::UdpBuilder::new_v6()
-            }.map_err(|err| {
+            saddr
+        } else {
+            let saddr = SocketAddr::new(addr, port as u16);
+            gst_debug!(self.cat, obj: element, "Binding to {:?}", saddr);
+
+            saddr
+        };
+
+        let builder = if addr.is_ipv4() {
+            net2::UdpBuilder::new_v4()
+        } else {
+            net2::UdpBuilder::new_v6()
+        }.map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Failed to create socket: {}", err]
+            )
+        })?;
+
+        builder.reuse_address(settings.reuse).map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Failed to set reuse_address: {}", err]
+            )
+        })?;
+
+        #[cfg(unix)]
+        {
+            use net2::unix::UnixUdpBuilderExt;
+
+            builder.reuse_port(settings.reuse).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
-                    ["Failed to create socket: {}", err]
+                    ["Failed to set reuse_port: {}", err]
                 )
             })?;
+        }
 
-            builder.reuse_address(settings.reuse).map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to set reuse_address: {}", err]
-                )
-            })?;
+        let socket = builder.bind(&saddr).map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Failed to bind socket: {}", err]
+            )
+        })?;
 
-            #[cfg(unix)]
-            {
-                use net2::unix::UnixUdpBuilderExt;
+        let socket = net::UdpSocket::from_std(socket, io_context.handle()).map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Failed to setup socket for tokio: {}", err]
+            )
+        })?;
 
-                builder.reuse_port(settings.reuse).map_err(|err| {
-                    gst_error_msg!(
-                        gst::ResourceError::OpenRead,
-                        ["Failed to set reuse_port: {}", err]
-                    )
-                })?;
-            }
-
-            let socket = builder.bind(&saddr).map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to bind socket: {}", err]
-                )
-            })?;
-
-            let socket = net::UdpSocket::from_std(socket, io_context.handle()).map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to setup socket for tokio: {}", err]
-                )
-            })?;
-
+        if addr.is_multicast() {
             // TODO: Multicast interface configuration, going to be tricky
             match addr {
                 IpAddr::V4(addr) => {
@@ -536,20 +544,7 @@ impl UdpSrc {
                     })?;
                 }
             }
-
-            socket
-        } else {
-            let saddr = SocketAddr::new(addr, port as u16);
-            gst_debug!(self.cat, obj: element, "Binding to {:?}", saddr);
-            let socket = net::UdpSocket::bind(&saddr).map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to bind socket: {}", err]
-                )
-            })?;
-
-            socket
-        };
+        }
 
         let buffer_pool = gst::BufferPool::new();
         let mut config = buffer_pool.get_config();
