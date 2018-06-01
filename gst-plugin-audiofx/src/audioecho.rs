@@ -245,11 +245,11 @@ impl BaseTransformImpl<BaseTransform> for AudioEcho {
 
         match state.info.format() {
             gst_audio::AUDIO_FORMAT_F64 => {
-                let data = map.as_mut_slice().as_mut_slice_of::<f64>().unwrap();
+                let data = map.as_mut_slice_of::<f64>().unwrap();
                 Self::process(data, state, &settings);
             }
             gst_audio::AUDIO_FORMAT_F32 => {
-                let data = map.as_mut_slice().as_mut_slice_of::<f32>().unwrap();
+                let data = map.as_mut_slice_of::<f32>().unwrap();
                 Self::process(data, state, &settings);
             }
             _ => return gst::FlowReturn::NotNegotiated,

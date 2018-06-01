@@ -12,7 +12,7 @@ glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
 gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
 gstreamer-audio = { git = "https://github.com/sdroege/gstreamer-rs" }
-byte-slice-cast = "0.1"
+byte-slice-cast = "0.2"
 num-traits = "0.2"
 
 [lib]
