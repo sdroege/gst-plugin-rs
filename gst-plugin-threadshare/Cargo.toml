@@ -19,7 +19,7 @@ tokio-threadpool = { git = "https://github.com/tokio-rs/tokio" }
 futures = "0.1"
 lazy_static = "1.0"
 either = "1.0"
-rand = "0.4"
+rand = "0.5"
 net2 = "0.2"
 
 [lib]
