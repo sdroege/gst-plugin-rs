@@ -16,6 +16,7 @@ tokio-reactor = { git = "https://github.com/tokio-rs/tokio" }
 tokio-executor = { git = "https://github.com/tokio-rs/tokio" }
 tokio-timer = { git = "https://github.com/tokio-rs/tokio" }
 tokio-threadpool = { git = "https://github.com/tokio-rs/tokio" }
+tokio-current-thread = { git = "https://github.com/tokio-rs/tokio" }
 futures = "0.1"
 lazy_static = "1.0"
 either = "1.0"

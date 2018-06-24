@@ -26,7 +26,7 @@ use futures::future;
 use futures::stream::futures_unordered::FuturesUnordered;
 use futures::sync::oneshot;
 use futures::{Future, Stream};
-use tokio::executor::thread_pool;
+use tokio_threadpool;
 use tokio::reactor;
 use tokio_timer::timer;
 
@@ -124,13 +124,13 @@ impl IOContextRunner {
         gst_debug!(CONTEXT_CAT, "Started reactor thread '{}'", self.name);
 
         if let Some(ref pending_futures) = self.pending_futures {
-            use tokio::executor::current_thread;
+            use tokio_current_thread;
 
             let handle = reactor.handle();
             let mut enter = ::tokio_executor::enter().unwrap();
             let timer = timer::Timer::new(reactor);
             let timer_handle = timer.handle();
-            let mut current_thread = current_thread::CurrentThread::new_with_park(timer);
+            let mut current_thread = tokio_current_thread::CurrentThread::new_with_park(timer);
 
             ::tokio_reactor::with_default(&handle, &mut enter, |mut enter| {
                 ::tokio_timer::with_default(&timer_handle, &mut enter, |enter| loop {
@@ -245,7 +245,7 @@ pub struct IOContext(Arc<IOContextInner>);
 
 struct IOContextInner {
     name: String,
-    pool: Either<thread_pool::ThreadPool, IOContextExecutor>,
+    pool: Either<tokio_threadpool::ThreadPool, IOContextExecutor>,
     handle: reactor::Handle,
     // Only used for dropping
     _shutdown: IOContextShutdown,
@@ -284,7 +284,7 @@ impl IOContext {
             let shutdown = IOContextRunner::start(name, wait, reactor);
 
             // FIXME: The executor threads are not throttled at all, only the reactor
-            let mut pool_builder = thread_pool::Builder::new();
+            let mut pool_builder = tokio_threadpool::Builder::new();
             pool_builder
                 .around_worker(move |w, enter| {
                     let timer_handle = t1.lock().unwrap().get(w.id()).unwrap().clone();
