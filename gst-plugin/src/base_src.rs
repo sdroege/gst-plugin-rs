@@ -383,7 +383,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -399,7 +398,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -415,7 +413,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -434,7 +431,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -461,7 +457,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -483,7 +478,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -511,7 +505,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -530,7 +523,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -550,7 +542,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -569,7 +560,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -593,7 +583,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -610,7 +599,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -630,7 +618,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -649,7 +636,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
@@ -665,7 +651,6 @@ where
     T::ImplType: BaseSrcImpl<T>,
     T::InstanceStructType: PanicPoison,
 {
-    callback_guard!();
     floating_reference_guard!(ptr);
     let element = &*(ptr as *mut T::InstanceStructType);
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
