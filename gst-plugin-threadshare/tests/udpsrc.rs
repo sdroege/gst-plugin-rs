@@ -56,7 +56,8 @@ fn init() {
     });
 }
 
-fn test_push(n_threads: i32) {
+#[test]
+fn test_push() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
@@ -67,9 +68,8 @@ fn test_push(n_threads: i32) {
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
     udpsrc.set_property("caps", &caps).unwrap();
-    udpsrc.set_property("context-threads", &n_threads).unwrap();
     udpsrc
-        .set_property("port", &((5000 + n_threads) as u32))
+        .set_property("port", &(5000 as u32))
         .unwrap();
 
     appsink.set_property("emit-signals", &true).unwrap();
@@ -112,7 +112,7 @@ fn test_push(n_threads: i32) {
         let socket = net::UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let dest = SocketAddr::new(ipaddr, (5000 + n_threads) as u16);
+        let dest = SocketAddr::new(ipaddr, 5000 as u16);
 
         for _ in 0..3 {
             socket.send_to(&buffer, dest).unwrap();
@@ -143,14 +143,4 @@ fn test_push(n_threads: i32) {
     }
 
     pipeline.set_state(gst::State::Null).into_result().unwrap();
-}
-
-#[test]
-fn test_push_single_threaded() {
-    test_push(-1);
-}
-
-#[test]
-fn test_push_multi_threaded() {
-    test_push(2);
 }

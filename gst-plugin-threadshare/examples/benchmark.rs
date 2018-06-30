@@ -53,9 +53,8 @@ fn main() {
     assert_eq!(args.len(), 6);
     let n_streams: u16 = args[1].parse().unwrap();
     let source = &args[2];
-    let n_threads: i32 = args[3].parse().unwrap();
-    let n_groups: u32 = args[4].parse().unwrap();
-    let wait: u32 = args[5].parse().unwrap();
+    let n_groups: u32 = args[3].parse().unwrap();
+    let wait: u32 = args[4].parse().unwrap();
 
     let l = glib::MainLoop::new(None, false);
     let pipeline = gst::Pipeline::new(None);
@@ -90,7 +89,6 @@ fn main() {
                 source
                     .set_property("context", &format!("context-{}", (i as u32) % n_groups))
                     .unwrap();
-                source.set_property("context-threads", &n_threads).unwrap();
                 source.set_property("context-wait", &wait).unwrap();
 
                 source
@@ -104,7 +102,6 @@ fn main() {
                 source
                     .set_property("context", &format!("context-{}", (i as u32) % n_groups))
                     .unwrap();
-                source.set_property("context-threads", &n_threads).unwrap();
                 source.set_property("context-wait", &wait).unwrap();
 
                 source
@@ -132,7 +129,6 @@ fn main() {
                 source
                     .set_property("context", &format!("context-{}", (i as u32) % n_groups))
                     .unwrap();
-                source.set_property("context-threads", &n_threads).unwrap();
                 source.set_property("context-wait", &wait).unwrap();
 
                 source

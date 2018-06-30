@@ -55,7 +55,8 @@ fn init() {
     });
 }
 
-fn test_push(n_threads: i32) {
+#[test]
+fn test_push() {
     init();
 
     let pipeline = gst::Pipeline::new(None);
@@ -68,7 +69,6 @@ fn test_push(n_threads: i32) {
     queue.link(&appsink).unwrap();
 
     fakesrc.set_property("num-buffers", &3i32).unwrap();
-    queue.set_property("context-threads", &n_threads).unwrap();
 
     appsink.set_property("emit-signals", &true).unwrap();
 
@@ -120,14 +120,4 @@ fn test_push(n_threads: i32) {
     }
 
     pipeline.set_state(gst::State::Null).into_result().unwrap();
-}
-
-#[test]
-fn test_push_single_threaded() {
-    test_push(-1);
-}
-
-#[test]
-fn test_push_multi_threaded() {
-    test_push(2);
 }

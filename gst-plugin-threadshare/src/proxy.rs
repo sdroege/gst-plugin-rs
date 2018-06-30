@@ -26,7 +26,7 @@ use gst_plugin::element::*;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, Weak};
-use std::{u16, u32, u64};
+use std::{u32, u64};
 
 use futures;
 use futures::future;
@@ -49,7 +49,6 @@ const DEFAULT_MAX_SIZE_BUFFERS: u32 = 200;
 const DEFAULT_MAX_SIZE_BYTES: u32 = 1024 * 1024;
 const DEFAULT_MAX_SIZE_TIME: u64 = gst::SECOND_VAL;
 const DEFAULT_CONTEXT: &'static str = "";
-const DEFAULT_CONTEXT_THREADS: i32 = 0;
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 #[derive(Debug, Clone)]
@@ -71,7 +70,6 @@ struct SettingsSrc {
     max_size_bytes: u32,
     max_size_time: u64,
     context: String,
-    context_threads: i32,
     context_wait: u32,
     proxy_context: String,
 }
@@ -83,14 +81,13 @@ impl Default for SettingsSrc {
             max_size_bytes: DEFAULT_MAX_SIZE_BYTES,
             max_size_time: DEFAULT_MAX_SIZE_TIME,
             context: DEFAULT_CONTEXT.into(),
-            context_threads: DEFAULT_CONTEXT_THREADS,
             context_wait: DEFAULT_CONTEXT_WAIT,
             proxy_context: DEFAULT_PROXY_CONTEXT.into(),
         }
     }
 }
 
-static PROPERTIES_SRC: [Property; 7] = [
+static PROPERTIES_SRC: [Property; 6] = [
     Property::UInt(
         "max-size-buffers",
         "Max Size Buffers",
@@ -120,14 +117,6 @@ static PROPERTIES_SRC: [Property; 7] = [
         "Context",
         "Context name to share threads with",
         Some(DEFAULT_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Int(
-        "context-threads",
-        "Context Threads",
-        "Number of threads for the context thread-pool if we create it",
-        (-1, u16::MAX as i32),
-        DEFAULT_CONTEXT_THREADS,
         PropertyMutability::ReadWrite,
     ),
     Property::UInt(
@@ -1078,7 +1067,6 @@ impl ProxySrc {
 
         let io_context = IOContext::new(
             &settings.context,
-            settings.context_threads as isize,
             settings.context_wait,
         ).map_err(|err| {
             gst_error_msg!(
@@ -1260,10 +1248,6 @@ impl ObjectImpl<Element> for ProxySrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::Int("context-threads", ..) => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.context_threads = value.get().unwrap();
-            }
             Property::UInt("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
@@ -1295,10 +1279,6 @@ impl ObjectImpl<Element> for ProxySrc {
             Property::String("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
-            }
-            Property::Int("context-threads", ..) => {
-                let mut settings = self.settings.lock().unwrap();
-                Ok(settings.context_threads.to_value())
             }
             Property::UInt("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();

@@ -47,7 +47,6 @@ const DEFAULT_REUSE: bool = true;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_MTU: u32 = 1500;
 const DEFAULT_CONTEXT: &'static str = "";
-const DEFAULT_CONTEXT_THREADS: i32 = 0;
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 #[derive(Debug, Clone)]
@@ -58,7 +57,6 @@ struct Settings {
     caps: Option<gst::Caps>,
     mtu: u32,
     context: String,
-    context_threads: i32,
     context_wait: u32,
 }
 
@@ -71,13 +69,12 @@ impl Default for Settings {
             caps: DEFAULT_CAPS,
             mtu: DEFAULT_MTU,
             context: DEFAULT_CONTEXT.into(),
-            context_threads: DEFAULT_CONTEXT_THREADS,
             context_wait: DEFAULT_CONTEXT_WAIT,
         }
     }
 }
 
-static PROPERTIES: [Property; 8] = [
+static PROPERTIES: [Property; 7] = [
     Property::String(
         "address",
         "Address",
@@ -120,14 +117,6 @@ static PROPERTIES: [Property; 8] = [
         "Context",
         "Context name to share threads with",
         Some(DEFAULT_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Int(
-        "context-threads",
-        "Context Threads",
-        "Number of threads for the context thread-pool if we create it",
-        (-1, u16::MAX as i32),
-        DEFAULT_CONTEXT_THREADS,
         PropertyMutability::ReadWrite,
     ),
     Property::UInt(
@@ -443,7 +432,6 @@ impl UdpSrc {
 
         let io_context = IOContext::new(
             &settings.context,
-            settings.context_threads as isize,
             settings.context_wait,
         ).map_err(|err| {
             gst_error_msg!(
@@ -534,7 +522,7 @@ impl UdpSrc {
             )
         })?;
 
-        let socket = net::UdpSocket::from_std(socket, io_context.handle()).map_err(|err| {
+        let socket = net::UdpSocket::from_std(socket, io_context.reactor_handle()).map_err(|err| {
             gst_error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to setup socket for tokio: {}", err]
@@ -717,10 +705,6 @@ impl ObjectImpl<Element> for UdpSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::Int("context-threads", ..) => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.context_threads = value.get().unwrap();
-            }
             Property::UInt("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
@@ -756,10 +740,6 @@ impl ObjectImpl<Element> for UdpSrc {
             Property::String("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
-            }
-            Property::Int("context-threads", ..) => {
-                let mut settings = self.settings.lock().unwrap();
-                Ok(settings.context_threads.to_value())
             }
             Property::UInt("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();

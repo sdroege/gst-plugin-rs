@@ -24,7 +24,7 @@ use gobject_subclass::object::*;
 use gst_plugin::element::*;
 
 use std::sync::Mutex;
-use std::{u16, u32};
+use std::u32;
 
 use futures::future;
 use futures::sync::{mpsc, oneshot};
@@ -37,7 +37,6 @@ use rand;
 use iocontext::*;
 
 const DEFAULT_CONTEXT: &'static str = "";
-const DEFAULT_CONTEXT_THREADS: i32 = 0;
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_MAX_BUFFERS: u32 = 10;
@@ -46,7 +45,6 @@ const DEFAULT_DO_TIMESTAMP: bool = false;
 #[derive(Debug, Clone)]
 struct Settings {
     context: String,
-    context_threads: i32,
     context_wait: u32,
     caps: Option<gst::Caps>,
     max_buffers: u32,
@@ -57,7 +55,6 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             context: DEFAULT_CONTEXT.into(),
-            context_threads: DEFAULT_CONTEXT_THREADS,
             context_wait: DEFAULT_CONTEXT_WAIT,
             caps: DEFAULT_CAPS,
             max_buffers: DEFAULT_MAX_BUFFERS,
@@ -66,20 +63,12 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [Property; 6] = [
+static PROPERTIES: [Property; 5] = [
     Property::String(
         "context",
         "Context",
         "Context name to share threads with",
         Some(DEFAULT_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Int(
-        "context-threads",
-        "Context Threads",
-        "Number of threads for the context thread-pool if we create it",
-        (-1, u16::MAX as i32),
-        DEFAULT_CONTEXT_THREADS,
         PropertyMutability::ReadWrite,
     ),
     Property::UInt(
@@ -472,7 +461,6 @@ impl AppSrc {
 
         let io_context = IOContext::new(
             &settings.context,
-            settings.context_threads as isize,
             settings.context_wait,
         ).map_err(|err| {
             gst_error_msg!(
@@ -565,10 +553,6 @@ impl ObjectImpl<Element> for AppSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::Int("context-threads", ..) => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.context_threads = value.get().unwrap();
-            }
             Property::UInt("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
@@ -596,10 +580,6 @@ impl ObjectImpl<Element> for AppSrc {
             Property::String("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
-            }
-            Property::Int("context-threads", ..) => {
-                let mut settings = self.settings.lock().unwrap();
-                Ok(settings.context_threads.to_value())
             }
             Property::UInt("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();

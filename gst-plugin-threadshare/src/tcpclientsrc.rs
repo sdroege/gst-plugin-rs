@@ -46,7 +46,6 @@ const DEFAULT_PORT: u32 = 5000;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_CHUNK_SIZE: u32 = 4096;
 const DEFAULT_CONTEXT: &'static str = "";
-const DEFAULT_CONTEXT_THREADS: i32 = 0;
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 #[derive(Debug, Clone)]
@@ -56,7 +55,6 @@ struct Settings {
     caps: Option<gst::Caps>,
     chunk_size: u32,
     context: String,
-    context_threads: i32,
     context_wait: u32,
 }
 
@@ -68,13 +66,12 @@ impl Default for Settings {
             caps: DEFAULT_CAPS,
             chunk_size: DEFAULT_CHUNK_SIZE,
             context: DEFAULT_CONTEXT.into(),
-            context_threads: DEFAULT_CONTEXT_THREADS,
             context_wait: DEFAULT_CONTEXT_WAIT,
         }
     }
 }
 
-static PROPERTIES: [Property; 7] = [
+static PROPERTIES: [Property; 6] = [
     Property::String(
         "address",
         "Address",
@@ -110,14 +107,6 @@ static PROPERTIES: [Property; 7] = [
         "Context",
         "Context name to share threads with",
         Some(DEFAULT_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Int(
-        "context-threads",
-        "Context Threads",
-        "Number of threads for the context thread-pool if we create it",
-        (-1, u16::MAX as i32),
-        DEFAULT_CONTEXT_THREADS,
         PropertyMutability::ReadWrite,
     ),
     Property::UInt(
@@ -456,7 +445,6 @@ impl TcpClientSrc {
 
         let io_context = IOContext::new(
             &settings.context,
-            settings.context_threads as isize,
             settings.context_wait,
         ).map_err(|err| {
             gst_error_msg!(
@@ -646,10 +634,6 @@ impl ObjectImpl<Element> for TcpClientSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::Int("context-threads", ..) => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.context_threads = value.get().unwrap();
-            }
             Property::UInt("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
@@ -681,10 +665,6 @@ impl ObjectImpl<Element> for TcpClientSrc {
             Property::String("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
-            }
-            Property::Int("context-threads", ..) => {
-                let mut settings = self.settings.lock().unwrap();
-                Ok(settings.context_threads.to_value())
             }
             Property::UInt("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
