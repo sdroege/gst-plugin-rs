@@ -23,12 +23,13 @@ use gst::prelude::*;
 use gobject_subclass::object::*;
 use gst_plugin::element::*;
 
+use std::io;
 use std::sync::Mutex;
 use std::u16;
 
 use futures;
-use futures::Future;
 use futures::future;
+use futures::{Future, Poll};
 use tokio::net;
 
 use either::Either;
@@ -139,10 +140,28 @@ static PROPERTIES: [Property; 8] = [
     ),
 ];
 
+pub struct UdpReader {
+    socket: net::UdpSocket,
+}
+
+impl UdpReader {
+    pub fn new(socket: net::UdpSocket) -> Self {
+        Self { socket: socket }
+    }
+}
+
+impl SocketRead for UdpReader {
+    const DO_TIMESTAMP: bool = true;
+
+    fn poll_read(&mut self, buf: &mut [u8]) -> Poll<usize, io::Error> {
+        self.socket.poll_recv(buf)
+    }
+}
+
 struct State {
     io_context: Option<IOContext>,
     pending_future_id: Option<PendingFutureId>,
-    socket: Option<Socket>,
+    socket: Option<Socket<UdpReader>>,
     need_initial_events: bool,
     configured_caps: Option<gst::Caps>,
     pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
@@ -556,7 +575,7 @@ impl UdpSrc {
             )
         })?;
 
-        let socket = Socket::new(&element.clone().upcast(), socket, buffer_pool);
+        let socket = Socket::new(element.upcast_ref(), UdpReader::new(socket), buffer_pool);
 
         let element_clone = element.clone();
         let element_clone2 = element.clone();
@@ -646,7 +665,7 @@ impl UdpSrc {
         let state = self.state.lock().unwrap();
 
         if let Some(ref socket) = state.socket {
-            socket.unpause(element.get_clock().unwrap(), element.get_base_time());
+            socket.unpause(element.get_clock(), Some(element.get_base_time()));
         }
 
         gst_debug!(self.cat, obj: element, "Started");

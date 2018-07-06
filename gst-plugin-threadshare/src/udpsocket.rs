@@ -1,4 +1,5 @@
 // Copyright (C) 2018 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2018 LEE Dongjun <redongjun@gmail.com>
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Library General Public
@@ -24,7 +25,6 @@ use gst::prelude::*;
 use futures::sync::oneshot;
 use futures::task;
 use futures::{Async, Future, IntoFuture, Poll, Stream};
-use tokio::net;
 
 use either::Either;
 
@@ -38,8 +38,7 @@ lazy_static! {
     );
 }
 
-#[derive(Clone)]
-pub struct Socket(Arc<Mutex<SocketInner>>);
+pub struct Socket<T: SocketRead + 'static>(Arc<Mutex<SocketInner<T>>>);
 
 #[derive(PartialEq, Eq, Debug)]
 enum SocketState {
@@ -49,10 +48,16 @@ enum SocketState {
     Shutdown,
 }
 
-struct SocketInner {
+pub trait SocketRead: Send {
+    const DO_TIMESTAMP: bool;
+
+    fn poll_read(&mut self, buf: &mut [u8]) -> Poll<usize, io::Error>;
+}
+
+struct SocketInner<T: SocketRead + 'static> {
     element: gst::Element,
     state: SocketState,
-    socket: net::UdpSocket,
+    reader: T,
     buffer_pool: gst::BufferPool,
     current_task: Option<task::Task>,
     shutdown_receiver: Option<oneshot::Receiver<()>>,
@@ -60,16 +65,12 @@ struct SocketInner {
     base_time: Option<gst::ClockTime>,
 }
 
-impl Socket {
-    pub fn new(
-        element: &gst::Element,
-        socket: net::UdpSocket,
-        buffer_pool: gst::BufferPool,
-    ) -> Self {
-        Socket(Arc::new(Mutex::new(SocketInner {
+impl<T: SocketRead + 'static> Socket<T> {
+    pub fn new(element: &gst::Element, reader: T, buffer_pool: gst::BufferPool) -> Self {
+        Socket(Arc::new(Mutex::new(SocketInner::<T> {
             element: element.clone(),
             state: SocketState::Unscheduled,
-            socket: socket,
+            reader: reader,
             buffer_pool: buffer_pool,
             current_task: None,
             shutdown_receiver: None,
@@ -89,7 +90,7 @@ impl Socket {
         //
         // Need to wait for a possible shutdown to finish first
         // spawn() on the reactor, change state to Scheduled
-        let stream = SocketStream(self.clone(), None);
+        let stream = SocketStream::<T>(self.clone(), None);
 
         let mut inner = self.0.lock().unwrap();
         gst_debug!(SOCKET_CAT, obj: &inner.element, "Scheduling socket");
@@ -132,7 +133,7 @@ impl Socket {
         Ok(())
     }
 
-    pub fn unpause(&self, clock: gst::Clock, base_time: gst::ClockTime) {
+    pub fn unpause(&self, clock: Option<gst::Clock>, base_time: Option<gst::ClockTime>) {
         // Paused->Playing
         //
         // Change state to Running and signal task
@@ -145,8 +146,8 @@ impl Socket {
 
         assert_eq!(inner.state, SocketState::Scheduled);
         inner.state = SocketState::Running;
-        inner.clock = Some(clock);
-        inner.base_time = Some(base_time);
+        inner.clock = clock;
+        inner.base_time = base_time;
 
         if let Some(task) = inner.current_task.take() {
             task.notify();
@@ -208,15 +209,24 @@ impl Socket {
     }
 }
 
-impl Drop for SocketInner {
+impl<T: SocketRead + 'static> Clone for Socket<T> {
+    fn clone(&self) -> Self {
+        Socket::<T>(self.0.clone())
+    }
+}
+
+impl<T: SocketRead + 'static> Drop for SocketInner<T> {
     fn drop(&mut self) {
         assert_eq!(self.state, SocketState::Unscheduled);
     }
 }
 
-struct SocketStream(Socket, Option<gst::MappedBuffer<gst::buffer::Writable>>);
+struct SocketStream<T: SocketRead + 'static>(
+    Socket<T>,
+    Option<gst::MappedBuffer<gst::buffer::Writable>>,
+);
 
-impl Stream for SocketStream {
+impl<T: SocketRead + 'static> Stream for SocketStream<T> {
     type Item = gst::Buffer;
     type Error = Either<gst::FlowError, io::Error>;
 
@@ -249,7 +259,7 @@ impl Stream for SocketStream {
                 },
             };
 
-            match inner.socket.poll_recv(buffer.as_mut_slice()) {
+            match inner.reader.poll_read(buffer.as_mut_slice()) {
                 Ok(Async::NotReady) => {
                     gst_debug!(SOCKET_CAT, obj: &inner.element, "No data available");
                     inner.current_task = Some(task::current());
@@ -260,9 +270,15 @@ impl Stream for SocketStream {
                     return Err(Either::Right(err));
                 }
                 Ok(Async::Ready(len)) => {
-                    let time = inner.clock.as_ref().unwrap().get_time();
-                    let dts = time - inner.base_time.unwrap();
-                    gst_debug!(SOCKET_CAT, obj: &inner.element, "Read {} bytes at {} (clock {})", len, dts, time);
+                    let dts = if T::DO_TIMESTAMP {
+                        let time = inner.clock.as_ref().unwrap().get_time();
+                        let running_time = time - inner.base_time.unwrap();
+                        gst_debug!(SOCKET_CAT, obj: &inner.element, "Read {} bytes at {} (clock {})", len, running_time, time);
+                        running_time
+                    } else {
+                        gst_debug!(SOCKET_CAT, obj: &inner.element, "Read {} bytes", len);
+                        gst::CLOCK_TIME_NONE
+                    };
                     (len, dts)
                 }
             }
