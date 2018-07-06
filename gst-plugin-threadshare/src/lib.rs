@@ -47,6 +47,7 @@ extern crate net2;
 mod iocontext;
 
 mod socket;
+mod tcpclientsrc;
 mod udpsrc;
 
 mod appsrc;
@@ -56,6 +57,7 @@ mod queue;
 
 fn plugin_init(plugin: &gst::Plugin) -> bool {
     udpsrc::register(plugin);
+    tcpclientsrc::register(plugin);
     queue::register(plugin);
     proxy::register(plugin);
     appsrc::register(plugin);

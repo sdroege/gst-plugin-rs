@@ -41,3 +41,7 @@ path = "examples/udpsrc_benchmark.rs"
 [[example]]
 name = "udpsrc-benchmark-sender"
 path = "examples/udpsrc_benchmark_sender.rs"
+
+[[example]]
+name = "tcpclientsrc-benchmark-sender"
+path = "examples/tcpclientsrc_benchmark_sender.rs"
