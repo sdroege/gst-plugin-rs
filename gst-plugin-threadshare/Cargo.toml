@@ -35,8 +35,8 @@ debug = true
 panic = 'unwind'
 
 [[example]]
-name = "udpsrc-benchmark"
-path = "examples/udpsrc_benchmark.rs"
+name = "benchmark"
+path = "examples/benchmark.rs"
 
 [[example]]
 name = "udpsrc-benchmark-sender"
