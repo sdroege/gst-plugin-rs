@@ -39,7 +39,7 @@ use rand;
 use net2;
 
 use iocontext::*;
-use udpsocket::*;
+use socket::*;
 
 const DEFAULT_ADDRESS: Option<&'static str> = Some("127.0.0.1");
 const DEFAULT_PORT: u32 = 5000;
