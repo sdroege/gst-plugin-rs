@@ -444,7 +444,7 @@ impl ToggleRecord {
 
                 drop(rec_state);
                 drop(state);
-                self.notify(&element.clone().upcast(), "recording");
+                element.notify("recording");
 
                 HandleResult::Drop
             }
@@ -516,7 +516,7 @@ impl ToggleRecord {
 
                 drop(rec_state);
                 drop(state);
-                self.notify(&element.clone().upcast(), "recording");
+                element.notify("recording");
 
                 HandleResult::Pass
             }
@@ -1289,7 +1289,7 @@ impl ElementImpl<Element> for ToggleRecord {
                 let mut rec_state = self.state.lock().unwrap();
                 *rec_state = State::default();
                 drop(rec_state);
-                self.notify(&element.clone().upcast(), "recording");
+                element.notify("recording");
             }
             _ => (),
         }
