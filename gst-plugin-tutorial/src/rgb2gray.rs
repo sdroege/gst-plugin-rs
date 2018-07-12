@@ -206,7 +206,7 @@ impl ObjectImpl<BaseTransform> for Rgb2Gray {
     // at any time from any thread.
     fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
-        let element = obj.clone().downcast::<BaseTransform>().unwrap();
+        let element = obj.downcast_ref::<BaseTransform>().unwrap();
 
         match *prop {
             Property::Boolean("invert", ..) => {
@@ -214,7 +214,7 @@ impl ObjectImpl<BaseTransform> for Rgb2Gray {
                 let invert = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: &element,
+                    obj: element,
                     "Changing invert from {} to {}",
                     settings.invert,
                     invert
@@ -226,7 +226,7 @@ impl ObjectImpl<BaseTransform> for Rgb2Gray {
                 let shift = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: &element,
+                    obj: element,
                     "Changing shift from {} to {}",
                     settings.shift,
                     shift

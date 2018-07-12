@@ -251,7 +251,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
     // at any time from any thread.
     fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
-        let element = obj.clone().downcast::<BaseSrc>().unwrap();
+        let element = obj.downcast_ref::<BaseSrc>().unwrap();
 
         match *prop {
             Property::UInt("samples-per-buffer", ..) => {
@@ -259,7 +259,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
                 let samples_per_buffer = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: &element,
+                    obj: element,
                     "Changing samples-per-buffer from {} to {}",
                     settings.samples_per_buffer,
                     samples_per_buffer
@@ -268,14 +268,14 @@ impl ObjectImpl<BaseSrc> for SineSrc {
                 drop(settings);
 
                 let _ =
-                    element.post_message(&gst::Message::new_latency().src(Some(&element)).build());
+                    element.post_message(&gst::Message::new_latency().src(Some(element)).build());
             }
             Property::UInt("freq", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let freq = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: &element,
+                    obj: element,
                     "Changing freq from {} to {}",
                     settings.freq,
                     freq
@@ -287,7 +287,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
                 let volume = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: &element,
+                    obj: element,
                     "Changing volume from {} to {}",
                     settings.volume,
                     volume
@@ -299,7 +299,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
                 let mute = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: &element,
+                    obj: element,
                     "Changing mute from {} to {}",
                     settings.mute,
                     mute
@@ -311,7 +311,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
                 let is_live = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: &element,
+                    obj: element,
                     "Changing is-live from {} to {}",
                     settings.is_live,
                     is_live

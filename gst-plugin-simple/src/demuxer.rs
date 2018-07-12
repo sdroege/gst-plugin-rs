@@ -340,9 +340,8 @@ impl Demuxer {
     ) -> bool {
         let element = parent
             .as_ref()
-            .cloned()
             .unwrap()
-            .downcast::<Element>()
+            .downcast_ref::<Element>()
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
@@ -352,7 +351,7 @@ impl Demuxer {
                 .peer_query_duration::<gst::format::Bytes>()
                 .and_then(|v| v.0);
 
-            if !demuxer.start(&element, upstream_size, mode == gst::PadMode::Pull) {
+            if !demuxer.start(element, upstream_size, mode == gst::PadMode::Pull) {
                 return false;
             }
 
@@ -367,7 +366,7 @@ impl Demuxer {
                 let _ = demuxer.sinkpad.stop_task();
             }
 
-            demuxer.stop(&element)
+            demuxer.stop(element)
         }
     }
 
@@ -378,23 +377,22 @@ impl Demuxer {
     ) -> gst::FlowReturn {
         let element = parent
             .as_ref()
-            .cloned()
             .unwrap()
-            .downcast::<Element>()
+            .downcast_ref::<Element>()
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
         let mut res = {
             let demuxer_impl = &mut demuxer.imp.lock().unwrap();
 
-            gst_trace!(demuxer.cat, obj: &element, "Handling buffer {:?}", buffer);
+            gst_trace!(demuxer.cat, obj: element, "Handling buffer {:?}", buffer);
 
-            match demuxer_impl.handle_buffer(&element, Some(buffer)) {
+            match demuxer_impl.handle_buffer(element, Some(buffer)) {
                 Ok(res) => res,
                 Err(flow_error) => {
                     gst_error!(
                         demuxer.cat,
-                        obj: &element,
+                        obj: element,
                         "Failed handling buffer: {:?}",
                         flow_error
                     );
@@ -411,33 +409,33 @@ impl Demuxer {
 
         // Loop until AllEos, NeedMoreData or error when pushing downstream
         loop {
-            gst_trace!(demuxer.cat, obj: &element, "Handled {:?}", res);
+            gst_trace!(demuxer.cat, obj: element, "Handled {:?}", res);
 
             match res {
                 HandleBufferResult::NeedMoreData => {
                     return gst::FlowReturn::Ok;
                 }
                 HandleBufferResult::StreamAdded(stream) => {
-                    demuxer.add_stream(&element, stream.index, stream.caps, &stream.stream_id);
+                    demuxer.add_stream(element, stream.index, stream.caps, &stream.stream_id);
                 }
                 HandleBufferResult::HaveAllStreams => {
-                    demuxer.added_all_streams(&element);
+                    demuxer.added_all_streams(element);
                 }
                 HandleBufferResult::StreamChanged(stream) => {
-                    demuxer.stream_format_changed(&element, stream.index, stream.caps);
+                    demuxer.stream_format_changed(element, stream.index, stream.caps);
                 }
                 HandleBufferResult::StreamsChanged(streams) => for stream in streams {
-                    demuxer.stream_format_changed(&element, stream.index, stream.caps);
+                    demuxer.stream_format_changed(element, stream.index, stream.caps);
                 },
                 HandleBufferResult::BufferForStream(index, buffer) => {
-                    let flow_ret = demuxer.stream_push_buffer(&element, index, buffer);
+                    let flow_ret = demuxer.stream_push_buffer(element, index, buffer);
 
                     if flow_ret != gst::FlowReturn::Ok {
                         return flow_ret;
                     }
                 }
                 HandleBufferResult::Eos(index) => {
-                    demuxer.stream_eos(&element, index);
+                    demuxer.stream_eos(element, index);
                     return gst::FlowReturn::Eos;
                 }
                 HandleBufferResult::Again => {
@@ -445,16 +443,16 @@ impl Demuxer {
                 }
             };
 
-            gst_trace!(demuxer.cat, obj: &element, "Calling again");
+            gst_trace!(demuxer.cat, obj: element, "Calling again");
 
             res = {
                 let demuxer_impl = &mut demuxer.imp.lock().unwrap();
-                match demuxer_impl.handle_buffer(&element, None) {
+                match demuxer_impl.handle_buffer(element, None) {
                     Ok(res) => res,
                     Err(flow_error) => {
                         gst_error!(
                             demuxer.cat,
-                            obj: &element,
+                            obj: element,
                             "Failed calling again: {:?}",
                             flow_error
                         );
@@ -476,9 +474,8 @@ impl Demuxer {
 
         let element = parent
             .as_ref()
-            .cloned()
             .unwrap()
-            .downcast::<Element>()
+            .downcast_ref::<Element>()
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
@@ -486,13 +483,13 @@ impl Demuxer {
             EventView::Eos(..) => {
                 let demuxer_impl = &mut demuxer.imp.lock().unwrap();
 
-                gst_debug!(demuxer.cat, obj: &element, "End of stream");
-                match demuxer_impl.end_of_stream(&element) {
+                gst_debug!(demuxer.cat, obj: element, "End of stream");
+                match demuxer_impl.end_of_stream(element) {
                     Ok(_) => (),
                     Err(ref msg) => {
                         gst_error!(
                             demuxer.cat,
-                            obj: &element,
+                            obj: element,
                             "Failed end of stream: {:?}",
                             msg
                         );
@@ -511,9 +508,8 @@ impl Demuxer {
 
         let element = parent
             .as_ref()
-            .cloned()
             .unwrap()
-            .downcast::<Element>()
+            .downcast_ref::<Element>()
             .unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
@@ -526,7 +522,7 @@ impl Demuxer {
                     let position = demuxer_impl.get_position(&element);
                     gst_trace!(
                         demuxer.cat,
-                        obj: &element,
+                        obj: element,
                         "Returning position {:?}",
                         position
                     );
@@ -550,7 +546,7 @@ impl Demuxer {
                     let duration = demuxer_impl.get_duration(&element);
                     gst_trace!(
                         demuxer.cat,
-                        obj: &element,
+                        obj: element,
                         "Returning duration {:?}",
                         duration
                     );

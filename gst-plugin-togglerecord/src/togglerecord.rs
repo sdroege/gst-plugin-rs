@@ -1194,7 +1194,7 @@ impl ToggleRecord {
 impl ObjectImpl<Element> for ToggleRecord {
     fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
-        let element = obj.clone().downcast::<Element>().unwrap();
+        let element = obj.downcast_ref::<Element>().unwrap();
 
         match *prop {
             Property::Boolean("record", ..) => {
@@ -1202,7 +1202,7 @@ impl ObjectImpl<Element> for ToggleRecord {
                 let record = value.get().unwrap();
                 gst_debug!(
                     self.cat,
-                    obj: &element,
+                    obj: element,
                     "Setting record from {:?} to {:?}",
                     settings.record,
                     record
