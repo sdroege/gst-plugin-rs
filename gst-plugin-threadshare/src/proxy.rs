@@ -839,9 +839,8 @@ impl ProxySrc {
     ) -> T {
         let element = parent
             .as_ref()
-            .cloned()
             .unwrap()
-            .downcast::<Element>()
+            .downcast_ref::<Element>()
             .unwrap();
         let src = element.get_impl().downcast_ref::<ProxySrc>().unwrap();
         element.catch_panic(fallback, |element| f(src, element))
