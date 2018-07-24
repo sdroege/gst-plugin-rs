@@ -236,7 +236,8 @@ impl DataQueue {
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Clearing queue");
         for item in inner.queue.drain(..) {
             if let DataQueueItem::Event(event) = item {
-                if event.is_sticky() && event.get_type() != gst::EventType::Segment
+                if event.is_sticky()
+                    && event.get_type() != gst::EventType::Segment
                     && event.get_type() != gst::EventType::Eos
                 {
                     let _ = src_pad.store_sticky_event(&event);

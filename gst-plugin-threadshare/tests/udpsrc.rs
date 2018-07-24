@@ -68,9 +68,7 @@ fn test_push() {
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
     udpsrc.set_property("caps", &caps).unwrap();
-    udpsrc
-        .set_property("port", &(5000 as u32))
-        .unwrap();
+    udpsrc.set_property("port", &(5000 as u32)).unwrap();
 
     appsink.set_property("emit-signals", &true).unwrap();
 

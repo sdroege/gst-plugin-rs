@@ -430,10 +430,7 @@ impl UdpSrc {
 
         let mut state = self.state.lock().unwrap();
 
-        let io_context = IOContext::new(
-            &settings.context,
-            settings.context_wait,
-        ).map_err(|err| {
+        let io_context = IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
             gst_error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to create IO context: {}", err]
@@ -522,12 +519,13 @@ impl UdpSrc {
             )
         })?;
 
-        let socket = net::UdpSocket::from_std(socket, io_context.reactor_handle()).map_err(|err| {
-            gst_error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Failed to setup socket for tokio: {}", err]
-            )
-        })?;
+        let socket =
+            net::UdpSocket::from_std(socket, io_context.reactor_handle()).map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to setup socket for tokio: {}", err]
+                )
+            })?;
 
         if addr.is_multicast() {
             // TODO: Multicast interface configuration, going to be tricky

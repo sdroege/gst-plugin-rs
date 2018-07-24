@@ -565,12 +565,14 @@ impl Queue {
 
                 let (flags, min, max, align) = new_query.get_result();
                 q.set(flags, min, max, align);
-                q.add_scheduling_modes(&new_query
-                    .get_scheduling_modes()
-                    .iter()
-                    .cloned()
-                    .filter(|m| m != &gst::PadMode::Pull)
-                    .collect::<Vec<_>>());
+                q.add_scheduling_modes(
+                    &new_query
+                        .get_scheduling_modes()
+                        .iter()
+                        .cloned()
+                        .filter(|m| m != &gst::PadMode::Pull)
+                        .collect::<Vec<_>>(),
+                );
                 gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());
                 return true;
             }
@@ -691,10 +693,7 @@ impl Queue {
 
         let mut state = self.state.lock().unwrap();
 
-        let io_context = IOContext::new(
-            &settings.context,
-            settings.context_wait,
-        ).map_err(|err| {
+        let io_context = IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
             gst_error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to create IO context: {}", err]

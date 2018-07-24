@@ -29,9 +29,9 @@ extern crate gstreamer as gst;
 
 extern crate futures;
 extern crate tokio;
+extern crate tokio_current_thread;
 extern crate tokio_executor;
 extern crate tokio_reactor;
-extern crate tokio_current_thread;
 extern crate tokio_timer;
 
 extern crate either;

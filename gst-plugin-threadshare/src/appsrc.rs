@@ -459,10 +459,7 @@ impl AppSrc {
 
         let mut state = self.state.lock().unwrap();
 
-        let io_context = IOContext::new(
-            &settings.context,
-            settings.context_wait,
-        ).map_err(|err| {
+        let io_context = IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
             gst_error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to create IO context: {}", err]

@@ -27,8 +27,8 @@ use futures::stream::futures_unordered::FuturesUnordered;
 use futures::sync::oneshot;
 use futures::{Future, Stream};
 use tokio::reactor;
-use tokio_timer::timer;
 use tokio_current_thread;
+use tokio_timer::timer;
 
 use gst;
 
@@ -84,7 +84,12 @@ impl IOContextRunner {
         (runtime_handle, shutdown)
     }
 
-    fn run(&mut self, wait: u32, reactor: reactor::Reactor, sender: mpsc::Sender<tokio_current_thread::Handle>) {
+    fn run(
+        &mut self,
+        wait: u32,
+        reactor: reactor::Reactor,
+        sender: mpsc::Sender<tokio_current_thread::Handle>,
+    ) {
         use std::time;
         let wait = time::Duration::from_millis(wait as u64);
 

@@ -72,12 +72,8 @@ fn test_push() {
     proxysrc.link(&appsink).unwrap();
 
     fakesrc.set_property("num-buffers", &3i32).unwrap();
-    proxysink
-        .set_property("proxy-context", &"test")
-        .unwrap();
-    proxysrc
-        .set_property("proxy-context", &"test")
-        .unwrap();
+    proxysink.set_property("proxy-context", &"test").unwrap();
+    proxysrc.set_property("proxy-context", &"test").unwrap();
 
     appsink.set_property("emit-signals", &true).unwrap();
 
