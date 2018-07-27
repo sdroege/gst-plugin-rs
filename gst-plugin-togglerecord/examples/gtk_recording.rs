@@ -26,10 +26,8 @@ use gst::prelude::*;
 extern crate gtk;
 use gtk::prelude::*;
 
-extern crate send_cell;
-use send_cell::SendCell;
-
 use std::env;
+use std::cell::RefCell;
 
 fn create_pipeline() -> (
     gst::Pipeline,
@@ -219,11 +217,18 @@ fn create_ui(app: &gtk::Application) {
 
     app.add_window(&window);
 
-    let video_sink_clone = video_sink.clone();
-    let togglerecord_clone = togglerecord.clone();
-    gtk::timeout_add(100, move || {
-        let video_sink = &video_sink_clone;
-        let togglerecord = &togglerecord_clone;
+    let video_sink_weak = video_sink.downgrade();
+    let togglerecord_weak = togglerecord.downgrade();
+    let timeout_id = gtk::timeout_add(100, move || {
+        let video_sink = match video_sink_weak.upgrade() {
+            Some(video_sink) => video_sink,
+            None => return glib::Continue(true),
+        };
+
+        let togglerecord = match togglerecord_weak.upgrade() {
+            Some(togglerecord) => togglerecord,
+            None => return glib::Continue(true),
+        };
 
         let position = video_sink
             .query_position::<gst::ClockTime>()
@@ -240,9 +245,12 @@ fn create_ui(app: &gtk::Application) {
         glib::Continue(true)
     });
 
-    let togglerecord_clone = togglerecord.clone();
+    let togglerecord_weak = togglerecord.downgrade();
     record_button.connect_clicked(move |button| {
-        let togglerecord = &togglerecord_clone;
+        let togglerecord = match togglerecord_weak.upgrade() {
+            Some(togglerecord) => togglerecord,
+            None => return,
+        };
 
         let recording = !togglerecord
             .get_property("record")
@@ -254,9 +262,13 @@ fn create_ui(app: &gtk::Application) {
         button.set_label(if recording { "Stop" } else { "Record" });
     });
 
-    let record_button_clone = record_button.clone();
+    let record_button_weak = record_button.downgrade();
     finish_button.connect_clicked(move |button| {
-        let record_button = &record_button_clone;
+        let record_button = match record_button_weak.upgrade() {
+            Some(record_button) => record_button,
+            None => return,
+        };
+
         record_button.set_sensitive(false);
         button.set_sensitive(false);
 
@@ -264,19 +276,27 @@ fn create_ui(app: &gtk::Application) {
         audio_pad.send_event(gst::Event::new_eos().build());
     });
 
-    let app_clone = app.clone();
+    let app_weak = app.downgrade();
     window.connect_delete_event(move |_, _| {
-        let app = &app_clone;
+        let app = match app_weak.upgrade() {
+            Some(app) => app,
+            None => return Inhibit(false),
+        };
+
         app.quit();
         Inhibit(false)
     });
 
     let bus = pipeline.get_bus().unwrap();
-    let app_clone = SendCell::new(app.clone());
+    let app_weak = glib::SendWeakRef::from(app.downgrade());
     bus.add_watch(move |_, msg| {
         use gst::MessageView;
 
-        let app = app_clone.borrow();
+        let app = match app_weak.upgrade() {
+            Some(app) => app,
+            None => return glib::Continue(false),
+        };
+
         match msg.view() {
             MessageView::Eos(..) => app.quit(),
             MessageView::Error(err) => {
@@ -294,15 +314,22 @@ fn create_ui(app: &gtk::Application) {
         glib::Continue(true)
     });
 
-    let pipeline_clone = pipeline.clone();
-    app.connect_shutdown(move |_| {
-        let pipeline = &pipeline_clone;
-        let ret = pipeline.set_state(gst::State::Null);
-        assert_ne!(ret, gst::StateChangeReturn::Failure);
-    });
-
     let ret = pipeline.set_state(gst::State::Playing);
     assert_ne!(ret, gst::StateChangeReturn::Failure);
+
+    // Pipeline reference is owned by the closure below, so will be
+    // destroyed once the app is destroyed
+    let timeout_id = RefCell::new(Some(timeout_id));
+    app.connect_shutdown(move |_| {
+        let ret = pipeline.set_state(gst::State::Null);
+        assert_ne!(ret, gst::StateChangeReturn::Failure);
+
+        bus.remove_watch();
+
+        if let Some(timeout_id) = timeout_id.borrow_mut().take() {
+            glib::source_remove(timeout_id);
+        }
+    });
 }
 
 fn main() {

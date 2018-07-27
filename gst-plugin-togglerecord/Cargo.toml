@@ -12,7 +12,6 @@ gobject-subclass = { git = "https://github.com/sdroege/gobject-subclass" }
 gst-plugin = { path = "../gst-plugin" }
 gtk = { git = "https://github.com/gtk-rs/gtk", features = ["v3_6"], optional = true }
 gio = { git = "https://github.com/gtk-rs/gio", optional = true }
-send-cell = { version = "0.1", optional = true }
 
 [dev-dependencies]
 either = "1.0"
@@ -25,5 +24,5 @@ path = "src/lib.rs"
 [[example]]
 name = "gtk-recording"
 path = "examples/gtk_recording.rs"
-required-features = ["gtk", "gio", "send-cell"]
+required-features = ["gtk", "gio"]
 
