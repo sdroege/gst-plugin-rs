@@ -1,8 +1,8 @@
 use std::ptr;
 use std::sync::atomic::AtomicBool;
 
-use gobject_subclass::object::*;
 use glib::wrapper::Wrapper;
+use gobject_subclass::object::*;
 
 #[repr(C)]
 pub struct ElementInstanceStruct<T: ObjectType> {

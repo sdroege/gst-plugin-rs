@@ -328,8 +328,7 @@ unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType> Ba
     for T
 where
     T::InstanceStructType: PanicPoison,
-{
-}
+{}
 pub type BaseTransformClass = ClassStruct<BaseTransform>;
 
 // FIXME: Boilerplate

@@ -26,8 +26,8 @@ use gst::prelude::*;
 extern crate gtk;
 use gtk::prelude::*;
 
-use std::env;
 use std::cell::RefCell;
+use std::env;
 
 fn create_pipeline() -> (
     gst::Pipeline,

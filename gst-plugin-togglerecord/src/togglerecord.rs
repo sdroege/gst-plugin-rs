@@ -611,7 +611,8 @@ impl ToggleRecord {
             // stop position that we're EOS now
             // If we're before the start position (we were starting before EOS),
             // drop the buffer
-            if rec_state.last_recording_stop.is_none() || rec_state.last_recording_start.is_none()
+            if rec_state.last_recording_stop.is_none()
+                || rec_state.last_recording_start.is_none()
                 || current_running_time_end > rec_state.last_recording_stop
             {
                 gst_debug!(
@@ -982,7 +983,9 @@ impl ToggleRecord {
         // If a serialized event and coming after Segment and a new Segment is pending,
         // queue up and send at a later time (buffer/gap) after we sent the Segment
         let type_ = event.get_type();
-        if forward && type_ != gst::EventType::Eos && type_.is_serialized()
+        if forward
+            && type_ != gst::EventType::Eos
+            && type_.is_serialized()
             && type_.partial_cmp(&gst::EventType::Segment) == Some(cmp::Ordering::Greater)
         {
             let mut state = stream.state.lock().unwrap();
@@ -1111,12 +1114,14 @@ impl ToggleRecord {
 
                 let (flags, min, max, align) = new_query.get_result();
                 q.set(flags, min, max, align);
-                q.add_scheduling_modes(&new_query
-                    .get_scheduling_modes()
-                    .iter()
-                    .cloned()
-                    .filter(|m| m != &gst::PadMode::Pull)
-                    .collect::<Vec<_>>());
+                q.add_scheduling_modes(
+                    &new_query
+                        .get_scheduling_modes()
+                        .iter()
+                        .cloned()
+                        .filter(|m| m != &gst::PadMode::Pull)
+                        .collect::<Vec<_>>(),
+                );
                 gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());
                 return true;
             }
@@ -1240,7 +1245,8 @@ impl ElementImpl<Element> for ToggleRecord {
 
         match transition {
             gst::StateChange::ReadyToPaused => {
-                for s in self.other_streams
+                for s in self
+                    .other_streams
                     .lock()
                     .unwrap()
                     .0
@@ -1274,7 +1280,8 @@ impl ElementImpl<Element> for ToggleRecord {
 
         match transition {
             gst::StateChange::PausedToReady => {
-                for s in self.other_streams
+                for s in self
+                    .other_streams
                     .lock()
                     .unwrap()
                     .0

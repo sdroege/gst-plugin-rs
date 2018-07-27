@@ -83,7 +83,9 @@ struct AudioFormat {
 // Ignores bitrate
 impl PartialEq for AudioFormat {
     fn eq(&self, other: &Self) -> bool {
-        self.format.eq(&other.format) && self.rate.eq(&other.rate) && self.width.eq(&other.width)
+        self.format.eq(&other.format)
+            && self.rate.eq(&other.rate)
+            && self.width.eq(&other.width)
             && self.channels.eq(&other.channels)
             && self.aac_sequence_header.eq(&other.aac_sequence_header)
     }
@@ -372,7 +374,8 @@ impl VideoFormat {
 // Ignores bitrate
 impl PartialEq for VideoFormat {
     fn eq(&self, other: &Self) -> bool {
-        self.format.eq(&other.format) && self.width.eq(&other.width)
+        self.format.eq(&other.format)
+            && self.width.eq(&other.width)
             && self.height.eq(&other.height)
             && self.pixel_aspect_ratio.eq(&other.pixel_aspect_ratio)
             && self.framerate.eq(&other.framerate)
@@ -515,7 +518,8 @@ impl FlvDemux {
 
         self.adapter.flush(15).unwrap();
 
-        let buffer = self.adapter
+        let buffer = self
+            .adapter
             .get_buffer(tag_header.data_size as usize)
             .unwrap();
         let map = buffer.map_readable().unwrap();
@@ -669,7 +673,8 @@ impl FlvDemux {
                     match header.packet_type {
                         flavors::AACPacketType::SequenceHeader => {
                             self.adapter.flush(15 + 1 + 1).unwrap();
-                            let buffer = self.adapter
+                            let buffer = self
+                                .adapter
                                 .get_buffer((tag_header.data_size - 1 - 1) as usize)
                                 .unwrap();
                             gst_debug!(
@@ -724,7 +729,8 @@ impl FlvDemux {
             self.adapter.flush(offset as usize).unwrap();
         }
 
-        let mut buffer = self.adapter
+        let mut buffer = self
+            .adapter
             .get_buffer((tag_header.data_size - 1 - offset) as usize)
             .unwrap();
 
@@ -845,7 +851,8 @@ impl FlvDemux {
                     match header.packet_type {
                         flavors::AVCPacketType::SequenceHeader => {
                             self.adapter.flush(15 + 1 + 4).unwrap();
-                            let buffer = self.adapter
+                            let buffer = self
+                                .adapter
                                 .get_buffer((tag_header.data_size - 1 - 4) as usize)
                                 .unwrap();
                             gst_debug!(
@@ -910,7 +917,8 @@ impl FlvDemux {
             self.adapter.flush(offset as usize).unwrap();
         }
 
-        let mut buffer = self.adapter
+        let mut buffer = self
+            .adapter
             .get_buffer((tag_header.data_size - 1 - offset) as usize)
             .unwrap();
 

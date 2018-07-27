@@ -6,8 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use reqwest::header::{AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, ContentRangeSpec,
-                      Range, RangeUnit};
+use reqwest::header::{
+    AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, ContentRangeSpec, Range, RangeUnit,
+};
 use reqwest::{Client, Response};
 use std::io::Read;
 use std::u64;

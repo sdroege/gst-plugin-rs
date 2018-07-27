@@ -338,11 +338,7 @@ impl Demuxer {
         mode: gst::PadMode,
         active: bool,
     ) -> bool {
-        let element = parent
-            .as_ref()
-            .unwrap()
-            .downcast_ref::<Element>()
-            .unwrap();
+        let element = parent.as_ref().unwrap().downcast_ref::<Element>().unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
         if active {
@@ -375,11 +371,7 @@ impl Demuxer {
         parent: &Option<gst::Object>,
         buffer: gst::Buffer,
     ) -> gst::FlowReturn {
-        let element = parent
-            .as_ref()
-            .unwrap()
-            .downcast_ref::<Element>()
-            .unwrap();
+        let element = parent.as_ref().unwrap().downcast_ref::<Element>().unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
         let mut res = {
@@ -472,11 +464,7 @@ impl Demuxer {
     fn sink_event(pad: &gst::Pad, parent: &Option<gst::Object>, event: gst::Event) -> bool {
         use gst::EventView;
 
-        let element = parent
-            .as_ref()
-            .unwrap()
-            .downcast_ref::<Element>()
-            .unwrap();
+        let element = parent.as_ref().unwrap().downcast_ref::<Element>().unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
         match event.view() {
@@ -487,12 +475,7 @@ impl Demuxer {
                 match demuxer_impl.end_of_stream(element) {
                     Ok(_) => (),
                     Err(ref msg) => {
-                        gst_error!(
-                            demuxer.cat,
-                            obj: element,
-                            "Failed end of stream: {:?}",
-                            msg
-                        );
+                        gst_error!(demuxer.cat, obj: element, "Failed end of stream: {:?}", msg);
                         element.post_error_message(msg);
                     }
                 }
@@ -506,11 +489,7 @@ impl Demuxer {
     fn src_query(pad: &gst::Pad, parent: &Option<gst::Object>, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
-        let element = parent
-            .as_ref()
-            .unwrap()
-            .downcast_ref::<Element>()
-            .unwrap();
+        let element = parent.as_ref().unwrap().downcast_ref::<Element>().unwrap();
         let demuxer = element.get_impl().downcast_ref::<Demuxer>().unwrap();
 
         match query.view_mut() {

@@ -72,11 +72,7 @@ pub trait ReadBytesExtShort: io::Read {
     }
 }
 
-impl<T> ReadBytesExtShort for T
-where
-    T: ReadBytesExt,
-{
-}
+impl<T> ReadBytesExtShort for T where T: ReadBytesExt {}
 
 pub trait WriteBytesExtShort: WriteBytesExt {
     fn write_u16le(&mut self, n: u16) -> io::Result<()> {
@@ -141,8 +137,4 @@ pub trait WriteBytesExtShort: WriteBytesExt {
     }
 }
 
-impl<T> WriteBytesExtShort for T
-where
-    T: WriteBytesExt,
-{
-}
+impl<T> WriteBytesExtShort for T where T: WriteBytesExt {}

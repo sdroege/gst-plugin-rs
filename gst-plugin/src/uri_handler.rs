@@ -121,7 +121,8 @@ pub fn register_uri_handler<T: ObjectType, I: URIHandlerImplStatic<T>>(
     imp: &I,
 ) {
     unsafe {
-        let mut protocols: Vec<_> = imp.get_protocols()
+        let mut protocols: Vec<_> = imp
+            .get_protocols()
             .iter()
             .map(|s| s.to_glib_full())
             .collect();
