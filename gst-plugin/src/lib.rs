@@ -47,9 +47,11 @@ pub mod base_src;
 pub mod base_sink;
 #[macro_use]
 pub mod base_transform;
-pub mod uri_handler;
 
 #[macro_use]
 pub mod pad;
 #[macro_use]
 pub mod ghost_pad;
+
+pub mod child_proxy;
+pub mod uri_handler;
