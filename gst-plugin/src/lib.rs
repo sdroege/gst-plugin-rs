@@ -51,3 +51,5 @@ pub mod uri_handler;
 
 #[macro_use]
 pub mod pad;
+#[macro_use]
+pub mod ghost_pad;
