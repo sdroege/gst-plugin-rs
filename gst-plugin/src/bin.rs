@@ -172,7 +172,7 @@ where
     let imp = bin.get_impl();
 
     panic_to_error!(&wrap, &bin.panicked(), false, {
-        imp.add_element(&wrap, &from_glib_none(element))
+        imp.add_element(&wrap, &from_glib_borrow(element))
     }).to_glib()
 }
 
@@ -190,7 +190,7 @@ where
     let imp = bin.get_impl();
 
     panic_to_error!(&wrap, &bin.panicked(), false, {
-        imp.remove_element(&wrap, &from_glib_none(element))
+        imp.remove_element(&wrap, &from_glib_borrow(element))
     }).to_glib()
 }
 

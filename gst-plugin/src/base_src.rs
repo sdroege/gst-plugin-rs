@@ -548,7 +548,7 @@ where
     let imp = element.get_impl();
 
     panic_to_error!(&wrap, &element.panicked(), false, {
-        imp.event(&wrap, &from_glib_none(event_ptr))
+        imp.event(&wrap, &from_glib_borrow(event_ptr))
     }).to_glib()
 }
 
