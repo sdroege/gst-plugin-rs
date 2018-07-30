@@ -48,3 +48,6 @@ pub mod base_sink;
 #[macro_use]
 pub mod base_transform;
 pub mod uri_handler;
+
+#[macro_use]
+pub mod pad;
