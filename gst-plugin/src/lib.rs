@@ -47,11 +47,17 @@ pub mod base_src;
 pub mod base_sink;
 #[macro_use]
 pub mod base_transform;
+#[cfg(any(feature = "v1_14", feature = "dox"))]
+#[macro_use]
+pub mod aggregator;
 
 #[macro_use]
 pub mod pad;
 #[macro_use]
 pub mod ghost_pad;
+#[cfg(any(feature = "v1_14", feature = "dox"))]
+#[macro_use]
+pub mod aggregator_pad;
 
 pub mod child_proxy;
 pub mod uri_handler;

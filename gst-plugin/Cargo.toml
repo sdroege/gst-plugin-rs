@@ -27,3 +27,9 @@ gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
 [lib]
 name = "gst_plugin"
 path = "src/lib.rs"
+
+[features]
+v1_10 = ["gstreamer/v1_10", "gstreamer-base/v1_10"]
+v1_12 = ["gstreamer/v1_12", "gstreamer-base/v1_12", "v1_10"]
+v1_14 = ["gstreamer/v1_14", "gstreamer-base/v1_14", "v1_12"]
+
