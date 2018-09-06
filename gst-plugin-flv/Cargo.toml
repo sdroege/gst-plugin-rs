@@ -10,7 +10,7 @@ url = "1.1"
 gst-plugin = { path="../gst-plugin" }
 gst-plugin-simple = { path="../gst-plugin-simple" }
 gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
-num-rational = { version = "0.1", default-features = false, features = [] }
+num-rational = { version = "0.2", default-features = false, features = [] }
 nom = "3.0"
 flavors = {git = "https://github.com/rust-av/flavors.git"}
 muldiv = "0.2"
