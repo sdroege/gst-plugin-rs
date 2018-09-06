@@ -9,7 +9,7 @@ glib-sys = { git = "https://github.com/gtk-rs/sys" }
 gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys" }
 glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
-gobject-subclass = { git = "https://github.com/sdroege/gobject-subclass" }
+gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
 gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
 tokio = { git = "https://github.com/tokio-rs/tokio" }
 tokio-reactor = { git = "https://github.com/tokio-rs/tokio" }
