@@ -21,12 +21,14 @@ extern crate num_traits;
 
 mod rgb2gray;
 mod sinesrc;
+mod mixer;
 
 // Plugin entry point that should register all elements provided by this plugin,
 // and everything else that this plugin might provide (e.g. typefinders or device providers).
 fn plugin_init(plugin: &gst::Plugin) -> bool {
     rgb2gray::register(plugin);
     sinesrc::register(plugin);
+    mixer::register(plugin);
     true
 }
 
