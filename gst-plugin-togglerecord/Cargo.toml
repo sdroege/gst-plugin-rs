@@ -5,13 +5,13 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1+"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
-gstreamer-video = { git = "https://github.com/sdroege/gstreamer-rs" }
-gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
-gst-plugin = { path = "../gst-plugin" }
-gtk = { git = "https://github.com/gtk-rs/gtk", features = ["v3_6"], optional = true }
-gio = { git = "https://github.com/gtk-rs/gio", optional = true }
+glib = "0.6"
+gstreamer = "0.12"
+gstreamer-video = "0.12"
+gobject-subclass = "0.2"
+gst-plugin = { version = "0.3", path = "../gst-plugin" }
+gtk = { version = "0.5", features = ["v3_6"], optional = true }
+gio = { version = "0.5", optional = true }
 
 [dev-dependencies]
 either = "1.0"

@@ -6,13 +6,13 @@ repository = "https://github.com/sdroege/gst-plugin-rs"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
-gst-plugin = { path="../gst-plugin" }
-glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
-gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
-gstreamer-video = { git = "https://github.com/sdroege/gstreamer-rs" }
-gstreamer-audio = { git = "https://github.com/sdroege/gstreamer-rs" }
+gobject-subclass = "0.2"
+gst-plugin = { version = "0.3", path="../gst-plugin" }
+glib = "0.6"
+gstreamer = "0.12"
+gstreamer-base = "0.12"
+gstreamer-video = "0.12"
+gstreamer-audio = "0.12"
 byte-slice-cast = "0.2"
 num-traits = "0.2"
 

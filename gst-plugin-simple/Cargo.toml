@@ -7,11 +7,11 @@ license = "MIT/Apache-2.0"
 
 [dependencies]
 url = "1.1"
-glib = { git = "https://github.com/gtk-rs/glib" }
-gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
-gst-plugin = { path="../gst-plugin" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
-gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
+glib = "0.6"
+gobject-subclass = "0.2"
+gst-plugin = { version = "0.3", path="../gst-plugin" }
+gstreamer = "0.12"
+gstreamer-base = "0.12"
 
 [lib]
 name = "gst_plugin_simple"
