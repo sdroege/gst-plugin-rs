@@ -5,6 +5,21 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.3.0] - 2018-09-08
+### Added
+- Support for subclassing pads, ghost pads, aggregator and aggregator pads
+- Support for implementing child proxy interface
+- Generic catch_panic_pad_function() that allows wrapping around pad functions
+  for catching their panics and converting them into error messages
+- More Rust-like FlowError enum that can be used to simplify implementations
+
+### Changed
+- Use ptr::NonNull in various places
+- Move to standalone gobject-subclass crate and refactor for its API changes
+- Removed CallbackGuard as unwinding across FFI boundaries is not undefined
+  behaviour anymore and will cause an immediate panic instead
+- Use new Object::downcast_ref() to prevent some unneeded clones
+
 ## [0.2.1] - 2018-05-09
 ### Fixed
 - Fix memory leak in ElementClass::add_pad_template() related to floating
@@ -43,7 +58,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 ## [0.1.0] - 2017-12-22
 - Initial release of the `gst-plugin` crate.
 
-[Unreleased]: https://github.com/sdroege/gst-plugin-rs/compare/0.2.1...HEAD
+[Unreleased]: https://github.com/sdroege/gst-plugin-rs/compare/0.3.0...HEAD
+[0.2.1]: https://github.com/sdroege/gst-plugin-rs/compare/0.2.1...0.3.0
 [0.2.1]: https://github.com/sdroege/gst-plugin-rs/compare/0.2.0...0.2.1
 [0.2.0]: https://github.com/sdroege/gst-plugin-rs/compare/0.1.4...0.2.0
 [0.1.4]: https://github.com/sdroege/gst-plugin-rs/compare/0.1.3...0.1.4
