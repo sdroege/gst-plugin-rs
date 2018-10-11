@@ -353,10 +353,7 @@ impl BaseTransformImpl<BaseTransform> for Rgb2Gray {
             outcaps
         );
 
-        *self.state.lock().unwrap() = Some(State {
-            in_info,
-            out_info,
-        });
+        *self.state.lock().unwrap() = Some(State { in_info, out_info });
 
         true
     }

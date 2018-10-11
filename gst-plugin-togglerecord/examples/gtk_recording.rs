@@ -139,7 +139,8 @@ fn create_pipeline() -> (
         &video_queue1,
         &video_convert1,
         &video_sink,
-    ]).unwrap();
+    ])
+    .unwrap();
 
     gst::Element::link_many(&[
         &video_tee,
@@ -147,7 +148,8 @@ fn create_pipeline() -> (
         &video_convert2,
         &video_enc,
         &video_parse,
-    ]).unwrap();
+    ])
+    .unwrap();
 
     video_parse.link_pads("src", &togglerecord, "sink").unwrap();
     togglerecord.link_pads("src", &mux_queue1, "sink").unwrap();
@@ -159,7 +161,8 @@ fn create_pipeline() -> (
         &audio_queue1,
         &audio_convert1,
         &audio_sink,
-    ]).unwrap();
+    ])
+    .unwrap();
 
     gst::Element::link_many(&[
         &audio_tee,
@@ -167,7 +170,8 @@ fn create_pipeline() -> (
         &audio_convert2,
         &audio_enc,
         &audio_parse,
-    ]).unwrap();
+    ])
+    .unwrap();
 
     audio_parse
         .link_pads("src", &togglerecord, "sink_0")

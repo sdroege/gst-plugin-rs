@@ -585,7 +585,8 @@ impl ToggleRecord {
 
         while (main_state.current_running_time == gst::CLOCK_TIME_NONE
             || main_state.current_running_time < current_running_time)
-            && !main_state.eos && !stream.state.lock().unwrap().flushing
+            && !main_state.eos
+            && !stream.state.lock().unwrap().flushing
         {
             gst_log!(
                 self.cat,
@@ -1138,36 +1139,40 @@ impl ToggleRecord {
                 return true;
             }
             // Position and duration is always the current recording position
-            QueryView::Position(ref mut q) => if q.get_format() == gst::Format::Time {
-                let state = stream.state.lock().unwrap();
-                let rec_state = self.state.lock().unwrap();
-                let mut recording_duration = rec_state.recording_duration;
-                if rec_state.recording_state == RecordingState::Recording
-                    || rec_state.recording_state == RecordingState::Stopping
-                {
-                    recording_duration +=
-                        state.current_running_time - rec_state.last_recording_start;
+            QueryView::Position(ref mut q) => {
+                if q.get_format() == gst::Format::Time {
+                    let state = stream.state.lock().unwrap();
+                    let rec_state = self.state.lock().unwrap();
+                    let mut recording_duration = rec_state.recording_duration;
+                    if rec_state.recording_state == RecordingState::Recording
+                        || rec_state.recording_state == RecordingState::Stopping
+                    {
+                        recording_duration +=
+                            state.current_running_time - rec_state.last_recording_start;
+                    }
+                    q.set(recording_duration);
+                    return true;
+                } else {
+                    return false;
                 }
-                q.set(recording_duration);
-                return true;
-            } else {
-                return false;
-            },
-            QueryView::Duration(ref mut q) => if q.get_format() == gst::Format::Time {
-                let state = stream.state.lock().unwrap();
-                let rec_state = self.state.lock().unwrap();
-                let mut recording_duration = rec_state.recording_duration;
-                if rec_state.recording_state == RecordingState::Recording
-                    || rec_state.recording_state == RecordingState::Stopping
-                {
-                    recording_duration +=
-                        state.current_running_time - rec_state.last_recording_start;
+            }
+            QueryView::Duration(ref mut q) => {
+                if q.get_format() == gst::Format::Time {
+                    let state = stream.state.lock().unwrap();
+                    let rec_state = self.state.lock().unwrap();
+                    let mut recording_duration = rec_state.recording_duration;
+                    if rec_state.recording_state == RecordingState::Recording
+                        || rec_state.recording_state == RecordingState::Stopping
+                    {
+                        recording_duration +=
+                            state.current_running_time - rec_state.last_recording_start;
+                    }
+                    q.set(recording_duration);
+                    return true;
+                } else {
+                    return false;
                 }
-                q.set(recording_duration);
-                return true;
-            } else {
-                return false;
-            },
+            }
             _ => (),
         };
 

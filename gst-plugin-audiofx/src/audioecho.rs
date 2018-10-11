@@ -163,7 +163,8 @@ impl AudioEcho {
     ) {
         let delay_frames = (settings.delay as usize)
             * (state.info.channels() as usize)
-            * (state.info.rate() as usize) / (gst::SECOND_VAL as usize);
+            * (state.info.rate() as usize)
+            / (gst::SECOND_VAL as usize);
 
         for (i, (o, e)) in data.iter_mut().zip(state.buffer.iter(delay_frames)) {
             let inp = (*i).to_f64().unwrap();

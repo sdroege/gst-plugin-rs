@@ -143,7 +143,8 @@ impl Source {
                 Err(err) => Err(UriError::new(
                     gst::URIError::BadUri,
                     format!("Failed to parse URI '{}': {}", uri_str, err),
-                ).into()),
+                )
+                .into()),
             }
         } else {
             Ok(())

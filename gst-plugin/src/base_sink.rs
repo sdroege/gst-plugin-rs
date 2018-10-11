@@ -350,7 +350,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {
         imp.render(&wrap, buffer)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_sink_prepare<T: BaseSinkBase>(
@@ -369,7 +370,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {
         imp.prepare(&wrap, buffer)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_sink_render_list<T: BaseSinkBase>(
@@ -388,7 +390,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {
         imp.render_list(&wrap, list)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_sink_prepare_list<T: BaseSinkBase>(
@@ -407,7 +410,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {
         imp.prepare_list(&wrap, list)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_sink_query<T: BaseSinkBase>(
@@ -426,7 +430,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         BaseSinkImpl::query(imp, &wrap, query)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_sink_event<T: BaseSinkBase>(
@@ -444,7 +449,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.event(&wrap, from_glib_full(event_ptr))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_sink_get_caps<T: BaseSinkBase>(
@@ -467,8 +473,9 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), None, {
         imp.get_caps(&wrap, filter)
-    }).map(|caps| caps.into_ptr())
-        .unwrap_or(ptr::null_mut())
+    })
+    .map(|caps| caps.into_ptr())
+    .unwrap_or(ptr::null_mut())
 }
 
 unsafe extern "C" fn base_sink_set_caps<T: BaseSinkBase>(
@@ -487,7 +494,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.set_caps(&wrap, caps)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_sink_fixate<T: BaseSinkBase>(
@@ -506,7 +514,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), gst::Caps::new_empty(), {
         imp.fixate(&wrap, caps)
-    }).into_ptr()
+    })
+    .into_ptr()
 }
 
 unsafe extern "C" fn base_sink_unlock<T: BaseSinkBase>(
@@ -538,5 +547,6 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.unlock_stop(&wrap)
-    }).to_glib()
+    })
+    .to_glib()
 }

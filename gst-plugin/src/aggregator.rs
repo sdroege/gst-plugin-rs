@@ -540,7 +540,8 @@ where
 
     panic_to_error!(&wrap, &aggregator.panicked(), gst::FlowReturn::Error, {
         imp.flush(&wrap)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_clip<T: AggregatorBase>(
@@ -583,7 +584,8 @@ where
 
     panic_to_error!(&wrap, &aggregator.panicked(), gst::FlowReturn::Error, {
         imp.finish_buffer(&wrap, from_glib_full(buffer))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_sink_event<T: AggregatorBase>(
@@ -606,7 +608,8 @@ where
             &from_glib_borrow(aggregator_pad),
             from_glib_full(event),
         )
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_sink_query<T: AggregatorBase>(
@@ -629,7 +632,8 @@ where
             &from_glib_borrow(aggregator_pad),
             gst::QueryRef::from_mut_ptr(query),
         )
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_src_event<T: AggregatorBase>(
@@ -647,7 +651,8 @@ where
 
     panic_to_error!(&wrap, &aggregator.panicked(), false, {
         imp.src_event(&wrap, from_glib_full(event))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_src_query<T: AggregatorBase>(
@@ -665,7 +670,8 @@ where
 
     panic_to_error!(&wrap, &aggregator.panicked(), false, {
         imp.src_query(&wrap, gst::QueryRef::from_mut_ptr(query))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_src_activate<T: AggregatorBase>(
@@ -684,7 +690,8 @@ where
 
     panic_to_error!(&wrap, &aggregator.panicked(), false, {
         imp.src_activate(&wrap, from_glib(mode), from_glib(active))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_aggregate<T: AggregatorBase>(
@@ -702,7 +709,8 @@ where
 
     panic_to_error!(&wrap, &aggregator.panicked(), gst::FlowReturn::Error, {
         imp.aggregate(&wrap, from_glib(timeout))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_start<T: AggregatorBase>(
@@ -749,7 +757,8 @@ where
 
     panic_to_error!(&wrap, &aggregator.panicked(), gst::CLOCK_TIME_NONE, {
         imp.get_next_time(&wrap)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_create_new_pad<T: AggregatorBase>(
@@ -790,7 +799,8 @@ where
                 Some(gst::CapsRef::from_ptr(caps))
             },
         )
-    }).to_glib_full()
+    })
+    .to_glib_full()
 }
 
 unsafe extern "C" fn aggregator_update_src_caps<T: AggregatorBase>(
@@ -817,7 +827,8 @@ where
             }
             Err(err) => err,
         }
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn aggregator_fixate_src_caps<T: AggregatorBase>(
@@ -835,7 +846,8 @@ where
 
     panic_to_error!(&wrap, &aggregator.panicked(), gst::Caps::new_empty(), {
         imp.fixate_src_caps(&wrap, from_glib_full(caps))
-    }).into_ptr()
+    })
+    .into_ptr()
 }
 
 unsafe extern "C" fn aggregator_negotiated_src_caps<T: AggregatorBase>(
@@ -853,5 +865,6 @@ where
 
     panic_to_error!(&wrap, &aggregator.panicked(), false, {
         imp.negotiated_src_caps(&wrap, gst::CapsRef::from_ptr(caps))
-    }).to_glib()
+    })
+    .to_glib()
 }

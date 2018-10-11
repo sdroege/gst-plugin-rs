@@ -173,7 +173,8 @@ where
 
     panic_to_error!(&wrap, &bin.panicked(), false, {
         imp.add_element(&wrap, &from_glib_borrow(element))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn bin_remove_element<T: BinBase>(
@@ -191,7 +192,8 @@ where
 
     panic_to_error!(&wrap, &bin.panicked(), false, {
         imp.remove_element(&wrap, &from_glib_borrow(element))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn bin_handle_message<T: BinBase>(

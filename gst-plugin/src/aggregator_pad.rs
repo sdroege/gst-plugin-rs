@@ -11,8 +11,8 @@ use std::ptr;
 
 use glib_ffi;
 use gobject_ffi;
-use gst_ffi;
 use gst_base_ffi;
+use gst_ffi;
 
 use glib;
 use glib::translate::*;
@@ -32,14 +32,21 @@ pub trait AggregatorPadImpl<T: AggregatorPadBase>:
         aggregator_pad.parent_flush(aggregator)
     }
 
-    fn skip_buffer(&self, aggregator_pad: &T, aggregator: &gst_base::Aggregator, buffer: &gst::BufferRef) -> bool {
+    fn skip_buffer(
+        &self,
+        aggregator_pad: &T,
+        aggregator: &gst_base::Aggregator,
+        buffer: &gst::BufferRef,
+    ) -> bool {
         aggregator_pad.parent_skip_buffer(aggregator, buffer)
     }
 }
 
 any_impl!(AggregatorPadBase, AggregatorPadImpl);
 
-pub unsafe trait AggregatorPadBase: IsA<gst_base::AggregatorPad> + IsA<gst::Pad> + ObjectType {
+pub unsafe trait AggregatorPadBase:
+    IsA<gst_base::AggregatorPad> + IsA<gst::Pad> + ObjectType
+{
     fn parent_flush(&self, aggregator: &gst_base::Aggregator) -> gst::FlowReturn {
         unsafe {
             let klass = self.get_class();
@@ -52,14 +59,24 @@ pub unsafe trait AggregatorPadBase: IsA<gst_base::AggregatorPad> + IsA<gst::Pad>
         }
     }
 
-    fn parent_skip_buffer(&self, aggregator: &gst_base::Aggregator, buffer: &gst::BufferRef) -> bool {
+    fn parent_skip_buffer(
+        &self,
+        aggregator: &gst_base::Aggregator,
+        buffer: &gst::BufferRef,
+    ) -> bool {
         unsafe {
             let klass = self.get_class();
             let parent_klass =
                 (*klass).get_parent_class() as *const gst_base_ffi::GstAggregatorPadClass;
             (*parent_klass)
                 .skip_buffer
-                .map(|f| from_glib(f(self.to_glib_none().0, aggregator.to_glib_none().0, buffer.as_mut_ptr())))
+                .map(|f| {
+                    from_glib(f(
+                        self.to_glib_none().0,
+                        aggregator.to_glib_none().0,
+                        buffer.as_mut_ptr(),
+                    ))
+                })
                 .unwrap_or(false)
         }
     }
@@ -163,5 +180,10 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = aggregator_pad.get_impl();
 
-    imp.skip_buffer(&wrap, &from_glib_borrow(aggregator), gst::BufferRef::from_ptr(buffer)).to_glib()
+    imp.skip_buffer(
+        &wrap,
+        &from_glib_borrow(aggregator),
+        gst::BufferRef::from_ptr(buffer),
+    )
+    .to_glib()
 }
