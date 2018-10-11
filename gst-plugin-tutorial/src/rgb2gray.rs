@@ -354,8 +354,8 @@ impl BaseTransformImpl<BaseTransform> for Rgb2Gray {
         );
 
         *self.state.lock().unwrap() = Some(State {
-            in_info: in_info,
-            out_info: out_info,
+            in_info,
+            out_info,
         });
 
         true

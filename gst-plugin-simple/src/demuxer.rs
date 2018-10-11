@@ -82,9 +82,9 @@ pub struct Stream {
 impl Stream {
     pub fn new(index: StreamIndex, caps: gst::Caps, stream_id: String) -> Stream {
         Stream {
-            index: index,
-            caps: caps,
-            stream_id: stream_id,
+            index,
+            caps,
+            stream_id,
         }
     }
 }
@@ -138,7 +138,7 @@ impl Demuxer {
                 gst::DebugColorFlags::empty(),
                 "Rust demuxer base class",
             ),
-            sinkpad: sinkpad,
+            sinkpad,
             flow_combiner: Mutex::new(Default::default()),
             group_id: Mutex::new(gst::util_group_id_next()),
             srcpads: Mutex::new(BTreeMap::new()),
@@ -671,7 +671,7 @@ pub fn demuxer_register(plugin: &gst::Plugin, demuxer_info: DemuxerInfo) {
 
     let demuxer_static = DemuxerStatic {
         name: format!("Demuxer-{}", name),
-        demuxer_info: demuxer_info,
+        demuxer_info,
     };
 
     let type_ = register_type(demuxer_static);

@@ -129,14 +129,12 @@ impl AudioFormat {
     }
 
     fn update_with_metadata(&mut self, metadata: &Metadata) -> bool {
-        let mut changed = false;
-
         if self.bitrate != metadata.audio_bitrate {
             self.bitrate = metadata.audio_bitrate;
-            changed = true;
+            true
+        } else {
+            false
         }
-
-        changed
     }
 
     fn to_caps(&self) -> Option<gst::Caps> {
@@ -233,18 +231,18 @@ impl AudioFormat {
         };
 
         if self.rate != 0 {
-            caps.as_mut().map(|c| {
-                c.get_mut()
+            if let Some(ref mut caps) = caps.as_mut() {
+                caps.get_mut()
                     .unwrap()
                     .set_simple(&[("rate", &(self.rate as i32))])
-            });
+            }
         }
         if self.channels != 0 {
-            caps.as_mut().map(|c| {
-                c.get_mut()
+            if let Some(ref mut caps) = caps.as_mut() {
+                caps.get_mut()
                     .unwrap()
                     .set_simple(&[("channels", &(self.channels as i32))])
-            });
+            }
         }
 
         caps
@@ -338,32 +336,32 @@ impl VideoFormat {
         };
 
         if let (Some(width), Some(height)) = (self.width, self.height) {
-            caps.as_mut().map(|c| {
-                c.get_mut()
+            if let Some(ref mut caps) = caps.as_mut() {
+                caps.get_mut()
                     .unwrap()
                     .set_simple(&[("width", &(width as i32)), ("height", &(height as i32))])
-            });
+            }
         }
 
         if let Some(par) = self.pixel_aspect_ratio {
             if *par.numer() != 0 && par.numer() != par.denom() {
-                caps.as_mut().map(|c| {
-                    c.get_mut().unwrap().set_simple(&[(
+                if let Some(ref mut caps) = caps.as_mut() {
+                    caps.get_mut().unwrap().set_simple(&[(
                         "pixel-aspect-ratio",
                         &gst::Fraction::new(*par.numer(), *par.denom()),
                     )])
-                });
+                }
             }
         }
 
         if let Some(fps) = self.framerate {
             if *fps.numer() != 0 {
-                caps.as_mut().map(|c| {
-                    c.get_mut().unwrap().set_simple(&[(
+                if let Some(ref mut caps) = caps.as_mut() {
+                    caps.get_mut().unwrap().set_simple(&[(
                         "framerate",
                         &gst::Fraction::new(*fps.numer(), *fps.denom()),
                     )])
-                });
+                }
             }
         }
 
@@ -1091,7 +1089,7 @@ impl FlvDemux {
 impl DemuxerImpl for FlvDemux {
     fn start(
         &mut self,
-        demuxer: &Element,
+        _demuxer: &Element,
         _upstream_size: Option<u64>,
         _random_access: bool,
     ) -> Result<(), gst::ErrorMessage> {
@@ -1100,7 +1098,7 @@ impl DemuxerImpl for FlvDemux {
         Ok(())
     }
 
-    fn stop(&mut self, demuxer: &Element) -> Result<(), gst::ErrorMessage> {
+    fn stop(&mut self, _demuxer: &Element) -> Result<(), gst::ErrorMessage> {
         self.state = State::Stopped;
         self.adapter.clear();
         self.streaming_state = None;
@@ -1110,9 +1108,9 @@ impl DemuxerImpl for FlvDemux {
 
     fn seek(
         &mut self,
-        demuxer: &Element,
-        start: gst::ClockTime,
-        stop: gst::ClockTime,
+        _demuxer: &Element,
+        _start: gst::ClockTime,
+        _stop: gst::ClockTime,
     ) -> Result<SeekResult, gst::ErrorMessage> {
         unimplemented!();
     }
@@ -1129,16 +1127,16 @@ impl DemuxerImpl for FlvDemux {
         self.update_state(demuxer)
     }
 
-    fn end_of_stream(&mut self, demuxer: &Element) -> Result<(), gst::ErrorMessage> {
+    fn end_of_stream(&mut self, _demuxer: &Element) -> Result<(), gst::ErrorMessage> {
         // nothing to do here, all data we have left is incomplete
         Ok(())
     }
 
-    fn is_seekable(&self, demuxer: &Element) -> bool {
+    fn is_seekable(&self, _demuxer: &Element) -> bool {
         false
     }
 
-    fn get_position(&self, demuxer: &Element) -> gst::ClockTime {
+    fn get_position(&self, _demuxer: &Element) -> gst::ClockTime {
         if let Some(StreamingState { last_position, .. }) = self.streaming_state {
             return last_position;
         }
@@ -1146,7 +1144,7 @@ impl DemuxerImpl for FlvDemux {
         gst::CLOCK_TIME_NONE
     }
 
-    fn get_duration(&self, demuxer: &Element) -> gst::ClockTime {
+    fn get_duration(&self, _demuxer: &Element) -> gst::ClockTime {
         if let Some(StreamingState {
             metadata: Some(Metadata { duration, .. }),
             ..

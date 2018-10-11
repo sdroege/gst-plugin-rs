@@ -102,7 +102,7 @@ impl SinkImpl for FileSink {
         gst_debug!(self.cat, obj: sink, "Opened file {:?}", file);
 
         self.streaming_state = StreamingState::Started {
-            file: file,
+            file,
             position: 0,
         };
 

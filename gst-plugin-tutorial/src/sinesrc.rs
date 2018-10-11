@@ -418,9 +418,9 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
 
         *state = State {
             info: Some(info),
-            sample_offset: sample_offset,
-            sample_stop: sample_stop,
-            accumulator: accumulator,
+            sample_offset,
+            sample_stop,
+            accumulator,
         };
 
         drop(state);
@@ -720,9 +720,9 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
 
             *state = State {
                 info: state.info.clone(),
-                sample_offset: sample_offset,
-                sample_stop: sample_stop,
-                accumulator: accumulator,
+                sample_offset,
+                sample_stop,
+                accumulator,
             };
 
             true

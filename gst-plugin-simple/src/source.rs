@@ -378,7 +378,7 @@ pub fn source_register(plugin: &gst::Plugin, source_info: SourceInfo) {
 
     let source_static = SourceStatic {
         name: format!("Source-{}", name),
-        source_info: source_info,
+        source_info,
     };
 
     let type_ = register_type(source_static);

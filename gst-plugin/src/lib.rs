@@ -6,6 +6,8 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#![cfg_attr(feature = "cargo-clippy", allow(cast_ptr_alignment))]
+
 extern crate byteorder;
 
 pub extern crate glib_sys as glib_ffi;

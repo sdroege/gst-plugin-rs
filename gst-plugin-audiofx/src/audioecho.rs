@@ -274,7 +274,7 @@ impl BaseTransformImpl<BaseTransform> for AudioEcho {
         let buffer_size = size * (info.channels() as u64);
 
         *self.state.lock().unwrap() = Some(State {
-            info: info,
+            info,
             buffer: RingBuffer::new(buffer_size as usize),
         });
 
@@ -353,10 +353,10 @@ impl<'a> RingBufferIter<'a> {
         let buffer = &mut buffer.buffer;
 
         RingBufferIter {
-            buffer: buffer,
-            buffer_pos: buffer_pos,
-            read_pos: read_pos,
-            write_pos: write_pos,
+            buffer,
+            buffer_pos,
+            read_pos,
+            write_pos,
         }
     }
 }

@@ -294,7 +294,7 @@ pub fn sink_register(plugin: &gst::Plugin, sink_info: SinkInfo) {
 
     let sink_static = SinkStatic {
         name: format!("Sink-{}", name),
-        sink_info: sink_info,
+        sink_info,
     };
 
     let type_ = register_type(sink_static);

@@ -80,8 +80,8 @@ impl Eq for Stream {}
 impl Stream {
     fn new(sinkpad: gst::Pad, srcpad: gst::Pad) -> Self {
         Self {
-            sinkpad: sinkpad,
-            srcpad: srcpad,
+            sinkpad,
+            srcpad,
             state: Arc::new(Mutex::new(StreamState::default())),
         }
     }
@@ -193,7 +193,7 @@ impl ToggleRecord {
             ),
             settings: Mutex::new(Settings::default()),
             state: Mutex::new(State::default()),
-            main_stream: main_stream,
+            main_stream,
             main_stream_cond: Condvar::new(),
             other_streams: Mutex::new((Vec::new(), 0)),
             pads: Mutex::new(pads),

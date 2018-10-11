@@ -22,7 +22,7 @@ pub struct UriError {
 impl UriError {
     pub fn new<T: Into<String>>(error: gst::URIError, message: T) -> UriError {
         UriError {
-            error: error,
+            error,
             message: message.into(),
         }
     }

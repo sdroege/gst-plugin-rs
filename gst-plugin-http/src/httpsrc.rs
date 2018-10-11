@@ -131,13 +131,13 @@ impl HttpSrc {
         gst_debug!(cat, obj: src, "Request successful: {:?}", response);
 
         Ok(StreamingState::Started {
-            uri: uri,
-            response: response,
-            seekable: seekable,
+            uri,
+            response,
+            seekable,
             position: 0,
-            size: size,
-            start: start,
-            stop: stop,
+            size,
+            start,
+            stop,
         })
     }
 }
