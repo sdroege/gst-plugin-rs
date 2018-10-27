@@ -50,15 +50,15 @@ pub enum FlowError {
     Error(gst::ErrorMessage),
 }
 
-impl Into<gst::FlowReturn> for FlowError {
-    fn into(self) -> gst::FlowReturn {
-        (&self).into()
+impl From<FlowError> for gst::FlowReturn {
+    fn from(err: FlowError) -> Self {
+        gst::FlowReturn::from(&err)
     }
 }
 
-impl<'a> Into<gst::FlowReturn> for &'a FlowError {
-    fn into(self) -> gst::FlowReturn {
-        match *self {
+impl<'a> From<&'a FlowError> for gst::FlowReturn {
+    fn from(err: &FlowError) -> gst::FlowReturn {
+        match *err {
             FlowError::Flushing => gst::FlowReturn::Flushing,
             FlowError::Eos => gst::FlowReturn::Eos,
             FlowError::NotNegotiated(..) => gst::FlowReturn::NotNegotiated,
