@@ -108,7 +108,7 @@ where
         &self,
         aggregator: &T,
         caps: &gst::CapsRef,
-    ) -> Result<gst::Caps, gst::FlowReturn> {
+    ) -> Result<gst::Caps, gst::FlowError> {
         aggregator.parent_update_src_caps(caps)
     }
 
@@ -322,7 +322,7 @@ pub unsafe trait AggregatorBase:
         }
     }
 
-    fn parent_update_src_caps(&self, caps: &gst::CapsRef) -> Result<gst::Caps, gst::FlowReturn> {
+    fn parent_update_src_caps(&self, caps: &gst::CapsRef) -> Result<gst::Caps, gst::FlowError> {
         unsafe {
             let klass = self.get_class();
             let parent_klass =
@@ -333,13 +333,9 @@ pub unsafe trait AggregatorBase:
                     let mut out_caps = ptr::null_mut();
                     let flow_ret =
                         from_glib(f(self.to_glib_none().0, caps.as_mut_ptr(), &mut out_caps));
-                    if flow_ret == gst::FlowReturn::Ok {
-                        Ok(from_glib_full(out_caps))
-                    } else {
-                        Err(flow_ret)
-                    }
+                    flow_ret.into_result_value(|| from_glib_full(out_caps))
                 })
-                .unwrap_or(Err(gst::FlowReturn::Error))
+                .unwrap_or(Err(gst::FlowError::Error))
         }
     }
 

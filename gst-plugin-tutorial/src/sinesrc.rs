@@ -492,7 +492,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
         element: &BaseSrc,
         _offset: u64,
         _length: u32,
-    ) -> Result<gst::Buffer, gst::FlowReturn> {
+    ) -> Result<gst::Buffer, gst::FlowError> {
         // Keep a local copy of the values of all our properties at this very moment. This
         // ensures that the mutex is never locked for long and the application wouldn't
         // have to block until this function returns when getting/setting property values
@@ -503,7 +503,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
         let info = match state.info {
             None => {
                 gst_element_error!(element, gst::CoreError::Negotiation, ["Have no caps yet"]);
-                return Err(gst::FlowReturn::NotNegotiated);
+                return Err(gst::FlowError::NotNegotiated);
             }
             Some(ref info) => info.clone(),
         };
@@ -513,7 +513,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
         let n_samples = if let Some(sample_stop) = state.sample_stop {
             if sample_stop <= state.sample_offset {
                 gst_log!(self.cat, obj: element, "At EOS");
-                return Err(gst::FlowReturn::Eos);
+                return Err(gst::FlowError::Eos);
             }
 
             sample_stop - state.sample_offset
@@ -606,7 +606,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
             let mut clock_wait = self.clock_wait.lock().unwrap();
             if clock_wait.flushing {
                 gst_debug!(self.cat, obj: element, "Flushing");
-                return Err(gst::FlowReturn::Flushing);
+                return Err(gst::FlowError::Flushing);
             }
 
             let id = clock.new_single_shot_id(wait_until).unwrap();
@@ -634,7 +634,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
             // and we should return Flushing immediately.
             if res == gst::ClockReturn::Unscheduled {
                 gst_debug!(self.cat, obj: element, "Flushing");
-                return Err(gst::FlowReturn::Flushing);
+                return Err(gst::FlowError::Flushing);
             }
         }
 
