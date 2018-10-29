@@ -62,7 +62,7 @@ where
         element: &T,
         offset: u64,
         length: u32,
-    ) -> Result<gst::Buffer, gst::FlowReturn> {
+    ) -> Result<gst::Buffer, gst::FlowError> {
         element.parent_create(offset, length)
     }
 
@@ -108,7 +108,7 @@ any_impl!(BaseSrcBase, BaseSrcImpl, PanicPoison);
 pub unsafe trait BaseSrcBase:
     IsA<gst::Element> + IsA<gst_base::BaseSrc> + ObjectType
 {
-    fn parent_create(&self, offset: u64, length: u32) -> Result<gst::Buffer, gst::FlowReturn> {
+    fn parent_create(&self, offset: u64, length: u32) -> Result<gst::Buffer, gst::FlowError> {
         unsafe {
             let klass = self.get_class();
             let parent_klass = (*klass).get_parent_class() as *const gst_base_ffi::GstBaseSrcClass;
@@ -119,12 +119,11 @@ pub unsafe trait BaseSrcBase:
                     // FIXME: Wrong signature in -sys bindings
                     // https://github.com/sdroege/gstreamer-sys/issues/3
                     let buffer_ref = &mut buffer as *mut _ as *mut gst_ffi::GstBuffer;
-                    match from_glib(f(self.to_glib_none().0, offset, length, buffer_ref)) {
-                        gst::FlowReturn::Ok => Ok(from_glib_full(buffer)),
-                        ret => Err(ret),
-                    }
+                    let ret: gst::FlowReturn = from_glib(f(self.to_glib_none().0, offset, length, buffer_ref));
+
+                    ret.into_result_value(|| from_glib_full(buffer))
                 })
-                .unwrap_or(Err(gst::FlowReturn::Error))
+                .unwrap_or(Err(gst::FlowError::Error))
         }
     }
 
@@ -307,7 +306,7 @@ macro_rules! box_base_src_impl(
                 element: &T,
                 offset: u64,
                 length: u32,
-            ) -> Result<gst::Buffer, gst::FlowReturn> {
+            ) -> Result<gst::Buffer, gst::FlowError> {
                 let imp: &$name<T> = self.as_ref();
                 imp.create(element, offset, length)
             }
@@ -495,7 +494,7 @@ where
                 *buffer_ptr = buffer.into_ptr();
                 gst::FlowReturn::Ok
             }
-            Err(err) => err,
+            Err(err) => gst::FlowReturn::from(err),
         }
     })
     .to_glib()
