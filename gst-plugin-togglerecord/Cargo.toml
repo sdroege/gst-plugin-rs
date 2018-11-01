@@ -12,6 +12,7 @@ gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
 gst-plugin = { path = "../gst-plugin" }
 gtk = { git = "https://github.com/gtk-rs/gtk", features = ["v3_6"], optional = true }
 gio = { git = "https://github.com/gtk-rs/gio", optional = true }
+parking_lot = "0.6"
 
 [dev-dependencies]
 either = "1.0"

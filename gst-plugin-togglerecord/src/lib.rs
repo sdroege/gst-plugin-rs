@@ -25,6 +25,8 @@ extern crate gst_plugin;
 extern crate gstreamer as gst;
 extern crate gstreamer_video as gst_video;
 
+extern crate parking_lot;
+
 mod togglerecord;
 
 fn plugin_init(plugin: &gst::Plugin) -> bool {
