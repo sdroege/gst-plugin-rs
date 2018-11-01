@@ -11,11 +11,11 @@ glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
 gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
 gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
-tokio = { git = "https://github.com/tokio-rs/tokio" }
-tokio-reactor = { git = "https://github.com/tokio-rs/tokio" }
-tokio-executor = { git = "https://github.com/tokio-rs/tokio" }
-tokio-timer = { git = "https://github.com/tokio-rs/tokio" }
-tokio-current-thread = { git = "https://github.com/tokio-rs/tokio" }
+tokio = "0.1"
+tokio-reactor = "0.1"
+tokio-executor = "0.1"
+tokio-timer = "0.2"
+tokio-current-thread = "0.1"
 futures = "0.1"
 lazy_static = "1.0"
 either = "1.0"

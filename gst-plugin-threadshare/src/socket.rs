@@ -254,7 +254,7 @@ impl<T: SocketRead + 'static> Stream for SocketStream<T> {
                     }
                     Err(err) => {
                         gst_debug!(SOCKET_CAT, obj: &inner.element, "Failed to acquire buffer {:?}", err);
-                        return Err(Either::Left(err.into_result().unwrap_err()));
+                        return Err(Either::Left(err));
                     }
                 },
             };

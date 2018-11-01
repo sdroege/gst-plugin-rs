@@ -120,12 +120,12 @@ static PROPERTIES: [Property; 6] = [
 ];
 
 pub struct TcpClientReader {
-    connect_future: net::ConnectFuture,
+    connect_future: net::tcp::ConnectFuture,
     socket: Option<net::TcpStream>,
 }
 
 impl TcpClientReader {
-    pub fn new(connect_future: net::ConnectFuture) -> Self {
+    pub fn new(connect_future: net::tcp::ConnectFuture) -> Self {
         Self {
             connect_future: connect_future,
             socket: None,
