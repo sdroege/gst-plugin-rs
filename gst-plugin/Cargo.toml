@@ -4,7 +4,7 @@ version = "0.4.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 categories = ["multimedia", "api-bindings"]
 description = "Infrastructure for writing GStreamer plugins in Rust"
-repository = "https://github.com/sdroege/gst-plugin-rs/tree/master/gst-plugin"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/tree/master/gst-plugin"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 homepage = "https://gstreamer.freedesktop.org"
@@ -18,11 +18,11 @@ byteorder = "1.0"
 gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
 glib-sys = { git = "https://github.com/gtk-rs/sys" }
 gobject-sys = { git = "https://github.com/gtk-rs/sys" }
-gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys" }
-gstreamer-base-sys = { git = "https://github.com/sdroege/gstreamer-sys" }
+gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
+gstreamer-base-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
 glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
-gstreamer-base = { git = "https://github.com/sdroege/gstreamer-rs" }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 
 [lib]
 name = "gst_plugin"
