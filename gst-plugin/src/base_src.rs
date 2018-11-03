@@ -117,7 +117,7 @@ pub unsafe trait BaseSrcBase:
                 .map(|f| {
                     let mut buffer: *mut gst_ffi::GstBuffer = ptr::null_mut();
                     // FIXME: Wrong signature in -sys bindings
-                    // https://github.com/sdroege/gstreamer-sys/issues/3
+                    // https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys/issues/3
                     let buffer_ref = &mut buffer as *mut _ as *mut gst_ffi::GstBuffer;
                     match from_glib(f(self.to_glib_none().0, offset, length, buffer_ref)) {
                         gst::FlowReturn::Ok => Ok(from_glib_full(buffer)),
@@ -483,7 +483,7 @@ where
     let wrap: T = from_glib_borrow(ptr as *mut T::InstanceStructType);
     let imp = element.get_impl();
     // FIXME: Wrong signature in -sys bindings
-    // https://github.com/sdroege/gstreamer-sys/issues/3
+    // https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys/issues/3
     let buffer_ptr = buffer_ptr as *mut *mut gst_ffi::GstBuffer;
 
     panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {

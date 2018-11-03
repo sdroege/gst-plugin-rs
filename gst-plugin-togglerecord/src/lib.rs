@@ -40,6 +40,6 @@ plugin_define!(
     b"LGPL\0",
     b"togglerecord\0",
     b"togglerecord\0",
-    b"https://github.com/sdroege/gst-plugin-rs\0",
+    b"https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs\0",
     b"2017-12-04\0"
 );

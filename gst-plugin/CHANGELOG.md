@@ -58,11 +58,11 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 ## [0.1.0] - 2017-12-22
 - Initial release of the `gst-plugin` crate.
 
-[Unreleased]: https://github.com/sdroege/gst-plugin-rs/compare/0.3.0...HEAD
-[0.2.1]: https://github.com/sdroege/gst-plugin-rs/compare/0.2.1...0.3.0
-[0.2.1]: https://github.com/sdroege/gst-plugin-rs/compare/0.2.0...0.2.1
-[0.2.0]: https://github.com/sdroege/gst-plugin-rs/compare/0.1.4...0.2.0
-[0.1.4]: https://github.com/sdroege/gst-plugin-rs/compare/0.1.3...0.1.4
-[0.1.3]: https://github.com/sdroege/gst-plugin-rs/compare/0.1.2...0.1.3
-[0.1.2]: https://github.com/sdroege/gst-plugin-rs/compare/0.1.1...0.1.2
-[0.1.1]: https://github.com/sdroege/gst-plugin-rs/compare/0.1.0...0.1.1
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/compare/0.3.0...HEAD
+[0.2.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/compare/0.2.1...0.3.0
+[0.2.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/compare/0.2.0...0.2.1
+[0.2.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/compare/0.1.4...0.2.0
+[0.1.4]: https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/compare/0.1.3...0.1.4
+[0.1.3]: https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/compare/0.1.2...0.1.3
+[0.1.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/compare/0.1.1...0.1.2
+[0.1.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/compare/0.1.0...0.1.1
