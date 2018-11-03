@@ -19,7 +19,7 @@ either = "1.0"
 
 [lib]
 name = "gsttogglerecord"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[example]]
