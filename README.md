@@ -1,3 +1,5 @@
+# NOTE: The canonical repository for gst-plugin-rs has moved to [freedesktop.org GitLab](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs)!
+
 # gst-plugin-rs [![crates.io](https://img.shields.io/crates/v/gst-plugin.svg)](https://crates.io/crates/gst-plugin) [![pipeline status](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/badges/master/pipeline.svg)](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/commits/master)
 
 Infrastructure for writing [GStreamer](https://gstreamer.freedesktop.org/)
