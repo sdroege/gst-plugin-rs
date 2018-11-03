@@ -57,12 +57,7 @@ where
         unimplemented!()
     }
 
-    fn create(
-        &self,
-        element: &T,
-        offset: u64,
-        length: u32,
-    ) -> Result<gst::Buffer, gst::FlowError> {
+    fn create(&self, element: &T, offset: u64, length: u32) -> Result<gst::Buffer, gst::FlowError> {
         element.parent_create(offset, length)
     }
 
@@ -119,7 +114,8 @@ pub unsafe trait BaseSrcBase:
                     // FIXME: Wrong signature in -sys bindings
                     // https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys/issues/3
                     let buffer_ref = &mut buffer as *mut _ as *mut gst_ffi::GstBuffer;
-                    let ret: gst::FlowReturn = from_glib(f(self.to_glib_none().0, offset, length, buffer_ref));
+                    let ret: gst::FlowReturn =
+                        from_glib(f(self.to_glib_none().0, offset, length, buffer_ref));
 
                     ret.into_result_value(|| from_glib_full(buffer))
                 })

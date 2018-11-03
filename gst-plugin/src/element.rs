@@ -199,7 +199,8 @@ glib_wrapper! {
 
 unsafe impl<T: IsA<gst::Element> + ObjectType> ElementBase for T where
     Self::InstanceStructType: PanicPoison
-{}
+{
+}
 
 pub type ElementClass = ClassStruct<Element>;
 
