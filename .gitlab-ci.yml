@@ -49,6 +49,11 @@ stages:
     - cargo build --all --color=always
     - cargo test --all --color=always
 
+test 1.28:
+  # 1.28 img
+  # https://hub.docker.com/_/rust/
+  image: "rust:1.28-slim"
+  <<: *cargo_test
 
 test stable:
   # Stable img
