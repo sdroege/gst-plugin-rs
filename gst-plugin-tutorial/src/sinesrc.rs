@@ -825,7 +825,7 @@ impl ImplTypeStatic<BaseSrc> for SineSrcStatic {
 // Registers the type for our element, and then registers in GStreamer under
 // the name "sinesrc" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
-pub fn register(plugin: &gst::Plugin) {
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     let type_ = register_type(SineSrcStatic);
-    gst::Element::register(plugin, "rssinesrc", 0, type_);
+    gst::Element::register(plugin, "rssinesrc", 0, type_)
 }

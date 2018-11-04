@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use std::u32;
 use std::u64;
 
+use glib;
 use gobject_subclass::object::*;
 use gst_plugin::element::*;
 use gst_plugin::error::*;
@@ -671,7 +672,10 @@ impl ImplTypeStatic<Element> for DemuxerStatic {
     }
 }
 
-pub fn demuxer_register(plugin: &gst::Plugin, demuxer_info: DemuxerInfo) {
+pub fn demuxer_register(
+    plugin: &gst::Plugin,
+    demuxer_info: DemuxerInfo,
+) -> Result<(), glib::BoolError> {
     let name = demuxer_info.name.clone();
     let rank = demuxer_info.rank;
 
@@ -681,5 +685,5 @@ pub fn demuxer_register(plugin: &gst::Plugin, demuxer_info: DemuxerInfo) {
     };
 
     let type_ = register_type(demuxer_static);
-    gst::Element::register(plugin, &name, rank, type_);
+    gst::Element::register(plugin, &name, rank, type_)
 }

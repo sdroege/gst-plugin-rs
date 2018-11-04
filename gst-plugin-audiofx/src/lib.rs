@@ -21,9 +21,8 @@ extern crate num_traits;
 
 mod audioecho;
 
-fn plugin_init(plugin: &gst::Plugin) -> bool {
-    audioecho::register(plugin);
-    true
+fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    audioecho::register(plugin)
 }
 
 plugin_define!(

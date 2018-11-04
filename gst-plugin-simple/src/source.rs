@@ -373,7 +373,10 @@ impl URIHandlerImplStatic<BaseSrc> for SourceStatic {
     }
 }
 
-pub fn source_register(plugin: &gst::Plugin, source_info: SourceInfo) {
+pub fn source_register(
+    plugin: &gst::Plugin,
+    source_info: SourceInfo,
+) -> Result<(), glib::BoolError> {
     let name = source_info.name.clone();
     let rank = source_info.rank;
 
@@ -383,5 +386,5 @@ pub fn source_register(plugin: &gst::Plugin, source_info: SourceInfo) {
     };
 
     let type_ = register_type(source_static);
-    gst::Element::register(plugin, &name, rank, type_);
+    gst::Element::register(plugin, &name, rank, type_)
 }

@@ -29,9 +29,8 @@ extern crate parking_lot;
 
 mod togglerecord;
 
-fn plugin_init(plugin: &gst::Plugin) -> bool {
-    togglerecord::register(plugin);
-    true
+fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    togglerecord::register(plugin)
 }
 
 plugin_define!(

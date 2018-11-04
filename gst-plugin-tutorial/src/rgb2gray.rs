@@ -556,7 +556,7 @@ impl ImplTypeStatic<BaseTransform> for Rgb2GrayStatic {
 // Registers the type for our element, and then registers in GStreamer under
 // the name "rsrgb2gray" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
-pub fn register(plugin: &gst::Plugin) {
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     let type_ = register_type(Rgb2GrayStatic);
-    gst::Element::register(plugin, "rsrgb2gray", 0, type_);
+    gst::Element::register(plugin, "rsrgb2gray", 0, type_)
 }

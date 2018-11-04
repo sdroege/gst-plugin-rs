@@ -9,6 +9,7 @@
 #![crate_type = "cdylib"]
 
 extern crate flavors;
+extern crate glib;
 #[macro_use]
 extern crate gst_plugin;
 extern crate gst_plugin_simple;
@@ -25,7 +26,7 @@ mod flvdemux;
 
 use flvdemux::FlvDemux;
 
-fn plugin_init(plugin: &gst::Plugin) -> bool {
+fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     demuxer_register(
         plugin,
         DemuxerInfo {
@@ -39,9 +40,9 @@ fn plugin_init(plugin: &gst::Plugin) -> bool {
             input_caps: gst::Caps::new_simple("video/x-flv", &[]),
             output_caps: gst::Caps::new_any(),
         },
-    );
+    )?;
 
-    true
+    Ok(())
 }
 
 plugin_define!(

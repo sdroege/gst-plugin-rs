@@ -1387,8 +1387,7 @@ impl ImplTypeStatic<Element> for ToggleRecordStatic {
     }
 }
 
-pub fn register(plugin: &gst::Plugin) {
-    let togglerecord_static = ToggleRecordStatic;
-    let type_ = register_type(togglerecord_static);
-    gst::Element::register(plugin, "togglerecord", 0, type_);
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    let type_ = register_type(ToggleRecordStatic);
+    gst::Element::register(plugin, "togglerecord", 0, type_)
 }

@@ -289,7 +289,7 @@ impl URIHandlerImplStatic<BaseSink> for SinkStatic {
     }
 }
 
-pub fn sink_register(plugin: &gst::Plugin, sink_info: SinkInfo) {
+pub fn sink_register(plugin: &gst::Plugin, sink_info: SinkInfo) -> Result<(), glib::BoolError> {
     let name = sink_info.name.clone();
     let rank = sink_info.rank;
 
@@ -299,5 +299,5 @@ pub fn sink_register(plugin: &gst::Plugin, sink_info: SinkInfo) {
     };
 
     let type_ = register_type(sink_static);
-    gst::Element::register(plugin, &name, rank, type_);
+    gst::Element::register(plugin, &name, rank, type_)
 }

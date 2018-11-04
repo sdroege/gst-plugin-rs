@@ -8,6 +8,7 @@
 
 #![crate_type = "cdylib"]
 
+extern crate glib;
 #[macro_use]
 extern crate gst_plugin;
 extern crate gst_plugin_simple;
@@ -24,7 +25,7 @@ mod filesrc;
 use filesink::FileSink;
 use filesrc::FileSrc;
 
-fn plugin_init(plugin: &gst::Plugin) -> bool {
+fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     source_register(
         plugin,
         SourceInfo {
@@ -38,7 +39,7 @@ fn plugin_init(plugin: &gst::Plugin) -> bool {
             protocols: vec!["file".into()],
             push_only: false,
         },
-    );
+    )?;
 
     sink_register(
         plugin,
@@ -52,9 +53,9 @@ fn plugin_init(plugin: &gst::Plugin) -> bool {
             create_instance: FileSink::new_boxed,
             protocols: vec!["file".into()],
         },
-    );
+    )?;
 
-    true
+    Ok(())
 }
 
 plugin_define!(

@@ -42,9 +42,16 @@ macro_rules! plugin_define(
             unsafe extern "C" fn plugin_init_trampoline(plugin: *mut $crate::gst_ffi::GstPlugin) -> $crate::glib_ffi::gboolean {
                 use std::panic::{self, AssertUnwindSafe};
 
-                let result = panic::catch_unwind(AssertUnwindSafe(|| super::$plugin_init(&from_glib_borrow(plugin)).to_glib()));
-                match result {
-                    Ok(result) => result,
+                let panic_result = panic::catch_unwind(AssertUnwindSafe(|| super::$plugin_init(&from_glib_borrow(plugin))));
+                match panic_result {
+                    Ok(register_result) => match register_result {
+                        Ok(_) => $crate::glib_ffi::GTRUE,
+                        Err(err) => {
+                            let cat = $crate::gst::DebugCategory::get("GST_PLUGIN_LOADING").unwrap();
+                            gst_error!(cat, "Failed to register plugin: {}", err);
+                            $crate::glib_ffi::GFALSE
+                        }
+                    } 
                     Err(err) => {
                         let cat = $crate::gst::DebugCategory::get("GST_PLUGIN_LOADING").unwrap();
                         if let Some(cause) = err.downcast_ref::<&str>() {

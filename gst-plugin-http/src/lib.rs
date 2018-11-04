@@ -8,6 +8,7 @@
 
 #![crate_type = "cdylib"]
 
+extern crate glib;
 #[macro_use]
 extern crate gst_plugin;
 extern crate gst_plugin_simple;
@@ -22,7 +23,7 @@ mod httpsrc;
 
 use httpsrc::HttpSrc;
 
-fn plugin_init(plugin: &gst::Plugin) -> bool {
+fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     source_register(
         plugin,
         SourceInfo {
@@ -38,7 +39,7 @@ fn plugin_init(plugin: &gst::Plugin) -> bool {
         },
     );
 
-    true
+    Ok(())
 }
 
 plugin_define!(

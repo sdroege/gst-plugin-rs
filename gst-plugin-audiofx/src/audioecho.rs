@@ -306,10 +306,9 @@ impl ImplTypeStatic<BaseTransform> for AudioEchoStatic {
     }
 }
 
-pub fn register(plugin: &gst::Plugin) {
-    let audioecho_static = AudioEchoStatic;
-    let type_ = register_type(audioecho_static);
-    gst::Element::register(plugin, "rsaudioecho", 0, type_);
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    let type_ = register_type(AudioEchoStatic);
+    gst::Element::register(plugin, "rsaudioecho", 0, type_)
 }
 
 struct RingBuffer {
