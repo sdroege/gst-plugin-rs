@@ -430,12 +430,13 @@ impl UdpSrc {
 
         let mut state = self.state.lock().unwrap();
 
-        let io_context = IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
-            gst_error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Failed to create IO context: {}", err]
-            )
-        })?;
+        let io_context =
+            IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to create IO context: {}", err]
+                )
+            })?;
 
         let addr: IpAddr = match settings.address {
             None => {
@@ -486,7 +487,8 @@ impl UdpSrc {
             net2::UdpBuilder::new_v4()
         } else {
             net2::UdpBuilder::new_v6()
-        }.map_err(|err| {
+        }
+        .map_err(|err| {
             gst_error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to create socket: {}", err]

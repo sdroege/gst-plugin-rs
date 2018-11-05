@@ -459,12 +459,13 @@ impl AppSrc {
 
         let mut state = self.state.lock().unwrap();
 
-        let io_context = IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
-            gst_error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Failed to create IO context: {}", err]
-            )
-        })?;
+        let io_context =
+            IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to create IO context: {}", err]
+                )
+            })?;
 
         let pending_future_id = io_context.acquire_pending_future_id();
         gst_debug!(
@@ -666,7 +667,7 @@ impl ImplTypeStatic<Element> for AppSrcStatic {
     }
 }
 
-pub fn register(plugin: &gst::Plugin)-> Result<(), glib::BoolError> {
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     let type_ = register_type(AppSrcStatic);
     gst::Element::register(plugin, "ts-appsrc", 0, type_)
 }

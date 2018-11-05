@@ -1059,12 +1059,13 @@ impl ProxySrc {
 
         let mut state = self.state.lock().unwrap();
 
-        let io_context = IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
-            gst_error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Failed to create IO context: {}", err]
-            )
-        })?;
+        let io_context =
+            IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to create IO context: {}", err]
+                )
+            })?;
 
         let queue = match SharedQueue::get(&settings.proxy_context, false) {
             Some(queue) => queue,

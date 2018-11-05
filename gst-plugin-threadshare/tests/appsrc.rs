@@ -97,24 +97,20 @@ fn test_push() {
         .unwrap();
 
     for _ in 0..3 {
-        assert!(
-            appsrc
-                .emit("push-buffer", &[&gst::Buffer::new()])
-                .unwrap()
-                .unwrap()
-                .get::<bool>()
-                .unwrap()
-        );
-    }
-
-    assert!(
-        appsrc
-            .emit("end-of-stream", &[])
+        assert!(appsrc
+            .emit("push-buffer", &[&gst::Buffer::new()])
             .unwrap()
             .unwrap()
             .get::<bool>()
-            .unwrap()
-    );
+            .unwrap());
+    }
+
+    assert!(appsrc
+        .emit("end-of-stream", &[])
+        .unwrap()
+        .unwrap()
+        .get::<bool>()
+        .unwrap());
 
     let mut eos = false;
     let bus = pipeline.get_bus().unwrap();

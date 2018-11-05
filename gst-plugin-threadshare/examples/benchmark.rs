@@ -97,7 +97,8 @@ fn main() {
                 let source = gst::ElementFactory::make(
                     "ts-tcpclientsrc",
                     Some(format!("source-{}", i).as_str()),
-                ).unwrap();
+                )
+                .unwrap();
                 source.set_property("port", &(40000u32)).unwrap();
                 source
                     .set_property("context", &format!("context-{}", (i as u32) % n_groups))
@@ -110,7 +111,8 @@ fn main() {
                 let source = gst::ElementFactory::make(
                     "tonegeneratesrc",
                     Some(format!("source-{}", i).as_str()),
-                ).unwrap();
+                )
+                .unwrap();
                 source
                     .set_property("samplesperbuffer", &((wait as i32) * 8000 / 1000))
                     .unwrap();
