@@ -666,7 +666,7 @@ impl ImplTypeStatic<Element> for AppSrcStatic {
     }
 }
 
-pub fn register(plugin: &gst::Plugin) {
+pub fn register(plugin: &gst::Plugin)-> Result<(), glib::BoolError> {
     let type_ = register_type(AppSrcStatic);
-    gst::Element::register(plugin, "ts-appsrc", 0, type_);
+    gst::Element::register(plugin, "ts-appsrc", 0, type_)
 }

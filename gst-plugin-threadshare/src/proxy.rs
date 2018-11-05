@@ -1363,10 +1363,10 @@ impl ImplTypeStatic<Element> for ProxySrcStatic {
     }
 }
 
-pub fn register(plugin: &gst::Plugin) {
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     let type_ = register_type(ProxySinkStatic);
-    gst::Element::register(plugin, "ts-proxysink", 0, type_);
+    gst::Element::register(plugin, "ts-proxysink", 0, type_)?;
 
     let type_ = register_type(ProxySrcStatic);
-    gst::Element::register(plugin, "ts-proxysrc", 0, type_);
+    gst::Element::register(plugin, "ts-proxysrc", 0, type_)
 }

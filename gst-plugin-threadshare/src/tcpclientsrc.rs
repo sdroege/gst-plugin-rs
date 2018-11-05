@@ -737,8 +737,8 @@ impl ImplTypeStatic<Element> for TcpClientSrcStatic {
     }
 }
 
-pub fn register(plugin: &gst::Plugin) {
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     let tcpclientsrc_static = TcpClientSrcStatic;
     let type_ = register_type(tcpclientsrc_static);
-    gst::Element::register(plugin, "ts-tcpclientsrc", 0, type_);
+    gst::Element::register(plugin, "ts-tcpclientsrc", 0, type_)
 }

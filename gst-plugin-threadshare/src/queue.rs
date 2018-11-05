@@ -950,8 +950,8 @@ impl ImplTypeStatic<Element> for QueueStatic {
     }
 }
 
-pub fn register(plugin: &gst::Plugin) {
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     let queue_static = QueueStatic;
     let type_ = register_type(queue_static);
-    gst::Element::register(plugin, "ts-queue", 0, type_);
+    gst::Element::register(plugin, "ts-queue", 0, type_)
 }

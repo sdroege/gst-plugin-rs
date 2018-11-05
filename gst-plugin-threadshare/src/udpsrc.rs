@@ -815,8 +815,8 @@ impl ImplTypeStatic<Element> for UdpSrcStatic {
     }
 }
 
-pub fn register(plugin: &gst::Plugin) {
+pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     let udpsrc_static = UdpSrcStatic;
     let type_ = register_type(udpsrc_static);
-    gst::Element::register(plugin, "ts-udpsrc", 0, type_);
+    gst::Element::register(plugin, "ts-udpsrc", 0, type_)
 }

@@ -54,13 +54,14 @@ mod dataqueue;
 mod proxy;
 mod queue;
 
-fn plugin_init(plugin: &gst::Plugin) -> bool {
-    udpsrc::register(plugin);
-    tcpclientsrc::register(plugin);
-    queue::register(plugin);
-    proxy::register(plugin);
-    appsrc::register(plugin);
-    true
+fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    udpsrc::register(plugin)?;
+    tcpclientsrc::register(plugin)?;
+    queue::register(plugin)?;
+    proxy::register(plugin)?;
+    appsrc::register(plugin)?;
+
+    Ok(())
 }
 
 plugin_define!(
@@ -71,7 +72,7 @@ plugin_define!(
     b"LGPL\0",
     b"threadshare\0",
     b"threadshare\0",
-    b"https://github.com/sdroege/gst-plugin-threadshare\0",
+    b"https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs\0",
     b"2018-03-01\0"
 );
 
