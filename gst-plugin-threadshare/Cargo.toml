@@ -24,7 +24,7 @@ net2 = "0.2"
 
 [lib]
 name = "gstthreadshare"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[example]]

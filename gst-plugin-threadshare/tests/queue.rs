@@ -23,35 +23,15 @@ use gst::prelude::*;
 
 use std::sync::{Arc, Mutex};
 
+extern crate gstthreadshare;
+
 fn init() {
     use std::sync::{Once, ONCE_INIT};
     static INIT: Once = ONCE_INIT;
 
     INIT.call_once(|| {
         gst::init().unwrap();
-
-        #[cfg(debug_assertions)]
-        {
-            use std::path::Path;
-
-            let mut path = Path::new("target/debug");
-            if !path.exists() {
-                path = Path::new("../target/debug");
-            }
-
-            gst::Registry::get().scan_path(path);
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            use std::path::Path;
-
-            let mut path = Path::new("target/release");
-            if !path.exists() {
-                path = Path::new("../target/release");
-            }
-
-            gst::Registry::get().scan_path(path);
-        }
+        gstthreadshare::plugin_register_static();
     });
 }
 
