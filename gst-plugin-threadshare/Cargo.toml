@@ -6,11 +6,11 @@ license = "LGPL-2.1+"
 
 [dependencies]
 glib-sys = { git = "https://github.com/gtk-rs/sys" }
-gstreamer-sys = { git = "https://github.com/sdroege/gstreamer-sys" }
+gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
 glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
-gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
+gst-plugin = { path = "../gst-plugin" }
 tokio = "0.1"
 tokio-reactor = "0.1"
 tokio-executor = "0.1"
@@ -26,12 +26,6 @@ net2 = "0.2"
 name = "gstthreadshare"
 crate-type = ["cdylib"]
 path = "src/lib.rs"
-
-[profile.release]
-lto = true
-opt-level = 3
-debug = true
-panic = 'unwind'
 
 [[example]]
 name = "benchmark"
