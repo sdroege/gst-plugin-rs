@@ -619,7 +619,8 @@ impl FlvDemux {
             }
         }
 
-        if !streaming_state.got_all_streams && streaming_state.audio != None
+        if !streaming_state.got_all_streams
+            && streaming_state.audio != None
             && (streaming_state.expect_video && streaming_state.video != None
                 || !streaming_state.expect_video)
         {
@@ -795,7 +796,8 @@ impl FlvDemux {
             }
         }
 
-        if !streaming_state.got_all_streams && streaming_state.video != None
+        if !streaming_state.got_all_streams
+            && streaming_state.video != None
             && (streaming_state.expect_audio && streaming_state.audio != None
                 || !streaming_state.expect_audio)
         {

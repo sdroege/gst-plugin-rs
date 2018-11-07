@@ -148,37 +148,43 @@ fn setup_sender_receiver(
                 SendData::Eos => {
                     break;
                 }
-                SendData::Buffers(n) => for _ in 0..n {
-                    let mut buffer = gst::Buffer::new();
-                    buffer
-                        .get_mut()
-                        .unwrap()
-                        .set_pts(offset + i * 20 * gst::MSECOND);
-                    buffer.get_mut().unwrap().set_duration(20 * gst::MSECOND);
-                    let _ = sinkpad.chain(buffer);
-                    i += 1;
-                },
-                SendData::BuffersDelta(n) => for _ in 0..n {
-                    let mut buffer = gst::Buffer::new();
-                    buffer
-                        .get_mut()
-                        .unwrap()
-                        .set_pts(offset + i * 20 * gst::MSECOND);
-                    buffer.get_mut().unwrap().set_duration(20 * gst::MSECOND);
-                    buffer
-                        .get_mut()
-                        .unwrap()
-                        .set_flags(gst::BufferFlags::DELTA_UNIT);
-                    let _ = sinkpad.chain(buffer);
-                    i += 1;
-                },
-                SendData::Gaps(n) => for _ in 0..n {
-                    let event =
-                        gst::Event::new_gap(offset + i * 20 * gst::MSECOND, 20 * gst::MSECOND)
-                            .build();
-                    let _ = sinkpad.send_event(event);
-                    i += 1;
-                },
+                SendData::Buffers(n) => {
+                    for _ in 0..n {
+                        let mut buffer = gst::Buffer::new();
+                        buffer
+                            .get_mut()
+                            .unwrap()
+                            .set_pts(offset + i * 20 * gst::MSECOND);
+                        buffer.get_mut().unwrap().set_duration(20 * gst::MSECOND);
+                        let _ = sinkpad.chain(buffer);
+                        i += 1;
+                    }
+                }
+                SendData::BuffersDelta(n) => {
+                    for _ in 0..n {
+                        let mut buffer = gst::Buffer::new();
+                        buffer
+                            .get_mut()
+                            .unwrap()
+                            .set_pts(offset + i * 20 * gst::MSECOND);
+                        buffer.get_mut().unwrap().set_duration(20 * gst::MSECOND);
+                        buffer
+                            .get_mut()
+                            .unwrap()
+                            .set_flags(gst::BufferFlags::DELTA_UNIT);
+                        let _ = sinkpad.chain(buffer);
+                        i += 1;
+                    }
+                }
+                SendData::Gaps(n) => {
+                    for _ in 0..n {
+                        let event =
+                            gst::Event::new_gap(offset + i * 20 * gst::MSECOND, 20 * gst::MSECOND)
+                                .build();
+                        let _ = sinkpad.send_event(event);
+                        i += 1;
+                    }
+                }
             }
 
             let _ = sender_input_done.send(());

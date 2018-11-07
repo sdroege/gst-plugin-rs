@@ -199,7 +199,8 @@ glib_wrapper! {
 
 unsafe impl<T: IsA<gst::Element> + ObjectType> ElementBase for T where
     Self::InstanceStructType: PanicPoison
-{}
+{
+}
 
 pub type ElementClass = ClassStruct<Element>;
 
@@ -297,7 +298,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), fallback, {
         imp.change_state(&wrap, transition)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn element_request_new_pad<T: ElementBase>(
@@ -371,7 +373,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.send_event(&wrap, from_glib_full(event))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn element_query<T: ElementBase>(
@@ -390,7 +393,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.query(&wrap, query)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn element_set_context<T: ElementBase>(

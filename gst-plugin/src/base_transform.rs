@@ -328,7 +328,8 @@ unsafe impl<T: IsA<gst::Element> + IsA<gst_base::BaseTransform> + ObjectType> Ba
     for T
 where
     T::InstanceStructType: PanicPoison,
-{}
+{
+}
 pub type BaseTransformClass = ClassStruct<BaseTransform>;
 
 // FIXME: Boilerplate
@@ -494,7 +495,8 @@ where
             &from_glib_borrow(caps),
             filter.as_ref(),
         )
-    }).into_ptr()
+    })
+    .into_ptr()
 }
 
 unsafe extern "C" fn base_transform_fixate_caps<T: BaseTransformBase>(
@@ -519,7 +521,8 @@ where
             &from_glib_borrow(caps),
             from_glib_full(othercaps),
         )
-    }).into_ptr()
+    })
+    .into_ptr()
 }
 
 unsafe extern "C" fn base_transform_set_caps<T: BaseTransformBase>(
@@ -538,7 +541,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.set_caps(&wrap, &from_glib_borrow(incaps), &from_glib_borrow(outcaps))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_transform_accept_caps<T: BaseTransformBase>(
@@ -557,7 +561,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.accept_caps(&wrap, from_glib(direction), &from_glib_borrow(caps))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_transform_query<T: BaseTransformBase>(
@@ -581,7 +586,8 @@ where
             from_glib(direction),
             gst::QueryRef::from_mut_ptr(query),
         )
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_transform_transform_size<T: BaseTransformBase>(
@@ -615,7 +621,8 @@ where
             }
             None => false,
         }
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_transform_get_unit_size<T: BaseTransformBase>(
@@ -640,7 +647,8 @@ where
             }
             None => false,
         }
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_transform_sink_event<T: BaseTransformBase>(
@@ -658,7 +666,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.sink_event(&wrap, from_glib_full(event))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_transform_src_event<T: BaseTransformBase>(
@@ -676,7 +685,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.src_event(&wrap, from_glib_full(event))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_transform_transform<T: BaseTransformBase>(
@@ -699,7 +709,8 @@ where
             &from_glib_borrow(inbuf),
             gst::BufferRef::from_mut_ptr(outbuf),
         )
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_transform_transform_ip<T: BaseTransformBase>(
@@ -724,5 +735,6 @@ where
         } else {
             imp.transform_ip(&wrap, gst::BufferRef::from_mut_ptr(buf))
         }
-    }).to_glib()
+    })
+    .to_glib()
 }

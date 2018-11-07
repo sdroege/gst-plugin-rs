@@ -231,12 +231,16 @@ impl Demuxer {
 
         let event = gst::Event::new_eos().build();
         match index {
-            Some(index) => if let Some(pad) = srcpads.get(&index) {
-                pad.push_event(event);
-            },
-            None => for (_, pad) in srcpads.iter().by_ref() {
-                pad.push_event(event.clone());
-            },
+            Some(index) => {
+                if let Some(pad) = srcpads.get(&index) {
+                    pad.push_event(event);
+                }
+            }
+            None => {
+                for (_, pad) in srcpads.iter().by_ref() {
+                    pad.push_event(event.clone());
+                }
+            }
         };
     }
 
@@ -416,9 +420,11 @@ impl Demuxer {
                 HandleBufferResult::StreamChanged(stream) => {
                     demuxer.stream_format_changed(element, stream.index, stream.caps);
                 }
-                HandleBufferResult::StreamsChanged(streams) => for stream in streams {
-                    demuxer.stream_format_changed(element, stream.index, stream.caps);
-                },
+                HandleBufferResult::StreamsChanged(streams) => {
+                    for stream in streams {
+                        demuxer.stream_format_changed(element, stream.index, stream.caps);
+                    }
+                }
                 HandleBufferResult::BufferForStream(index, buffer) => {
                     let flow_ret = demuxer.stream_push_buffer(element, index, buffer);
 

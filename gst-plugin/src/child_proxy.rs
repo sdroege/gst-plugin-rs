@@ -70,7 +70,8 @@ unsafe extern "C" fn child_proxy_get_child_by_name<T: ObjectType>(
     imp.get_child_by_name(
         &from_glib_borrow(child_proxy),
         String::from_glib_none(name).as_str(),
-    ).to_glib_full()
+    )
+    .to_glib_full()
 }
 
 unsafe extern "C" fn child_proxy_get_child_by_index<T: ObjectType>(

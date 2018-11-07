@@ -420,7 +420,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.is_seekable(&wrap)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_src_get_size<T: BaseSrcBase>(
@@ -444,7 +445,8 @@ where
             }
             None => false,
         }
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_src_fill<T: BaseSrcBase>(
@@ -465,7 +467,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), gst::FlowReturn::Error, {
         imp.fill(&wrap, offset, length, buffer)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_src_create<T: BaseSrcBase>(
@@ -494,7 +497,8 @@ where
             }
             Err(err) => err,
         }
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_src_do_seek<T: BaseSrcBase>(
@@ -512,7 +516,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.do_seek(&wrap, &mut from_glib_borrow(segment))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_src_query<T: BaseSrcBase>(
@@ -531,7 +536,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         BaseSrcImpl::query(imp, &wrap, query)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_src_event<T: BaseSrcBase>(
@@ -549,7 +555,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.event(&wrap, &from_glib_borrow(event_ptr))
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_src_get_caps<T: BaseSrcBase>(
@@ -572,8 +579,9 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), None, {
         imp.get_caps(&wrap, filter)
-    }).map(|caps| caps.into_ptr())
-        .unwrap_or(ptr::null_mut())
+    })
+    .map(|caps| caps.into_ptr())
+    .unwrap_or(ptr::null_mut())
 }
 
 unsafe extern "C" fn base_src_negotiate<T: BaseSrcBase>(
@@ -607,7 +615,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.set_caps(&wrap, caps)
-    }).to_glib()
+    })
+    .to_glib()
 }
 
 unsafe extern "C" fn base_src_fixate<T: BaseSrcBase>(
@@ -626,7 +635,8 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), gst::Caps::new_empty(), {
         imp.fixate(&wrap, caps)
-    }).into_ptr()
+    })
+    .into_ptr()
 }
 
 unsafe extern "C" fn base_src_unlock<T: BaseSrcBase>(
@@ -658,5 +668,6 @@ where
 
     panic_to_error!(&wrap, &element.panicked(), false, {
         imp.unlock_stop(&wrap)
-    }).to_glib()
+    })
+    .to_glib()
 }
