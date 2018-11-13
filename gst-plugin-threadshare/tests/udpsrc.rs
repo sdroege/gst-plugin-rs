@@ -18,6 +18,8 @@
 extern crate glib;
 use glib::prelude::*;
 
+extern crate gio;
+
 extern crate gstreamer as gst;
 extern crate gstreamer_check as gst_check;
 
@@ -91,13 +93,80 @@ fn test_push() {
             }
             EventView::Segment(..) => {
                 assert_eq!(n_events, 2);
-            }
-            EventView::Eos(..) => {
                 break;
             }
             _ => (),
         }
         n_events += 1;
     }
-    assert!(n_events >= 3);
+    assert!(n_events >= 2);
+}
+
+#[test]
+fn test_socket_reuse() {
+    init();
+
+    let mut ts_src_h = gst_check::Harness::new("ts-udpsrc");
+    let mut sink_h = gst_check::Harness::new("udpsink");
+    let mut ts_src_h2 = gst_check::Harness::new("ts-udpsrc");
+
+    {
+        let udpsrc = ts_src_h.get_element().unwrap();
+        udpsrc.set_property("port", &(6000 as u32)).unwrap();
+        udpsrc
+            .set_property("context", &"test-socket-reuse")
+            .unwrap();
+    }
+    ts_src_h.play();
+
+    {
+        let udpsrc = ts_src_h.get_element().unwrap();
+        let socket = udpsrc
+            .get_property("used-socket")
+            .unwrap()
+            .get::<gio::Socket>()
+            .unwrap();
+
+        let udpsink = sink_h.get_element().unwrap();
+        udpsink.set_property("socket", &socket).unwrap();
+        udpsink.set_property("host", &"127.0.0.1").unwrap();
+        udpsink.set_property("port", &6001i32).unwrap();
+    }
+    sink_h.play();
+
+    {
+        let udpsrc = ts_src_h2.get_element().unwrap();
+        udpsrc.set_property("port", &(6001 as u32)).unwrap();
+        udpsrc
+            .set_property("context", &"test-socket-reuse")
+            .unwrap();
+    }
+    ts_src_h2.play();
+
+    thread::spawn(move || {
+        use std::net;
+        use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        use std::time;
+
+        // Sleep 50ms to allow for the udpsrc to be ready to actually receive data
+        thread::sleep(time::Duration::from_millis(50));
+
+        let buffer = [0; 160];
+        let socket = net::UdpSocket::bind("0.0.0.0:0").unwrap();
+
+        let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let dest = SocketAddr::new(ipaddr, 6000 as u16);
+
+        for _ in 0..3 {
+            socket.send_to(&buffer, dest).unwrap();
+        }
+    });
+
+    for _ in 0..3 {
+        let buffer = ts_src_h.pull().unwrap();
+        sink_h.push(buffer).into_result().unwrap();
+        let buffer = ts_src_h2.pull().unwrap();
+
+        assert_eq!(buffer.get_size(), 160);
+    }
 }
