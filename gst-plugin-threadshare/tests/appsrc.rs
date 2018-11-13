@@ -19,9 +19,7 @@ extern crate glib;
 use glib::prelude::*;
 
 extern crate gstreamer as gst;
-use gst::prelude::*;
-
-use std::sync::{Arc, Mutex};
+extern crate gstreamer_check as gst_check;
 
 extern crate gstthreadshare;
 
@@ -39,81 +37,64 @@ fn init() {
 fn test_push() {
     init();
 
-    let pipeline = gst::Pipeline::new(None);
-    let appsrc = gst::ElementFactory::make("ts-appsrc", None).unwrap();
-    let appsink = gst::ElementFactory::make("appsink", None).unwrap();
-    pipeline.add_many(&[&appsrc, &appsink]).unwrap();
-    appsrc.link(&appsink).unwrap();
+    let mut h = gst_check::Harness::new("ts-appsrc");
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
-    appsrc.set_property("caps", &caps).unwrap();
-    appsrc.set_property("do-timestamp", &true).unwrap();
+    {
+        let appsrc = h.get_element().unwrap();
+        appsrc.set_property("caps", &caps).unwrap();
+        appsrc.set_property("do-timestamp", &true).unwrap();
+        appsrc.set_property("context", &"test-push").unwrap();
+    }
 
-    appsink.set_property("emit-signals", &true).unwrap();
+    h.play();
 
-    let samples = Arc::new(Mutex::new(Vec::new()));
-
-    let samples_clone = samples.clone();
-    appsink
-        .connect("new-sample", true, move |args| {
-            let appsink = args[0].get::<gst::Element>().unwrap();
-
-            let sample = appsink
-                .emit("pull-sample", &[])
+    {
+        let appsrc = h.get_element().unwrap();
+        for _ in 0..3 {
+            assert!(appsrc
+                .emit("push-buffer", &[&gst::Buffer::new()])
                 .unwrap()
                 .unwrap()
-                .get::<gst::Sample>()
-                .unwrap();
+                .get::<bool>()
+                .unwrap());
+        }
 
-            samples_clone.lock().unwrap().push(sample);
-
-            Some(gst::FlowReturn::Ok.to_value())
-        })
-        .unwrap();
-
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
-
-    for _ in 0..3 {
         assert!(appsrc
-            .emit("push-buffer", &[&gst::Buffer::new()])
+            .emit("end-of-stream", &[])
             .unwrap()
             .unwrap()
             .get::<bool>()
             .unwrap());
     }
 
-    assert!(appsrc
-        .emit("end-of-stream", &[])
-        .unwrap()
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    for _ in 0..3 {
+        let _buffer = h.pull().unwrap();
+    }
 
-    let mut eos = false;
-    let bus = pipeline.get_bus().unwrap();
-    while let Some(msg) = bus.timed_pop(5 * gst::SECOND) {
-        use gst::MessageView;
-        match msg.view() {
-            MessageView::Eos(..) => {
-                eos = true;
+    let mut n_events = 0;
+    loop {
+        use gst::EventView;
+
+        let event = h.pull_event().unwrap();
+        match event.view() {
+            EventView::StreamStart(..) => {
+                assert_eq!(n_events, 0);
+            }
+            EventView::Caps(ev) => {
+                assert_eq!(n_events, 1);
+                let event_caps = ev.get_caps();
+                assert_eq!(caps.as_ref(), event_caps);
+            }
+            EventView::Segment(..) => {
+                assert_eq!(n_events, 2);
+            }
+            EventView::Eos(..) => {
                 break;
             }
-            MessageView::Error(..) => unreachable!(),
             _ => (),
         }
+        n_events += 1;
     }
-
-    assert!(eos);
-    let samples = samples.lock().unwrap();
-    assert_eq!(samples.len(), 3);
-
-    for sample in samples.iter() {
-        assert!(sample.get_buffer().is_some());
-        assert_eq!(Some(&caps), sample.get_caps().as_ref());
-    }
-
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    assert!(n_events >= 3);
 }
