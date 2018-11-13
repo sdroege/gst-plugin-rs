@@ -19,9 +19,8 @@ extern crate glib;
 use glib::prelude::*;
 
 extern crate gstreamer as gst;
-use gst::prelude::*;
+extern crate gstreamer_check as gst_check;
 
-use std::sync::{Arc, Mutex};
 use std::thread;
 
 extern crate gstthreadshare;
@@ -40,51 +39,25 @@ fn init() {
 fn test_push() {
     init();
 
-    let pipeline = gst::Pipeline::new(None);
-    let udpsrc = gst::ElementFactory::make("ts-udpsrc", None).unwrap();
-    let appsink = gst::ElementFactory::make("appsink", None).unwrap();
-    pipeline.add_many(&[&udpsrc, &appsink]).unwrap();
-    udpsrc.link(&appsink).unwrap();
+    let mut h = gst_check::Harness::new("ts-udpsrc");
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
-    udpsrc.set_property("caps", &caps).unwrap();
-    udpsrc.set_property("port", &(5000 as u32)).unwrap();
+    {
+        let udpsrc = h.get_element().unwrap();
+        udpsrc.set_property("caps", &caps).unwrap();
+        udpsrc.set_property("port", &(5000 as u32)).unwrap();
+        udpsrc.set_property("context", &"test-push").unwrap();
+    }
 
-    appsink.set_property("emit-signals", &true).unwrap();
-
-    let samples = Arc::new(Mutex::new(Vec::new()));
-
-    let samples_clone = samples.clone();
-    appsink
-        .connect("new-sample", true, move |args| {
-            let appsink = args[0].get::<gst::Element>().unwrap();
-
-            let sample = appsink
-                .emit("pull-sample", &[])
-                .unwrap()
-                .unwrap()
-                .get::<gst::Sample>()
-                .unwrap();
-
-            let mut samples = samples_clone.lock().unwrap();
-
-            samples.push(sample);
-            if samples.len() == 3 {
-                let _ = appsink.post_message(&gst::Message::new_eos().src(Some(&appsink)).build());
-            }
-
-            Some(gst::FlowReturn::Ok.to_value())
-        })
-        .unwrap();
-
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    h.play();
 
     thread::spawn(move || {
         use std::net;
         use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+        use std::time;
+
+        // Sleep 50ms to allow for the udpsrc to be ready to actually receive data
+        thread::sleep(time::Duration::from_millis(50));
 
         let buffer = [0; 160];
         let socket = net::UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -97,28 +70,34 @@ fn test_push() {
         }
     });
 
-    let mut eos = false;
-    let bus = pipeline.get_bus().unwrap();
-    while let Some(msg) = bus.timed_pop(5 * gst::SECOND) {
-        use gst::MessageView;
-        match msg.view() {
-            MessageView::Eos(..) => {
-                eos = true;
+    for _ in 0..3 {
+        let buffer = h.pull().unwrap();
+        assert_eq!(buffer.get_size(), 160);
+    }
+
+    let mut n_events = 0;
+    loop {
+        use gst::EventView;
+
+        let event = h.pull_event().unwrap();
+        match event.view() {
+            EventView::StreamStart(..) => {
+                assert_eq!(n_events, 0);
+            }
+            EventView::Caps(ev) => {
+                assert_eq!(n_events, 1);
+                let event_caps = ev.get_caps();
+                assert_eq!(caps.as_ref(), event_caps);
+            }
+            EventView::Segment(..) => {
+                assert_eq!(n_events, 2);
+            }
+            EventView::Eos(..) => {
                 break;
             }
-            MessageView::Error(..) => unreachable!(),
             _ => (),
         }
+        n_events += 1;
     }
-
-    assert!(eos);
-    let samples = samples.lock().unwrap();
-    assert_eq!(samples.len(), 3);
-
-    for sample in samples.iter() {
-        assert_eq!(sample.get_buffer().map(|b| b.get_size()), Some(160));
-        assert_eq!(Some(&caps), sample.get_caps().as_ref());
-    }
-
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    assert!(n_events >= 3);
 }

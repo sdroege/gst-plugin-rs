@@ -12,6 +12,7 @@ gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-s
 glib = { git = "https://github.com/gtk-rs/glib" }
 gio = { git = "https://github.com/gtk-rs/gio" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
 gst-plugin = { path = "../gst-plugin" }
 tokio = "0.1"
