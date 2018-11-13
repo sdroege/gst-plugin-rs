@@ -6,8 +6,11 @@ license = "LGPL-2.1+"
 
 [dependencies]
 glib-sys = { git = "https://github.com/gtk-rs/sys" }
+gobject-sys = { git = "https://github.com/gtk-rs/sys" }
+gio-sys = { git = "https://github.com/gtk-rs/sys" }
 gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
 glib = { git = "https://github.com/gtk-rs/glib" }
+gio = { git = "https://github.com/gtk-rs/gio" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gobject-subclass = { git = "https://github.com/gtk-rs/gobject-subclass" }
 gst-plugin = { path = "../gst-plugin" }

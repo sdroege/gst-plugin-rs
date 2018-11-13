@@ -17,9 +17,12 @@
 
 #![crate_type = "cdylib"]
 
+extern crate gio_sys as gio_ffi;
 extern crate glib_sys as glib_ffi;
+extern crate gobject_sys as gobject_ffi;
 extern crate gstreamer_sys as gst_ffi;
 
+extern crate gio;
 extern crate glib;
 extern crate gobject_subclass;
 #[macro_use]
