@@ -17,12 +17,12 @@
 
 use glib;
 use glib::prelude::*;
+use glib::subclass;
+use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
+use gst::subclass::prelude::*;
 use gst_video;
-
-use gobject_subclass::object::*;
-use gst_plugin::element::*;
 
 use parking_lot::{Condvar, Mutex};
 use std::cmp;
@@ -46,21 +46,25 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [Property; 2] = [
-    Property::Boolean(
-        "record",
-        "Record",
-        "Enable/disable recording",
-        DEFAULT_RECORD,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boolean(
-        "recording",
-        "Recording",
-        "Whether recording is currently taking place",
-        DEFAULT_RECORD,
-        PropertyMutability::Readable,
-    ),
+static PROPERTIES: [subclass::Property; 2] = [
+    subclass::Property("record", || {
+        glib::ParamSpec::boolean(
+            "record",
+            "Record",
+            "Enable/disable recording",
+            DEFAULT_RECORD,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("recording", || {
+        glib::ParamSpec::boolean(
+            "recording",
+            "Recording",
+            "Whether recording is currently taking place",
+            DEFAULT_RECORD,
+            glib::ParamFlags::READABLE,
+        )
+    }),
 ];
 
 #[derive(Clone)]
@@ -179,86 +183,6 @@ struct ToggleRecord {
 }
 
 impl ToggleRecord {
-    fn new(_element: &Element, sinkpad: gst::Pad, srcpad: gst::Pad) -> Self {
-        let main_stream = Stream::new(sinkpad, srcpad);
-
-        let mut pads = HashMap::new();
-        pads.insert(main_stream.sinkpad.clone(), main_stream.clone());
-        pads.insert(main_stream.srcpad.clone(), main_stream.clone());
-
-        Self {
-            cat: gst::DebugCategory::new(
-                "togglerecord",
-                gst::DebugColorFlags::empty(),
-                "Toggle Record Element",
-            ),
-            settings: Mutex::new(Settings::default()),
-            state: Mutex::new(State::default()),
-            main_stream,
-            main_stream_cond: Condvar::new(),
-            other_streams: Mutex::new((Vec::new(), 0)),
-            pads: Mutex::new(pads),
-        }
-    }
-
-    fn class_init(klass: &mut ElementClass) {
-        klass.set_metadata(
-            "Toggle Record",
-            "Generic",
-            "Valve that ensures multiple streams start/end at the same time",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(sink_pad_template);
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src_%u",
-            gst::PadDirection::Src,
-            gst::PadPresence::Sometimes,
-            &caps,
-        );
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink_%u",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Request,
-            &caps,
-        );
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
-
-    fn init(element: &Element) -> Box<ElementImpl<Element>> {
-        let templ = element.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, "sink");
-        let templ = element.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, "src");
-
-        ToggleRecord::set_pad_functions(&sinkpad, &srcpad);
-        element.add_pad(&sinkpad).unwrap();
-        element.add_pad(&srcpad).unwrap();
-
-        let imp = Self::new(element, sinkpad, srcpad);
-        Box::new(imp)
-    }
-
     fn set_pad_functions(sinkpad: &gst::Pad, srcpad: &gst::Pad) {
         sinkpad.set_chain_function(|pad, parent, buffer| {
             ToggleRecord::catch_panic_pad_function(
@@ -314,7 +238,7 @@ impl ToggleRecord {
 
     fn handle_main_stream(
         &self,
-        element: &Element,
+        element: &gst::Element,
         pad: &gst::Pad,
         stream: &Stream,
         is_keyframe: bool,
@@ -725,7 +649,7 @@ impl ToggleRecord {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &Element,
+        element: &gst::Element,
         buffer: gst::Buffer,
     ) -> gst::FlowReturn {
         let stream = match self.pads.lock().get(pad) {
@@ -871,7 +795,7 @@ impl ToggleRecord {
         stream.srcpad.push(buffer)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
         use gst::EventView;
 
         let stream = match self.pads.lock().get(pad) {
@@ -1028,7 +952,12 @@ impl ToggleRecord {
         }
     }
 
-    fn sink_query(&self, pad: &gst::Pad, element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn sink_query(
+        &self,
+        pad: &gst::Pad,
+        element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         let stream = match self.pads.lock().get(pad) {
             None => {
                 gst_element_error!(
@@ -1046,7 +975,7 @@ impl ToggleRecord {
         stream.srcpad.peer_query(query)
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &Element, mut event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, mut event: gst::Event) -> bool {
         use gst::EventView;
 
         let stream = match self.pads.lock().get(pad) {
@@ -1088,7 +1017,7 @@ impl ToggleRecord {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
         let stream = match self.pads.lock().get(pad) {
@@ -1181,7 +1110,11 @@ impl ToggleRecord {
         stream.sinkpad.peer_query(query)
     }
 
-    fn iterate_internal_links(&self, pad: &gst::Pad, element: &Element) -> gst::Iterator<gst::Pad> {
+    fn iterate_internal_links(
+        &self,
+        pad: &gst::Pad,
+        element: &gst::Element,
+    ) -> gst::Iterator<gst::Pad> {
         let stream = match self.pads.lock().get(pad) {
             None => {
                 gst_element_error!(
@@ -1202,13 +1135,103 @@ impl ToggleRecord {
     }
 }
 
-impl ObjectImpl<Element> for ToggleRecord {
-    fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
-        let element = obj.downcast_ref::<Element>().unwrap();
+impl ObjectSubclass for ToggleRecord {
+    const NAME: &'static str = "RsToggleRecord";
+    type ParentType = gst::Element;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
+    fn new() -> Self {
+        unreachable!();
+    }
+
+    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let templ = klass.get_pad_template("sink").unwrap();
+        let sinkpad = gst::Pad::new_from_template(&templ, "sink");
+        let templ = klass.get_pad_template("src").unwrap();
+        let srcpad = gst::Pad::new_from_template(&templ, "src");
+
+        ToggleRecord::set_pad_functions(&sinkpad, &srcpad);
+
+        let main_stream = Stream::new(sinkpad, srcpad);
+
+        let mut pads = HashMap::new();
+        pads.insert(main_stream.sinkpad.clone(), main_stream.clone());
+        pads.insert(main_stream.srcpad.clone(), main_stream.clone());
+
+        Self {
+            cat: gst::DebugCategory::new(
+                "togglerecord",
+                gst::DebugColorFlags::empty(),
+                "Toggle Record Element",
+            ),
+            settings: Mutex::new(Settings::default()),
+            state: Mutex::new(State::default()),
+            main_stream,
+            main_stream_cond: Condvar::new(),
+            other_streams: Mutex::new((Vec::new(), 0)),
+            pads: Mutex::new(pads),
+        }
+    }
+
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        klass.override_vfuncs();
+
+        klass.install_properties(&PROPERTIES);
+
+        klass.set_metadata(
+            "Toggle Record",
+            "Generic",
+            "Valve that ensures multiple streams start/end at the same time",
+            "Sebastian Dröge <sebastian@centricular.com>",
+        );
+
+        let caps = gst::Caps::new_any();
+        let src_pad_template = gst::PadTemplate::new(
+            "src",
+            gst::PadDirection::Src,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(src_pad_template);
+
+        let sink_pad_template = gst::PadTemplate::new(
+            "sink",
+            gst::PadDirection::Sink,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(sink_pad_template);
+
+        let src_pad_template = gst::PadTemplate::new(
+            "src_%u",
+            gst::PadDirection::Src,
+            gst::PadPresence::Sometimes,
+            &caps,
+        );
+        klass.add_pad_template(src_pad_template);
+
+        let sink_pad_template = gst::PadTemplate::new(
+            "sink_%u",
+            gst::PadDirection::Sink,
+            gst::PadPresence::Request,
+            &caps,
+        );
+        klass.add_pad_template(sink_pad_template);
+    }
+}
+
+impl ObjectImpl for ToggleRecord {
+    glib_object_impl!();
+
+    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
+        let element = obj.downcast_ref::<gst::Element>().unwrap();
 
         match *prop {
-            Property::Boolean("record", ..) => {
+            subclass::Property("record", ..) => {
                 let mut settings = self.settings.lock();
                 let record = value.get().unwrap();
                 gst_debug!(
@@ -1224,27 +1247,35 @@ impl ObjectImpl<Element> for ToggleRecord {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::Boolean("record", ..) => {
+            subclass::Property("record", ..) => {
                 let settings = self.settings.lock();
                 Ok(settings.record.to_value())
             }
-            Property::Boolean("recording", ..) => {
+            subclass::Property("recording", ..) => {
                 let rec_state = self.state.lock();
                 Ok((rec_state.recording_state == RecordingState::Recording).to_value())
             }
             _ => unimplemented!(),
         }
     }
+
+    fn constructed(&self, obj: &glib::Object) {
+        self.parent_constructed(obj);
+
+        let element = obj.downcast_ref::<gst::Element>().unwrap();
+        element.add_pad(&self.main_stream.sinkpad).unwrap();
+        element.add_pad(&self.main_stream.srcpad).unwrap();
+    }
 }
 
-impl ElementImpl<Element> for ToggleRecord {
+impl ElementImpl for ToggleRecord {
     fn change_state(
         &self,
-        element: &Element,
+        element: &gst::Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
@@ -1278,7 +1309,7 @@ impl ElementImpl<Element> for ToggleRecord {
             _ => (),
         }
 
-        let ret = element.parent_change_state(transition);
+        let ret = self.parent_change_state(element, transition);
         if ret == gst::StateChangeReturn::Failure {
             return ret;
         }
@@ -1310,7 +1341,7 @@ impl ElementImpl<Element> for ToggleRecord {
 
     fn request_new_pad(
         &self,
-        element: &Element,
+        element: &gst::Element,
         _templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::CapsRef>,
@@ -1346,7 +1377,7 @@ impl ElementImpl<Element> for ToggleRecord {
         Some(sinkpad)
     }
 
-    fn release_pad(&self, element: &Element, pad: &gst::Pad) {
+    fn release_pad(&self, element: &gst::Element, pad: &gst::Pad) {
         let mut other_streams = self.other_streams.lock();
         let (ref mut other_streams, _) = *other_streams;
         let mut pads = self.pads.lock();
@@ -1371,23 +1402,6 @@ impl ElementImpl<Element> for ToggleRecord {
     }
 }
 
-struct ToggleRecordStatic;
-
-impl ImplTypeStatic<Element> for ToggleRecordStatic {
-    fn get_name(&self) -> &str {
-        "ToggleRecord"
-    }
-
-    fn new(&self, element: &Element) -> Box<ElementImpl<Element>> {
-        ToggleRecord::init(element)
-    }
-
-    fn class_init(&self, klass: &mut ElementClass) {
-        ToggleRecord::class_init(klass);
-    }
-}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    let type_ = register_type(ToggleRecordStatic);
-    gst::Element::register(plugin, "togglerecord", 0, type_)
+    gst::Element::register(plugin, "togglerecord", 0, ToggleRecord::get_type())
 }

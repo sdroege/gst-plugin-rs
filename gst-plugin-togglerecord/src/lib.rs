@@ -17,10 +17,8 @@
 
 #![crate_type = "cdylib"]
 
-extern crate glib;
-extern crate gobject_subclass;
 #[macro_use]
-extern crate gst_plugin;
+extern crate glib;
 #[macro_use]
 extern crate gstreamer as gst;
 extern crate gstreamer_video as gst_video;
@@ -33,14 +31,14 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     togglerecord::register(plugin)
 }
 
-plugin_define!(
-    b"togglerecord\0",
-    b"Toggle Record Plugin\0",
+gst_plugin_define!(
+    "togglerecord",
+    "Toggle Record Plugin",
     plugin_init,
-    b"0.1.0\0",
-    b"LGPL\0",
-    b"togglerecord\0",
-    b"togglerecord\0",
-    b"https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs\0",
-    b"2017-12-04\0"
+    "0.1.0",
+    "LGPL",
+    "togglerecord",
+    "togglerecord",
+    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
+    "2017-12-04"
 );
