@@ -519,6 +519,7 @@ impl ObjectType for Aggregator {
     type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn class_init(token: &ClassInitToken, klass: &mut AggregatorClass) {
+        ObjectClassExt::override_vfuncs(klass, token);
         ElementClassExt::override_vfuncs(klass, token);
         AggregatorClassExt::override_vfuncs(klass, token);
     }

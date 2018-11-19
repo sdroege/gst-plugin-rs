@@ -81,6 +81,7 @@ impl ObjectType for GhostPad {
     type InstanceStructType = InstanceStruct<Self>;
 
     fn class_init(token: &ClassInitToken, klass: &mut GhostPadClass) {
+        ObjectClassExt::override_vfuncs(klass, token);
         PadClassExt::override_vfuncs(klass, token);
         GhostPadClassExt::override_vfuncs(klass, token);
     }

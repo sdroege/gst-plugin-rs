@@ -145,7 +145,9 @@ impl ObjectType for AggregatorPad {
     type InstanceStructType = InstanceStruct<Self>;
 
     fn class_init(token: &ClassInitToken, klass: &mut AggregatorPadClass) {
+        ObjectClassExt::override_vfuncs(klass, token);
         PadClassExt::override_vfuncs(klass, token);
+        GhostPadClassExt::override_vfuncs(klass, token);
         AggregatorPadClassExt::override_vfuncs(klass, token);
     }
 

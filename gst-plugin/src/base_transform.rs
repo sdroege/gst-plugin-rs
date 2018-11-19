@@ -430,6 +430,7 @@ impl ObjectType for BaseTransform {
     type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn class_init(token: &ClassInitToken, klass: &mut BaseTransformClass) {
+        ObjectClassExt::override_vfuncs(klass, token);
         ElementClassExt::override_vfuncs(klass, token);
         BaseTransformClassExt::override_vfuncs(klass, token);
     }

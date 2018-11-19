@@ -297,6 +297,7 @@ impl ObjectType for BaseSink {
     type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn class_init(token: &ClassInitToken, klass: &mut BaseSinkClass) {
+        ObjectClassExt::override_vfuncs(klass, token);
         ElementClassExt::override_vfuncs(klass, token);
         BaseSinkClassExt::override_vfuncs(klass, token);
     }
