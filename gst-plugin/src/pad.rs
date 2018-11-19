@@ -118,6 +118,7 @@ impl ObjectType for Pad {
     type InstanceStructType = InstanceStruct<Self>;
 
     fn class_init(token: &ClassInitToken, klass: &mut PadClass) {
+        ObjectClassExt::override_vfuncs(klass, token);
         PadClassExt::override_vfuncs(klass, token);
     }
 

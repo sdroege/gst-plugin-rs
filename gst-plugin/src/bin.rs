@@ -151,6 +151,7 @@ impl ObjectType for Bin {
     type InstanceStructType = ElementInstanceStruct<Self>;
 
     fn class_init(token: &ClassInitToken, klass: &mut BinClass) {
+        ObjectClassExt::override_vfuncs(klass, token);
         ElementClassExt::override_vfuncs(klass, token);
         BinClassExt::override_vfuncs(klass, token);
     }
