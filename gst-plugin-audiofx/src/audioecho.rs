@@ -1,4 +1,4 @@
-// Copyright (C) 2017 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2017,2018 Sebastian Dröge <sebastian@centricular.com>
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
@@ -7,14 +7,14 @@
 // except according to those terms.
 
 use glib;
+use glib::subclass;
+use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
+use gst::subclass::prelude::*;
 use gst_audio;
-
-use gst_plugin::base_transform::*;
-use gst_plugin::element::*;
-
-use gobject_subclass::object::*;
+use gst_base;
+use gst_base::subclass::prelude::*;
 
 use std::sync::Mutex;
 use std::{cmp, i32, iter, u64};
@@ -59,43 +59,80 @@ struct AudioEcho {
     state: Mutex<Option<State>>,
 }
 
-static PROPERTIES: [Property; 4] = [
-    Property::UInt64(
-        "max-delay",
+static PROPERTIES: [subclass::Property; 4] = [
+    subclass::Property("max-delay", || {
+        glib::ParamSpec::uint64("max-delay",
         "Maximum Delay",
         "Maximum delay of the echo in nanoseconds (can't be changed in PLAYING or PAUSED state)",
-        (0, u64::MAX),
+        0, u64::MAX,
         DEFAULT_MAX_DELAY,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt64(
-        "delay",
-        "Delay",
-        "Delay of the echo in nanoseconds",
-        (0, u64::MAX),
-        DEFAULT_DELAY,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Double(
-        "intensity",
-        "Intensity",
-        "Intensity of the echo",
-        (0.0, 1.0),
-        DEFAULT_INTENSITY,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Double(
-        "feedback",
-        "Feedback",
-        "Amount of feedback",
-        (0.0, 1.0),
-        DEFAULT_FEEDBACK,
-        PropertyMutability::ReadWrite,
-    ),
+        glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("delay", || {
+        glib::ParamSpec::uint64(
+            "delay",
+            "Delay",
+            "Delay of the echo in nanoseconds",
+            0,
+            u64::MAX,
+            DEFAULT_DELAY,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("intensity", || {
+        glib::ParamSpec::double(
+            "intensity",
+            "Intensity",
+            "Intensity of the echo",
+            0.0,
+            1.0,
+            DEFAULT_INTENSITY,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("feedback", || {
+        glib::ParamSpec::double(
+            "feedback",
+            "Feedback",
+            "Amount of feedback",
+            0.0,
+            1.0,
+            DEFAULT_FEEDBACK,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
 ];
 
 impl AudioEcho {
-    fn new(_transform: &BaseTransform) -> Self {
+    fn process<F: Float + ToPrimitive + FromPrimitive>(
+        data: &mut [F],
+        state: &mut State,
+        settings: &Settings,
+    ) {
+        let delay_frames = (settings.delay as usize)
+            * (state.info.channels() as usize)
+            * (state.info.rate() as usize)
+            / (gst::SECOND_VAL as usize);
+
+        for (i, (o, e)) in data.iter_mut().zip(state.buffer.iter(delay_frames)) {
+            let inp = (*i).to_f64().unwrap();
+            let out = inp + settings.intensity * e;
+            *o = inp + settings.feedback * e;
+            *i = FromPrimitive::from_f64(out).unwrap();
+        }
+    }
+}
+
+impl ObjectSubclass for AudioEcho {
+    const NAME: &'static str = "RsAudioEcho";
+    type ParentType = gst_base::BaseTransform;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
+    fn new() -> Self {
         Self {
             cat: gst::DebugCategory::new(
                 "rsaudioecho",
@@ -107,7 +144,7 @@ impl AudioEcho {
         }
     }
 
-    fn class_init(klass: &mut BaseTransformClass) {
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
         klass.set_metadata(
             "Audio echo",
             "Filter/Effect/Audio",
@@ -148,53 +185,36 @@ impl AudioEcho {
 
         klass.install_properties(&PROPERTIES);
 
-        klass.configure(BaseTransformMode::AlwaysInPlace, false, false);
-    }
-
-    fn init(element: &BaseTransform) -> Box<BaseTransformImpl<BaseTransform>> {
-        let imp = Self::new(element);
-        Box::new(imp)
-    }
-
-    fn process<F: Float + ToPrimitive + FromPrimitive>(
-        data: &mut [F],
-        state: &mut State,
-        settings: &Settings,
-    ) {
-        let delay_frames = (settings.delay as usize)
-            * (state.info.channels() as usize)
-            * (state.info.rate() as usize)
-            / (gst::SECOND_VAL as usize);
-
-        for (i, (o, e)) in data.iter_mut().zip(state.buffer.iter(delay_frames)) {
-            let inp = (*i).to_f64().unwrap();
-            let out = inp + settings.intensity * e;
-            *o = inp + settings.feedback * e;
-            *i = FromPrimitive::from_f64(out).unwrap();
-        }
+        klass.configure(
+            gst_base::subclass::BaseTransformMode::AlwaysInPlace,
+            false,
+            false,
+        );
     }
 }
 
-impl ObjectImpl<BaseTransform> for AudioEcho {
-    fn set_property(&self, _obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
+impl ObjectImpl for AudioEcho {
+    glib_object_impl!();
+
+    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::UInt64("max-delay", ..) => {
+            subclass::Property("max-delay", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
                     settings.max_delay = value.get().unwrap();
                 }
             }
-            Property::UInt64("delay", ..) => {
+            subclass::Property("delay", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.delay = value.get().unwrap();
             }
-            Property::Double("intensity", ..) => {
+            subclass::Property("intensity", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.intensity = value.get().unwrap();
             }
-            Property::Double("feedback", ..) => {
+            subclass::Property("feedback", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.feedback = value.get().unwrap();
             }
@@ -202,23 +222,23 @@ impl ObjectImpl<BaseTransform> for AudioEcho {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::UInt64("max-delay", ..) => {
+            subclass::Property("max-delay", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.max_delay.to_value())
             }
-            Property::UInt64("delay", ..) => {
+            subclass::Property("delay", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.delay.to_value())
             }
-            Property::Double("intensity", ..) => {
+            subclass::Property("intensity", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.intensity.to_value())
             }
-            Property::Double("feedback", ..) => {
+            subclass::Property("feedback", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.feedback.to_value())
             }
@@ -227,10 +247,14 @@ impl ObjectImpl<BaseTransform> for AudioEcho {
     }
 }
 
-impl ElementImpl<BaseTransform> for AudioEcho {}
+impl ElementImpl for AudioEcho {}
 
-impl BaseTransformImpl<BaseTransform> for AudioEcho {
-    fn transform_ip(&self, _element: &BaseTransform, buf: &mut gst::BufferRef) -> gst::FlowReturn {
+impl BaseTransformImpl for AudioEcho {
+    fn transform_ip(
+        &self,
+        _element: &gst_base::BaseTransform,
+        buf: &mut gst::BufferRef,
+    ) -> gst::FlowReturn {
         let mut settings = *self.settings.lock().unwrap();
         settings.delay = cmp::min(settings.max_delay, settings.delay);
 
@@ -260,7 +284,12 @@ impl BaseTransformImpl<BaseTransform> for AudioEcho {
         gst::FlowReturn::Ok
     }
 
-    fn set_caps(&self, _element: &BaseTransform, incaps: &gst::Caps, outcaps: &gst::Caps) -> bool {
+    fn set_caps(
+        &self,
+        _element: &gst_base::BaseTransform,
+        incaps: &gst::Caps,
+        outcaps: &gst::Caps,
+    ) -> bool {
         if incaps != outcaps {
             return false;
         }
@@ -282,7 +311,7 @@ impl BaseTransformImpl<BaseTransform> for AudioEcho {
         true
     }
 
-    fn stop(&self, _element: &BaseTransform) -> bool {
+    fn stop(&self, _element: &gst_base::BaseTransform) -> bool {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
@@ -290,25 +319,8 @@ impl BaseTransformImpl<BaseTransform> for AudioEcho {
     }
 }
 
-struct AudioEchoStatic;
-
-impl ImplTypeStatic<BaseTransform> for AudioEchoStatic {
-    fn get_name(&self) -> &str {
-        "AudioEcho"
-    }
-
-    fn new(&self, element: &BaseTransform) -> Box<BaseTransformImpl<BaseTransform>> {
-        AudioEcho::init(element)
-    }
-
-    fn class_init(&self, klass: &mut BaseTransformClass) {
-        AudioEcho::class_init(klass);
-    }
-}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    let type_ = register_type(AudioEchoStatic);
-    gst::Element::register(plugin, "rsaudioecho", 0, type_)
+    gst::Element::register(plugin, "rsaudioecho", 0, AudioEcho::get_type())
 }
 
 struct RingBuffer {

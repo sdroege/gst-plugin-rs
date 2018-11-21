@@ -9,10 +9,8 @@
 #![crate_type = "cdylib"]
 
 extern crate byte_slice_cast;
-extern crate glib;
-extern crate gobject_subclass;
 #[macro_use]
-extern crate gst_plugin;
+extern crate glib;
 #[macro_use]
 extern crate gstreamer as gst;
 extern crate gstreamer_audio as gst_audio;
@@ -25,14 +23,14 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     audioecho::register(plugin)
 }
 
-plugin_define!(
-    b"rsaudiofx\0",
-    b"Rust AudioFx Plugin\0",
+gst_plugin_define!(
+    "rsaudiofx",
+    "Rust AudioFx Plugin",
     plugin_init,
-    b"1.0\0",
-    b"MIT/X11\0",
-    b"rsaudiofx\0",
-    b"rsaudiofx\0",
-    b"https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs\0",
-    b"2016-12-08\0"
+    "1.0",
+    "MIT/X11",
+    "rsaudiofx",
+    "rsaudiofx",
+    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
+    "2016-12-08"
 );
