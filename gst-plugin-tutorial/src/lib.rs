@@ -6,10 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate glib;
-extern crate gobject_subclass;
 #[macro_use]
-extern crate gst_plugin;
+extern crate glib;
 #[macro_use]
 extern crate gstreamer as gst;
 extern crate gstreamer_audio as gst_audio;
@@ -35,14 +33,14 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 // Plugin name, plugin description, plugin entry point function, version number of this plugin,
 // license of the plugin, source package name, binary package name, origin where it comes from
 // and the date/time of release.
-plugin_define!(
-    b"rstutorial\0",
-    b"Rust Tutorial Plugin\0",
+gst_plugin_define!(
+    "rstutorial",
+    "Rust Tutorial Plugin",
     plugin_init,
-    b"1.0\0",
-    b"MIT/X11\0",
-    b"rstutorial\0",
-    b"rstutorial\0",
-    b"https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs\0",
-    b"2017-12-30\0"
+    "1.0",
+    "MIT/X11",
+    "rstutorial",
+    "rstutorial",
+    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
+    "2017-12-30"
 );

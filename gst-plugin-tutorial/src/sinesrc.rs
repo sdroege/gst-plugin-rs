@@ -7,16 +7,17 @@
 // except according to those terms.
 
 use glib;
+use glib::subclass;
+use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
+use gst::subclass::prelude::*;
 use gst_audio;
+use gst_base;
 use gst_base::prelude::*;
+use gst_base::subclass::prelude::*;
 
 use byte_slice_cast::*;
-
-use gobject_subclass::object::*;
-use gst_plugin::base_src::*;
-use gst_plugin::element::*;
 
 use std::ops::Rem;
 use std::sync::Mutex;
@@ -55,45 +56,58 @@ impl Default for Settings {
 }
 
 // Metadata for the properties
-static PROPERTIES: [Property; 5] = [
-    Property::UInt(
-        "samples-per-buffer",
-        "Samples Per Buffer",
-        "Number of samples per output buffer",
-        (1, u32::MAX),
-        DEFAULT_SAMPLES_PER_BUFFER,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "freq",
-        "Frequency",
-        "Frequency",
-        (1, u32::MAX),
-        DEFAULT_FREQ,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Double(
-        "volume",
-        "Volume",
-        "Output volume",
-        (0.0, 10.0),
-        DEFAULT_VOLUME,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boolean(
-        "mute",
-        "Mute",
-        "Mute",
-        DEFAULT_MUTE,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boolean(
-        "is-live",
-        "Is Live",
-        "(Pseudo) live output",
-        DEFAULT_IS_LIVE,
-        PropertyMutability::ReadWrite,
-    ),
+static PROPERTIES: [subclass::Property; 5] = [
+    subclass::Property("samples-per-buffer", || {
+        glib::ParamSpec::uint(
+            "samples-per-buffer",
+            "Samples Per Buffer",
+            "Number of samples per output buffer",
+            1,
+            u32::MAX,
+            DEFAULT_SAMPLES_PER_BUFFER,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("freq", || {
+        glib::ParamSpec::uint(
+            "freq",
+            "Frequency",
+            "Frequency",
+            1,
+            u32::MAX,
+            DEFAULT_FREQ,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("volume", || {
+        glib::ParamSpec::double(
+            "volume",
+            "Volume",
+            "Output volume",
+            0.0,
+            10.0,
+            DEFAULT_VOLUME,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("mute", || {
+        glib::ParamSpec::boolean(
+            "mute",
+            "Mute",
+            "Mute",
+            DEFAULT_MUTE,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("is-live", || {
+        glib::ParamSpec::boolean(
+            "is-live",
+            "Is Live",
+            "(Pseudo) live output",
+            DEFAULT_IS_LIVE,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
 ];
 
 // Stream-specific state, i.e. audio format configuration
@@ -130,77 +144,6 @@ struct SineSrc {
 }
 
 impl SineSrc {
-    // Called when a new instance is to be created
-    fn new(element: &BaseSrc) -> Box<BaseSrcImpl<BaseSrc>> {
-        // Initialize live-ness and notify the base class that
-        // we'd like to operate in Time format
-        element.set_live(DEFAULT_IS_LIVE);
-        element.set_format(gst::Format::Time);
-
-        Box::new(Self {
-            cat: gst::DebugCategory::new(
-                "rssinesrc",
-                gst::DebugColorFlags::empty(),
-                "Rust Sine Wave Source",
-            ),
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(Default::default()),
-            clock_wait: Mutex::new(ClockWait {
-                clock_id: None,
-                flushing: true,
-            }),
-        })
-    }
-
-    // Called exactly once when registering the type. Used for
-    // setting up metadata for all instances, e.g. the name and
-    // classification and the pad templates with their caps.
-    //
-    // Actual instances can create pads based on those pad templates
-    // with a subset of the caps given here. In case of basesrc,
-    // a "src" and "sink" pad template are required here and the base class
-    // will automatically instantiate pads for them.
-    //
-    // Our element here can output f32 and f64
-    fn class_init(klass: &mut BaseSrcClass) {
-        klass.set_metadata(
-            "Sine Wave Source",
-            "Source/Audio",
-            "Creates a sine wave",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        // On the src pad, we can produce F32/F64 with any sample rate
-        // and any number of channels
-        let caps = gst::Caps::new_simple(
-            "audio/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[
-                        &gst_audio::AUDIO_FORMAT_F32.to_string(),
-                        &gst_audio::AUDIO_FORMAT_F64.to_string(),
-                    ]),
-                ),
-                ("layout", &"interleaved"),
-                ("rate", &gst::IntRange::<i32>::new(1, i32::MAX)),
-                ("channels", &gst::IntRange::<i32>::new(1, i32::MAX)),
-            ],
-        );
-        // The src pad template must be named "src" for basesrc
-        // and specific a pad that is always there
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(src_pad_template);
-
-        // Install all our properties
-        klass.install_properties(&PROPERTIES);
-    }
-
     fn process<F: Float + FromByteSlice>(
         data: &mut [u8],
         accumulator_ref: &mut f64,
@@ -245,21 +188,109 @@ impl SineSrc {
     }
 }
 
+impl ObjectSubclass for SineSrc {
+    const NAME: &'static str = "RsSineSrc";
+    type ParentType = gst_base::BaseSrc;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
+    // Called when a new instance is to be created
+    fn new() -> Self {
+        Self {
+            cat: gst::DebugCategory::new(
+                "rssinesrc",
+                gst::DebugColorFlags::empty(),
+                "Rust Sine Wave Source",
+            ),
+            settings: Mutex::new(Default::default()),
+            state: Mutex::new(Default::default()),
+            clock_wait: Mutex::new(ClockWait {
+                clock_id: None,
+                flushing: true,
+            }),
+        }
+    }
+
+    // Called exactly once when registering the type. Used for
+    // setting up metadata for all instances, e.g. the name and
+    // classification and the pad templates with their caps.
+    //
+    // Actual instances can create pads based on those pad templates
+    // with a subset of the caps given here. In case of basesrc,
+    // a "src" and "sink" pad template are required here and the base class
+    // will automatically instantiate pads for them.
+    //
+    // Our element here can output f32 and f64
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        klass.set_metadata(
+            "Sine Wave Source",
+            "Source/Audio",
+            "Creates a sine wave",
+            "Sebastian Dröge <sebastian@centricular.com>",
+        );
+
+        // On the src pad, we can produce F32/F64 with any sample rate
+        // and any number of channels
+        let caps = gst::Caps::new_simple(
+            "audio/x-raw",
+            &[
+                (
+                    "format",
+                    &gst::List::new(&[
+                        &gst_audio::AUDIO_FORMAT_F32.to_string(),
+                        &gst_audio::AUDIO_FORMAT_F64.to_string(),
+                    ]),
+                ),
+                ("layout", &"interleaved"),
+                ("rate", &gst::IntRange::<i32>::new(1, i32::MAX)),
+                ("channels", &gst::IntRange::<i32>::new(1, i32::MAX)),
+            ],
+        );
+        // The src pad template must be named "src" for basesrc
+        // and specific a pad that is always there
+        let src_pad_template = gst::PadTemplate::new(
+            "src",
+            gst::PadDirection::Src,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(src_pad_template);
+
+        // Install all our properties
+        klass.install_properties(&PROPERTIES);
+    }
+}
+
 // Virtual methods of GObject itself
-impl ObjectImpl<BaseSrc> for SineSrc {
+impl ObjectImpl for SineSrc {
+    glib_object_impl!();
+
+    // Called right after construction of each object
+    fn constructed(&self, obj: &glib::Object) {
+        self.parent_constructed(obj);
+
+        let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
+        // Initialize live-ness and notify the base class that
+        // we'd like to operate in Time format
+        basesrc.set_live(DEFAULT_IS_LIVE);
+        basesrc.set_format(gst::Format::Time);
+    }
+
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
-        let element = obj.downcast_ref::<BaseSrc>().unwrap();
+    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
+        let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
 
         match *prop {
-            Property::UInt("samples-per-buffer", ..) => {
+            subclass::Property("samples-per-buffer", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let samples_per_buffer = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: element,
+                    obj: basesrc,
                     "Changing samples-per-buffer from {} to {}",
                     settings.samples_per_buffer,
                     samples_per_buffer
@@ -268,50 +299,50 @@ impl ObjectImpl<BaseSrc> for SineSrc {
                 drop(settings);
 
                 let _ =
-                    element.post_message(&gst::Message::new_latency().src(Some(element)).build());
+                    basesrc.post_message(&gst::Message::new_latency().src(Some(basesrc)).build());
             }
-            Property::UInt("freq", ..) => {
+            subclass::Property("freq", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let freq = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: element,
+                    obj: basesrc,
                     "Changing freq from {} to {}",
                     settings.freq,
                     freq
                 );
                 settings.freq = freq;
             }
-            Property::Double("volume", ..) => {
+            subclass::Property("volume", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let volume = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: element,
+                    obj: basesrc,
                     "Changing volume from {} to {}",
                     settings.volume,
                     volume
                 );
                 settings.volume = volume;
             }
-            Property::Boolean("mute", ..) => {
+            subclass::Property("mute", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let mute = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: element,
+                    obj: basesrc,
                     "Changing mute from {} to {}",
                     settings.mute,
                     mute
                 );
                 settings.mute = mute;
             }
-            Property::Boolean("is-live", ..) => {
+            subclass::Property("is-live", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let is_live = value.get().unwrap();
                 gst_info!(
                     self.cat,
-                    obj: element,
+                    obj: basesrc,
                     "Changing is-live from {} to {}",
                     settings.is_live,
                     is_live
@@ -324,27 +355,27 @@ impl ObjectImpl<BaseSrc> for SineSrc {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::UInt("samples-per-buffer", ..) => {
+            subclass::Property("samples-per-buffer", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.samples_per_buffer.to_value())
             }
-            Property::UInt("freq", ..) => {
+            subclass::Property("freq", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.freq.to_value())
             }
-            Property::Double("volume", ..) => {
+            subclass::Property("volume", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.volume.to_value())
             }
-            Property::Boolean("mute", ..) => {
+            subclass::Property("mute", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.mute.to_value())
             }
-            Property::Boolean("is-live", ..) => {
+            subclass::Property("is-live", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.is_live.to_value())
             }
@@ -354,33 +385,35 @@ impl ObjectImpl<BaseSrc> for SineSrc {
 }
 
 // Virtual methods of gst::Element. We override none
-impl ElementImpl<BaseSrc> for SineSrc {
+impl ElementImpl for SineSrc {
     fn change_state(
         &self,
-        element: &BaseSrc,
+        element: &gst::Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
+        let basesrc = element.downcast_ref::<gst_base::BaseSrc>().unwrap();
+
         // Configure live'ness once here just before starting the source
         match transition {
             gst::StateChange::ReadyToPaused => {
-                element.set_live(self.settings.lock().unwrap().is_live);
+                basesrc.set_live(self.settings.lock().unwrap().is_live);
             }
             _ => (),
         }
 
-        element.parent_change_state(transition)
+        self.parent_change_state(element, transition)
     }
 }
 
 // Virtual methods of gst_base::BaseSrc
-impl BaseSrcImpl<BaseSrc> for SineSrc {
+impl BaseSrcImpl for SineSrc {
     // Called whenever the input/output caps are changing, i.e. in the very beginning before data
     // flow happens and whenever the situation in the pipeline is changing. All buffers after this
     // call have the caps given here.
     //
     // We simply remember the resulting AudioInfo from the caps to be able to use this for knowing
     // the sample rate, etc. when creating buffers
-    fn set_caps(&self, element: &BaseSrc, caps: &gst::CapsRef) -> bool {
+    fn set_caps(&self, element: &gst_base::BaseSrc, caps: &gst::CapsRef) -> bool {
         use std::f64::consts::PI;
 
         let info = match gst_audio::AudioInfo::from_caps(caps) {
@@ -431,7 +464,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
     }
 
     // Called when starting, so we can initialize all stream-related state to its defaults
-    fn start(&self, element: &BaseSrc) -> bool {
+    fn start(&self, element: &gst_base::BaseSrc) -> bool {
         // Reset state
         *self.state.lock().unwrap() = Default::default();
         self.unlock_stop(element);
@@ -442,7 +475,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
     }
 
     // Called when shutting down the element so we can release all stream-related state
-    fn stop(&self, element: &BaseSrc) -> bool {
+    fn stop(&self, element: &gst_base::BaseSrc) -> bool {
         // Reset state
         *self.state.lock().unwrap() = Default::default();
         self.unlock(element);
@@ -452,7 +485,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
         true
     }
 
-    fn query(&self, element: &BaseSrc, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
         match query.view_mut() {
@@ -483,13 +516,13 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
             }
             _ => (),
         }
-        BaseSrcBase::parent_query(element, query)
+        BaseSrcImpl::parent_query(self, element, query)
     }
 
     // Creates the audio buffers
     fn create(
         &self,
-        element: &BaseSrc,
+        element: &gst_base::BaseSrc,
         _offset: u64,
         _length: u32,
     ) -> Result<gst::Buffer, gst::FlowError> {
@@ -643,7 +676,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
         Ok(buffer)
     }
 
-    fn fixate(&self, element: &BaseSrc, caps: gst::Caps) -> gst::Caps {
+    fn fixate(&self, element: &gst_base::BaseSrc, caps: gst::Caps) -> gst::Caps {
         // Fixate the caps. BaseSrc will do some fixation for us, but
         // as we allow any rate between 1 and MAX it would fixate to 1. 1Hz
         // is generally not a useful sample rate.
@@ -661,14 +694,14 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
 
         // Let BaseSrc fixate anything else for us. We could've alternatively have
         // called Caps::fixate() here
-        element.parent_fixate(caps)
+        self.parent_fixate(element, caps)
     }
 
-    fn is_seekable(&self, _element: &BaseSrc) -> bool {
+    fn is_seekable(&self, _element: &gst_base::BaseSrc) -> bool {
         true
     }
 
-    fn do_seek(&self, element: &BaseSrc, segment: &mut gst::Segment) -> bool {
+    fn do_seek(&self, element: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {
         // Handle seeking here. For Time and Default (sample offset) seeks we can
         // do something and have to update our sample offset and accumulator accordingly.
         //
@@ -774,7 +807,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
         }
     }
 
-    fn unlock(&self, element: &BaseSrc) -> bool {
+    fn unlock(&self, element: &gst_base::BaseSrc) -> bool {
         // This should unblock the create() function ASAP, so we
         // just unschedule the clock it here, if any.
         gst_debug!(self.cat, obj: element, "Unlocking");
@@ -787,7 +820,7 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
         true
     }
 
-    fn unlock_stop(&self, element: &BaseSrc) -> bool {
+    fn unlock_stop(&self, element: &gst_base::BaseSrc) -> bool {
         // This signals that unlocking is done, so we can reset
         // all values again.
         gst_debug!(self.cat, obj: element, "Unlock stop");
@@ -798,34 +831,9 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
     }
 }
 
-// This zero-sized struct is containing the static metadata of our element. It is only necessary to
-// be able to implement traits on it, but e.g. a plugin that registers multiple elements with the
-// same code would use this struct to store information about the concrete element. An example of
-// this would be a plugin that wraps around a library that has multiple decoders with the same API,
-// but wants (as it should) a separate element registered for each decoder.
-struct SineSrcStatic;
-
-// The basic trait for registering the type: This returns a name for the type and registers the
-// instance and class initializations functions with the type system, thus hooking everything
-// together.
-impl ImplTypeStatic<BaseSrc> for SineSrcStatic {
-    fn get_name(&self) -> &str {
-        "SineSrc"
-    }
-
-    fn new(&self, element: &BaseSrc) -> Box<BaseSrcImpl<BaseSrc>> {
-        SineSrc::new(element)
-    }
-
-    fn class_init(&self, klass: &mut BaseSrcClass) {
-        SineSrc::class_init(klass);
-    }
-}
-
 // Registers the type for our element, and then registers in GStreamer under
 // the name "sinesrc" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    let type_ = register_type(SineSrcStatic);
-    gst::Element::register(plugin, "rssinesrc", 0, type_)
+    gst::Element::register(plugin, "rssinesrc", 0, SineSrc::get_type())
 }

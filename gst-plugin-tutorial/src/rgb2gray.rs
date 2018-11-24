@@ -1,4 +1,4 @@
-// Copyright (C) 2017 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2017,2018 Sebastian Dröge <sebastian@centricular.com>
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
@@ -7,13 +7,14 @@
 // except according to those terms.
 
 use glib;
+use glib::subclass;
+use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
+use gst::subclass::prelude::*;
+use gst_base;
+use gst_base::subclass::prelude::*;
 use gst_video;
-
-use gobject_subclass::object::*;
-use gst_plugin::base_transform::*;
-use gst_plugin::element::*;
 
 use std::i32;
 use std::sync::Mutex;
@@ -39,22 +40,27 @@ impl Default for Settings {
 }
 
 // Metadata for the properties
-static PROPERTIES: [Property; 2] = [
-    Property::Boolean(
-        "invert",
-        "Invert",
-        "Invert grayscale output",
-        DEFAULT_INVERT,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "shift",
-        "Shift",
-        "Shift grayscale output (wrapping around)",
-        (0, 255),
-        DEFAULT_SHIFT,
-        PropertyMutability::ReadWrite,
-    ),
+static PROPERTIES: [subclass::Property; 2] = [
+    subclass::Property("invert", || {
+        glib::ParamSpec::boolean(
+            "invert",
+            "Invert",
+            "Invert grayscale output",
+            DEFAULT_INVERT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("shift", || {
+        glib::ParamSpec::uint(
+            "shift",
+            "Shift",
+            "Shift grayscale output (wrapping around)",
+            0,
+            255,
+            DEFAULT_SHIFT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
 ];
 
 // Stream-specific state, i.e. video format configuration
@@ -71,9 +77,43 @@ struct Rgb2Gray {
 }
 
 impl Rgb2Gray {
+    // Converts one pixel of BGRx to a grayscale value, shifting and/or
+    // inverting it as configured
+    #[inline]
+    fn bgrx_to_gray(in_p: &[u8], shift: u8, invert: bool) -> u8 {
+        // See https://en.wikipedia.org/wiki/YUV#SDTV_with_BT.601
+        const R_Y: u32 = 19595; // 0.299 * 65536
+        const G_Y: u32 = 38470; // 0.587 * 65536
+        const B_Y: u32 = 7471; // 0.114 * 65536
+
+        assert_eq!(in_p.len(), 4);
+
+        let b = u32::from(in_p[0]);
+        let g = u32::from(in_p[1]);
+        let r = u32::from(in_p[2]);
+
+        let gray = ((r * R_Y) + (g * G_Y) + (b * B_Y)) / 65536;
+        let gray = (gray as u8).wrapping_add(shift);
+
+        if invert {
+            255 - gray
+        } else {
+            gray
+        }
+    }
+}
+
+impl ObjectSubclass for Rgb2Gray {
+    const NAME: &'static str = "RsRgb2Gray";
+    type ParentType = gst_base::BaseTransform;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
     // Called when a new instance is to be created
-    fn new(_transform: &BaseTransform) -> Box<BaseTransformImpl<BaseTransform>> {
-        Box::new(Self {
+    fn new() -> Self {
+        Self {
             cat: gst::DebugCategory::new(
                 "rsrgb2gray",
                 gst::DebugColorFlags::empty(),
@@ -81,7 +121,7 @@ impl Rgb2Gray {
             ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(None),
-        })
+        }
     }
 
     // Called exactly once when registering the type. Used for
@@ -94,7 +134,7 @@ impl Rgb2Gray {
     // will automatically instantiate pads for them.
     //
     // Our element here can convert BGRx to BGRx or GRAY8, both being grayscale.
-    fn class_init(klass: &mut BaseTransformClass) {
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
         klass.set_metadata(
             "RGB-GRAY Converter",
             "Filter/Effect/Converter/Video",
@@ -171,45 +211,26 @@ impl Rgb2Gray {
         //
         // We could work in-place for BGRx->BGRx but don't do here for simplicity
         // for now.
-        klass.configure(BaseTransformMode::NeverInPlace, false, false);
-    }
-
-    // Converts one pixel of BGRx to a grayscale value, shifting and/or
-    // inverting it as configured
-    #[inline]
-    fn bgrx_to_gray(in_p: &[u8], shift: u8, invert: bool) -> u8 {
-        // See https://en.wikipedia.org/wiki/YUV#SDTV_with_BT.601
-        const R_Y: u32 = 19595; // 0.299 * 65536
-        const G_Y: u32 = 38470; // 0.587 * 65536
-        const B_Y: u32 = 7471; // 0.114 * 65536
-
-        assert_eq!(in_p.len(), 4);
-
-        let b = u32::from(in_p[0]);
-        let g = u32::from(in_p[1]);
-        let r = u32::from(in_p[2]);
-
-        let gray = ((r * R_Y) + (g * G_Y) + (b * B_Y)) / 65536;
-        let gray = (gray as u8).wrapping_add(shift);
-
-        if invert {
-            255 - gray
-        } else {
-            gray
-        }
+        klass.configure(
+            gst_base::subclass::BaseTransformMode::NeverInPlace,
+            false,
+            false,
+        );
     }
 }
 
 // Virtual methods of GObject itself
-impl ObjectImpl<BaseTransform> for Rgb2Gray {
+impl ObjectImpl for Rgb2Gray {
+    glib_object_impl!();
+
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
-        let element = obj.downcast_ref::<BaseTransform>().unwrap();
+    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
+        let element = obj.downcast_ref::<gst_base::BaseTransform>().unwrap();
 
         match *prop {
-            Property::Boolean("invert", ..) => {
+            subclass::Property("invert", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let invert = value.get().unwrap();
                 gst_info!(
@@ -221,7 +242,7 @@ impl ObjectImpl<BaseTransform> for Rgb2Gray {
                 );
                 settings.invert = invert;
             }
-            Property::UInt("shift", ..) => {
+            subclass::Property("shift", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let shift = value.get().unwrap();
                 gst_info!(
@@ -239,15 +260,15 @@ impl ObjectImpl<BaseTransform> for Rgb2Gray {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::Boolean("invert", ..) => {
+            subclass::Property("invert", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.invert.to_value())
             }
-            Property::UInt("shift", ..) => {
+            subclass::Property("shift", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.shift.to_value())
             }
@@ -257,17 +278,17 @@ impl ObjectImpl<BaseTransform> for Rgb2Gray {
 }
 
 // Virtual methods of gst::Element. We override none
-impl ElementImpl<BaseTransform> for Rgb2Gray {}
+impl ElementImpl for Rgb2Gray {}
 
 // Virtual methods of gst_base::BaseTransform
-impl BaseTransformImpl<BaseTransform> for Rgb2Gray {
+impl BaseTransformImpl for Rgb2Gray {
     // Called for converting caps from one pad to another to account for any
     // changes in the media format this element is performing.
     //
     // In our case that means that:
     fn transform_caps(
         &self,
-        element: &BaseTransform,
+        element: &gst_base::BaseTransform,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -325,7 +346,7 @@ impl BaseTransformImpl<BaseTransform> for Rgb2Gray {
     // Returns the size of one processing unit (i.e. a frame in our case) corresponding
     // to the given caps. This is used for allocating a big enough output buffer and
     // sanity checking the input buffer size, among other things.
-    fn get_unit_size(&self, _element: &BaseTransform, caps: &gst::Caps) -> Option<usize> {
+    fn get_unit_size(&self, _element: &gst_base::BaseTransform, caps: &gst::Caps) -> Option<usize> {
         gst_video::VideoInfo::from_caps(caps).map(|info| info.size())
     }
 
@@ -335,7 +356,12 @@ impl BaseTransformImpl<BaseTransform> for Rgb2Gray {
     //
     // We simply remember the resulting VideoInfo from the caps to be able to use this for knowing
     // the width, stride, etc when transforming buffers
-    fn set_caps(&self, element: &BaseTransform, incaps: &gst::Caps, outcaps: &gst::Caps) -> bool {
+    fn set_caps(
+        &self,
+        element: &gst_base::BaseTransform,
+        incaps: &gst::Caps,
+        outcaps: &gst::Caps,
+    ) -> bool {
         let in_info = match gst_video::VideoInfo::from_caps(incaps) {
             None => return false,
             Some(info) => info,
@@ -360,7 +386,7 @@ impl BaseTransformImpl<BaseTransform> for Rgb2Gray {
 
     // Called when shutting down the element so we can release all stream-related state
     // There's also start(), which is called whenever starting the element again
-    fn stop(&self, element: &BaseTransform) -> bool {
+    fn stop(&self, element: &gst_base::BaseTransform) -> bool {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
@@ -372,7 +398,7 @@ impl BaseTransformImpl<BaseTransform> for Rgb2Gray {
     // Does the actual transformation of the input buffer to the output buffer
     fn transform(
         &self,
-        element: &BaseTransform,
+        element: &gst_base::BaseTransform,
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
     ) -> gst::FlowReturn {
@@ -529,34 +555,9 @@ impl BaseTransformImpl<BaseTransform> for Rgb2Gray {
     }
 }
 
-// This zero-sized struct is containing the static metadata of our element. It is only necessary to
-// be able to implement traits on it, but e.g. a plugin that registers multiple elements with the
-// same code would use this struct to store information about the concrete element. An example of
-// this would be a plugin that wraps around a library that has multiple decoders with the same API,
-// but wants (as it should) a separate element registered for each decoder.
-struct Rgb2GrayStatic;
-
-// The basic trait for registering the type: This returns a name for the type and registers the
-// instance and class initializations functions with the type system, thus hooking everything
-// together.
-impl ImplTypeStatic<BaseTransform> for Rgb2GrayStatic {
-    fn get_name(&self) -> &str {
-        "Rgb2Gray"
-    }
-
-    fn new(&self, element: &BaseTransform) -> Box<BaseTransformImpl<BaseTransform>> {
-        Rgb2Gray::new(element)
-    }
-
-    fn class_init(&self, klass: &mut BaseTransformClass) {
-        Rgb2Gray::class_init(klass);
-    }
-}
-
 // Registers the type for our element, and then registers in GStreamer under
 // the name "rsrgb2gray" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    let type_ = register_type(Rgb2GrayStatic);
-    gst::Element::register(plugin, "rsrgb2gray", 0, type_)
+    gst::Element::register(plugin, "rsrgb2gray", 0, Rgb2Gray::get_type())
 }
