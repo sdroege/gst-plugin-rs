@@ -4,11 +4,11 @@ version = "0.4.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 categories = ["multimedia", "api-bindings"]
 description = "Infrastructure for writing GStreamer plugins in Rust"
+documentation = "https://slomo.pages.freedesktop.org/rustdocs/gst-plugin/gst_plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/tree/master/gst-plugin"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 homepage = "https://gstreamer.freedesktop.org"
-documentation = "https://sdroege.github.io/rustdoc/gst-plugin/gst_plugin/"
 keywords = ["gstreamer", "multimedia", "audio", "video", "gnome"]
 
 [dependencies]
