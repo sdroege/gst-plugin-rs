@@ -1,3 +1,5 @@
+# NOTE: The canonical repository for gst-plugin-rs has moved to [freedesktop.org GitLab](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs)!
+
 # gst-plugin-rs [![crates.io](https://img.shields.io/crates/v/gst-plugin.svg)](https://crates.io/crates/gst-plugin) [![pipeline status](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/badges/master/pipeline.svg)](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/commits/master)
 
 Infrastructure for writing [GStreamer](https://gstreamer.freedesktop.org/)
@@ -7,12 +9,12 @@ plugins.
 
 Documentation for the crate containing the infrastructure for writing
 GStreamer plugins in Rust, [`gst-plugin`](gst-plugin), can be found
-[here](https://sdroege.github.io/rustdoc/gst-plugin/gst_plugin/). The whole
+[here](https://slomo.pages.freedesktop.org/rustdocs/gst-plugin/gst_plugin). The whole
 API builds upon the [application-side GStreamer bindings](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs).
 Check the README.md of that repository also for details about how to set-up
 your development environment.
 
-Various example plugins can be found in the [GIT repository](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/). A blog post series about writing GStreamer plugins/elements can be found [here](https://coaxion.net/blog/2018/01/how-to-write-gstreamer-elements-in-rust-part-1-a-video-filter-for-converting-rgb-to-grayscale/).
+Various example plugins can be found in the [GIT repository](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/). A blog post series about writing GStreamer plugins/elements can be found [here](https://coaxion.net/blog/2018/01/how-to-write-gstreamer-elements-in-rust-part-1-a-video-filter-for-converting-rgb-to-grayscale/)[2](https://coaxion.net/blog/2018/02/how-to-write-gstreamer-elements-in-rust-part-2-a-raw-audio-sine-wave-source/).
 
 For background and motivation, see the [announcement
 blogpost](https://coaxion.net/blog/2016/05/writing-gstreamer-plugins-and-elements-in-rust/)

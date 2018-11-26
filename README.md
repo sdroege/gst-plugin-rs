@@ -9,7 +9,7 @@ plugins.
 
 Documentation for the crate containing the infrastructure for writing
 GStreamer plugins in Rust, [`gst-plugin`](gst-plugin), can be found
-[here](https://sdroege.github.io/rustdoc/gst-plugin/gst_plugin/). The whole
+[here](https://slomo.pages.freedesktop.org/rustdocs/gst-plugin/gst_plugin). The whole
 API builds upon the [application-side GStreamer bindings](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs).
 Check the README.md of that repository also for details about how to set-up
 your development environment.
