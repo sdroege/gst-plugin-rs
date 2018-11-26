@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html),
 specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-version-field).
 
+## [0.3.2] - 2018-11-26
+### Changed
+- Fix various links in the README.md
+- Link to the correct location for the documentation
+
 ## [0.3.1] - 2018-11-19
 ### Fixed
 - Override vfuncs of all parent classes correctly.
@@ -62,7 +67,8 @@ specifically the [variant used by Rust](http://doc.crates.io/manifest.html#the-v
 ## [0.1.0] - 2017-12-22
 - Initial release of the `gst-plugin` crate.
 
-[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.3.1...HEAD
+[Unreleased]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.3.2...HEAD
+[0.3.2]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.3.1...0.3.2
 [0.3.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.3.0...0.3.1
 [0.3.0]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.2.1...0.3.0
 [0.2.1]: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/compare/0.2.0...0.2.1
