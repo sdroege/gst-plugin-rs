@@ -1,6 +1,6 @@
-# NOTE: The canonical repository for gst-plugin-rs has moved to [freedesktop.org GitLab](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs)!
+# NOTE: The canonical repository for gst-plugins-rs has moved to [freedesktop.org GitLab](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs)!
 
-# gst-plugin-rs [![crates.io](https://img.shields.io/crates/v/gst-plugin.svg)](https://crates.io/crates/gst-plugin) [![pipeline status](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/badges/master/pipeline.svg)](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/commits/master)
+# gst-plugins-rs [![crates.io](https://img.shields.io/crates/v/gst-plugin.svg)](https://crates.io/crates/gst-plugin) [![pipeline status](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/badges/master/pipeline.svg)](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/commits/master)
 
 Infrastructure for writing [GStreamer](https://gstreamer.freedesktop.org/)
 plugins and elements in the [Rust programming
@@ -14,7 +14,7 @@ API builds upon the [application-side GStreamer bindings](https://gitlab.freedes
 Check the README.md of that repository also for details about how to set-up
 your development environment.
 
-Various example plugins can be found in the [GIT repository](https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs/). A blog post series about writing GStreamer plugins/elements can be found [here](https://coaxion.net/blog/2018/01/how-to-write-gstreamer-elements-in-rust-part-1-a-video-filter-for-converting-rgb-to-grayscale/)[2](https://coaxion.net/blog/2018/02/how-to-write-gstreamer-elements-in-rust-part-2-a-raw-audio-sine-wave-source/).
+Various example plugins can be found in the [GIT repository](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/). A blog post series about writing GStreamer plugins/elements can be found [here](https://coaxion.net/blog/2018/01/how-to-write-gstreamer-elements-in-rust-part-1-a-video-filter-for-converting-rgb-to-grayscale/)[2](https://coaxion.net/blog/2018/02/how-to-write-gstreamer-elements-in-rust-part-2-a-raw-audio-sine-wave-source/).
 
 For background and motivation, see the [announcement
 blogpost](https://coaxion.net/blog/2016/05/writing-gstreamer-plugins-and-elements-in-rust/)
@@ -27,7 +27,7 @@ blogposts were written.
 
 ## LICENSE
 
-gst-plugin-rs and all crates contained in here that are not listed below are
+gst-plugins-rs and all crates contained in here that are not listed below are
 licensed under either of
 
  * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
@@ -50,5 +50,5 @@ https://www.gnu.org/licenses/lgpl-2.1.html
 Any kinds of contributions are welcome as a pull request.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in gst-plugin-rs by you, as defined in the Apache-2.0 license, shall be
+for inclusion in gst-plugins-rs by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.

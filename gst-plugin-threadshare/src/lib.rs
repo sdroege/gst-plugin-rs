@@ -75,7 +75,7 @@ plugin_define!(
     b"LGPL\0",
     b"threadshare\0",
     b"threadshare\0",
-    b"https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs\0",
+    b"https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs\0",
     b"2018-03-01\0"
 );
 

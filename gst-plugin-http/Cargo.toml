@@ -2,7 +2,7 @@
 name = "gst-plugin-http"
 version = "0.4.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 
 [dependencies]

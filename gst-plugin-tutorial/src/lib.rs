@@ -43,6 +43,6 @@ plugin_define!(
     b"MIT/X11\0",
     b"rstutorial\0",
     b"rstutorial\0",
-    b"https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs\0",
+    b"https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs\0",
     b"2017-12-30\0"
 );
