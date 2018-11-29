@@ -23,6 +23,7 @@ extern crate gobject_sys as gobject_ffi;
 extern crate gstreamer_sys as gst_ffi;
 
 extern crate gio;
+#[macro_use]
 extern crate glib;
 extern crate gobject_subclass;
 #[macro_use]

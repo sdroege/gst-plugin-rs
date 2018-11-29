@@ -242,11 +242,8 @@ impl Queue {
             let s = gst::Structure::new(
                 "ts-io-context",
                 &[
-                    ("io-context", &glib::AnySendValue::new(io_context.clone())),
-                    (
-                        "pending-future-id",
-                        &glib::AnySendValue::new(*pending_future_id),
-                    ),
+                    ("io-context", &io_context),
+                    ("pending-future-id", &*pending_future_id),
                 ],
             );
             Some(gst::Event::new_custom_downstream_sticky(s).build())
@@ -472,12 +469,8 @@ impl Queue {
                 let s = e.get_structure().unwrap();
                 if s.get_name() == "ts-io-context" {
                     let mut state = self.state.lock().unwrap();
-                    let io_context = s.get::<&glib::AnySendValue>("io-context").unwrap();
-                    let io_context = io_context.downcast_ref::<IOContext>().unwrap();
-                    let pending_future_id =
-                        s.get::<&glib::AnySendValue>("pending-future-id").unwrap();
-                    let pending_future_id =
-                        pending_future_id.downcast_ref::<PendingFutureId>().unwrap();
+                    let io_context = s.get::<&IOContext>("io-context").unwrap();
+                    let pending_future_id = s.get::<&PendingFutureId>("pending-future-id").unwrap();
 
                     gst_debug!(
                         self.cat,

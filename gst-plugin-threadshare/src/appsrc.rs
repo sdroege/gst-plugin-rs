@@ -222,11 +222,8 @@ impl AppSrc {
             let s = gst::Structure::new(
                 "ts-io-context",
                 &[
-                    ("io-context", &glib::AnySendValue::new(io_context.clone())),
-                    (
-                        "pending-future-id",
-                        &glib::AnySendValue::new(*pending_future_id),
-                    ),
+                    ("io-context", &io_context),
+                    ("pending-future-id", &*pending_future_id),
                 ],
             );
             Some(gst::Event::new_custom_downstream_sticky(s).build())

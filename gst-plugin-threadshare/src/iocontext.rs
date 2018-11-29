@@ -30,6 +30,7 @@ use tokio::reactor;
 use tokio_current_thread;
 use tokio_timer::timer;
 
+use glib;
 use gst;
 
 lazy_static! {
@@ -165,6 +166,14 @@ impl Drop for IOContextShutdown {
 #[derive(Clone)]
 pub struct IOContext(Arc<IOContextInner>);
 
+impl glib::subclass::boxed::BoxedType for IOContext {
+    const NAME: &'static str = "TsIOContext";
+
+    glib_boxed_type!();
+}
+
+glib_boxed_derive_traits!(IOContext);
+
 struct IOContextInner {
     name: String,
     runtime_handle: Mutex<tokio_current_thread::Handle>,
@@ -286,3 +295,11 @@ pub type PendingFuturesFuture<E> =
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct PendingFutureId(u64);
+
+impl glib::subclass::boxed::BoxedType for PendingFutureId {
+    const NAME: &'static str = "TsPendingFutureId";
+
+    glib_boxed_type!();
+}
+
+glib_boxed_derive_traits!(PendingFutureId);
