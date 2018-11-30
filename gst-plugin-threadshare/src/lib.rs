@@ -17,6 +17,8 @@
 
 #![crate_type = "cdylib"]
 
+extern crate libc;
+
 extern crate gio_sys as gio_ffi;
 extern crate glib_sys as glib_ffi;
 extern crate gobject_sys as gobject_ffi;
@@ -46,6 +48,9 @@ extern crate rand;
 extern crate lazy_static;
 
 extern crate net2;
+
+#[cfg(windows)]
+extern crate winapi;
 
 mod iocontext;
 

@@ -95,12 +95,16 @@ impl GioSocketWrapper {
 
     #[cfg(unix)]
     fn get<T: FromRawFd>(&self) -> T {
-        unsafe { FromRawFd::from_raw_fd(gio_ffi::g_socket_get_fd(self.socket)) }
+        use libc;
+
+        unsafe { FromRawFd::from_raw_fd(libc::dup(gio_ffi::g_socket_get_fd(self.socket))) }
     }
 
     #[cfg(windows)]
     fn get<T: FromRawSocket>(&self) -> T {
-        unsafe { FromRawSocket::from_raw_socket(ffi::g_socket_get_fd(self.socket) as _) }
+        unsafe {
+            FromRawSocket::from_raw_socket(dup_socket(ffi::g_socket_get_fd(self.socket) as _) as _)
+        }
     }
 }
 
@@ -118,6 +122,32 @@ impl Drop for GioSocketWrapper {
             gobject_ffi::g_object_unref(self.socket as *mut _);
         }
     }
+}
+
+#[cfg(windows)]
+unsafe fn dup_socket(socket: usize) -> usize {
+    use std::mem;
+    use winapi::shared::minwindef::DWORD;
+    use winapi::shared::ws2def;
+    use winapi::um::processthreadsapi;
+    use winapi::um::winsock2;
+    use winapi::um::winsock2;
+
+    let mut proto_info = mem::zeroed();
+    let ret = winsock2::WSADuplicateSocketA(
+        socket,
+        processthreadsapi::GetCurrentProcess(),
+        &mut proto_info,
+    );
+    assert_eq!(ret, 0);
+    winsock2::WSASocketA(
+        ws2def::AF_INET,
+        ws2def::SOCK_DGRAM,
+        ws2def::IPPROTO_UDP,
+        &mut proto_info,
+        0,
+        0,
+    );
 }
 
 #[derive(Debug, Clone)]
@@ -223,8 +253,8 @@ pub struct UdpReader {
 }
 
 impl UdpReader {
-    pub fn new(socket: net::UdpSocket) -> Self {
-        Self { socket: socket }
+    fn new(socket: net::UdpSocket) -> Self {
+        Self { socket }
     }
 }
 
@@ -668,7 +698,9 @@ impl UdpSrc {
             // Store the socket as used-socket in the settings
             #[cfg(unix)]
             {
-                let fd = socket.as_raw_fd();
+                use libc;
+
+                let fd = unsafe { libc::dup(socket.as_raw_fd()) };
 
                 // This is technically unsafe because it allows
                 // us to share the fd between the socket and the
@@ -694,7 +726,7 @@ impl UdpSrc {
             }
             #[cfg(windows)]
             {
-                let fd = socket.as_raw_socket();
+                let fd = unsafe { dup_socket(socket.as_raw_socket() as _) as _ };
 
                 // This is technically unsafe because it allows
                 // us to share the fd between the socket and the

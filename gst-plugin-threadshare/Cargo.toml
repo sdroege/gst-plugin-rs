@@ -5,6 +5,7 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1+"
 
 [dependencies]
+libc = "0.2"
 glib-sys = { git = "https://github.com/gtk-rs/sys" }
 gobject-sys = { git = "https://github.com/gtk-rs/sys" }
 gio-sys = { git = "https://github.com/gtk-rs/sys" }
@@ -25,6 +26,9 @@ lazy_static = "1.0"
 either = "1.0"
 rand = "0.5"
 net2 = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winsock2", "processthreadsapi"] }
 
 [lib]
 name = "gstthreadshare"
