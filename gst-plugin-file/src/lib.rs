@@ -8,64 +8,31 @@
 
 #![crate_type = "cdylib"]
 
+#[macro_use]
 extern crate glib;
 #[macro_use]
-extern crate gst_plugin;
-extern crate gst_plugin_simple;
-#[macro_use]
 extern crate gstreamer as gst;
+extern crate gstreamer_base as gst_base;
 extern crate url;
 
-use gst_plugin_simple::sink::*;
-use gst_plugin_simple::source::*;
-
+mod file_location;
 mod filesink;
 mod filesrc;
 
-use filesink::FileSink;
-use filesrc::FileSrc;
-
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    source_register(
-        plugin,
-        SourceInfo {
-            name: "rsfilesrc".into(),
-            long_name: "File Source".into(),
-            description: "Reads local files".into(),
-            classification: "Source/File".into(),
-            author: "Sebastian Dröge <sebastian@centricular.com>".into(),
-            rank: 256 + 100,
-            create_instance: FileSrc::new_boxed,
-            protocols: vec!["file".into()],
-            push_only: false,
-        },
-    )?;
-
-    sink_register(
-        plugin,
-        SinkInfo {
-            name: "rsfilesink".into(),
-            long_name: "File Sink".into(),
-            description: "Writes to local files".into(),
-            classification: "Sink/File".into(),
-            author: "Luis de Bethencourt <luisbg@osg.samsung.com>".into(),
-            rank: 256 + 100,
-            create_instance: FileSink::new_boxed,
-            protocols: vec!["file".into()],
-        },
-    )?;
-
+    filesink::register(plugin)?;
+    filesrc::register(plugin)?;
     Ok(())
 }
 
-plugin_define!(
-    b"rsfile\0",
-    b"Rust File Plugin\0",
+gst_plugin_define!(
+    "rsfile",
+    "Rust File Plugin",
     plugin_init,
-    b"1.0\0",
-    b"MIT/X11\0",
-    b"rsfile\0",
-    b"rsfile\0",
-    b"https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs\0",
-    b"2016-12-08\0"
+    "1.0",
+    "MIT/X11",
+    "rsfile",
+    "rsfile",
+    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
+    "2016-12-08"
 );
