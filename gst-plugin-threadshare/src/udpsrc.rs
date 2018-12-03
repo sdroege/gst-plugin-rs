@@ -697,15 +697,13 @@ impl UdpSrc {
 
             // Store the socket as used-socket in the settings
             #[cfg(unix)]
-            {
+            unsafe {
                 use libc;
 
-                let fd = unsafe { libc::dup(socket.as_raw_fd()) };
+                let fd = libc::dup(socket.as_raw_fd());
 
-                // This is technically unsafe because it allows
-                // us to share the fd between the socket and the
-                // GIO socket below, but safety of this is the
-                // job of the application
+                // This is unsafe because it allows us to share the fd between the socket and the
+                // GIO socket below, but safety of this is the job of the application
                 struct FdConverter(RawFd);
                 impl IntoRawFd for FdConverter {
                     fn into_raw_fd(self) -> RawFd {
@@ -725,13 +723,11 @@ impl UdpSrc {
                 self.settings.lock().unwrap().used_socket = Some(wrapper);
             }
             #[cfg(windows)]
-            {
-                let fd = unsafe { dup_socket(socket.as_raw_socket() as _) as _ };
+            unsafe {
+                let fd = dup_socket(socket.as_raw_socket() as _) as _;
 
-                // This is technically unsafe because it allows
-                // us to share the fd between the socket and the
-                // GIO socket below, but safety of this is the
-                // job of the application
+                // This is unsafe because it allows us to share the fd between the socket and the
+                // GIO socket below, but safety of this is the job of the application
                 struct SocketConverter(RawSocket);
                 impl IntoRawSocket for SocketConverter {
                     fn into_raw_socket(self) -> RawSocket {
