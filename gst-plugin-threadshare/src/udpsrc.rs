@@ -585,14 +585,14 @@ impl UdpSrc {
                     return Err(gst_error_msg!(
                         gst::ResourceError::Settings,
                         ["No address set"]
-                    ))
+                    ));
                 }
                 Some(ref addr) => match addr.parse() {
                     Err(err) => {
                         return Err(gst_error_msg!(
                             gst::ResourceError::Settings,
                             ["Invalid address '{}' set: {}", addr, err]
-                        ))
+                        ));
                     }
                     Ok(addr) => addr,
                 },
