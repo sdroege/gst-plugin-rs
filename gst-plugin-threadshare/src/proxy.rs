@@ -17,11 +17,11 @@
 
 use glib;
 use glib::prelude::*;
+use glib::subclass;
+use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
-
-use gobject_subclass::object::*;
-use gst_plugin::element::*;
+use gst::subclass::prelude::*;
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -87,62 +87,80 @@ impl Default for SettingsSrc {
     }
 }
 
-static PROPERTIES_SRC: [Property; 6] = [
-    Property::UInt(
-        "max-size-buffers",
-        "Max Size Buffers",
-        "Maximum number of buffers to queue (0=unlimited)",
-        (0, u32::MAX),
-        DEFAULT_MAX_SIZE_BUFFERS,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "max-size-bytes",
-        "Max Size Bytes",
-        "Maximum number of bytes to queue (0=unlimited)",
-        (0, u32::MAX),
-        DEFAULT_MAX_SIZE_BYTES,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt64(
-        "max-size-time",
-        "Max Size Time",
-        "Maximum number of nanoseconds to queue (0=unlimited)",
-        (0, u64::MAX - 1),
-        DEFAULT_MAX_SIZE_TIME,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::String(
-        "context",
-        "Context",
-        "Context name to share threads with",
-        Some(DEFAULT_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "context-wait",
-        "Context Wait",
-        "Throttle poll loop to run at most once every this many ms",
-        (0, 1000),
-        DEFAULT_CONTEXT_WAIT,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::String(
+static PROPERTIES_SRC: [subclass::Property; 6] = [
+    subclass::Property("max-size-buffers", || {
+        glib::ParamSpec::uint(
+            "max-size-buffers",
+            "Max Size Buffers",
+            "Maximum number of buffers to queue (0=unlimited)",
+            0,
+            u32::MAX,
+            DEFAULT_MAX_SIZE_BUFFERS,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("max-size-bytes", || {
+        glib::ParamSpec::uint(
+            "max-size-bytes",
+            "Max Size Bytes",
+            "Maximum number of bytes to queue (0=unlimited)",
+            0,
+            u32::MAX,
+            DEFAULT_MAX_SIZE_BYTES,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("max-size-time", || {
+        glib::ParamSpec::uint64(
+            "max-size-time",
+            "Max Size Time",
+            "Maximum number of nanoseconds to queue (0=unlimited)",
+            0,
+            u64::MAX - 1,
+            DEFAULT_MAX_SIZE_TIME,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("context", || {
+        glib::ParamSpec::string(
+            "context",
+            "Context",
+            "Context name to share threads with",
+            Some(DEFAULT_CONTEXT),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("context-wait", || {
+        glib::ParamSpec::uint(
+            "context-wait",
+            "Context Wait",
+            "Throttle poll loop to run at most once every this many ms",
+            0,
+            1000,
+            DEFAULT_CONTEXT_WAIT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("proxy-context", || {
+        glib::ParamSpec::string(
+            "proxy-context",
+            "Proxy Context",
+            "Context name of the proxy to share with",
+            Some(DEFAULT_PROXY_CONTEXT),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+];
+
+static PROPERTIES_SINK: [subclass::Property; 1] = [subclass::Property("proxy-context", || {
+    glib::ParamSpec::string(
         "proxy-context",
         "Proxy Context",
         "Context name of the proxy to share with",
         Some(DEFAULT_PROXY_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-];
-
-static PROPERTIES_SINK: [Property; 1] = [Property::String(
-    "proxy-context",
-    "Proxy Context",
-    "Context name of the proxy to share with",
-    Some(DEFAULT_PROXY_CONTEXT),
-    PropertyMutability::ReadWrite,
-)];
+        glib::ParamFlags::READWRITE,
+    )
+})];
 
 // TODO: Refactor into a Sender and Receiver instead of the have_ booleans
 
@@ -273,80 +291,10 @@ struct ProxySink {
 }
 
 impl ProxySink {
-    fn class_init(klass: &mut ElementClass) {
-        klass.set_metadata(
-            "Thread-sharing proxy sink",
-            "Sink/Generic",
-            "Thread-sharing proxy sink",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES_SINK);
-    }
-
-    fn init(element: &Element) -> Box<ElementImpl<Element>> {
-        let templ = element.get_pad_template("sink").unwrap();
-        let sink_pad = gst::Pad::new_from_template(&templ, "sink");
-
-        sink_pad.set_chain_function(|pad, parent, buffer| {
-            ProxySink::catch_panic_pad_function(
-                parent,
-                || gst::FlowReturn::Error,
-                |queue, element| queue.sink_chain(pad, element, buffer),
-            )
-        });
-        sink_pad.set_chain_list_function(|pad, parent, list| {
-            ProxySink::catch_panic_pad_function(
-                parent,
-                || gst::FlowReturn::Error,
-                |queue, element| queue.sink_chain_list(pad, element, list),
-            )
-        });
-        sink_pad.set_event_function(|pad, parent, event| {
-            ProxySink::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.sink_event(pad, element, event),
-            )
-        });
-        sink_pad.set_query_function(|pad, parent, query| {
-            ProxySink::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.sink_query(pad, element, query),
-            )
-        });
-
-        element.add_pad(&sink_pad).unwrap();
-
-        ::set_element_flags(element, gst::ElementFlags::SINK);
-
-        Box::new(Self {
-            cat: gst::DebugCategory::new(
-                "ts-proxysink",
-                gst::DebugColorFlags::empty(),
-                "Thread-sharing proxy sink",
-            ),
-            sink_pad: sink_pad,
-            state: Mutex::new(StateSink::default()),
-            settings: Mutex::new(SettingsSink::default()),
-        })
-    }
-
     fn enqueue_item(
         &self,
         _pad: &gst::Pad,
-        element: &Element,
+        element: &gst::Element,
         item: DataQueueItem,
     ) -> gst::FlowReturn {
         let wait_future = {
@@ -426,10 +374,7 @@ impl ProxySink {
 
                         let element_clone = element.clone();
                         let future = future::poll_fn(move || {
-                            let sink = element_clone
-                                .get_impl()
-                                .downcast_ref::<ProxySink>()
-                                .unwrap();
+                            let sink = Self::from_instance(&element_clone);
                             let state = sink.state.lock().unwrap();
 
                             gst_log!(
@@ -549,7 +494,7 @@ impl ProxySink {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &Element,
+        element: &gst::Element,
         buffer: gst::Buffer,
     ) -> gst::FlowReturn {
         gst_log!(self.cat, obj: pad, "Handling buffer {:?}", buffer);
@@ -559,14 +504,14 @@ impl ProxySink {
     fn sink_chain_list(
         &self,
         pad: &gst::Pad,
-        element: &Element,
+        element: &gst::Element,
         list: gst::BufferList,
     ) -> gst::FlowReturn {
         gst_log!(self.cat, obj: pad, "Handling buffer list {:?}", list);
         self.enqueue_item(pad, element, DataQueueItem::BufferList(list))
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
@@ -612,13 +557,18 @@ impl ProxySink {
         true
     }
 
-    fn sink_query(&self, pad: &gst::Pad, element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn sink_query(
+        &self,
+        pad: &gst::Pad,
+        element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
 
         pad.query_default(element, query)
     }
 
-    fn prepare(&self, element: &Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(self.cat, obj: element, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
@@ -640,7 +590,7 @@ impl ProxySink {
         Ok(())
     }
 
-    fn unprepare(&self, element: &Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Unpreparing");
 
         let mut state = self.state.lock().unwrap();
@@ -650,7 +600,7 @@ impl ProxySink {
         Ok(())
     }
 
-    fn start(&self, element: &Element) -> Result<(), ()> {
+    fn start(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Starting");
         let state = self.state.lock().unwrap();
 
@@ -662,7 +612,7 @@ impl ProxySink {
         Ok(())
     }
 
-    fn stop(&self, element: &Element) -> Result<(), ()> {
+    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Stopping");
         let mut state = self.state.lock().unwrap();
 
@@ -682,12 +632,93 @@ impl ProxySink {
     }
 }
 
-impl ObjectImpl<Element> for ProxySink {
-    fn set_property(&self, _obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES_SINK[id as usize];
+impl ObjectSubclass for ProxySink {
+    const NAME: &'static str = "RsTsProxySink";
+    type ParentType = gst::Element;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        klass.set_metadata(
+            "Thread-sharing proxy sink",
+            "Sink/Generic",
+            "Thread-sharing proxy sink",
+            "Sebastian Dröge <sebastian@centricular.com>",
+        );
+
+        let caps = gst::Caps::new_any();
+
+        let sink_pad_template = gst::PadTemplate::new(
+            "sink",
+            gst::PadDirection::Sink,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(sink_pad_template);
+
+        klass.install_properties(&PROPERTIES_SINK);
+    }
+
+    fn new() -> Self {
+        unreachable!()
+    }
+
+    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let templ = klass.get_pad_template("sink").unwrap();
+        let sink_pad = gst::Pad::new_from_template(&templ, "sink");
+
+        sink_pad.set_chain_function(|pad, parent, buffer| {
+            ProxySink::catch_panic_pad_function(
+                parent,
+                || gst::FlowReturn::Error,
+                |queue, element| queue.sink_chain(pad, element, buffer),
+            )
+        });
+        sink_pad.set_chain_list_function(|pad, parent, list| {
+            ProxySink::catch_panic_pad_function(
+                parent,
+                || gst::FlowReturn::Error,
+                |queue, element| queue.sink_chain_list(pad, element, list),
+            )
+        });
+        sink_pad.set_event_function(|pad, parent, event| {
+            ProxySink::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.sink_event(pad, element, event),
+            )
+        });
+        sink_pad.set_query_function(|pad, parent, query| {
+            ProxySink::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.sink_query(pad, element, query),
+            )
+        });
+
+        Self {
+            cat: gst::DebugCategory::new(
+                "ts-proxysink",
+                gst::DebugColorFlags::empty(),
+                "Thread-sharing proxy sink",
+            ),
+            sink_pad: sink_pad,
+            state: Mutex::new(StateSink::default()),
+            settings: Mutex::new(SettingsSink::default()),
+        }
+    }
+}
+
+impl ObjectImpl for ProxySink {
+    glib_object_impl!();
+
+    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES_SINK[id];
 
         match *prop {
-            Property::String("proxy-context", ..) => {
+            subclass::Property("proxy-context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.proxy_context = value.get().unwrap_or_else(|| "".into());
             }
@@ -695,23 +726,32 @@ impl ObjectImpl<Element> for ProxySink {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES_SINK[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES_SINK[id];
 
         match *prop {
-            Property::String("proxy-context", ..) => {
+            subclass::Property("proxy-context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.proxy_context.to_value())
             }
             _ => unimplemented!(),
         }
     }
+
+    fn constructed(&self, obj: &glib::Object) {
+        self.parent_constructed(obj);
+
+        let element = obj.downcast_ref::<gst::Element>().unwrap();
+        element.add_pad(&self.sink_pad).unwrap();
+
+        ::set_element_flags(element, gst::ElementFlags::SINK);
+    }
 }
 
-impl ElementImpl<Element> for ProxySink {
+impl ElementImpl for ProxySink {
     fn change_state(
         &self,
-        element: &Element,
+        element: &gst::Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
@@ -735,7 +775,7 @@ impl ElementImpl<Element> for ProxySink {
             _ => (),
         }
 
-        let ret = element.parent_change_state(transition);
+        let ret = self.parent_change_state(element, transition);
         if ret == gst::StateChangeReturn::Failure {
             return ret;
         }
@@ -760,71 +800,6 @@ struct ProxySrc {
 }
 
 impl ProxySrc {
-    fn class_init(klass: &mut ElementClass) {
-        klass.set_metadata(
-            "Thread-sharing proxy source",
-            "Source/Generic",
-            "Thread-sharing proxy source",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES_SRC);
-    }
-
-    fn init(element: &Element) -> Box<ElementImpl<Element>> {
-        let templ = element.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, "src");
-
-        src_pad.set_event_function(|pad, parent, event| {
-            ProxySrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_event(pad, element, event),
-            )
-        });
-        src_pad.set_query_function(|pad, parent, query| {
-            ProxySrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_query(pad, element, query),
-            )
-        });
-        element.add_pad(&src_pad).unwrap();
-
-        ::set_element_flags(element, gst::ElementFlags::SOURCE);
-
-        Box::new(Self {
-            cat: gst::DebugCategory::new(
-                "ts-proxysrc",
-                gst::DebugColorFlags::empty(),
-                "Thread-sharing proxy source",
-            ),
-            src_pad: src_pad,
-            state: Mutex::new(StateSrc::default()),
-            settings: Mutex::new(SettingsSrc::default()),
-        })
-    }
-
-    fn catch_panic_pad_function<T, F: FnOnce(&Self, &Element) -> T, G: FnOnce() -> T>(
-        parent: &Option<gst::Object>,
-        fallback: G,
-        f: F,
-    ) -> T {
-        let element = parent.as_ref().unwrap().downcast_ref::<Element>().unwrap();
-        let src = element.get_impl().downcast_ref::<ProxySrc>().unwrap();
-        element.catch_panic(fallback, |element| f(src, element))
-    }
-
     fn create_io_context_event(state: &StateSrc) -> Option<gst::Event> {
         if let (&Some(ref pending_future_id), &Some(ref io_context)) =
             (&state.pending_future_id, &state.io_context)
@@ -842,7 +817,7 @@ impl ProxySrc {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
@@ -875,7 +850,12 @@ impl ProxySrc {
         ret
     }
 
-    fn src_query(&self, pad: &gst::Pad, _element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        _element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
@@ -917,7 +897,7 @@ impl ProxySrc {
 
     fn push_item(
         &self,
-        element: &Element,
+        element: &gst::Element,
         item: DataQueueItem,
     ) -> future::Either<
         Box<Future<Item = (), Error = gst::FlowError> + Send + 'static>,
@@ -1045,7 +1025,7 @@ impl ProxySrc {
         }
     }
 
-    fn prepare(&self, element: &Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(self.cat, obj: element, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
@@ -1095,14 +1075,11 @@ impl ProxySrc {
             .schedule(
                 &io_context,
                 move |item| {
-                    let src = element_clone.get_impl().downcast_ref::<ProxySrc>().unwrap();
+                    let src = Self::from_instance(&element_clone);
                     src.push_item(&element_clone, item)
                 },
                 move |err| {
-                    let src = element_clone2
-                        .get_impl()
-                        .downcast_ref::<ProxySrc>()
-                        .unwrap();
+                    let src = Self::from_instance(&element_clone2);
                     gst_error!(src.cat, obj: &element_clone2, "Got error {}", err);
                     match err {
                         gst::FlowError::CustomError => (),
@@ -1143,7 +1120,7 @@ impl ProxySrc {
         Ok(())
     }
 
-    fn unprepare(&self, element: &Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Unpreparing");
 
         // FIXME: The IO Context has to be alive longer than the queue,
@@ -1181,7 +1158,7 @@ impl ProxySrc {
         Ok(())
     }
 
-    fn start(&self, element: &Element) -> Result<(), ()> {
+    fn start(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Starting");
         let state = self.state.lock().unwrap();
         let queue = state.queue.as_ref().unwrap().0.lock().unwrap();
@@ -1195,7 +1172,7 @@ impl ProxySrc {
         Ok(())
     }
 
-    fn stop(&self, element: &Element) -> Result<(), ()> {
+    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Stopping");
         let state = self.state.lock().unwrap();
         let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
@@ -1212,32 +1189,99 @@ impl ProxySrc {
     }
 }
 
-impl ObjectImpl<Element> for ProxySrc {
-    fn set_property(&self, _obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES_SRC[id as usize];
+impl ObjectSubclass for ProxySrc {
+    const NAME: &'static str = "RsTsProxySrc";
+    type ParentType = gst::Element;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        klass.set_metadata(
+            "Thread-sharing proxy source",
+            "Source/Generic",
+            "Thread-sharing proxy source",
+            "Sebastian Dröge <sebastian@centricular.com>",
+        );
+
+        let caps = gst::Caps::new_any();
+
+        let src_pad_template = gst::PadTemplate::new(
+            "src",
+            gst::PadDirection::Src,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(src_pad_template);
+
+        klass.install_properties(&PROPERTIES_SRC);
+    }
+
+    fn new() -> Self {
+        unreachable!()
+    }
+
+    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let templ = klass.get_pad_template("src").unwrap();
+        let src_pad = gst::Pad::new_from_template(&templ, "src");
+
+        src_pad.set_event_function(|pad, parent, event| {
+            ProxySrc::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.src_event(pad, element, event),
+            )
+        });
+        src_pad.set_query_function(|pad, parent, query| {
+            ProxySrc::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.src_query(pad, element, query),
+            )
+        });
+
+        Self {
+            cat: gst::DebugCategory::new(
+                "ts-proxysrc",
+                gst::DebugColorFlags::empty(),
+                "Thread-sharing proxy source",
+            ),
+            src_pad: src_pad,
+            state: Mutex::new(StateSrc::default()),
+            settings: Mutex::new(SettingsSrc::default()),
+        }
+    }
+}
+
+impl ObjectImpl for ProxySrc {
+    glib_object_impl!();
+
+    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES_SRC[id];
 
         match *prop {
-            Property::UInt("max-size-buffers", ..) => {
+            subclass::Property("max-size-buffers", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_size_buffers = value.get().unwrap();
             }
-            Property::UInt("max-size-bytes", ..) => {
+            subclass::Property("max-size-bytes", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_size_bytes = value.get().unwrap();
             }
-            Property::UInt64("max-size-time", ..) => {
+            subclass::Property("max-size-time", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_size_time = value.get().unwrap();
             }
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
             }
-            Property::String("proxy-context", ..) => {
+            subclass::Property("proxy-context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.proxy_context = value.get().unwrap_or_else(|| "".into());
             }
@@ -1245,43 +1289,52 @@ impl ObjectImpl<Element> for ProxySrc {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES_SRC[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES_SRC[id];
 
         match *prop {
-            Property::UInt("max-size-buffers", ..) => {
+            subclass::Property("max-size-buffers", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_buffers.to_value())
             }
-            Property::UInt("max-size-bytes", ..) => {
+            subclass::Property("max-size-bytes", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_bytes.to_value())
             }
-            Property::UInt64("max-size-time", ..) => {
+            subclass::Property("max-size-time", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_time.to_value())
             }
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
-            Property::String("proxy-context", ..) => {
+            subclass::Property("proxy-context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.proxy_context.to_value())
             }
             _ => unimplemented!(),
         }
     }
+
+    fn constructed(&self, obj: &glib::Object) {
+        self.parent_constructed(obj);
+
+        let element = obj.downcast_ref::<gst::Element>().unwrap();
+        element.add_pad(&self.src_pad).unwrap();
+
+        ::set_element_flags(element, gst::ElementFlags::SOURCE);
+    }
 }
 
-impl ElementImpl<Element> for ProxySrc {
+impl ElementImpl for ProxySrc {
     fn change_state(
         &self,
-        element: &Element,
+        element: &gst::Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
@@ -1305,7 +1358,7 @@ impl ElementImpl<Element> for ProxySrc {
             _ => (),
         }
 
-        let mut ret = element.parent_change_state(transition);
+        let mut ret = self.parent_change_state(element, transition);
         if ret == gst::StateChangeReturn::Failure {
             return ret;
         }
@@ -1325,42 +1378,7 @@ impl ElementImpl<Element> for ProxySrc {
     }
 }
 
-struct ProxySinkStatic;
-
-impl ImplTypeStatic<Element> for ProxySinkStatic {
-    fn get_name(&self) -> &str {
-        "ProxySink"
-    }
-
-    fn new(&self, element: &Element) -> Box<ElementImpl<Element>> {
-        ProxySink::init(element)
-    }
-
-    fn class_init(&self, klass: &mut ElementClass) {
-        ProxySink::class_init(klass);
-    }
-}
-
-struct ProxySrcStatic;
-
-impl ImplTypeStatic<Element> for ProxySrcStatic {
-    fn get_name(&self) -> &str {
-        "ProxySrc"
-    }
-
-    fn new(&self, element: &Element) -> Box<ElementImpl<Element>> {
-        ProxySrc::init(element)
-    }
-
-    fn class_init(&self, klass: &mut ElementClass) {
-        ProxySrc::class_init(klass);
-    }
-}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    let type_ = register_type(ProxySinkStatic);
-    gst::Element::register(plugin, "ts-proxysink", 0, type_)?;
-
-    let type_ = register_type(ProxySrcStatic);
-    gst::Element::register(plugin, "ts-proxysrc", 0, type_)
+    gst::Element::register(plugin, "ts-proxysink", 0, ProxySink::get_type())?;
+    gst::Element::register(plugin, "ts-proxysrc", 0, ProxySrc::get_type())
 }

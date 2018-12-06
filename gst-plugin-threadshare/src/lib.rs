@@ -27,9 +27,6 @@ extern crate gstreamer_sys as gst_ffi;
 extern crate gio;
 #[macro_use]
 extern crate glib;
-extern crate gobject_subclass;
-#[macro_use]
-extern crate gst_plugin;
 #[macro_use]
 extern crate gstreamer as gst;
 
@@ -73,16 +70,16 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-plugin_define!(
-    b"threadshare\0",
-    b"Threadshare Plugin\0",
+gst_plugin_define!(
+    "threadshare",
+    "Threadshare Plugin",
     plugin_init,
-    b"0.1.0\0",
-    b"LGPL\0",
-    b"threadshare\0",
-    b"threadshare\0",
-    b"https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs\0",
-    b"2018-03-01\0"
+    "0.1.0",
+    "LGPL",
+    "threadshare",
+    "threadshare",
+    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
+    "2018-03-01"
 );
 
 pub fn set_element_flags<T: glib::IsA<gst::Object> + glib::IsA<gst::Element>>(

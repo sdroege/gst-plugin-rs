@@ -18,11 +18,11 @@
 
 use glib;
 use glib::prelude::*;
+use glib::subclass;
+use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
-
-use gobject_subclass::object::*;
-use gst_plugin::element::*;
+use gst::subclass::prelude::*;
 
 use std::io;
 use std::sync::Mutex;
@@ -71,52 +71,67 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [Property; 6] = [
-    Property::String(
-        "address",
-        "Address",
-        "Address to receive packets from",
-        DEFAULT_ADDRESS,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "port",
-        "Port",
-        "Port to receive packets from",
-        (0, u16::MAX as u32),
-        DEFAULT_PORT,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boxed(
-        "caps",
-        "Caps",
-        "Caps to use",
-        gst::Caps::static_type,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "chunk-size",
-        "Chunk Size",
-        "Chunk Size",
-        (0, u16::MAX as u32),
-        DEFAULT_CHUNK_SIZE,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::String(
-        "context",
-        "Context",
-        "Context name to share threads with",
-        Some(DEFAULT_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "context-wait",
-        "Context Wait",
-        "Throttle poll loop to run at most once every this many ms",
-        (0, 1000),
-        DEFAULT_CONTEXT_WAIT,
-        PropertyMutability::ReadWrite,
-    ),
+static PROPERTIES: [subclass::Property; 6] = [
+    subclass::Property("address", || {
+        glib::ParamSpec::string(
+            "address",
+            "Address",
+            "Address to receive packets from",
+            DEFAULT_ADDRESS,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("port", || {
+        glib::ParamSpec::uint(
+            "port",
+            "Port",
+            "Port to receive packets from",
+            0,
+            u16::MAX as u32,
+            DEFAULT_PORT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("caps", || {
+        glib::ParamSpec::boxed(
+            "caps",
+            "Caps",
+            "Caps to use",
+            gst::Caps::static_type(),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("chunk-size", || {
+        glib::ParamSpec::uint(
+            "chunk-size",
+            "Chunk Size",
+            "Chunk Size",
+            0,
+            u16::MAX as u32,
+            DEFAULT_CHUNK_SIZE,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("context", || {
+        glib::ParamSpec::string(
+            "context",
+            "Context",
+            "Context name to share threads with",
+            Some(DEFAULT_CONTEXT),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("context-wait", || {
+        glib::ParamSpec::uint(
+            "context-wait",
+            "Context Wait",
+            "Throttle poll loop to run at most once every this many ms",
+            0,
+            1000,
+            DEFAULT_CONTEXT_WAIT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
 ];
 
 pub struct TcpClientReader {
@@ -185,61 +200,7 @@ struct TcpClientSrc {
 }
 
 impl TcpClientSrc {
-    fn class_init(klass: &mut ElementClass) {
-        klass.set_metadata(
-            "Thread-sharing TCP client source",
-            "Source/Network",
-            "Receives data over the network via TCP",
-            "Sebastian Dröge <sebastian@centricular.com>, LEE Dongjun <redongjun@gmail.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
-
-    fn init(element: &Element) -> Box<ElementImpl<Element>> {
-        let templ = element.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, "src");
-
-        src_pad.set_event_function(|pad, parent, event| {
-            TcpClientSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |tcpclientsrc, element| tcpclientsrc.src_event(pad, element, event),
-            )
-        });
-        src_pad.set_query_function(|pad, parent, query| {
-            TcpClientSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |tcpclientsrc, element| tcpclientsrc.src_query(pad, element, query),
-            )
-        });
-        element.add_pad(&src_pad).unwrap();
-
-        ::set_element_flags(element, gst::ElementFlags::SOURCE);
-
-        Box::new(Self {
-            cat: gst::DebugCategory::new(
-                "ts-tcpclientsrc",
-                gst::DebugColorFlags::empty(),
-                "Thread-sharing TCP Client source",
-            ),
-            src_pad: src_pad,
-            state: Mutex::new(State::default()),
-            settings: Mutex::new(Settings::default()),
-        })
-    }
-
-    fn src_event(&self, pad: &gst::Pad, element: &Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
@@ -271,7 +232,12 @@ impl TcpClientSrc {
         ret
     }
 
-    fn src_query(&self, pad: &gst::Pad, _element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        _element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
@@ -331,7 +297,7 @@ impl TcpClientSrc {
 
     fn push_buffer(
         &self,
-        element: &Element,
+        element: &gst::Element,
         buffer: gst::Buffer,
     ) -> future::Either<
         Box<Future<Item = (), Error = gst::FlowError> + Send + 'static>,
@@ -431,7 +397,7 @@ impl TcpClientSrc {
         }
     }
 
-    fn prepare(&self, element: &Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         use std::net::{IpAddr, SocketAddr};
 
         gst_debug!(self.cat, obj: element, "Preparing");
@@ -493,17 +459,11 @@ impl TcpClientSrc {
             .schedule(
                 &io_context,
                 move |buffer| {
-                    let tcpclientsrc = element_clone
-                        .get_impl()
-                        .downcast_ref::<TcpClientSrc>()
-                        .unwrap();
+                    let tcpclientsrc = Self::from_instance(&element_clone);
                     tcpclientsrc.push_buffer(&element_clone, buffer)
                 },
                 move |err| {
-                    let tcpclientsrc = element_clone2
-                        .get_impl()
-                        .downcast_ref::<TcpClientSrc>()
-                        .unwrap();
+                    let tcpclientsrc = Self::from_instance(&element_clone2);
                     gst_error!(tcpclientsrc.cat, obj: &element_clone2, "Got error {}", err);
                     match err {
                         Either::Left(gst::FlowError::CustomError) => (),
@@ -547,7 +507,7 @@ impl TcpClientSrc {
         Ok(())
     }
 
-    fn unprepare(&self, element: &Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Unpreparing");
 
         // FIXME: The IO Context has to be alive longer than the queue,
@@ -576,7 +536,7 @@ impl TcpClientSrc {
         Ok(())
     }
 
-    fn start(&self, element: &Element) -> Result<(), ()> {
+    fn start(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Starting");
         let state = self.state.lock().unwrap();
 
@@ -589,7 +549,7 @@ impl TcpClientSrc {
         Ok(())
     }
 
-    fn stop(&self, element: &Element) -> Result<(), ()> {
+    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Stopping");
         let mut state = self.state.lock().unwrap();
 
@@ -604,32 +564,98 @@ impl TcpClientSrc {
     }
 }
 
-impl ObjectImpl<Element> for TcpClientSrc {
-    fn set_property(&self, _obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
+impl ObjectSubclass for TcpClientSrc {
+    const NAME: &'static str = "RsTsTcpClientSrc";
+    type ParentType = gst::Element;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        klass.set_metadata(
+            "Thread-sharing TCP client source",
+            "Source/Network",
+            "Receives data over the network via TCP",
+            "Sebastian Dröge <sebastian@centricular.com>, LEE Dongjun <redongjun@gmail.com>",
+        );
+
+        let caps = gst::Caps::new_any();
+        let src_pad_template = gst::PadTemplate::new(
+            "src",
+            gst::PadDirection::Src,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(src_pad_template);
+
+        klass.install_properties(&PROPERTIES);
+    }
+
+    fn new() -> Self {
+        unreachable!()
+    }
+
+    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let templ = klass.get_pad_template("src").unwrap();
+        let src_pad = gst::Pad::new_from_template(&templ, "src");
+
+        src_pad.set_event_function(|pad, parent, event| {
+            TcpClientSrc::catch_panic_pad_function(
+                parent,
+                || false,
+                |tcpclientsrc, element| tcpclientsrc.src_event(pad, element, event),
+            )
+        });
+        src_pad.set_query_function(|pad, parent, query| {
+            TcpClientSrc::catch_panic_pad_function(
+                parent,
+                || false,
+                |tcpclientsrc, element| tcpclientsrc.src_query(pad, element, query),
+            )
+        });
+
+        Self {
+            cat: gst::DebugCategory::new(
+                "ts-tcpclientsrc",
+                gst::DebugColorFlags::empty(),
+                "Thread-sharing TCP Client source",
+            ),
+            src_pad: src_pad,
+            state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
+        }
+    }
+}
+
+impl ObjectImpl for TcpClientSrc {
+    glib_object_impl!();
+
+    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::String("address", ..) => {
+            subclass::Property("address", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.address = value.get();
             }
-            Property::UInt("port", ..) => {
+            subclass::Property("port", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.port = value.get().unwrap();
             }
-            Property::Boxed("caps", ..) => {
+            subclass::Property("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.caps = value.get();
             }
-            Property::UInt("chunk-size", ..) => {
+            subclass::Property("chunk-size", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.chunk_size = value.get().unwrap();
             }
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
             }
@@ -637,43 +663,52 @@ impl ObjectImpl<Element> for TcpClientSrc {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::String("address", ..) => {
+            subclass::Property("address", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.address.to_value())
             }
-            Property::UInt("port", ..) => {
+            subclass::Property("port", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.port.to_value())
             }
-            Property::Boxed("caps", ..) => {
+            subclass::Property("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.caps.to_value())
             }
-            Property::UInt("chunk-size", ..) => {
+            subclass::Property("chunk-size", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.chunk_size.to_value())
             }
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),
         }
     }
+
+    fn constructed(&self, obj: &glib::Object) {
+        self.parent_constructed(obj);
+
+        let element = obj.downcast_ref::<gst::Element>().unwrap();
+        element.add_pad(&self.src_pad).unwrap();
+
+        ::set_element_flags(element, gst::ElementFlags::SOURCE);
+    }
 }
 
-impl ElementImpl<Element> for TcpClientSrc {
+impl ElementImpl for TcpClientSrc {
     fn change_state(
         &self,
-        element: &Element,
+        element: &gst::Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
@@ -699,7 +734,7 @@ impl ElementImpl<Element> for TcpClientSrc {
             _ => (),
         }
 
-        let mut ret = element.parent_change_state(transition);
+        let mut ret = self.parent_change_state(element, transition);
         if ret == gst::StateChangeReturn::Failure {
             return ret;
         }
@@ -719,24 +754,6 @@ impl ElementImpl<Element> for TcpClientSrc {
     }
 }
 
-struct TcpClientSrcStatic;
-
-impl ImplTypeStatic<Element> for TcpClientSrcStatic {
-    fn get_name(&self) -> &str {
-        "TcpClientSrc"
-    }
-
-    fn new(&self, element: &Element) -> Box<ElementImpl<Element>> {
-        TcpClientSrc::init(element)
-    }
-
-    fn class_init(&self, klass: &mut ElementClass) {
-        TcpClientSrc::class_init(klass);
-    }
-}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    let tcpclientsrc_static = TcpClientSrcStatic;
-    let type_ = register_type(tcpclientsrc_static);
-    gst::Element::register(plugin, "ts-tcpclientsrc", 0, type_)
+    gst::Element::register(plugin, "ts-tcpclientsrc", 0, TcpClientSrc::get_type())
 }

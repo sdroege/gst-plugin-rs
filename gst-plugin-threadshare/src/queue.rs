@@ -17,11 +17,11 @@
 
 use glib;
 use glib::prelude::*;
+use glib::subclass;
+use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
-
-use gobject_subclass::object::*;
-use gst_plugin::element::*;
+use gst::subclass::prelude::*;
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -64,46 +64,60 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [Property; 5] = [
-    Property::UInt(
-        "max-size-buffers",
-        "Max Size Buffers",
-        "Maximum number of buffers to queue (0=unlimited)",
-        (0, u32::MAX),
-        DEFAULT_MAX_SIZE_BUFFERS,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "max-size-bytes",
-        "Max Size Bytes",
-        "Maximum number of bytes to queue (0=unlimited)",
-        (0, u32::MAX),
-        DEFAULT_MAX_SIZE_BYTES,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt64(
-        "max-size-time",
-        "Max Size Time",
-        "Maximum number of nanoseconds to queue (0=unlimited)",
-        (0, u64::MAX - 1),
-        DEFAULT_MAX_SIZE_TIME,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::String(
-        "context",
-        "Context",
-        "Context name to share threads with",
-        Some(DEFAULT_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "context-wait",
-        "Context Wait",
-        "Throttle poll loop to run at most once every this many ms",
-        (0, 1000),
-        DEFAULT_CONTEXT_WAIT,
-        PropertyMutability::ReadWrite,
-    ),
+static PROPERTIES: [subclass::Property; 5] = [
+    subclass::Property("max-size-buffers", || {
+        glib::ParamSpec::uint(
+            "max-size-buffers",
+            "Max Size Buffers",
+            "Maximum number of buffers to queue (0=unlimited)",
+            0,
+            u32::MAX,
+            DEFAULT_MAX_SIZE_BUFFERS,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("max-size-bytes", || {
+        glib::ParamSpec::uint(
+            "max-size-bytes",
+            "Max Size Bytes",
+            "Maximum number of bytes to queue (0=unlimited)",
+            0,
+            u32::MAX,
+            DEFAULT_MAX_SIZE_BYTES,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("max-size-time", || {
+        glib::ParamSpec::uint64(
+            "max-size-time",
+            "Max Size Time",
+            "Maximum number of nanoseconds to queue (0=unlimited)",
+            0,
+            u64::MAX - 1,
+            DEFAULT_MAX_SIZE_TIME,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("context", || {
+        glib::ParamSpec::string(
+            "context",
+            "Context",
+            "Context name to share threads with",
+            Some(DEFAULT_CONTEXT),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("context-wait", || {
+        glib::ParamSpec::uint(
+            "context-wait",
+            "Context Wait",
+            "Throttle poll loop to run at most once every this many ms",
+            0,
+            1000,
+            DEFAULT_CONTEXT_WAIT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
 ];
 
 struct State {
@@ -141,100 +155,6 @@ struct Queue {
 }
 
 impl Queue {
-    fn class_init(klass: &mut ElementClass) {
-        klass.set_metadata(
-            "Thread-sharing queue",
-            "Generic",
-            "Simple data queue",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(sink_pad_template);
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
-
-    fn init(element: &Element) -> Box<ElementImpl<Element>> {
-        let templ = element.get_pad_template("sink").unwrap();
-        let sink_pad = gst::Pad::new_from_template(&templ, "sink");
-        let templ = element.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, "src");
-
-        sink_pad.set_chain_function(|pad, parent, buffer| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || gst::FlowReturn::Error,
-                |queue, element| queue.sink_chain(pad, element, buffer),
-            )
-        });
-        sink_pad.set_chain_list_function(|pad, parent, list| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || gst::FlowReturn::Error,
-                |queue, element| queue.sink_chain_list(pad, element, list),
-            )
-        });
-        sink_pad.set_event_function(|pad, parent, event| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.sink_event(pad, element, event),
-            )
-        });
-        sink_pad.set_query_function(|pad, parent, query| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.sink_query(pad, element, query),
-            )
-        });
-
-        src_pad.set_event_function(|pad, parent, event| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_event(pad, element, event),
-            )
-        });
-        src_pad.set_query_function(|pad, parent, query| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_query(pad, element, query),
-            )
-        });
-        element.add_pad(&sink_pad).unwrap();
-        element.add_pad(&src_pad).unwrap();
-
-        Box::new(Self {
-            cat: gst::DebugCategory::new(
-                "ts-queue",
-                gst::DebugColorFlags::empty(),
-                "Thread-sharing queue",
-            ),
-            sink_pad: sink_pad,
-            src_pad: src_pad,
-            state: Mutex::new(State::default()),
-            settings: Mutex::new(Settings::default()),
-        })
-    }
-
     fn create_io_context_event(state: &State) -> Option<gst::Event> {
         if let (&Some(ref pending_future_id), &Some(ref io_context)) =
             (&state.pending_future_id, &state.io_context)
@@ -255,7 +175,7 @@ impl Queue {
     fn enqueue_item(
         &self,
         _pad: &gst::Pad,
-        element: &Element,
+        element: &gst::Element,
         item: DataQueueItem,
     ) -> gst::FlowReturn {
         let wait_future = {
@@ -325,7 +245,7 @@ impl Queue {
 
                         let element_clone = element.clone();
                         let future = future::poll_fn(move || {
-                            let queue = element_clone.get_impl().downcast_ref::<Queue>().unwrap();
+                            let queue = Self::from_instance(&element_clone);
                             let mut state = queue.state.lock().unwrap();
 
                             let State {
@@ -430,7 +350,7 @@ impl Queue {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &Element,
+        element: &gst::Element,
         buffer: gst::Buffer,
     ) -> gst::FlowReturn {
         gst_log!(self.cat, obj: pad, "Handling buffer {:?}", buffer);
@@ -440,14 +360,14 @@ impl Queue {
     fn sink_chain_list(
         &self,
         pad: &gst::Pad,
-        element: &Element,
+        element: &gst::Element,
         list: gst::BufferList,
     ) -> gst::FlowReturn {
         gst_log!(self.cat, obj: pad, "Handling buffer list {:?}", list);
         self.enqueue_item(pad, element, DataQueueItem::BufferList(list))
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &Element, mut event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, mut event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
@@ -505,7 +425,12 @@ impl Queue {
         }
     }
 
-    fn sink_query(&self, pad: &gst::Pad, _element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn sink_query(
+        &self,
+        pad: &gst::Pad,
+        _element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
 
         if query.is_serialized() {
@@ -518,7 +443,7 @@ impl Queue {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
@@ -542,7 +467,12 @@ impl Queue {
         self.sink_pad.push_event(event)
     }
 
-    fn src_query(&self, pad: &gst::Pad, _element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        _element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
@@ -578,7 +508,7 @@ impl Queue {
 
     fn push_item(
         &self,
-        element: &Element,
+        element: &gst::Element,
         item: DataQueueItem,
     ) -> future::Either<
         Box<Future<Item = (), Error = gst::FlowError> + Send + 'static>,
@@ -679,7 +609,7 @@ impl Queue {
         }
     }
 
-    fn prepare(&self, element: &Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(self.cat, obj: element, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
@@ -719,11 +649,11 @@ impl Queue {
             .schedule(
                 &io_context,
                 move |item| {
-                    let queue = element_clone.get_impl().downcast_ref::<Queue>().unwrap();
+                    let queue = Self::from_instance(&element_clone);
                     queue.push_item(&element_clone, item)
                 },
                 move |err| {
-                    let queue = element_clone2.get_impl().downcast_ref::<Queue>().unwrap();
+                    let queue = Self::from_instance(&element_clone2);
                     gst_error!(queue.cat, obj: &element_clone2, "Got error {}", err);
                     match err {
                         gst::FlowError::CustomError => (),
@@ -762,7 +692,7 @@ impl Queue {
         Ok(())
     }
 
-    fn unprepare(&self, element: &Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Unpreparing");
 
         // FIXME: The IO Context has to be alive longer than the queue,
@@ -792,7 +722,7 @@ impl Queue {
         Ok(())
     }
 
-    fn start(&self, element: &Element) -> Result<(), ()> {
+    fn start(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Starting");
         let mut state = self.state.lock().unwrap();
 
@@ -806,7 +736,7 @@ impl Queue {
         Ok(())
     }
 
-    fn stop(&self, element: &Element) -> Result<(), ()> {
+    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Stopping");
         let mut state = self.state.lock().unwrap();
 
@@ -826,28 +756,135 @@ impl Queue {
     }
 }
 
-impl ObjectImpl<Element> for Queue {
-    fn set_property(&self, _obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
+impl ObjectSubclass for Queue {
+    const NAME: &'static str = "RsTsQueue";
+    type ParentType = gst::Element;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        klass.set_metadata(
+            "Thread-sharing queue",
+            "Generic",
+            "Simple data queue",
+            "Sebastian Dröge <sebastian@centricular.com>",
+        );
+
+        let caps = gst::Caps::new_any();
+
+        let sink_pad_template = gst::PadTemplate::new(
+            "sink",
+            gst::PadDirection::Sink,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(sink_pad_template);
+
+        let src_pad_template = gst::PadTemplate::new(
+            "src",
+            gst::PadDirection::Src,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(src_pad_template);
+
+        klass.install_properties(&PROPERTIES);
+    }
+
+    fn new() -> Self {
+        unreachable!()
+    }
+
+    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let templ = klass.get_pad_template("sink").unwrap();
+        let sink_pad = gst::Pad::new_from_template(&templ, "sink");
+        let templ = klass.get_pad_template("src").unwrap();
+        let src_pad = gst::Pad::new_from_template(&templ, "src");
+
+        sink_pad.set_chain_function(|pad, parent, buffer| {
+            Queue::catch_panic_pad_function(
+                parent,
+                || gst::FlowReturn::Error,
+                |queue, element| queue.sink_chain(pad, element, buffer),
+            )
+        });
+        sink_pad.set_chain_list_function(|pad, parent, list| {
+            Queue::catch_panic_pad_function(
+                parent,
+                || gst::FlowReturn::Error,
+                |queue, element| queue.sink_chain_list(pad, element, list),
+            )
+        });
+        sink_pad.set_event_function(|pad, parent, event| {
+            Queue::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.sink_event(pad, element, event),
+            )
+        });
+        sink_pad.set_query_function(|pad, parent, query| {
+            Queue::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.sink_query(pad, element, query),
+            )
+        });
+
+        src_pad.set_event_function(|pad, parent, event| {
+            Queue::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.src_event(pad, element, event),
+            )
+        });
+        src_pad.set_query_function(|pad, parent, query| {
+            Queue::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.src_query(pad, element, query),
+            )
+        });
+
+        Self {
+            cat: gst::DebugCategory::new(
+                "ts-queue",
+                gst::DebugColorFlags::empty(),
+                "Thread-sharing queue",
+            ),
+            sink_pad: sink_pad,
+            src_pad: src_pad,
+            state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
+        }
+    }
+}
+
+impl ObjectImpl for Queue {
+    glib_object_impl!();
+
+    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::UInt("max-size-buffers", ..) => {
+            subclass::Property("max-size-buffers", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_size_buffers = value.get().unwrap();
             }
-            Property::UInt("max-size-bytes", ..) => {
+            subclass::Property("max-size-bytes", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_size_bytes = value.get().unwrap();
             }
-            Property::UInt64("max-size-time", ..) => {
+            subclass::Property("max-size-time", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_size_time = value.get().unwrap();
             }
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
             }
@@ -855,39 +892,47 @@ impl ObjectImpl<Element> for Queue {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::UInt("max-size-buffers", ..) => {
+            subclass::Property("max-size-buffers", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_buffers.to_value())
             }
-            Property::UInt("max-size-bytes", ..) => {
+            subclass::Property("max-size-bytes", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_bytes.to_value())
             }
-            Property::UInt64("max-size-time", ..) => {
+            subclass::Property("max-size-time", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_time.to_value())
             }
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),
         }
     }
+
+    fn constructed(&self, obj: &glib::Object) {
+        self.parent_constructed(obj);
+
+        let element = obj.downcast_ref::<gst::Element>().unwrap();
+        element.add_pad(&self.sink_pad).unwrap();
+        element.add_pad(&self.src_pad).unwrap();
+    }
 }
 
-impl ElementImpl<Element> for Queue {
+impl ElementImpl for Queue {
     fn change_state(
         &self,
-        element: &Element,
+        element: &gst::Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
@@ -911,7 +956,7 @@ impl ElementImpl<Element> for Queue {
             _ => (),
         }
 
-        let ret = element.parent_change_state(transition);
+        let ret = self.parent_change_state(element, transition);
         if ret == gst::StateChangeReturn::Failure {
             return ret;
         }
@@ -928,24 +973,6 @@ impl ElementImpl<Element> for Queue {
     }
 }
 
-struct QueueStatic;
-
-impl ImplTypeStatic<Element> for QueueStatic {
-    fn get_name(&self) -> &str {
-        "Queue"
-    }
-
-    fn new(&self, element: &Element) -> Box<ElementImpl<Element>> {
-        Queue::init(element)
-    }
-
-    fn class_init(&self, klass: &mut ElementClass) {
-        Queue::class_init(klass);
-    }
-}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    let queue_static = QueueStatic;
-    let type_ = register_type(queue_static);
-    gst::Element::register(plugin, "ts-queue", 0, type_)
+    gst::Element::register(plugin, "ts-queue", 0, Queue::get_type())
 }

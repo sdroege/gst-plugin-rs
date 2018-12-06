@@ -17,16 +17,16 @@
 
 use glib;
 use glib::prelude::*;
+use glib::subclass;
+use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
+use gst::subclass::prelude::*;
 
 use gio;
 
 use gio_ffi;
 use gobject_ffi;
-
-use gobject_subclass::object::*;
-use gst_plugin::element::*;
 
 use std::io;
 use std::sync::Mutex;
@@ -179,73 +179,94 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [Property; 9] = [
-    Property::String(
-        "address",
-        "Address",
-        "Address/multicast group to listen on",
-        DEFAULT_ADDRESS,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "port",
-        "Port",
-        "Port to listen on",
-        (0, u16::MAX as u32),
-        DEFAULT_PORT,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boolean(
-        "reuse",
-        "Reuse",
-        "Allow reuse of the port",
-        DEFAULT_REUSE,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boxed(
-        "caps",
-        "Caps",
-        "Caps to use",
-        gst::Caps::static_type,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "mtu",
-        "MTU",
-        "MTU",
-        (0, u16::MAX as u32),
-        DEFAULT_MTU,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Object(
-        "socket",
-        "Socket",
-        "Socket to use for UDP reception. (None == allocate)",
-        gio::Socket::static_type,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Object(
-        "used-socket",
-        "Used Socket",
-        "Socket currently in use for UDP reception. (None = no socket)",
-        gio::Socket::static_type,
-        PropertyMutability::Readable,
-    ),
-    Property::String(
-        "context",
-        "Context",
-        "Context name to share threads with",
-        Some(DEFAULT_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "context-wait",
-        "Context Wait",
-        "Throttle poll loop to run at most once every this many ms",
-        (0, 1000),
-        DEFAULT_CONTEXT_WAIT,
-        PropertyMutability::ReadWrite,
-    ),
+static PROPERTIES: [subclass::Property; 9] = [
+    subclass::Property("address", || {
+        glib::ParamSpec::string(
+            "address",
+            "Address",
+            "Address/multicast group to listen on",
+            DEFAULT_ADDRESS,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("port", || {
+        glib::ParamSpec::uint(
+            "port",
+            "Port",
+            "Port to listen on",
+            0,
+            u16::MAX as u32,
+            DEFAULT_PORT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("reuse", || {
+        glib::ParamSpec::boolean(
+            "reuse",
+            "Reuse",
+            "Allow reuse of the port",
+            DEFAULT_REUSE,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("caps", || {
+        glib::ParamSpec::boxed(
+            "caps",
+            "Caps",
+            "Caps to use",
+            gst::Caps::static_type(),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("mtu", || {
+        glib::ParamSpec::uint(
+            "mtu",
+            "MTU",
+            "MTU",
+            0,
+            u16::MAX as u32,
+            DEFAULT_MTU,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("socket", || {
+        glib::ParamSpec::object(
+            "socket",
+            "Socket",
+            "Socket to use for UDP reception. (None == allocate)",
+            gio::Socket::static_type(),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("used-socket", || {
+        glib::ParamSpec::object(
+            "used-socket",
+            "Used Socket",
+            "Socket currently in use for UDP reception. (None = no socket)",
+            gio::Socket::static_type(),
+            glib::ParamFlags::READABLE,
+        )
+    }),
+    subclass::Property("context", || {
+        glib::ParamSpec::string(
+            "context",
+            "Context",
+            "Context name to share threads with",
+            Some(DEFAULT_CONTEXT),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("context-wait", || {
+        glib::ParamSpec::uint(
+            "context-wait",
+            "Context Wait",
+            "Throttle poll loop to run at most once every this many ms",
+            0,
+            1000,
+            DEFAULT_CONTEXT_WAIT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
 ];
 
 pub struct UdpReader {
@@ -296,61 +317,7 @@ struct UdpSrc {
 }
 
 impl UdpSrc {
-    fn class_init(klass: &mut ElementClass) {
-        klass.set_metadata(
-            "Thread-sharing UDP source",
-            "Source/Network",
-            "Receives data over the network via UDP",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
-
-    fn init(element: &Element) -> Box<ElementImpl<Element>> {
-        let templ = element.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, "src");
-
-        src_pad.set_event_function(|pad, parent, event| {
-            UdpSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |udpsrc, element| udpsrc.src_event(pad, element, event),
-            )
-        });
-        src_pad.set_query_function(|pad, parent, query| {
-            UdpSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |udpsrc, element| udpsrc.src_query(pad, element, query),
-            )
-        });
-        element.add_pad(&src_pad).unwrap();
-
-        ::set_element_flags(element, gst::ElementFlags::SOURCE);
-
-        Box::new(Self {
-            cat: gst::DebugCategory::new(
-                "ts-udpsrc",
-                gst::DebugColorFlags::empty(),
-                "Thread-sharing UDP source",
-            ),
-            src_pad: src_pad,
-            state: Mutex::new(State::default()),
-            settings: Mutex::new(Settings::default()),
-        })
-    }
-
-    fn src_event(&self, pad: &gst::Pad, element: &Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
@@ -382,7 +349,12 @@ impl UdpSrc {
         ret
     }
 
-    fn src_query(&self, pad: &gst::Pad, _element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        _element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
@@ -442,7 +414,7 @@ impl UdpSrc {
 
     fn push_buffer(
         &self,
-        element: &Element,
+        element: &gst::Element,
         buffer: gst::Buffer,
     ) -> future::Either<
         Box<Future<Item = (), Error = gst::FlowError> + Send + 'static>,
@@ -537,7 +509,7 @@ impl UdpSrc {
         }
     }
 
-    fn prepare(&self, element: &Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
         gst_debug!(self.cat, obj: element, "Preparing");
@@ -768,11 +740,11 @@ impl UdpSrc {
             .schedule(
                 &io_context,
                 move |buffer| {
-                    let udpsrc = element_clone.get_impl().downcast_ref::<UdpSrc>().unwrap();
+                    let udpsrc = Self::from_instance(&element_clone);
                     udpsrc.push_buffer(&element_clone, buffer)
                 },
                 move |err| {
-                    let udpsrc = element_clone2.get_impl().downcast_ref::<UdpSrc>().unwrap();
+                    let udpsrc = Self::from_instance(&element_clone2);
                     gst_error!(udpsrc.cat, obj: &element_clone2, "Got error {}", err);
                     match err {
                         Either::Left(gst::FlowError::CustomError) => (),
@@ -819,7 +791,7 @@ impl UdpSrc {
         Ok(())
     }
 
-    fn unprepare(&self, element: &Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Unpreparing");
 
         self.settings.lock().unwrap().used_socket = None;
@@ -850,7 +822,7 @@ impl UdpSrc {
         Ok(())
     }
 
-    fn start(&self, element: &Element) -> Result<(), ()> {
+    fn start(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Starting");
         let state = self.state.lock().unwrap();
 
@@ -863,7 +835,7 @@ impl UdpSrc {
         Ok(())
     }
 
-    fn stop(&self, element: &Element) -> Result<(), ()> {
+    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Stopping");
         let mut state = self.state.lock().unwrap();
 
@@ -878,45 +850,111 @@ impl UdpSrc {
     }
 }
 
-impl ObjectImpl<Element> for UdpSrc {
-    fn set_property(&self, _obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
+impl ObjectSubclass for UdpSrc {
+    const NAME: &'static str = "RsTsUdpSrc";
+    type ParentType = gst::Element;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        klass.set_metadata(
+            "Thread-sharing UDP source",
+            "Source/Network",
+            "Receives data over the network via UDP",
+            "Sebastian Dröge <sebastian@centricular.com>",
+        );
+
+        let caps = gst::Caps::new_any();
+        let src_pad_template = gst::PadTemplate::new(
+            "src",
+            gst::PadDirection::Src,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(src_pad_template);
+
+        klass.install_properties(&PROPERTIES);
+    }
+
+    fn new() -> Self {
+        unreachable!()
+    }
+
+    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let templ = klass.get_pad_template("src").unwrap();
+        let src_pad = gst::Pad::new_from_template(&templ, "src");
+
+        src_pad.set_event_function(|pad, parent, event| {
+            UdpSrc::catch_panic_pad_function(
+                parent,
+                || false,
+                |udpsrc, element| udpsrc.src_event(pad, element, event),
+            )
+        });
+        src_pad.set_query_function(|pad, parent, query| {
+            UdpSrc::catch_panic_pad_function(
+                parent,
+                || false,
+                |udpsrc, element| udpsrc.src_query(pad, element, query),
+            )
+        });
+
+        Self {
+            cat: gst::DebugCategory::new(
+                "ts-udpsrc",
+                gst::DebugColorFlags::empty(),
+                "Thread-sharing UDP source",
+            ),
+            src_pad: src_pad,
+            state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
+        }
+    }
+}
+
+impl ObjectImpl for UdpSrc {
+    glib_object_impl!();
+
+    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::String("address", ..) => {
+            subclass::Property("address", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.address = value.get();
             }
-            Property::UInt("port", ..) => {
+            subclass::Property("port", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.port = value.get().unwrap();
             }
-            Property::Boolean("reuse", ..) => {
+            subclass::Property("reuse", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.reuse = value.get().unwrap();
             }
-            Property::Boxed("caps", ..) => {
+            subclass::Property("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.caps = value.get();
             }
-            Property::UInt("mtu", ..) => {
+            subclass::Property("mtu", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.mtu = value.get().unwrap();
             }
-            Property::Object("socket", ..) => {
+            subclass::Property("socket", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.socket = value
                     .get::<gio::Socket>()
                     .map(|socket| GioSocketWrapper::new(&socket));
             }
-            Property::Object("used-socket", ..) => {
+            subclass::Property("used-socket", ..) => {
                 unreachable!();
             }
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
             }
@@ -924,31 +962,31 @@ impl ObjectImpl<Element> for UdpSrc {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::String("address", ..) => {
+            subclass::Property("address", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.address.to_value())
             }
-            Property::UInt("port", ..) => {
+            subclass::Property("port", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.port.to_value())
             }
-            Property::Boolean("reuse", ..) => {
+            subclass::Property("reuse", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.reuse.to_value())
             }
-            Property::Boxed("caps", ..) => {
+            subclass::Property("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.caps.to_value())
             }
-            Property::UInt("mtu", ..) => {
+            subclass::Property("mtu", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.mtu.to_value())
             }
-            Property::Object("socket", ..) => {
+            subclass::Property("socket", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings
                     .socket
@@ -956,7 +994,7 @@ impl ObjectImpl<Element> for UdpSrc {
                     .map(GioSocketWrapper::as_socket)
                     .to_value())
             }
-            Property::Object("used-socket", ..) => {
+            subclass::Property("used-socket", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings
                     .used_socket
@@ -964,23 +1002,31 @@ impl ObjectImpl<Element> for UdpSrc {
                     .map(GioSocketWrapper::as_socket)
                     .to_value())
             }
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),
         }
     }
+
+    fn constructed(&self, obj: &glib::Object) {
+        self.parent_constructed(obj);
+
+        let element = obj.downcast_ref::<gst::Element>().unwrap();
+        element.add_pad(&self.src_pad).unwrap();
+        ::set_element_flags(element, gst::ElementFlags::SOURCE);
+    }
 }
 
-impl ElementImpl<Element> for UdpSrc {
+impl ElementImpl for UdpSrc {
     fn change_state(
         &self,
-        element: &Element,
+        element: &gst::Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
@@ -1004,7 +1050,7 @@ impl ElementImpl<Element> for UdpSrc {
             _ => (),
         }
 
-        let mut ret = element.parent_change_state(transition);
+        let mut ret = self.parent_change_state(element, transition);
         if ret == gst::StateChangeReturn::Failure {
             return ret;
         }
@@ -1028,24 +1074,6 @@ impl ElementImpl<Element> for UdpSrc {
     }
 }
 
-struct UdpSrcStatic;
-
-impl ImplTypeStatic<Element> for UdpSrcStatic {
-    fn get_name(&self) -> &str {
-        "UdpSrc"
-    }
-
-    fn new(&self, element: &Element) -> Box<ElementImpl<Element>> {
-        UdpSrc::init(element)
-    }
-
-    fn class_init(&self, klass: &mut ElementClass) {
-        UdpSrc::class_init(klass);
-    }
-}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    let udpsrc_static = UdpSrcStatic;
-    let type_ = register_type(udpsrc_static);
-    gst::Element::register(plugin, "ts-udpsrc", 0, type_)
+    gst::Element::register(plugin, "ts-udpsrc", 0, UdpSrc::get_type())
 }

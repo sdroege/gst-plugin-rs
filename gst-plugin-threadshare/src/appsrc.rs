@@ -17,11 +17,11 @@
 
 use glib;
 use glib::prelude::*;
+use glib::subclass;
+use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
-
-use gobject_subclass::object::*;
-use gst_plugin::element::*;
+use gst::subclass::prelude::*;
 
 use std::sync::Mutex;
 use std::u32;
@@ -63,44 +63,56 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [Property; 5] = [
-    Property::String(
-        "context",
-        "Context",
-        "Context name to share threads with",
-        Some(DEFAULT_CONTEXT),
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "context-wait",
-        "Context Wait",
-        "Throttle poll loop to run at most once every this many ms",
-        (0, 1000),
-        DEFAULT_CONTEXT_WAIT,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "max-buffers",
-        "Max Buffers",
-        "Maximum number of buffers to queue up",
-        (1, u32::MAX),
-        DEFAULT_MAX_BUFFERS,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boxed(
-        "caps",
-        "Caps",
-        "Caps to use",
-        gst::Caps::static_type,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boolean(
-        "do-timestamp",
-        "Do Timestamp",
-        "Timestamp buffers with the current running time on arrival",
-        DEFAULT_DO_TIMESTAMP,
-        PropertyMutability::ReadWrite,
-    ),
+static PROPERTIES: [subclass::Property; 5] = [
+    subclass::Property("context", || {
+        glib::ParamSpec::string(
+            "context",
+            "Context",
+            "Context name to share threads with",
+            Some(DEFAULT_CONTEXT),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("context-wait", || {
+        glib::ParamSpec::uint(
+            "context-wait",
+            "Context Wait",
+            "Throttle poll loop to run at most once every this many ms",
+            0,
+            1000,
+            DEFAULT_CONTEXT_WAIT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("max-buffers", || {
+        glib::ParamSpec::uint(
+            "max-buffers",
+            "Max Buffers",
+            "Maximum number of buffers to queue up",
+            1,
+            u32::MAX,
+            DEFAULT_MAX_BUFFERS,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("caps", || {
+        glib::ParamSpec::boxed(
+            "caps",
+            "Caps",
+            "Caps to use",
+            gst::Caps::static_type(),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("do-timestamp", || {
+        glib::ParamSpec::boolean(
+            "do-timestamp",
+            "Do Timestamp",
+            "Timestamp buffers with the current running time on arrival",
+            DEFAULT_DO_TIMESTAMP,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
 ];
 
 struct State {
@@ -133,88 +145,6 @@ struct AppSrc {
 }
 
 impl AppSrc {
-    fn class_init(klass: &mut ElementClass) {
-        klass.set_metadata(
-            "Thread-sharing app source",
-            "Source/Generic",
-            "Thread-sharing app source",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        );
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-
-        klass.add_action_signal(
-            "push-buffer",
-            &[gst::Buffer::static_type()],
-            bool::static_type(),
-            |args| {
-                let element = args[0]
-                    .get::<gst::Element>()
-                    .unwrap()
-                    .downcast::<Element>()
-                    .unwrap();
-                let buffer = args[1].get::<gst::Buffer>().unwrap();
-                let appsrc = element.get_impl().downcast_ref::<AppSrc>().unwrap();
-
-                Some(appsrc.push_buffer(&element, buffer).to_value())
-            },
-        );
-
-        klass.add_action_signal("end-of-stream", &[], bool::static_type(), |args| {
-            let element = args[0]
-                .get::<gst::Element>()
-                .unwrap()
-                .downcast::<Element>()
-                .unwrap();
-            let appsrc = element.get_impl().downcast_ref::<AppSrc>().unwrap();
-            Some(appsrc.end_of_stream(&element).to_value())
-        });
-    }
-
-    fn init(element: &Element) -> Box<ElementImpl<Element>> {
-        let templ = element.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, "src");
-
-        src_pad.set_event_function(|pad, parent, event| {
-            AppSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_event(pad, element, event),
-            )
-        });
-        src_pad.set_query_function(|pad, parent, query| {
-            AppSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_query(pad, element, query),
-            )
-        });
-        element.add_pad(&src_pad).unwrap();
-
-        ::set_element_flags(element, gst::ElementFlags::SOURCE);
-
-        Box::new(Self {
-            cat: gst::DebugCategory::new(
-                "ts-appsrc",
-                gst::DebugColorFlags::empty(),
-                "Thread-sharing app source",
-            ),
-            src_pad: src_pad,
-            state: Mutex::new(State::default()),
-            settings: Mutex::new(Settings::default()),
-        })
-    }
-
     fn create_io_context_event(state: &State) -> Option<gst::Event> {
         if let (&Some(ref pending_future_id), &Some(ref io_context)) =
             (&state.pending_future_id, &state.io_context)
@@ -232,7 +162,7 @@ impl AppSrc {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
@@ -265,7 +195,12 @@ impl AppSrc {
         ret
     }
 
-    fn src_query(&self, pad: &gst::Pad, _element: &Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        _element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
@@ -306,7 +241,7 @@ impl AppSrc {
         ret
     }
 
-    fn push_buffer(&self, element: &Element, mut buffer: gst::Buffer) -> bool {
+    fn push_buffer(&self, element: &gst::Element, mut buffer: gst::Buffer) -> bool {
         let settings = self.settings.lock().unwrap().clone();
 
         if settings.do_timestamp {
@@ -337,7 +272,7 @@ impl AppSrc {
         }
     }
 
-    fn end_of_stream(&self, element: &Element) -> bool {
+    fn end_of_stream(&self, element: &gst::Element) -> bool {
         let mut state = self.state.lock().unwrap();
         if let Some(ref mut channel) = state.channel {
             match channel.try_send(Either::Right(gst::Event::new_eos().build())) {
@@ -354,7 +289,7 @@ impl AppSrc {
 
     fn push_item(
         &self,
-        element: &Element,
+        element: &gst::Element,
         item: Either<gst::Buffer, gst::Event>,
     ) -> future::Either<
         Box<Future<Item = (), Error = ()> + Send + 'static>,
@@ -449,7 +384,7 @@ impl AppSrc {
         }
     }
 
-    fn prepare(&self, element: &Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(self.cat, obj: element, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
@@ -480,7 +415,7 @@ impl AppSrc {
         Ok(())
     }
 
-    fn unprepare(&self, element: &Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Unpreparing");
 
         let mut state = self.state.lock().unwrap();
@@ -498,7 +433,7 @@ impl AppSrc {
         Ok(())
     }
 
-    fn start(&self, element: &Element) -> Result<(), ()> {
+    fn start(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Starting");
         let settings = self.settings.lock().unwrap().clone();
         let mut state = self.state.lock().unwrap();
@@ -515,7 +450,7 @@ impl AppSrc {
 
         let element_clone = element.clone();
         let future = channel_receiver.for_each(move |item| {
-            let appsrc = element_clone.get_impl().downcast_ref::<AppSrc>().unwrap();
+            let appsrc = Self::from_instance(&element_clone);
             appsrc.push_item(&element_clone, item)
         });
         io_context.spawn(future);
@@ -526,7 +461,7 @@ impl AppSrc {
         Ok(())
     }
 
-    fn stop(&self, element: &Element) -> Result<(), ()> {
+    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Stopping");
         let mut state = self.state.lock().unwrap();
 
@@ -539,28 +474,114 @@ impl AppSrc {
     }
 }
 
-impl ObjectImpl<Element> for AppSrc {
-    fn set_property(&self, _obj: &glib::Object, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
+impl ObjectSubclass for AppSrc {
+    const NAME: &'static str = "RsTsAppSrc";
+    type ParentType = gst::Element;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    glib_object_subclass!();
+
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        klass.set_metadata(
+            "Thread-sharing app source",
+            "Source/Generic",
+            "Thread-sharing app source",
+            "Sebastian Dröge <sebastian@centricular.com>",
+        );
+
+        let caps = gst::Caps::new_any();
+
+        let src_pad_template = gst::PadTemplate::new(
+            "src",
+            gst::PadDirection::Src,
+            gst::PadPresence::Always,
+            &caps,
+        );
+        klass.add_pad_template(src_pad_template);
+
+        klass.install_properties(&PROPERTIES);
+
+        klass.add_action_signal(
+            "push-buffer",
+            &[gst::Buffer::static_type()],
+            bool::static_type(),
+            |args| {
+                let element = args[0].get::<gst::Element>().unwrap();
+                let buffer = args[1].get::<gst::Buffer>().unwrap();
+                let appsrc = Self::from_instance(&element);
+
+                Some(appsrc.push_buffer(&element, buffer).to_value())
+            },
+        );
+
+        klass.add_action_signal("end-of-stream", &[], bool::static_type(), |args| {
+            let element = args[0].get::<gst::Element>().unwrap();
+            let appsrc = Self::from_instance(&element);
+            Some(appsrc.end_of_stream(&element).to_value())
+        });
+    }
+
+    fn new() -> Self {
+        unreachable!()
+    }
+
+    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let templ = klass.get_pad_template("src").unwrap();
+        let src_pad = gst::Pad::new_from_template(&templ, "src");
+
+        src_pad.set_event_function(|pad, parent, event| {
+            AppSrc::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.src_event(pad, element, event),
+            )
+        });
+        src_pad.set_query_function(|pad, parent, query| {
+            AppSrc::catch_panic_pad_function(
+                parent,
+                || false,
+                |queue, element| queue.src_query(pad, element, query),
+            )
+        });
+
+        Self {
+            cat: gst::DebugCategory::new(
+                "ts-appsrc",
+                gst::DebugColorFlags::empty(),
+                "Thread-sharing app source",
+            ),
+            src_pad: src_pad,
+            state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
+        }
+    }
+}
+
+impl ObjectImpl for AppSrc {
+    glib_object_impl!();
+
+    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value.get().unwrap_or_else(|| "".into());
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
             }
-            Property::Boxed("caps", ..) => {
+            subclass::Property("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.caps = value.get();
             }
-            Property::UInt("max-buffers", ..) => {
+            subclass::Property("max-buffers", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_buffers = value.get().unwrap();
             }
-            Property::Boolean("do-timestamp", ..) => {
+            subclass::Property("do-timestamp", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.do_timestamp = value.get().unwrap();
             }
@@ -568,39 +589,48 @@ impl ObjectImpl<Element> for AppSrc {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
-        let prop = &PROPERTIES[id as usize];
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
 
         match *prop {
-            Property::String("context", ..) => {
+            subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
-            Property::UInt("context-wait", ..) => {
+            subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
-            Property::Boxed("caps", ..) => {
+            subclass::Property("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.caps.to_value())
             }
-            Property::UInt("max-buffers", ..) => {
+            subclass::Property("max-buffers", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.max_buffers.to_value())
             }
-            Property::Boolean("do-timestamp", ..) => {
+            subclass::Property("do-timestamp", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.do_timestamp.to_value())
             }
             _ => unimplemented!(),
         }
     }
+
+    fn constructed(&self, obj: &glib::Object) {
+        self.parent_constructed(obj);
+
+        let element = obj.downcast_ref::<gst::Element>().unwrap();
+        element.add_pad(&self.src_pad).unwrap();
+
+        ::set_element_flags(element, gst::ElementFlags::SOURCE);
+    }
 }
 
-impl ElementImpl<Element> for AppSrc {
+impl ElementImpl for AppSrc {
     fn change_state(
         &self,
-        element: &Element,
+        element: &gst::Element,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
@@ -624,7 +654,7 @@ impl ElementImpl<Element> for AppSrc {
             _ => (),
         }
 
-        let mut ret = element.parent_change_state(transition);
+        let mut ret = self.parent_change_state(element, transition);
         if ret == gst::StateChangeReturn::Failure {
             return ret;
         }
@@ -648,23 +678,6 @@ impl ElementImpl<Element> for AppSrc {
     }
 }
 
-struct AppSrcStatic;
-
-impl ImplTypeStatic<Element> for AppSrcStatic {
-    fn get_name(&self) -> &str {
-        "AppSrc"
-    }
-
-    fn new(&self, element: &Element) -> Box<ElementImpl<Element>> {
-        AppSrc::init(element)
-    }
-
-    fn class_init(&self, klass: &mut ElementClass) {
-        AppSrc::class_init(klass);
-    }
-}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    let type_ = register_type(AppSrcStatic);
-    gst::Element::register(plugin, "ts-appsrc", 0, type_)
+    gst::Element::register(plugin, "ts-appsrc", 0, AppSrc::get_type())
 }
