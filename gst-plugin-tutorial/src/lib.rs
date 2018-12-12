@@ -17,6 +17,7 @@ extern crate gstreamer_video as gst_video;
 extern crate byte_slice_cast;
 extern crate num_traits;
 
+mod identity;
 mod rgb2gray;
 mod sinesrc;
 
@@ -25,6 +26,7 @@ mod sinesrc;
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     rgb2gray::register(plugin)?;
     sinesrc::register(plugin)?;
+    identity::register(plugin)?;
     Ok(())
 }
 
