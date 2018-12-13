@@ -188,15 +188,20 @@ impl SineSrc {
     }
 }
 
+// This trait registers our type with the GObject object system and
+// provides the entry points for creating a new instance and setting
+// up the class data
 impl ObjectSubclass for SineSrc {
     const NAME: &'static str = "RsSineSrc";
     type ParentType = gst_base::BaseSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
+    // This macro provides some boilerplate.
     glib_object_subclass!();
 
-    // Called when a new instance is to be created
+    // Called when a new instance is to be created. We need to return an instance
+    // of our struct here.
     fn new() -> Self {
         Self {
             cat: gst::DebugCategory::new(
@@ -224,12 +229,21 @@ impl ObjectSubclass for SineSrc {
     //
     // Our element here can output f32 and f64
     fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        // Set the element specific metadata. This information is what
+        // is visible from gst-inspect-1.0 and can also be programatically
+        // retrieved from the gst::Registry after initial registration
+        // without having to load the plugin in memory.
         klass.set_metadata(
             "Sine Wave Source",
             "Source/Audio",
             "Creates a sine wave",
             "Sebastian Dröge <sebastian@centricular.com>",
         );
+
+        // Create and add pad templates for our sink and source pad. These
+        // are later used for actually creating the pads and beforehand
+        // already provide information to GStreamer about all possible
+        // pads that could exist for this type.
 
         // On the src pad, we can produce F32/F64 with any sample rate
         // and any number of channels
@@ -263,17 +277,19 @@ impl ObjectSubclass for SineSrc {
     }
 }
 
-// Virtual methods of GObject itself
+// Implementation of glib::Object virtual methods
 impl ObjectImpl for SineSrc {
+    // This macro provides some boilerplate.
     glib_object_impl!();
 
-    // Called right after construction of each object
+    // Called right after construction of a new instance
     fn constructed(&self, obj: &glib::Object) {
+        // Call the parent class' ::constructed() implementation first
         self.parent_constructed(obj);
 
-        let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
         // Initialize live-ness and notify the base class that
         // we'd like to operate in Time format
+        let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
         basesrc.set_live(DEFAULT_IS_LIVE);
         basesrc.set_format(gst::Format::Time);
     }
@@ -384,8 +400,11 @@ impl ObjectImpl for SineSrc {
     }
 }
 
-// Virtual methods of gst::Element. We override none
+// Implementation of gst::Element virtual methods
 impl ElementImpl for SineSrc {
+    // Called whenever the state of the element should be changed. This allows for
+    // starting up the element, allocating/deallocating resources or shutting down
+    // the element again.
     fn change_state(
         &self,
         element: &gst::Element,
@@ -401,11 +420,12 @@ impl ElementImpl for SineSrc {
             _ => (),
         }
 
+        // Call the parent class' implementation of ::change_state()
         self.parent_change_state(element, transition)
     }
 }
 
-// Virtual methods of gst_base::BaseSrc
+// Implementation of gst_base::BaseSrc virtual methods
 impl BaseSrcImpl for SineSrc {
     // Called whenever the input/output caps are changing, i.e. in the very beginning before data
     // flow happens and whenever the situation in the pipeline is changing. All buffers after this

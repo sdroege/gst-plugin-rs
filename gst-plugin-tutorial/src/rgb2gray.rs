@@ -103,15 +103,20 @@ impl Rgb2Gray {
     }
 }
 
+// This trait registers our type with the GObject object system and
+// provides the entry points for creating a new instance and setting
+// up the class data
 impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
+    // This macro provides some boilerplate
     glib_object_subclass!();
 
-    // Called when a new instance is to be created
+    // Called when a new instance is to be created. We need to return an instance
+    // of our struct here.
     fn new() -> Self {
         Self {
             cat: gst::DebugCategory::new(
@@ -135,12 +140,21 @@ impl ObjectSubclass for Rgb2Gray {
     //
     // Our element here can convert BGRx to BGRx or GRAY8, both being grayscale.
     fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        // Set the element specific metadata. This information is what
+        // is visible from gst-inspect-1.0 and can also be programatically
+        // retrieved from the gst::Registry after initial registration
+        // without having to load the plugin in memory.
         klass.set_metadata(
             "RGB-GRAY Converter",
             "Filter/Effect/Converter/Video",
             "Converts RGB to GRAY or grayscale RGB",
             "Sebastian Dröge <sebastian@centricular.com>",
         );
+
+        // Create and add pad templates for our sink and source pad. These
+        // are later used for actually creating the pads and beforehand
+        // already provide information to GStreamer about all possible
+        // pads that could exist for this type.
 
         // On the src pad, we can produce BGRx and GRAY8 of any
         // width/height and with any framerate
@@ -219,8 +233,9 @@ impl ObjectSubclass for Rgb2Gray {
     }
 }
 
-// Virtual methods of GObject itself
+// Implementation of glib::Object virtual methods
 impl ObjectImpl for Rgb2Gray {
+    // This macro provides some boilerplate.
     glib_object_impl!();
 
     // Called whenever a value of a property is changed. It can be called
@@ -277,10 +292,10 @@ impl ObjectImpl for Rgb2Gray {
     }
 }
 
-// Virtual methods of gst::Element. We override none
+// Implementation of gst::Element virtual methods
 impl ElementImpl for Rgb2Gray {}
 
-// Virtual methods of gst_base::BaseTransform
+// Implementation of gst_base::BaseTransform virtual methods
 impl BaseTransformImpl for Rgb2Gray {
     // Called for converting caps from one pad to another to account for any
     // changes in the media format this element is performing.
