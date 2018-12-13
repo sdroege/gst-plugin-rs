@@ -1177,8 +1177,6 @@ impl ObjectSubclass for ToggleRecord {
     }
 
     fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
-        klass.override_vfuncs();
-
         klass.install_properties(&PROPERTIES);
 
         klass.set_metadata(
