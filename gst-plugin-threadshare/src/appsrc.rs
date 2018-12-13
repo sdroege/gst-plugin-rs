@@ -418,15 +418,25 @@ impl AppSrc {
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(self.cat, obj: element, "Unpreparing");
 
-        let mut state = self.state.lock().unwrap();
+        // FIXME: The IO Context has to be alive longer than the other parts
+        // of the state. Otherwise a deadlock can happen between shutting down
+        // the IO context (thread join while the state lock is held) and stuff
+        // happening on the IO context (which might take the state lock).
+        let io_context = {
+            let mut state = self.state.lock().unwrap();
 
-        if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-            (&state.pending_future_id, &state.io_context)
-        {
-            io_context.release_pending_future_id(*pending_future_id);
-        }
+            if let (&Some(ref pending_future_id), &Some(ref io_context)) =
+                (&state.pending_future_id, &state.io_context)
+            {
+                io_context.release_pending_future_id(*pending_future_id);
+            }
 
-        *state = State::default();
+            let io_context = state.io_context.take();
+            *state = State::default();
+            io_context
+        };
+
+        drop(io_context);
 
         gst_debug!(self.cat, obj: element, "Unprepared");
 
