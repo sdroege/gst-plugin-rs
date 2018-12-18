@@ -170,7 +170,7 @@ impl ObjectImpl for FileSrc {
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {
-            subclass::Property("name", ..) => {
+            subclass::Property("location", ..) => {
                 let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
 
                 let res = match value.get::<String>() {
@@ -195,7 +195,7 @@ impl ObjectImpl for FileSrc {
     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
         match *prop {
-            subclass::Property("name", ..) => {
+            subclass::Property("location", ..) => {
                 let settings = self.settings.lock().unwrap();
                 let location = settings
                     .location
