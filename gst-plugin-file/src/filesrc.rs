@@ -39,11 +39,9 @@ impl Default for Settings {
     }
 }
 
-const LOCATION_PROP: &str = "location";
-
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property(LOCATION_PROP, || {
+static PROPERTIES: [subclass::Property; 1] = [subclass::Property("location", |name| {
     glib::ParamSpec::string(
-        LOCATION_PROP,
+        name,
         "File Location",
         "Location of the file to read from",
         None,
@@ -78,11 +76,7 @@ impl FileSrc {
         if let State::Started { .. } = *state {
             return Err(gst::Error::new(
                 gst::LibraryError::Failed,
-                format!(
-                    "Changing the `{}` property on a started `filesrc` is not supported",
-                    LOCATION_PROP,
-                )
-                .as_str(),
+                "Changing the `location` property on a started `filesrc` is not supported",
             ));
         }
 
@@ -108,31 +102,19 @@ impl FileSrc {
                         gst_info!(
                             self.cat,
                             obj: element,
-                            "Changing `{}` from {:?} to {}",
-                            LOCATION_PROP,
+                            "Changing `location` from {:?} to {}",
                             location_cur,
                             location,
                         );
                     }
                     None => {
-                        gst_info!(
-                            self.cat,
-                            obj: element,
-                            "Setting `{}` to {}",
-                            LOCATION_PROP,
-                            location,
-                        );
+                        gst_info!(self.cat, obj: element, "Setting `location to {}", location,);
                     }
                 }
                 Some(location)
             }
             None => {
-                gst_info!(
-                    self.cat,
-                    obj: element,
-                    "Resetting `{}` to None",
-                    LOCATION_PROP
-                );
+                gst_info!(self.cat, obj: element, "Resetting `location` to None",);
                 None
             }
         };
@@ -188,7 +170,7 @@ impl ObjectImpl for FileSrc {
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {
-            subclass::Property(LOCATION_PROP, ..) => {
+            subclass::Property("name", ..) => {
                 let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
 
                 let res = match value.get::<String>() {
@@ -201,8 +183,7 @@ impl ObjectImpl for FileSrc {
                     gst_error!(
                         self.cat,
                         obj: element,
-                        "Failed to set property `{}`: {}",
-                        LOCATION_PROP,
+                        "Failed to set property `location`: {}",
                         err
                     );
                 }
@@ -214,7 +195,7 @@ impl ObjectImpl for FileSrc {
     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
         match *prop {
-            subclass::Property(LOCATION_PROP, ..) => {
+            subclass::Property("name", ..) => {
                 let settings = self.settings.lock().unwrap();
                 let location = settings
                     .location

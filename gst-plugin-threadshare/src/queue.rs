@@ -65,9 +65,9 @@ impl Default for Settings {
 }
 
 static PROPERTIES: [subclass::Property; 5] = [
-    subclass::Property("max-size-buffers", || {
+    subclass::Property("max-size-buffers", |name| {
         glib::ParamSpec::uint(
-            "max-size-buffers",
+            name,
             "Max Size Buffers",
             "Maximum number of buffers to queue (0=unlimited)",
             0,
@@ -76,9 +76,9 @@ static PROPERTIES: [subclass::Property; 5] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("max-size-bytes", || {
+    subclass::Property("max-size-bytes", |name| {
         glib::ParamSpec::uint(
-            "max-size-bytes",
+            name,
             "Max Size Bytes",
             "Maximum number of bytes to queue (0=unlimited)",
             0,
@@ -87,9 +87,9 @@ static PROPERTIES: [subclass::Property; 5] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("max-size-time", || {
+    subclass::Property("max-size-time", |name| {
         glib::ParamSpec::uint64(
-            "max-size-time",
+            name,
             "Max Size Time",
             "Maximum number of nanoseconds to queue (0=unlimited)",
             0,
@@ -98,18 +98,18 @@ static PROPERTIES: [subclass::Property; 5] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("context", || {
+    subclass::Property("context", |name| {
         glib::ParamSpec::string(
-            "context",
+            name,
             "Context",
             "Context name to share threads with",
             Some(DEFAULT_CONTEXT),
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("context-wait", || {
+    subclass::Property("context-wait", |name| {
         glib::ParamSpec::uint(
-            "context-wait",
+            name,
             "Context Wait",
             "Throttle poll loop to run at most once every this many ms",
             0,

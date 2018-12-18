@@ -88,9 +88,9 @@ impl Default for SettingsSrc {
 }
 
 static PROPERTIES_SRC: [subclass::Property; 6] = [
-    subclass::Property("max-size-buffers", || {
+    subclass::Property("max-size-buffers", |name| {
         glib::ParamSpec::uint(
-            "max-size-buffers",
+            name,
             "Max Size Buffers",
             "Maximum number of buffers to queue (0=unlimited)",
             0,
@@ -99,9 +99,9 @@ static PROPERTIES_SRC: [subclass::Property; 6] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("max-size-bytes", || {
+    subclass::Property("max-size-bytes", |name| {
         glib::ParamSpec::uint(
-            "max-size-bytes",
+            name,
             "Max Size Bytes",
             "Maximum number of bytes to queue (0=unlimited)",
             0,
@@ -110,9 +110,9 @@ static PROPERTIES_SRC: [subclass::Property; 6] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("max-size-time", || {
+    subclass::Property("max-size-time", |name| {
         glib::ParamSpec::uint64(
-            "max-size-time",
+            name,
             "Max Size Time",
             "Maximum number of nanoseconds to queue (0=unlimited)",
             0,
@@ -121,18 +121,18 @@ static PROPERTIES_SRC: [subclass::Property; 6] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("context", || {
+    subclass::Property("context", |name| {
         glib::ParamSpec::string(
-            "context",
+            name,
             "Context",
             "Context name to share threads with",
             Some(DEFAULT_CONTEXT),
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("context-wait", || {
+    subclass::Property("context-wait", |name| {
         glib::ParamSpec::uint(
-            "context-wait",
+            name,
             "Context Wait",
             "Throttle poll loop to run at most once every this many ms",
             0,
@@ -141,9 +141,9 @@ static PROPERTIES_SRC: [subclass::Property; 6] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("proxy-context", || {
+    subclass::Property("proxy-context", |name| {
         glib::ParamSpec::string(
-            "proxy-context",
+            name,
             "Proxy Context",
             "Context name of the proxy to share with",
             Some(DEFAULT_PROXY_CONTEXT),
@@ -152,9 +152,9 @@ static PROPERTIES_SRC: [subclass::Property; 6] = [
     }),
 ];
 
-static PROPERTIES_SINK: [subclass::Property; 1] = [subclass::Property("proxy-context", || {
+static PROPERTIES_SINK: [subclass::Property; 1] = [subclass::Property("proxy-context", |name| {
     glib::ParamSpec::string(
-        "proxy-context",
+        name,
         "Proxy Context",
         "Context name of the proxy to share with",
         Some(DEFAULT_PROXY_CONTEXT),

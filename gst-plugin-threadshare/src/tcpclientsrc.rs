@@ -72,18 +72,18 @@ impl Default for Settings {
 }
 
 static PROPERTIES: [subclass::Property; 6] = [
-    subclass::Property("address", || {
+    subclass::Property("address", |name| {
         glib::ParamSpec::string(
-            "address",
+            name,
             "Address",
             "Address to receive packets from",
             DEFAULT_ADDRESS,
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("port", || {
+    subclass::Property("port", |name| {
         glib::ParamSpec::uint(
-            "port",
+            name,
             "Port",
             "Port to receive packets from",
             0,
@@ -92,18 +92,18 @@ static PROPERTIES: [subclass::Property; 6] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("caps", || {
+    subclass::Property("caps", |name| {
         glib::ParamSpec::boxed(
-            "caps",
+            name,
             "Caps",
             "Caps to use",
             gst::Caps::static_type(),
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("chunk-size", || {
+    subclass::Property("chunk-size", |name| {
         glib::ParamSpec::uint(
-            "chunk-size",
+            name,
             "Chunk Size",
             "Chunk Size",
             0,
@@ -112,18 +112,18 @@ static PROPERTIES: [subclass::Property; 6] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("context", || {
+    subclass::Property("context", |name| {
         glib::ParamSpec::string(
-            "context",
+            name,
             "Context",
             "Context name to share threads with",
             Some(DEFAULT_CONTEXT),
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("context-wait", || {
+    subclass::Property("context-wait", |name| {
         glib::ParamSpec::uint(
-            "context-wait",
+            name,
             "Context Wait",
             "Throttle poll loop to run at most once every this many ms",
             0,

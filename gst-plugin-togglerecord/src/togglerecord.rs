@@ -47,18 +47,18 @@ impl Default for Settings {
 }
 
 static PROPERTIES: [subclass::Property; 2] = [
-    subclass::Property("record", || {
+    subclass::Property("record", |name| {
         glib::ParamSpec::boolean(
-            "record",
+            name,
             "Record",
             "Enable/disable recording",
             DEFAULT_RECORD,
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("recording", || {
+    subclass::Property("recording", |name| {
         glib::ParamSpec::boolean(
-            "recording",
+            name,
             "Recording",
             "Whether recording is currently taking place",
             DEFAULT_RECORD,

@@ -60,8 +60,8 @@ struct AudioEcho {
 }
 
 static PROPERTIES: [subclass::Property; 4] = [
-    subclass::Property("max-delay", || {
-        glib::ParamSpec::uint64("max-delay",
+    subclass::Property("max-delay", |name| {
+        glib::ParamSpec::uint64(name,
         "Maximum Delay",
         "Maximum delay of the echo in nanoseconds (can't be changed in PLAYING or PAUSED state)",
         0, u64::MAX,
@@ -69,9 +69,9 @@ static PROPERTIES: [subclass::Property; 4] = [
         glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("delay", || {
+    subclass::Property("delay", |name| {
         glib::ParamSpec::uint64(
-            "delay",
+            name,
             "Delay",
             "Delay of the echo in nanoseconds",
             0,
@@ -80,9 +80,9 @@ static PROPERTIES: [subclass::Property; 4] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("intensity", || {
+    subclass::Property("intensity", |name| {
         glib::ParamSpec::double(
-            "intensity",
+            name,
             "Intensity",
             "Intensity of the echo",
             0.0,
@@ -91,9 +91,9 @@ static PROPERTIES: [subclass::Property; 4] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("feedback", || {
+    subclass::Property("feedback", |name| {
         glib::ParamSpec::double(
-            "feedback",
+            name,
             "Feedback",
             "Amount of feedback",
             0.0,

@@ -41,18 +41,18 @@ impl Default for Settings {
 
 // Metadata for the properties
 static PROPERTIES: [subclass::Property; 2] = [
-    subclass::Property("invert", || {
+    subclass::Property("invert", |name| {
         glib::ParamSpec::boolean(
-            "invert",
+            name,
             "Invert",
             "Invert grayscale output",
             DEFAULT_INVERT,
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("shift", || {
+    subclass::Property("shift", |name| {
         glib::ParamSpec::uint(
-            "shift",
+            name,
             "Shift",
             "Shift grayscale output (wrapping around)",
             0,

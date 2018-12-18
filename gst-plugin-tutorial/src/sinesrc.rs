@@ -57,9 +57,9 @@ impl Default for Settings {
 
 // Metadata for the properties
 static PROPERTIES: [subclass::Property; 5] = [
-    subclass::Property("samples-per-buffer", || {
+    subclass::Property("samples-per-buffer", |name| {
         glib::ParamSpec::uint(
-            "samples-per-buffer",
+            name,
             "Samples Per Buffer",
             "Number of samples per output buffer",
             1,
@@ -68,9 +68,9 @@ static PROPERTIES: [subclass::Property; 5] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("freq", || {
+    subclass::Property("freq", |name| {
         glib::ParamSpec::uint(
-            "freq",
+            name,
             "Frequency",
             "Frequency",
             1,
@@ -79,9 +79,9 @@ static PROPERTIES: [subclass::Property; 5] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("volume", || {
+    subclass::Property("volume", |name| {
         glib::ParamSpec::double(
-            "volume",
+            name,
             "Volume",
             "Output volume",
             0.0,
@@ -90,18 +90,18 @@ static PROPERTIES: [subclass::Property; 5] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("mute", || {
+    subclass::Property("mute", |name| {
         glib::ParamSpec::boolean(
-            "mute",
+            name,
             "Mute",
             "Mute",
             DEFAULT_MUTE,
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("is-live", || {
+    subclass::Property("is-live", |name| {
         glib::ParamSpec::boolean(
-            "is-live",
+            name,
             "Is Live",
             "(Pseudo) live output",
             DEFAULT_IS_LIVE,

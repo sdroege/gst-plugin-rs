@@ -64,18 +64,18 @@ impl Default for Settings {
 }
 
 static PROPERTIES: [subclass::Property; 5] = [
-    subclass::Property("context", || {
+    subclass::Property("context", |name| {
         glib::ParamSpec::string(
-            "context",
+            name,
             "Context",
             "Context name to share threads with",
             Some(DEFAULT_CONTEXT),
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("context-wait", || {
+    subclass::Property("context-wait", |name| {
         glib::ParamSpec::uint(
-            "context-wait",
+            name,
             "Context Wait",
             "Throttle poll loop to run at most once every this many ms",
             0,
@@ -84,9 +84,9 @@ static PROPERTIES: [subclass::Property; 5] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("max-buffers", || {
+    subclass::Property("max-buffers", |name| {
         glib::ParamSpec::uint(
-            "max-buffers",
+            name,
             "Max Buffers",
             "Maximum number of buffers to queue up",
             1,
@@ -95,18 +95,18 @@ static PROPERTIES: [subclass::Property; 5] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("caps", || {
+    subclass::Property("caps", |name| {
         glib::ParamSpec::boxed(
-            "caps",
+            name,
             "Caps",
             "Caps to use",
             gst::Caps::static_type(),
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("do-timestamp", || {
+    subclass::Property("do-timestamp", |name| {
         glib::ParamSpec::boolean(
-            "do-timestamp",
+            name,
             "Do Timestamp",
             "Timestamp buffers with the current running time on arrival",
             DEFAULT_DO_TIMESTAMP,

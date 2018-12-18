@@ -180,18 +180,18 @@ impl Default for Settings {
 }
 
 static PROPERTIES: [subclass::Property; 9] = [
-    subclass::Property("address", || {
+    subclass::Property("address", |name| {
         glib::ParamSpec::string(
-            "address",
+            name,
             "Address",
             "Address/multicast group to listen on",
             DEFAULT_ADDRESS,
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("port", || {
+    subclass::Property("port", |name| {
         glib::ParamSpec::uint(
-            "port",
+            name,
             "Port",
             "Port to listen on",
             0,
@@ -200,27 +200,27 @@ static PROPERTIES: [subclass::Property; 9] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("reuse", || {
+    subclass::Property("reuse", |name| {
         glib::ParamSpec::boolean(
-            "reuse",
+            name,
             "Reuse",
             "Allow reuse of the port",
             DEFAULT_REUSE,
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("caps", || {
+    subclass::Property("caps", |name| {
         glib::ParamSpec::boxed(
-            "caps",
+            name,
             "Caps",
             "Caps to use",
             gst::Caps::static_type(),
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("mtu", || {
+    subclass::Property("mtu", |name| {
         glib::ParamSpec::uint(
-            "mtu",
+            name,
             "MTU",
             "MTU",
             0,
@@ -229,36 +229,36 @@ static PROPERTIES: [subclass::Property; 9] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("socket", || {
+    subclass::Property("socket", |name| {
         glib::ParamSpec::object(
-            "socket",
+            name,
             "Socket",
             "Socket to use for UDP reception. (None == allocate)",
             gio::Socket::static_type(),
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("used-socket", || {
+    subclass::Property("used-socket", |name| {
         glib::ParamSpec::object(
-            "used-socket",
+            name,
             "Used Socket",
             "Socket currently in use for UDP reception. (None = no socket)",
             gio::Socket::static_type(),
             glib::ParamFlags::READABLE,
         )
     }),
-    subclass::Property("context", || {
+    subclass::Property("context", |name| {
         glib::ParamSpec::string(
-            "context",
+            name,
             "Context",
             "Context name to share threads with",
             Some(DEFAULT_CONTEXT),
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("context-wait", || {
+    subclass::Property("context-wait", |name| {
         glib::ParamSpec::uint(
-            "context-wait",
+            name,
             "Context Wait",
             "Throttle poll loop to run at most once every this many ms",
             0,
