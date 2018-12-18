@@ -126,8 +126,8 @@ impl ObjectSubclass for FileSink {
         }
     }
 
-    fn type_init(type_: &subclass::InitializingType<Self>) {
-        gst::subclass::uri_handler::register(type_);
+    fn type_init(type_: &mut subclass::InitializingType<Self>) {
+        type_.add_interface::<gst::URIHandler>();
     }
 
     fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
