@@ -10,7 +10,8 @@ url = "1.1"
 glib = { git = "https://github.com/gtk-rs/glib" }
 gst-plugin = { path="../gst-plugin" }
 gst-plugin-simple = { path="../gst-plugin-simple" }
-reqwest = "0.8"
+reqwest = "0.9"
+hyperx = "0.13"
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 
 [lib]

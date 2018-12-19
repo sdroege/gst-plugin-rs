@@ -14,6 +14,7 @@ extern crate gst_plugin;
 extern crate gst_plugin_simple;
 #[macro_use]
 extern crate gstreamer as gst;
+extern crate hyperx;
 extern crate reqwest;
 extern crate url;
 

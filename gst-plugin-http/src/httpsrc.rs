@@ -6,8 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use reqwest::header::{
-    AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, ContentRangeSpec, Range, RangeUnit,
+use hyperx::header::{
+    AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, ContentRangeSpec, Headers, Range,
+    RangeUnit,
 };
 use reqwest::{Client, Response};
 use std::io::Read;
@@ -68,17 +69,22 @@ impl HttpSrc {
         stop: Option<u64>,
     ) -> Result<StreamingState, gst::ErrorMessage> {
         let cat = self.cat;
-        let mut req = self.client.get(uri.clone());
+        let req = self.client.get(uri.clone());
+
+        let mut headers = Headers::new();
 
         match (start != 0, stop) {
             (false, None) => (),
             (true, None) => {
-                req.header(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]));
+                headers.set(Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]));
             }
             (_, Some(stop)) => {
-                req.header(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]));
+                headers.set(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]));
             }
         }
+
+        // Add all headers for the request here
+        let req = req.headers(headers.into());
 
         gst_debug!(cat, obj: src, "Doing new request {:?}", req);
 
@@ -98,12 +104,10 @@ impl HttpSrc {
             ));
         }
 
-        let size = response
-            .headers()
-            .get()
-            .map(|&ContentLength(cl)| cl + start);
+        let headers = Headers::from(response.headers());
+        let size = headers.get().map(|&ContentLength(cl)| cl + start);
 
-        let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = response.headers().get() {
+        let accept_byte_ranges = if let Some(&AcceptRanges(ref ranges)) = headers.get() {
             ranges.iter().any(|u| *u == RangeUnit::Bytes)
         } else {
             false
@@ -114,7 +118,7 @@ impl HttpSrc {
         let position = if let Some(&ContentRange(ContentRangeSpec::Bytes {
             range: Some((range_start, _)),
             ..
-        })) = response.headers().get()
+        })) = headers.get()
         {
             range_start
         } else {
