@@ -793,10 +793,6 @@ impl ObjectSubclass for Queue {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn new() -> Self {
-        unreachable!()
-    }
-
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sink_pad = gst::Pad::new_from_template(&templ, "sink");

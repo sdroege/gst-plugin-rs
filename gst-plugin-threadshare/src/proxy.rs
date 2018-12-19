@@ -661,10 +661,6 @@ impl ObjectSubclass for ProxySink {
         klass.install_properties(&PROPERTIES_SINK);
     }
 
-    fn new() -> Self {
-        unreachable!()
-    }
-
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sink_pad = gst::Pad::new_from_template(&templ, "sink");

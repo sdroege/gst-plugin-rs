@@ -162,12 +162,6 @@ impl ObjectSubclass for Identity {
     // This macro provides some boilerplate.
     glib_object_subclass!();
 
-    // By default this would be called for creating a new instance but we
-    // want access to the class struct below so this function is unreachable
-    fn new() -> Self {
-        unreachable!();
-    }
-
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here and also get the class struct passed in case it's needed
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {

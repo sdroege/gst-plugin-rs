@@ -878,10 +878,6 @@ impl ObjectSubclass for UdpSrc {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn new() -> Self {
-        unreachable!()
-    }
-
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("src").unwrap();
         let src_pad = gst::Pad::new_from_template(&templ, "src");
