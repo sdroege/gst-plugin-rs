@@ -47,7 +47,7 @@ use net2;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 #[cfg(windows)]
-use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawFd, RawSocket};
+use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
 
 use iocontext::*;
 use socket::*;
@@ -103,7 +103,9 @@ impl GioSocketWrapper {
     #[cfg(windows)]
     fn get<T: FromRawSocket>(&self) -> T {
         unsafe {
-            FromRawSocket::from_raw_socket(dup_socket(ffi::g_socket_get_fd(self.socket) as _) as _)
+            FromRawSocket::from_raw_socket(
+                dup_socket(gio_ffi::g_socket_get_fd(self.socket) as _) as _
+            )
         }
     }
 }
@@ -127,27 +129,30 @@ impl Drop for GioSocketWrapper {
 #[cfg(windows)]
 unsafe fn dup_socket(socket: usize) -> usize {
     use std::mem;
-    use winapi::shared::minwindef::DWORD;
     use winapi::shared::ws2def;
     use winapi::um::processthreadsapi;
-    use winapi::um::winsock2;
     use winapi::um::winsock2;
 
     let mut proto_info = mem::zeroed();
     let ret = winsock2::WSADuplicateSocketA(
         socket,
-        processthreadsapi::GetCurrentProcess(),
+        processthreadsapi::GetCurrentProcessId(),
         &mut proto_info,
     );
     assert_eq!(ret, 0);
-    winsock2::WSASocketA(
+
+    let socket = winsock2::WSASocketA(
         ws2def::AF_INET,
         ws2def::SOCK_DGRAM,
-        ws2def::IPPROTO_UDP,
+        ws2def::IPPROTO_UDP as i32,
         &mut proto_info,
         0,
         0,
     );
+
+    assert_ne!(socket, winsock2::INVALID_SOCKET);
+
+    socket
 }
 
 #[derive(Debug, Clone)]
