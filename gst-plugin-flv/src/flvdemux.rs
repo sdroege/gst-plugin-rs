@@ -203,7 +203,7 @@ impl AudioFormat {
 
                     data.into_inner()
                 };
-                let header = gst::Buffer::from_mut_slice(header).unwrap();
+                let header = gst::Buffer::from_mut_slice(header);
 
                 let comment = {
                     let comment_size = 4 + 7 /* nothing */ + 4 + 1;
@@ -217,7 +217,7 @@ impl AudioFormat {
 
                     data.into_inner()
                 };
-                let comment = gst::Buffer::from_mut_slice(comment).unwrap();
+                let comment = gst::Buffer::from_mut_slice(comment);
 
                 Some(gst::Caps::new_simple(
                     "audio/x-speex",
