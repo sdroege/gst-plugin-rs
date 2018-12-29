@@ -398,7 +398,7 @@ impl URIHandlerImpl for FileSrc {
     }
 
     fn get_uri_type() -> gst::URIType {
-        gst::URIType::Sink
+        gst::URIType::Src
     }
 
     fn get_protocols() -> Vec<String> {
