@@ -8,11 +8,10 @@ license = "MIT/Apache-2.0"
 [dependencies]
 url = "1.1"
 glib = { git = "https://github.com/gtk-rs/glib" }
-gst-plugin = { path="../gst-plugin" }
-gst-plugin-simple = { path="../gst-plugin-simple" }
 reqwest = "0.9"
 hyperx = "0.13"
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
+gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
 
 [lib]
 name = "gstrshttp"

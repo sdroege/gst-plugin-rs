@@ -8,49 +8,29 @@
 
 #![crate_type = "cdylib"]
 
+#[macro_use]
 extern crate glib;
 #[macro_use]
-extern crate gst_plugin;
-extern crate gst_plugin_simple;
-#[macro_use]
 extern crate gstreamer as gst;
+extern crate gstreamer_base as gst_base;
 extern crate hyperx;
 extern crate reqwest;
 extern crate url;
 
-use gst_plugin_simple::source::*;
-
 mod httpsrc;
 
-use httpsrc::HttpSrc;
-
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    source_register(
-        plugin,
-        SourceInfo {
-            name: "rshttpsrc".into(),
-            long_name: "HTTP/HTTPS Source".into(),
-            description: "Reads HTTP/HTTPS streams".into(),
-            classification: "Source/File".into(),
-            author: "Sebastian Dröge <sebastian@centricular.com>".into(),
-            rank: 256 + 100,
-            create_instance: HttpSrc::new_boxed,
-            protocols: vec!["http".into(), "https".into()],
-            push_only: true,
-        },
-    );
-
-    Ok(())
+    httpsrc::register(plugin)
 }
 
-plugin_define!(
-    b"rshttp\0",
-    b"Rust HTTP Plugin\0",
+gst_plugin_define!(
+    "rshttp",
+    "Rust HTTP Plugin",
     plugin_init,
-    b"1.0\0",
-    b"MIT/X11\0",
-    b"rshttp\0",
-    b"rshttp\0",
-    b"https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs\0",
-    b"2016-12-08\0"
+    "1.0",
+    "MIT/X11",
+    "rshttp",
+    "rshttp",
+    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
+    "2016-12-08"
 );
