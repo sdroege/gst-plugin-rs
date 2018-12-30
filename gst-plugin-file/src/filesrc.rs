@@ -14,6 +14,7 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base;
+use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use std::fs::File;
@@ -206,6 +207,13 @@ impl ObjectImpl for FileSrc {
             }
             _ => unimplemented!(),
         }
+    }
+
+    fn constructed(&self, obj: &glib::Object) {
+        self.parent_constructed(obj);
+
+        let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
+        element.set_format(gst::Format::Bytes);
     }
 }
 
