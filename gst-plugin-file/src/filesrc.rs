@@ -300,12 +300,13 @@ impl BaseSrcImpl for FileSrc {
         true
     }
 
-    fn create(
+    fn fill(
         &self,
         element: &gst_base::BaseSrc,
         offset: u64,
-        length: u32,
-    ) -> Result<gst::Buffer, gst::FlowError> {
+        _length: u32,
+        buffer: &mut gst::BufferRef,
+    ) -> gst::FlowReturn {
         let mut state = self.state.lock().unwrap();
 
         let (file, position) = match *state {
@@ -315,66 +316,54 @@ impl BaseSrcImpl for FileSrc {
             } => (file, position),
             State::Stopped => {
                 gst_element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
-                return Err(gst::FlowError::Error);
+                return gst::FlowReturn::Error;
             }
         };
 
         if *position != offset {
-            file.seek(SeekFrom::Start(offset)).map_err(|err| {
+            if let Err(err) = file.seek(SeekFrom::Start(offset)) {
                 gst_element_error!(
                     element,
                     gst::LibraryError::Failed,
                     ["Failed to seek to {}: {}", offset, err.to_string()]
                 );
-                gst::FlowError::Error
-            })?;
+                return gst::FlowReturn::Error;
+            }
 
             *position = offset;
         }
 
-        let mut buffer = match gst::Buffer::with_size(length as usize) {
-            Some(buffer) => buffer,
-            None => {
-                gst_element_error!(
-                    element,
-                    gst::LibraryError::Failed,
-                    ["Failed to allocate buffer"]
-                );
-                return Err(gst::FlowError::Error);
-            }
-        };
+        let size = {
+            let mut map = match buffer.map_writable() {
+                Some(map) => map,
+                None => {
+                    gst_element_error!(
+                        element,
+                        gst::LibraryError::Failed,
+                        ["Failed to map buffer"]
+                    );
+                    return gst::FlowReturn::Error;
+                }
+            };
 
-        {
-            let buffer = buffer.make_mut();
-            let size = {
-                let mut map = match buffer.map_writable() {
-                    Some(map) => map,
-                    None => {
-                        gst_element_error!(
-                            element,
-                            gst::LibraryError::Failed,
-                            ["Failed to map buffer"]
-                        );
-                        return Err(gst::FlowError::Error);
-                    }
-                };
-
-                file.read(map.as_mut()).map_err(|err| {
+            match file.read(map.as_mut()) {
+                Ok(size) => size,
+                Err(err) => {
                     gst_element_error!(
                         element,
                         gst::LibraryError::Failed,
                         ["Failed to read at {}: {}", offset, err.to_string()]
                     );
-                    gst::FlowError::Error
-                })?
-            };
+                    return gst::FlowReturn::Error;
+                }
+            }
+        };
 
-            *position += size as u64;
+        *position += size as u64;
 
-            buffer.set_size(size);
-        }
+        buffer.set_size(size);
 
-        Ok(buffer)
+        gst::FlowReturn::Ok
     }
 }
 
