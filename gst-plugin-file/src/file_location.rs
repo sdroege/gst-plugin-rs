@@ -49,14 +49,14 @@ impl FileLocation {
     fn try_from(location: PathBuf) -> Result<Self, glib::Error> {
         let location_str = location.to_str().ok_or_else(|| {
             gst::Error::new(
-                gst::LibraryError::Failed,
+                gst::URIError::BadReference,
                 format!("Invalid path {:?}", location).as_str(),
             )
         })?;
 
         let file_name = location.file_name().ok_or_else(|| {
             gst::Error::new(
-                gst::LibraryError::Failed,
+                gst::URIError::BadReference,
                 format!("Expected a path with a filename, got {}", location_str,).as_str(),
             )
         })?;
@@ -75,7 +75,7 @@ impl FileLocation {
 
         let parent_canonical = parent_dir.canonicalize().map_err(|err| {
             gst::Error::new(
-                gst::LibraryError::Failed,
+                gst::URIError::BadReference,
                 format!(
                     "Could not resolve path {}: {}",
                     location_str,
@@ -106,7 +106,7 @@ impl FileLocation {
         Url::from_file_path(&location_canonical)
             .map_err(|_| {
                 gst::Error::new(
-                    gst::LibraryError::Failed,
+                    gst::URIError::BadReference,
                     format!("Could not resolve path to URL {}", location_str).as_str(),
                 )
             })

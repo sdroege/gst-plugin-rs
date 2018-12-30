@@ -75,7 +75,7 @@ impl FileSrc {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             return Err(gst::Error::new(
-                gst::LibraryError::Failed,
+                gst::URIError::BadState,
                 "Changing the `location` property on a started `filesrc` is not supported",
             ));
         }
@@ -85,14 +85,14 @@ impl FileSrc {
             Some(location) => {
                 if !location.exists() {
                     return Err(gst::Error::new(
-                        gst::LibraryError::Failed,
+                        gst::URIError::BadReference,
                         format!("{} doesn't exist", location).as_str(),
                     ));
                 }
 
                 if !location.is_file() {
                     return Err(gst::Error::new(
-                        gst::LibraryError::Failed,
+                        gst::URIError::BadReference,
                         format!("{} is not a file", location).as_str(),
                     ));
                 }

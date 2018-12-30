@@ -76,7 +76,7 @@ impl FileSink {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             return Err(gst::Error::new(
-                gst::LibraryError::Failed,
+                gst::URIError::BadState,
                 "Changing the `location` property on a started `filesink` is not supported",
             ));
         }
