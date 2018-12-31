@@ -15,20 +15,11 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-extern crate glib;
-
-extern crate gstreamer as gst;
-use gst::prelude::*;
-extern crate gstreamer_check as gst_check;
-extern crate gstreamer_video as gst_video;
-
-extern crate rand;
-use rand::{Rng, SeedableRng};
-
-extern crate gstrsclosedcaption;
-
 #[macro_use]
 extern crate pretty_assertions;
+
+use gst::prelude::*;
+use rand::{Rng, SeedableRng};
 
 fn init() {
     use std::sync::{Once, ONCE_INIT};

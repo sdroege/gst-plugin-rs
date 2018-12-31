@@ -15,17 +15,10 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-extern crate glib;
-use glib::prelude::*;
-
-extern crate gstreamer as gst;
-extern crate gstreamer_check as gst_check;
-extern crate gstreamer_video as gst_video;
-
-extern crate gstrsclosedcaption;
-
 #[macro_use]
 extern crate pretty_assertions;
+
+use glib::prelude::*;
 
 fn init() {
     use std::sync::{Once, ONCE_INIT};
