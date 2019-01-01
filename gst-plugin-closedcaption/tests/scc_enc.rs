@@ -1,0 +1,227 @@
+// Copyright (C) 2019 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2019 Jordan Petridis <jordan@centricular.com>
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Library General Public
+// License as published by the Free Software Foundation; either
+// version 2 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Library General Public License for more details.
+//
+// You should have received a copy of the GNU Library General Public
+// License along with this library; if not, write to the
+// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
+// Boston, MA 02110-1335, USA.
+
+#[macro_use]
+extern crate pretty_assertions;
+
+fn init() {
+    use std::sync::{Once, ONCE_INIT};
+    static INIT: Once = ONCE_INIT;
+
+    INIT.call_once(|| {
+        gst::init().unwrap();
+        gstrsclosedcaption::plugin_register_static().unwrap();
+    });
+}
+
+/// Encode a single raw CEA608 packet and compare the output
+#[test]
+fn test_encode_single_packet() {
+    init();
+
+    let input = [148, 44];
+    let expected_output = b"Scenarist_SCC V1.0\r\n\r\n11:12:13;14\t942c\r\n\r\n";
+
+    let mut h = gst_check::Harness::new("sccenc");
+    h.set_src_caps_str("closedcaption/x-cea-608, format=raw, framerate=(fraction)30000/1001");
+    let tc = gst_video::ValidVideoTimeCode::new(
+        gst::Fraction::new(30000, 1001),
+        None,
+        gst_video::VideoTimeCodeFlags::DROP_FRAME,
+        11,
+        12,
+        13,
+        14,
+        0,
+    )
+    .unwrap();
+
+    let buf = {
+        let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input[..]));
+        let buf_ref = buf.get_mut().unwrap();
+        gst_video::VideoTimeCodeMeta::add(buf_ref, &tc);
+        buf_ref.set_pts(gst::ClockTime::from_seconds(0));
+        buf
+    };
+
+    assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
+    h.push_event(gst::Event::new_eos().build());
+
+    let buf = h.pull().expect("Couldn't pull buffer");
+
+    let timecode = buf
+        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .expect("No timecode for buffer")
+        .get_tc();
+    assert_eq!(timecode, tc);
+
+    let pts = buf.get_pts();
+    assert_eq!(pts, gst::ClockTime::from_seconds(0));
+
+    let map = buf.map_readable().expect("Couldn't map buffer readable");
+    assert_eq!(
+        std::str::from_utf8(map.as_ref()),
+        std::str::from_utf8(expected_output.as_ref())
+    );
+}
+
+/// Encode a multiple raw CEA608 packets and compare the output
+#[test]
+fn test_encode_multiple_packets() {
+    init();
+
+    let input1 = [148, 44];
+    let input2 = [
+        148, 32, 148, 32, 148, 174, 148, 174, 148, 84, 148, 84, 16, 174, 16, 174, 70, 242, 239,
+        109, 32, 206, 229, 247, 32, 217, 239, 242, 107, 44, 148, 242, 148, 242, 16, 174, 16, 174,
+        244, 104, 233, 115, 32, 233, 115, 32, 196, 229, 109, 239, 227, 242, 97, 227, 121, 32, 206,
+        239, 247, 161, 148, 47, 148, 47,
+    ];
+
+    let expected_output1 = b"Scenarist_SCC V1.0\r\n\r\n00:00:00;00\t942c 942c\r\n\r\n";
+    let expected_output2 = b"00:00:14;01\t9420 9420 94ae 94ae 9454 9454 10ae 10ae 46f2 ef6d 20ce e5f7 20d9 eff2 6b2c 94f2\r\n\r\n";
+    let expected_output3 = b"00:00:14;17\t94f2 10ae 10ae f468 e973 20e9 7320 c4e5 6def e3f2 61e3 7920 ceef f7a1 942f 942f\r\n\r\n";
+
+    let mut h = gst_check::Harness::new("sccenc");
+    h.set_src_caps_str("closedcaption/x-cea-608, format=raw, framerate=(fraction)30000/1001");
+    let tc1 = gst_video::ValidVideoTimeCode::new(
+        gst::Fraction::new(30000, 1001),
+        None,
+        gst_video::VideoTimeCodeFlags::DROP_FRAME,
+        00,
+        00,
+        00,
+        00,
+        0,
+    )
+    .unwrap();
+
+    let tc2 = gst_video::ValidVideoTimeCode::new(
+        gst::Fraction::new(30000, 1001),
+        None,
+        gst_video::VideoTimeCodeFlags::DROP_FRAME,
+        00,
+        00,
+        14,
+        01,
+        0,
+    )
+    .unwrap();
+
+    let buf1 = {
+        let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input1[..]));
+        let buf_ref = buf.get_mut().unwrap();
+        gst_video::VideoTimeCodeMeta::add(buf_ref, &tc1);
+        buf_ref.set_pts(gst::ClockTime::from_seconds(0));
+        buf
+    };
+
+    let buf2 = {
+        let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input1[..]));
+        let buf_ref = buf.get_mut().unwrap();
+        let mut tc = tc1.clone();
+        tc.increment_frame();
+        gst_video::VideoTimeCodeMeta::add(buf_ref, &tc);
+        buf_ref.set_pts(gst::ClockTime::from_seconds(0));
+        buf
+    };
+
+    let mut t = tc2.clone();
+    let mut buffers = input2
+        .chunks(2)
+        .map(move |bytes| {
+            let mut buf = gst::Buffer::from_mut_slice(Vec::from(&bytes[..]));
+            let buf_ref = buf.get_mut().unwrap();
+            gst_video::VideoTimeCodeMeta::add(buf_ref, &t);
+            t.increment_frame();
+            buf
+        })
+        .collect::<Vec<gst::Buffer>>();
+    buffers.insert(0, buf1);
+    buffers.insert(1, buf2);
+
+    buffers.iter().for_each(|buf| {
+        assert_eq!(h.push(buf.clone()), Ok(gst::FlowSuccess::Ok));
+    });
+    h.push_event(gst::Event::new_eos().build());
+
+    // Pull 1
+    let buf = h.pull().expect("Couldn't pull buffer");
+
+    let timecode = buf
+        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .expect("No timecode for buffer")
+        .get_tc();
+    assert_eq!(timecode, tc1);
+
+    let pts = buf.get_pts();
+    assert_eq!(pts, gst::ClockTime::from_seconds(0));
+
+    let map = buf.map_readable().expect("Couldn't map buffer readable");
+
+    assert_eq!(
+        std::str::from_utf8(map.as_ref()),
+        std::str::from_utf8(expected_output1.as_ref())
+    );
+
+    // Pull 2
+    let buf = h.pull().expect("Couldn't pull buffer");
+    let timecode = buf
+        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .expect("No timecode for buffer")
+        .get_tc();
+    assert_eq!(timecode, tc2);
+
+    // let pts = buf.get_pts();
+    // assert_eq!(pts, gst::ClockTime::from_seconds(0));
+
+    let map = buf.map_readable().expect("Couldn't map buffer readable");
+    assert_eq!(
+        std::str::from_utf8(map.as_ref()),
+        std::str::from_utf8(expected_output2.as_ref())
+    );
+
+    let tc3 = gst_video::ValidVideoTimeCode::new(
+        gst::Fraction::new(30000, 1001),
+        None,
+        gst_video::VideoTimeCodeFlags::DROP_FRAME,
+        00,
+        00,
+        14,
+        17,
+        0,
+    )
+    .unwrap();
+
+    // Pull 3
+    let buf = h.pull().expect("Couldn't pull buffer");
+    let timecode = buf
+        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .expect("No timecode for buffer")
+        .get_tc();
+    assert_eq!(timecode, tc3);
+
+    // let pts = buf.get_pts();
+    // assert_eq!(pts, gst::ClockTime::from_seconds(0));
+
+    let map = buf.map_readable().expect("Couldn't map buffer readable");
+    assert_eq!(
+        std::str::from_utf8(map.as_ref()),
+        std::str::from_utf8(expected_output3.as_ref())
+    );
+}

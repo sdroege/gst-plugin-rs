@@ -15,17 +15,17 @@ lazy_static = "1.2"
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
-features = ["subclassing", "v1_10"]
+features = ["subclassing", "v1_12"]
 package="gstreamer"
 
 [dependencies.gst-base]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
-features = ["subclassing", "v1_10"]
+features = ["subclassing", "v1_12"]
 package="gstreamer-base"
 
 [dependencies.gst-video]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
-features = ["v1_10"]
+features = ["v1_12"]
 package="gstreamer-video"
 
 [dev-dependencies]

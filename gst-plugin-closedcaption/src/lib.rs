@@ -37,10 +37,15 @@ mod line_reader;
 mod mcc_enc;
 mod mcc_parse;
 mod mcc_parser;
+mod scc_enc;
+mod scc_parse;
+mod scc_parser;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     mcc_parse::register(plugin)?;
     mcc_enc::register(plugin)?;
+    scc_parse::register(plugin)?;
+    scc_enc::register(plugin)?;
     Ok(())
 }
 
