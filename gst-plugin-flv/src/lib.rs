@@ -8,51 +8,30 @@
 
 #![crate_type = "cdylib"]
 
-extern crate flavors;
+#[macro_use]
 extern crate glib;
 #[macro_use]
-extern crate gst_plugin;
-extern crate gst_plugin_simple;
-#[macro_use]
 extern crate gstreamer as gst;
-extern crate muldiv;
-extern crate nom;
-extern crate num_rational;
-extern crate url;
+extern crate gstreamer_base as gst_base;
 
-use gst_plugin_simple::demuxer::*;
+#[macro_use]
+extern crate lazy_static;
 
+mod bytes;
 mod flvdemux;
 
-use flvdemux::FlvDemux;
-
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    demuxer_register(
-        plugin,
-        DemuxerInfo {
-            name: "rsflvdemux".into(),
-            long_name: "FLV Demuxer".into(),
-            description: "Demuxes FLV Streams".into(),
-            classification: "Codec/Demuxer".into(),
-            author: "Sebastian Dröge <sebastian@centricular.com>".into(),
-            rank: 256 + 100,
-            create_instance: FlvDemux::new_boxed,
-            input_caps: gst::Caps::new_simple("video/x-flv", &[]),
-            output_caps: gst::Caps::new_any(),
-        },
-    )?;
-
-    Ok(())
+    flvdemux::register(plugin)
 }
 
-plugin_define!(
-    b"rsflv\0",
-    b"Rust FLV Plugin\0",
+gst_plugin_define!(
+    "rsflv",
+    "Rust FLV Plugin",
     plugin_init,
-    b"1.0\0",
-    b"MIT/X11\0",
-    b"rsflv\0",
-    b"rsflv\0",
-    b"https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs\0",
-    b"2016-12-08\0"
+    "1.0",
+    "MIT/X11",
+    "rsflv",
+    "rsflv",
+    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
+    "2016-12-08"
 );
