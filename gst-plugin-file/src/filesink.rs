@@ -265,7 +265,11 @@ impl BaseSinkImpl for FileSink {
 
     // TODO: implement seek in BYTES format
 
-    fn render(&self, element: &gst_base::BaseSink, buffer: &gst::BufferRef) -> gst::FlowReturn {
+    fn render(
+        &self,
+        element: &gst_base::BaseSink,
+        buffer: &gst::BufferRef,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
         let (file, position) = match *state {
             State::Started {
@@ -274,35 +278,28 @@ impl BaseSinkImpl for FileSink {
             } => (file, position),
             State::Stopped => {
                 gst_element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
-                return gst::FlowReturn::Error;
+                return Err(gst::FlowError::Error);
             }
         };
 
         gst_trace!(self.cat, obj: element, "Rendering {:?}", buffer);
-        let map = match buffer.map_readable() {
-            None => {
-                gst_element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
-                return gst::FlowReturn::Error;
-            }
-            Some(map) => map,
-        };
+        let map = buffer.map_readable().ok_or_else(|| {
+            gst_element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
+            gst::FlowError::Error
+        })?;
 
-        match file.write_all(map.as_ref()) {
-            Ok(()) => {
-                *position += map.len() as u64;
+        file.write_all(map.as_ref()).map_err(|err| {
+            gst_element_error!(
+                element,
+                gst::ResourceError::Write,
+                ["Failed to write buffer: {}", err]
+            );
+            gst::FlowError::Error
+        })?;
 
-                gst::FlowReturn::Ok
-            }
-            Err(err) => {
-                gst_element_error!(
-                    element,
-                    gst::ResourceError::Write,
-                    ["Failed to write buffer: {}", err]
-                );
+        *position += map.len() as u64;
 
-                gst::FlowReturn::Error
-            }
-        }
+        Ok(gst::FlowSuccess::Ok)
     }
 }
 

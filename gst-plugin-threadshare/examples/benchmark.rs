@@ -164,10 +164,7 @@ fn main() {
         glib::Continue(true)
     });
 
-    assert_ne!(
-        pipeline.set_state(gst::State::Playing),
-        gst::StateChangeReturn::Failure
-    );
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     println!("started");
 

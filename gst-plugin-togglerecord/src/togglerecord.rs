@@ -187,7 +187,7 @@ impl ToggleRecord {
         sinkpad.set_chain_function(|pad, parent, buffer| {
             ToggleRecord::catch_panic_pad_function(
                 parent,
-                || gst::FlowReturn::Error,
+                || Err(gst::FlowError::Error),
                 |togglerecord, element| togglerecord.sink_chain(pad, element, buffer),
             )
         });
@@ -651,25 +651,27 @@ impl ToggleRecord {
         pad: &gst::Pad,
         element: &gst::Element,
         buffer: gst::Buffer,
-    ) -> gst::FlowReturn {
-        let stream = match self.pads.lock().get(pad) {
-            None => {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let stream = self
+            .pads
+            .lock()
+            .get(pad)
+            .map(|stream| stream.clone())
+            .ok_or_else(|| {
                 gst_element_error!(
                     element,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.get_name()]
                 );
-                return gst::FlowReturn::Error;
-            }
-            Some(stream) => stream.clone(),
-        };
+                gst::FlowError::Error
+            })?;
 
         gst_log!(self.cat, obj: pad, "Handling buffer {:?}", buffer);
 
         {
             let state = stream.state.lock();
             if state.eos {
-                return gst::FlowReturn::Eos;
+                return Err(gst::FlowError::Eos);
             }
         }
 
@@ -682,19 +684,19 @@ impl ToggleRecord {
                     gst::StreamError::Format,
                     ["DTS != PTS not supported for secondary streams"]
                 );
-                return gst::FlowReturn::Error;
+                return Err(gst::FlowError::Error);
             }
-            if !pts.is_some() {
+            pts.ok_or_else(|| {
                 gst_element_error!(element, gst::StreamError::Format, ["Buffer without PTS"]);
-                return gst::FlowReturn::Error;
-            }
+                gst::FlowError::Error
+            })?;
             if buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT) {
                 gst_element_error!(
                     element,
                     gst::StreamError::Format,
                     ["Delta-units not supported for secondary streams"]
                 );
-                return gst::FlowReturn::Error;
+                return Err(gst::FlowError::Error);
             }
 
             self.handle_secondary_stream(pad, &stream, pts, buffer.get_duration())
@@ -706,7 +708,7 @@ impl ToggleRecord {
                     gst::StreamError::Format,
                     ["Buffer without DTS or PTS"]
                 );
-                return gst::FlowReturn::Error;
+                return Err(gst::FlowError::Error);
             }
 
             self.handle_main_stream(
@@ -721,10 +723,10 @@ impl ToggleRecord {
 
         match handle_result {
             HandleResult::Drop => {
-                return gst::FlowReturn::Ok;
+                return Ok(gst::FlowSuccess::Ok);
             }
             HandleResult::Flushing => {
-                return gst::FlowReturn::Flushing;
+                return Err(gst::FlowError::Flushing);
             }
             HandleResult::Eos => {
                 stream.srcpad.push_event(
@@ -732,7 +734,7 @@ impl ToggleRecord {
                         .seqnum(stream.state.lock().segment_seqnum)
                         .build(),
                 );
-                return gst::FlowReturn::Eos;
+                return Err(gst::FlowError::Eos);
             }
             HandleResult::Pass => {
                 // Pass through and actually push the buffer
@@ -1271,7 +1273,7 @@ impl ElementImpl for ToggleRecord {
         &self,
         element: &gst::Element,
         transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
 
         match transition {
@@ -1303,34 +1305,28 @@ impl ElementImpl for ToggleRecord {
             _ => (),
         }
 
-        let ret = self.parent_change_state(element, transition);
-        if ret == gst::StateChangeReturn::Failure {
-            return ret;
-        }
+        let success = self.parent_change_state(element, transition)?;
 
-        match transition {
-            gst::StateChange::PausedToReady => {
-                for s in self
-                    .other_streams
-                    .lock()
-                    .0
-                    .iter()
-                    .chain(iter::once(&self.main_stream))
-                {
-                    let mut state = s.state.lock();
+        if transition == gst::StateChange::PausedToReady {
+            for s in self
+                .other_streams
+                .lock()
+                .0
+                .iter()
+                .chain(iter::once(&self.main_stream))
+            {
+                let mut state = s.state.lock();
 
-                    state.pending_events.clear();
-                }
-
-                let mut rec_state = self.state.lock();
-                *rec_state = State::default();
-                drop(rec_state);
-                element.notify("recording");
+                state.pending_events.clear();
             }
-            _ => (),
+
+            let mut rec_state = self.state.lock();
+            *rec_state = State::default();
+            drop(rec_state);
+            element.notify("recording");
         }
 
-        ret
+        Ok(success)
     }
 
     fn request_new_pad(

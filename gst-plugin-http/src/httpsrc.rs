@@ -350,7 +350,7 @@ impl BaseSrcImpl for HttpSrc {
         offset: u64,
         _: u32,
         buffer: &mut gst::BufferRef,
-    ) -> gst::FlowReturn {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
         let (response, position) = match *state {
@@ -362,7 +362,7 @@ impl BaseSrcImpl for HttpSrc {
             State::Stopped => {
                 gst_element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
 
-                return gst::FlowReturn::Error;
+                return Err(gst::FlowError::Error);
             }
         };
 
@@ -373,45 +373,39 @@ impl BaseSrcImpl for HttpSrc {
                 ["Got unexpected offset {}, expected {}", offset, position]
             );
 
-            return gst::FlowReturn::Error;
+            return Err(gst::FlowError::Error);
         }
 
         let size = {
-            let mut map = match buffer.map_writable() {
-                None => {
-                    gst_element_error!(src, gst::LibraryError::Failed, ["Failed to map buffer"]);
+            let mut map = buffer.map_writable().ok_or_else(|| {
+                gst_element_error!(src, gst::LibraryError::Failed, ["Failed to map buffer"]);
 
-                    return gst::FlowReturn::Error;
-                }
-                Some(map) => map,
-            };
+                gst::FlowError::Error
+            })?;
 
             let data = map.as_mut_slice();
 
-            match response.read(data) {
-                Ok(size) => size,
-                Err(err) => {
-                    gst_error!(self.cat, obj: src, "Failed to read: {:?}", err);
-                    gst_element_error!(
-                        src,
-                        gst::ResourceError::Read,
-                        ["Failed to read at {}: {}", offset, err.to_string()]
-                    );
+            response.read(data).map_err(|err| {
+                gst_error!(self.cat, obj: src, "Failed to read: {:?}", err);
+                gst_element_error!(
+                    src,
+                    gst::ResourceError::Read,
+                    ["Failed to read at {}: {}", offset, err.to_string()]
+                );
 
-                    return gst::FlowReturn::Error;
-                }
-            }
+                gst::FlowError::Error
+            })?
         };
 
         if size == 0 {
-            return gst::FlowReturn::Eos;
+            return Err(gst::FlowError::Eos);
         }
 
         *position += size as u64;
 
         buffer.set_size(size);
 
-        gst::FlowReturn::Ok
+        Ok(gst::FlowSuccess::Ok)
     }
 }
 

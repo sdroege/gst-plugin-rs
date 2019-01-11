@@ -164,7 +164,7 @@ fn test_socket_reuse() {
 
     for _ in 0..3 {
         let buffer = ts_src_h.pull().unwrap();
-        sink_h.push(buffer).into_result().unwrap();
+        sink_h.push(buffer).unwrap();
         let buffer = ts_src_h2.pull().unwrap();
 
         assert_eq!(buffer.get_size(), 160);

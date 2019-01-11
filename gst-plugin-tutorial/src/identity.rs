@@ -35,7 +35,7 @@ impl Identity {
         sinkpad.set_chain_function(|pad, parent, buffer| {
             Identity::catch_panic_pad_function(
                 parent,
-                || gst::FlowReturn::Error,
+                || Err(gst::FlowError::Error),
                 |identity, element| identity.sink_chain(pad, element, buffer),
             )
         });
@@ -81,7 +81,7 @@ impl Identity {
         pad: &gst::Pad,
         _element: &gst::Element,
         buffer: gst::Buffer,
-    ) -> gst::FlowReturn {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(self.cat, obj: pad, "Handling buffer {:?}", buffer);
         self.srcpad.push(buffer)
     }
@@ -260,16 +260,11 @@ impl ElementImpl for Identity {
         &self,
         element: &gst::Element,
         transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
 
         // Call the parent class' implementation of ::change_state()
-        let ret = self.parent_change_state(element, transition);
-        if ret == gst::StateChangeReturn::Failure {
-            return ret;
-        }
-
-        ret
+        self.parent_change_state(element, transition)
     }
 }
 

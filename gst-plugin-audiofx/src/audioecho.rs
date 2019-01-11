@@ -254,20 +254,14 @@ impl BaseTransformImpl for AudioEcho {
         &self,
         _element: &gst_base::BaseTransform,
         buf: &mut gst::BufferRef,
-    ) -> gst::FlowReturn {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut settings = *self.settings.lock().unwrap();
         settings.delay = cmp::min(settings.max_delay, settings.delay);
 
         let mut state_guard = self.state.lock().unwrap();
-        let state = match *state_guard {
-            None => return gst::FlowReturn::NotNegotiated,
-            Some(ref mut state) => state,
-        };
+        let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
-        let mut map = match buf.map_writable() {
-            None => return gst::FlowReturn::Error,
-            Some(map) => map,
-        };
+        let mut map = buf.map_writable().ok_or(gst::FlowError::Error)?;
 
         match state.info.format() {
             gst_audio::AUDIO_FORMAT_F64 => {
@@ -278,10 +272,10 @@ impl BaseTransformImpl for AudioEcho {
                 let data = map.as_mut_slice_of::<f32>().unwrap();
                 Self::process(data, state, &settings);
             }
-            _ => return gst::FlowReturn::NotNegotiated,
+            _ => return Err(gst::FlowError::NotNegotiated),
         }
 
-        gst::FlowReturn::Ok
+        Ok(gst::FlowSuccess::Ok)
     }
 
     fn set_caps(

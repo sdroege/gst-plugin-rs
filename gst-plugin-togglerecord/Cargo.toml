@@ -24,4 +24,3 @@ path = "src/lib.rs"
 name = "gtk-recording"
 path = "examples/gtk_recording.rs"
 required-features = ["gtk", "gio"]
-

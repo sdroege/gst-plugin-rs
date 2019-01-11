@@ -318,15 +318,13 @@ fn create_ui(app: &gtk::Application) {
         glib::Continue(true)
     });
 
-    let ret = pipeline.set_state(gst::State::Playing);
-    assert_ne!(ret, gst::StateChangeReturn::Failure);
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     // Pipeline reference is owned by the closure below, so will be
     // destroyed once the app is destroyed
     let timeout_id = RefCell::new(Some(timeout_id));
     app.connect_shutdown(move |_| {
-        let ret = pipeline.set_state(gst::State::Null);
-        assert_ne!(ret, gst::StateChangeReturn::Failure);
+        pipeline.set_state(gst::State::Null).unwrap();
 
         bus.remove_watch();
 

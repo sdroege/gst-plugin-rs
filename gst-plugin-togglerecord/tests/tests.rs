@@ -73,7 +73,7 @@ fn setup_sender_receiver(
     };
 
     let fakesink_sinkpad = fakesink.get_static_pad("sink").unwrap();
-    srcpad.link(&fakesink_sinkpad).into_result().unwrap();
+    srcpad.link(&fakesink_sinkpad).unwrap();
 
     let (sender_output, receiver_output) = mpsc::channel::<Either<gst::Buffer, gst::Event>>();
     let sender_output = Mutex::new(sender_output);
@@ -254,10 +254,7 @@ fn test_one_stream_open() {
     let (sender_input, _, receiver_output, thread) =
         setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
@@ -274,7 +271,7 @@ fn test_one_stream_open() {
 
     thread.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -288,10 +285,7 @@ fn test_one_stream_gaps_open() {
     let (sender_input, _, receiver_output, thread) =
         setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
     sender_input.send(SendData::Buffers(5)).unwrap();
@@ -309,7 +303,7 @@ fn test_one_stream_gaps_open() {
 
     thread.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -323,10 +317,7 @@ fn test_one_stream_close_open() {
     let (sender_input, receiver_input_done, receiver_output, thread) =
         setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     sender_input.send(SendData::Buffers(10)).unwrap();
     receiver_input_done.recv().unwrap();
@@ -345,7 +336,7 @@ fn test_one_stream_close_open() {
 
     thread.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -359,10 +350,7 @@ fn test_one_stream_open_close() {
     let (sender_input, receiver_input_done, receiver_output, thread) =
         setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
@@ -382,7 +370,7 @@ fn test_one_stream_open_close() {
 
     thread.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -396,10 +384,7 @@ fn test_one_stream_open_close_open() {
     let (sender_input, receiver_input_done, receiver_output, thread) =
         setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
@@ -428,7 +413,7 @@ fn test_one_stream_open_close_open() {
 
     thread.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -444,10 +429,7 @@ fn test_two_stream_open() {
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
         setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
 
@@ -482,7 +464,7 @@ fn test_two_stream_open() {
     thread_1.join().unwrap();
     thread_2.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -498,10 +480,7 @@ fn test_two_stream_open_shift() {
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
         setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 5 * gst::MSECOND);
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
 
@@ -536,7 +515,7 @@ fn test_two_stream_open_shift() {
     thread_1.join().unwrap();
     thread_2.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -552,10 +531,7 @@ fn test_two_stream_open_shift_main() {
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
         setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
 
@@ -591,7 +567,7 @@ fn test_two_stream_open_shift_main() {
     thread_1.join().unwrap();
     thread_2.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -607,10 +583,7 @@ fn test_two_stream_open_close() {
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
         setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
 
@@ -661,7 +634,7 @@ fn test_two_stream_open_close() {
     thread_1.join().unwrap();
     thread_2.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -677,10 +650,7 @@ fn test_two_stream_close_open() {
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
         setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &false).unwrap();
 
@@ -731,7 +701,7 @@ fn test_two_stream_close_open() {
     thread_1.join().unwrap();
     thread_2.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -747,10 +717,7 @@ fn test_two_stream_open_close_open() {
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
         setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
 
@@ -826,7 +793,7 @@ fn test_two_stream_open_close_open() {
     thread_1.join().unwrap();
     thread_2.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -842,10 +809,7 @@ fn test_two_stream_open_close_open_gaps() {
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
         setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
 
@@ -927,7 +891,7 @@ fn test_two_stream_open_close_open_gaps() {
     thread_1.join().unwrap();
     thread_2.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -943,10 +907,7 @@ fn test_two_stream_close_open_close_delta() {
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
         setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &false).unwrap();
 
@@ -1017,7 +978,7 @@ fn test_two_stream_close_open_close_delta() {
     thread_1.join().unwrap();
     thread_2.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }
 
 #[test]
@@ -1035,10 +996,7 @@ fn test_three_stream_open_close_open() {
     let (sender_input_3, receiver_input_done_3, receiver_output_3, thread_3) =
         setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
 
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     togglerecord.set_property("record", &true).unwrap();
 
@@ -1142,5 +1100,5 @@ fn test_three_stream_open_close_open() {
     thread_2.join().unwrap();
     thread_3.join().unwrap();
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 }

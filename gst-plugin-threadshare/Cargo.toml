@@ -13,6 +13,7 @@ gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-s
 glib = { git = "https://github.com/gtk-rs/glib", features = ["subclassing"] }
 gio = { git = "https://github.com/gtk-rs/gio" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
+gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 tokio = "0.1"
 tokio-reactor = "0.1"

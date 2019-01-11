@@ -409,7 +409,7 @@ impl ElementImpl for SineSrc {
         &self,
         element: &gst::Element,
         transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         let basesrc = element.downcast_ref::<gst_base::BaseSrc>().unwrap();
 
         // Configure live'ness once here just before starting the source
@@ -685,7 +685,7 @@ impl BaseSrcImpl for SineSrc {
 
             // If the clock ID was unscheduled, unlock() was called
             // and we should return Flushing immediately.
-            if res == gst::ClockReturn::Unscheduled {
+            if res == Err(gst::ClockError::Unscheduled) {
                 gst_debug!(self.cat, obj: element, "Flushing");
                 return Err(gst::FlowError::Flushing);
             }

@@ -306,7 +306,7 @@ impl BaseSrcImpl for FileSrc {
         offset: u64,
         _length: u32,
         buffer: &mut gst::BufferRef,
-    ) -> gst::FlowReturn {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
         let (file, position) = match *state {
@@ -316,54 +316,44 @@ impl BaseSrcImpl for FileSrc {
             } => (file, position),
             State::Stopped => {
                 gst_element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
-                return gst::FlowReturn::Error;
+                return Err(gst::FlowError::Error);
             }
         };
 
         if *position != offset {
-            if let Err(err) = file.seek(SeekFrom::Start(offset)) {
+            file.seek(SeekFrom::Start(offset)).map_err(|err| {
                 gst_element_error!(
                     element,
                     gst::LibraryError::Failed,
                     ["Failed to seek to {}: {}", offset, err.to_string()]
                 );
-                return gst::FlowReturn::Error;
-            }
+                gst::FlowError::Error
+            })?;
 
             *position = offset;
         }
 
         let size = {
-            let mut map = match buffer.map_writable() {
-                Some(map) => map,
-                None => {
-                    gst_element_error!(
-                        element,
-                        gst::LibraryError::Failed,
-                        ["Failed to map buffer"]
-                    );
-                    return gst::FlowReturn::Error;
-                }
-            };
+            let mut map = buffer.map_writable().ok_or_else(|| {
+                gst_element_error!(element, gst::LibraryError::Failed, ["Failed to map buffer"]);
+                gst::FlowError::Error
+            })?;
 
-            match file.read(map.as_mut()) {
-                Ok(size) => size,
-                Err(err) => {
-                    gst_element_error!(
-                        element,
-                        gst::LibraryError::Failed,
-                        ["Failed to read at {}: {}", offset, err.to_string()]
-                    );
-                    return gst::FlowReturn::Error;
-                }
-            }
+            file.read(map.as_mut()).map_err(|err| {
+                gst_element_error!(
+                    element,
+                    gst::LibraryError::Failed,
+                    ["Failed to read at {}: {}", offset, err.to_string()]
+                );
+                gst::FlowError::Error
+            })?
         };
 
         *position += size as u64;
 
         buffer.set_size(size);
 
-        gst::FlowReturn::Ok
+        Ok(gst::FlowSuccess::Ok)
     }
 }
 

@@ -22,6 +22,8 @@ use glib::prelude::*;
 extern crate gstreamer as gst;
 use gst::prelude::*;
 
+extern crate gstreamer_app as gst_app;
+
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
@@ -75,28 +77,22 @@ fn test_push() {
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 
+    let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
     let samples_clone = samples.clone();
-    appsink
-        .connect("new-sample", true, move |args| {
-            let appsink = args[0].get::<gst::Element>().unwrap();
+    appsink.connect_new_sample(move |appsink| {
+        let sample = appsink
+            .emit("pull-sample", &[])
+            .unwrap()
+            .unwrap()
+            .get::<gst::Sample>()
+            .unwrap();
 
-            let sample = appsink
-                .emit("pull-sample", &[])
-                .unwrap()
-                .unwrap()
-                .get::<gst::Sample>()
-                .unwrap();
+        let mut samples = samples_clone.lock().unwrap();
+        samples.push(sample);
+        Ok(gst::FlowSuccess::Ok)
+    });
 
-            let mut samples = samples_clone.lock().unwrap();
-            samples.push(sample);
-            Some(gst::FlowReturn::Ok.to_value())
-        })
-        .unwrap();
-
-    pipeline
-        .set_state(gst::State::Playing)
-        .into_result()
-        .unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
 
     let mut eos = false;
     let bus = pipeline.get_bus().unwrap();
@@ -123,7 +119,7 @@ fn test_push() {
     });
     assert_eq!(total_received_size, 3 * 160);
 
-    pipeline.set_state(gst::State::Null).into_result().unwrap();
+    pipeline.set_state(gst::State::Null).unwrap();
 
     handler.join().unwrap();
 }

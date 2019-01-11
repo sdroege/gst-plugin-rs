@@ -198,7 +198,7 @@ impl SharedQueue {
             let inner = Arc::new(Mutex::new(SharedQueueInner {
                 name: name.into(),
                 queue: None,
-                last_ret: gst::FlowReturn::Flushing,
+                last_res: Err(gst::FlowError::Flushing),
                 pending_queue: None,
                 pending_future_cancel: None,
                 have_sink: as_sink,
@@ -236,7 +236,7 @@ impl Drop for SharedQueue {
 struct SharedQueueInner {
     name: String,
     queue: Option<DataQueue>,
-    last_ret: gst::FlowReturn,
+    last_res: Result<gst::FlowSuccess, gst::FlowError>,
     pending_queue: Option<(Option<task::Task>, bool, VecDeque<DataQueueItem>)>,
     pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
     have_sink: bool,
@@ -296,7 +296,7 @@ impl ProxySink {
         _pad: &gst::Pad,
         element: &gst::Element,
         item: DataQueueItem,
-    ) -> gst::FlowReturn {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let wait_future = {
             let state = self.state.lock().unwrap();
             let StateSink {
@@ -305,10 +305,7 @@ impl ProxySink {
                 pending_future_id,
                 ..
             } = *state;
-            let queue = match *queue {
-                None => return gst::FlowReturn::Error,
-                Some(ref queue) => queue,
-            };
+            let queue = queue.as_ref().ok_or(gst::FlowError::Error)?;
 
             let mut queue = queue.0.lock().unwrap();
 
@@ -472,23 +469,20 @@ impl ProxySink {
 
         if let Some(wait_future) = wait_future {
             gst_log!(self.cat, obj: element, "Blocking until queue becomes empty");
-            match executor::current_thread::block_on_all(wait_future) {
-                Err(_) => {
-                    gst_element_error!(
-                        element,
-                        gst::StreamError::Failed,
-                        ["failed to wait for queue to become empty again"]
-                    );
-                    return gst::FlowReturn::Error;
-                }
-                Ok(_) => (),
-            }
+            executor::current_thread::block_on_all(wait_future).map_err(|_| {
+                gst_element_error!(
+                    element,
+                    gst::StreamError::Failed,
+                    ["failed to wait for queue to become empty again"]
+                );
+                gst::FlowError::Error
+            })?;
         }
 
         let state = self.state.lock().unwrap();
         let queue = state.queue.as_ref().unwrap();
-        let ret = queue.0.lock().unwrap().last_ret;
-        ret
+        let res = queue.0.lock().unwrap().last_res;
+        res
     }
 
     fn sink_chain(
@@ -496,7 +490,7 @@ impl ProxySink {
         pad: &gst::Pad,
         element: &gst::Element,
         buffer: gst::Buffer,
-    ) -> gst::FlowReturn {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(self.cat, obj: pad, "Handling buffer {:?}", buffer);
         self.enqueue_item(pad, element, DataQueueItem::Buffer(buffer))
     }
@@ -506,7 +500,7 @@ impl ProxySink {
         pad: &gst::Pad,
         element: &gst::Element,
         list: gst::BufferList,
-    ) -> gst::FlowReturn {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(self.cat, obj: pad, "Handling buffer list {:?}", list);
         self.enqueue_item(pad, element, DataQueueItem::BufferList(list))
     }
@@ -524,9 +518,9 @@ impl ProxySink {
                 let _ = self.stop(element);
             }
             EventView::FlushStop(..) => {
-                let (ret, state, pending) = element.get_state(0.into());
-                if ret == gst::StateChangeReturn::Success && state == gst::State::Paused
-                    || ret == gst::StateChangeReturn::Async && pending == gst::State::Paused
+                let (res, state, pending) = element.get_state(0.into());
+                if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Paused
+                    || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Paused
                 {
                     let _ = self.start(element);
                 }
@@ -605,7 +599,7 @@ impl ProxySink {
         let state = self.state.lock().unwrap();
 
         let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
-        queue.last_ret = gst::FlowReturn::Ok;
+        queue.last_res = Ok(gst::FlowSuccess::Ok);
 
         gst_debug!(self.cat, obj: element, "Started");
 
@@ -624,7 +618,7 @@ impl ProxySink {
         if let Some((Some(task), _, _)) = queue.pending_queue.take() {
             task.notify();
         }
-        queue.last_ret = gst::FlowReturn::Flushing;
+        queue.last_res = Err(gst::FlowError::Flushing);
 
         gst_debug!(self.cat, obj: element, "Stopped");
 
@@ -668,14 +662,14 @@ impl ObjectSubclass for ProxySink {
         sink_pad.set_chain_function(|pad, parent, buffer| {
             ProxySink::catch_panic_pad_function(
                 parent,
-                || gst::FlowReturn::Error,
+                || Err(gst::FlowError::Error),
                 |queue, element| queue.sink_chain(pad, element, buffer),
             )
         });
         sink_pad.set_chain_list_function(|pad, parent, list| {
             ProxySink::catch_panic_pad_function(
                 parent,
-                || gst::FlowReturn::Error,
+                || Err(gst::FlowError::Error),
                 |queue, element| queue.sink_chain_list(pad, element, list),
             )
         });
@@ -749,42 +743,32 @@ impl ElementImpl for ProxySink {
         &self,
         element: &gst::Element,
         transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
 
         match transition {
-            gst::StateChange::NullToReady => match self.prepare(element) {
-                Err(err) => {
+            gst::StateChange::NullToReady => {
+                self.prepare(element).map_err(|err| {
                     element.post_error_message(&err);
-                    return gst::StateChangeReturn::Failure;
-                }
-                Ok(_) => (),
-            },
-            gst::StateChange::PausedToReady => match self.stop(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => (),
-            },
-            gst::StateChange::ReadyToNull => match self.unprepare(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => (),
-            },
+                    gst::StateChangeError
+                })?;
+            }
+            gst::StateChange::PausedToReady => {
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
+            }
+            gst::StateChange::ReadyToNull => {
+                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+            }
             _ => (),
         }
 
-        let ret = self.parent_change_state(element, transition);
-        if ret == gst::StateChangeReturn::Failure {
-            return ret;
+        let success = self.parent_change_state(element, transition)?;
+
+        if transition == gst::StateChange::ReadyToPaused {
+            self.start(element).map_err(|_| gst::StateChangeError)?;
         }
 
-        match transition {
-            gst::StateChange::ReadyToPaused => match self.start(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => (),
-            },
-            _ => (),
-        }
-
-        ret
+        Ok(success)
     }
 }
 
@@ -824,9 +808,9 @@ impl ProxySrc {
                 true
             }
             EventView::FlushStop(..) => {
-                let (ret, state, pending) = element.get_state(0.into());
-                if ret == gst::StateChangeReturn::Success && state == gst::State::Playing
-                    || ret == gst::StateChangeReturn::Async && pending == gst::State::Playing
+                let (res, state, pending) = element.get_state(0.into());
+                if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
+                    || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
                     let _ = self.start(element);
                 }
@@ -920,11 +904,11 @@ impl ProxySrc {
         let res = match item {
             DataQueueItem::Buffer(buffer) => {
                 gst_log!(self.cat, obj: element, "Forwarding buffer {:?}", buffer);
-                self.src_pad.push(buffer).into_result().map(|_| ())
+                self.src_pad.push(buffer).map(|_| ())
             }
             DataQueueItem::BufferList(list) => {
                 gst_log!(self.cat, obj: element, "Forwarding buffer list {:?}", list);
-                self.src_pad.push_list(list).into_result().map(|_| ())
+                self.src_pad.push_list(list).map(|_| ())
             }
             DataQueueItem::Event(event) => {
                 use gst::EventView;
@@ -960,7 +944,7 @@ impl ProxySrc {
                 gst_log!(self.cat, obj: element, "Successfully pushed item");
                 let state = self.state.lock().unwrap();
                 let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
-                queue.last_ret = gst::FlowReturn::Ok;
+                queue.last_res = Ok(gst::FlowSuccess::Ok);
                 Ok(())
             }
             Err(gst::FlowError::Flushing) => {
@@ -970,7 +954,7 @@ impl ProxySrc {
                 if let Some(ref queue) = queue.queue {
                     queue.pause();
                 }
-                queue.last_ret = gst::FlowReturn::Flushing;
+                queue.last_res = Err(gst::FlowError::Flushing);
                 Ok(())
             }
             Err(gst::FlowError::Eos) => {
@@ -980,7 +964,7 @@ impl ProxySrc {
                 if let Some(ref queue) = queue.queue {
                     queue.pause();
                 }
-                queue.last_ret = gst::FlowReturn::Eos;
+                queue.last_res = Err(gst::FlowError::Eos);
                 Ok(())
             }
             Err(err) => {
@@ -993,7 +977,7 @@ impl ProxySrc {
                 );
                 let state = self.state.lock().unwrap();
                 let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
-                queue.last_ret = gst::FlowReturn::from_error(err);
+                queue.last_res = Err(err);
                 Err(gst::FlowError::CustomError)
             }
         };
@@ -1036,15 +1020,9 @@ impl ProxySrc {
                 )
             })?;
 
-        let queue = match SharedQueue::get(&settings.proxy_context, false) {
-            Some(queue) => queue,
-            None => {
-                return Err(gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to create get queue"]
-                ));
-            }
-        };
+        let queue = SharedQueue::get(&settings.proxy_context, false).ok_or_else(|| {
+            gst_error_msg!(gst::ResourceError::OpenRead, ["Failed to create get queue"])
+        })?;
 
         let dataqueue = DataQueue::new(
             &element.clone().upcast(),
@@ -1095,7 +1073,7 @@ impl ProxySrc {
                     gst::ResourceError::OpenRead,
                     ["Failed to schedule data queue"]
                 )
-            })?;;
+            })?;
 
         let pending_future_id = io_context.acquire_pending_future_id();
         gst_debug!(
@@ -1332,45 +1310,38 @@ impl ElementImpl for ProxySrc {
         &self,
         element: &gst::Element,
         transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
 
         match transition {
-            gst::StateChange::NullToReady => match self.prepare(element) {
-                Err(err) => {
+            gst::StateChange::NullToReady => {
+                self.prepare(element).map_err(|err| {
                     element.post_error_message(&err);
-                    return gst::StateChangeReturn::Failure;
-                }
-                Ok(_) => (),
-            },
-            gst::StateChange::PlayingToPaused => match self.stop(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => (),
-            },
-            gst::StateChange::ReadyToNull => match self.unprepare(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => (),
-            },
+                    gst::StateChangeError
+                })?;
+            }
+            gst::StateChange::PlayingToPaused => {
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
+            }
+            gst::StateChange::ReadyToNull => {
+                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+            }
             _ => (),
         }
 
-        let mut ret = self.parent_change_state(element, transition);
-        if ret == gst::StateChangeReturn::Failure {
-            return ret;
-        }
+        let mut success = self.parent_change_state(element, transition)?;
 
         match transition {
             gst::StateChange::ReadyToPaused => {
-                ret = gst::StateChangeReturn::NoPreroll;
+                success = gst::StateChangeSuccess::NoPreroll;
             }
-            gst::StateChange::PausedToPlaying => match self.start(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => (),
-            },
+            gst::StateChange::PausedToPlaying => {
+                self.start(element).map_err(|_| gst::StateChangeError)?;
+            }
             _ => (),
         }
 
-        ret
+        Ok(success)
     }
 }
 

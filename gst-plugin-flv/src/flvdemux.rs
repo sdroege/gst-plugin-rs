@@ -158,7 +158,7 @@ impl ObjectSubclass for FlvDemux {
         sinkpad.set_chain_function(|pad, parent, buffer| {
             FlvDemux::catch_panic_pad_function(
                 parent,
-                || gst::FlowReturn::Error,
+                || Err(gst::FlowError::Error),
                 |demux, element| demux.sink_chain(pad, element, buffer),
             )
         });
@@ -461,7 +461,7 @@ impl FlvDemux {
         pad: &gst::Pad,
         element: &gst::Element,
         buffer: gst::Buffer,
-    ) -> gst::FlowReturn {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         let mut adapter = self.adapter.lock().unwrap();
@@ -476,7 +476,7 @@ impl FlvDemux {
                         Ok(header) => header,
                         Err(_) => {
                             gst_trace!(CAT, obj: element, "Need more data");
-                            return gst::FlowReturn::Ok;
+                            return Ok(gst::FlowSuccess::Ok);
                         }
                     };
 
@@ -505,7 +505,7 @@ impl FlvDemux {
                     let avail = adapter.available();
                     if avail == 0 {
                         gst_trace!(CAT, obj: element, "Need more data");
-                        return gst::FlowReturn::Ok;
+                        return Ok(gst::FlowSuccess::Ok);
                     }
                     let skip = cmp::min(avail, *skip_left as usize);
                     adapter.flush(skip);
@@ -517,22 +517,20 @@ impl FlvDemux {
                     match res {
                         Ok(None) => {
                             gst_trace!(CAT, obj: element, "Need more data");
-                            return gst::FlowReturn::Ok;
+                            return Ok(gst::FlowSuccess::Ok);
                         }
                         Ok(Some(events)) => {
                             drop(state);
                             drop(adapter);
 
-                            if let Err(err) = self.handle_events(element, events) {
-                                return err.into();
-                            }
+                            self.handle_events(element, events)?;
 
                             adapter = self.adapter.lock().unwrap();
                             state = self.state.lock().unwrap();
                         }
                         Err(err) => {
                             element.post_error_message(&err);
-                            return gst::FlowReturn::Error;
+                            return Err(gst::FlowError::Error);
                         }
                     }
                 }
@@ -622,8 +620,7 @@ impl FlvDemux {
                         self.flow_combiner
                             .lock()
                             .unwrap()
-                            .update_pad_flow(&pad, res)
-                            .into_result()?;
+                            .update_pad_flow(&pad, res)?;
                     }
                 }
                 Event::HaveAllStreams => {

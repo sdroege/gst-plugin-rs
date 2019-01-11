@@ -416,7 +416,7 @@ impl BaseTransformImpl for Rgb2Gray {
         element: &gst_base::BaseTransform,
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
-    ) -> gst::FlowReturn {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         // Keep a local copy of the values of all our properties at this very moment. This
         // ensures that the mutex is never locked for long and the application wouldn't
         // have to block until this function returns when getting/setting property values
@@ -424,13 +424,10 @@ impl BaseTransformImpl for Rgb2Gray {
 
         // Get a locked reference to our state, i.e. the input and output VideoInfo
         let mut state_guard = self.state.lock().unwrap();
-        let state = match *state_guard {
-            None => {
-                gst_element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
-                return gst::FlowReturn::NotNegotiated;
-            }
-            Some(ref mut state) => state,
-        };
+        let state = state_guard.as_mut().ok_or_else(|| {
+            gst_element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
+            gst::FlowError::NotNegotiated
+        })?;
 
         // Map the input buffer as a VideoFrameRef. This is similar to directly mapping
         // the buffer with inbuf.map_readable() but in addition extracts various video
@@ -440,34 +437,28 @@ impl BaseTransformImpl for Rgb2Gray {
         //
         // This fails if the buffer can't be read or is invalid in relation to the video
         // info that is passed here
-        let in_frame = match gst_video::VideoFrameRef::from_buffer_ref_readable(
-            inbuf.as_ref(),
-            &state.in_info,
-        ) {
-            None => {
-                gst_element_error!(
-                    element,
-                    gst::CoreError::Failed,
-                    ["Failed to map input buffer readable"]
-                );
-                return gst::FlowReturn::Error;
-            }
-            Some(in_frame) => in_frame,
-        };
+        let in_frame =
+            gst_video::VideoFrameRef::from_buffer_ref_readable(inbuf.as_ref(), &state.in_info)
+                .ok_or_else(|| {
+                    gst_element_error!(
+                        element,
+                        gst::CoreError::Failed,
+                        ["Failed to map input buffer readable"]
+                    );
+                    gst::FlowError::Error
+                })?;
 
         // And now map the output buffer writable, so we can fill it.
         let mut out_frame =
-            match gst_video::VideoFrameRef::from_buffer_ref_writable(outbuf, &state.out_info) {
-                None => {
+            gst_video::VideoFrameRef::from_buffer_ref_writable(outbuf, &state.out_info)
+                .ok_or_else(|| {
                     gst_element_error!(
                         element,
                         gst::CoreError::Failed,
                         ["Failed to map output buffer writable"]
                     );
-                    return gst::FlowReturn::Error;
-                }
-                Some(out_frame) => out_frame,
-            };
+                    gst::FlowError::Error
+                })?;
 
         // Keep the various metadata we need for working with the video frames in
         // local variables. This saves some typing below.
@@ -566,7 +557,7 @@ impl BaseTransformImpl for Rgb2Gray {
             unimplemented!();
         }
 
-        gst::FlowReturn::Ok
+        Ok(gst::FlowSuccess::Ok)
     }
 }
 

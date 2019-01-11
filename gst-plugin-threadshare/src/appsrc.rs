@@ -173,9 +173,9 @@ impl AppSrc {
                 true
             }
             EventView::FlushStop(..) => {
-                let (ret, state, pending) = element.get_state(0.into());
-                if ret == gst::StateChangeReturn::Success && state == gst::State::Playing
-                    || ret == gst::StateChangeReturn::Async && pending == gst::State::Playing
+                let (res, state, pending) = element.get_state(0.into());
+                if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
+                    || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
                     let _ = self.start(element);
                 }
@@ -331,7 +331,7 @@ impl AppSrc {
         let res = match item {
             Either::Left(buffer) => {
                 gst_log!(self.cat, obj: element, "Forwarding buffer {:?}", buffer);
-                self.src_pad.push(buffer).into_result().map(|_| ())
+                self.src_pad.push(buffer).map(|_| ())
             }
             Either::Right(event) => {
                 gst_log!(self.cat, obj: element, "Forwarding event {:?}", event);
@@ -638,41 +638,34 @@ impl ElementImpl for AppSrc {
         &self,
         element: &gst::Element,
         transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
 
         match transition {
-            gst::StateChange::NullToReady => match self.prepare(element) {
-                Err(err) => {
+            gst::StateChange::NullToReady => {
+                self.prepare(element).map_err(|err| {
                     element.post_error_message(&err);
-                    return gst::StateChangeReturn::Failure;
-                }
-                Ok(_) => (),
-            },
-            gst::StateChange::PlayingToPaused => match self.stop(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => (),
-            },
-            gst::StateChange::ReadyToNull => match self.unprepare(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => (),
-            },
+                    gst::StateChangeError
+                })?;
+            }
+            gst::StateChange::PlayingToPaused => {
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
+            }
+            gst::StateChange::ReadyToNull => {
+                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+            }
             _ => (),
         }
 
-        let mut ret = self.parent_change_state(element, transition);
-        if ret == gst::StateChangeReturn::Failure {
-            return ret;
-        }
+        let mut success = self.parent_change_state(element, transition)?;
 
         match transition {
             gst::StateChange::ReadyToPaused => {
-                ret = gst::StateChangeReturn::NoPreroll;
+                success = gst::StateChangeSuccess::NoPreroll;
             }
-            gst::StateChange::PausedToPlaying => match self.start(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => (),
-            },
+            gst::StateChange::PausedToPlaying => {
+                self.start(element).map_err(|_| gst::StateChangeError)?;
+            }
             gst::StateChange::PausedToReady => {
                 let mut state = self.state.lock().unwrap();
                 state.need_initial_events = true;
@@ -680,7 +673,7 @@ impl ElementImpl for AppSrc {
             _ => (),
         }
 
-        ret
+        Ok(success)
     }
 }
 

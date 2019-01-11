@@ -211,9 +211,9 @@ impl TcpClientSrc {
                 true
             }
             EventView::FlushStop(..) => {
-                let (ret, state, pending) = element.get_state(0.into());
-                if ret == gst::StateChangeReturn::Success && state == gst::State::Playing
-                    || ret == gst::StateChangeReturn::Async && pending == gst::State::Playing
+                let (res, state, pending) = element.get_state(0.into());
+                if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
+                    || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
                     let _ = self.start(element);
                 }
@@ -341,7 +341,7 @@ impl TcpClientSrc {
             self.src_pad.push_event(event);
         }
 
-        let res = match self.src_pad.push(buffer).into_result() {
+        let res = match self.src_pad.push(buffer) {
             Ok(_) => {
                 gst_log!(self.cat, obj: element, "Successfully pushed buffer");
                 Ok(())
@@ -706,38 +706,31 @@ impl ElementImpl for TcpClientSrc {
         &self,
         element: &gst::Element,
         transition: gst::StateChange,
-    ) -> gst::StateChangeReturn {
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
 
         match transition {
-            gst::StateChange::NullToReady => match self.prepare(element) {
-                Err(err) => {
-                    element.post_error_message(&err);
-                    return gst::StateChangeReturn::Failure;
-                }
-                Ok(_) => match self.start(element) {
-                    Err(_) => return gst::StateChangeReturn::Failure,
-                    Ok(_) => (),
-                },
-            },
-            gst::StateChange::PlayingToPaused => match self.stop(element) {
-                Err(_) => return gst::StateChangeReturn::Failure,
-                Ok(_) => match self.unprepare(element) {
-                    Err(_) => return gst::StateChangeReturn::Failure,
-                    Ok(_) => (),
-                },
-            },
+            gst::StateChange::NullToReady => {
+                self.prepare(element)
+                    .map_err(|err| {
+                        element.post_error_message(&err);
+                        gst::StateChangeError
+                    })
+                    .and_then(|_| self.start(element).map_err(|_| gst::StateChangeError))?;
+            }
+            gst::StateChange::PlayingToPaused => {
+                self.stop(element)
+                    .and_then(|_| self.unprepare(element))
+                    .map_err(|_| gst::StateChangeError)?;
+            }
             _ => (),
         }
 
-        let mut ret = self.parent_change_state(element, transition);
-        if ret == gst::StateChangeReturn::Failure {
-            return ret;
-        }
+        let mut success = self.parent_change_state(element, transition)?;
 
         match transition {
             gst::StateChange::ReadyToPaused => {
-                ret = gst::StateChangeReturn::Success;
+                success = gst::StateChangeSuccess::Success;
             }
             gst::StateChange::PausedToReady => {
                 let mut state = self.state.lock().unwrap();
@@ -746,7 +739,7 @@ impl ElementImpl for TcpClientSrc {
             _ => (),
         }
 
-        ret
+        Ok(success)
     }
 }
 
