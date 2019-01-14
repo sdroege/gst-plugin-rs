@@ -698,9 +698,7 @@ impl StreamingState {
         let data = adapter.map(15).unwrap();
 
         match nom::be_u32(&data[0..4]) {
-            IResult::Error(_) | IResult::Incomplete(_) => {
-                unimplemented!();
-            }
+            IResult::Error(_) | IResult::Incomplete(_) => unreachable!(),
             IResult::Done(_, previous_size) => {
                 gst_trace!(CAT, obj: element, "Previous tag size {}", previous_size);
                 // Nothing to do here, we just consume it for now
@@ -708,7 +706,13 @@ impl StreamingState {
         }
 
         let tag_header = match flavors::tag_header(&data[4..]) {
-            IResult::Error(_) | IResult::Incomplete(_) => unimplemented!(),
+            IResult::Error(err) => {
+                return Err(gst_error_msg!(
+                    gst::StreamError::Demux,
+                    ["Invalid tag header: {:?}", err]
+                ));
+            }
+            IResult::Incomplete(_) => unreachable!(),
             IResult::Done(_, tag_header) => tag_header,
         };
 
@@ -868,9 +872,18 @@ impl StreamingState {
         let data = adapter.map(1).unwrap();
 
         match flavors::aac_audio_packet_header(&*data) {
-            IResult::Error(_) | IResult::Incomplete(_) => {
-                unimplemented!();
+            IResult::Error(err) => {
+                gst_error!(
+                    CAT,
+                    obj: element,
+                    "Invalid AAC audio packet header: {:?}",
+                    err
+                );
+                drop(data);
+                adapter.flush((tag_header.data_size - 1) as usize);
+                return Ok(true);
             }
+            IResult::Incomplete(_) => unreachable!(),
             IResult::Done(_, header) => {
                 gst_trace!(CAT, obj: element, "Got AAC packet header {:?}", header);
                 match header.packet_type {
@@ -905,7 +918,13 @@ impl StreamingState {
 
         let data = adapter.map(1).unwrap();
         let data_header = match flavors::audio_data_header(&*data) {
-            IResult::Error(_) | IResult::Incomplete(_) => unimplemented!(),
+            IResult::Error(err) => {
+                gst_error!(CAT, obj: element, "Invalid audio data header: {:?}", err);
+                drop(data);
+                adapter.flush(tag_header.data_size as usize);
+                return Ok(SmallVec::new());
+            }
+            IResult::Incomplete(_) => unreachable!(),
             IResult::Done(_, data_header) => data_header,
         };
         drop(data);
@@ -1022,9 +1041,18 @@ impl StreamingState {
 
         let data = adapter.map(4).unwrap();
         match flavors::avc_video_packet_header(&*data) {
-            IResult::Error(_) | IResult::Incomplete(_) => {
-                unimplemented!();
+            IResult::Error(err) => {
+                gst_error!(
+                    CAT,
+                    obj: element,
+                    "Invalid AVC video packet header: {:?}",
+                    err
+                );
+                drop(data);
+                adapter.flush((tag_header.data_size - 1) as usize);
+                return Ok(None);
             }
+            IResult::Incomplete(_) => unreachable!(),
             IResult::Done(_, header) => {
                 gst_trace!(CAT, obj: element, "Got AVC packet header {:?}", header);
                 match header.packet_type {
@@ -1071,7 +1099,13 @@ impl StreamingState {
 
         let data = adapter.map(1).unwrap();
         let data_header = match flavors::video_data_header(&*data) {
-            IResult::Error(_) | IResult::Incomplete(_) => unimplemented!(),
+            IResult::Error(err) => {
+                gst_error!(CAT, obj: element, "Invalid video data header: {:?}", err);
+                drop(data);
+                adapter.flush(tag_header.data_size as usize);
+                return Ok(SmallVec::new());
+            }
+            IResult::Incomplete(_) => unreachable!(),
             IResult::Done(_, data_header) => data_header,
         };
         drop(data);
