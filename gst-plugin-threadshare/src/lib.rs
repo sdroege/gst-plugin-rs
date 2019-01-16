@@ -90,7 +90,7 @@ pub fn set_element_flags<T: glib::IsA<gst::Object> + glib::IsA<gst::Element>>(
         use glib::translate::ToGlib;
         use gst_ffi;
 
-        let ptr: *mut gst_ffi::GstObject = element.to_glib_none().0;
+        let ptr: *mut gst_ffi::GstObject = element.as_ptr() as *mut _;
         let _guard = MutexGuard::lock(&(*ptr).lock);
         (*ptr).flags |= flags.to_glib();
     }
