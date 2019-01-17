@@ -35,7 +35,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gsttogglerecord::plugin_register_static();
+        gsttogglerecord::plugin_register_static().expect("gsttogglerecord tests");
     });
 }
 

@@ -29,7 +29,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstthreadshare::plugin_register_static();
+        gstthreadshare::plugin_register_static().expect("gstthreadshare appsrc test");
     });
 }
 

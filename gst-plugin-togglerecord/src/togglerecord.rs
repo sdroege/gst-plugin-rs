@@ -753,8 +753,10 @@ impl ToggleRecord {
 
                 state.out_segment = state.in_segment.clone();
                 let offset = rec_state.running_time_offset.unwrap_or(0);
-                let res = state.out_segment.offset_running_time(-(offset as i64));
-                assert!(res);
+                state
+                    .out_segment
+                    .offset_running_time(-(offset as i64))
+                    .expect("Adjusting record duration");
                 events.push(
                     gst::Event::new_segment(&state.out_segment)
                         .seqnum(state.segment_seqnum)

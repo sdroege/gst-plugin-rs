@@ -142,7 +142,7 @@ impl ObjectSubclass for FlvDemux {
         sinkpad.set_activate_function(|pad, parent| {
             FlvDemux::catch_panic_pad_function(
                 parent,
-                || false,
+                || Err(glib_bool_error!("Panic activating sink pad")),
                 |demux, element| demux.sink_activate(pad, element),
             )
         });
@@ -150,7 +150,7 @@ impl ObjectSubclass for FlvDemux {
         sinkpad.set_activatemode_function(|pad, parent, mode, active| {
             FlvDemux::catch_panic_pad_function(
                 parent,
-                || false,
+                || Err(glib_bool_error!("Panic activating sink pad with mode")),
                 |demux, element| demux.sink_activatemode(pad, element, mode, active),
             )
         });
@@ -286,11 +286,15 @@ impl ObjectImpl for FlvDemux {
 impl ElementImpl for FlvDemux {}
 
 impl FlvDemux {
-    fn sink_activate(&self, pad: &gst::Pad, _element: &gst::Element) -> bool {
+    fn sink_activate(
+        &self,
+        pad: &gst::Pad,
+        _element: &gst::Element,
+    ) -> Result<(), glib::BoolError> {
         let mode = {
             let mut query = gst::Query::new_scheduling();
             if !pad.peer_query(&mut query) {
-                return false;
+                return Err(glib_bool_error!("Scheduling query failed on peer"));
             }
 
             // TODO: pull mode
@@ -308,7 +312,7 @@ impl FlvDemux {
             }
         };
 
-        pad.activate_mode(mode, true).is_ok()
+        pad.activate_mode(mode, true)
     }
 
     fn sink_activatemode(
@@ -317,32 +321,30 @@ impl FlvDemux {
         element: &gst::Element,
         mode: gst::PadMode,
         active: bool,
-    ) -> bool {
+    ) -> Result<(), glib::BoolError> {
         if active {
-            if let Err(err) = self.start(element, mode) {
+            self.start(element, mode).map_err(|err| {
                 element.post_error_message(&err);
-                return false;
-            }
+                glib_bool_error!("Failed to start element with mode {:?}", mode)
+            })?;
 
             if mode == gst::PadMode::Pull {
                 // TODO implement pull mode
                 // self.sinkpad.start_task(...)
                 unimplemented!();
             }
-
-            true
         } else {
             if mode == gst::PadMode::Pull {
                 let _ = self.sinkpad.stop_task();
             }
 
-            if let Err(err) = self.stop(element) {
+            self.stop(element).map_err(|err| {
                 element.post_error_message(&err);
-                return false;
-            }
-
-            true
+                glib_bool_error!("Failed to stop element")
+            })?;
         }
+
+        Ok(())
     }
 
     fn start(&self, _element: &gst::Element, _mode: gst::PadMode) -> Result<(), gst::ErrorMessage> {
