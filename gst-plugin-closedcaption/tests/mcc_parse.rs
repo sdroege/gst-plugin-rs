@@ -27,7 +27,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstrsclosedcaption::plugin_register_static();
+        gstrsclosedcaption::plugin_register_static().expect("mccparse test");
     });
 }
 
