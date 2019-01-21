@@ -236,12 +236,7 @@ impl BaseSrcImpl for FileSrc {
     fn start(&self, element: &gst_base::BaseSrc) -> bool {
         let mut state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
-            gst_element_info!(
-                element,
-                gst::CoreError::StateChange,
-                ["FileSrc already started"]
-            );
-            return false;
+            unreachable!("FileSrc already started");
         }
 
         let settings = self.settings.lock().unwrap();

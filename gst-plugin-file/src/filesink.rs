@@ -202,12 +202,7 @@ impl BaseSinkImpl for FileSink {
     fn start(&self, element: &gst_base::BaseSink) -> bool {
         let mut state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
-            gst_element_info!(
-                element,
-                gst::CoreError::StateChange,
-                ["FileSink already started"]
-            );
-            return false;
+            unreachable!("FileSink already started");
         }
 
         let settings = self.settings.lock().unwrap();
