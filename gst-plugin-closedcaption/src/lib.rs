@@ -26,6 +26,8 @@
 extern crate glib;
 #[macro_use]
 extern crate gst;
+#[macro_use]
+extern crate lazy_static;
 
 #[cfg(test)]
 #[macro_use]
