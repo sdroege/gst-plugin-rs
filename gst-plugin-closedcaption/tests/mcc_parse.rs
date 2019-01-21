@@ -50,6 +50,8 @@ fn test_parse() {
 
     let mut h = gst_check::Harness::new("mccparse");
 
+    h.set_src_caps_str("application/x-mcc, version=(int) 1");
+
     let mut input_len = 0;
     let mut output_len = 0;
     let mut checksum = 0u32;

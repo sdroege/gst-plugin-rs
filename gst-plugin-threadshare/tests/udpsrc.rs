@@ -133,6 +133,7 @@ fn test_socket_reuse() {
         udpsink.set_property("port", &6001i32).unwrap();
     }
     sink_h.play();
+    sink_h.set_src_caps_str("application/test");
 
     {
         let udpsrc = ts_src_h2.get_element().unwrap();
