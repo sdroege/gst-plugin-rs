@@ -142,7 +142,7 @@ impl ObjectSubclass for FlvDemux {
         sinkpad.set_activate_function(|pad, parent| {
             FlvDemux::catch_panic_pad_function(
                 parent,
-                || Err(glib_bool_error!("Panic activating sink pad")),
+                || Err(gst_loggable_error!(CAT, "Panic activating sink pad")),
                 |demux, element| demux.sink_activate(pad, element),
             )
         });
@@ -150,7 +150,12 @@ impl ObjectSubclass for FlvDemux {
         sinkpad.set_activatemode_function(|pad, parent, mode, active| {
             FlvDemux::catch_panic_pad_function(
                 parent,
-                || Err(glib_bool_error!("Panic activating sink pad with mode")),
+                || {
+                    Err(gst_loggable_error!(
+                        CAT,
+                        "Panic activating sink pad with mode"
+                    ))
+                },
                 |demux, element| demux.sink_activatemode(pad, element, mode, active),
             )
         });
@@ -290,11 +295,11 @@ impl FlvDemux {
         &self,
         pad: &gst::Pad,
         _element: &gst::Element,
-    ) -> Result<(), glib::BoolError> {
+    ) -> Result<(), gst::LoggableError> {
         let mode = {
             let mut query = gst::Query::new_scheduling();
             if !pad.peer_query(&mut query) {
-                return Err(glib_bool_error!("Scheduling query failed on peer"));
+                return Err(gst_loggable_error!(CAT, "Scheduling query failed on peer"));
             }
 
             // TODO: pull mode
@@ -312,7 +317,8 @@ impl FlvDemux {
             }
         };
 
-        pad.activate_mode(mode, true)
+        pad.activate_mode(mode, true)?;
+        Ok(())
     }
 
     fn sink_activatemode(
@@ -321,11 +327,11 @@ impl FlvDemux {
         element: &gst::Element,
         mode: gst::PadMode,
         active: bool,
-    ) -> Result<(), glib::BoolError> {
+    ) -> Result<(), gst::LoggableError> {
         if active {
             self.start(element, mode).map_err(|err| {
                 element.post_error_message(&err);
-                glib_bool_error!("Failed to start element with mode {:?}", mode)
+                gst_loggable_error!(CAT, "Failed to start element with mode {:?}", mode)
             })?;
 
             if mode == gst::PadMode::Pull {
@@ -340,7 +346,7 @@ impl FlvDemux {
 
             self.stop(element).map_err(|err| {
                 element.post_error_message(&err);
-                glib_bool_error!("Failed to stop element")
+                gst_loggable_error!(CAT, "Failed to stop element")
             })?;
         }
 
