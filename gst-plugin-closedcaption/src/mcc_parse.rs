@@ -434,6 +434,9 @@ impl MccParse {
 
         state.add_buffer_metadata(element, &mut buffer, &timecode, &framerate);
 
+        // Update the last_timecode to the current one
+        state.last_timecode = Some(timecode);
+
         // Drop our state mutex while we push out buffers or events
         drop(state);
 
