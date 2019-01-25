@@ -172,7 +172,7 @@ impl SineSrc {
         let mut accumulator = *accumulator_ref;
         let step = two_pi * freq / rate;
 
-        for chunk in data.chunks_mut(channels as usize) {
+        for chunk in data.chunks_exact_mut(channels as usize) {
             let value = vol * F::sin(NumCast::from(accumulator).unwrap());
             for sample in chunk {
                 *sample = value;

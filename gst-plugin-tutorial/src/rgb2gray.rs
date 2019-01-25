@@ -489,22 +489,22 @@ impl BaseTransformImpl for Rgb2Gray {
 
             // Iterate over each line of the input and output frame, mutable for the output frame.
             // Each input line has in_stride bytes, each output line out_stride. We use the
-            // chunks/chunks_mut iterators here for getting a chunks of that many bytes per
+            // chunks_exact/chunks_exact_mut iterators here for getting a chunks of that many bytes per
             // iteration and zip them together to have access to both at the same time.
             for (in_line, out_line) in in_data
-                .chunks(in_stride)
-                .zip(out_data.chunks_mut(out_stride))
+                .chunks_exact(in_stride)
+                .zip(out_data.chunks_exact_mut(out_stride))
             {
                 // Next iterate the same way over each actual pixel in each line. Every pixel is 4
-                // bytes in the input and output, so we again use the chunks/chunks_mut iterators
+                // bytes in the input and output, so we again use the chunks_exact/chunks_exact_mut iterators
                 // to give us each pixel individually and zip them together.
                 //
                 // Note that we take a sub-slice of the whole lines: each line can contain an
                 // arbitrary amount of padding at the end (e.g. for alignment purposes) and we
                 // don't want to process that padding.
                 for (in_p, out_p) in in_line[..in_line_bytes]
-                    .chunks(4)
-                    .zip(out_line[..out_line_bytes].chunks_mut(4))
+                    .chunks_exact(4)
+                    .zip(out_line[..out_line_bytes].chunks_exact_mut(4))
                 {
                     assert_eq!(out_p.len(), 4);
 
@@ -529,22 +529,22 @@ impl BaseTransformImpl for Rgb2Gray {
 
             // Iterate over each line of the input and output frame, mutable for the output frame.
             // Each input line has in_stride bytes, each output line out_stride. We use the
-            // chunks/chunks_mut iterators here for getting a chunks of that many bytes per
+            // chunks_exact/chunks_exact_mut iterators here for getting a chunks of that many bytes per
             // iteration and zip them together to have access to both at the same time.
             for (in_line, out_line) in in_data
-                .chunks(in_stride)
-                .zip(out_data.chunks_mut(out_stride))
+                .chunks_exact(in_stride)
+                .zip(out_data.chunks_exact_mut(out_stride))
             {
                 // Next iterate the same way over each actual pixel in each line. Every pixel is 4
                 // bytes in the input and 1 byte in the output, so we again use the
-                // chunks/chunks_mut iterators to give us each pixel individually and zip them
+                // chunks_exact/chunks_exact_mut iterators to give us each pixel individually and zip them
                 // together.
                 //
                 // Note that we take a sub-slice of the whole lines: each line can contain an
                 // arbitrary amount of padding at the end (e.g. for alignment purposes) and we
                 // don't want to process that padding.
                 for (in_p, out_p) in in_line[..in_line_bytes]
-                    .chunks(4)
+                    .chunks_exact(4)
                     .zip(out_line[..out_line_bytes].iter_mut())
                 {
                     // Use our above-defined function to convert a BGRx pixel with the settings to
