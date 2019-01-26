@@ -305,11 +305,11 @@ impl BaseTransformImpl for AudioEcho {
         true
     }
 
-    fn stop(&self, _element: &gst_base::BaseTransform) -> bool {
+    fn stop(&self, _element: &gst_base::BaseTransform) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
-        true
+        Ok(())
     }
 }
 

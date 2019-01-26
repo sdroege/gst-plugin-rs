@@ -401,13 +401,13 @@ impl BaseTransformImpl for Rgb2Gray {
 
     // Called when shutting down the element so we can release all stream-related state
     // There's also start(), which is called whenever starting the element again
-    fn stop(&self, element: &gst_base::BaseTransform) -> bool {
+    fn stop(&self, element: &gst_base::BaseTransform) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
         gst_info!(self.cat, obj: element, "Stopped");
 
-        true
+        Ok(())
     }
 
     // Does the actual transformation of the input buffer to the output buffer

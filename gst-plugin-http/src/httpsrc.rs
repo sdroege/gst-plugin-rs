@@ -270,39 +270,31 @@ impl BaseSrcImpl for HttpSrc {
         }
     }
 
-    fn start(&self, src: &gst_base::BaseSrc) -> bool {
+    fn start(&self, src: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
 
         *state = State::Stopped;
 
-        let uri = match self.settings.lock().unwrap().location {
-            Some(ref uri) => uri.clone(),
-            None => {
-                gst_element_error!(
-                    src,
-                    gst::CoreError::StateChange,
-                    ["Can't start without an URI"]
-                );
-                return false;
-            }
-        };
+        let uri = self
+            .settings
+            .lock()
+            .unwrap()
+            .location
+            .as_ref()
+            .ok_or_else(|| {
+                gst_error_msg!(gst::CoreError::StateChange, ["Can't start without an URI"])
+            })
+            .map(|uri| uri.clone())?;
 
-        match self.do_request(src, uri, 0, None) {
-            Ok(s) => {
-                *state = s;
-                true
-            }
-            Err(err) => {
-                src.post_error_message(&err);
-                false
-            }
-        }
+        *state = self.do_request(src, uri, 0, None)?;
+
+        Ok(())
     }
 
-    fn stop(&self, _src: &gst_base::BaseSrc) -> bool {
+    fn stop(&self, _src: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
         *self.state.lock().unwrap() = State::Stopped;
 
-        true
+        Ok(())
     }
 
     fn do_seek(&self, src: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {

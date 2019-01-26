@@ -233,40 +233,30 @@ impl BaseSrcImpl for FileSrc {
         }
     }
 
-    fn start(&self, element: &gst_base::BaseSrc) -> bool {
+    fn start(&self, element: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             unreachable!("FileSrc already started");
         }
 
         let settings = self.settings.lock().unwrap();
-        let location = match settings.location {
-            Some(ref location) => location,
-            None => {
-                gst_element_error!(
-                    element,
-                    gst::CoreError::StateChange,
-                    ["File location is not defined"]
-                );
-                return false;
-            }
-        };
+        let location = settings.location.as_ref().ok_or_else(|| {
+            gst_error_msg!(
+                gst::ResourceError::Settings,
+                ["File location is not defined"]
+            )
+        })?;
 
-        let file = match File::open(location) {
-            Ok(file) => file,
-            Err(err) => {
-                gst_element_error!(
-                    element,
-                    gst::ResourceError::OpenRead,
-                    [
-                        "Could not open file {} for reading: {}",
-                        location,
-                        err.to_string(),
-                    ]
-                );
-                return false;
-            }
-        };
+        let file = File::open(location).map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                [
+                    "Could not open file {} for reading: {}",
+                    location,
+                    err.to_string(),
+                ]
+            )
+        })?;
 
         gst_debug!(self.cat, obj: element, "Opened file {:?}", file);
 
@@ -274,25 +264,23 @@ impl BaseSrcImpl for FileSrc {
 
         gst_info!(self.cat, obj: element, "Started");
 
-        true
+        Ok(())
     }
 
-    fn stop(&self, element: &gst_base::BaseSrc) -> bool {
+    fn stop(&self, element: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Stopped = *state {
-            gst_element_warning!(
-                element,
-                gst::CoreError::StateChange,
-                ["FileSink not started"]
-            );
-            return false;
+            return Err(gst_error_msg!(
+                gst::ResourceError::Settings,
+                ["FileSrc not started"]
+            ));
         }
 
         *state = State::Stopped;
 
         gst_info!(self.cat, obj: element, "Stopped");
 
-        true
+        Ok(())
     }
 
     fn fill(

@@ -199,63 +199,51 @@ impl ObjectImpl for FileSink {
 impl ElementImpl for FileSink {}
 
 impl BaseSinkImpl for FileSink {
-    fn start(&self, element: &gst_base::BaseSink) -> bool {
+    fn start(&self, element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             unreachable!("FileSink already started");
         }
 
         let settings = self.settings.lock().unwrap();
-        let location = match settings.location {
-            Some(ref location) => location,
-            None => {
-                gst_element_error!(
-                    element,
-                    gst::ResourceError::Settings,
-                    ["File location is not defined"]
-                );
-                return false;
-            }
-        };
+        let location = settings.location.as_ref().ok_or_else(|| {
+            gst_error_msg!(
+                gst::ResourceError::Settings,
+                ["File location is not defined"]
+            )
+        })?;
 
-        let file = match File::create(location) {
-            Ok(file) => file,
-            Err(err) => {
-                gst_element_error!(
-                    element,
-                    gst::ResourceError::OpenWrite,
-                    [
-                        "Could not open file {} for writing: {}",
-                        location,
-                        err.to_string(),
-                    ]
-                );
-                return false;
-            }
-        };
+        let file = File::create(location).map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenWrite,
+                [
+                    "Could not open file {} for writing: {}",
+                    location,
+                    err.to_string(),
+                ]
+            )
+        })?;
         gst_debug!(self.cat, obj: element, "Opened file {:?}", file);
 
         *state = State::Started { file, position: 0 };
         gst_info!(self.cat, obj: element, "Started");
 
-        true
+        Ok(())
     }
 
-    fn stop(&self, element: &gst_base::BaseSink) -> bool {
+    fn stop(&self, element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Stopped = *state {
-            gst_element_warning!(
-                element,
-                gst::CoreError::StateChange,
+            return Err(gst_error_msg!(
+                gst::ResourceError::Settings,
                 ["FileSink not started"]
-            );
-            return false;
+            ));
         }
 
         *state = State::Stopped;
         gst_info!(self.cat, obj: element, "Stopped");
 
-        true
+        Ok(())
     }
 
     // TODO: implement seek in BYTES format

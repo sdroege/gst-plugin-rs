@@ -433,13 +433,16 @@ impl BaseSrcImpl for SineSrc {
     //
     // We simply remember the resulting AudioInfo from the caps to be able to use this for knowing
     // the sample rate, etc. when creating buffers
-    fn set_caps(&self, element: &gst_base::BaseSrc, caps: &gst::CapsRef) -> bool {
+    fn set_caps(
+        &self,
+        element: &gst_base::BaseSrc,
+        caps: &gst::CapsRef,
+    ) -> Result<(), gst::LoggableError> {
         use std::f64::consts::PI;
 
-        let info = match gst_audio::AudioInfo::from_caps(caps) {
-            None => return false,
-            Some(info) => info,
-        };
+        let info = gst_audio::AudioInfo::from_caps(caps).ok_or_else(|| {
+            gst_loggable_error!(self.cat, "Failed to build `AudioInfo` from caps {}", caps)
+        })?;
 
         gst_debug!(self.cat, obj: element, "Configuring for caps {}", caps);
 
@@ -480,29 +483,29 @@ impl BaseSrcImpl for SineSrc {
 
         let _ = element.post_message(&gst::Message::new_latency().src(Some(element)).build());
 
-        true
+        Ok(())
     }
 
     // Called when starting, so we can initialize all stream-related state to its defaults
-    fn start(&self, element: &gst_base::BaseSrc) -> bool {
+    fn start(&self, element: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
         // Reset state
         *self.state.lock().unwrap() = Default::default();
-        self.unlock_stop(element);
+        self.unlock_stop(element)?;
 
         gst_info!(self.cat, obj: element, "Started");
 
-        true
+        Ok(())
     }
 
     // Called when shutting down the element so we can release all stream-related state
-    fn stop(&self, element: &gst_base::BaseSrc) -> bool {
+    fn stop(&self, element: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
         // Reset state
         *self.state.lock().unwrap() = Default::default();
-        self.unlock(element);
+        self.unlock(element)?;
 
         gst_info!(self.cat, obj: element, "Stopped");
 
-        true
+        Ok(())
     }
 
     fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
@@ -827,7 +830,7 @@ impl BaseSrcImpl for SineSrc {
         }
     }
 
-    fn unlock(&self, element: &gst_base::BaseSrc) -> bool {
+    fn unlock(&self, element: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
         // This should unblock the create() function ASAP, so we
         // just unschedule the clock it here, if any.
         gst_debug!(self.cat, obj: element, "Unlocking");
@@ -837,17 +840,17 @@ impl BaseSrcImpl for SineSrc {
         }
         clock_wait.flushing = true;
 
-        true
+        Ok(())
     }
 
-    fn unlock_stop(&self, element: &gst_base::BaseSrc) -> bool {
+    fn unlock_stop(&self, element: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
         // This signals that unlocking is done, so we can reset
         // all values again.
         gst_debug!(self.cat, obj: element, "Unlock stop");
         let mut clock_wait = self.clock_wait.lock().unwrap();
         clock_wait.flushing = false;
 
-        true
+        Ok(())
     }
 }
 
