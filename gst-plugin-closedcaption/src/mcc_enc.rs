@@ -555,7 +555,8 @@ impl ObjectSubclass for MccEnc {
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(sink_pad_template);
 
         let caps = gst::Caps::builder("application/x-mcc").build();
@@ -564,7 +565,8 @@ impl ObjectSubclass for MccEnc {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         klass.install_properties(&PROPERTIES);

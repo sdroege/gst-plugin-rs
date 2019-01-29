@@ -269,7 +269,8 @@ impl ObjectSubclass for SineSrc {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         // Install all our properties

@@ -462,7 +462,8 @@ impl ObjectSubclass for HttpSrc {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         klass.install_properties(&PROPERTIES);

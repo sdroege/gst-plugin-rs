@@ -649,7 +649,8 @@ impl ObjectSubclass for ProxySink {
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(sink_pad_template);
 
         klass.install_properties(&PROPERTIES_SINK);
@@ -1186,7 +1187,8 @@ impl ObjectSubclass for ProxySrc {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         klass.install_properties(&PROPERTIES_SRC);

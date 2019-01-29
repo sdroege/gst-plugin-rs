@@ -586,7 +586,8 @@ impl ObjectSubclass for TcpClientSrc {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         klass.install_properties(&PROPERTIES);

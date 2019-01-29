@@ -230,7 +230,8 @@ impl ObjectSubclass for FlvDemux {
             gst::PadDirection::Src,
             gst::PadPresence::Sometimes,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(audiosrc_pad_template);
 
         let mut caps = gst::Caps::new_empty();
@@ -263,7 +264,8 @@ impl ObjectSubclass for FlvDemux {
             gst::PadDirection::Src,
             gst::PadPresence::Sometimes,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(videosrc_pad_template);
 
         let caps = gst::Caps::builder("video/x-flv").build();
@@ -272,7 +274,8 @@ impl ObjectSubclass for FlvDemux {
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(sink_pad_template);
     }
 }

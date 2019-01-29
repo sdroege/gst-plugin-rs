@@ -220,7 +220,8 @@ impl ObjectSubclass for Identity {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         let sink_pad_template = gst::PadTemplate::new(
@@ -228,7 +229,8 @@ impl ObjectSubclass for Identity {
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(sink_pad_template);
     }
 }

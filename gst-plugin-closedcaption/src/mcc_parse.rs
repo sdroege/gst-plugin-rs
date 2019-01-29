@@ -603,7 +603,8 @@ impl ObjectSubclass for MccParse {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         let caps = gst::Caps::builder("application/x-mcc")
@@ -614,7 +615,8 @@ impl ObjectSubclass for MccParse {
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(sink_pad_template);
     }
 }

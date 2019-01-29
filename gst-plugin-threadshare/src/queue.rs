@@ -774,7 +774,8 @@ impl ObjectSubclass for Queue {
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(sink_pad_template);
 
         let src_pad_template = gst::PadTemplate::new(
@@ -782,7 +783,8 @@ impl ObjectSubclass for Queue {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         klass.install_properties(&PROPERTIES);

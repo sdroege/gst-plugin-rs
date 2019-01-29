@@ -186,7 +186,8 @@ impl ObjectSubclass for Rgb2Gray {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         // On the sink pad, we can accept BGRx of any
@@ -213,7 +214,8 @@ impl ObjectSubclass for Rgb2Gray {
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(sink_pad_template);
 
         // Install all our properties

@@ -144,7 +144,8 @@ impl ObjectSubclass for FileSink {
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(sink_pad_template);
 
         klass.install_properties(&PROPERTIES);
