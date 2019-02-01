@@ -309,7 +309,7 @@ impl BaseTransformImpl for Rgb2Gray {
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
-    ) -> gst::Caps {
+    ) -> Option<gst::Caps> {
         let other_caps = if direction == gst::PadDirection::Src {
             // For src to sink, no matter if we get asked for BGRx or GRAY8 caps, we can only
             // accept corresponding BGRx caps on the sinkpad. We will only ever get BGRx and GRAY8
@@ -354,9 +354,9 @@ impl BaseTransformImpl for Rgb2Gray {
         // In the end we need to filter the caps through an optional filter caps to get rid of any
         // unwanted caps.
         if let Some(filter) = filter {
-            filter.intersect_with_mode(&other_caps, gst::CapsIntersectMode::First)
+            Some(filter.intersect_with_mode(&other_caps, gst::CapsIntersectMode::First))
         } else {
-            other_caps
+            Some(other_caps)
         }
     }
 
