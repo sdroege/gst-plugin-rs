@@ -393,9 +393,14 @@ impl MccEnc {
         }
 
         self.generate_caption(element, &*state, &buffer, &mut outbuf)?;
-        drop(state);
 
-        self.srcpad.push(gst::Buffer::from_mut_slice(outbuf))
+        let mut buf = gst::Buffer::from_mut_slice(outbuf);
+        buffer
+            .copy_into(buf.get_mut().unwrap(), *gst::BUFFER_COPY_METADATA, 0, None)
+            .expect("Failed to copy buffer metadata");
+
+        drop(state);
+        self.srcpad.push(buf)
     }
 
     fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {

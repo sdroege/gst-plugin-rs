@@ -106,21 +106,23 @@ Time Code Rate=30DF\r\n\
         "closedcaption/x-cea-708, format=(string)cdp, framerate=(fraction)30000/1001",
     );
 
+    let tc = gst_video::ValidVideoTimeCode::new(
+        gst::Fraction::new(30000, 1001),
+        None,
+        gst_video::VideoTimeCodeFlags::DROP_FRAME,
+        11,
+        12,
+        13,
+        14,
+        0,
+    )
+    .unwrap();
+
     let buf = {
         let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input[..]));
         let buf_ref = buf.get_mut().unwrap();
-        let tc = gst_video::ValidVideoTimeCode::new(
-            gst::Fraction::new(30000, 1001),
-            None,
-            gst_video::VideoTimeCodeFlags::DROP_FRAME,
-            11,
-            12,
-            13,
-            14,
-            0,
-        )
-        .unwrap();
         gst_video::VideoTimeCodeMeta::add(buf_ref, &tc);
+        buf_ref.set_pts(gst::ClockTime::from_seconds(0));
         buf
     };
 
@@ -128,6 +130,15 @@ Time Code Rate=30DF\r\n\
     h.push_event(gst::Event::new_eos().build());
 
     let buf = h.pull().expect("Couldn't pull buffer");
+    let timecode = buf
+        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .expect("No timecode for buffer")
+        .get_tc();
+    assert_eq!(timecode, tc);
+
+    let pts = buf.get_pts();
+    assert_eq!(pts, gst::ClockTime::from_seconds(0));
+
     let map = buf.map_readable().expect("Couldn't map buffer readable");
     assert_eq!(
         std::str::from_utf8(map.as_ref()),
