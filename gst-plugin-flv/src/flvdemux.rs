@@ -10,7 +10,6 @@ use std::cmp;
 use std::sync::Mutex;
 
 use nom;
-use nom::IResult;
 
 // FIXME: rustfmt removes the :: but they're required here
 #[rustfmt::skip]
@@ -557,7 +556,7 @@ impl FlvDemux {
         while adapter.available() >= 9 {
             let data = adapter.map(9).unwrap();
 
-            if let IResult::Done(_, header) = flavors::header(&*data) {
+            if let Ok((_, header)) = flavors::header(&*data) {
                 gst_debug!(CAT, obj: element, "Found FLV header: {:?}", header);
                 drop(data);
                 adapter.flush(9);
@@ -709,22 +708,22 @@ impl StreamingState {
         let data = adapter.map(15).unwrap();
 
         match nom::be_u32(&data[0..4]) {
-            IResult::Error(_) | IResult::Incomplete(_) => unreachable!(),
-            IResult::Done(_, previous_size) => {
+            Err(_) => unreachable!(),
+            Ok((_, previous_size)) => {
                 gst_trace!(CAT, obj: element, "Previous tag size {}", previous_size);
                 // Nothing to do here, we just consume it for now
             }
         }
 
         let tag_header = match flavors::tag_header(&data[4..]) {
-            IResult::Error(err) => {
+            Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 return Err(gst_error_msg!(
                     gst::StreamError::Demux,
                     ["Invalid tag header: {:?}", err]
                 ));
             }
-            IResult::Incomplete(_) => unreachable!(),
-            IResult::Done(_, tag_header) => tag_header,
+            Err(nom::Err::Incomplete(_)) => unreachable!(),
+            Ok((_, tag_header)) => tag_header,
         };
 
         gst_trace!(CAT, obj: element, "Parsed tag header {:?}", tag_header);
@@ -770,7 +769,7 @@ impl StreamingState {
         let data = adapter.map(tag_header.data_size as usize).unwrap();
 
         match flavors::script_data(&*data) {
-            IResult::Done(_, ref script_data) if script_data.name == "onMetaData" => {
+            Ok((_, ref script_data)) if script_data.name == "onMetaData" => {
                 gst_trace!(CAT, obj: element, "Got script tag: {:?}", script_data);
 
                 let metadata = Metadata::new(script_data);
@@ -801,13 +800,13 @@ impl StreamingState {
                     }
                 }
             }
-            IResult::Done(_, ref script_data) => {
+            Ok((_, ref script_data)) => {
                 gst_trace!(CAT, obj: element, "Got script tag: {:?}", script_data);
             }
-            IResult::Error(err) => {
+            Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 gst_error!(CAT, obj: element, "Error parsing script tag: {:?}", err);
             }
-            IResult::Incomplete(_) => {
+            Err(nom::Err::Incomplete(_)) => {
                 // ignore
             }
         }
@@ -883,7 +882,7 @@ impl StreamingState {
         let data = adapter.map(1).unwrap();
 
         match flavors::aac_audio_packet_header(&*data) {
-            IResult::Error(err) => {
+            Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 gst_error!(
                     CAT,
                     obj: element,
@@ -894,8 +893,8 @@ impl StreamingState {
                 adapter.flush((tag_header.data_size - 1) as usize);
                 return Ok(true);
             }
-            IResult::Incomplete(_) => unreachable!(),
-            IResult::Done(_, header) => {
+            Err(nom::Err::Incomplete(_)) => unreachable!(),
+            Ok((_, header)) => {
                 gst_trace!(CAT, obj: element, "Got AAC packet header {:?}", header);
                 match header.packet_type {
                     flavors::AACPacketType::SequenceHeader => {
@@ -929,14 +928,14 @@ impl StreamingState {
 
         let data = adapter.map(1).unwrap();
         let data_header = match flavors::audio_data_header(&*data) {
-            IResult::Error(err) => {
+            Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 gst_error!(CAT, obj: element, "Invalid audio data header: {:?}", err);
                 drop(data);
                 adapter.flush(tag_header.data_size as usize);
                 return Ok(SmallVec::new());
             }
-            IResult::Incomplete(_) => unreachable!(),
-            IResult::Done(_, data_header) => data_header,
+            Err(nom::Err::Incomplete(_)) => unreachable!(),
+            Ok((_, data_header)) => data_header,
         };
         drop(data);
         adapter.flush(1);
@@ -1052,7 +1051,7 @@ impl StreamingState {
 
         let data = adapter.map(4).unwrap();
         match flavors::avc_video_packet_header(&*data) {
-            IResult::Error(err) => {
+            Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 gst_error!(
                     CAT,
                     obj: element,
@@ -1063,8 +1062,8 @@ impl StreamingState {
                 adapter.flush((tag_header.data_size - 1) as usize);
                 return Ok(None);
             }
-            IResult::Incomplete(_) => unreachable!(),
-            IResult::Done(_, header) => {
+            Err(nom::Err::Incomplete(_)) => unreachable!(),
+            Ok((_, header)) => {
                 gst_trace!(CAT, obj: element, "Got AVC packet header {:?}", header);
                 match header.packet_type {
                     flavors::AVCPacketType::SequenceHeader => {
@@ -1110,14 +1109,14 @@ impl StreamingState {
 
         let data = adapter.map(1).unwrap();
         let data_header = match flavors::video_data_header(&*data) {
-            IResult::Error(err) => {
+            Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
                 gst_error!(CAT, obj: element, "Invalid video data header: {:?}", err);
                 drop(data);
                 adapter.flush(tag_header.data_size as usize);
                 return Ok(SmallVec::new());
             }
-            IResult::Incomplete(_) => unreachable!(),
-            IResult::Done(_, data_header) => data_header,
+            Err(nom::Err::Incomplete(_)) => unreachable!(),
+            Ok((_, data_header)) => data_header,
         };
         drop(data);
         adapter.flush(1);
