@@ -44,8 +44,6 @@ enum Format {
 struct State {
     format: Option<Format>,
     need_headers: bool,
-    start_position: gst::ClockTime,
-    last_position: gst::ClockTime,
 }
 
 impl Default for State {
@@ -53,8 +51,6 @@ impl Default for State {
         Self {
             format: None,
             need_headers: true,
-            start_position: gst::CLOCK_TIME_NONE,
-            last_position: gst::CLOCK_TIME_NONE,
         }
     }
 }
@@ -471,16 +467,6 @@ impl MccEnc {
                     gst::GenericFormattedValue::Other(fmt, -1),
                 );
                 true
-            }
-            QueryView::Position(ref mut q) => {
-                // For Time answer ourselfs, otherwise forward
-                if q.get_format() == gst::Format::Time {
-                    let state = self.state.lock().unwrap();
-                    q.set(state.last_position);
-                    true
-                } else {
-                    self.sinkpad.peer_query(query)
-                }
             }
             _ => pad.query_default(element, query),
         }
