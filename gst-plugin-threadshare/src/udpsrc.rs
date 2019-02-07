@@ -696,7 +696,9 @@ impl UdpSrc {
             }
             #[cfg(windows)]
             unsafe {
-                let fd = dup_socket(socket.as_raw_socket() as _) as _;
+                // FIXME: Needs https://github.com/tokio-rs/tokio/pull/806
+                // and https://github.com/carllerche/mio/pull/859
+                let fd = unreachable!(); //dup_socket(socket.as_raw_socket() as _) as _;
 
                 // This is unsafe because it allows us to share the fd between the socket and the
                 // GIO socket below, but safety of this is the job of the application
@@ -876,7 +878,23 @@ impl ObjectSubclass for UdpSrc {
         .unwrap();
         klass.add_pad_template(src_pad_template);
 
-        klass.install_properties(&PROPERTIES);
+        #[cfg(not(windows))]
+        {
+            klass.install_properties(&PROPERTIES);
+        }
+        #[cfg(windows)]
+        {
+            let properties = PROPERTIES
+                .iter()
+                .filter(|p| match *p {
+                    subclass::Property("socket", ..) | subclass::Property("used-socket", ..) => {
+                        false
+                    }
+                    _ => true,
+                })
+                .collect::<Vec<_>>();
+            klass.install_properties(properties.as_slice());
+        }
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {

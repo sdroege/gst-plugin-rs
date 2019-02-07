@@ -103,6 +103,7 @@ fn test_push() {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn test_socket_reuse() {
     init();
 
