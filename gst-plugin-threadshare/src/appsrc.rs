@@ -513,11 +513,12 @@ impl ObjectSubclass for AppSrc {
 
         klass.install_properties(&PROPERTIES);
 
-        klass.add_action_signal(
+        klass.add_signal_with_class_handler(
             "push-buffer",
+            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
             &[gst::Buffer::static_type()],
             bool::static_type(),
-            |args| {
+            |_, args| {
                 let element = args[0].get::<gst::Element>().unwrap();
                 let buffer = args[1].get::<gst::Buffer>().unwrap();
                 let appsrc = Self::from_instance(&element);
@@ -526,11 +527,17 @@ impl ObjectSubclass for AppSrc {
             },
         );
 
-        klass.add_action_signal("end-of-stream", &[], bool::static_type(), |args| {
-            let element = args[0].get::<gst::Element>().unwrap();
-            let appsrc = Self::from_instance(&element);
-            Some(appsrc.end_of_stream(&element).to_value())
-        });
+        klass.add_signal_with_class_handler(
+            "end-of-stream",
+            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
+            &[],
+            bool::static_type(),
+            |_, args| {
+                let element = args[0].get::<gst::Element>().unwrap();
+                let appsrc = Self::from_instance(&element);
+                Some(appsrc.end_of_stream(&element).to_value())
+            },
+        );
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
