@@ -486,6 +486,10 @@ impl MccParse {
                 state.parser.reset();
                 state.need_segment = true;
                 state.pending_events.clear();
+                state.start_position = gst::ClockTime::from_seconds(0);
+                state.last_position = gst::ClockTime::from_seconds(0);
+                state.last_timecode = None;
+                state.timecode_rate = None;
 
                 pad.event_default(element, event)
             }
