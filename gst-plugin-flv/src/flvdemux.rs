@@ -1236,8 +1236,10 @@ impl AudioFormat {
     ) -> AudioFormat {
         let numeric_rate = match (data_header.sound_format, data_header.sound_rate) {
             (flavors::SoundFormat::NELLYMOSER_16KHZ_MONO, _) => 16_000,
-            (flavors::SoundFormat::NELLYMOSER_8KHZ_MONO, _) => 8_000,
-            (flavors::SoundFormat::MP3_8KHZ, _) => 8_000,
+            (flavors::SoundFormat::NELLYMOSER_8KHZ_MONO, _)
+            | (flavors::SoundFormat::PCM_ALAW, _)
+            | (flavors::SoundFormat::PCM_ULAW, _)
+            | (flavors::SoundFormat::MP3_8KHZ, _) => 8_000,
             (flavors::SoundFormat::SPEEX, _) => 16_000,
             (_, flavors::SoundRate::_5_5KHZ) => 5_512,
             (_, flavors::SoundRate::_11KHZ) => 11_025,
