@@ -46,6 +46,7 @@ struct State {
     parser: SccParser,
     need_segment: bool,
     pending_events: Vec<gst::Event>,
+    framerate: Option<gst::Fraction>,
     start_position: gst::ClockTime,
     last_position: gst::ClockTime,
     last_timecode: Option<gst_video::ValidVideoTimeCode>,
@@ -58,6 +59,7 @@ impl Default for State {
             parser: SccParser::new(),
             need_segment: true,
             pending_events: Vec::new(),
+            framerate: None,
             start_position: gst::CLOCK_TIME_NONE,
             last_position: gst::CLOCK_TIME_NONE,
             last_timecode: None,
@@ -311,11 +313,14 @@ impl SccParse {
 
         let mut events = Vec::new();
 
-        let caps = gst::Caps::builder("closedcaption/x-cea-608")
-            .field("format", &"raw")
-            .field("framerate", &framerate)
-            .build();
-        events.push(gst::Event::new_caps(&caps).build());
+        if Some(framerate) != state.framerate {
+            let caps = gst::Caps::builder("closedcaption/x-cea-608")
+                .field("format", &"raw")
+                .field("framerate", &framerate)
+                .build();
+            events.push(gst::Event::new_caps(&caps).build());
+            state.framerate = Some(framerate);
+        }
 
         if state.need_segment {
             let segment = gst::FormattedSegment::<gst::format::Time>::new();
