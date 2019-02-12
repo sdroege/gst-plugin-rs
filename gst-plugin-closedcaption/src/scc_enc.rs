@@ -117,13 +117,15 @@ impl State {
         // flush the previous line into the buffer, and push
         // the new packet to the, now empty, internal buffer
         if Some(&timecode) != self.expected_timecode.as_ref() {
-            let res = self.write_line(element);
+            let outbuf = self.write_line(element)?;
+
             assert!(self.internal_buffer.is_empty());
             self.internal_buffer.push(buffer);
 
             timecode.increment_frame();
             self.expected_timecode = Some(timecode);
-            return res;
+
+            return Ok(outbuf);
         } else if let Some(ref mut timecode) = self.expected_timecode {
             timecode.increment_frame();
         }
@@ -145,7 +147,9 @@ impl State {
         let mut outbuf = Vec::new();
         let mut line_start = true;
 
-        assert!(!self.internal_buffer.is_empty());
+        if self.internal_buffer.is_empty() {
+            return Ok(None);
+        }
 
         if self.need_headers {
             self.generate_headers(&mut outbuf);
@@ -311,8 +315,8 @@ impl SccEnc {
                         gst_error!(CAT, obj: pad, "Failed to push buffer to the pad");
                         return false;
                     }
-                } else {
-                    gst_error!(CAT, obj: pad, "Failed to write a line after EOS");
+                } else if let Err(err) = outbuf {
+                    gst_error!(CAT, obj: pad, "Failed to write a line after EOS: {:?}", err);
                     return false;
                 }
                 pad.event_default(element, event)
