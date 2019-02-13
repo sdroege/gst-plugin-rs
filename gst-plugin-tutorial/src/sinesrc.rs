@@ -540,7 +540,7 @@ impl BaseSrcImpl for SineSrc {
             }
             _ => (),
         }
-        BaseSrcImpl::parent_query(self, element, query)
+        BaseSrcImplExt::parent_query(self, element, query)
     }
 
     // Creates the audio buffers
