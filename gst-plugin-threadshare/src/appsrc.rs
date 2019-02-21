@@ -36,7 +36,7 @@ use rand;
 
 use iocontext::*;
 
-const DEFAULT_CONTEXT: &'static str = "";
+const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_MAX_BUFFERS: u32 = 10;
@@ -219,11 +219,11 @@ impl AppSrc {
                 let caps = if let Some(ref caps) = state.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
-                        .unwrap_or(caps.clone())
+                        .unwrap_or_else(|| caps.clone())
                 } else {
                     q.get_filter()
                         .map(|f| f.to_owned())
-                        .unwrap_or(gst::Caps::new_any())
+                        .unwrap_or_else(|| gst::Caps::new_any())
                 };
 
                 q.set_result(&caps);
@@ -565,7 +565,7 @@ impl ObjectSubclass for AppSrc {
                 gst::DebugColorFlags::empty(),
                 "Thread-sharing app source",
             ),
-            src_pad: src_pad,
+            src_pad,
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
         }

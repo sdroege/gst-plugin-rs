@@ -70,8 +70,8 @@ impl<T: SocketRead + 'static> Socket<T> {
         Socket(Arc::new(Mutex::new(SocketInner::<T> {
             element: element.clone(),
             state: SocketState::Unscheduled,
-            reader: reader,
-            buffer_pool: buffer_pool,
+            reader,
+            buffer_pool,
             current_task: None,
             shutdown_receiver: None,
             clock: None,

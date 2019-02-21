@@ -213,7 +213,6 @@ impl State {
         };
 
         // Clear the internal buffer
-        drop(first_buf);
         self.internal_buffer.clear();
 
         Ok(Some(buffer))

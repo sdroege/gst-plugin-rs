@@ -52,14 +52,14 @@ use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket}
 use iocontext::*;
 use socket::*;
 
-const DEFAULT_ADDRESS: Option<&'static str> = Some("127.0.0.1");
+const DEFAULT_ADDRESS: Option<&str> = Some("127.0.0.1");
 const DEFAULT_PORT: u32 = 5000;
 const DEFAULT_REUSE: bool = true;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_MTU: u32 = 1500;
 const DEFAULT_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_USED_SOCKET: Option<GioSocketWrapper> = None;
-const DEFAULT_CONTEXT: &'static str = "";
+const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 // Send/Sync struct for passing around a gio::Socket
@@ -378,11 +378,11 @@ impl UdpSrc {
                 let caps = if let Some(ref caps) = state.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
-                        .unwrap_or(caps.clone())
+                        .unwrap_or_else(|| caps.clone())
                 } else {
                     q.get_filter()
                         .map(|f| f.to_owned())
-                        .unwrap_or(gst::Caps::new_any())
+                        .unwrap_or_else(|| gst::Caps::new_any())
                 };
 
                 q.set_result(&caps);
@@ -927,7 +927,7 @@ impl ObjectSubclass for UdpSrc {
                 gst::DebugColorFlags::empty(),
                 "Thread-sharing UDP source",
             ),
-            src_pad: src_pad,
+            src_pad,
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
         }

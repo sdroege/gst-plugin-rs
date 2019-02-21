@@ -40,7 +40,7 @@ use iocontext::*;
 const DEFAULT_MAX_SIZE_BUFFERS: u32 = 200;
 const DEFAULT_MAX_SIZE_BYTES: u32 = 1024 * 1024;
 const DEFAULT_MAX_SIZE_TIME: u64 = gst::SECOND_VAL;
-const DEFAULT_CONTEXT: &'static str = "";
+const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 #[derive(Debug, Clone)]
@@ -846,8 +846,8 @@ impl ObjectSubclass for Queue {
                 gst::DebugColorFlags::empty(),
                 "Thread-sharing queue",
             ),
-            sink_pad: sink_pad,
-            src_pad: src_pad,
+            sink_pad,
+            src_pad,
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
         }

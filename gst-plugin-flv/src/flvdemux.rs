@@ -891,7 +891,7 @@ impl StreamingState {
                 );
                 drop(data);
                 adapter.flush((tag_header.data_size - 1) as usize);
-                return Ok(true);
+                Ok(true)
             }
             Err(nom::Err::Incomplete(_)) => unreachable!(),
             Ok((_, header)) => {
@@ -1060,7 +1060,7 @@ impl StreamingState {
                 );
                 drop(data);
                 adapter.flush((tag_header.data_size - 1) as usize);
-                return Ok(None);
+                Ok(None)
             }
             Err(nom::Err::Incomplete(_)) => unreachable!(),
             Ok((_, header)) => {

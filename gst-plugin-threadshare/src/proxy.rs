@@ -43,12 +43,12 @@ lazy_static! {
         Mutex::new(HashMap::new());
 }
 
-const DEFAULT_PROXY_CONTEXT: &'static str = "";
+const DEFAULT_PROXY_CONTEXT: &str = "";
 
 const DEFAULT_MAX_SIZE_BUFFERS: u32 = 200;
 const DEFAULT_MAX_SIZE_BYTES: u32 = 1024 * 1024;
 const DEFAULT_MAX_SIZE_TIME: u64 = gst::SECOND_VAL;
-const DEFAULT_CONTEXT: &'static str = "";
+const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 #[derive(Debug, Clone)]
@@ -395,7 +395,7 @@ impl ProxySink {
 
                             let res = if let Some((ref mut task, _, ref mut items)) = *pending_queue
                             {
-                                if let &Some(ref queue) = queue {
+                                if let Some(ref queue) = queue {
                                     let mut failed_item = None;
                                     while let Some(item) = items.pop_front() {
                                         if let Err(item) = queue.push(item) {
@@ -695,7 +695,7 @@ impl ObjectSubclass for ProxySink {
                 gst::DebugColorFlags::empty(),
                 "Thread-sharing proxy sink",
             ),
-            sink_pad: sink_pad,
+            sink_pad,
             state: Mutex::new(StateSink::default()),
             settings: Mutex::new(SettingsSink::default()),
         }
@@ -854,11 +854,11 @@ impl ProxySrc {
                 let caps = if let Some(ref caps) = self.src_pad.get_current_caps() {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
-                        .unwrap_or(caps.clone())
+                        .unwrap_or_else(|| caps.clone())
                 } else {
                     q.get_filter()
                         .map(|f| f.to_owned())
-                        .unwrap_or(gst::Caps::new_any())
+                        .unwrap_or_else(|| gst::Caps::new_any())
                 };
 
                 q.set_result(&caps);
@@ -1223,7 +1223,7 @@ impl ObjectSubclass for ProxySrc {
                 gst::DebugColorFlags::empty(),
                 "Thread-sharing proxy source",
             ),
-            src_pad: src_pad,
+            src_pad,
             state: Mutex::new(StateSrc::default()),
             settings: Mutex::new(SettingsSrc::default()),
         }

@@ -106,9 +106,9 @@ impl DataQueue {
             queue: VecDeque::new(),
             cur_size_buffers: 0,
             cur_size_bytes: 0,
-            max_size_buffers: max_size_buffers,
-            max_size_bytes: max_size_bytes,
-            max_size_time: max_size_time,
+            max_size_buffers,
+            max_size_bytes,
+            max_size_time,
             current_task: None,
             shutdown_receiver: None,
         })))

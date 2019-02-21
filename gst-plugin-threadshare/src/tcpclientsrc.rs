@@ -41,11 +41,11 @@ use rand;
 use iocontext::*;
 use socket::*;
 
-const DEFAULT_ADDRESS: Option<&'static str> = Some("127.0.0.1");
+const DEFAULT_ADDRESS: Option<&str> = Some("127.0.0.1");
 const DEFAULT_PORT: u32 = 5000;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_CHUNK_SIZE: u32 = 4096;
-const DEFAULT_CONTEXT: &'static str = "";
+const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 #[derive(Debug, Clone)]
@@ -142,7 +142,7 @@ pub struct TcpClientReader {
 impl TcpClientReader {
     pub fn new(connect_future: net::tcp::ConnectFuture) -> Self {
         Self {
-            connect_future: connect_future,
+            connect_future,
             socket: None,
         }
     }
@@ -256,11 +256,11 @@ impl TcpClientSrc {
                 let caps = if let Some(ref caps) = state.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
-                        .unwrap_or(caps.clone())
+                        .unwrap_or_else(|| caps.clone())
                 } else {
                     q.get_filter()
                         .map(|f| f.to_owned())
-                        .unwrap_or(gst::Caps::new_any())
+                        .unwrap_or_else(|| gst::Caps::new_any())
                 };
 
                 q.set_result(&caps);
@@ -618,7 +618,7 @@ impl ObjectSubclass for TcpClientSrc {
                 gst::DebugColorFlags::empty(),
                 "Thread-sharing TCP Client source",
             ),
-            src_pad: src_pad,
+            src_pad,
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
         }
