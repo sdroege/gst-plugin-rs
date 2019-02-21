@@ -16,6 +16,7 @@
 // Boston, MA 02110-1335, USA.
 
 #![crate_type = "cdylib"]
+#![recursion_limit = "128"]
 
 // These macros are in weird paths currently,
 // and extern crate is used to avoid the explicit imports
