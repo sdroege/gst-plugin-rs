@@ -6,7 +6,7 @@ license = "LGPL-2.1+"
 edition = "2018"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib", features = ["subclassing"] }
+glib = { version = "0.7", features = ["subclassing"] }
 combine = "3.6"
 either = "1"
 uuid = { version = "0.7", features = ["v4"] }
@@ -14,17 +14,17 @@ chrono = "0.4"
 lazy_static = "1.2"
 
 [dependencies.gst]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.13"
 features = ["subclassing", "v1_12"]
 package="gstreamer"
 
 [dependencies.gst-base]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.13"
 features = ["subclassing", "v1_12"]
 package="gstreamer-base"
 
 [dependencies.gst-video]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.13"
 features = ["v1_12"]
 package="gstreamer-video"
 
@@ -33,7 +33,7 @@ pretty_assertions = "0.6"
 rand = "0.6"
 
 [dev-dependencies.gst-check]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.13"
 package="gstreamer-check"
 
 [lib]

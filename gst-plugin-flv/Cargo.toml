@@ -8,9 +8,9 @@ edition = "2018"
 
 [dependencies]
 url = "1.1"
-glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
-gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+glib = { version = "0.7", features = ["subclassing"] }
+gstreamer = { version = "0.13", features = ["subclassing"] }
+gstreamer-base = { version = "0.13" }
 num-rational = { version = "0.2", default-features = false, features = [] }
 nom = "4.0"
 flavors = {git = "https://github.com/rust-av/flavors.git"}

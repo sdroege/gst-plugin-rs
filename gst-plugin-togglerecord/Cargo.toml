@@ -5,11 +5,11 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1+"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib", features = ["subclassing"] }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
-gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gtk = { git = "https://github.com/gtk-rs/gtk", optional = true }
-gio = { git = "https://github.com/gtk-rs/gio", optional = true }
+glib = { version = "0.7", features = ["subclassing"] }
+gstreamer = { version = "0.13", features = ["subclassing"] }
+gstreamer-video = { version = "0.13" }
+gtk = { version = "0.6", optional = true }
+gio = { version = "0.6", optional = true }
 parking_lot = "0.7"
 
 [dev-dependencies]
