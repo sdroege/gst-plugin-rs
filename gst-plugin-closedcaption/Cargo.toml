@@ -29,7 +29,7 @@ features = ["v1_12"]
 package="gstreamer-video"
 
 [dev-dependencies]
-pretty_assertions = "0.5.1"
+pretty_assertions = "0.6"
 rand = "0.6"
 
 [dev-dependencies.gst-check]
