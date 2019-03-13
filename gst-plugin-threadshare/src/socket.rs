@@ -51,7 +51,10 @@ enum SocketState {
 pub trait SocketRead: Send {
     const DO_TIMESTAMP: bool;
 
-    fn poll_read(&mut self, buf: &mut [u8]) -> Poll<usize, io::Error>;
+    fn poll_read(
+        &mut self,
+        buf: &mut [u8],
+    ) -> Poll<(usize, Option<std::net::SocketAddr>), io::Error>;
 }
 
 struct SocketInner<T: SocketRead + 'static> {
@@ -81,7 +84,7 @@ impl<T: SocketRead + 'static> Socket<T> {
 
     pub fn schedule<U, F, G>(&self, io_context: &IOContext, func: F, err_func: G) -> Result<(), ()>
     where
-        F: Fn(gst::Buffer) -> U + Send + 'static,
+        F: Fn((gst::Buffer, Option<std::net::SocketAddr>)) -> U + Send + 'static,
         U: IntoFuture<Item = (), Error = gst::FlowError> + 'static,
         <U as IntoFuture>::Future: Send + 'static,
         G: FnOnce(Either<gst::FlowError, io::Error>) + Send + 'static,
@@ -112,7 +115,9 @@ impl<T: SocketRead + 'static> Socket<T> {
         let element_clone = inner.element.clone();
         io_context.spawn(
             stream
-                .for_each(move |buffer| func(buffer).into_future().map_err(Either::Left))
+                .for_each(move |(buffer, saddr)| {
+                    func((buffer, saddr)).into_future().map_err(Either::Left)
+                })
                 .then(move |res| {
                     gst_debug!(
                         SOCKET_CAT,
@@ -227,7 +232,7 @@ struct SocketStream<T: SocketRead + 'static>(
 );
 
 impl<T: SocketRead + 'static> Stream for SocketStream<T> {
-    type Item = gst::Buffer;
+    type Item = (gst::Buffer, Option<std::net::SocketAddr>);
     type Error = Either<gst::FlowError, io::Error>;
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
@@ -244,7 +249,7 @@ impl<T: SocketRead + 'static> Stream for SocketStream<T> {
         assert_eq!(inner.state, SocketState::Running);
 
         gst_debug!(SOCKET_CAT, obj: &inner.element, "Trying to read data");
-        let (len, time) = {
+        let (len, saddr, time) = {
             let mut buffer = match self.1 {
                 Some(ref mut buffer) => buffer,
                 None => match inner.buffer_pool.acquire_buffer(None) {
@@ -269,7 +274,7 @@ impl<T: SocketRead + 'static> Stream for SocketStream<T> {
                     gst_debug!(SOCKET_CAT, obj: &inner.element, "Read error {:?}", err);
                     return Err(Either::Right(err));
                 }
-                Ok(Async::Ready(len)) => {
+                Ok(Async::Ready((len, saddr))) => {
                     let dts = if T::DO_TIMESTAMP {
                         let time = inner.clock.as_ref().unwrap().get_time();
                         let running_time = time - inner.base_time.unwrap();
@@ -279,7 +284,7 @@ impl<T: SocketRead + 'static> Stream for SocketStream<T> {
                         gst_debug!(SOCKET_CAT, obj: &inner.element, "Read {} bytes", len);
                         gst::CLOCK_TIME_NONE
                     };
-                    (len, dts)
+                    (len, saddr, dts)
                 }
             }
         };
@@ -293,6 +298,6 @@ impl<T: SocketRead + 'static> Stream for SocketStream<T> {
             buffer.set_dts(time);
         }
 
-        Ok(Async::Ready(Some(buffer)))
+        Ok(Async::Ready(Some((buffer, saddr))))
     }
 }

@@ -151,7 +151,10 @@ impl TcpClientReader {
 impl SocketRead for TcpClientReader {
     const DO_TIMESTAMP: bool = false;
 
-    fn poll_read(&mut self, buf: &mut [u8]) -> Poll<usize, io::Error> {
+    fn poll_read(
+        &mut self,
+        buf: &mut [u8],
+    ) -> Poll<(usize, Option<std::net::SocketAddr>), io::Error> {
         let socket = match self.socket {
             Some(ref mut socket) => socket,
             None => match self.connect_future.poll() {
@@ -165,8 +168,15 @@ impl SocketRead for TcpClientReader {
                 _ => return Ok(Async::NotReady),
             },
         };
-
-        socket.poll_read(buf)
+        match socket.poll_read(buf) {
+            Ok(Async::Ready(result)) => {
+                return Ok(Async::Ready((result, None)));
+            }
+            Ok(Async::NotReady) => {
+                return Ok(Async::NotReady);
+            }
+            Err(result) => return Err(result),
+        };
     }
 }
 
@@ -458,7 +468,7 @@ impl TcpClientSrc {
         socket
             .schedule(
                 &io_context,
-                move |buffer| {
+                move |(buffer, _)| {
                     let tcpclientsrc = Self::from_instance(&element_clone);
                     tcpclientsrc.push_buffer(&element_clone, buffer)
                 },

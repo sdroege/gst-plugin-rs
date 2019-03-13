@@ -22,6 +22,7 @@ use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_net::*;
 
 use gio;
 
@@ -34,7 +35,7 @@ use std::u16;
 
 use futures;
 use futures::future;
-use futures::{Future, Poll};
+use futures::{Async, Future, Poll};
 use tokio::net;
 
 use either::Either;
@@ -61,6 +62,7 @@ const DEFAULT_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_USED_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
+const DEFAULT_RETRIEVE_SENDER_ADDRESS: bool = true;
 
 // Send/Sync struct for passing around a gio::Socket
 // and getting the raw fd from it
@@ -166,6 +168,7 @@ struct Settings {
     used_socket: Option<GioSocketWrapper>,
     context: String,
     context_wait: u32,
+    retrieve_sender_address: bool,
 }
 
 impl Default for Settings {
@@ -180,11 +183,12 @@ impl Default for Settings {
             used_socket: DEFAULT_USED_SOCKET,
             context: DEFAULT_CONTEXT.into(),
             context_wait: DEFAULT_CONTEXT_WAIT,
+            retrieve_sender_address: DEFAULT_RETRIEVE_SENDER_ADDRESS,
         }
     }
 }
 
-static PROPERTIES: [subclass::Property; 9] = [
+static PROPERTIES: [subclass::Property; 10] = [
     subclass::Property("address", |name| {
         glib::ParamSpec::string(
             name,
@@ -272,6 +276,15 @@ static PROPERTIES: [subclass::Property; 9] = [
             glib::ParamFlags::READWRITE,
         )
     }),
+    subclass::Property("retrieve-sender-address", |name| {
+        glib::ParamSpec::boolean(
+            name,
+            "Retrieve sender address",
+            "Whether to retrieve the sender address and add it to buffers as meta. Disabling this might result in minor performance improvements in certain scenarios",
+            DEFAULT_REUSE,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
 ];
 
 pub struct UdpReader {
@@ -287,8 +300,19 @@ impl UdpReader {
 impl SocketRead for UdpReader {
     const DO_TIMESTAMP: bool = true;
 
-    fn poll_read(&mut self, buf: &mut [u8]) -> Poll<usize, io::Error> {
-        self.socket.poll_recv(buf)
+    fn poll_read(
+        &mut self,
+        buf: &mut [u8],
+    ) -> Poll<(usize, Option<std::net::SocketAddr>), io::Error> {
+        match self.socket.poll_recv_from(buf) {
+            Ok(Async::Ready(result)) => {
+                return Ok(Async::Ready((result.0, Some(result.1))));
+            }
+            Ok(Async::NotReady) => {
+                return Ok(Async::NotReady);
+            }
+            Err(result) => return Err(result),
+        };
     }
 }
 
@@ -743,11 +767,30 @@ impl UdpSrc {
 
         let element_clone = element.clone();
         let element_clone2 = element.clone();
+
+        let retrieve_sender_address = self.settings.lock().unwrap().retrieve_sender_address;
+
         socket
             .schedule(
                 &io_context,
-                move |buffer| {
+                move |(mut buffer, saddr)| {
                     let udpsrc = Self::from_instance(&element_clone);
+                    if let Some(saddr) = saddr {
+                        if retrieve_sender_address {
+                            let inet_addr = match saddr.ip() {
+                                IpAddr::V4(ip) => gio::InetAddress::new_from_bytes(
+                                    gio::InetAddressBytes::V4(&ip.octets()),
+                                ),
+                                IpAddr::V6(ip) => gio::InetAddress::new_from_bytes(
+                                    gio::InetAddressBytes::V6(&ip.octets()),
+                                ),
+                            };
+                            let inet_socket_addr =
+                                &gio::InetSocketAddress::new(&inet_addr, saddr.port());
+                            NetAddressMeta::add(buffer.get_mut().unwrap(), inet_socket_addr);
+                        }
+                    }
+
                     udpsrc.push_buffer(&element_clone, buffer)
                 },
                 move |err| {
@@ -978,6 +1021,10 @@ impl ObjectImpl for UdpSrc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get().unwrap();
             }
+            subclass::Property("retrieve-sender-address", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.retrieve_sender_address = value.get().unwrap();
+            }
             _ => unimplemented!(),
         }
     }
@@ -1029,6 +1076,10 @@ impl ObjectImpl for UdpSrc {
             subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
+            }
+            subclass::Property("retrieve-sender-address", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                Ok(settings.retrieve_sender_address.to_value())
             }
             _ => unimplemented!(),
         }

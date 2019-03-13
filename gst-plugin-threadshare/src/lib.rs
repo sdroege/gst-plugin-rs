@@ -29,6 +29,7 @@ extern crate gio;
 extern crate glib;
 #[macro_use]
 extern crate gstreamer as gst;
+extern crate gstreamer_net as gst_net;
 
 extern crate futures;
 extern crate tokio;
