@@ -9,6 +9,7 @@ members = [
     "gst-plugin-threadshare",
     "gst-plugin-tutorial",
     "gst-plugin-closedcaption",
+    "gst-plugin-sodium",
 ]
 
 [profile.release]

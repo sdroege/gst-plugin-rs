@@ -12,8 +12,11 @@ stages:
   stage: "test"
   variables:
     G_DEBUG: "fatal_warnings"
+    SODIUM_USE_PKG_CONFIG: "true"
     DEPENDENCIES: |
       curl
+      file
+      libsodium-dev
       libssl-dev
       liborc-0.4-dev
       libglib2.0-dev
@@ -54,10 +57,10 @@ stages:
     - cargo test --all-features --all --color=always
     - cargo build --all-features --examples --all --color=always
 
-test 1.31:
-  # 1.31 img
+test 1.32:
+  # 1.32 img
   # https://hub.docker.com/_/rust/
-  image: "rust:1.31-slim"
+  image: "rust:1.32-slim"
   <<: *cargo_test
 
 test stable:
