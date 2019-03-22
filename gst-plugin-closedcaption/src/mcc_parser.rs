@@ -41,7 +41,7 @@ pub enum MccLine<'a> {
     UUID(&'a [u8]),
     Metadata(&'a [u8], &'a [u8]),
     TimeCodeRate(u8, bool),
-    Caption(TimeCode, Vec<u8>),
+    Caption(TimeCode, Option<Vec<u8>>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -340,7 +340,7 @@ where
 }
 
 /// Parser for a MCC caption line in the form `timecode\tpayload`.
-fn caption<'a, I: 'a>() -> impl Parser<Input = I, Output = MccLine<'a>>
+fn caption<'a, I: 'a>(parse_payload: bool) -> impl Parser<Input = I, Output = MccLine<'a>>
 where
     I: RangeStream<Item = u8, Range = &'a [u8]>,
     I::Error: ParseError<I::Item, I::Range, I::Position>,
@@ -353,7 +353,11 @@ where
             optional((token(b','), digits())),
         )),
         token(b'\t'),
-        mcc_payload(),
+        if parse_payload {
+            mcc_payload().map(|v| Some(v)).right()
+        } else {
+            skip_many(any()).map(|_| None).left()
+        },
         end_of_line(),
     )
         .map(|(tc, _, _, value, _)| MccLine::Caption(tc, value))
@@ -366,6 +370,12 @@ impl MccParser {
         Self { state: State::Init }
     }
 
+    pub fn new_scan_captions() -> Self {
+        Self {
+            state: State::Captions,
+        }
+    }
+
     pub fn reset(&mut self) {
         self.state = State::Init;
     }
@@ -373,6 +383,7 @@ impl MccParser {
     pub fn parse_line<'a>(
         &mut self,
         line: &'a [u8],
+        parse_payload: bool,
     ) -> Result<MccLine<'a>, combine::easy::Errors<u8, &'a [u8], combine::stream::PointerOffset>>
     {
         match self.state {
@@ -410,7 +421,7 @@ impl MccParser {
 
                     v.0
                 }),
-            State::Captions => caption()
+            State::Captions => caption(parse_payload)
                 .message("while in Captions state")
                 .easy_parse(line)
                 .map(|v| v.0),
@@ -654,7 +665,7 @@ mod tests {
 
     #[test]
     fn test_caption() {
-        let mut parser = caption();
+        let mut parser = caption(true);
         assert_eq!(
             parser.parse(b"00:00:00:00\tT52S524F67ZZ72F4QROO7391UC13FFF74ZZAEB4".as_ref()),
             Ok((
@@ -666,7 +677,7 @@ mod tests {
                         frames: 0,
                         drop_frame: false
                     },
-                    vec![
+                    Some(vec![
                         0x61, 0x01, 0x52, 0x96, 0x69, 0x52, 0x4F, 0x67, 0x00, 0x00, 0x72, 0xF4,
                         0xFC, 0x80, 0x80, 0xFD, 0x80, 0x80, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
                         0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
@@ -675,7 +686,7 @@ mod tests {
                         0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
                         0x73, 0x91, 0xE1, 0x00, 0x00, 0xC1, 0x3F, 0xFF, 0x74, 0x00, 0x00, 0xAE,
                         0xB4
-                    ]
+                    ])
                 ),
                 b"".as_ref()
             ))
@@ -692,7 +703,7 @@ mod tests {
                         frames: 0,
                         drop_frame: false
                     },
-                    vec![
+                    Some(vec![
                         0x61, 0x01, 0x52, 0x96, 0x69, 0x52, 0x4F, 0x67, 0x00, 0x00, 0x72, 0xF4,
                         0xFC, 0x80, 0x80, 0xFD, 0x80, 0x80, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
                         0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
@@ -701,7 +712,7 @@ mod tests {
                         0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
                         0x73, 0x91, 0xE1, 0x00, 0x00, 0xC1, 0x3F, 0xFF, 0x74, 0x00, 0x00, 0xAE,
                         0xB4
-                    ]
+                    ])
                 ),
                 b"".as_ref()
             ))
@@ -718,7 +729,7 @@ mod tests {
                         frames: 0,
                         drop_frame: false
                     },
-                    vec![
+                    Some(vec![
                         0x61, 0x01, 0x52, 0x96, 0x69, 0x52, 0x4F, 0x67, 0x00, 0x00, 0x72, 0xF4,
                         0xFC, 0x80, 0x80, 0xFD, 0x80, 0x80, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
                         0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
@@ -727,7 +738,7 @@ mod tests {
                         0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00, 0xFA, 0x00, 0x00,
                         0x73, 0x91, 0xE1, 0x00, 0x00, 0xC1, 0x3F, 0xFF, 0x74, 0x00, 0x00, 0xAE,
                         0xB4
-                    ]
+                    ])
                 ),
                 b"".as_ref()
             ))
@@ -749,7 +760,7 @@ mod tests {
         reader.push(Vec::from(mcc_file.as_ref()));
 
         while let Some(line) = reader.get_line() {
-            let res = match parser.parse_line(line) {
+            let res = match parser.parse_line(line, true) {
                 Ok(res) => res,
                 Err(err) => panic!("Couldn't parse line {}: {:?}", line_cnt, err),
             };

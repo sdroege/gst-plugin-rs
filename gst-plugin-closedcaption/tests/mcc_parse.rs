@@ -19,7 +19,9 @@
 extern crate pretty_assertions;
 
 use gst::prelude::*;
+use gst::EventView;
 use rand::{Rng, SeedableRng};
+use std::path::PathBuf;
 
 fn init() {
     use std::sync::{Once, ONCE_INIT};
@@ -126,4 +128,85 @@ fn test_parse() {
             .field("framerate", &gst::Fraction::new(30000, 1001))
             .build()
     );
+}
+
+#[test]
+fn test_pull() {
+    init();
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests/captions-test_708.mcc");
+
+    let mut h = gst_check::Harness::new_parse(&format!("filesrc location={:?} ! mccparse", path));
+
+    h.play();
+
+    /* Let's first pull until EOS */
+    loop {
+        let mut done = false;
+
+        while h.events_in_queue() != 0 {
+            let event = h.pull_event();
+
+            if let Some(event) = event {
+                match event.view() {
+                    EventView::Eos(_) => {
+                        done = true;
+                        break;
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        while h.buffers_in_queue() != 0 {
+            let _ = h.pull();
+        }
+
+        if done {
+            break;
+        }
+    }
+
+    /* Now seek and check that we receive buffers with appropriate PTS */
+    h.push_upstream_event(
+        gst::Event::new_seek(
+            1.0,
+            gst::SeekFlags::FLUSH,
+            gst::SeekType::Set,
+            gst::GenericFormattedValue::Time(gst::SECOND.into()),
+            gst::SeekType::Set,
+            gst::GenericFormattedValue::Time((2 * gst::SECOND).into()),
+        )
+        .build(),
+    );
+
+    loop {
+        let mut done = false;
+
+        while h.buffers_in_queue() != 0 {
+            if let Some(buffer) = h.pull() {
+                let pts = buffer.get_pts();
+                assert!(pts > gst::SECOND && pts < 2 * gst::SECOND);
+            }
+        }
+
+        while h.events_in_queue() != 0 {
+            let event = h.pull_event();
+
+            if let Some(event) = event {
+                match event.view() {
+                    EventView::Eos(_) => {
+                        done = true;
+                        break;
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        if done {
+            break;
+        }
+    }
 }
