@@ -104,10 +104,10 @@ impl IOContextRunner {
 
         let _ = sender.send(current_thread.handle());
 
+        let mut now = time::Instant::now();
+
         ::tokio_timer::with_default(&timer_handle, &mut enter, |mut enter| {
             ::tokio_reactor::with_default(&handle, &mut enter, |enter| loop {
-                let now = time::Instant::now();
-
                 if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
                     break;
                 }
@@ -130,6 +130,7 @@ impl IOContextRunner {
                     );
                     thread::sleep(wait - elapsed);
                 }
+                now += wait;
             })
         });
     }
