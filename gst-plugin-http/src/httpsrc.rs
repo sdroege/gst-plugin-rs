@@ -471,5 +471,5 @@ impl ObjectSubclass for HttpSrc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "rshttpsrc", 256 + 100, HttpSrc::get_type())
+    gst::Element::register(Some(plugin), "rshttpsrc", 256 + 100, HttpSrc::get_type())
 }

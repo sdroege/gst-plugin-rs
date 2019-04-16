@@ -605,7 +605,7 @@ impl ObjectSubclass for TcpClientSrc {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, "src");
+        let src_pad = gst::Pad::new_from_template(&templ, Some("src"));
 
         src_pad.set_event_function(|pad, parent, event| {
             TcpClientSrc::catch_panic_pad_function(
@@ -755,5 +755,5 @@ impl ElementImpl for TcpClientSrc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "ts-tcpclientsrc", 0, TcpClientSrc::get_type())
+    gst::Element::register(Some(plugin), "ts-tcpclientsrc", 0, TcpClientSrc::get_type())
 }

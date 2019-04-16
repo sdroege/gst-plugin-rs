@@ -168,9 +168,9 @@ impl ObjectSubclass for Identity {
         // Create our two pads from the templates that were registered with
         // the class
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, "sink");
+        let sinkpad = gst::Pad::new_from_template(&templ, Some("sink"));
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, "src");
+        let srcpad = gst::Pad::new_from_template(&templ, Some("src"));
 
         // And then set all our pad functions for handling anything that happens
         // on these pads
@@ -274,5 +274,5 @@ impl ElementImpl for Identity {
 // the name "rsidentity" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "rsidentity", 0, Identity::get_type())
+    gst::Element::register(Some(plugin), "rsidentity", 0, Identity::get_type())
 }

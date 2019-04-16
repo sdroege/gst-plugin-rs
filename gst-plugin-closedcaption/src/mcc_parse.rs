@@ -58,7 +58,10 @@ impl PullState {
     fn new(element: &gst::Element, pad: &gst::Pad) -> Self {
         Self {
             need_stream_start: true,
-            stream_id: pad.create_stream_id(element, "src").unwrap().to_string(),
+            stream_id: pad
+                .create_stream_id(element, Some("src"))
+                .unwrap()
+                .to_string(),
             offset: 0,
             duration: gst::CLOCK_TIME_NONE,
         }
@@ -1195,9 +1198,9 @@ impl ObjectSubclass for MccParse {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, "sink");
+        let sinkpad = gst::Pad::new_from_template(&templ, Some("sink"));
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, "src");
+        let srcpad = gst::Pad::new_from_template(&templ, Some("src"));
 
         MccParse::set_pad_functions(&sinkpad, &srcpad);
 
@@ -1287,5 +1290,5 @@ impl ElementImpl for MccParse {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "mccparse", 0, MccParse::get_type())
+    gst::Element::register(Some(plugin), "mccparse", 0, MccParse::get_type())
 }

@@ -368,9 +368,9 @@ impl ObjectSubclass for SccEnc {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, "sink");
+        let sinkpad = gst::Pad::new_from_template(&templ, Some("sink"));
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, "src");
+        let srcpad = gst::Pad::new_from_template(&templ, Some("src"));
 
         SccEnc::set_pad_functions(&sinkpad, &srcpad);
 
@@ -450,5 +450,5 @@ impl ElementImpl for SccEnc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "sccenc", 0, SccEnc::get_type())
+    gst::Element::register(Some(plugin), "sccenc", 0, SccEnc::get_type())
 }

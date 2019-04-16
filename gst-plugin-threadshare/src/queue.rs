@@ -792,9 +792,9 @@ impl ObjectSubclass for Queue {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sink_pad = gst::Pad::new_from_template(&templ, "sink");
+        let sink_pad = gst::Pad::new_from_template(&templ, Some("sink"));
         let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, "src");
+        let src_pad = gst::Pad::new_from_template(&templ, Some("src"));
 
         sink_pad.set_chain_function(|pad, parent, buffer| {
             Queue::catch_panic_pad_function(
@@ -957,5 +957,5 @@ impl ElementImpl for Queue {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "ts-queue", 0, Queue::get_type())
+    gst::Element::register(Some(plugin), "ts-queue", 0, Queue::get_type())
 }

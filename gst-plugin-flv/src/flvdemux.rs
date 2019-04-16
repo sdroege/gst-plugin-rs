@@ -136,7 +136,7 @@ impl ObjectSubclass for FlvDemux {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, "sink");
+        let sinkpad = gst::Pad::new_from_template(&templ, Some("sink"));
 
         sinkpad.set_activate_function(|pad, parent| {
             FlvDemux::catch_panic_pad_function(
@@ -644,7 +644,7 @@ impl FlvDemux {
 
     fn create_srcpad(&self, element: &gst::Element, name: &str, caps: &gst::Caps) -> gst::Pad {
         let templ = element.get_element_class().get_pad_template(name).unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, name);
+        let srcpad = gst::Pad::new_from_template(&templ, Some(name));
 
         srcpad.set_event_function(|pad, parent, event| {
             FlvDemux::catch_panic_pad_function(
@@ -664,7 +664,7 @@ impl FlvDemux {
 
         srcpad.set_active(true).unwrap();
 
-        let full_stream_id = srcpad.create_stream_id(element, name).unwrap();
+        let full_stream_id = srcpad.create_stream_id(element, Some(name)).unwrap();
         // FIXME group id
         srcpad.push_event(gst::Event::new_stream_start(&full_stream_id).build());
         srcpad.push_event(gst::Event::new_caps(&caps).build());
@@ -1580,5 +1580,5 @@ impl Metadata {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "rsflvdemux", 256 + 100, FlvDemux::get_type())
+    gst::Element::register(Some(plugin), "rsflvdemux", 256 + 100, FlvDemux::get_type())
 }

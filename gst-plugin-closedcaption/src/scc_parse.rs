@@ -480,9 +480,9 @@ impl ObjectSubclass for SccParse {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, "sink");
+        let sinkpad = gst::Pad::new_from_template(&templ, Some("sink"));
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, "src");
+        let srcpad = gst::Pad::new_from_template(&templ, Some("src"));
 
         SccParse::set_pad_functions(&sinkpad, &srcpad);
 
@@ -559,5 +559,5 @@ impl ElementImpl for SccParse {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "sccparse", 0, SccParse::get_type())
+    gst::Element::register(Some(plugin), "sccparse", 0, SccParse::get_type())
 }

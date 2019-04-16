@@ -947,7 +947,7 @@ impl ObjectSubclass for UdpSrc {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, "src");
+        let src_pad = gst::Pad::new_from_template(&templ, Some("src"));
 
         src_pad.set_event_function(|pad, parent, event| {
             UdpSrc::catch_panic_pad_function(
@@ -1139,5 +1139,5 @@ impl ElementImpl for UdpSrc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "ts-udpsrc", 0, UdpSrc::get_type())
+    gst::Element::register(Some(plugin), "ts-udpsrc", 0, UdpSrc::get_type())
 }

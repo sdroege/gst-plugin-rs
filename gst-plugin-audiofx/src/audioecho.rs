@@ -316,7 +316,7 @@ impl BaseTransformImpl for AudioEcho {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "rsaudioecho", 0, AudioEcho::get_type())
+    gst::Element::register(Some(plugin), "rsaudioecho", 0, AudioEcho::get_type())
 }
 
 struct RingBuffer {

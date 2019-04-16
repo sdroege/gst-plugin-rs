@@ -324,5 +324,5 @@ impl URIHandlerImpl for FileSink {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "rsfilesink", 256 + 100, FileSink::get_type())
+    gst::Element::register(Some(plugin), "rsfilesink", 256 + 100, FileSink::get_type())
 }

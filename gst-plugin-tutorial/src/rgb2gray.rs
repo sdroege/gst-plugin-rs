@@ -567,5 +567,5 @@ impl BaseTransformImpl for Rgb2Gray {
 // the name "rsrgb2gray" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(plugin, "rsrgb2gray", 0, Rgb2Gray::get_type())
+    gst::Element::register(Some(plugin), "rsrgb2gray", 0, Rgb2Gray::get_type())
 }
