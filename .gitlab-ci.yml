@@ -17,6 +17,8 @@ stages:
       libssl-dev
       liborc-0.4-dev
       libglib2.0-dev
+      libgdk-pixbuf2.0-dev
+      libgtk-3-dev
       libxml2-dev
       libegl1-mesa
       libgles2-mesa
@@ -48,6 +50,9 @@ stages:
   script:
     - cargo build --all --color=always
     - cargo test --all --color=always
+    - cargo build --all-features --all --color=always
+    - cargo test --all-features --all --color=always
+    - cargo build --all-features --examples --all --color=always
 
 test 1.31:
   # 1.31 img
