@@ -151,9 +151,15 @@ fn create_pipeline() -> (
     ])
     .unwrap();
 
-    video_parse.link_pads("src", &togglerecord, "sink").unwrap();
-    togglerecord.link_pads("src", &mux_queue1, "sink").unwrap();
-    mux_queue1.link_pads("src", &mux, "video_%u").unwrap();
+    video_parse
+        .link_pads(Some("src"), &togglerecord, Some("sink"))
+        .unwrap();
+    togglerecord
+        .link_pads(Some("src"), &mux_queue1, Some("sink"))
+        .unwrap();
+    mux_queue1
+        .link_pads(Some("src"), &mux, Some("video_%u"))
+        .unwrap();
 
     gst::Element::link_many(&[
         &audio_src,
@@ -174,12 +180,14 @@ fn create_pipeline() -> (
     .unwrap();
 
     audio_parse
-        .link_pads("src", &togglerecord, "sink_0")
+        .link_pads(Some("src"), &togglerecord, Some("sink_0"))
         .unwrap();
     togglerecord
-        .link_pads("src_0", &mux_queue2, "sink")
+        .link_pads(Some("src_0"), &mux_queue2, Some("sink"))
         .unwrap();
-    mux_queue2.link_pads("src", &mux, "audio_%u").unwrap();
+    mux_queue2
+        .link_pads(Some("src"), &mux, Some("audio_%u"))
+        .unwrap();
 
     gst::Element::link_many(&[&mux, &file_sink]).unwrap();
 
@@ -203,9 +211,9 @@ fn create_ui(app: &gtk::Application) {
     vbox.pack_start(&video_widget, true, true, 0);
 
     let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    let position_label = gtk::Label::new("Position: 00:00:00");
+    let position_label = gtk::Label::new(Some("Position: 00:00:00"));
     hbox.pack_start(&position_label, true, true, 5);
-    let recorded_duration_label = gtk::Label::new("Recorded: 00:00:00");
+    let recorded_duration_label = gtk::Label::new(Some("Recorded: 00:00:00"));
     hbox.pack_start(&recorded_duration_label, true, true, 5);
     vbox.pack_start(&hbox, false, false, 5);
 
