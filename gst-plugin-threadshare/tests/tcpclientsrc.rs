@@ -111,7 +111,7 @@ fn test_push() {
     assert!(eos);
     let samples = samples.lock().unwrap();
     for sample in samples.iter() {
-        assert_eq!(Some(&caps), sample.get_caps().as_ref());
+        assert_eq!(Some(caps.as_ref()), sample.get_caps());
     }
 
     let total_received_size = samples.iter().fold(0, |acc, sample| {
