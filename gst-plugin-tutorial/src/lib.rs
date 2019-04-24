@@ -18,6 +18,7 @@ extern crate byte_slice_cast;
 extern crate num_traits;
 
 mod identity;
+mod progressbin;
 mod rgb2gray;
 mod sinesrc;
 
@@ -27,6 +28,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     rgb2gray::register(plugin)?;
     sinesrc::register(plugin)?;
     identity::register(plugin)?;
+    progressbin::register(plugin)?;
     Ok(())
 }
 
