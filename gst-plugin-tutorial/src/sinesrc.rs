@@ -518,7 +518,7 @@ impl BaseSrcImpl for SineSrc {
             QueryView::Scheduling(ref mut q) => {
                 q.set(gst::SchedulingFlags::SEQUENTIAL, 1, -1, 0);
                 q.add_scheduling_modes(&[gst::PadMode::Push]);
-                return true;
+                true
             }
             // In Live mode we will have a latency equal to the number of samples in each buffer.
             // We can't output samples before they were produced, and the last sample of a buffer
@@ -533,14 +533,13 @@ impl BaseSrcImpl for SineSrc {
                         .unwrap();
                     gst_debug!(self.cat, obj: element, "Returning latency {}", latency);
                     q.set(settings.is_live, latency, gst::CLOCK_TIME_NONE);
-                    return true;
+                    true
                 } else {
-                    return false;
+                    false
                 }
             }
-            _ => (),
+            _ => BaseSrcImplExt::parent_query(self, element, query),
         }
-        BaseSrcImplExt::parent_query(self, element, query)
     }
 
     // Creates the audio buffers
