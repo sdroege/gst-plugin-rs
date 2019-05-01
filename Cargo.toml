@@ -10,6 +10,7 @@ members = [
     "gst-plugin-tutorial",
     "gst-plugin-closedcaption",
     "gst-plugin-sodium",
+    "gst-plugin-cdg",
 ]
 
 [profile.release]
