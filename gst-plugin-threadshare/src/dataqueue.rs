@@ -32,7 +32,7 @@ lazy_static! {
     static ref DATA_QUEUE_CAT: gst::DebugCategory = gst::DebugCategory::new(
         "ts-dataqueue",
         gst::DebugColorFlags::empty(),
-        "Thread-sharing queue",
+        Some("Thread-sharing queue"),
     );
 }
 

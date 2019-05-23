@@ -440,7 +440,7 @@ impl MccEnc {
                     .build();
                 self.srcpad.push_event(gst::Event::new_caps(&caps).build())
             }
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 
@@ -453,7 +453,7 @@ impl MccEnc {
                 gst_log!(self.cat, obj: pad, "Dropping seek event");
                 false
             }
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 
@@ -473,7 +473,7 @@ impl MccEnc {
                 );
                 true
             }
-            _ => pad.query_default(element, query),
+            _ => pad.query_default(Some(element), query),
         }
     }
 }
@@ -498,7 +498,7 @@ impl ObjectSubclass for MccEnc {
             cat: gst::DebugCategory::new(
                 "mccenc",
                 gst::DebugColorFlags::empty(),
-                "Mcc Encoder Element",
+                Some("Mcc Encoder Element"),
             ),
             srcpad,
             sinkpad,

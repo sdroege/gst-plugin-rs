@@ -39,7 +39,7 @@ lazy_static! {
         gst::DebugCategory::new(
             "rssodiumencrypter",
             gst::DebugColorFlags::empty(),
-            "Encrypter Element",
+            Some("Encrypter Element"),
         )
     };
 }
@@ -334,9 +334,9 @@ impl Encrypter {
                     }
                 }
 
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 
@@ -347,7 +347,7 @@ impl Encrypter {
 
         match event.view() {
             EventView::Seek(_) => false,
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 
@@ -369,7 +369,7 @@ impl Encrypter {
             }
             QueryView::Duration(ref mut q) => {
                 if q.get_format() != gst::Format::Bytes {
-                    return pad.query_default(element, query);
+                    return pad.query_default(Some(element), query);
                 }
 
                 /* First let's query the bytes duration upstream */
@@ -410,7 +410,7 @@ impl Encrypter {
 
                 true
             }
-            _ => pad.query_default(element, query),
+            _ => pad.query_default(Some(element), query),
         }
     }
 }

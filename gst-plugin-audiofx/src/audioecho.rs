@@ -137,7 +137,7 @@ impl ObjectSubclass for AudioEcho {
             cat: gst::DebugCategory::new(
                 "rsaudioecho",
                 gst::DebugColorFlags::empty(),
-                "Rust audioecho effect",
+                Some("Rust audioecho effect"),
             ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(None),

@@ -844,7 +844,7 @@ impl ObjectSubclass for Queue {
             cat: gst::DebugCategory::new(
                 "ts-queue",
                 gst::DebugColorFlags::empty(),
-                "Thread-sharing queue",
+                Some("Thread-sharing queue"),
             ),
             sink_pad,
             src_pad,

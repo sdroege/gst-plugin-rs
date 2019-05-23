@@ -183,7 +183,7 @@ impl ObjectSubclass for Identity {
             cat: gst::DebugCategory::new(
                 "rsidentity",
                 gst::DebugColorFlags::empty(),
-                "Identity Element",
+                Some("Identity Element"),
             ),
             srcpad,
             sinkpad,

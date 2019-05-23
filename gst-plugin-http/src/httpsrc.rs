@@ -436,7 +436,7 @@ impl ObjectSubclass for HttpSrc {
             cat: gst::DebugCategory::new(
                 "rshttpsrc",
                 gst::DebugColorFlags::empty(),
-                "Rust HTTP source",
+                Some("Rust HTTP source"),
             ),
             client: Client::new(),
             settings: Mutex::new(Default::default()),

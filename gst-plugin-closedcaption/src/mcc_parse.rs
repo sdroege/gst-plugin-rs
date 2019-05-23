@@ -35,7 +35,7 @@ lazy_static! {
         gst::DebugCategory::new(
             "mccparse",
             gst::DebugColorFlags::empty(),
-            "Mcc Parser Element",
+            Some("Mcc Parser Element"),
         )
     };
 }
@@ -1002,14 +1002,14 @@ impl MccParse {
 
                 let _ = self.flush(state);
 
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
             EventView::Eos(_) => {
                 gst_log!(CAT, obj: pad, "Draining");
                 if let Err(err) = self.handle_buffer(element, None, false) {
                     gst_error!(CAT, obj: pad, "Failed to drain parser: {:?}", err);
                 }
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
             _ => {
                 if event.is_sticky()
@@ -1021,7 +1021,7 @@ impl MccParse {
                     state.pending_events.push(event);
                     true
                 } else {
-                    pad.event_default(element, event)
+                    pad.event_default(Some(element), event)
                 }
             }
         }
@@ -1125,7 +1125,7 @@ impl MccParse {
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(e) => self.perform_seek(&e, element),
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 
@@ -1183,7 +1183,7 @@ impl MccParse {
                     self.sinkpad.peer_query(query)
                 }
             }
-            _ => pad.query_default(element, query),
+            _ => pad.query_default(Some(element), query),
         }
     }
 }

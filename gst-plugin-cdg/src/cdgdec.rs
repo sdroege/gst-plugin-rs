@@ -47,7 +47,11 @@ impl ObjectSubclass for CdgDec {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new("cdgdec", gst::DebugColorFlags::empty(), "CDG decoder"),
+            cat: gst::DebugCategory::new(
+                "cdgdec",
+                gst::DebugColorFlags::empty(),
+                Some("CDG decoder"),
+            ),
             cdg_inter: Mutex::new(cdg_renderer::CdgInterpreter::new()),
             output_info: Mutex::new(None),
         }

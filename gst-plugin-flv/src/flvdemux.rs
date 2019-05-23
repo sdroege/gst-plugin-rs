@@ -31,7 +31,7 @@ lazy_static! {
         gst::DebugCategory::new(
             "rsflvdemux",
             gst::DebugColorFlags::empty(),
-            "Rust FLV demuxer",
+            Some("Rust FLV demuxer"),
         )
     };
 }
@@ -388,21 +388,21 @@ impl FlvDemux {
         match event.view() {
             EventView::Eos(..) => {
                 // TODO implement
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
             EventView::Segment(..) => {
                 // TODO implement
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
             EventView::FlushStart(..) => {
                 // TODO implement
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
             EventView::FlushStop(..) => {
                 // TODO implement
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 
@@ -450,7 +450,7 @@ impl FlvDemux {
                     false
                 }
             }
-            _ => pad.query_default(element, query),
+            _ => pad.query_default(Some(element), query),
         }
     }
 
@@ -462,7 +462,7 @@ impl FlvDemux {
                 // TODO: Implement
                 false
             }
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 

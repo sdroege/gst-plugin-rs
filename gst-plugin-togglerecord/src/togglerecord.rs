@@ -1165,7 +1165,7 @@ impl ObjectSubclass for ToggleRecord {
             cat: gst::DebugCategory::new(
                 "togglerecord",
                 gst::DebugColorFlags::empty(),
-                "Toggle Record Element",
+                Some("Toggle Record Element"),
             ),
             settings: Mutex::new(Settings::default()),
             state: Mutex::new(State::default()),
@@ -1340,7 +1340,7 @@ impl ElementImpl for ToggleRecord {
         element: &gst::Element,
         _templ: &gst::PadTemplate,
         _name: Option<String>,
-        _caps: Option<&gst::CapsRef>,
+        _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         let mut other_streams = self.other_streams.lock();
         let (ref mut other_streams, ref mut pad_count) = *other_streams;

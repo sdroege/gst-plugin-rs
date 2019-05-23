@@ -33,7 +33,7 @@ lazy_static! {
         gst::DebugCategory::new(
             "sccenc",
             gst::DebugColorFlags::empty(),
-            "Scc Encoder Element",
+            Some("Scc Encoder Element"),
         )
     };
 }
@@ -318,9 +318,9 @@ impl SccEnc {
                     gst_error!(CAT, obj: pad, "Failed to write a line after EOS: {:?}", err);
                     return false;
                 }
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 
@@ -333,7 +333,7 @@ impl SccEnc {
                 gst_log!(CAT, obj: pad, "Dropping seek event");
                 false
             }
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 
@@ -353,7 +353,7 @@ impl SccEnc {
                 );
                 true
             }
-            _ => pad.query_default(element, query),
+            _ => pad.query_default(Some(element), query),
         }
     }
 }

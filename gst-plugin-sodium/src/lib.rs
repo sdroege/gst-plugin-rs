@@ -48,11 +48,11 @@ fn typefind_register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     use gst::{Caps, TypeFind, TypeFindProbability};
 
     TypeFind::register(
-        plugin,
+        Some(plugin),
         "sodium_encrypted_typefind",
         gst::Rank::Primary.to_glib() as u32,
         None,
-        &Caps::new_simple("application/x-sodium-encrypted", &[]),
+        Some(&Caps::new_simple("application/x-sodium-encrypted", &[])),
         |typefind| {
             if let Some(data) = typefind.peek(0, TYPEFIND_HEADER_SIZE as u32) {
                 if data == TYPEFIND_HEADER {

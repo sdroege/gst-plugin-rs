@@ -134,7 +134,11 @@ impl ObjectSubclass for FileSrc {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new("rsfilesrc", gst::DebugColorFlags::empty(), "File Source"),
+            cat: gst::DebugCategory::new(
+                "rsfilesrc",
+                gst::DebugColorFlags::empty(),
+                Some("File Source"),
+            ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
         }

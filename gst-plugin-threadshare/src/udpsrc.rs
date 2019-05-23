@@ -968,7 +968,7 @@ impl ObjectSubclass for UdpSrc {
             cat: gst::DebugCategory::new(
                 "ts-udpsrc",
                 gst::DebugColorFlags::empty(),
-                "Thread-sharing UDP source",
+                Some("Thread-sharing UDP source"),
             ),
             src_pad,
             state: Mutex::new(State::default()),

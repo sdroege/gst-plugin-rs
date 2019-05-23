@@ -34,7 +34,7 @@ lazy_static! {
     static ref SOCKET_CAT: gst::DebugCategory = gst::DebugCategory::new(
         "ts-socket",
         gst::DebugColorFlags::empty(),
-        "Thread-sharing Socket",
+        Some("Thread-sharing Socket"),
     );
 }
 

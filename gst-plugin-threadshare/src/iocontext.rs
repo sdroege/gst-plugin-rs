@@ -38,7 +38,7 @@ lazy_static! {
     static ref CONTEXT_CAT: gst::DebugCategory = gst::DebugCategory::new(
         "ts-context",
         gst::DebugColorFlags::empty(),
-        "Thread-sharing Context",
+        Some("Thread-sharing Context"),
     );
 }
 

@@ -626,7 +626,7 @@ impl ObjectSubclass for TcpClientSrc {
             cat: gst::DebugCategory::new(
                 "ts-tcpclientsrc",
                 gst::DebugColorFlags::empty(),
-                "Thread-sharing TCP Client source",
+                Some("Thread-sharing TCP Client source"),
             ),
             src_pad,
             state: Mutex::new(State::default()),

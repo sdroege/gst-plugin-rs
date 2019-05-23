@@ -122,7 +122,7 @@ impl ObjectSubclass for Rgb2Gray {
             cat: gst::DebugCategory::new(
                 "rsrgb2gray",
                 gst::DebugColorFlags::empty(),
-                "Rust RGB-GRAY converter",
+                Some("Rust RGB-GRAY converter"),
             ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(None),

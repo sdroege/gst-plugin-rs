@@ -207,7 +207,7 @@ impl ObjectSubclass for SineSrc {
             cat: gst::DebugCategory::new(
                 "rssinesrc",
                 gst::DebugColorFlags::empty(),
-                "Rust Sine Wave Source",
+                Some("Rust Sine Wave Source"),
             ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
@@ -437,7 +437,7 @@ impl BaseSrcImpl for SineSrc {
     fn set_caps(
         &self,
         element: &gst_base::BaseSrc,
-        caps: &gst::CapsRef,
+        caps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
         use std::f64::consts::PI;
 

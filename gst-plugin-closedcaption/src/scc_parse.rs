@@ -35,7 +35,7 @@ lazy_static! {
         gst::DebugCategory::new(
             "sccparse",
             gst::DebugColorFlags::empty(),
-            "Scc Parser Element",
+            Some("Scc Parser Element"),
         )
     };
 }
@@ -401,14 +401,14 @@ impl SccParse {
                 state.last_position = gst::ClockTime::from_seconds(0);
                 state.last_timecode = None;
 
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
             EventView::Eos(_) => {
                 gst_log!(CAT, obj: pad, "Draining");
                 if let Err(err) = self.handle_buffer(element, None) {
                     gst_error!(CAT, obj: pad, "Failed to drain parser: {:?}", err);
                 }
-                pad.event_default(element, event)
+                pad.event_default(Some(element), event)
             }
             _ => {
                 if event.is_sticky()
@@ -420,7 +420,7 @@ impl SccParse {
                     state.pending_events.push(event);
                     true
                 } else {
-                    pad.event_default(element, event)
+                    pad.event_default(Some(element), event)
                 }
             }
         }
@@ -435,7 +435,7 @@ impl SccParse {
                 gst_log!(CAT, obj: pad, "Dropping seek event");
                 false
             }
-            _ => pad.event_default(element, event),
+            _ => pad.event_default(Some(element), event),
         }
     }
 
@@ -465,7 +465,7 @@ impl SccParse {
                     self.sinkpad.peer_query(query)
                 }
             }
-            _ => pad.query_default(element, query),
+            _ => pad.query_default(Some(element), query),
         }
     }
 }

@@ -120,7 +120,11 @@ impl ObjectSubclass for FileSink {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new("rsfilesink", gst::DebugColorFlags::empty(), "File Sink"),
+            cat: gst::DebugCategory::new(
+                "rsfilesink",
+                gst::DebugColorFlags::empty(),
+                Some("File Sink"),
+            ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
         }
@@ -252,7 +256,7 @@ impl BaseSinkImpl for FileSink {
     fn render(
         &self,
         element: &gst_base::BaseSink,
-        buffer: &gst::BufferRef,
+        buffer: &gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
         let (file, position) = match *state {

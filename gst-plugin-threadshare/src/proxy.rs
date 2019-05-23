@@ -559,7 +559,7 @@ impl ProxySink {
     ) -> bool {
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
 
-        pad.query_default(element, query)
+        pad.query_default(Some(element), query)
     }
 
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
@@ -693,7 +693,7 @@ impl ObjectSubclass for ProxySink {
             cat: gst::DebugCategory::new(
                 "ts-proxysink",
                 gst::DebugColorFlags::empty(),
-                "Thread-sharing proxy sink",
+                Some("Thread-sharing proxy sink"),
             ),
             sink_pad,
             state: Mutex::new(StateSink::default()),
@@ -1221,7 +1221,7 @@ impl ObjectSubclass for ProxySrc {
             cat: gst::DebugCategory::new(
                 "ts-proxysrc",
                 gst::DebugColorFlags::empty(),
-                "Thread-sharing proxy source",
+                Some("Thread-sharing proxy source"),
             ),
             src_pad,
             state: Mutex::new(StateSrc::default()),

@@ -59,7 +59,7 @@ impl ObjectSubclass for ProgressBin {
             cat: gst::DebugCategory::new(
                 "rsprogressbin",
                 gst::DebugColorFlags::empty(),
-                "Progress printing Bin",
+                Some("Progress printing Bin"),
             ),
             progress,
             srcpad,

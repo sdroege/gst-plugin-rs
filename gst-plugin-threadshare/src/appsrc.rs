@@ -563,7 +563,7 @@ impl ObjectSubclass for AppSrc {
             cat: gst::DebugCategory::new(
                 "ts-appsrc",
                 gst::DebugColorFlags::empty(),
-                "Thread-sharing app source",
+                Some("Thread-sharing app source"),
             ),
             src_pad,
             state: Mutex::new(State::default()),

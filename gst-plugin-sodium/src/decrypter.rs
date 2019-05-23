@@ -36,7 +36,7 @@ lazy_static! {
         gst::DebugCategory::new(
             "rssodiumdecrypter",
             gst::DebugColorFlags::empty(),
-            "Decrypter Element",
+            Some("Decrypter Element"),
         )
     };
 }
@@ -328,7 +328,7 @@ impl Decrypter {
             }
             QueryView::Duration(ref mut q) => {
                 if q.get_format() != gst::Format::Bytes {
-                    return pad.query_default(element, query);
+                    return pad.query_default(Some(element), query);
                 }
 
                 /* First let's query the bytes duration upstream */
@@ -370,7 +370,7 @@ impl Decrypter {
 
                 true
             }
-            _ => pad.query_default(element, query),
+            _ => pad.query_default(Some(element), query),
         }
     }
 
