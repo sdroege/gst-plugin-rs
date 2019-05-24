@@ -10,7 +10,7 @@ glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
 gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-byte-slice-cast = "0.2"
+byte-slice-cast = "0.3"
 num-traits = "0.2"
 
 [lib]
