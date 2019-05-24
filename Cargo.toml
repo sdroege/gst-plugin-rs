@@ -12,6 +12,7 @@ members = [
     "gst-plugin-sodium",
     "gst-plugin-cdg",
     "gst-plugin-rav1e",
+    "gst-plugin-s3",
 ]
 
 [profile.release]

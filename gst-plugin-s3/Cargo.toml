@@ -1,0 +1,23 @@
+[package]
+name = "gst-plugin-s3"
+version = "0.5.0"
+authors = ["Arun Raghavan <arun@arunraghavan.net>"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
+license = "MIT/Apache-2.0"
+edition = "2018"
+
+[dependencies]
+bytes = "0.4"
+futures = "0.1"
+glib = { git = "https://github.com/gtk-rs/glib" }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing", "v1_12"] }
+gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing", "v1_12"] }
+rusoto_core = "0.39.0"
+rusoto_s3 = "0.39.0"
+url = "1.7"
+tokio = "0.1"
+
+[lib]
+name = "gsts3"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
