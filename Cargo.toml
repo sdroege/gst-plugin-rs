@@ -11,6 +11,7 @@ members = [
     "gst-plugin-closedcaption",
     "gst-plugin-sodium",
     "gst-plugin-cdg",
+    "gst-plugin-rav1e",
 ]
 
 [profile.release]

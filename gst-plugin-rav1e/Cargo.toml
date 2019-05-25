@@ -1,0 +1,19 @@
+[package]
+name = "gst-plugin-rav1e"
+version = "0.5.0"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
+license = "MIT/Apache-2.0"
+edition = "2018"
+
+[dependencies]
+glib = { git = "https://github.com/gtk-rs/glib" }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
+gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
+gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+rav1e = { git = "https://github.com/xiph/rav1e.git", default-features=false }
+
+[lib]
+name = "gstrav1e"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
