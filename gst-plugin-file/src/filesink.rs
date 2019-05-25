@@ -303,19 +303,18 @@ impl URIHandlerImpl for FileSink {
         })
     }
 
-    fn set_uri(&self, element: &gst::URIHandler, uri: Option<String>) -> Result<(), glib::Error> {
+    fn set_uri(&self, element: &gst::URIHandler, uri: &str) -> Result<(), glib::Error> {
         let element = element.dynamic_cast_ref::<gst_base::BaseSink>().unwrap();
 
         // Special case for "file://" as this is used by some applications to test
         // with `gst_element_make_from_uri` if there's an element that supports the URI protocol
-        let uri = uri.filter(|uri| uri != "file://");
 
-        let file_location = match uri {
-            Some(uri) => Some(FileLocation::try_from_uri_str(&uri)?),
-            None => None,
-        };
-
-        self.set_location(&element, file_location)
+        if uri != "file://" {
+            let file_location = FileLocation::try_from_uri_str(uri)?;
+            self.set_location(&element, Some(file_location))
+        } else {
+            Ok(())
+        }
     }
 
     fn get_uri_type() -> gst::URIType {

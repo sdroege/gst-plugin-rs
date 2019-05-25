@@ -80,11 +80,7 @@ pub struct HttpSrc {
 }
 
 impl HttpSrc {
-    fn set_location(
-        &self,
-        _element: &gst_base::BaseSrc,
-        uri: Option<String>,
-    ) -> Result<(), glib::Error> {
+    fn set_location(&self, _element: &gst_base::BaseSrc, uri: &str) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             return Err(glib::Error::new(
@@ -95,15 +91,7 @@ impl HttpSrc {
 
         let mut settings = self.settings.lock().unwrap();
 
-        let uri = match uri {
-            Some(uri) => uri,
-            None => {
-                settings.location = None;
-                return Ok(());
-            }
-        };
-
-        let uri = Url::parse(uri.as_str()).map_err(|err| {
+        let uri = Url::parse(uri).map_err(|err| {
             glib::Error::new(
                 gst::URIError::BadUri,
                 format!("Failed to parse URI '{}': {:?}", uri, err,).as_str(),
@@ -216,7 +204,7 @@ impl ObjectImpl for HttpSrc {
             subclass::Property("location", ..) => {
                 let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
 
-                let location = value.get::<String>();
+                let location = value.get::<&str>().unwrap();
                 let res = self.set_location(element, location);
 
                 if let Err(err) = res {
@@ -408,7 +396,7 @@ impl URIHandlerImpl for HttpSrc {
         settings.location.as_ref().map(Url::to_string)
     }
 
-    fn set_uri(&self, element: &gst::URIHandler, uri: Option<String>) -> Result<(), glib::Error> {
+    fn set_uri(&self, element: &gst::URIHandler, uri: &str) -> Result<(), glib::Error> {
         let element = element.dynamic_cast_ref::<gst_base::BaseSrc>().unwrap();
 
         self.set_location(&element, uri)

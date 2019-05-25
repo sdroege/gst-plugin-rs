@@ -98,11 +98,7 @@ impl S3Src {
         Ok(S3Client::new(url.region.clone()))
     }
 
-    fn set_uri(
-        self: &S3Src,
-        _: &gst_base::BaseSrc,
-        url_str: Option<String>,
-    ) -> Result<(), glib::Error> {
+    fn set_uri(self: &S3Src, _: &gst_base::BaseSrc, url_str: &str) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
@@ -114,21 +110,15 @@ impl S3Src {
 
         let mut url = self.url.lock().unwrap();
 
-        match url_str {
-            Some(s) => match parse_s3_url(&s) {
-                Ok(s3url) => {
-                    *url = Some(s3url);
-                    Ok(())
-                }
-                Err(_) => Err(gst::Error::new(
-                    gst::URIError::BadUri,
-                    "Could not parse URI",
-                )),
-            },
-            None => {
-                *url = None;
+        match parse_s3_url(&url_str) {
+            Ok(s3url) => {
+                *url = Some(s3url);
                 Ok(())
             }
+            Err(_) => Err(gst::Error::new(
+                gst::URIError::BadUri,
+                "Could not parse URI",
+            )),
         }
     }
 
@@ -302,9 +292,7 @@ impl ObjectImpl for S3Src {
 
         match *prop {
             subclass::Property("uri", ..) => {
-                self.set_uri(basesrc, value.get()).unwrap_or_else(|err| {
-                    gst_error!(self.cat, obj: basesrc, "Could not set URI: {}", err);
-                });
+                let _ = self.set_uri(basesrc, value.get().unwrap());
             }
             _ => unimplemented!(),
         }
@@ -345,7 +333,7 @@ impl URIHandlerImpl for S3Src {
         self.url.lock().unwrap().as_ref().map(|s| s.to_string())
     }
 
-    fn set_uri(&self, element: &gst::URIHandler, uri: Option<String>) -> Result<(), glib::Error> {
+    fn set_uri(&self, element: &gst::URIHandler, uri: &str) -> Result<(), glib::Error> {
         let basesrc = element.dynamic_cast_ref::<gst_base::BaseSrc>().unwrap();
         self.set_uri(basesrc, uri)
     }
