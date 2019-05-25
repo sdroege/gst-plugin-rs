@@ -20,7 +20,7 @@ use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use gstreamer_base as gst_base;
 use gstreamer_video as gst_video;
-use image::GenericImage;
+use image::GenericImageView;
 use muldiv::MulDiv;
 use std::sync::Mutex;
 
