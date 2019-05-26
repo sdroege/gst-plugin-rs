@@ -24,12 +24,7 @@ use image::GenericImageView;
 use muldiv::MulDiv;
 use std::sync::Mutex;
 
-const CDG_PACKET_SIZE: i32 = 24;
-// 75 sectors/sec * 4 packets/sector = 300 packets/sec
-const CDG_PACKET_PERIOD: u64 = 300;
-
-const CDG_WIDTH: u32 = 300;
-const CDG_HEIGHT: u32 = 216;
+use crate::constants::{CDG_HEIGHT, CDG_PACKET_PERIOD, CDG_PACKET_SIZE, CDG_WIDTH};
 
 struct CdgDec {
     cat: gst::DebugCategory,
