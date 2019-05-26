@@ -161,6 +161,88 @@ enum Context {
     Sixteen(rav1e::Context<u16>),
 }
 
+impl Context {
+    fn receive_packet(&mut self) -> Result<(rav1e::FrameType, u64, Vec<u8>), rav1e::EncoderStatus> {
+        match self {
+            Context::Eight(ref mut context) => context
+                .receive_packet()
+                .map(|packet| (packet.frame_type, packet.number, packet.data)),
+            Context::Sixteen(ref mut context) => context
+                .receive_packet()
+                .map(|packet| (packet.frame_type, packet.number, packet.data)),
+        }
+    }
+
+    fn send_frame(
+        &mut self,
+        in_frame: Option<&gst_video::VideoFrameRef<&gst::BufferRef>>,
+    ) -> Result<(), rav1e::EncoderStatus> {
+        match self {
+            Context::Eight(ref mut context) => {
+                let enc_frame = in_frame.map(|in_frame| {
+                    let mut enc_frame = context.new_frame();
+                    let enc_frame_mut = Arc::get_mut(&mut enc_frame)
+                        .expect("newly created encoder frame not mutable");
+                    enc_frame_mut.planes[0].copy_from_raw_u8(
+                        in_frame.plane_data(0).unwrap(),
+                        in_frame.plane_stride()[0] as usize,
+                        1,
+                    );
+
+                    if in_frame.n_planes() > 1 {
+                        enc_frame_mut.planes[1].copy_from_raw_u8(
+                            in_frame.plane_data(1).unwrap(),
+                            in_frame.plane_stride()[1] as usize,
+                            1,
+                        );
+                        enc_frame_mut.planes[2].copy_from_raw_u8(
+                            in_frame.plane_data(2).unwrap(),
+                            in_frame.plane_stride()[2] as usize,
+                            1,
+                        );
+                    }
+                    enc_frame
+                });
+                context.send_frame(enc_frame)
+            }
+            Context::Sixteen(ref mut context) => {
+                let enc_frame = in_frame.map(|in_frame| {
+                    let mut enc_frame = context.new_frame();
+                    let enc_frame_mut = Arc::get_mut(&mut enc_frame)
+                        .expect("newly created encoder frame not mutable");
+                    enc_frame_mut.planes[0].copy_from_raw_u8(
+                        in_frame.plane_data(0).unwrap(),
+                        in_frame.plane_stride()[0] as usize,
+                        2,
+                    );
+
+                    if in_frame.n_planes() > 1 {
+                        enc_frame_mut.planes[1].copy_from_raw_u8(
+                            in_frame.plane_data(1).unwrap(),
+                            in_frame.plane_stride()[1] as usize,
+                            2,
+                        );
+                        enc_frame_mut.planes[2].copy_from_raw_u8(
+                            in_frame.plane_data(2).unwrap(),
+                            in_frame.plane_stride()[2] as usize,
+                            2,
+                        );
+                    }
+                    enc_frame
+                });
+                context.send_frame(enc_frame)
+            }
+        }
+    }
+
+    fn flush(&mut self) {
+        match self {
+            Context::Eight(ref mut context) => context.flush(),
+            Context::Sixteen(ref mut context) => context.flush(),
+        }
+    }
+}
+
 struct State {
     context: Context,
     video_info: gst_video::VideoInfo,
@@ -429,28 +511,13 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let mut state_guard = self.state.lock().unwrap();
         if let Some(ref mut state) = *state_guard {
-            match state.context {
-                Context::Eight(ref mut context) => {
-                    context.flush();
-                    loop {
-                        match context.receive_packet() {
-                            Ok(_) | Err(rav1e::EncoderStatus::Encoded) => {
-                                gst_debug!(self.cat, obj: element, "Dropping packet on flush",);
-                            }
-                            _ => break,
-                        }
+            state.context.flush();
+            loop {
+                match state.context.receive_packet() {
+                    Ok(_) | Err(rav1e::EncoderStatus::Encoded) => {
+                        gst_debug!(self.cat, obj: element, "Dropping packet on flush",);
                     }
-                }
-                Context::Sixteen(ref mut context) => {
-                    context.flush();
-                    loop {
-                        match context.receive_packet() {
-                            Ok(_) | Err(rav1e::EncoderStatus::Encoded) => {
-                                gst_debug!(self.cat, obj: element, "Dropping packet on flush",);
-                            }
-                            _ => break,
-                        }
-                    }
+                    _ => break,
                 }
             }
         }
@@ -466,16 +533,10 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let mut state_guard = self.state.lock().unwrap();
         if let Some(ref mut state) = *state_guard {
-            match state.context {
-                Context::Eight(ref mut context) => {
-                    let _ = context.send_frame(None);
-                    context.flush();
-                }
-                Context::Sixteen(ref mut context) => {
-                    let _ = context.send_frame(None);
-                    context.flush();
-                }
+            if let Err(rav1e::EncoderStatus::Failure) = state.context.send_frame(None) {
+                return Err(gst::FlowError::Error);
             }
+            state.context.flush();
         }
         drop(state_guard);
         self.output_frames(element)
@@ -498,16 +559,13 @@ impl VideoEncoderImpl for Rav1Enc {
             frame.get_system_frame_number()
         );
 
-        let res = {
-            let input_buffer = frame
-                .get_input_buffer()
-                .expect("frame without input buffer");
+        let input_buffer = frame
+            .get_input_buffer()
+            .expect("frame without input buffer");
 
-            let in_frame = gst_video::VideoFrameRef::from_buffer_ref_readable(
-                &*input_buffer,
-                &state.video_info,
-            )
-            .ok_or_else(|| {
+        let in_frame =
+            gst_video::VideoFrameRef::from_buffer_ref_readable(&*input_buffer, &state.video_info)
+                .ok_or_else(|| {
                 gst_element_error!(
                     element,
                     gst::CoreError::Failed,
@@ -516,59 +574,7 @@ impl VideoEncoderImpl for Rav1Enc {
                 gst::FlowError::Error
             })?;
 
-            match state.context {
-                Context::Eight(ref mut context) => {
-                    let mut enc_frame = context.new_frame();
-                    let enc_frame_mut = Arc::get_mut(&mut enc_frame)
-                        .expect("newly created encoder frame not mutable");
-                    enc_frame_mut.planes[0].copy_from_raw_u8(
-                        in_frame.plane_data(0).unwrap(),
-                        in_frame.plane_stride()[0] as usize,
-                        1,
-                    );
-
-                    if state.video_info.n_planes() > 1 {
-                        enc_frame_mut.planes[1].copy_from_raw_u8(
-                            in_frame.plane_data(1).unwrap(),
-                            in_frame.plane_stride()[1] as usize,
-                            1,
-                        );
-                        enc_frame_mut.planes[2].copy_from_raw_u8(
-                            in_frame.plane_data(2).unwrap(),
-                            in_frame.plane_stride()[2] as usize,
-                            1,
-                        );
-                    }
-                    context.send_frame(enc_frame)
-                }
-                Context::Sixteen(ref mut context) => {
-                    let mut enc_frame = context.new_frame();
-                    let enc_frame_mut = Arc::get_mut(&mut enc_frame)
-                        .expect("newly created encoder frame not mutable");
-                    enc_frame_mut.planes[0].copy_from_raw_u8(
-                        in_frame.plane_data(0).unwrap(),
-                        in_frame.plane_stride()[0] as usize,
-                        2,
-                    );
-
-                    if state.video_info.n_planes() > 1 {
-                        enc_frame_mut.planes[1].copy_from_raw_u8(
-                            in_frame.plane_data(1).unwrap(),
-                            in_frame.plane_stride()[1] as usize,
-                            2,
-                        );
-                        enc_frame_mut.planes[2].copy_from_raw_u8(
-                            in_frame.plane_data(2).unwrap(),
-                            in_frame.plane_stride()[2] as usize,
-                            2,
-                        );
-                    }
-                    context.send_frame(enc_frame)
-                }
-            }
-        };
-
-        match res {
+        match state.context.send_frame(Some(&in_frame)) {
             Ok(_) => {
                 gst_debug!(
                     self.cat,
@@ -601,35 +607,17 @@ impl Rav1Enc {
         };
 
         loop {
-            let res = match state.context {
-                Context::Eight(ref mut context) => context.receive_packet().map(|packet| {
+            match state.context.receive_packet() {
+                Ok((packet_type, packet_number, packet_data)) => {
                     gst_debug!(
                         self.cat,
                         obj: element,
                         "Received packet {} of size {}, frame type {:?}",
-                        packet.number,
-                        packet.data.len(),
-                        packet.frame_type
+                        packet_number,
+                        packet_data.len(),
+                        packet_type
                     );
 
-                    (packet.frame_type, packet.data)
-                }),
-                Context::Sixteen(ref mut context) => context.receive_packet().map(|packet| {
-                    gst_debug!(
-                        self.cat,
-                        obj: element,
-                        "Received packet {} of size {}, frame type {:?}",
-                        packet.number,
-                        packet.data.len(),
-                        packet.frame_type
-                    );
-
-                    (packet.frame_type, packet.data)
-                }),
-            };
-
-            match res {
-                Ok((packet_type, packet_data)) => {
                     let frame = element.get_oldest_frame().expect("frame not found");
                     if packet_type == rav1e::FrameType::KEY {
                         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);
