@@ -14,10 +14,13 @@ extern crate glib;
 extern crate gstreamer as gst;
 
 mod cdgdec;
+mod cdgparse;
 mod constants;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    cdgdec::register(plugin)
+    cdgdec::register(plugin)?;
+    cdgparse::register(plugin)?;
+    Ok(())
 }
 
 gst_plugin_define!(
