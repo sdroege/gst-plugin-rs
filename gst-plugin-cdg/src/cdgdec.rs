@@ -11,20 +11,16 @@ use cdg_renderer;
 use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::Cast;
 use gst;
 use gst::subclass::prelude::*;
-use gst::{ClockTime, SECOND_VAL};
 use gst_video::prelude::VideoDecoderExtManual;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
-use gstreamer_base as gst_base;
 use gstreamer_video as gst_video;
 use image::GenericImageView;
-use muldiv::MulDiv;
 use std::sync::Mutex;
 
-use crate::constants::{CDG_HEIGHT, CDG_PACKET_PERIOD, CDG_PACKET_SIZE, CDG_WIDTH};
+use crate::constants::{CDG_HEIGHT, CDG_WIDTH};
 
 struct CdgDec {
     cat: gst::DebugCategory,
@@ -60,7 +56,7 @@ impl ObjectSubclass for CdgDec {
             "Guillaume Desmottes <guillaume.desmottes@collabora.com>",
         );
 
-        let sink_caps = gst::Caps::new_simple("video/x-cdg", &[]);
+        let sink_caps = gst::Caps::new_simple("video/x-cdg", &[("parsed", &true)]);
         let sink_pad_template = gst::PadTemplate::new(
             "sink",
             gst::PadDirection::Sink,
@@ -92,13 +88,6 @@ impl ObjectSubclass for CdgDec {
 
 impl ObjectImpl for CdgDec {
     glib_object_impl!();
-
-    fn constructed(&self, obj: &glib::Object) {
-        self.parent_constructed(obj);
-
-        let dec = obj.downcast_ref::<gst_video::VideoDecoder>().unwrap();
-        dec.set_packetized(false);
-    }
 }
 
 impl ElementImpl for CdgDec {}
@@ -109,22 +98,6 @@ impl VideoDecoderImpl for CdgDec {
         *out_info = None;
 
         self.parent_start(element)
-    }
-
-    fn parse(
-        &self,
-        element: &gst_video::VideoDecoder,
-        _frame: &gst_video::VideoCodecFrame,
-        adapter: &gst_base::Adapter,
-        _at_eos: bool,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        // FIXME: scan for CDG header
-        if adapter.available() >= CDG_PACKET_SIZE as usize {
-            element.add_to_frame(CDG_PACKET_SIZE);
-            element.have_frame()
-        } else {
-            Ok(gst::FlowSuccess::CustomSuccess)
-        }
     }
 
     fn handle_frame(
@@ -215,16 +188,13 @@ impl VideoDecoderImpl for CdgDec {
             }
         }
 
-        let pts = {
-            // FIXME: this won't work when seeking
-            let nb = frame.get_decode_frame_number() as u64;
-            let ns = nb.mul_div_round(SECOND_VAL, CDG_PACKET_PERIOD).unwrap();
-            ClockTime::from_nseconds(ns)
-        };
+        gst_debug!(
+            self.cat,
+            obj: element,
+            "Finish frame pts={}",
+            frame.get_pts()
+        );
 
-        gst_debug!(self.cat, obj: element, "Finish frame pts={}", pts);
-
-        frame.set_pts(pts);
         element.finish_frame(frame)
     }
 

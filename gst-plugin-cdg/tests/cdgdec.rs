@@ -50,13 +50,14 @@ fn test_cdgdec() {
         .set_property("blocksize", &blocksize)
         .expect("failed to set 'blocksize' property");
 
+    let parse = gst::ElementFactory::make("cdgparse", None).unwrap();
     let dec = gst::ElementFactory::make("cdgdec", None).unwrap();
     let sink = gst::ElementFactory::make("appsink", None).unwrap();
 
     pipeline
-        .add_many(&[&filesrc, &dec, &sink])
+        .add_many(&[&filesrc, &parse, &dec, &sink])
         .expect("failed to add elements to the pipeline");
-    gst::Element::link_many(&[&filesrc, &dec, &sink]).expect("failed to link the elements");
+    gst::Element::link_many(&[&filesrc, &parse, &dec, &sink]).expect("failed to link the elements");
 
     let sink = sink.downcast::<gst_app::AppSink>().unwrap();
     sink.set_callbacks(
