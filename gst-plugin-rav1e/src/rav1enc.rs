@@ -447,7 +447,7 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let settings = self.settings.lock().unwrap();
 
-        // TODO: More properties and properly set colorimetry, chroma site, etc
+        // TODO: More properties, HDR information
         let cfg = rav1e::Config {
             enc: rav1e::EncoderConfig {
                 width: video_info.width() as usize,
@@ -465,6 +465,76 @@ impl VideoEncoderImpl for Rav1Enc {
                     | gst_video::VideoFormat::Y44412le => rav1e::ChromaSampling::Cs444,
                     // gst_video::VideoFormat::Gray8 => rav1e::ChromaSampling::Cs400,
                     _ => unreachable!(),
+                },
+                chroma_sample_position: match video_info.chroma_site() {
+                    gst_video::VideoChromaSite::H_COSITED => rav1e::ChromaSamplePosition::Vertical,
+                    gst_video::VideoChromaSite::COSITED => rav1e::ChromaSamplePosition::Colocated,
+                    _ => rav1e::ChromaSamplePosition::Unknown,
+                },
+                pixel_range: match video_info.colorimetry().range() {
+                    gst_video::VideoColorRange::Range0255 => rav1e::PixelRange::Full,
+                    gst_video::VideoColorRange::Range16235 => rav1e::PixelRange::Limited,
+                    _ => rav1e::PixelRange::Unspecified,
+                },
+                color_description: {
+                    let matrix = match video_info.colorimetry().matrix() {
+                        gst_video::VideoColorMatrix::Rgb => rav1e::MatrixCoefficients::Identity,
+                        gst_video::VideoColorMatrix::Fcc => rav1e::MatrixCoefficients::BT470M,
+                        gst_video::VideoColorMatrix::Bt709 => rav1e::MatrixCoefficients::BT709,
+                        gst_video::VideoColorMatrix::Bt601 => rav1e::MatrixCoefficients::ST170M,
+                        gst_video::VideoColorMatrix::Smpte240m => rav1e::MatrixCoefficients::ST240M,
+                        gst_video::VideoColorMatrix::Bt2020 => {
+                            rav1e::MatrixCoefficients::BT2020NonConstantLuminance
+                        }
+                        _ => rav1e::MatrixCoefficients::Unspecified,
+                    };
+                    let transfer = match video_info.colorimetry().transfer() {
+                        gst_video::VideoTransferFunction::Gamma10 => {
+                            rav1e::TransferCharacteristics::Linear
+                        }
+                        gst_video::VideoTransferFunction::Bt709 => {
+                            rav1e::TransferCharacteristics::BT1886
+                        }
+                        gst_video::VideoTransferFunction::Smpte240m => {
+                            rav1e::TransferCharacteristics::ST240M
+                        }
+                        gst_video::VideoTransferFunction::Srgb => {
+                            rav1e::TransferCharacteristics::SRGB
+                        }
+                        gst_video::VideoTransferFunction::Log100 => {
+                            rav1e::TransferCharacteristics::Logarithmic100
+                        }
+                        gst_video::VideoTransferFunction::Log316 => {
+                            rav1e::TransferCharacteristics::Logarithmic316
+                        }
+                        gst_video::VideoTransferFunction::Bt202012 => {
+                            rav1e::TransferCharacteristics::BT2020Twelve
+                        }
+                        gst_video::VideoTransferFunction::Gamma18
+                        | gst_video::VideoTransferFunction::Gamma20
+                        | gst_video::VideoTransferFunction::Gamma22
+                        | gst_video::VideoTransferFunction::Gamma28
+                        | gst_video::VideoTransferFunction::Adobergb
+                        | _ => rav1e::TransferCharacteristics::Unspecified,
+                    };
+                    let primaries = match video_info.colorimetry().primaries() {
+                        gst_video::VideoColorPrimaries::Bt709 => rav1e::ColorPrimaries::BT709,
+                        gst_video::VideoColorPrimaries::Bt470m => rav1e::ColorPrimaries::BT470M,
+                        gst_video::VideoColorPrimaries::Bt470bg => rav1e::ColorPrimaries::BT470BG,
+                        gst_video::VideoColorPrimaries::Smpte170m => rav1e::ColorPrimaries::ST170M,
+                        gst_video::VideoColorPrimaries::Smpte240m => rav1e::ColorPrimaries::ST240M,
+                        gst_video::VideoColorPrimaries::Film => rav1e::ColorPrimaries::Film,
+                        gst_video::VideoColorPrimaries::Bt2020 => rav1e::ColorPrimaries::BT2020,
+                        gst_video::VideoColorPrimaries::Adobergb | _ => {
+                            rav1e::ColorPrimaries::Unspecified
+                        }
+                    };
+
+                    Some(rav1e::ColorDescription {
+                        color_primaries: primaries,
+                        transfer_characteristics: transfer,
+                        matrix_coefficients: matrix,
+                    })
                 },
                 speed_settings: rav1e::SpeedSettings::from_preset(settings.speed_preset as usize),
                 time_base: if video_info.fps() != gst::Fraction::new(0, 1) {
