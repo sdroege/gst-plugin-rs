@@ -24,7 +24,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    "rshttp",
+    rshttp,
     "Rust HTTP Plugin",
     plugin_init,
     "1.0",

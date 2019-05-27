@@ -51,7 +51,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    "rsclosedcaption",
+    rsclosedcaption,
     "Rust Closed Caption Plugin",
     plugin_init,
     "0.1.0",

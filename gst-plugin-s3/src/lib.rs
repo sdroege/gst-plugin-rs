@@ -22,7 +22,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    "s3src",
+    s3src,
     "Amazon S3 Plugin",
     plugin_init,
     "1.0",

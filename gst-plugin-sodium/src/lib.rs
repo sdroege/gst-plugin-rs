@@ -74,7 +74,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    "rssodium",
+    rssodium,
     "libsodium-based file encryption and decryption",
     plugin_init,
     "1.0",

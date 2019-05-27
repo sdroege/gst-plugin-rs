@@ -32,7 +32,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    "togglerecord",
+    togglerecord,
     "Toggle Record Plugin",
     plugin_init,
     "0.1.0",

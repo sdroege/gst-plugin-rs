@@ -20,7 +20,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    "rav1e",
+    rav1e,
     "rav1e AV1 Encoder Plugin",
     plugin_init,
     "1.0",

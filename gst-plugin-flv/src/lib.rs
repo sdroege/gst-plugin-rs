@@ -25,7 +25,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    "rsflv",
+    rsflv,
     "Rust FLV Plugin",
     plugin_init,
     "1.0",

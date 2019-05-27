@@ -26,7 +26,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    "rsfile",
+    rsfile,
     "Rust File Plugin",
     plugin_init,
     "1.0",

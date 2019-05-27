@@ -38,7 +38,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 // license of the plugin, source package name, binary package name, origin where it comes from
 // and the date/time of release.
 gst_plugin_define!(
-    "rstutorial",
+    rstutorial,
     "Rust Tutorial Plugin",
     plugin_init,
     "1.0",
