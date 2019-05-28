@@ -20,7 +20,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    cdg,
+    rscdg,
     "CDG Plugin",
     plugin_init,
     "1.0",
