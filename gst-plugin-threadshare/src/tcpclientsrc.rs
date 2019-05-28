@@ -675,27 +675,27 @@ impl ObjectImpl for TcpClientSrc {
 
         match *prop {
             subclass::Property("address", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.address.to_value())
             }
             subclass::Property("port", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.port.to_value())
             }
             subclass::Property("caps", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.caps.to_value())
             }
             subclass::Property("chunk-size", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.chunk_size.to_value())
             }
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),

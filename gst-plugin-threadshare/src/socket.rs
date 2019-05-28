@@ -250,7 +250,7 @@ impl<T: SocketRead + 'static> Stream for SocketStream<T> {
 
         gst_debug!(SOCKET_CAT, obj: &inner.element, "Trying to read data");
         let (len, saddr, time) = {
-            let mut buffer = match self.1 {
+            let buffer = match self.1 {
                 Some(ref mut buffer) => buffer,
                 None => match inner.buffer_pool.acquire_buffer(None) {
                     Ok(buffer) => {

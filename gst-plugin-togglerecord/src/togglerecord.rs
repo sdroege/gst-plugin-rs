@@ -350,8 +350,8 @@ impl ToggleRecord {
 
                 let mut rec_state = self.state.lock();
                 rec_state.recording_state = RecordingState::Stopped;
-                rec_state.recording_duration +=
-                    rec_state.last_recording_stop - rec_state.last_recording_start;
+                let advance_by = rec_state.last_recording_stop - rec_state.last_recording_start;
+                rec_state.recording_duration += advance_by;
                 rec_state.last_recording_start = gst::CLOCK_TIME_NONE;
                 rec_state.last_recording_stop = gst::CLOCK_TIME_NONE;
 

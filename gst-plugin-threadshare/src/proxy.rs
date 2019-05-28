@@ -174,7 +174,7 @@ impl SharedQueue {
         if let Some(context) = contexts.get(name) {
             if let Some(context) = context.upgrade() {
                 {
-                    let mut inner = context.lock().unwrap();
+                    let inner = context.lock().unwrap();
                     if (inner.have_sink && as_sink) || (inner.have_src && !as_sink) {
                         return None;
                     }
@@ -722,7 +722,7 @@ impl ObjectImpl for ProxySink {
 
         match *prop {
             subclass::Property("proxy-context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.proxy_context.to_value())
             }
             _ => unimplemented!(),
@@ -1270,27 +1270,27 @@ impl ObjectImpl for ProxySrc {
 
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_buffers.to_value())
             }
             subclass::Property("max-size-bytes", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_bytes.to_value())
             }
             subclass::Property("max-size-time", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_time.to_value())
             }
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
             subclass::Property("proxy-context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.proxy_context.to_value())
             }
             _ => unimplemented!(),

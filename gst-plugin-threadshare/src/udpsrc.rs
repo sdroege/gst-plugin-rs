@@ -97,8 +97,6 @@ impl GioSocketWrapper {
 
     #[cfg(unix)]
     fn get<T: FromRawFd>(&self) -> T {
-        use libc;
-
         unsafe { FromRawFd::from_raw_fd(libc::dup(gio_ffi::g_socket_get_fd(self.socket))) }
     }
 
@@ -699,8 +697,6 @@ impl UdpSrc {
             // Store the socket as used-socket in the settings
             #[cfg(unix)]
             unsafe {
-                use libc;
-
                 let fd = libc::dup(socket.as_raw_fd());
 
                 // This is unsafe because it allows us to share the fd between the socket and the
@@ -1034,27 +1030,27 @@ impl ObjectImpl for UdpSrc {
 
         match *prop {
             subclass::Property("address", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.address.to_value())
             }
             subclass::Property("port", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.port.to_value())
             }
             subclass::Property("reuse", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.reuse.to_value())
             }
             subclass::Property("caps", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.caps.to_value())
             }
             subclass::Property("mtu", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.mtu.to_value())
             }
             subclass::Property("socket", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings
                     .socket
                     .as_ref()
@@ -1062,7 +1058,7 @@ impl ObjectImpl for UdpSrc {
                     .to_value())
             }
             subclass::Property("used-socket", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings
                     .used_socket
                     .as_ref()
@@ -1070,15 +1066,15 @@ impl ObjectImpl for UdpSrc {
                     .to_value())
             }
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
             subclass::Property("retrieve-sender-address", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.retrieve_sender_address.to_value())
             }
             _ => unimplemented!(),

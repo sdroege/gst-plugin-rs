@@ -334,7 +334,7 @@ fn create_ui(app: &gtk::Application) {
     app.connect_shutdown(move |_| {
         pipeline.set_state(gst::State::Null).unwrap();
 
-        bus.remove_watch();
+        bus.remove_watch().unwrap();
 
         if let Some(timeout_id) = timeout_id.borrow_mut().take() {
             glib::source_remove(timeout_id);

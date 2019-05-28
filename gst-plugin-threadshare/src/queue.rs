@@ -890,23 +890,23 @@ impl ObjectImpl for Queue {
 
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_buffers.to_value())
             }
             subclass::Property("max-size-bytes", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_bytes.to_value())
             }
             subclass::Property("max-size-time", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.max_size_time.to_value())
             }
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),

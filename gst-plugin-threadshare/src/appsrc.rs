@@ -608,23 +608,23 @@ impl ObjectImpl for AppSrc {
 
         match *prop {
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.context_wait.to_value())
             }
             subclass::Property("caps", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.caps.to_value())
             }
             subclass::Property("max-buffers", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.max_buffers.to_value())
             }
             subclass::Property("do-timestamp", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 Ok(settings.do_timestamp.to_value())
             }
             _ => unimplemented!(),
