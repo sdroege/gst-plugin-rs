@@ -34,7 +34,7 @@ use std::sync::Mutex;
 lazy_static! {
     static ref CAT: gst::DebugCategory = {
         gst::DebugCategory::new(
-            "rssodiumdecrypter",
+            "sodiumdecrypter",
             gst::DebugColorFlags::empty(),
             Some("Decrypter Element"),
         )
@@ -691,5 +691,5 @@ impl ElementImpl for Decrypter {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "rssodiumdecrypter", 0, Decrypter::get_type())
+    gst::Element::register(Some(plugin), "sodiumdecrypter", 0, Decrypter::get_type())
 }

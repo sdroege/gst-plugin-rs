@@ -83,7 +83,7 @@ fn test_pipeline() {
         .set_property("location", &input_path.to_str().unwrap())
         .expect("failed to set property");
 
-    let dec = gst::ElementFactory::make("rssodiumdecrypter", None).unwrap();
+    let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
     dec.set_property("sender-key", &*SENDER_PUBLIC)
         .expect("failed to set property");
     dec.set_property("receiver-key", &*RECEIVER_PRIVATE)
@@ -176,7 +176,7 @@ fn test_pull_range() {
         .set_property("location", &input_path.to_str().unwrap())
         .expect("failed to set property");
 
-    let dec = gst::ElementFactory::make("rssodiumdecrypter", None).unwrap();
+    let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
     dec.set_property("sender-key", &*SENDER_PUBLIC)
         .expect("failed to set property");
     dec.set_property("receiver-key", &*RECEIVER_PRIVATE)
@@ -286,17 +286,17 @@ fn test_state_changes() {
 
     // NullToReady without keys provided
     {
-        let dec = gst::ElementFactory::make("rssodiumdecrypter", None).unwrap();
+        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
         assert!(dec.change_state(gst::StateChange::NullToReady).is_err());
 
         // Set only receiver key
-        let dec = gst::ElementFactory::make("rssodiumdecrypter", None).unwrap();
+        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
         dec.set_property("receiver-key", &*RECEIVER_PRIVATE)
             .expect("failed to set property");
         assert!(dec.change_state(gst::StateChange::NullToReady).is_err());
 
         // Set only sender key
-        let dec = gst::ElementFactory::make("rssodiumdecrypter", None).unwrap();
+        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
         dec.set_property("sender-key", &*SENDER_PUBLIC)
             .expect("failed to set property");
         assert!(dec.change_state(gst::StateChange::NullToReady).is_err());
@@ -304,7 +304,7 @@ fn test_state_changes() {
 
     // NullToReady, no nonce provided
     {
-        let dec = gst::ElementFactory::make("rssodiumdecrypter", None).unwrap();
+        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
         dec.set_property("sender-key", &*SENDER_PUBLIC)
             .expect("failed to set property");
         dec.set_property("receiver-key", &*RECEIVER_PRIVATE)
@@ -314,7 +314,7 @@ fn test_state_changes() {
 
     // ReadyToNull
     {
-        let dec = gst::ElementFactory::make("rssodiumdecrypter", None).unwrap();
+        let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
         dec.set_property("sender-key", &*SENDER_PUBLIC)
             .expect("failed to set property");
         dec.set_property("receiver-key", &*RECEIVER_PRIVATE)

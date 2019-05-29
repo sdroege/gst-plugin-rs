@@ -75,7 +75,7 @@ fn encrypt_file() {
 
     let mut adapter = gst_base::UniqueAdapter::new();
 
-    let enc = gst::ElementFactory::make("rssodiumencrypter", None).unwrap();
+    let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
     enc.set_property("sender-key", &*SENDER_PRIVATE)
         .expect("failed to set property");
     enc.set_property("receiver-key", &*RECEIVER_PUBLIC)
@@ -114,17 +114,17 @@ fn test_state_changes() {
 
     // NullToReady without keys provided
     {
-        let enc = gst::ElementFactory::make("rssodiumencrypter", None).unwrap();
+        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
         assert!(enc.change_state(gst::StateChange::NullToReady).is_err());
 
         // Set only receiver key
-        let enc = gst::ElementFactory::make("rssodiumencrypter", None).unwrap();
+        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
         enc.set_property("receiver-key", &*RECEIVER_PUBLIC)
             .expect("failed to set property");
         assert!(enc.change_state(gst::StateChange::NullToReady).is_err());
 
         // Set only sender key
-        let enc = gst::ElementFactory::make("rssodiumencrypter", None).unwrap();
+        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
         enc.set_property("sender-key", &*SENDER_PRIVATE)
             .expect("failed to set property");
         assert!(enc.change_state(gst::StateChange::NullToReady).is_err());
@@ -132,7 +132,7 @@ fn test_state_changes() {
 
     // NullToReady
     {
-        let enc = gst::ElementFactory::make("rssodiumencrypter", None).unwrap();
+        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
         enc.set_property("sender-key", &*SENDER_PRIVATE)
             .expect("failed to set property");
         enc.set_property("receiver-key", &*RECEIVER_PUBLIC)
@@ -142,7 +142,7 @@ fn test_state_changes() {
 
     // ReadyToNull
     {
-        let enc = gst::ElementFactory::make("rssodiumencrypter", None).unwrap();
+        let enc = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
         enc.set_property("sender-key", &*SENDER_PRIVATE)
             .expect("failed to set property");
         enc.set_property("receiver-key", &*RECEIVER_PUBLIC)

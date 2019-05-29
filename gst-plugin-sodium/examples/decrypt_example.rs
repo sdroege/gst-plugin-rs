@@ -98,7 +98,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let sender = &Keys::from_file(&sender_keys)?;
 
     let filesrc = gst::ElementFactory::make("filesrc", None).unwrap();
-    let decrypter = gst::ElementFactory::make("rssodiumdecrypter", None).unwrap();
+    let decrypter = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
     let typefind = gst::ElementFactory::make("typefind", None).unwrap();
     let filesink = gst::ElementFactory::make("filesink", None).unwrap();
 
