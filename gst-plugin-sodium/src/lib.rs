@@ -74,13 +74,13 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst_plugin_define!(
-    rssodium,
+    sodium,
     "libsodium-based file encryption and decryption",
     plugin_init,
     "1.0",
     "MIT/X11",
-    "rssodium",
-    "rssodium",
+    "sodium",
+    "sodium",
     "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
     "2019-03-18"
 );

@@ -31,7 +31,7 @@ git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package="gstreamer-app"
 
 [lib]
-name = "gstrssodium"
+name = "gstsodium"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 

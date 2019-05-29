@@ -27,7 +27,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate pretty_assertions;
 
-extern crate gstrssodium;
+extern crate gstsodium;
 
 use glib::prelude::*;
 use gst::prelude::*;
@@ -59,7 +59,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstrssodium::plugin_register_static().unwrap();
+        gstsodium::plugin_register_static().unwrap();
     });
 }
 
