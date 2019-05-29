@@ -18,6 +18,6 @@ image = "0.21"
 muldiv = "0.2"
 
 [lib]
-name = "gstrscdg"
+name = "gstcdg"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"

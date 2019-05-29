@@ -11,7 +11,7 @@ use gstreamer as gst;
 use gstreamer_app as gst_app;
 use std::path::PathBuf;
 
-use gstrscdg;
+use gstcdg;
 
 fn init() {
     use std::sync::{Once, ONCE_INIT};
@@ -19,7 +19,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstrscdg::plugin_register_static().expect("cdgdec tests");
+        gstcdg::plugin_register_static().expect("cdgdec tests");
     });
 }
 
