@@ -221,5 +221,10 @@ impl VideoDecoderImpl for CdgDec {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "cdgdec", 0, CdgDec::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "cdgdec",
+        gst::Rank::Primary,
+        CdgDec::get_type(),
+    )
 }

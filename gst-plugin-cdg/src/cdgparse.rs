@@ -223,5 +223,10 @@ impl BaseParseImpl for CdgParse {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "cdgparse", 0, CdgParse::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "cdgparse",
+        gst::Rank::Primary,
+        CdgParse::get_type(),
+    )
 }
