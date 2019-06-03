@@ -39,12 +39,12 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 // and the date/time of release.
 gst_plugin_define!(
     rstutorial,
-    "Rust Tutorial Plugin",
+    env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
-    "1.0",
+    concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
     "MIT/X11",
-    "rstutorial",
-    "rstutorial",
-    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
-    "2017-12-30"
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_REPOSITORY"),
+    env!("BUILD_REL_DATE")
 );

@@ -1,0 +1,9 @@
+[package]
+name = "gst-plugin-version-helper"
+version = "0.1.0"
+authors = ["Sajeer Ahamed <ahamedsajeer.15.15@cse.mrt.ac.lk>"]
+edition = "2018"
+
+[dependencies]
+git2 = "0.8.0"
+chrono = "0.4.6"

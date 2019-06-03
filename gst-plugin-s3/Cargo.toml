@@ -4,6 +4,7 @@ version = "0.5.0"
 authors = ["Arun Raghavan <arun@arunraghavan.net>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
 license = "MIT/Apache-2.0"
+description = "Amazon S3 Plugin"
 edition = "2018"
 
 [dependencies]
@@ -21,3 +22,6 @@ tokio = "0.1"
 name = "gsts3"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../gst-plugin-version-helper" }

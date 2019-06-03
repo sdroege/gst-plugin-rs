@@ -9,6 +9,7 @@ members = [
     "gst-plugin-threadshare",
     "gst-plugin-tutorial",
     "gst-plugin-closedcaption",
+    "gst-plugin-version-helper",
     "gst-plugin-sodium",
     "gst-plugin-cdg",
     "gst-plugin-rav1e",

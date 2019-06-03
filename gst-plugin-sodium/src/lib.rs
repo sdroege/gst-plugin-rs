@@ -1,5 +1,3 @@
-// lib.rs
-//
 // Copyright 2019 Jordan Petridis <jordan@centricular.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -75,12 +73,12 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
 gst_plugin_define!(
     sodium,
-    "libsodium-based file encryption and decryption",
+    env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
-    "1.0",
+    concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
     "MIT/X11",
-    "sodium",
-    "sodium",
-    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
-    "2019-03-18"
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_REPOSITORY"),
+    env!("BUILD_REL_DATE")
 );

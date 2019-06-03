@@ -1,8 +1,10 @@
 [package]
 name = "gst-plugin-threadshare"
-version = "0.1.0"
+version = "0.5.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1+"
+description = "Threadshare Plugin"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
 libc = "0.2"
@@ -47,3 +49,6 @@ path = "examples/udpsrc_benchmark_sender.rs"
 [[example]]
 name = "tcpclientsrc-benchmark-sender"
 path = "examples/tcpclientsrc_benchmark_sender.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../gst-plugin-version-helper" }

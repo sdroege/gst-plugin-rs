@@ -27,12 +27,12 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
 gst_plugin_define!(
     rsfile,
-    "Rust File Plugin",
+    env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
-    "1.0",
+    concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
     "MIT/X11",
-    "rsfile",
-    "rsfile",
-    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
-    "2016-12-08"
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_REPOSITORY"),
+    env!("BUILD_REL_DATE")
 );

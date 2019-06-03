@@ -21,12 +21,12 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
 gst_plugin_define!(
     rav1e,
-    "rav1e AV1 Encoder Plugin",
+    env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
-    "1.0",
+    concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
     "MIT/X11",
-    "rav1e",
-    "rav1e",
-    "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs",
-    "2019-05-25"
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_REPOSITORY"),
+    env!("BUILD_REL_DATE")
 );

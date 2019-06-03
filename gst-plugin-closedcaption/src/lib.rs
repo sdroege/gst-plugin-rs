@@ -52,12 +52,12 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
 gst_plugin_define!(
     rsclosedcaption,
-    "Rust Closed Caption Plugin",
+    env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
-    "0.1.0",
+    concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
     "LGPL",
-    "rsclosedcaption",
-    "rsclosedcaption",
-    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
-    "2018-12-17"
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_REPOSITORY"),
+    env!("BUILD_REL_DATE")
 );

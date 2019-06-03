@@ -73,14 +73,14 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
 gst_plugin_define!(
     threadshare,
-    "Threadshare Plugin",
+    env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
-    "0.1.0",
+    concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
     "LGPL",
-    "threadshare",
-    "threadshare",
-    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
-    "2018-03-01"
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_REPOSITORY"),
+    env!("BUILD_REL_DATE")
 );
 
 pub fn set_element_flags<T: glib::IsA<gst::Object> + glib::IsA<gst::Element>>(

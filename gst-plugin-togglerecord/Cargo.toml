@@ -3,6 +3,8 @@ name = "gst-plugin-togglerecord"
 version = "0.5.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1+"
+description = "Toggle Record Plugin"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
 glib = { git = "https://github.com/gtk-rs/glib", features = ["subclassing"] }
@@ -24,3 +26,6 @@ path = "src/lib.rs"
 name = "gtk-recording"
 path = "examples/gtk_recording.rs"
 required-features = ["gtk", "gio"]
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../gst-plugin-version-helper" }

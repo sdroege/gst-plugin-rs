@@ -4,6 +4,7 @@ version = "0.5.0"
 authors = ["Guillaume Desmottes <guillaume.desmottes@collabora.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
 license = "MIT/Apache-2.0"
+description = "CDG Plugin"
 edition = "2018"
 
 [dependencies]
@@ -21,3 +22,6 @@ muldiv = "0.2"
 name = "gstcdg"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../gst-plugin-version-helper" }

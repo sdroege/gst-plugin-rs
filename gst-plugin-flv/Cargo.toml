@@ -5,6 +5,7 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 edition = "2018"
+description = "Rust FLV Plugin"
 
 [dependencies]
 url = "1.1"
@@ -23,3 +24,6 @@ smallvec = "0.6"
 name = "gstrsflv"
 crate-type = ["cdylib"]
 path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../gst-plugin-version-helper" }

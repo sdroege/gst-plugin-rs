@@ -23,12 +23,12 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
 gst_plugin_define!(
     s3,
-    "Amazon S3 Plugin",
+    env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
-    "1.0",
+    concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
     "MIT/X11",
-    "s3",
-    "s3",
-    "https://github.com/ford-prefect/gst-plugin-s3",
-    "2017-04-17"
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_REPOSITORY"),
+    env!("BUILD_REL_DATE")
 );

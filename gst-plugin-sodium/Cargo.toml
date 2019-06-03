@@ -2,6 +2,8 @@
 name = "gst-plugin-sodium"
 version = "0.1.0"
 authors = ["Jordan Petridis <jordan@centricular.com>"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
+description = "libsodium-based file encryption and decryption"
 edition = "2018"
 
 [dependencies]
@@ -49,3 +51,6 @@ required-features = ["serde", "serde_json", "clap"]
 name = "decrypt-example"
 path = "examples/decrypt_example.rs"
 required-features = ["serde", "serde_json", "clap"]
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../gst-plugin-version-helper" }
