@@ -97,6 +97,8 @@ impl State {
         framerate: gst::Fraction,
         element: &gst::Element,
     ) -> Result<gst_video::ValidVideoTimeCode, gst::FlowError> {
+        use std::convert::TryInto;
+
         let timecode = gst_video::VideoTimeCode::new(
             framerate,
             None,

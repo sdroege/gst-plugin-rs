@@ -327,6 +327,8 @@ impl Decrypter {
                 true
             }
             QueryView::Duration(ref mut q) => {
+                use std::convert::TryInto;
+
                 if q.get_format() != gst::Format::Bytes {
                     return pad.query_default(Some(element), query);
                 }
@@ -339,7 +341,7 @@ impl Decrypter {
                     return false;
                 }
 
-                let size = match peer_query.get_result().try_into_bytes().unwrap() {
+                let size = match peer_query.get_result().try_into().unwrap() {
                     gst::format::Bytes(Some(size)) => size,
                     gst::format::Bytes(None) => {
                         gst_error!(CAT, "Failed to query upstream duration");

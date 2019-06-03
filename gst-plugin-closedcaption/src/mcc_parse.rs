@@ -25,6 +25,7 @@ use gst::subclass::prelude::*;
 use gst_video::{self, ValidVideoTimeCode};
 
 use std::cmp;
+use std::convert::TryInto;
 use std::sync::{Mutex, MutexGuard};
 
 use crate::line_reader::LineReader;
@@ -735,7 +736,7 @@ impl MccParse {
             ));
         }
 
-        let size = match q.get_result().try_into_bytes().unwrap() {
+        let size = match q.get_result().try_into().unwrap() {
             gst::format::Bytes(Some(size)) => size,
             gst::format::Bytes(None) => {
                 return Err(gst_loggable_error!(
@@ -1037,7 +1038,7 @@ impl MccParse {
 
         let (rate, flags, start_type, start, stop_type, stop) = event.get();
 
-        let mut start = match start.try_into_time() {
+        let mut start = match start.try_into() {
             Ok(start) => start,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");
@@ -1045,7 +1046,7 @@ impl MccParse {
             }
         };
 
-        let mut stop = match stop.try_into_time() {
+        let mut stop = match stop.try_into() {
             Ok(stop) => stop,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");

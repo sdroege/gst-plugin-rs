@@ -111,6 +111,8 @@ fn test_parse() {
 /// Test that ensures timecode parsing is the expected one
 #[test]
 fn test_timecodes() {
+    use std::convert::TryInto;
+
     init();
     let data = include_bytes!("timecodes-cut-down-sample.scc").as_ref();
 
