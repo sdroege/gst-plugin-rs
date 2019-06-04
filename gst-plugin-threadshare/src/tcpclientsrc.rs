@@ -755,5 +755,10 @@ impl ElementImpl for TcpClientSrc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "ts-tcpclientsrc", 0, TcpClientSrc::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "ts-tcpclientsrc",
+        gst::Rank::None,
+        TcpClientSrc::get_type(),
+    )
 }

@@ -858,5 +858,10 @@ impl BaseSrcImpl for SineSrc {
 // the name "sinesrc" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "rssinesrc", 0, SineSrc::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "rssinesrc",
+        gst::Rank::None,
+        SineSrc::get_type(),
+    )
 }

@@ -42,13 +42,12 @@ mod decrypter;
 mod encrypter;
 
 fn typefind_register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    use glib::translate::ToGlib;
     use gst::{Caps, TypeFind, TypeFindProbability};
 
     TypeFind::register(
         Some(plugin),
         "sodium_encrypted_typefind",
-        gst::Rank::Primary.to_glib() as u32,
+        gst::Rank::Primary,
         None,
         Some(&Caps::new_simple("application/x-sodium-encrypted", &[])),
         |typefind| {

@@ -630,5 +630,5 @@ impl ElementImpl for MccEnc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "mccenc", 0, MccEnc::get_type())
+    gst::Element::register(Some(plugin), "mccenc", gst::Rank::None, MccEnc::get_type())
 }

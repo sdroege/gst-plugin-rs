@@ -381,5 +381,10 @@ impl URIHandlerImpl for FileSrc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "rsfilesrc", 256 + 100, FileSrc::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "rsfilesrc",
+        gst::Rank::Primary + 100,
+        FileSrc::get_type(),
+    )
 }

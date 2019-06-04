@@ -177,5 +177,10 @@ impl BinImpl for ProgressBin {
 // the name "rsprogressbin" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "rsprogressbin", 0, ProgressBin::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "rsprogressbin",
+        gst::Rank::None,
+        ProgressBin::get_type(),
+    )
 }

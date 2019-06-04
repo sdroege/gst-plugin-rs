@@ -957,5 +957,5 @@ impl ElementImpl for Queue {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "ts-queue", 0, Queue::get_type())
+    gst::Element::register(Some(plugin), "ts-queue", gst::Rank::None, Queue::get_type())
 }

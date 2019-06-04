@@ -1580,5 +1580,10 @@ impl Metadata {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "rsflvdemux", 256 + 100, FlvDemux::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "rsflvdemux",
+        gst::Rank::Primary + 100,
+        FlvDemux::get_type(),
+    )
 }

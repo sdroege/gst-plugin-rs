@@ -1399,5 +1399,10 @@ impl ElementImpl for ToggleRecord {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "togglerecord", 0, ToggleRecord::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "togglerecord",
+        gst::Rank::None,
+        ToggleRecord::get_type(),
+    )
 }

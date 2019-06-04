@@ -686,5 +686,10 @@ impl ElementImpl for AppSrc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "ts-appsrc", 0, AppSrc::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "ts-appsrc",
+        gst::Rank::None,
+        AppSrc::get_type(),
+    )
 }

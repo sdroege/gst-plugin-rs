@@ -1135,5 +1135,10 @@ impl ElementImpl for UdpSrc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "ts-udpsrc", 0, UdpSrc::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "ts-udpsrc",
+        gst::Rank::None,
+        UdpSrc::get_type(),
+    )
 }

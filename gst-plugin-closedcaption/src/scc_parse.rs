@@ -561,5 +561,10 @@ impl ElementImpl for SccParse {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "sccparse", 0, SccParse::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "sccparse",
+        gst::Rank::None,
+        SccParse::get_type(),
+    )
 }

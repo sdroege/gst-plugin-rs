@@ -1348,6 +1348,16 @@ impl ElementImpl for ProxySrc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "ts-proxysink", 0, ProxySink::get_type())?;
-    gst::Element::register(Some(plugin), "ts-proxysrc", 0, ProxySrc::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "ts-proxysink",
+        gst::Rank::None,
+        ProxySink::get_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "ts-proxysrc",
+        gst::Rank::None,
+        ProxySrc::get_type(),
+    )
 }

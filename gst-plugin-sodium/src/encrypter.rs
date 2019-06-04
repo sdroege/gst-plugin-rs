@@ -565,5 +565,10 @@ impl ElementImpl for Encrypter {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "sodiumencrypter", 0, Encrypter::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "sodiumencrypter",
+        gst::Rank::None,
+        Encrypter::get_type(),
+    )
 }

@@ -725,5 +725,10 @@ impl Rav1Enc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "rav1enc", 0, Rav1Enc::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "rav1enc",
+        gst::Rank::None,
+        Rav1Enc::get_type(),
+    )
 }

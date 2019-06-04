@@ -1291,5 +1291,10 @@ impl ElementImpl for MccParse {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "mccparse", 0, MccParse::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "mccparse",
+        gst::Rank::None,
+        MccParse::get_type(),
+    )
 }

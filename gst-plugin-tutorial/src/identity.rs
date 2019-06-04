@@ -274,5 +274,10 @@ impl ElementImpl for Identity {
 // the name "rsidentity" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "rsidentity", 0, Identity::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "rsidentity",
+        gst::Rank::None,
+        Identity::get_type(),
+    )
 }
