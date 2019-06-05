@@ -17,10 +17,10 @@ use gst_base::subclass::prelude::*;
 use gstreamer::format::Bytes;
 use gstreamer_base as gst_base;
 
-use crate::constants::{CDG_HEIGHT, CDG_PACKET_PERIOD, CDG_PACKET_SIZE, CDG_WIDTH};
+use crate::constants::{
+    CDG_COMMAND, CDG_HEIGHT, CDG_MASK, CDG_PACKET_PERIOD, CDG_PACKET_SIZE, CDG_WIDTH,
+};
 
-const CDG_MASK: u8 = 0x3F;
-const CDG_COMMAND: u8 = 0x09;
 const CDG_CMD_MEMORY_PRESET: u8 = 1;
 
 struct CdgParse {

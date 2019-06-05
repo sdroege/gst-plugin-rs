@@ -17,9 +17,55 @@ mod cdgdec;
 mod cdgparse;
 mod constants;
 
+use constants::{CDG_COMMAND, CDG_MASK, CDG_PACKET_SIZE};
+
+const TYPEFIND_SEARCH_WINDOW: i64 = 100000; /* in bytes */
+
+/* Return the percentage of CDG packets in the first @len bytes of @typefind */
+fn cdg_packets_ratio(typefind: &mut gst::TypeFind, len: i64) -> i64 {
+    let mut count = 0;
+    let total = len / CDG_PACKET_SIZE as i64;
+
+    for offset in (0..len).step_by(CDG_PACKET_SIZE as usize) {
+        match typefind.peek(offset, CDG_PACKET_SIZE as u32) {
+            Some(data) => {
+                if data[0] & CDG_MASK == CDG_COMMAND {
+                    count += 1;
+                }
+            }
+            None => break,
+        }
+    }
+    (count * 100) / total
+}
+
+fn typefind_register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    use gst::{Caps, TypeFind, TypeFindProbability};
+
+    TypeFind::register(
+        Some(plugin),
+        "cdg_typefind",
+        gst::Rank::None,
+        Some("cdg"),
+        Some(&Caps::new_simple("video/x-cdg", &[])),
+        |mut typefind| {
+            let proba = match cdg_packets_ratio(&mut typefind, TYPEFIND_SEARCH_WINDOW) {
+                0...5 => TypeFindProbability::None,
+                6...10 => TypeFindProbability::Possible,
+                _ => TypeFindProbability::Likely,
+            };
+
+            if proba != gst::TypeFindProbability::None {
+                typefind.suggest(proba, &Caps::new_simple("video/x-cdg", &[]));
+            }
+        },
+    )
+}
+
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     cdgdec::register(plugin)?;
     cdgparse::register(plugin)?;
+    typefind_register(plugin)?;
     Ok(())
 }
 
