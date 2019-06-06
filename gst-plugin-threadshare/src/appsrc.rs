@@ -292,7 +292,7 @@ impl AppSrc {
         element: &gst::Element,
         item: Either<gst::Buffer, gst::Event>,
     ) -> future::Either<
-        Box<Future<Item = (), Error = ()> + Send + 'static>,
+        Box<dyn Future<Item = (), Error = ()> + Send + 'static>,
         future::FutureResult<(), ()>,
     > {
         let mut events = Vec::new();

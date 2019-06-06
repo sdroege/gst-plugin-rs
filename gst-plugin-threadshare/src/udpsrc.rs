@@ -444,7 +444,7 @@ impl UdpSrc {
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> future::Either<
-        Box<Future<Item = (), Error = gst::FlowError> + Send + 'static>,
+        Box<dyn Future<Item = (), Error = gst::FlowError> + Send + 'static>,
         future::FutureResult<(), gst::FlowError>,
     > {
         let mut events = Vec::new();
@@ -556,7 +556,7 @@ impl UdpSrc {
         let socket = if let Some(ref wrapped_socket) = settings.socket {
             use std::net::UdpSocket;
 
-            let mut socket: UdpSocket;
+            let socket: UdpSocket;
 
             #[cfg(unix)]
             {

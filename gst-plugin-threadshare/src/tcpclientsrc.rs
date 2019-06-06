@@ -310,7 +310,7 @@ impl TcpClientSrc {
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> future::Either<
-        Box<Future<Item = (), Error = gst::FlowError> + Send + 'static>,
+        Box<dyn Future<Item = (), Error = gst::FlowError> + Send + 'static>,
         future::FutureResult<(), gst::FlowError>,
     > {
         let mut events = Vec::new();

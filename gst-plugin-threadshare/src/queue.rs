@@ -506,7 +506,7 @@ impl Queue {
         element: &gst::Element,
         item: DataQueueItem,
     ) -> future::Either<
-        Box<Future<Item = (), Error = gst::FlowError> + Send + 'static>,
+        Box<dyn Future<Item = (), Error = gst::FlowError> + Send + 'static>,
         future::FutureResult<(), gst::FlowError>,
     > {
         let event = {

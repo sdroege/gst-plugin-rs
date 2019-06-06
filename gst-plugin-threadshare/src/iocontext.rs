@@ -183,7 +183,7 @@ struct IOContextInner {
     _shutdown: IOContextShutdown,
     pending_futures: Mutex<(
         u64,
-        HashMap<u64, FuturesUnordered<Box<Future<Item = (), Error = ()> + Send + 'static>>>,
+        HashMap<u64, FuturesUnordered<Box<dyn Future<Item = (), Error = ()> + Send + 'static>>>,
     )>,
 }
 
@@ -291,8 +291,10 @@ impl IOContext {
     }
 }
 
-pub type PendingFuturesFuture<E> =
-    future::Either<Box<Future<Item = (), Error = E> + Send + 'static>, future::FutureResult<(), E>>;
+pub type PendingFuturesFuture<E> = future::Either<
+    Box<dyn Future<Item = (), Error = E> + Send + 'static>,
+    future::FutureResult<(), E>,
+>;
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct PendingFutureId(u64);
