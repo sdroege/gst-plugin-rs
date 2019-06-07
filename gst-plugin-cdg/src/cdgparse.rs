@@ -96,13 +96,13 @@ fn bytes_to_time(bytes: u64) -> gst::ClockTime {
     gst::ClockTime::from_nseconds(ns)
 }
 
-fn time_to_bytes(time: gst::ClockTime) -> Option<Bytes> {
+fn time_to_bytes(time: gst::ClockTime) -> Bytes {
     match time.nseconds() {
         Some(time) => {
             let bytes = time.mul_div_round(CDG_PACKET_PERIOD * CDG_PACKET_SIZE as u64, SECOND_VAL);
-            Some(Bytes(bytes))
+            Bytes(bytes)
         }
-        None => None,
+        None => Bytes(None),
     }
 }
 
@@ -212,10 +212,7 @@ impl BaseParseImpl for CdgParse {
                 gst::GenericFormattedValue::Time(bytes_to_time(bytes.unwrap())),
             ),
             (gst::GenericFormattedValue::Time(time), gst::Format::Bytes) => {
-                match time_to_bytes(time) {
-                    Some(bytes) => Some(gst::GenericFormattedValue::Bytes(bytes)),
-                    None => None,
-                }
+                Some(time_to_bytes(time).into())
             }
             _ => None,
         }
