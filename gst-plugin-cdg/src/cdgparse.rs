@@ -16,6 +16,7 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 use gstreamer::format::Bytes;
 use gstreamer_base as gst_base;
+use std::convert::TryInto;
 
 use crate::constants::{
     CDG_COMMAND, CDG_HEIGHT, CDG_MASK, CDG_PACKET_PERIOD, CDG_PACKET_SIZE, CDG_WIDTH,
@@ -89,11 +90,14 @@ impl ObjectImpl for CdgParse {
 
 impl ElementImpl for CdgParse {}
 
-fn bytes_to_time(bytes: u64) -> gst::ClockTime {
-    let nb = bytes / CDG_PACKET_SIZE as u64;
-    let ns = nb.mul_div_round(SECOND_VAL, CDG_PACKET_PERIOD).unwrap();
-
-    gst::ClockTime::from_nseconds(ns)
+fn bytes_to_time(bytes: Bytes) -> gst::ClockTime {
+    match bytes {
+        Bytes(Some(bytes)) => {
+            let nb = bytes / CDG_PACKET_SIZE as u64;
+            gst::ClockTime(nb.mul_div_round(SECOND_VAL, CDG_PACKET_PERIOD))
+        }
+        Bytes(None) => gst::ClockTime::none(),
+    }
 }
 
 fn time_to_bytes(time: gst::ClockTime) -> Bytes {
@@ -114,8 +118,8 @@ impl BaseParseImpl for CdgParse {
         let mut query = gst::Query::new_duration(gst::Format::Bytes);
         let pad = element.get_src_pad();
         if pad.query(&mut query) {
-            let size = query.get_result().get_value() as u64;
-            let duration = bytes_to_time(size);
+            let size = query.get_result();
+            let duration = bytes_to_time(size.try_into().unwrap());
             element.set_duration(duration, 0);
         }
 
@@ -184,7 +188,7 @@ impl BaseParseImpl for CdgParse {
             data[1] & CDG_MASK == CDG_CMD_MEMORY_PRESET
         };
 
-        let pts = bytes_to_time(frame.get_offset() as u64);
+        let pts = bytes_to_time(Bytes(Some(frame.get_offset())));
         let buffer = frame.get_buffer().unwrap();
         buffer.set_pts(pts);
 
@@ -208,9 +212,9 @@ impl BaseParseImpl for CdgParse {
         let src_val = src_val.into();
 
         match (src_val, dest_format) {
-            (gst::GenericFormattedValue::Bytes(bytes), gst::Format::Time) => Some(
-                gst::GenericFormattedValue::Time(bytes_to_time(bytes.unwrap())),
-            ),
+            (gst::GenericFormattedValue::Bytes(bytes), gst::Format::Time) => {
+                Some(bytes_to_time(bytes).into())
+            }
             (gst::GenericFormattedValue::Time(time), gst::Format::Bytes) => {
                 Some(time_to_bytes(time).into())
             }
