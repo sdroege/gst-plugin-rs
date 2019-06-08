@@ -214,6 +214,14 @@ impl VideoDecoderImpl for CdgDec {
 
         self.parent_decide_allocation(element, query)
     }
+
+    fn flush(&self, element: &gst_video::VideoDecoder) -> bool {
+        gst_debug!(CAT, obj: element, "flushing, reset CDG interpreter");
+
+        let mut cdg_inter = self.cdg_inter.lock().unwrap();
+        cdg_inter.reset(false);
+        true
+    }
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
