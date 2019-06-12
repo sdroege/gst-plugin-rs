@@ -35,3 +35,15 @@ $ gst-launch-1.0 \
     s3src uri=s3://ap-south-1/my-bucket/my-object-key/which-can-have-slashes?version=my-optional-version !
     filesink name=my-object.out
 ```
+
+## s3sink
+
+Writes data to a specified S3 bucket. The `region` parameter is optional, and if not specified, the default parameter will be used (from `.aws/config` file).
+
+```
+$ gst-launch-1.0 \
+    videotestsrc ! \
+    theoraenc ! \
+    oggmux ! \
+    s3sink bucket=example-bucket key=my/file.ogv region=us-west-1
+```

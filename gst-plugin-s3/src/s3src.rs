@@ -26,6 +26,7 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use crate::s3url::*;
+use crate::s3utils;
 
 enum StreamingState {
     Stopped,
@@ -62,36 +63,6 @@ impl S3Src {
             /* We don't do anything, the Sender will be dropped, and that will cause the
              * Receiver to be cancelled */
         }
-    }
-
-    fn wait<F>(&self, future: F) -> Result<F::Item, Option<gst::ErrorMessage>>
-    where
-        F: Send + Future<Error = gst::ErrorMessage> + 'static,
-        F::Item: Send,
-    {
-        let mut canceller = self.canceller.lock().unwrap();
-        let (sender, receiver) = oneshot::channel::<Bytes>();
-
-        canceller.replace(sender);
-
-        let unlock_error = gst_error_msg!(gst::ResourceError::Busy, ["unlock"]);
-
-        let res = oneshot::spawn(future, &self.runtime.executor())
-            .select(receiver.then(|_| Err(unlock_error.clone())))
-            .wait()
-            .map(|v| v.0)
-            .map_err(|err| {
-                if err.0 == unlock_error {
-                    None
-                } else {
-                    Some(err.0)
-                }
-            });
-
-        /* Clear out the canceller */
-        *canceller = None;
-
-        res
     }
 
     fn connect(self: &S3Src, url: &GstS3Url) -> Result<S3Client, gst::ErrorMessage> {
@@ -137,19 +108,22 @@ impl S3Src {
 
         let response = client.head_object(request);
 
-        let output = self
-            .wait(response.map_err(|err| {
+        let output = s3utils::wait(
+            &self.canceller,
+            &self.runtime,
+            response.map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::NotFound,
                     ["Failed to HEAD object: {}", err]
                 )
-            }))
-            .map_err(|err| {
-                err.unwrap_or(gst_error_msg!(
-                    gst::LibraryError::Failed,
-                    ["Interrupted during start"]
-                ))
-            })?;
+            }),
+        )
+        .map_err(|err| {
+            err.unwrap_or(gst_error_msg!(
+                gst::LibraryError::Failed,
+                ["Interrupted during start"]
+            ))
+        })?;
 
         if let Some(size) = output.content_length {
             gst_info!(
@@ -212,9 +186,13 @@ impl S3Src {
          * interruptible */
         drop(state);
 
-        let output = self.wait(response.map_err(|err| {
-            gst_error_msg!(gst::ResourceError::Read, ["Could not read: {}", err])
-        }))?;
+        let output = s3utils::wait(
+            &self.canceller,
+            &self.runtime,
+            response.map_err(|err| {
+                gst_error_msg!(gst::ResourceError::Read, ["Could not read: {}", err])
+            }),
+        )?;
 
         gst_debug!(
             self.cat,
@@ -223,7 +201,9 @@ impl S3Src {
             output.content_length.unwrap()
         );
 
-        self.wait(
+        s3utils::wait(
+            &self.canceller,
+            &self.runtime,
             output.body.unwrap().concat2().map_err(|err| {
                 gst_error_msg!(gst::ResourceError::Read, ["Could not read: {}", err])
             }),
