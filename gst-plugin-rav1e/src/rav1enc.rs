@@ -166,10 +166,10 @@ impl Context {
         match self {
             Context::Eight(ref mut context) => context
                 .receive_packet()
-                .map(|packet| (packet.frame_type, packet.number, packet.data)),
+                .map(|packet| (packet.frame_type, packet.input_frameno, packet.data)),
             Context::Sixteen(ref mut context) => context
                 .receive_packet()
-                .map(|packet| (packet.frame_type, packet.number, packet.data)),
+                .map(|packet| (packet.frame_type, packet.input_frameno, packet.data)),
         }
     }
 
