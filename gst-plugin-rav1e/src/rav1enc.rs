@@ -14,7 +14,9 @@ use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use gstreamer_video as gst_video;
-use rav1e;
+use rav1e::color;
+use rav1e::config;
+use rav1e::data;
 use std::sync::{Arc, Mutex};
 
 const DEFAULT_SPEED_PRESET: u32 = 5;
@@ -162,7 +164,7 @@ enum Context {
 }
 
 impl Context {
-    fn receive_packet(&mut self) -> Result<(rav1e::FrameType, u64, Vec<u8>), rav1e::EncoderStatus> {
+    fn receive_packet(&mut self) -> Result<(data::FrameType, u64, Vec<u8>), data::EncoderStatus> {
         match self {
             Context::Eight(ref mut context) => context
                 .receive_packet()
@@ -176,7 +178,7 @@ impl Context {
     fn send_frame(
         &mut self,
         in_frame: Option<&gst_video::VideoFrameRef<&gst::BufferRef>>,
-    ) -> Result<(), rav1e::EncoderStatus> {
+    ) -> Result<(), data::EncoderStatus> {
         match self {
             Context::Eight(ref mut context) => {
                 let enc_frame = in_frame.map(|in_frame| {
@@ -448,102 +450,102 @@ impl VideoEncoderImpl for Rav1Enc {
         let settings = self.settings.lock().unwrap();
 
         // TODO: More properties, HDR information
-        let cfg = rav1e::Config {
-            enc: rav1e::EncoderConfig {
+        let cfg = config::Config {
+            enc: config::EncoderConfig {
                 width: video_info.width() as usize,
                 height: video_info.height() as usize,
                 bit_depth: video_info.format_info().depth()[0] as usize,
                 chroma_sampling: match video_info.format() {
                     gst_video::VideoFormat::I420
                     | gst_video::VideoFormat::I42010le
-                    | gst_video::VideoFormat::I42012le => rav1e::ChromaSampling::Cs420,
+                    | gst_video::VideoFormat::I42012le => color::ChromaSampling::Cs420,
                     gst_video::VideoFormat::Y42b
                     | gst_video::VideoFormat::I42210le
-                    | gst_video::VideoFormat::I42212le => rav1e::ChromaSampling::Cs422,
+                    | gst_video::VideoFormat::I42212le => color::ChromaSampling::Cs422,
                     gst_video::VideoFormat::Y444
                     | gst_video::VideoFormat::Y44410le
-                    | gst_video::VideoFormat::Y44412le => rav1e::ChromaSampling::Cs444,
-                    // gst_video::VideoFormat::Gray8 => rav1e::ChromaSampling::Cs400,
+                    | gst_video::VideoFormat::Y44412le => color::ChromaSampling::Cs444,
+                    // gst_video::VideoFormat::Gray8 => color::ChromaSampling::Cs400,
                     _ => unreachable!(),
                 },
                 chroma_sample_position: match video_info.chroma_site() {
-                    gst_video::VideoChromaSite::H_COSITED => rav1e::ChromaSamplePosition::Vertical,
-                    gst_video::VideoChromaSite::COSITED => rav1e::ChromaSamplePosition::Colocated,
-                    _ => rav1e::ChromaSamplePosition::Unknown,
+                    gst_video::VideoChromaSite::H_COSITED => color::ChromaSamplePosition::Vertical,
+                    gst_video::VideoChromaSite::COSITED => color::ChromaSamplePosition::Colocated,
+                    _ => color::ChromaSamplePosition::Unknown,
                 },
                 pixel_range: match video_info.colorimetry().range() {
-                    gst_video::VideoColorRange::Range0255 => rav1e::PixelRange::Full,
-                    gst_video::VideoColorRange::Range16235 => rav1e::PixelRange::Limited,
-                    _ => rav1e::PixelRange::Unspecified,
+                    gst_video::VideoColorRange::Range0255 => color::PixelRange::Full,
+                    gst_video::VideoColorRange::Range16235 => color::PixelRange::Limited,
+                    _ => color::PixelRange::Unspecified,
                 },
                 color_description: {
                     let matrix = match video_info.colorimetry().matrix() {
-                        gst_video::VideoColorMatrix::Rgb => rav1e::MatrixCoefficients::Identity,
-                        gst_video::VideoColorMatrix::Fcc => rav1e::MatrixCoefficients::BT470M,
-                        gst_video::VideoColorMatrix::Bt709 => rav1e::MatrixCoefficients::BT709,
-                        gst_video::VideoColorMatrix::Bt601 => rav1e::MatrixCoefficients::ST170M,
-                        gst_video::VideoColorMatrix::Smpte240m => rav1e::MatrixCoefficients::ST240M,
+                        gst_video::VideoColorMatrix::Rgb => color::MatrixCoefficients::Identity,
+                        gst_video::VideoColorMatrix::Fcc => color::MatrixCoefficients::BT470M,
+                        gst_video::VideoColorMatrix::Bt709 => color::MatrixCoefficients::BT709,
+                        gst_video::VideoColorMatrix::Bt601 => color::MatrixCoefficients::ST170M,
+                        gst_video::VideoColorMatrix::Smpte240m => color::MatrixCoefficients::ST240M,
                         gst_video::VideoColorMatrix::Bt2020 => {
-                            rav1e::MatrixCoefficients::BT2020NonConstantLuminance
+                            color::MatrixCoefficients::BT2020NonConstantLuminance
                         }
-                        _ => rav1e::MatrixCoefficients::Unspecified,
+                        _ => color::MatrixCoefficients::Unspecified,
                     };
                     let transfer = match video_info.colorimetry().transfer() {
                         gst_video::VideoTransferFunction::Gamma10 => {
-                            rav1e::TransferCharacteristics::Linear
+                            color::TransferCharacteristics::Linear
                         }
                         gst_video::VideoTransferFunction::Bt709 => {
-                            rav1e::TransferCharacteristics::BT1886
+                            color::TransferCharacteristics::BT1886
                         }
                         gst_video::VideoTransferFunction::Smpte240m => {
-                            rav1e::TransferCharacteristics::ST240M
+                            color::TransferCharacteristics::ST240M
                         }
                         gst_video::VideoTransferFunction::Srgb => {
-                            rav1e::TransferCharacteristics::SRGB
+                            color::TransferCharacteristics::SRGB
                         }
                         gst_video::VideoTransferFunction::Log100 => {
-                            rav1e::TransferCharacteristics::Logarithmic100
+                            color::TransferCharacteristics::Logarithmic100
                         }
                         gst_video::VideoTransferFunction::Log316 => {
-                            rav1e::TransferCharacteristics::Logarithmic316
+                            color::TransferCharacteristics::Logarithmic316
                         }
                         gst_video::VideoTransferFunction::Bt202012 => {
-                            rav1e::TransferCharacteristics::BT2020Twelve
+                            color::TransferCharacteristics::BT2020Twelve
                         }
                         gst_video::VideoTransferFunction::Gamma18
                         | gst_video::VideoTransferFunction::Gamma20
                         | gst_video::VideoTransferFunction::Gamma22
                         | gst_video::VideoTransferFunction::Gamma28
                         | gst_video::VideoTransferFunction::Adobergb
-                        | _ => rav1e::TransferCharacteristics::Unspecified,
+                        | _ => color::TransferCharacteristics::Unspecified,
                     };
                     let primaries = match video_info.colorimetry().primaries() {
-                        gst_video::VideoColorPrimaries::Bt709 => rav1e::ColorPrimaries::BT709,
-                        gst_video::VideoColorPrimaries::Bt470m => rav1e::ColorPrimaries::BT470M,
-                        gst_video::VideoColorPrimaries::Bt470bg => rav1e::ColorPrimaries::BT470BG,
-                        gst_video::VideoColorPrimaries::Smpte170m => rav1e::ColorPrimaries::ST170M,
-                        gst_video::VideoColorPrimaries::Smpte240m => rav1e::ColorPrimaries::ST240M,
-                        gst_video::VideoColorPrimaries::Film => rav1e::ColorPrimaries::Film,
-                        gst_video::VideoColorPrimaries::Bt2020 => rav1e::ColorPrimaries::BT2020,
+                        gst_video::VideoColorPrimaries::Bt709 => color::ColorPrimaries::BT709,
+                        gst_video::VideoColorPrimaries::Bt470m => color::ColorPrimaries::BT470M,
+                        gst_video::VideoColorPrimaries::Bt470bg => color::ColorPrimaries::BT470BG,
+                        gst_video::VideoColorPrimaries::Smpte170m => color::ColorPrimaries::ST170M,
+                        gst_video::VideoColorPrimaries::Smpte240m => color::ColorPrimaries::ST240M,
+                        gst_video::VideoColorPrimaries::Film => color::ColorPrimaries::Film,
+                        gst_video::VideoColorPrimaries::Bt2020 => color::ColorPrimaries::BT2020,
                         gst_video::VideoColorPrimaries::Adobergb | _ => {
-                            rav1e::ColorPrimaries::Unspecified
+                            color::ColorPrimaries::Unspecified
                         }
                     };
 
-                    Some(rav1e::ColorDescription {
+                    Some(color::ColorDescription {
                         color_primaries: primaries,
                         transfer_characteristics: transfer,
                         matrix_coefficients: matrix,
                     })
                 },
-                speed_settings: rav1e::SpeedSettings::from_preset(settings.speed_preset as usize),
+                speed_settings: config::SpeedSettings::from_preset(settings.speed_preset as usize),
                 time_base: if video_info.fps() != gst::Fraction::new(0, 1) {
-                    rav1e::Rational {
+                    data::Rational {
                         num: *video_info.fps().numer() as u64,
                         den: *video_info.fps().denom() as u64,
                     }
                 } else {
-                    rav1e::Rational { num: 30, den: 1 }
+                    data::Rational { num: 30, den: 1 }
                 },
                 low_latency: settings.low_latency,
                 min_key_frame_interval: settings.min_key_frame_interval,
@@ -584,7 +586,7 @@ impl VideoEncoderImpl for Rav1Enc {
             state.context.flush();
             loop {
                 match state.context.receive_packet() {
-                    Ok(_) | Err(rav1e::EncoderStatus::Encoded) => {
+                    Ok(_) | Err(data::EncoderStatus::Encoded) => {
                         gst_debug!(self.cat, obj: element, "Dropping packet on flush",);
                     }
                     _ => break,
@@ -603,7 +605,7 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let mut state_guard = self.state.lock().unwrap();
         if let Some(ref mut state) = *state_guard {
-            if let Err(rav1e::EncoderStatus::Failure) = state.context.send_frame(None) {
+            if let Err(data::EncoderStatus::Failure) = state.context.send_frame(None) {
                 return Err(gst::FlowError::Error);
             }
             state.context.flush();
@@ -653,7 +655,7 @@ impl VideoEncoderImpl for Rav1Enc {
                     frame.get_system_frame_number()
                 );
             }
-            Err(rav1e::EncoderStatus::Failure) => {
+            Err(data::EncoderStatus::Failure) => {
                 gst_element_error!(element, gst::CoreError::Failed, ["Failed to send frame"]);
                 return Err(gst::FlowError::Error);
             }
@@ -689,7 +691,7 @@ impl Rav1Enc {
                     );
 
                     let frame = element.get_oldest_frame().expect("frame not found");
-                    if packet_type == rav1e::FrameType::KEY {
+                    if packet_type == data::FrameType::KEY {
                         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);
                     }
                     let output_buffer = gst::Buffer::from_mut_slice(packet_data);
@@ -699,10 +701,10 @@ impl Rav1Enc {
                     state_guard = self.state.lock().unwrap();
                     state = state_guard.as_mut().expect("Not negotiated yet");
                 }
-                Err(rav1e::EncoderStatus::Encoded) => {
+                Err(data::EncoderStatus::Encoded) => {
                     gst_debug!(self.cat, obj: element, "Encoded but not output frame yet",);
                 }
-                Err(rav1e::EncoderStatus::Failure) => {
+                Err(data::EncoderStatus::Failure) => {
                     gst_element_error!(
                         element,
                         gst::CoreError::Failed,
