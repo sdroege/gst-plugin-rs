@@ -50,8 +50,8 @@ fn typefind_register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         Some(&Caps::new_simple("video/x-cdg", &[])),
         |mut typefind| {
             let proba = match cdg_packets_ratio(&mut typefind, TYPEFIND_SEARCH_WINDOW) {
-                0...5 => TypeFindProbability::None,
-                6...10 => TypeFindProbability::Possible,
+                0..=5 => TypeFindProbability::None,
+                6..=10 => TypeFindProbability::Possible,
                 _ => TypeFindProbability::Likely,
             };
 
