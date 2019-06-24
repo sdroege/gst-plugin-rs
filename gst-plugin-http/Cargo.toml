@@ -5,14 +5,18 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 description = "Rust HTTP Plugin"
+edition = "2018"
 
 [dependencies]
 url = "1.1"
 glib = { git = "https://github.com/gtk-rs/glib" }
 reqwest = "0.9"
+futures = "0.1.23"
 hyperx = "0.15"
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
+tokio = "0.1"
+bytes = "0.4"
 
 [lib]
 name = "gstrshttp"

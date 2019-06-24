@@ -6,14 +6,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use bytes::Bytes;
+use futures::sync::oneshot;
+use futures::{Future, Stream};
 use hyperx::header::{
     AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, ContentRangeSpec, Headers, Range,
     RangeUnit,
 };
-use reqwest::{Client, Response};
-use std::io::Read;
+use reqwest::r#async::{Client, Decoder};
+use std::mem;
 use std::sync::Mutex;
 use std::u64;
+use tokio::runtime;
 use url::Url;
 
 use glib;
@@ -56,7 +60,7 @@ enum State {
     Stopped,
     Started {
         uri: Url,
-        response: Response,
+        body: Option<Decoder>,
         seekable: bool,
         position: u64,
         size: Option<u64>,
@@ -77,6 +81,8 @@ pub struct HttpSrc {
     client: Client,
     settings: Mutex<Settings>,
     state: Mutex<State>,
+    runtime: runtime::Runtime,
+    canceller: Mutex<Option<oneshot::Sender<Bytes>>>,
 }
 
 impl HttpSrc {
@@ -137,13 +143,25 @@ impl HttpSrc {
 
         gst_debug!(cat, obj: src, "Doing new request {:?}", req);
 
-        let response = try!(req.send().or_else(|err| {
-            gst_error!(cat, obj: src, "Request failed: {:?}", err);
-            Err(gst_error_msg!(
-                gst::ResourceError::Read,
-                ["Failed to fetch {}: {}", uri, err.to_string()]
-            ))
-        }));
+        let response_fut = req.send().and_then(|res| {
+            // gst_debug!(cat, obj: src, "Response received: {:?}", res);
+            Ok(res)
+        });
+
+        let uri_clone = uri.clone();
+        let mut response = self
+            .wait(response_fut.map_err(move |err| {
+                gst_error_msg!(
+                    gst::ResourceError::Read,
+                    ["Failed to fetch {}: {:?}", uri_clone, err]
+                )
+            }))
+            .map_err(|err| {
+                err.unwrap_or(gst_error_msg!(
+                    gst::LibraryError::Failed,
+                    ["Interrupted during start"]
+                ))
+            })?;
 
         if !response.status().is_success() {
             gst_error!(cat, obj: src, "Request status failed: {:?}", response);
@@ -183,15 +201,47 @@ impl HttpSrc {
 
         gst_debug!(cat, obj: src, "Request successful: {:?}", response);
 
+        let body = mem::replace(response.body_mut(), Decoder::empty());
+
         Ok(State::Started {
             uri,
-            response,
+            body: Some(body),
             seekable,
             position: 0,
             size,
             start,
             stop,
         })
+    }
+
+    fn wait<F>(&self, future: F) -> Result<F::Item, Option<gst::ErrorMessage>>
+    where
+        F: Send + Future<Error = gst::ErrorMessage> + 'static,
+        F::Item: Send,
+    {
+        let mut canceller = self.canceller.lock().unwrap();
+        let (sender, receiver) = oneshot::channel::<Bytes>();
+
+        canceller.replace(sender);
+
+        let unlock_error = gst_error_msg!(gst::ResourceError::Busy, ["unlock"]);
+
+        let res = oneshot::spawn(future, &self.runtime.executor())
+            .select(receiver.then(|_| Err(unlock_error.clone())))
+            .wait()
+            .map(|v| v.0)
+            .map_err(|err| {
+                if err.0 == unlock_error {
+                    None
+                } else {
+                    Some(err.0)
+                }
+            });
+
+        /* Clear out the canceller */
+        *canceller = None;
+
+        res
     }
 }
 
@@ -235,8 +285,8 @@ impl ObjectImpl for HttpSrc {
 
     fn constructed(&self, obj: &glib::Object) {
         self.parent_constructed(obj);
-
         let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
+        element.set_automatic_eos(false);
         element.set_format(gst::Format::Bytes);
     }
 }
@@ -324,21 +374,21 @@ impl BaseSrcImpl for HttpSrc {
         }
     }
 
-    fn fill(
+    fn create(
         &self,
         src: &gst_base::BaseSrc,
         offset: u64,
-        _: u32,
-        buffer: &mut gst::BufferRef,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        _length: u32,
+    ) -> Result<gst::Buffer, gst::FlowError> {
+        let cat = self.cat;
         let mut state = self.state.lock().unwrap();
 
-        let (response, position) = match *state {
+        let (body, position) = match *state {
             State::Started {
-                ref mut response,
+                ref mut body,
                 ref mut position,
                 ..
-            } => (response, position),
+            } => (body, position),
             State::Stopped => {
                 gst_element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
 
@@ -356,36 +406,78 @@ impl BaseSrcImpl for HttpSrc {
             return Err(gst::FlowError::Error);
         }
 
-        let size = {
-            let mut map = buffer.map_writable().ok_or_else(|| {
-                gst_element_error!(src, gst::LibraryError::Failed, ["Failed to map buffer"]);
+        let current_body = match body.take() {
+            Some(body) => body,
+            None => {
+                gst_error!(self.cat, obj: src, "Don't have a response body");
+                gst_element_error!(
+                    src,
+                    gst::ResourceError::Read,
+                    ["Don't have a response body"]
+                );
 
-                gst::FlowError::Error
-            })?;
+                return Err(gst::FlowError::Error);
+            }
+        };
 
-            let data = map.as_mut_slice();
+        drop(state);
+        let res = self.wait(current_body.into_future().map_err(|(err, _body)| {
+            gst_error_msg!(
+                gst::ResourceError::Read,
+                ["Failed to read chunk: {:?}", err]
+            )
+        }));
 
-            response.read(data).map_err(|err| {
+        let mut state = self.state.lock().unwrap();
+        let (body, position) = match *state {
+            State::Started {
+                ref mut body,
+                ref mut position,
+                ..
+            } => (body, position),
+            State::Stopped => {
+                gst_element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
+
+                return Err(gst::FlowError::Error);
+            }
+        };
+
+        match res {
+            Ok((Some(chunk), current_body)) => {
+                /* do something with the chunk and store the body again in the state */
+
+                gst_debug!(cat, obj: src, "Data Received {:?}", chunk);
+                let size = chunk.len();
+                assert_ne!(chunk.len(), 0);
+
+                *position += size as u64;
+
+                let buffer = gst::Buffer::from_slice(chunk);
+
+                *body = Some(current_body);
+
+                return Ok(buffer);
+            }
+            Ok((None, current_body)) => {
+                /* No further data, end of stream */
+                gst_debug!(cat, obj: src, "End of stream");
+                *body = Some(current_body);
+                // src.set_automatic_eos(false);
+                return Err(gst::FlowError::Eos);
+            }
+            Err(err) => {
+                /* error */
+
                 gst_error!(self.cat, obj: src, "Failed to read: {:?}", err);
                 gst_element_error!(
                     src,
                     gst::ResourceError::Read,
-                    ["Failed to read at {}: {}", offset, err.to_string()]
+                    ["Failed to read at {}: {:?}", offset, err]
                 );
 
-                gst::FlowError::Error
-            })?
-        };
-
-        if size == 0 {
-            return Err(gst::FlowError::Eos);
+                return Err(gst::FlowError::Error);
+            }
         }
-
-        *position += size as u64;
-
-        buffer.set_size(size);
-
-        Ok(gst::FlowSuccess::Ok)
     }
 }
 
@@ -429,6 +521,12 @@ impl ObjectSubclass for HttpSrc {
             client: Client::new(),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
+            runtime: runtime::Builder::new()
+                .core_threads(1)
+                .name_prefix("gst-http-tokio")
+                .build()
+                .unwrap(),
+            canceller: Mutex::new(None),
         }
     }
 

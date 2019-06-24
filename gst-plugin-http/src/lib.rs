@@ -12,9 +12,12 @@
 extern crate glib;
 #[macro_use]
 extern crate gstreamer as gst;
+extern crate bytes;
+extern crate futures;
 extern crate gstreamer_base as gst_base;
 extern crate hyperx;
 extern crate reqwest;
+extern crate tokio;
 extern crate url;
 
 mod httpsrc;
