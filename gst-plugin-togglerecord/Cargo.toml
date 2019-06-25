@@ -7,11 +7,11 @@ description = "Toggle Record Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib", features = ["subclassing"] }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
-gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gtk = { git = "https://github.com/gtk-rs/gtk", optional = true }
-gio = { git = "https://github.com/gtk-rs/gio", optional = true }
+glib = { version = "0.8", features = ["subclassing"] }
+gstreamer = { version = "0.14", features = ["subclassing"] }
+gstreamer-video = { version = "0.14" }
+gtk = { version = "0.7", optional = true }
+gio = { version = "0.7", optional = true }
 parking_lot = "0.8"
 
 [dev-dependencies]

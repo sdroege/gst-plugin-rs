@@ -8,16 +8,16 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
 libc = "0.2"
-glib-sys = { git = "https://github.com/gtk-rs/sys" }
-gobject-sys = { git = "https://github.com/gtk-rs/sys" }
-gio-sys = { git = "https://github.com/gtk-rs/sys" }
-gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
-glib = { git = "https://github.com/gtk-rs/glib", features = ["subclassing"] }
-gio = { git = "https://github.com/gtk-rs/gio" }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
-gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gstreamer-net = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+glib-sys = { version = "0.9" }
+gobject-sys = { version = "0.9" }
+gio-sys = { version = "0.9" }
+gstreamer-sys = { version = "0.8" }
+glib = { version = "0.8", features = ["subclassing"] }
+gio = { version = "0.7" }
+gstreamer = { version = "0.14", features = ["subclassing"] }
+gstreamer-app = { version = "0.14" }
+gstreamer-check = { version = "0.14" }
+gstreamer-net = { version = "0.14" }
 
 tokio = "0.1"
 tokio-reactor = "0.1"

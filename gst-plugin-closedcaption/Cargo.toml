@@ -8,7 +8,7 @@ description = "Rust Closed Caption Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib", features = ["subclassing"] }
+glib = { version = "0.8", features = ["subclassing"] }
 combine = "3.6"
 either = "1"
 uuid = { version = "0.7", features = ["v4"] }
@@ -16,17 +16,17 @@ chrono = "0.4"
 lazy_static = "1.2"
 
 [dependencies.gst]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.14"
 features = ["subclassing", "v1_12"]
 package="gstreamer"
 
 [dependencies.gst-base]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.14"
 features = ["subclassing", "v1_12"]
 package="gstreamer-base"
 
 [dependencies.gst-video]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.14"
 features = ["v1_12"]
 package="gstreamer-video"
 
@@ -35,7 +35,7 @@ pretty_assertions = "0.6"
 rand = "0.6"
 
 [dev-dependencies.gst-check]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.14"
 package="gstreamer-check"
 
 [lib]
