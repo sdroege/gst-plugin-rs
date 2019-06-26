@@ -20,10 +20,10 @@ extern crate reqwest;
 extern crate tokio;
 extern crate url;
 
-mod httpsrc;
+mod reqwesthttpsrc;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    httpsrc::register(plugin)
+    reqwesthttpsrc::register(plugin)
 }
 
 gst_plugin_define!(

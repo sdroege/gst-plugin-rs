@@ -76,7 +76,7 @@ impl Default for State {
 }
 
 #[derive(Debug)]
-pub struct HttpSrc {
+pub struct ReqwestHttpSrc {
     cat: gst::DebugCategory,
     client: Client,
     settings: Mutex<Settings>,
@@ -85,13 +85,13 @@ pub struct HttpSrc {
     canceller: Mutex<Option<oneshot::Sender<Bytes>>>,
 }
 
-impl HttpSrc {
+impl ReqwestHttpSrc {
     fn set_location(&self, _element: &gst_base::BaseSrc, uri: &str) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             return Err(glib::Error::new(
                 gst::URIError::BadState,
-                "Changing the `location` property on a started `httpsrc` is not supported",
+                "Changing the `location` property on a started `reqwesthttpsrc` is not supported",
             ));
         }
 
@@ -143,8 +143,9 @@ impl HttpSrc {
 
         gst_debug!(cat, obj: src, "Doing new request {:?}", req);
 
-        let response_fut = req.send().and_then(|res| {
-            // gst_debug!(cat, obj: src, "Response received: {:?}", res);
+        let src_clone = src.clone();
+        let response_fut = req.send().and_then(move |res| {
+            gst_debug!(cat, obj: &src_clone, "Response received: {:?}", res);
             Ok(res)
         });
 
@@ -245,7 +246,7 @@ impl HttpSrc {
     }
 }
 
-impl ObjectImpl for HttpSrc {
+impl ObjectImpl for ReqwestHttpSrc {
     glib_object_impl!();
 
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
@@ -291,9 +292,9 @@ impl ObjectImpl for HttpSrc {
     }
 }
 
-impl ElementImpl for HttpSrc {}
+impl ElementImpl for ReqwestHttpSrc {}
 
-impl BaseSrcImpl for HttpSrc {
+impl BaseSrcImpl for ReqwestHttpSrc {
     fn is_seekable(&self, _src: &gst_base::BaseSrc) -> bool {
         match *self.state.lock().unwrap() {
             State::Started { seekable, .. } => seekable,
@@ -462,7 +463,6 @@ impl BaseSrcImpl for HttpSrc {
                 /* No further data, end of stream */
                 gst_debug!(cat, obj: src, "End of stream");
                 *body = Some(current_body);
-                // src.set_automatic_eos(false);
                 return Err(gst::FlowError::Eos);
             }
             Err(err) => {
@@ -481,7 +481,7 @@ impl BaseSrcImpl for HttpSrc {
     }
 }
 
-impl URIHandlerImpl for HttpSrc {
+impl URIHandlerImpl for ReqwestHttpSrc {
     fn get_uri(&self, _element: &gst::URIHandler) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
@@ -503,8 +503,8 @@ impl URIHandlerImpl for HttpSrc {
     }
 }
 
-impl ObjectSubclass for HttpSrc {
-    const NAME: &'static str = "RsHttpSrc";
+impl ObjectSubclass for ReqwestHttpSrc {
+    const NAME: &'static str = "ReqwestHttpSrc";
     type ParentType = gst_base::BaseSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -514,7 +514,7 @@ impl ObjectSubclass for HttpSrc {
     fn new() -> Self {
         Self {
             cat: gst::DebugCategory::new(
-                "rshttpsrc",
+                "reqwesthttpsrc",
                 gst::DebugColorFlags::empty(),
                 Some("Rust HTTP source"),
             ),
@@ -559,8 +559,8 @@ impl ObjectSubclass for HttpSrc {
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "rshttpsrc",
+        "reqwesthttpsrc",
         gst::Rank::Primary + 100,
-        HttpSrc::get_type(),
+        ReqwestHttpSrc::get_type(),
     )
 }
