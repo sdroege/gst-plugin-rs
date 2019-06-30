@@ -13,14 +13,17 @@ glib = { git = "https://github.com/gtk-rs/glib" }
 reqwest = "0.9"
 futures = "0.1.23"
 hyperx = "0.15"
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_10", "subclassing"] }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
 tokio = "0.1"
 bytes = "0.4"
 
+[dev-dependencies]
+hyper = "0.12"
+
 [lib]
-name = "gstrshttp"
-crate-type = ["cdylib"]
+name = "gstreqwest"
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
