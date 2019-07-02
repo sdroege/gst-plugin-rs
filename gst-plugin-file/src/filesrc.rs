@@ -384,7 +384,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rsfilesrc",
-        gst::Rank::Primary + 100,
+        gst::Rank::None,
         FileSrc::get_type(),
     )
 }

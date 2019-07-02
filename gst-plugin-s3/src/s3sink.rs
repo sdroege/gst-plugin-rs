@@ -552,5 +552,10 @@ impl BaseSinkImpl for S3Sink {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "s3sink", gst::Rank::None, S3Sink::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "s3sink",
+        gst::Rank::Primary,
+        S3Sink::get_type(),
+    )
 }

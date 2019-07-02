@@ -438,5 +438,5 @@ impl BaseSrcImpl for S3Src {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "s3src", gst::Rank::None, S3Src::get_type())
+    gst::Element::register(Some(plugin), "s3src", gst::Rank::Primary, S3Src::get_type())
 }
