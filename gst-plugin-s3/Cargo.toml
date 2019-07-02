@@ -13,8 +13,8 @@ futures = "0.1"
 glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing", "v1_12"] }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing", "v1_12"] }
-rusoto_core = "0.39.0"
-rusoto_s3 = "0.39.0"
+rusoto_core = "0.40"
+rusoto_s3 = "0.40"
 url = "1.7"
 tokio = "0.1"
 
