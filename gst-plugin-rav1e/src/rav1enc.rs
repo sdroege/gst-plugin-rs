@@ -730,7 +730,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rav1enc",
-        gst::Rank::None,
+        gst::Rank::Primary,
         Rav1Enc::get_type(),
     )
 }

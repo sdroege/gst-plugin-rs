@@ -462,7 +462,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rshttpsrc",
-        gst::Rank::Primary + 100,
+        gst::Rank::Marginal,
         HttpSrc::get_type(),
     )
 }

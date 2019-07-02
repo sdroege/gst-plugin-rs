@@ -47,7 +47,7 @@ fn typefind_register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     TypeFind::register(
         Some(plugin),
         "sodium_encrypted_typefind",
-        gst::Rank::Primary,
+        gst::Rank::None,
         None,
         Some(&Caps::new_simple("application/x-sodium-encrypted", &[])),
         |typefind| {

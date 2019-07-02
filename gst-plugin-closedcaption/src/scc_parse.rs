@@ -564,7 +564,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "sccparse",
-        gst::Rank::None,
+        gst::Rank::Primary,
         SccParse::get_type(),
     )
 }

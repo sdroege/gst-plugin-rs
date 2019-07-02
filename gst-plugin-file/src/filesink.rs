@@ -330,7 +330,7 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rsfilesink",
-        gst::Rank::Primary + 100,
+        gst::Rank::None,
         FileSink::get_type(),
     )
 }

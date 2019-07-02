@@ -450,5 +450,10 @@ impl ElementImpl for SccEnc {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "sccenc", gst::Rank::None, SccEnc::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "sccenc",
+        gst::Rank::Primary,
+        SccEnc::get_type(),
+    )
 }
