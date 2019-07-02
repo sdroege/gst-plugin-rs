@@ -32,7 +32,7 @@ package="gstreamer-video"
 
 [dev-dependencies]
 pretty_assertions = "0.6"
-rand = "0.6"
+rand = { version = "0.7", features = ["small_rng"] }
 
 [dev-dependencies.gst-check]
 version = "0.14"
