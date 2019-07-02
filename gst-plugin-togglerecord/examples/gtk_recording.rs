@@ -23,9 +23,10 @@ use gio::prelude::*;
 extern crate gstreamer as gst;
 use gst::prelude::*;
 
+extern crate gsttogglerecord;
+
 extern crate gtk;
 use gtk::prelude::*;
-
 use std::cell::RefCell;
 use std::env;
 
@@ -346,28 +347,7 @@ fn main() {
     gst::init().unwrap();
     gtk::init().unwrap();
 
-    #[cfg(debug_assertions)]
-    {
-        use std::path::Path;
-
-        let mut path = Path::new("target/debug");
-        if !path.exists() {
-            path = Path::new("../target/debug");
-        }
-
-        gst::Registry::get().scan_path(path);
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        use std::path::Path;
-
-        let mut path = Path::new("target/release");
-        if !path.exists() {
-            path = Path::new("../target/release");
-        }
-
-        gst::Registry::get().scan_path(path);
-    }
+    gsttogglerecord::plugin_register_static().expect("Failed to register togglerecord plugin");
 
     let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE).unwrap();
 
