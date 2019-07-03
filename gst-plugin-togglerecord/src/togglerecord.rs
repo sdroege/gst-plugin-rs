@@ -996,13 +996,10 @@ impl ToggleRecord {
 
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
 
-        let mut forward = true;
-        match event.view() {
-            EventView::Seek(..) => {
-                forward = false;
-            }
-            _ => (),
-        }
+        let forward = match event.view() {
+            EventView::Seek(..) => false,
+            _ => true,
+        };
 
         let rec_state = self.state.lock();
         let running_time_offset = rec_state.running_time_offset.unwrap_or(0) as i64;
@@ -1058,7 +1055,7 @@ impl ToggleRecord {
                         .collect::<Vec<_>>(),
                 );
                 gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());
-                return true;
+                true
             }
             QueryView::Seeking(ref mut q) => {
                 // Seeking is not possible here
@@ -1070,7 +1067,7 @@ impl ToggleRecord {
                 );
 
                 gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());
-                return true;
+                true
             }
             // Position and duration is always the current recording position
             QueryView::Position(ref mut q) => {
@@ -1085,9 +1082,9 @@ impl ToggleRecord {
                             state.current_running_time - rec_state.last_recording_start;
                     }
                     q.set(recording_duration);
-                    return true;
+                    true
                 } else {
-                    return false;
+                    false
                 }
             }
             QueryView::Duration(ref mut q) => {
@@ -1102,16 +1099,16 @@ impl ToggleRecord {
                             state.current_running_time - rec_state.last_recording_start;
                     }
                     q.set(recording_duration);
-                    return true;
+                    true
                 } else {
-                    return false;
+                    false
                 }
             }
-            _ => (),
-        };
-
-        gst_log!(self.cat, obj: pad, "Forwarding query {:?}", query);
-        stream.sinkpad.peer_query(query)
+            _ => {
+                gst_log!(self.cat, obj: pad, "Forwarding query {:?}", query);
+                stream.sinkpad.peer_query(query)
+            }
+        }
     }
 
     fn iterate_internal_links(
