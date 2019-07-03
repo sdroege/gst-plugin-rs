@@ -1342,8 +1342,8 @@ impl ElementImpl for ToggleRecord {
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
-        let mut other_streams = self.other_streams.lock();
-        let (ref mut other_streams, ref mut pad_count) = *other_streams;
+        let mut other_streams_guard = self.other_streams.lock();
+        let (ref mut other_streams, ref mut pad_count) = *other_streams_guard;
         let mut pads = self.pads.lock();
 
         let id = *pad_count;
@@ -1360,22 +1360,25 @@ impl ElementImpl for ToggleRecord {
         sinkpad.set_active(true).unwrap();
         srcpad.set_active(true).unwrap();
 
-        element.add_pad(&sinkpad).unwrap();
-        element.add_pad(&srcpad).unwrap();
-
-        let stream = Stream::new(sinkpad.clone(), srcpad);
+        let stream = Stream::new(sinkpad.clone(), srcpad.clone());
 
         pads.insert(stream.sinkpad.clone(), stream.clone());
         pads.insert(stream.srcpad.clone(), stream.clone());
 
         other_streams.push(stream);
 
+        drop(pads);
+        drop(other_streams_guard);
+
+        element.add_pad(&sinkpad).unwrap();
+        element.add_pad(&srcpad).unwrap();
+
         Some(sinkpad)
     }
 
     fn release_pad(&self, element: &gst::Element, pad: &gst::Pad) {
-        let mut other_streams = self.other_streams.lock();
-        let (ref mut other_streams, _) = *other_streams;
+        let mut other_streams_guard = self.other_streams.lock();
+        let (ref mut other_streams, _) = *other_streams_guard;
         let mut pads = self.pads.lock();
 
         let stream = match pads.get(pad) {
@@ -1386,15 +1389,18 @@ impl ElementImpl for ToggleRecord {
         stream.srcpad.set_active(false).unwrap();
         stream.sinkpad.set_active(false).unwrap();
 
-        element.remove_pad(&stream.sinkpad).unwrap();
-        element.remove_pad(&stream.srcpad).unwrap();
-
         pads.remove(&stream.sinkpad).unwrap();
         pads.remove(&stream.srcpad).unwrap();
 
         // TODO: Replace with Vec::remove_item() once stable
         let pos = other_streams.iter().position(|x| *x == stream);
         pos.map(|pos| other_streams.swap_remove(pos));
+
+        drop(pads);
+        drop(other_streams_guard);
+
+        element.remove_pad(&stream.sinkpad).unwrap();
+        element.remove_pad(&stream.srcpad).unwrap();
     }
 }
 

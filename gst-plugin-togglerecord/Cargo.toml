@@ -5,6 +5,7 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1+"
 description = "Toggle Record Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+edition = "2018"
 
 [dependencies]
 glib = { version = "0.8", features = ["subclassing"] }
