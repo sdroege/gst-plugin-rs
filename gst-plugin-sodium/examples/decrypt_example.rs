@@ -72,6 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .get_matches();
 
     gst::init()?;
+    gstsodium::plugin_register_static().expect("Failed to register sodium plugin");
 
     let input_loc = matches.value_of("input").unwrap();
     let out_loc = matches.value_of("output").unwrap();
