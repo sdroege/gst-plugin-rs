@@ -26,7 +26,7 @@ fn init() {
 struct Harness {
     src: gst::Element,
     pad: gst::Pad,
-    receiver: mpsc::Receiver<Message>,
+    receiver: Option<mpsc::Receiver<Message>>,
     rt: Option<tokio::runtime::Runtime>,
 }
 
@@ -73,19 +73,20 @@ impl Harness {
         // Collect all buffers, events and messages sent from the source
         let sender_clone = sender.clone();
         pad.set_chain_function(move |_pad, _parent, buffer| {
-            sender_clone.send(Message::Buffer(buffer)).unwrap();
+            let _ = sender_clone.send(Message::Buffer(buffer));
             Ok(gst::FlowSuccess::Ok)
         });
         let sender_clone = sender.clone();
         pad.set_event_function(move |_pad, _parent, event| {
-            sender_clone.send(Message::Event(event)).unwrap();
+            let _ = sender_clone.send(Message::Event(event));
             true
         });
         let bus = gst::Bus::new();
+        bus.set_flushing(false);
         src.set_bus(Some(&bus));
         let sender_clone = sender.clone();
         bus.set_sync_handler(move |_bus, msg| {
-            sender_clone.send(Message::Message(msg.clone())).unwrap();
+            let _ = sender_clone.send(Message::Message(msg.clone()));
             gst::BusSyncReply::Drop
         });
 
@@ -119,9 +120,7 @@ impl Harness {
 
         // Spawn the server in the background so that it can handle requests
         rt.spawn(server.map_err(move |e| {
-            sender
-                .send(Message::ServerError(format!("{:?}", e)))
-                .unwrap();
+            let _ = sender.send(Message::ServerError(format!("{:?}", e)));
         }));
 
         // Let the test setup anything needed on the HTTP source now
@@ -130,7 +129,7 @@ impl Harness {
         Harness {
             src,
             pad,
-            receiver,
+            receiver: Some(receiver),
             rt: Some(rt),
         }
     }
@@ -140,7 +139,7 @@ impl Harness {
     /// This function will panic on errors.
     fn wait_buffer_or_eos(&mut self) -> Option<gst::Buffer> {
         loop {
-            match self.receiver.recv().unwrap() {
+            match self.receiver.as_mut().unwrap().recv().unwrap() {
                 Message::ServerError(err) => {
                     panic!("Got server error: {}", err);
                 }
@@ -187,6 +186,12 @@ impl Drop for Harness {
         // and wait until the tokio runtime exited
         let bus = self.src.get_bus().unwrap();
         bus.set_flushing(true);
+
+        // Drop the receiver first before setting the state so that
+        // any threads that might still be blocked on the sender
+        // are immediately unblocked
+        self.receiver.take().unwrap();
+
         self.pad.set_active(false).unwrap();
         self.src.set_state(gst::State::Null).unwrap();
 
