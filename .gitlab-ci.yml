@@ -1,17 +1,13 @@
 stages:
   - "lint"
   - "test"
+  - "extras"
 
-.cargo_cache: &cache
-  cache:
-    key: "gst"
-    paths:
-      - ".cargo_cache/"
-
-.cargo_test_template: &cargo_test
-  stage: "test"
+.tarball_setup:
   variables:
-    G_DEBUG: "fatal_warnings"
+    # Only stuff inside the repo directory can be cached
+    # Override the CARGO_HOME variable to force its location
+    CARGO_HOME: "${CI_PROJECT_DIR}/.cargo_home"
     SODIUM_USE_PKG_CONFIG: "true"
     DEPENDENCIES: |
       curl
@@ -28,15 +24,9 @@ stages:
       libgl1-mesa-dri
       libgl1-mesa-glx
       libwayland-egl1-mesa
-
-  <<: *cache
   before_script:
     - apt-get update -yqq
     - apt-get install -yqq --no-install-recommends $DEPENDENCIES
-
-    # Only stuff inside the repo directory can be cached
-    # Override the CARGO_HOME variable to force its location
-    - export CARGO_HOME="${PWD}/.cargo_cache"
 
     - mkdir -p precompiled-gst && cd precompiled-gst
 
@@ -48,33 +38,40 @@ stages:
     - export PATH=$PATH:$PWD/gstreamer/bin
     - export LD_LIBRARY_PATH=$PWD/gstreamer/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
-    - rustc --version
-    - cargo --version
+    - cd "${CI_PROJECT_DIR}"
+  cache:
+    key: "gst"
+    paths:
+      - "${CARGO_HOME}"
+
+.cargo test:
+  extends: '.tarball_setup'
+  stage: "test"
   script:
-    - cargo build --all --color=always
-    - cargo test --all --color=always
-    - cargo build --all-features --all --color=always
-    - cargo test --all-features --all --color=always
-    - cargo build --all-features --examples --all --color=always
+    - rustc --version
+    - cargo build --color=always --all
+    - G_DEBUG=fatal_warnings cargo test --color=always --all
+    - cargo build --color=always --all --examples --all-features
+    - G_DEBUG=fatal_warnings cargo test --color=always --all --examples --all-features
 
 test 1.34:
   # 1.34 img
   # https://hub.docker.com/_/rust/
   image: "rust:1.34-slim"
-  <<: *cargo_test
+  extends: '.cargo test'
 
 test stable:
   # Stable img
   # https://hub.docker.com/_/rust/
   image: "rust:slim"
-  <<: *cargo_test
+  extends: '.cargo test'
 
 test nightly:
   # Nightly
   # https://hub.docker.com/r/rustlang/rust/
   image: "rustlang/rust:nightly-slim"
   allow_failure: true
-  <<: *cargo_test
+  extends: '.cargo test'
 
 rustfmt:
   image: "rust:slim"
@@ -83,3 +80,12 @@ rustfmt:
     - rustup component add rustfmt
     - cargo fmt --version
     - cargo fmt -- --color=always --check
+
+clippy:
+  extends: '.tarball_setup'
+  image: "rust:slim"
+  stage: 'extras'
+  allow_failure: true
+  script:
+    - rustup component add clippy-preview
+    - cargo clippy --color=always --all --all-features
