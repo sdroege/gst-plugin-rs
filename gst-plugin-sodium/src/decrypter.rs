@@ -120,7 +120,7 @@ impl State {
 
     // Split the buffer into N(`chunk_index`) chunks of `block_size`,
     // decrypt them, and push them to the internal adapter for further
-    // retreval
+    // retrieval
     fn decrypt_into_adapter(
         &mut self,
         element: &gst::Element,
@@ -414,7 +414,7 @@ impl Decrypter {
 
         let sodium_header_slice = &map[..crate::TYPEFIND_HEADER_SIZE];
         if sodium_header_slice != crate::TYPEFIND_HEADER {
-            let err = gst_loggable_error!(CAT, "Buffer has wrong tyfefind header");
+            let err = gst_loggable_error!(CAT, "Buffer has wrong typefind header");
             err.log_with_object(element);
             return Err(err);
         }
