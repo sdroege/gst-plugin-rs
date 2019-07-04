@@ -271,7 +271,6 @@ impl Encrypter {
                 })?,
         );
 
-        drop(state);
         drop(state_guard);
 
         for buffer in buffers {
@@ -324,7 +323,6 @@ impl Encrypter {
                 }
 
                 // drop the lock before pushing into the pad
-                drop(state);
                 drop(state_mutex);
 
                 for buffer in buffers {

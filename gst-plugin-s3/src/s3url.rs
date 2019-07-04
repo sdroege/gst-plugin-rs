@@ -85,10 +85,10 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
     }
 
     Ok(GstS3Url {
-        region: region,
-        bucket: bucket,
-        object: object,
-        version: version,
+        region,
+        bucket,
+        object,
+        version,
     })
 }
 

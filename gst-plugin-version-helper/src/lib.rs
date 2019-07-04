@@ -2,7 +2,7 @@ use chrono::TimeZone;
 use git2::{Commit, ObjectType, Repository};
 use std::path;
 
-pub fn get_info() -> () {
+pub fn get_info() {
     let mut commit_id = "UNKNOWN".to_string();
     let mut commit_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
 

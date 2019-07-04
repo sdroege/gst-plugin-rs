@@ -140,7 +140,7 @@ impl State {
 
         gst_debug!(CAT, obj: pad, "Returned pull size: {}", map.len());
 
-        let mut nonce = add_nonce(self.initial_nonce.clone().unwrap(), chunk_index);
+        let mut nonce = add_nonce(self.initial_nonce.unwrap(), chunk_index);
         let block_size = self.block_size.expect("Block size wasn't set") as usize + box_::MACBYTES;
 
         for subbuffer in map.chunks(block_size) {
