@@ -119,10 +119,9 @@ impl S3Src {
             }),
         )
         .map_err(|err| {
-            err.unwrap_or(gst_error_msg!(
-                gst::LibraryError::Failed,
-                ["Interrupted during start"]
-            ))
+            err.unwrap_or_else(|| {
+                gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
+            })
         })?;
 
         if let Some(size) = output.content_length {
@@ -300,7 +299,7 @@ impl ObjectImpl for S3Src {
         let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
         basesrc.set_format(gst::Format::Bytes);
         /* Set a larger default blocksize to make read more efficient */
-        basesrc.set_blocksize(262144);
+        basesrc.set_blocksize(256 * 1024);
     }
 }
 
@@ -368,7 +367,7 @@ impl BaseSrcImpl for S3Src {
         *state = StreamingState::Started {
             url: s3url,
             client: s3client,
-            size: size,
+            size,
         };
 
         Ok(())

@@ -290,10 +290,9 @@ impl S3Sink {
 
         s3utils::wait(&self.canceller, &self.runtime, complete_req_future)
             .map_err(|err| {
-                err.unwrap_or(gst_error_msg!(
-                    gst::LibraryError::Failed,
-                    ["Interrupted during stop"]
-                ))
+                err.unwrap_or_else(|| {
+                    gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during stop"])
+                })
             })
             .map(|_| ())
     }
@@ -313,16 +312,17 @@ impl S3Sink {
             });
         let response = s3utils::wait(&self.canceller, &self.runtime, create_multipart_req_future)
             .map_err(|err| {
-            err.unwrap_or(gst_error_msg!(
-                gst::LibraryError::Failed,
-                ["Interrupted during start"]
-            ))
+            err.unwrap_or_else(|| {
+                gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
+            })
         })?;
 
-        let upload_id = response.upload_id.ok_or(gst_error_msg!(
-            gst::ResourceError::Failed,
-            ["Failed to get multipart upload ID"]
-        ))?;
+        let upload_id = response.upload_id.ok_or_else(|| {
+            gst_error_msg!(
+                gst::ResourceError::Failed,
+                ["Failed to get multipart upload ID"]
+            )
+        })?;
 
         Ok(Started::new(
             Vec::with_capacity(self.settings.lock().unwrap().buffer_size as usize),

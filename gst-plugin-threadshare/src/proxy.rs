@@ -858,7 +858,7 @@ impl ProxySrc {
                 } else {
                     q.get_filter()
                         .map(|f| f.to_owned())
-                        .unwrap_or_else(|| gst::Caps::new_any())
+                        .unwrap_or_else(gst::Caps::new_any)
                 };
 
                 q.set_result(&caps);

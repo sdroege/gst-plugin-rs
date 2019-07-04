@@ -169,14 +169,10 @@ impl SocketRead for TcpClientReader {
             },
         };
         match socket.poll_read(buf) {
-            Ok(Async::Ready(result)) => {
-                return Ok(Async::Ready((result, None)));
-            }
-            Ok(Async::NotReady) => {
-                return Ok(Async::NotReady);
-            }
+            Ok(Async::Ready(result)) => Ok(Async::Ready((result, None))),
+            Ok(Async::NotReady) => Ok(Async::NotReady),
             Err(result) => return Err(result),
-        };
+        }
     }
 }
 
@@ -270,7 +266,7 @@ impl TcpClientSrc {
                 } else {
                     q.get_filter()
                         .map(|f| f.to_owned())
-                        .unwrap_or_else(|| gst::Caps::new_any())
+                        .unwrap_or_else(gst::Caps::new_any)
                 };
 
                 q.set_result(&caps);

@@ -303,14 +303,10 @@ impl SocketRead for UdpReader {
         buf: &mut [u8],
     ) -> Poll<(usize, Option<std::net::SocketAddr>), io::Error> {
         match self.socket.poll_recv_from(buf) {
-            Ok(Async::Ready(result)) => {
-                return Ok(Async::Ready((result.0, Some(result.1))));
-            }
-            Ok(Async::NotReady) => {
-                return Ok(Async::NotReady);
-            }
-            Err(result) => return Err(result),
-        };
+            Ok(Async::Ready(result)) => Ok(Async::Ready((result.0, Some(result.1)))),
+            Ok(Async::NotReady) => Ok(Async::NotReady),
+            Err(result) => Err(result),
+        }
     }
 }
 
@@ -404,7 +400,7 @@ impl UdpSrc {
                 } else {
                     q.get_filter()
                         .map(|f| f.to_owned())
-                        .unwrap_or_else(|| gst::Caps::new_any())
+                        .unwrap_or_else(gst::Caps::new_any)
                 };
 
                 q.set_result(&caps);

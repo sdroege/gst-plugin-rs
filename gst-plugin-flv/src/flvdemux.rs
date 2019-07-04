@@ -305,18 +305,17 @@ impl FlvDemux {
             }
 
             // TODO: pull mode
-            if false
-                && query.has_scheduling_mode_with_flags(
-                    gst::PadMode::Pull,
-                    gst::SchedulingFlags::SEEKABLE,
-                )
-            {
-                gst_debug!(CAT, obj: pad, "Activating in Pull mode");
-                gst::PadMode::Pull
-            } else {
-                gst_debug!(CAT, obj: pad, "Activating in Push mode");
-                gst::PadMode::Push
-            }
+            // if query.has_scheduling_mode_with_flags(
+            //         gst::PadMode::Pull,
+            //         gst::SchedulingFlags::SEEKABLE,
+            //     )
+            // {
+            //     gst_debug!(CAT, obj: pad, "Activating in Pull mode");
+            //     gst::PadMode::Pull
+            // } else {
+            gst_debug!(CAT, obj: pad, "Activating in Push mode");
+            gst::PadMode::Push
+            // }
         };
 
         pad.activate_mode(mode, true)?;

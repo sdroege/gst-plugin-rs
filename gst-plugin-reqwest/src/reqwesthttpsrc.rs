@@ -158,10 +158,9 @@ impl ReqwestHttpSrc {
                 )
             }))
             .map_err(|err| {
-                err.unwrap_or(gst_error_msg!(
-                    gst::LibraryError::Failed,
-                    ["Interrupted during start"]
-                ))
+                err.unwrap_or_else(|| {
+                    gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
+                })
             })?;
 
         if !response.status().is_success() {
@@ -457,13 +456,13 @@ impl BaseSrcImpl for ReqwestHttpSrc {
 
                 *body = Some(current_body);
 
-                return Ok(buffer);
+                Ok(buffer)
             }
             Ok((None, current_body)) => {
                 /* No further data, end of stream */
                 gst_debug!(cat, obj: src, "End of stream");
                 *body = Some(current_body);
-                return Err(gst::FlowError::Eos);
+                Err(gst::FlowError::Eos)
             }
             Err(err) => {
                 /* error */
@@ -475,7 +474,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
                     ["Failed to read at {}: {:?}", offset, err]
                 );
 
-                return Err(gst::FlowError::Error);
+                Err(gst::FlowError::Error)
             }
         }
     }
