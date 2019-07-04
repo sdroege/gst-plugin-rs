@@ -5,7 +5,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
 use bytes::Bytes;
 use futures::sync::oneshot;
 use futures::{Future, Stream};
@@ -14,6 +13,7 @@ use hyperx::header::{
     RangeUnit,
 };
 use reqwest::r#async::{Client, Decoder};
+use reqwest::StatusCode;
 use std::mem;
 use std::sync::Mutex;
 use std::u64;
@@ -163,13 +163,33 @@ impl ReqwestHttpSrc {
                 })
             })?;
 
-        //I have to read statusCode and produce error accordingly
         if !response.status().is_success() {
-            gst_error!(cat, obj: src, "Request status failed: {:?}", response);
-            return Err(gst_error_msg!(
-                gst::ResourceError::NotFound,
-                ["Failed to fetch {}: {}", uri, response.status()]
-            ));
+            match response.status() {
+                StatusCode::NOT_FOUND => {
+                    gst_error!(cat, obj: src, "Request status failed: {:?}", response);
+                    return Err(gst_error_msg!(
+                        gst::ResourceError::NotFound,
+                        ["Request status failed for {}: {}", uri, response.status()]
+                    ));
+                }
+                StatusCode::UNAUTHORIZED
+                | StatusCode::PAYMENT_REQUIRED
+                | StatusCode::FORBIDDEN
+                | StatusCode::PROXY_AUTHENTICATION_REQUIRED => {
+                    gst_error!(cat, obj: src, "Request status failed: {:?}", response);
+                    return Err(gst_error_msg!(
+                        gst::ResourceError::NotAuthorized,
+                        ["Request status failed for {}: {}", uri, response.status()]
+                    ));
+                }
+                _ => {
+                    gst_error!(cat, obj: src, "Request status failed: {:?}", response);
+                    return Err(gst_error_msg!(
+                        gst::ResourceError::OpenRead,
+                        ["Request status failed for {}: {}", uri, response.status()]
+                    ));
+                }
+            }
         }
 
         let headers = Headers::from(response.headers());
