@@ -134,6 +134,39 @@ impl Harness {
         }
     }
 
+    fn wait_for_error(&mut self) -> glib::Error {
+        loop {
+            match self.receiver.recv().unwrap() {
+                Message::ServerError(err) => {
+                    panic!("Got server error: {}", err);
+                }
+                Message::Event(ev) => {
+                    use gst::EventView;
+
+                    match ev.view() {
+                        EventView::Eos(_) => {
+                            panic!("Got EOS");
+                        }
+                        _ => (),
+                    }
+                }
+                Message::Message(msg) => {
+                    use gst::MessageView;
+
+                    match msg.view() {
+                        MessageView::Error(err) => {
+                            return err.get_error();
+                        }
+                        _ => (),
+                    }
+                }
+                Message::Buffer(buffer) => {
+                    panic!("Got buffer {:?}", buffer);
+                }
+            }
+        }
+    }
+
     /// Wait until a buffer is available or EOS was reached
     ///
     /// This function will panic on errors.
@@ -245,4 +278,34 @@ fn test_basic_request() {
 
     // Check if everything was read
     assert_eq!(cursor.position(), 11);
+}
+
+#[test]
+fn test_404_error() {
+    init();
+
+    let mut h = Harness::new(
+        |_req| {
+            use hyper::{Body, Response};
+
+            Response::builder().status(404).body(Body::empty()).unwrap()
+        },
+        |_src| {},
+    );
+
+    h.run(|src| {
+        let _ = src.set_state(gst::State::Playing);
+    });
+
+    let expected_error = gst::ResourceError::NotFound;
+
+    let err_code = h.wait_for_error();
+    if let Some(err) = err_code.kind::<gst::ResourceError>() {
+        match err {
+            gst::ResourceError::NotFound => {
+                assert_eq!(err, expected_error);
+            }
+            _ => panic!("unexpected error : {:?}", err),
+        }
+    }
 }

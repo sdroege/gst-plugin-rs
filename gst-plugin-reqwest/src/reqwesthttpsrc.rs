@@ -163,10 +163,11 @@ impl ReqwestHttpSrc {
                 })
             })?;
 
+        //I have to read statusCode and produce error accordingly
         if !response.status().is_success() {
             gst_error!(cat, obj: src, "Request status failed: {:?}", response);
             return Err(gst_error_msg!(
-                gst::ResourceError::Read,
+                gst::ResourceError::NotFound,
                 ["Failed to fetch {}: {}", uri, response.status()]
             ));
         }
