@@ -538,19 +538,26 @@ impl Decrypter {
         let chunk_index = offset as u64 / block_size as u64;
         gst_debug!(CAT, obj: pad, "Stream Block index: {}", chunk_index);
 
-        let buffer =
-            self.pull_requested_buffer(pad, element, requested_size, block_size, chunk_index)?;
+        let pull_offset = offset - (chunk_index * block_size as u64);
+        assert!(pull_offset <= std::u32::MAX as u64);
+        let pull_offset = pull_offset as u32;
+
+        let buffer = self.pull_requested_buffer(
+            pad,
+            element,
+            requested_size + pull_offset,
+            block_size,
+            chunk_index,
+        )?;
 
         let mut state = self.state.lock().unwrap();
         // This will only be run after READY state,
         // and will be guaranted to be initialized
         let state = state.as_mut().unwrap();
 
-        let adapter_offset = offset - (chunk_index * block_size as u64);
-        assert!(adapter_offset <= std::usize::MAX as u64);
-        let adapter_offset = adapter_offset as usize;
-
         state.decrypt_into_adapter(element, &self.srcpad, &buffer, chunk_index)?;
+
+        let adapter_offset = pull_offset as usize;
         state.get_requested_buffer(&self.srcpad, requested_size, adapter_offset)
     }
 }
