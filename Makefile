@@ -12,19 +12,22 @@ else
 endif
 endif
 
-all: debug
+ifeq ($(DEBUG),1)
+  CARGO_FLAGS=
+  BUILD_DIR=target/debug
+else
+  CARGO_FLAGS=--release
+  BUILD_DIR=target/release
+endif
 
-debug:
-	cargo build --all
+all: build
 
-release:
-	cargo build --all --release
+build:
+	cargo build --all $(CARGO_FLAGS)
 
-install: debug
-	install target/debug/*.$(SO_SUFFIX) $(PLUGINS_DIR)
-
-install-release: release
-	install target/release/*.$(SO_SUFFIX) $(PLUGINS_DIR)
+install: build
+	install -d $(DESTDIR)$(PLUGINS_DIR)
+	install -m 755 $(BUILD_DIR)/*.$(SO_SUFFIX) $(DESTDIR)$(PLUGINS_DIR)
 
 clean:
 	cargo clean
