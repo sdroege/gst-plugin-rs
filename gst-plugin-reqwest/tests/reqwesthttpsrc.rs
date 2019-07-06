@@ -167,6 +167,94 @@ impl Harness {
         }
     }
 
+    fn wait_for_state_change(&mut self) -> gst::State {
+        loop {
+            match self.receiver.as_mut().unwrap().recv().unwrap() {
+                Message::ServerError(err) => {
+                    panic!("Got server error: {}", err);
+                }
+                Message::Event(ev) => {
+                    use gst::EventView;
+
+                    match ev.view() {
+                        EventView::Eos(_) => {
+                            panic!("Got EOS but expected state change");
+                        }
+                        _ => (),
+                    }
+                }
+                Message::Message(msg) => {
+                    use gst::MessageView;
+
+                    match msg.view() {
+                        MessageView::StateChanged(state) => {
+                            return state.get_current();
+                        }
+                        MessageView::Error(err) => {
+                            use std::error::Error;
+                            panic!(
+                                "Got error: {} ({})",
+                                err.get_error().description(),
+                                err.get_debug().unwrap_or_else(|| String::from("None"))
+                            );
+                        }
+                        _ => (),
+                    }
+                }
+                Message::Buffer(_buffer) => {
+                    panic!("Got buffer but expected state change");
+                }
+            }
+        }
+    }
+
+    fn wait_for_segment(
+        &mut self,
+        allow_buffer: bool,
+    ) -> gst::FormattedSegment<gst::format::Bytes> {
+        loop {
+            match self.receiver.as_mut().unwrap().recv().unwrap() {
+                Message::ServerError(err) => {
+                    panic!("Got server error: {}", err);
+                }
+                Message::Event(ev) => {
+                    use gst::EventView;
+
+                    match ev.view() {
+                        EventView::Segment(seg) => {
+                            return seg
+                                .get_segment()
+                                .clone()
+                                .downcast::<gst::format::Bytes>()
+                                .unwrap();
+                        }
+                        _ => (),
+                    }
+                }
+                Message::Message(msg) => {
+                    use gst::MessageView;
+
+                    match msg.view() {
+                        MessageView::Error(err) => {
+                            use std::error::Error;
+                            panic!(
+                                "Got error: {} ({})",
+                                err.get_error().description(),
+                                err.get_debug().unwrap_or_else(|| String::from("None"))
+                            );
+                        }
+                        _ => (),
+                    }
+                }
+                Message::Buffer(_buffer) => {
+                    if !allow_buffer {
+                        panic!("Got buffer but expected segment");
+                    }
+                }
+            }
+        }
+    }
+
     /// Wait until a buffer is available or EOS was reached
     ///
     /// This function will panic on errors.
@@ -304,5 +392,167 @@ fn test_404_error() {
     let err_code = h.wait_for_error();
     if let Some(err) = err_code.kind::<gst::ResourceError>() {
         assert_eq!(err, gst::ResourceError::NotFound);
+    }
+}
+
+#[test]
+fn test_seek_after_ready() {
+    use std::io::{Cursor, Read};
+    init();
+
+    let mut h = Harness::new(
+        |req| {
+            use hyper::{Body, Response};
+
+            if req.headers().contains_key("Range") {
+                let range = req.headers().get("Range").unwrap();
+                if range == "bytes=123-" {
+                    let mut data_seek = vec![0; 8192 - 123];
+                    for (i, d) in data_seek.iter_mut().enumerate() {
+                        *d = (i + 123 % 256) as u8;
+                    }
+
+                    Response::builder()
+                        .header("content-length", 8192 - 123)
+                        .header("accept-ranges", "bytes")
+                        .header("content-range", "bytes 123-8192/8192")
+                        .body(Body::from(data_seek))
+                        .unwrap()
+                } else {
+                    panic!("Received an unexpected Range header")
+                }
+            } else {
+                // `panic!("Received no Range header")` should be called here but due to a bug
+                // in `basesrc` we cant do that here. If we do a seek in READY state, basesrc
+                // will do a `start()` call without seek. Once we get seek forwarded, the call
+                // with seek is made. This issue has to be solved.
+                // issue link: https://gitlab.freedesktop.org/gstreamer/gstreamer/issues/413
+                let mut data_full = vec![0; 8192];
+                for (i, d) in data_full.iter_mut().enumerate() {
+                    *d = (i % 256) as u8;
+                }
+
+                Response::builder()
+                    .header("content-length", 8192)
+                    .header("accept-ranges", "bytes")
+                    .body(Body::from(data_full))
+                    .unwrap()
+            }
+        },
+        |_src| {},
+    );
+
+    h.run(|src| {
+        src.set_state(gst::State::Ready).unwrap();
+    });
+
+    let current_state = h.wait_for_state_change();
+    assert_eq!(current_state, gst::State::Ready);
+
+    h.run(|src| {
+        src.seek_simple(gst::SeekFlags::FLUSH, gst::format::Bytes::from(123))
+            .unwrap();
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    let segment = h.wait_for_segment(false);
+    assert_eq!(
+        gst::format::Bytes::from(segment.get_start()),
+        gst::format::Bytes::from(123)
+    );
+
+    let mut expected_output = vec![0; 8192 - 123];
+    for (i, d) in expected_output.iter_mut().enumerate() {
+        *d = ((123 + i) % 256) as u8;
+    }
+    let mut cursor = Cursor::new(expected_output);
+
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        assert_eq!(buffer.get_offset(), 123 + cursor.position());
+
+        let map = buffer.map_readable().unwrap();
+        let mut read_buf = vec![0; map.get_size()];
+
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(&*map, &*read_buf);
+    }
+}
+
+#[test]
+fn test_seek_after_buffer_received() {
+    use std::io::{Cursor, Read};
+    init();
+
+    let mut h = Harness::new(
+        |req| {
+            use hyper::{Body, Response};
+
+            if req.headers().contains_key("Range") {
+                let range = req.headers().get("Range").unwrap();
+                if range == "bytes=123-" {
+                    let mut data_seek = vec![0; 8192 - 123];
+                    for (i, d) in data_seek.iter_mut().enumerate() {
+                        *d = (i + 123 % 256) as u8;
+                    }
+
+                    Response::builder()
+                        .header("content-length", 8192 - 123)
+                        .header("accept-ranges", "bytes")
+                        .header("content-range", "bytes 123-8192/8192")
+                        .body(Body::from(data_seek))
+                        .unwrap()
+                } else {
+                    panic!("Received an unexpected Range header")
+                }
+            } else {
+                let mut data_full = vec![0; 8192];
+                for (i, d) in data_full.iter_mut().enumerate() {
+                    *d = (i % 256) as u8;
+                }
+
+                Response::builder()
+                    .header("content-length", 8192)
+                    .header("accept-ranges", "bytes")
+                    .body(Body::from(data_full))
+                    .unwrap()
+            }
+        },
+        |_src| {},
+    );
+
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    //wait for a buffer
+    let buffer = h.wait_buffer_or_eos().unwrap();
+    assert_eq!(buffer.get_offset(), 0);
+
+    //seek to a position after a buffer is Received
+    h.run(|src| {
+        src.seek_simple(gst::SeekFlags::FLUSH, gst::format::Bytes::from(123))
+            .unwrap();
+    });
+
+    let segment = h.wait_for_segment(true);
+    assert_eq!(
+        gst::format::Bytes::from(segment.get_start()),
+        gst::format::Bytes::from(123)
+    );
+
+    let mut expected_output = vec![0; 8192 - 123];
+    for (i, d) in expected_output.iter_mut().enumerate() {
+        *d = ((123 + i) % 256) as u8;
+    }
+    let mut cursor = Cursor::new(expected_output);
+
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        assert_eq!(buffer.get_offset(), 123 + cursor.position());
+
+        let map = buffer.map_readable().unwrap();
+        let mut read_buf = vec![0; map.get_size()];
+
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(&*map, &*read_buf);
     }
 }
