@@ -36,7 +36,7 @@
 
 use chrono::TimeZone;
 use git2::{Commit, ObjectType, Repository};
-use std::{fs, path};
+use std::{env, fs, path};
 
 /// Extracts release for GStreamer plugin metadata
 ///
@@ -77,7 +77,8 @@ pub fn get_info() {
     let mut commit_id = "UNKNOWN".into();
     let mut commit_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
-    let crate_dir = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let crate_dir =
+        path::PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
     let mut repo_dir = crate_dir.clone();
 
     // First check for a git repository in the manifest directory and if there
