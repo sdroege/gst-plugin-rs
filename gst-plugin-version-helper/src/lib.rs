@@ -3,10 +3,76 @@
 //
 // Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
 
+//! Extracts release for [GStreamer](https://gstreamer.freedesktop.org) plugin metadata
+//!
+//! See [`get_info`](fn.get_info.html) for details.
+//!
+//! This function is supposed to be used as follows in the `build.rs` of a crate that implements a
+//! plugin:
+//!
+//! ```rust,ignore
+//! extern crate gst_plugin_version_helper;
+//!
+//! fn main() {
+//!     gst_plugin_version_helper::get_info()
+//! }
+//! ```
+//!
+//! Inside `lib.rs` of the plugin, the information provided by `get_info` are usable as follows:
+//!
+//! ```rust,ignore
+//! gst_plugin_define!(
+//!     the_plugin_name,
+//!     env!("CARGO_PKG_DESCRIPTION"),
+//!     plugin_init,
+//!     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
+//!     "The Plugin's License",
+//!     env!("CARGO_PKG_NAME"),
+//!     env!("CARGO_PKG_NAME"),
+//!     env!("CARGO_PKG_REPOSITORY"),
+//!     env!("BUILD_REL_DATE")
+//! );
+//! ```
+
 use chrono::TimeZone;
 use git2::{Commit, ObjectType, Repository};
 use std::{fs, path};
 
+/// Extracts release for GStreamer plugin metadata
+///
+/// Release information is first tried to be extracted from a git repository at the same
+/// place as the `Cargo.toml`, or one directory up to allow for Cargo workspaces. If no
+/// git repository is found, the information is extract from a `release.txt` in the same
+/// directory as the `Cargo.toml`.
+///
+/// - If extracted from a git repository, sets the `COMMIT_ID` environment variable to the short
+///   commit id of the latest commit and the `BUILD_REL_DATE` environment variable to the date of the
+///   commit.
+///
+/// - If extracted from a `release.txt`, `COMMIT_ID` will be set to the string `RELEASE` and the
+///   `BUILD_REL_DATE` variable will be set to the release date extracted from `release.txt`.
+///
+/// - If neither is possible, `COMMIT_ID` is set to the string `UNKNOWN` and `BUILD_REL_DATE` to the
+///   current date.
+///
+/// ## `release.txt`
+///
+/// `release.txt` is only parsed if no git repository was found and is assumed to be in the format
+///
+/// ```txt
+/// version_number
+/// release_date
+/// ```
+///
+/// for example
+///
+/// ```txt
+/// 1.16.0
+/// 2019-04-19
+/// ```
+///
+/// If the version number from `Cargo.toml` is not equivalent to the one in `release.txt`, this
+/// function will panic.
 pub fn get_info() {
     let mut commit_id = "UNKNOWN".into();
     let mut commit_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
