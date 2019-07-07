@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-s3"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Arun Raghavan <arun@arunraghavan.net>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
 license = "MIT/Apache-2.0"
