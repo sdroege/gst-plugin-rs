@@ -8,12 +8,16 @@ pub fn get_info() {
 
     let crate_dir = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut repo_dir = crate_dir.clone();
-    repo_dir.pop();
+
+    // First check for a git repository in the manifest directory and if there
+    // is none try one directory up in case we're in a Cargo workspace
+    let repo = Repository::open(&repo_dir).or_else(move |_| {
+        repo_dir.pop();
+        Repository::open(&repo_dir)
+    });
 
     let mut release_file = crate_dir.clone();
     release_file.push("release.txt");
-
-    let repo = Repository::open(&repo_dir);
 
     // If there is a git repository, extract the version information from there.
     // Otherwise use a 'release.txt' file as fallback, or report the current
