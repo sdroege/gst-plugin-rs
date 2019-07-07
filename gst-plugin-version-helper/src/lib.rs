@@ -1,3 +1,8 @@
+// Copyright (C) 2019 Sajeer Ahamed <ahamedsajeer.15.15@cse.mrt.ac.lk>
+// Copyright (C) 2019 Sebastian Dröge <sebastian@centricular.com>
+//
+// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+
 use chrono::TimeZone;
 use git2::{Commit, ObjectType, Repository};
 use std::{fs, path};

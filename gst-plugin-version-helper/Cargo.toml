@@ -1,7 +1,14 @@
 [package]
 name = "gst-plugin-version-helper"
 version = "0.1.0"
-authors = ["Sajeer Ahamed <ahamedsajeer.15.15@cse.mrt.ac.lk>"]
+authors = ["Sajeer Ahamed <ahamedsajeer.15.15@cse.mrt.ac.lk>",
+           "Sebastian Dröge <sebastian@centricular.com>"]
+categories = ["development-tools"]
+description = "build.rs helper function for GStreamer plugin metadata"
+repository = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+license = "MIT"
+homepage = "https://gstreamer.freedesktop.org"
+keywords = ["gstreamer", "multimedia", "cargo"]
 edition = "2018"
 
 [dependencies]
