@@ -187,6 +187,12 @@ trait HandleData: Sized {
     }
     fn get_duration(&self, state: &StreamState) -> gst::ClockTime;
     fn is_keyframe(&self) -> bool;
+    fn can_clip(&self, state: &StreamState) -> bool;
+    fn clip(
+        self,
+        state: &StreamState,
+        segment: &gst::FormattedSegment<gst::ClockTime>,
+    ) -> Option<Self>;
 }
 
 impl HandleData for (gst::ClockTime, gst::ClockTime) {
@@ -204,6 +210,26 @@ impl HandleData for (gst::ClockTime, gst::ClockTime) {
 
     fn is_keyframe(&self) -> bool {
         true
+    }
+
+    fn can_clip(&self, _state: &StreamState) -> bool {
+        true
+    }
+
+    fn clip(
+        self,
+        _state: &StreamState,
+        segment: &gst::FormattedSegment<gst::ClockTime>,
+    ) -> Option<Self> {
+        let stop = if self.1.is_some() {
+            self.0 + self.1
+        } else {
+            self.0
+        };
+
+        segment
+            .clip(self.0, stop)
+            .map(|(start, stop)| (start, stop - start))
     }
 }
 
@@ -239,11 +265,9 @@ impl HandleData for gst::Buffer {
 
             let size = self.get_size() as u64;
             let num_samples = size / audio_info.bpf() as u64;
-            let duration = gst::SECOND
+            gst::SECOND
                 .mul_div_floor(num_samples, audio_info.rate() as u64)
-                .unwrap_or(gst::CLOCK_TIME_NONE);
-
-            duration
+                .unwrap_or(gst::CLOCK_TIME_NONE)
         } else {
             gst::CLOCK_TIME_NONE
         }
@@ -251,6 +275,71 @@ impl HandleData for gst::Buffer {
 
     fn is_keyframe(&self) -> bool {
         !gst::BufferRef::get_flags(self).contains(gst::BufferFlags::DELTA_UNIT)
+    }
+
+    fn can_clip(&self, state: &StreamState) -> bool {
+        // Only do actual clipping for raw audio/video
+        if let Some(ref audio_info) = state.audio_info {
+            if audio_info.format() == gst_audio::AudioFormat::Unknown
+                || audio_info.format() == gst_audio::AudioFormat::Encoded
+                || audio_info.rate() == 0
+                || audio_info.bpf() == 0
+            {
+                return false;
+            }
+        } else if let Some(ref video_info) = state.video_info {
+            if video_info.format() == gst_video::VideoFormat::Unknown
+                || video_info.format() == gst_video::VideoFormat::Encoded
+                || self.get_dts_or_pts() != self.get_pts()
+            {
+                return false;
+            }
+        } else {
+            return false;
+        }
+
+        true
+    }
+
+    fn clip(
+        mut self,
+        state: &StreamState,
+        segment: &gst::FormattedSegment<gst::ClockTime>,
+    ) -> Option<Self> {
+        // Only do actual clipping for raw audio/video
+        if !self.can_clip(state) {
+            return Some(self);
+        }
+
+        let pts = HandleData::get_pts(&self);
+        let duration = HandleData::get_duration(&self, state);
+        let stop = if duration.is_some() {
+            pts + duration
+        } else {
+            pts
+        };
+
+        if let Some(ref audio_info) = state.audio_info {
+            gst_audio::audio_buffer_clip(
+                self,
+                segment.upcast_ref(),
+                audio_info.rate(),
+                audio_info.bpf(),
+            )
+        } else if let Some(_) = state.video_info {
+            segment.clip(pts, stop).map(move |(start, stop)| {
+                {
+                    let buffer = self.make_mut();
+                    buffer.set_pts(start);
+                    buffer.set_dts(start);
+                    buffer.set_duration(stop - start);
+                }
+
+                self
+            })
+        } else {
+            unreachable!();
+        }
     }
 }
 
@@ -348,6 +437,15 @@ impl ToggleRecord {
             dts_or_pts
         };
 
+        let data = match data.clip(&state, &state.in_segment) {
+            None => {
+                gst_log!(self.cat, obj: pad, "Dropping raw data outside segment");
+                return Ok(HandleResult::Drop);
+            }
+            Some(data) => data,
+        };
+
+        // This will only do anything for non-raw data
         dts_or_pts = cmp::max(state.in_segment.get_start(), dts_or_pts);
         dts_or_pts_end = cmp::max(state.in_segment.get_start(), dts_or_pts_end);
         if state.in_segment.get_stop().is_some() {
@@ -355,17 +453,15 @@ impl ToggleRecord {
             dts_or_pts_end = cmp::min(state.in_segment.get_stop(), dts_or_pts_end);
         }
 
-        let mut current_running_time = state.in_segment.to_running_time(dts_or_pts);
-        current_running_time = cmp::max(current_running_time, state.current_running_time);
-        state.current_running_time = current_running_time;
+        let current_running_time = state.in_segment.to_running_time(dts_or_pts);
+        let current_running_time_end = state.in_segment.to_running_time(dts_or_pts_end);
+        state.current_running_time = cmp::max(current_running_time_end, state.current_running_time);
 
         // Wake up everybody, we advanced a bit
         // Important: They will only be able to advance once we're done with this
         // function or waiting for them to catch up below, otherwise they might
         // get the wrong state
         self.main_stream_cond.notify_all();
-
-        let current_running_time_end = state.in_segment.to_running_time(dts_or_pts_end);
 
         gst_log!(
             self.cat,
@@ -420,19 +516,18 @@ impl ToggleRecord {
                     return Ok(HandleResult::Pass(data));
                 }
 
-                // Remember the time when we stopped: now!
+                // Remember the time when we stopped: now, i.e. right before the current buffer!
                 rec_state.last_recording_stop = current_running_time;
                 gst_debug!(self.cat, obj: pad, "Stopping at {}", current_running_time);
 
-                // Then unlock and wait for all other streams to reach
-                // it or go EOS instead.
+                // Then unlock and wait for all other streams to reach it or go EOS instead.
                 drop(rec_state);
 
                 while !self.other_streams.lock().0.iter().all(|s| {
                     let s = s.state.lock();
                     s.eos
                         || (s.current_running_time.is_some()
-                            && s.current_running_time >= current_running_time)
+                            && s.current_running_time >= current_running_time_end)
                 }) {
                     gst_log!(self.cat, obj: pad, "Waiting for other streams to stop");
                     self.main_stream_cond.wait(&mut state);
@@ -511,7 +606,7 @@ impl ToggleRecord {
                     let s = s.state.lock();
                     s.eos
                         || (s.current_running_time.is_some()
-                            && s.current_running_time >= current_running_time)
+                            && s.current_running_time >= current_running_time_end)
                 }) {
                     gst_log!(self.cat, obj: pad, "Waiting for other streams to start");
                     self.main_stream_cond.wait(&mut state);
@@ -586,32 +681,26 @@ impl ToggleRecord {
             pts
         };
 
-        pts = cmp::max(state.in_segment.get_start(), pts);
-        if state.in_segment.get_stop().is_some() && pts >= state.in_segment.get_stop() {
-            state.current_running_time = state
-                .in_segment
-                .to_running_time(state.in_segment.get_stop());
-            state.eos = true;
-            gst_debug!(
-                self.cat,
-                obj: pad,
-                "After segment end {} >= {}, EOS",
-                pts,
-                state.in_segment.get_stop()
-            );
+        let data = match data.clip(&state, &state.in_segment) {
+            None => {
+                gst_log!(self.cat, obj: pad, "Dropping raw data outside segment");
+                return Ok(HandleResult::Drop);
+            }
+            Some(data) => data,
+        };
 
-            return Ok(HandleResult::Eos);
-        }
+        // This will only do anything for non-raw data
+        pts = cmp::max(state.in_segment.get_start(), pts);
         pts_end = cmp::max(state.in_segment.get_start(), pts_end);
         if state.in_segment.get_stop().is_some() {
+            pts = cmp::min(state.in_segment.get_stop(), pts);
             pts_end = cmp::min(state.in_segment.get_stop(), pts_end);
         }
 
-        let mut current_running_time = state.in_segment.to_running_time(pts);
-        current_running_time = cmp::max(current_running_time, state.current_running_time);
-        state.current_running_time = current_running_time;
-
+        let current_running_time = state.in_segment.to_running_time(pts);
         let current_running_time_end = state.in_segment.to_running_time(pts_end);
+        state.current_running_time = cmp::max(current_running_time_end, state.current_running_time);
+
         gst_log!(
             self.cat,
             obj: pad,
@@ -631,7 +720,7 @@ impl ToggleRecord {
         self.main_stream_cond.notify_all();
 
         while (main_state.current_running_time == gst::CLOCK_TIME_NONE
-            || main_state.current_running_time < current_running_time)
+            || main_state.current_running_time < current_running_time_end)
             && !main_state.eos
             && !stream.state.lock().flushing
         {
@@ -645,7 +734,10 @@ impl ToggleRecord {
 
             self.main_stream_cond.wait(&mut main_state);
         }
-        if stream.state.lock().flushing {
+
+        state = stream.state.lock();
+
+        if state.flushing {
             gst_debug!(self.cat, obj: pad, "Flushing");
             return Ok(HandleResult::Flushing);
         }
@@ -655,36 +747,126 @@ impl ToggleRecord {
         // If the main stream is EOS, we are also EOS unless we are
         // before the final last recording stop running time
         if main_state.eos {
-            // If we have no start or stop position (we never recorded), or are after the current
-            // stop position that we're EOS now
-            // If we're before the start position (we were starting before EOS),
-            // drop the buffer
-            if rec_state.last_recording_stop.is_none()
-                || rec_state.last_recording_start.is_none()
-                || current_running_time_end > rec_state.last_recording_stop
-            {
+            // If we have no start or stop position (we never recorded) then we're EOS too now
+            if rec_state.last_recording_stop.is_none() || rec_state.last_recording_start.is_none() {
                 gst_debug!(
                     self.cat,
                     obj: pad,
-                    "Main stream EOS and we're EOS ({} > {})",
-                    current_running_time_end,
-                    rec_state.last_recording_stop
+                    "Main stream EOS and recording never started",
                 );
                 return Ok(HandleResult::Eos);
+            } else if data.can_clip(&*state)
+                && current_running_time < rec_state.last_recording_start
+                && current_running_time_end > rec_state.last_recording_start
+            {
+                // Otherwise if we're before the recording start but the end of the buffer is after
+                // the start and we can clip, clip the buffer and pass it onwards.
+                gst_debug!(
+                        self.cat,
+                        obj: pad,
+                        "Main stream EOS and we're not EOS yet (overlapping recording start, {} < {} < {})",
+                        current_running_time,
+                        rec_state.last_recording_start,
+                        current_running_time_end
+                    );
+
+                let mut clip_start = state
+                    .in_segment
+                    .position_from_running_time(rec_state.last_recording_start);
+                if clip_start.is_none() {
+                    clip_start = state.in_segment.get_start();
+                }
+                let mut clip_stop = state
+                    .in_segment
+                    .position_from_running_time(rec_state.last_recording_stop);
+                if clip_stop.is_none() {
+                    clip_stop = state.in_segment.get_stop();
+                }
+                let mut segment = state.in_segment.clone();
+                segment.set_start(clip_start);
+                segment.set_stop(clip_stop);
+
+                gst_log!(self.cat, obj: pad, "Clipping to segment {:?}", segment,);
+
+                if let Some(data) = data.clip(&*state, &segment) {
+                    return Ok(HandleResult::Pass(data));
+                } else {
+                    gst_warning!(self.cat, obj: pad, "Complete buffer clipped!");
+                    return Ok(HandleResult::Drop);
+                }
             } else if current_running_time < rec_state.last_recording_start {
+                // Otherwise if the buffer starts before the recording start, drop it. This
+                // means that we either can't clip, or that the end is also before the
+                // recording start
                 gst_debug!(
                     self.cat,
                     obj: pad,
-                    "Main stream EOS and we're not EOS yet (before recording start, {} <= {})",
+                    "Main stream EOS and we're not EOS yet (before recording start, {} < {})",
                     current_running_time,
                     rec_state.last_recording_start
                 );
                 return Ok(HandleResult::Drop);
-            } else {
+            } else if data.can_clip(&*state)
+                && current_running_time < rec_state.last_recording_stop
+                && current_running_time_end > rec_state.last_recording_stop
+            {
+                // Similarly if the end is after the recording stop but the start is before and we
+                // can clip, clip the buffer and pass it through.
+                gst_debug!(
+                        self.cat,
+                        obj: pad,
+                        "Main stream EOS and we're not EOS yet (overlapping recording end, {} < {} < {})",
+                        current_running_time,
+                        rec_state.last_recording_stop,
+                        current_running_time_end
+                    );
+
+                let mut clip_start = state
+                    .in_segment
+                    .position_from_running_time(rec_state.last_recording_start);
+                if clip_start.is_none() {
+                    clip_start = state.in_segment.get_start();
+                }
+                let mut clip_stop = state
+                    .in_segment
+                    .position_from_running_time(rec_state.last_recording_stop);
+                if clip_stop.is_none() {
+                    clip_stop = state.in_segment.get_stop();
+                }
+                let mut segment = state.in_segment.clone();
+                segment.set_start(clip_start);
+                segment.set_stop(clip_stop);
+
+                gst_log!(self.cat, obj: pad, "Clipping to segment {:?}", segment,);
+
+                if let Some(data) = data.clip(&*state, &segment) {
+                    return Ok(HandleResult::Pass(data));
+                } else {
+                    gst_warning!(self.cat, obj: pad, "Complete buffer clipped!");
+                    return Ok(HandleResult::Eos);
+                }
+            } else if current_running_time_end > rec_state.last_recording_stop {
+                // Otherwise if the end of the buffer is after the recording stop, we're EOS
+                // now. This means that we either couldn't clip or that the start is also after
+                // the recording stop
                 gst_debug!(
                     self.cat,
                     obj: pad,
-                    "Main stream EOS and we're not EOS yet (before recording end, {} <= {} < {})",
+                    "Main stream EOS and we're EOS too (after recording end, {} > {})",
+                    current_running_time_end,
+                    rec_state.last_recording_stop
+                );
+                return Ok(HandleResult::Eos);
+            } else {
+                // In all other cases the buffer is fully between recording start and end and
+                // can be passed through as is
+                assert!(current_running_time >= rec_state.last_recording_start);
+                assert!(current_running_time_end <= rec_state.last_recording_stop);
+
+                gst_debug!(
+                    self.cat,
+                    obj: pad,
+                    "Main stream EOS and we're not EOS yet (before recording end, {} <= {} <= {})",
                     rec_state.last_recording_start,
                     current_running_time,
                     rec_state.last_recording_stop
@@ -693,7 +875,8 @@ impl ToggleRecord {
             }
         }
 
-        assert!(main_state.current_running_time >= current_running_time);
+        // The end of our buffer is before the end of the previous buffer of the main stream
+        assert!(main_state.current_running_time >= current_running_time_end);
 
         match rec_state.recording_state {
             RecordingState::Recording => {
@@ -722,6 +905,36 @@ impl ToggleRecord {
                         rec_state.last_recording_stop
                     );
                     Ok(HandleResult::Pass(data))
+                } else if data.can_clip(&*state)
+                    && current_running_time < rec_state.last_recording_stop
+                    && current_running_time_end > rec_state.last_recording_stop
+                {
+                    gst_log!(
+                        self.cat,
+                        obj: pad,
+                        "Passing buffer (stopping: {} < {} < {})",
+                        current_running_time,
+                        rec_state.last_recording_stop,
+                        current_running_time_end,
+                    );
+
+                    let mut clip_stop = state
+                        .in_segment
+                        .position_from_running_time(rec_state.last_recording_stop);
+                    if clip_stop.is_none() {
+                        clip_stop = state.in_segment.get_stop();
+                    }
+                    let mut segment = state.in_segment.clone();
+                    segment.set_stop(clip_stop);
+
+                    gst_log!(self.cat, obj: pad, "Clipping to segment {:?}", segment,);
+
+                    if let Some(data) = data.clip(&*state, &segment) {
+                        Ok(HandleResult::Pass(data))
+                    } else {
+                        gst_warning!(self.cat, obj: pad, "Complete buffer clipped!");
+                        Ok(HandleResult::Drop)
+                    }
                 } else {
                     gst_log!(
                         self.cat,
@@ -756,6 +969,36 @@ impl ToggleRecord {
                         rec_state.last_recording_start
                     );
                     Ok(HandleResult::Pass(data))
+                } else if data.can_clip(&*state)
+                    && current_running_time < rec_state.last_recording_start
+                    && current_running_time_end > rec_state.last_recording_start
+                {
+                    gst_log!(
+                        self.cat,
+                        obj: pad,
+                        "Passing buffer (starting: {} < {} < {})",
+                        current_running_time,
+                        rec_state.last_recording_start,
+                        current_running_time_end,
+                    );
+
+                    let mut clip_start = state
+                        .in_segment
+                        .position_from_running_time(rec_state.last_recording_start);
+                    if clip_start.is_none() {
+                        clip_start = state.in_segment.get_start();
+                    }
+                    let mut segment = state.in_segment.clone();
+                    segment.set_start(clip_start);
+
+                    gst_log!(self.cat, obj: pad, "Clipping to segment {:?}", segment,);
+
+                    if let Some(data) = data.clip(&*state, &segment) {
+                        Ok(HandleResult::Pass(data))
+                    } else {
+                        gst_warning!(self.cat, obj: pad, "Complete buffer clipped!");
+                        Ok(HandleResult::Drop)
+                    }
                 } else {
                     gst_log!(
                         self.cat,
@@ -776,19 +1019,14 @@ impl ToggleRecord {
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let stream = self
-            .pads
-            .lock()
-            .get(pad)
-            .map(|stream| stream.clone())
-            .ok_or_else(|| {
-                gst_element_error!(
-                    element,
-                    gst::CoreError::Pad,
-                    ["Unknown pad {:?}", pad.get_name()]
-                );
-                gst::FlowError::Error
-            })?;
+        let stream = self.pads.lock().get(pad).cloned().ok_or_else(|| {
+            gst_element_error!(
+                element,
+                gst::CoreError::Pad,
+                ["Unknown pad {:?}", pad.get_name()]
+            );
+            gst::FlowError::Error
+        })?;
 
         gst_log!(self.cat, obj: pad, "Handling buffer {:?}", buffer);
 
@@ -930,10 +1168,12 @@ impl ToggleRecord {
                 let s = caps.get_structure(0).unwrap();
                 if s.get_name().starts_with("audio/") {
                     state.audio_info = gst_audio::AudioInfo::from_caps(caps);
+                    gst_log!(self.cat, obj: pad, "Got audio caps {:?}", state.audio_info);
                     state.video_info = None;
                 } else if s.get_name().starts_with("video/") {
                     state.audio_info = None;
                     state.video_info = gst_video::VideoInfo::from_caps(caps);
+                    gst_log!(self.cat, obj: pad, "Got video caps {:?}", state.video_info);
                 } else {
                     state.audio_info = None;
                     state.video_info = None;
