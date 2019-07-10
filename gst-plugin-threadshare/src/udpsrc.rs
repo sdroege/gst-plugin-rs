@@ -133,13 +133,14 @@ unsafe fn dup_socket(socket: usize) -> usize {
     use winapi::um::processthreadsapi;
     use winapi::um::winsock2;
 
-    let mut proto_info = mem::zeroed();
+    let mut proto_info = mem::MaybeUninit::uninit();
     let ret = winsock2::WSADuplicateSocketA(
         socket,
         processthreadsapi::GetCurrentProcessId(),
-        &mut proto_info,
+        proto_info.as_mut_ptr(),
     );
     assert_eq!(ret, 0);
+    let mut proto_info = prot_info.assume_init();
 
     let socket = winsock2::WSASocketA(
         ws2def::AF_INET,
