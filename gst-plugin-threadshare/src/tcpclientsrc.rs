@@ -171,7 +171,7 @@ impl SocketRead for TcpClientReader {
         match socket.poll_read(buf) {
             Ok(Async::Ready(result)) => Ok(Async::Ready((result, None))),
             Ok(Async::NotReady) => Ok(Async::NotReady),
-            Err(result) => return Err(result),
+            Err(result) => Err(result),
         }
     }
 }

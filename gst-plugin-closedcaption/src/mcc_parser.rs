@@ -354,7 +354,7 @@ where
         )),
         token(b'\t'),
         if parse_payload {
-            mcc_payload().map(|v| Some(v)).right()
+            mcc_payload().map(Some).right()
         } else {
             skip_many(any()).map(|_| None).left()
         },

@@ -19,7 +19,7 @@ mod constants;
 
 use constants::{CDG_COMMAND, CDG_MASK, CDG_PACKET_SIZE};
 
-const TYPEFIND_SEARCH_WINDOW: i64 = 100000; /* in bytes */
+const TYPEFIND_SEARCH_WINDOW: i64 = 100_000; /* in bytes */
 
 /* Return the percentage of CDG packets in the first @len bytes of @typefind */
 fn cdg_packets_ratio(typefind: &mut gst::TypeFind, len: i64) -> i64 {

@@ -166,12 +166,11 @@ impl State {
             combine::easy::Errors<u8, &[u8], combine::stream::PointerOffset>,
         ),
     > {
-        let line = match self.replay_last_line {
-            true => {
-                self.replay_last_line = false;
-                &self.last_raw_line
-            }
-            false => match self.reader.get_line_with_drain(drain) {
+        let line = if self.replay_last_line {
+            self.replay_last_line = false;
+            &self.last_raw_line
+        } else {
+            match self.reader.get_line_with_drain(drain) {
                 None => {
                     return Ok(None);
                 }
@@ -179,7 +178,7 @@ impl State {
                     self.last_raw_line = line.to_vec();
                     line
                 }
-            },
+            }
         };
 
         self.parser
@@ -268,7 +267,7 @@ impl State {
         element: &gst::Element,
         buffer: &mut gst::buffer::Buffer,
         timecode: &gst_video::ValidVideoTimeCode,
-        framerate: &gst::Fraction,
+        framerate: gst::Fraction,
     ) {
         let buffer = buffer.get_mut().unwrap();
         gst_video::VideoTimeCodeMeta::add(buffer, &timecode);
@@ -293,7 +292,7 @@ impl State {
         &mut self,
         element: &gst::Element,
         format: Option<Format>,
-        framerate: &gst::Fraction,
+        framerate: gst::Fraction,
     ) -> Vec<gst::Event> {
         let mut events = Vec::new();
 
@@ -322,11 +321,11 @@ impl State {
                 let caps = match format {
                     Format::Cea708Cdp => gst::Caps::builder("closedcaption/x-cea-708")
                         .field("format", &"cdp")
-                        .field("framerate", framerate)
+                        .field("framerate", &framerate)
                         .build(),
                     Format::Cea608 => gst::Caps::builder("closedcaption/x-cea-608")
                         .field("format", &"s334-1a")
-                        .field("framerate", framerate)
+                        .field("framerate", &framerate)
                         .build(),
                 };
 
@@ -606,7 +605,7 @@ impl MccParse {
         mut state: MutexGuard<State>,
     ) -> Result<MutexGuard<State>, gst::FlowError> {
         let (framerate, drop_frame) = parse_timecode_rate(state.timecode_rate)?;
-        let events = state.create_events(element, Some(format), &framerate);
+        let events = state.create_events(element, Some(format), framerate);
         let timecode = state.handle_timecode(element, framerate, drop_frame, tc)?;
 
         let len = data[2] as usize;
@@ -616,7 +615,7 @@ impl MccParse {
             len,
         });
 
-        state.add_buffer_metadata(element, &mut buffer, &timecode, &framerate);
+        state.add_buffer_metadata(element, &mut buffer, &timecode, framerate);
 
         // Update the last_timecode to the current one
         state.last_timecode = Some(timecode);
@@ -780,14 +779,7 @@ impl MccParse {
                 reader.push(buf);
             }
 
-            loop {
-                let line = match reader.get_line_with_drain(true) {
-                    Some(line) => line,
-                    None => {
-                        break;
-                    }
-                };
-
+            while let Some(line) = reader.get_line_with_drain(true) {
                 match parser.parse_line(line, false).map_err(|err| (line, err)) {
                     Ok(MccLine::Caption(tc, None)) => {
                         let state = self.state.lock().unwrap();
@@ -829,7 +821,7 @@ impl MccParse {
 
         match parse_timecode_rate(state.timecode_rate) {
             Ok((framerate, _)) => {
-                let mut events = state.create_events(element, None, &framerate);
+                let mut events = state.create_events(element, None, framerate);
                 let mut eos_event = gst::Event::new_eos();
 
                 if state.seek_seqnum != gst::event::SEQNUM_INVALID {
