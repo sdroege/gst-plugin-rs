@@ -54,8 +54,8 @@ lazy_static! {
 }
 
 fn init() {
-    use std::sync::{Once, ONCE_INIT};
-    static INIT: Once = ONCE_INIT;
+    use std::sync::Once;
+    static INIT: Once = Once::new();
 
     INIT.call_once(|| {
         gst::init().unwrap();
