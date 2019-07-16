@@ -210,7 +210,7 @@ impl ReqwestHttpSrc {
         {
             range_start
         } else {
-            start
+            0
         };
 
         if position != start {
@@ -228,7 +228,7 @@ impl ReqwestHttpSrc {
             uri,
             body: Some(body),
             seekable,
-            position: 0,
+            position: position,
             size,
             start,
             stop,
