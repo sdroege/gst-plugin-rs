@@ -228,7 +228,7 @@ impl ReqwestHttpSrc {
             uri,
             body: Some(body),
             seekable,
-            position: position,
+            position,
             size,
             start,
             stop,
@@ -473,9 +473,14 @@ impl BaseSrcImpl for ReqwestHttpSrc {
 
                 *position += size as u64;
 
-                let buffer = gst::Buffer::from_slice(chunk);
+                let mut buffer = gst::Buffer::from_slice(chunk);
 
                 *body = Some(current_body);
+
+                {
+                    let buffer = buffer.get_mut().unwrap();
+                    buffer.set_offset(offset);
+                }
 
                 Ok(buffer)
             }
