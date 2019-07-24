@@ -8,8 +8,8 @@
 
 use std::str::FromStr;
 
+use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
 use rusoto_core::Region;
-use url::percent_encoding::{percent_decode, percent_encode, DEFAULT_ENCODE_SET};
 use url::Url;
 
 #[derive(Clone)]
@@ -20,13 +20,20 @@ pub struct GstS3Url {
     pub version: Option<String>,
 }
 
+// FIXME: Copied from the url crate, see https://github.com/servo/rust-url/issues/529
+// https://url.spec.whatwg.org/#fragment-percent-encode-set
+const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
+// https://url.spec.whatwg.org/#path-percent-encode-set
+const PATH: &AsciiSet = &FRAGMENT.add(b'#').add(b'?').add(b'{').add(b'}');
+const PATH_SEGMENT: &AsciiSet = &PATH.add(b'/').add(b'%');
+
 impl ToString for GstS3Url {
     fn to_string(&self) -> String {
         format!(
             "s3://{}/{}/{}{}",
             self.region.name(),
             self.bucket,
-            percent_encode(self.object.as_bytes(), DEFAULT_ENCODE_SET),
+            percent_encode(self.object.as_bytes(), PATH_SEGMENT),
             if self.version.is_some() {
                 format!("?version={}", self.version.clone().unwrap())
             } else {

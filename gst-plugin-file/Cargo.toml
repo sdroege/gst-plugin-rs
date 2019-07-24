@@ -7,7 +7,7 @@ license = "MIT/Apache-2.0"
 description = "Rust File Plugin"
 
 [dependencies]
-url = "1.1"
+url = "2"
 glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
