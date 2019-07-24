@@ -14,7 +14,7 @@ gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gtk = { git = "https://github.com/gtk-rs/gtk", optional = true }
 gio = { git = "https://github.com/gtk-rs/gio", optional = true }
-parking_lot = "0.8"
+parking_lot = "0.9"
 
 [dev-dependencies]
 either = "1.0"
