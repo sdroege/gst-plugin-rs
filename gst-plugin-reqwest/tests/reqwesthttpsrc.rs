@@ -17,7 +17,7 @@ fn init() {
 
     INIT.call_once(|| {
         gst::init().unwrap();
-        gstreqwest::plugin_register_static().expect("reqwesthttpsrc tests");
+        gstrshttp::plugin_register_static().expect("reqwesthttpsrc tests");
     });
 }
 
