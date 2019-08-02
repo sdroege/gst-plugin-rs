@@ -475,8 +475,7 @@ impl VideoEncoderImpl for Rav1Enc {
                 },
                 pixel_range: match video_info.colorimetry().range() {
                     gst_video::VideoColorRange::Range0255 => color::PixelRange::Full,
-                    gst_video::VideoColorRange::Range16235 => color::PixelRange::Limited,
-                    _ => color::PixelRange::Unspecified,
+                    _ => color::PixelRange::Limited,
                 },
                 color_description: {
                     let matrix = match video_info.colorimetry().matrix() {
