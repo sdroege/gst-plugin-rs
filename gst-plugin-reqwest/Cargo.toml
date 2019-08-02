@@ -22,7 +22,7 @@ bytes = "0.4"
 hyper = "0.12"
 
 [lib]
-name = "gstrshttp"
+name = "gstreqwest"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
