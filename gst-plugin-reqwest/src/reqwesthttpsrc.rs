@@ -10,7 +10,7 @@ use futures::sync::oneshot;
 use futures::{Future, Stream};
 use hyperx::header::{
     AcceptRanges, ByteRangeSpec, ContentLength, ContentRange, ContentRangeSpec, Headers, Range,
-    RangeUnit,
+    RangeUnit, UserAgent,
 };
 use reqwest::r#async::{Client, Decoder};
 use reqwest::StatusCode;
@@ -31,29 +31,48 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 const DEFAULT_LOCATION: Option<Url> = None;
+const DEFAULT_USER_AGENT: &str = concat!(
+    "GStreamer reqwesthttpsrc ",
+    env!("CARGO_PKG_VERSION"),
+    "-",
+    env!("COMMIT_ID")
+);
 
 #[derive(Debug, Clone)]
 struct Settings {
     location: Option<Url>,
+    user_agent: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             location: DEFAULT_LOCATION,
+            user_agent: DEFAULT_USER_AGENT.into(),
         }
     }
 }
 
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property("location", |name| {
-    glib::ParamSpec::string(
-        name,
-        "File Location",
-        "URL to read from",
-        None,
-        glib::ParamFlags::READWRITE,
-    )
-})];
+static PROPERTIES: [subclass::Property; 2] = [
+    subclass::Property("location", |name| {
+        glib::ParamSpec::string(
+            name,
+            "Location",
+            "URL to read from",
+            None,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("user-agent", |name| {
+        glib::ParamSpec::string(
+            name,
+            "User-Agent",
+            "Value of the User-Agent HTTP request header field",
+            DEFAULT_USER_AGENT.into(),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+];
 
 #[derive(Debug)]
 enum State {
@@ -137,6 +156,9 @@ impl ReqwestHttpSrc {
                 headers.set(Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]));
             }
         }
+
+        let settings = self.settings.lock().unwrap();
+        headers.set(UserAgent::new(settings.user_agent.to_owned()));
 
         // Add all headers for the request here
         let req = req.headers(headers.into());
@@ -287,6 +309,11 @@ impl ObjectImpl for ReqwestHttpSrc {
                     );
                 }
             }
+            subclass::Property("user-agent", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let user_agent = value.get().unwrap();
+                settings.user_agent = user_agent;
+            }
             _ => unimplemented!(),
         };
     }
@@ -299,6 +326,10 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let location = settings.location.as_ref().map(Url::to_string);
 
                 Ok(location.to_value())
+            }
+            subclass::Property("user-agent", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.user_agent.to_value())
             }
             _ => unimplemented!(),
         }
