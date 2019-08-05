@@ -18,6 +18,7 @@ gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", fea
 gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-net = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-rtp = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 
 tokio = "0.1"
 tokio-reactor = "0.1"
@@ -52,3 +53,5 @@ path = "examples/tcpclientsrc_benchmark_sender.rs"
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../gst-plugin-version-helper" }
+cc = "1.0.38"
+pkg-config = "0.3.15"
