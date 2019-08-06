@@ -37,6 +37,7 @@ const DEFAULT_USER_AGENT: &str = concat!(
     "-",
     env!("COMMIT_ID")
 );
+const DEFAULT_IS_LIVE: bool = false;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -53,7 +54,7 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 2] = [
+static PROPERTIES: [subclass::Property; 3] = [
     subclass::Property("location", |name| {
         glib::ParamSpec::string(
             name,
@@ -69,6 +70,15 @@ static PROPERTIES: [subclass::Property; 2] = [
             "User-Agent",
             "Value of the User-Agent HTTP request header field",
             DEFAULT_USER_AGENT.into(),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("is-live", |name| {
+        glib::ParamSpec::boolean(
+            name,
+            "Is Live",
+            "Act like a live source",
+            DEFAULT_IS_LIVE,
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -314,11 +324,16 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let user_agent = value.get().unwrap();
                 settings.user_agent = user_agent;
             }
+            subclass::Property("is-live", ..) => {
+                let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
+                let is_live = value.get().unwrap();
+                element.set_live(is_live);
+            }
             _ => unimplemented!(),
         };
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("location", ..) => {
@@ -330,6 +345,10 @@ impl ObjectImpl for ReqwestHttpSrc {
             subclass::Property("user-agent", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.user_agent.to_value())
+            }
+            subclass::Property("is-live", ..) => {
+                let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
+                Ok(element.is_live().to_value())
             }
             _ => unimplemented!(),
         }
