@@ -13,9 +13,9 @@ gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", fea
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing", "v1_12"] }
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing", "v1_12"] }
 gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-cdg = "0.1.0"
-cdg_renderer = "0.2"
-image = "0.21"
+cdg = "0.1"
+cdg_renderer = "0.3"
+image = "0.22"
 muldiv = "0.2"
 
 [lib]
