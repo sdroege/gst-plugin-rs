@@ -43,6 +43,8 @@ const DEFAULT_IS_LIVE: bool = false;
 struct Settings {
     location: Option<Url>,
     user_agent: String,
+    user_id: Option<String>,
+    user_pw: Option<String>,
 }
 
 impl Default for Settings {
@@ -50,11 +52,13 @@ impl Default for Settings {
         Settings {
             location: DEFAULT_LOCATION,
             user_agent: DEFAULT_USER_AGENT.into(),
+            user_id: None,
+            user_pw: None,
         }
     }
 }
 
-static PROPERTIES: [subclass::Property; 3] = [
+static PROPERTIES: [subclass::Property; 5] = [
     subclass::Property("location", |name| {
         glib::ParamSpec::string(
             name,
@@ -79,6 +83,24 @@ static PROPERTIES: [subclass::Property; 3] = [
             "Is Live",
             "Act like a live source",
             DEFAULT_IS_LIVE,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("user-id", |name| {
+        glib::ParamSpec::string(
+            name,
+            "User-id",
+            "HTTP location URI user id for authentication",
+            None,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("user-pw", |name| {
+        glib::ParamSpec::string(
+            name,
+            "User-pw",
+            "HTTP location URI user password for authentication",
+            None,
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -154,6 +176,7 @@ impl ReqwestHttpSrc {
     ) -> Result<State, gst::ErrorMessage> {
         let cat = self.cat;
         let req = self.client.get(uri.clone());
+        let settings = self.settings.lock().unwrap().clone();
 
         let mut headers = Headers::new();
 
@@ -167,13 +190,19 @@ impl ReqwestHttpSrc {
             }
         }
 
-        let settings = self.settings.lock().unwrap();
         headers.set(UserAgent::new(settings.user_agent.to_owned()));
 
         // Add all headers for the request here
         let req = req.headers(headers.into());
 
         gst_debug!(cat, obj: src, "Doing new request {:?}", req);
+
+        let req = if let Some(user_id) = settings.user_id {
+            // HTTP auth available
+            req.basic_auth(user_id, settings.user_pw)
+        } else {
+            req
+        };
 
         let src_clone = src.clone();
         let response_fut = req.send().and_then(move |res| {
@@ -329,6 +358,16 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let is_live = value.get().unwrap();
                 element.set_live(is_live);
             }
+            subclass::Property("user-id", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let user_id = value.get();
+                settings.user_id = user_id;
+            }
+            subclass::Property("user-pw", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let user_pw = value.get();
+                settings.user_pw = user_pw;
+            }
             _ => unimplemented!(),
         };
     }
@@ -349,6 +388,14 @@ impl ObjectImpl for ReqwestHttpSrc {
             subclass::Property("is-live", ..) => {
                 let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
                 Ok(element.is_live().to_value())
+            }
+            subclass::Property("user-id", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.user_id.to_value())
+            }
+            subclass::Property("user-pw", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.user_pw.to_value())
             }
             _ => unimplemented!(),
         }
