@@ -140,7 +140,7 @@ unsafe fn dup_socket(socket: usize) -> usize {
         proto_info.as_mut_ptr(),
     );
     assert_eq!(ret, 0);
-    let mut proto_info = prot_info.assume_init();
+    let mut proto_info = proto_info.assume_init();
 
     let socket = winsock2::WSASocketA(
         ws2def::AF_INET,
