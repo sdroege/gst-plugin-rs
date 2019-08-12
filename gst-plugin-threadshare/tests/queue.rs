@@ -64,6 +64,7 @@ fn test_push() {
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()
+            .unwrap()
             .unwrap();
 
         samples_clone.lock().unwrap().push(sample);

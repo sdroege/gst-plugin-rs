@@ -22,6 +22,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
+use gst::structure;
 use gst::subclass::prelude::*;
 use gst_video::{self, ValidVideoTimeCode};
 
@@ -288,10 +289,13 @@ impl SccEnc {
             EventView::Caps(ev) => {
                 let caps = ev.get_caps();
                 let s = caps.get_structure(0).unwrap();
-                let framerate = s.get::<gst::Fraction>("framerate");
-                if framerate.is_none() {
-                    gst_error!(CAT, obj: pad, "Caps without framerate");
-                    return false;
+                let framerate = match s.get_some::<gst::Fraction>("framerate") {
+                    Ok(framerate) => Some(framerate),
+                    Err(structure::GetError::FieldNotFound { .. }) => {
+                        gst_error!(CAT, obj: pad, "Caps without framerate");
+                        return false;
+                    }
+                    err => panic!("SccEnc::sink_event caps: {:?}", err),
                 };
 
                 let mut state = self.state.lock().unwrap();

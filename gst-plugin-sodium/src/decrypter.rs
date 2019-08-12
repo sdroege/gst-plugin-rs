@@ -635,12 +635,12 @@ impl ObjectImpl for Decrypter {
         match *prop {
             subclass::Property("sender-key", ..) => {
                 let mut props = self.props.lock().unwrap();
-                props.sender_key = value.get();
+                props.sender_key = value.get().expect("type checked upstream");
             }
 
             subclass::Property("receiver-key", ..) => {
                 let mut props = self.props.lock().unwrap();
-                props.receiver_key = value.get();
+                props.receiver_key = value.get().expect("type checked upstream");
             }
 
             _ => unimplemented!(),

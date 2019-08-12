@@ -519,8 +519,14 @@ impl ObjectSubclass for AppSrc {
             &[gst::Buffer::static_type()],
             bool::static_type(),
             |_, args| {
-                let element = args[0].get::<gst::Element>().unwrap();
-                let buffer = args[1].get::<gst::Buffer>().unwrap();
+                let element = args[0]
+                    .get::<gst::Element>()
+                    .expect("signal arg")
+                    .expect("missing signal arg");
+                let buffer = args[1]
+                    .get::<gst::Buffer>()
+                    .expect("signal arg")
+                    .expect("missing signal arg");
                 let appsrc = Self::from_instance(&element);
 
                 Some(appsrc.push_buffer(&element, buffer).to_value())
@@ -533,7 +539,10 @@ impl ObjectSubclass for AppSrc {
             &[],
             bool::static_type(),
             |_, args| {
-                let element = args[0].get::<gst::Element>().unwrap();
+                let element = args[0]
+                    .get::<gst::Element>()
+                    .expect("signal arg")
+                    .expect("missing signal arg");
                 let appsrc = Self::from_instance(&element);
                 Some(appsrc.end_of_stream(&element).to_value())
             },
@@ -581,23 +590,26 @@ impl ObjectImpl for AppSrc {
         match *prop {
             subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context = value.get().unwrap_or_else(|| "".into());
+                settings.context = value
+                    .get()
+                    .expect("type checked upstream")
+                    .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context_wait = value.get().unwrap();
+                settings.context_wait = value.get_some().expect("type checked upstream");
             }
             subclass::Property("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.caps = value.get();
+                settings.caps = value.get().expect("type checked upstream");
             }
             subclass::Property("max-buffers", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_buffers = value.get().unwrap();
+                settings.max_buffers = value.get_some().expect("type checked upstream");
             }
             subclass::Property("do-timestamp", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.do_timestamp = value.get().unwrap();
+                settings.do_timestamp = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

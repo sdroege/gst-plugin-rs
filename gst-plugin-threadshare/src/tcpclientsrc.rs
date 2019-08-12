@@ -640,27 +640,30 @@ impl ObjectImpl for TcpClientSrc {
         match *prop {
             subclass::Property("address", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.address = value.get();
+                settings.address = value.get().expect("type checked upstream");
             }
             subclass::Property("port", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.port = value.get().unwrap();
+                settings.port = value.get_some().expect("type checked upstream");
             }
             subclass::Property("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.caps = value.get();
+                settings.caps = value.get().expect("type checked upstream");
             }
             subclass::Property("chunk-size", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.chunk_size = value.get().unwrap();
+                settings.chunk_size = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context = value.get().unwrap_or_else(|| "".into());
+                settings.context = value
+                    .get()
+                    .expect("type checked upstream")
+                    .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context_wait = value.get().unwrap();
+                settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

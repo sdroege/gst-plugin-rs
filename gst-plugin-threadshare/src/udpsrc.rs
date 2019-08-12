@@ -979,28 +979,29 @@ impl ObjectImpl for UdpSrc {
         match *prop {
             subclass::Property("address", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.address = value.get();
+                settings.address = value.get().expect("type checked upstream");
             }
             subclass::Property("port", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.port = value.get().unwrap();
+                settings.port = value.get_some().expect("type checked upstream");
             }
             subclass::Property("reuse", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.reuse = value.get().unwrap();
+                settings.reuse = value.get_some().expect("type checked upstream");
             }
             subclass::Property("caps", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.caps = value.get();
+                settings.caps = value.get().expect("type checked upstream");
             }
             subclass::Property("mtu", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.mtu = value.get().unwrap();
+                settings.mtu = value.get_some().expect("type checked upstream");
             }
             subclass::Property("socket", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.socket = value
                     .get::<gio::Socket>()
+                    .expect("type checked upstream")
                     .map(|socket| GioSocketWrapper::new(&socket));
             }
             subclass::Property("used-socket", ..) => {
@@ -1008,15 +1009,18 @@ impl ObjectImpl for UdpSrc {
             }
             subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context = value.get().unwrap_or_else(|| "".into());
+                settings.context = value
+                    .get()
+                    .expect("type checked upstream")
+                    .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context_wait = value.get().unwrap();
+                settings.context_wait = value.get_some().expect("type checked upstream");
             }
             subclass::Property("retrieve-sender-address", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.retrieve_sender_address = value.get().unwrap();
+                settings.retrieve_sender_address = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

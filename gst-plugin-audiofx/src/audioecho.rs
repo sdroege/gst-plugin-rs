@@ -205,20 +205,20 @@ impl ObjectImpl for AudioEcho {
             subclass::Property("max-delay", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
-                    settings.max_delay = value.get().unwrap();
+                    settings.max_delay = value.get_some().expect("type checked upstream");
                 }
             }
             subclass::Property("delay", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.delay = value.get().unwrap();
+                settings.delay = value.get_some().expect("type checked upstream");
             }
             subclass::Property("intensity", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.intensity = value.get().unwrap();
+                settings.intensity = value.get_some().expect("type checked upstream");
             }
             subclass::Property("feedback", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.feedback = value.get().unwrap();
+                settings.feedback = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

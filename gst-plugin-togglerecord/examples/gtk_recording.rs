@@ -62,11 +62,11 @@ fn create_pipeline() -> (
             glsinkbin.set_property("sink", &gtkglsink).unwrap();
 
             let widget = gtkglsink.get_property("widget").unwrap();
-            (glsinkbin, widget.get::<gtk::Widget>().unwrap())
+            (glsinkbin, widget.get::<gtk::Widget>().unwrap().unwrap())
         } else {
             let sink = gst::ElementFactory::make("gtksink", None).unwrap();
             let widget = sink.get_property("widget").unwrap();
-            (sink, widget.get::<gtk::Widget>().unwrap())
+            (sink, widget.get::<gtk::Widget>().unwrap().unwrap())
         };
 
     let video_enc = gst::ElementFactory::make("x264enc", None).unwrap();
@@ -268,7 +268,7 @@ fn create_ui(app: &gtk::Application) {
         let recording = !togglerecord
             .get_property("record")
             .unwrap()
-            .get::<bool>()
+            .get_some::<bool>()
             .unwrap();
         togglerecord.set_property("record", &recording).unwrap();
 

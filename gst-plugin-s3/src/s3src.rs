@@ -69,7 +69,11 @@ impl S3Src {
         Ok(S3Client::new(url.region.clone()))
     }
 
-    fn set_uri(self: &S3Src, _: &gst_base::BaseSrc, url_str: &str) -> Result<(), glib::Error> {
+    fn set_uri(
+        self: &S3Src,
+        _: &gst_base::BaseSrc,
+        url_str: Option<&str>,
+    ) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
@@ -81,7 +85,13 @@ impl S3Src {
 
         let mut url = self.url.lock().unwrap();
 
-        match parse_s3_url(&url_str) {
+        if url_str.is_none() {
+            *url = None;
+            return Ok(());
+        }
+
+        let url_str = url_str.unwrap();
+        match parse_s3_url(url_str) {
             Ok(s3url) => {
                 *url = Some(s3url);
                 Ok(())
@@ -271,7 +281,7 @@ impl ObjectImpl for S3Src {
 
         match *prop {
             subclass::Property("uri", ..) => {
-                let _ = self.set_uri(basesrc, value.get().unwrap());
+                let _ = self.set_uri(basesrc, value.get().expect("type checked upstream"));
             }
             _ => unimplemented!(),
         }
@@ -314,7 +324,7 @@ impl URIHandlerImpl for S3Src {
 
     fn set_uri(&self, element: &gst::URIHandler, uri: &str) -> Result<(), glib::Error> {
         let basesrc = element.dynamic_cast_ref::<gst_base::BaseSrc>().unwrap();
-        self.set_uri(basesrc, uri)
+        self.set_uri(basesrc, Some(uri))
     }
 
     fn get_uri_type() -> gst::URIType {

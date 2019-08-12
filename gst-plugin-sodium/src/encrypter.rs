@@ -488,17 +488,17 @@ impl ObjectImpl for Encrypter {
         match *prop {
             subclass::Property("sender-key", ..) => {
                 let mut props = self.props.lock().unwrap();
-                props.sender_key = value.get();
+                props.sender_key = value.get().expect("type checked upstream");
             }
 
             subclass::Property("receiver-key", ..) => {
                 let mut props = self.props.lock().unwrap();
-                props.receiver_key = value.get();
+                props.receiver_key = value.get().expect("type checked upstream");
             }
 
             subclass::Property("block-size", ..) => {
                 let mut props = self.props.lock().unwrap();
-                props.block_size = value.get().unwrap();
+                props.block_size = value.get_some().expect("type checked upstream");
             }
 
             _ => unimplemented!(),

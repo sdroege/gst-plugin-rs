@@ -432,8 +432,14 @@ impl Queue {
                 let s = e.get_structure().unwrap();
                 if s.get_name() == "ts-io-context" {
                     let mut state = self.state.lock().unwrap();
-                    let io_context = s.get::<&IOContext>("io-context").unwrap();
-                    let pending_future_id = s.get::<&PendingFutureId>("pending-future-id").unwrap();
+                    let io_context = s
+                        .get::<&IOContext>("io-context")
+                        .expect("signal arg")
+                        .expect("missing signal arg");
+                    let pending_future_id = s
+                        .get::<&PendingFutureId>("pending-future-id")
+                        .expect("signal arg")
+                        .expect("missing signal arg");
 
                     gst_debug!(
                         self.cat,
@@ -918,23 +924,26 @@ impl ObjectImpl for Queue {
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_size_buffers = value.get().unwrap();
+                settings.max_size_buffers = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-bytes", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_size_bytes = value.get().unwrap();
+                settings.max_size_bytes = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-time", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_size_time = value.get().unwrap();
+                settings.max_size_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context = value.get().unwrap_or_else(|| "".into());
+                settings.context = value
+                    .get()
+                    .expect("type checked upstream")
+                    .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context_wait = value.get().unwrap();
+                settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

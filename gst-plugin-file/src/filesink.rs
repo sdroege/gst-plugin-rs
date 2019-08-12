@@ -166,9 +166,10 @@ impl ObjectImpl for FileSink {
                 let element = obj.downcast_ref::<gst_base::BaseSink>().unwrap();
 
                 let res = match value.get::<String>() {
-                    Some(location) => FileLocation::try_from_path_str(location)
+                    Ok(Some(location)) => FileLocation::try_from_path_str(location)
                         .and_then(|file_location| self.set_location(&element, Some(file_location))),
-                    None => self.set_location(&element, None),
+                    Ok(None) => self.set_location(&element, None),
+                    Err(_) => unreachable!("type checked upstream"),
                 };
 
                 if let Err(err) = res {

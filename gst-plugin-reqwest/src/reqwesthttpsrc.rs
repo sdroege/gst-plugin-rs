@@ -137,7 +137,11 @@ pub struct ReqwestHttpSrc {
 }
 
 impl ReqwestHttpSrc {
-    fn set_location(&self, _element: &gst_base::BaseSrc, uri: &str) -> Result<(), glib::Error> {
+    fn set_location(
+        &self,
+        _element: &gst_base::BaseSrc,
+        uri: Option<&str>,
+    ) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             return Err(glib::Error::new(
@@ -148,6 +152,12 @@ impl ReqwestHttpSrc {
 
         let mut settings = self.settings.lock().unwrap();
 
+        if uri.is_none() {
+            settings.location = DEFAULT_LOCATION;
+            return Ok(());
+        }
+
+        let uri = uri.unwrap();
         let uri = Url::parse(uri).map_err(|err| {
             glib::Error::new(
                 gst::URIError::BadUri,
@@ -336,10 +346,8 @@ impl ObjectImpl for ReqwestHttpSrc {
             subclass::Property("location", ..) => {
                 let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
 
-                let location = value.get::<&str>().unwrap();
-                let res = self.set_location(element, location);
-
-                if let Err(err) = res {
+                let location = value.get::<&str>().expect("type checked upstream");
+                if let Err(err) = self.set_location(element, location) {
                     gst_error!(
                         self.cat,
                         obj: element,
@@ -350,22 +358,25 @@ impl ObjectImpl for ReqwestHttpSrc {
             }
             subclass::Property("user-agent", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let user_agent = value.get().unwrap();
+                let user_agent = value
+                    .get()
+                    .expect("type checked upstream")
+                    .unwrap_or_else(|| DEFAULT_USER_AGENT.into());
                 settings.user_agent = user_agent;
             }
             subclass::Property("is-live", ..) => {
                 let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
-                let is_live = value.get().unwrap();
+                let is_live = value.get_some().expect("type checked upstream");
                 element.set_live(is_live);
             }
             subclass::Property("user-id", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let user_id = value.get();
+                let user_id = value.get().expect("type checked upstream");
                 settings.user_id = user_id;
             }
             subclass::Property("user-pw", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let user_pw = value.get();
+                let user_pw = value.get().expect("type checked upstream");
                 settings.user_pw = user_pw;
             }
             _ => unimplemented!(),
@@ -613,7 +624,7 @@ impl URIHandlerImpl for ReqwestHttpSrc {
     fn set_uri(&self, element: &gst::URIHandler, uri: &str) -> Result<(), glib::Error> {
         let element = element.dynamic_cast_ref::<gst_base::BaseSrc>().unwrap();
 
-        self.set_location(&element, uri)
+        self.set_location(&element, Some(uri))
     }
 
     fn get_uri_type() -> gst::URIType {

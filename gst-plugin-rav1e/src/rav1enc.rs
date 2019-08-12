@@ -345,39 +345,42 @@ impl ObjectImpl for Rav1Enc {
         match *prop {
             subclass::Property("speed-preset", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.speed_preset = value.get().unwrap();
+                settings.speed_preset = value.get_some().expect("type checked upstream");
             }
             subclass::Property("low-latency", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.low_latency = value.get().unwrap();
+                settings.low_latency = value.get_some().expect("type checked upstream");
             }
             subclass::Property("min-key-frame-interval", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.min_key_frame_interval = value.get().unwrap();
+                settings.min_key_frame_interval = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-key-frame-interval", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_key_frame_interval = value.get().unwrap();
+                settings.max_key_frame_interval = value.get_some().expect("type checked upstream");
             }
             subclass::Property("bitrate", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.bitrate = value.get().unwrap();
+                settings.bitrate = value.get_some().expect("type checked upstream");
             }
             subclass::Property("quantizer", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.quantizer = value.get::<u32>().unwrap() as usize;
+                settings.quantizer =
+                    value.get_some::<u32>().expect("type checked upstream") as usize;
             }
             subclass::Property("tile-cols-log2", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.tile_cols_log2 = value.get::<u32>().unwrap() as usize;
+                settings.tile_cols_log2 =
+                    value.get_some::<u32>().expect("type checked upstream") as usize;
             }
             subclass::Property("tile-rows-log2", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.tile_rows_log2 = value.get::<u32>().unwrap() as usize;
+                settings.tile_rows_log2 =
+                    value.get_some::<u32>().expect("type checked upstream") as usize;
             }
             subclass::Property("threads", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.threads = value.get::<u32>().unwrap() as usize;
+                settings.threads = value.get_some::<u32>().expect("type checked upstream") as usize;
             }
             _ => unimplemented!(),
         }

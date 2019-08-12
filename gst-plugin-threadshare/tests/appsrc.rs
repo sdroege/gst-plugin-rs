@@ -56,7 +56,7 @@ fn test_push() {
                 .emit("push-buffer", &[&gst::Buffer::new()])
                 .unwrap()
                 .unwrap()
-                .get::<bool>()
+                .get_some::<bool>()
                 .unwrap());
         }
 
@@ -64,7 +64,7 @@ fn test_push() {
             .emit("end-of-stream", &[])
             .unwrap()
             .unwrap()
-            .get::<bool>()
+            .get_some::<bool>()
             .unwrap());
     }
 

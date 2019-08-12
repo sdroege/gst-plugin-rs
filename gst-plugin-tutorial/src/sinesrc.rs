@@ -304,7 +304,7 @@ impl ObjectImpl for SineSrc {
         match *prop {
             subclass::Property("samples-per-buffer", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let samples_per_buffer = value.get().unwrap();
+                let samples_per_buffer = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: basesrc,
@@ -320,7 +320,7 @@ impl ObjectImpl for SineSrc {
             }
             subclass::Property("freq", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let freq = value.get().unwrap();
+                let freq = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: basesrc,
@@ -332,7 +332,7 @@ impl ObjectImpl for SineSrc {
             }
             subclass::Property("volume", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let volume = value.get().unwrap();
+                let volume = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: basesrc,
@@ -344,7 +344,7 @@ impl ObjectImpl for SineSrc {
             }
             subclass::Property("mute", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let mute = value.get().unwrap();
+                let mute = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: basesrc,
@@ -356,7 +356,7 @@ impl ObjectImpl for SineSrc {
             }
             subclass::Property("is-live", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let is_live = value.get().unwrap();
+                let is_live = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: basesrc,

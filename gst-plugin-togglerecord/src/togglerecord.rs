@@ -1581,7 +1581,7 @@ impl ObjectImpl for ToggleRecord {
         match *prop {
             subclass::Property("record", ..) => {
                 let mut settings = self.settings.lock();
-                let record = value.get().unwrap();
+                let record = value.get_some().expect("type checked upstream");
                 gst_debug!(
                     self.cat,
                     obj: element,

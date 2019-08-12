@@ -21,6 +21,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
+use gst::structure;
 use gst::subclass::prelude::*;
 use gst_video;
 
@@ -139,11 +140,17 @@ impl MccEnc {
             .sinkpad
             .get_current_caps()
             .ok_or(gst::FlowError::NotNegotiated)?;
-        let framerate = caps
+        let framerate = match caps
             .get_structure(0)
             .unwrap()
-            .get::<gst::Fraction>("framerate")
-            .ok_or(gst::FlowError::NotNegotiated)?;
+            .get_some::<gst::Fraction>("framerate")
+        {
+            Ok(framerate) => framerate,
+            Err(structure::GetError::FieldNotFound { .. }) => {
+                return Err(gst::FlowError::NotNegotiated);
+            }
+            err => panic!("MccEnc::generate_headers caps: {:?}", err),
+        };
 
         if framerate == gst::Fraction::new(60000, 1001) {
             buffer.extend_from_slice(PREAMBLE_V2);
@@ -412,11 +419,13 @@ impl MccEnc {
             EventView::Caps(ev) => {
                 let caps = ev.get_caps();
                 let s = caps.get_structure(0).unwrap();
-                let framerate = if let Some(framerate) = s.get::<gst::Fraction>("framerate") {
-                    framerate
-                } else {
-                    gst_error!(self.cat, obj: pad, "Caps without framerate");
-                    return false;
+                let framerate = match s.get_some::<gst::Fraction>("framerate") {
+                    Ok(framerate) => framerate,
+                    Err(structure::GetError::FieldNotFound { .. }) => {
+                        gst_error!(self.cat, obj: pad, "Caps without framerate");
+                        return false;
+                    }
+                    err => panic!("MccEnc::sink_event caps: {:?}", err),
                 };
 
                 let mut state = self.state.lock().unwrap();
@@ -573,11 +582,11 @@ impl ObjectImpl for MccEnc {
         match *prop {
             subclass::Property("uuid", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.uuid = value.get();
+                settings.uuid = value.get().expect("type checked upstream");
             }
             subclass::Property("creation-date", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.creation_date = value.get();
+                settings.creation_date = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

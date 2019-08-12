@@ -432,13 +432,19 @@ impl ObjectImpl for S3Sink {
 
         match *prop {
             subclass::Property("bucket", ..) => {
-                settings.bucket = value.get::<String>();
+                settings.bucket = value.get::<String>().expect("type checked upstream");
             }
             subclass::Property("key", ..) => {
-                settings.key = value.get::<String>();
+                settings.key = value.get::<String>().expect("type checked upstream");
             }
             subclass::Property("region", ..) => {
-                let region = Region::from_str(&value.get::<String>().unwrap()).unwrap();
+                let region = Region::from_str(
+                    &value
+                        .get::<String>()
+                        .expect("type checked upstream")
+                        .expect("set_property(\"region\"): no value provided"),
+                )
+                .unwrap();
                 if settings.region != region {
                     let mut client = self.client.lock().unwrap();
                     std::mem::replace(&mut *client, S3Client::new(region.clone()));
@@ -446,7 +452,7 @@ impl ObjectImpl for S3Sink {
                 }
             }
             subclass::Property("part-size", ..) => {
-                settings.buffer_size = value.get::<u64>().unwrap();
+                settings.buffer_size = value.get_some::<u64>().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
