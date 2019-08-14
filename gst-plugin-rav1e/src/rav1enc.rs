@@ -699,7 +699,7 @@ impl Rav1Enc {
                     let output_buffer = gst::Buffer::from_mut_slice(packet_data);
                     frame.set_output_buffer(output_buffer);
                     drop(state_guard);
-                    element.finish_frame(frame)?;
+                    element.finish_frame(Some(frame))?;
                     state_guard = self.state.lock().unwrap();
                     state = state_guard.as_mut().expect("Not negotiated yet");
                 }
