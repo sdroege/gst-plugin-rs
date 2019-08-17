@@ -18,6 +18,11 @@ gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-s
 gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
 
+[dev-dependencies]
+gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}
+gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}
+lazy_static = "1.2"
+
 [lib]
 name = "gstfallbackswitch"
 crate-type = ["cdylib", "rlib"]
