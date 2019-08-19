@@ -483,13 +483,13 @@ impl VideoEncoderImpl for Rav1Enc {
                 color_description: {
                     let matrix = match video_info.colorimetry().matrix() {
                         gst_video::VideoColorMatrix::Rgb => color::MatrixCoefficients::Identity,
-                        gst_video::VideoColorMatrix::Fcc => color::MatrixCoefficients::BT470M,
+                        gst_video::VideoColorMatrix::Fcc => color::MatrixCoefficients::FCC,
                         gst_video::VideoColorMatrix::Bt709 => color::MatrixCoefficients::BT709,
-                        gst_video::VideoColorMatrix::Bt601 => color::MatrixCoefficients::ST170M,
-                        gst_video::VideoColorMatrix::Smpte240m => color::MatrixCoefficients::ST240M,
-                        gst_video::VideoColorMatrix::Bt2020 => {
-                            color::MatrixCoefficients::BT2020NonConstantLuminance
+                        gst_video::VideoColorMatrix::Bt601 => color::MatrixCoefficients::BT601,
+                        gst_video::VideoColorMatrix::Smpte240m => {
+                            color::MatrixCoefficients::SMPTE240
                         }
+                        gst_video::VideoColorMatrix::Bt2020 => color::MatrixCoefficients::BT2020NCL,
                         _ => color::MatrixCoefficients::Unspecified,
                     };
                     let transfer = match video_info.colorimetry().transfer() {
@@ -497,22 +497,22 @@ impl VideoEncoderImpl for Rav1Enc {
                             color::TransferCharacteristics::Linear
                         }
                         gst_video::VideoTransferFunction::Bt709 => {
-                            color::TransferCharacteristics::BT1886
+                            color::TransferCharacteristics::BT709
                         }
                         gst_video::VideoTransferFunction::Smpte240m => {
-                            color::TransferCharacteristics::ST240M
+                            color::TransferCharacteristics::SMPTE240
                         }
                         gst_video::VideoTransferFunction::Srgb => {
                             color::TransferCharacteristics::SRGB
                         }
                         gst_video::VideoTransferFunction::Log100 => {
-                            color::TransferCharacteristics::Logarithmic100
+                            color::TransferCharacteristics::Log100
                         }
                         gst_video::VideoTransferFunction::Log316 => {
-                            color::TransferCharacteristics::Logarithmic316
+                            color::TransferCharacteristics::Log100Sqrt10
                         }
                         gst_video::VideoTransferFunction::Bt202012 => {
-                            color::TransferCharacteristics::BT2020Twelve
+                            color::TransferCharacteristics::BT2020_12Bit
                         }
                         gst_video::VideoTransferFunction::Gamma18
                         | gst_video::VideoTransferFunction::Gamma20
@@ -525,9 +525,11 @@ impl VideoEncoderImpl for Rav1Enc {
                         gst_video::VideoColorPrimaries::Bt709 => color::ColorPrimaries::BT709,
                         gst_video::VideoColorPrimaries::Bt470m => color::ColorPrimaries::BT470M,
                         gst_video::VideoColorPrimaries::Bt470bg => color::ColorPrimaries::BT470BG,
-                        gst_video::VideoColorPrimaries::Smpte170m => color::ColorPrimaries::ST170M,
-                        gst_video::VideoColorPrimaries::Smpte240m => color::ColorPrimaries::ST240M,
-                        gst_video::VideoColorPrimaries::Film => color::ColorPrimaries::Film,
+                        gst_video::VideoColorPrimaries::Smpte170m => color::ColorPrimaries::BT601,
+                        gst_video::VideoColorPrimaries::Smpte240m => {
+                            color::ColorPrimaries::SMPTE240
+                        }
+                        gst_video::VideoColorPrimaries::Film => color::ColorPrimaries::GenericFilm,
                         gst_video::VideoColorPrimaries::Bt2020 => color::ColorPrimaries::BT2020,
                         gst_video::VideoColorPrimaries::Adobergb | _ => {
                             color::ColorPrimaries::Unspecified
