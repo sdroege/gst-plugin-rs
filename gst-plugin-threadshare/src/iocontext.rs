@@ -28,7 +28,7 @@ use futures::future;
 use futures::stream::futures_unordered::FuturesUnordered;
 use futures::sync::mpsc as futures_mpsc;
 use futures::sync::oneshot;
-use futures::{Future, Stream};
+use futures::{Async, Future, Stream};
 use tokio::reactor;
 use tokio_current_thread;
 use tokio_timer::timer;
@@ -399,11 +399,13 @@ impl Ord for TimerEntry {
     }
 }
 
+#[allow(unused)]
 pub struct Interval {
     receiver: futures_mpsc::UnboundedReceiver<()>,
 }
 
 impl Interval {
+    #[allow(unused)]
     pub fn new(context: &IOContext, interval: time::Duration) -> Self {
         let (sender, receiver) = futures_mpsc::unbounded();
 
@@ -426,5 +428,41 @@ impl Stream for Interval {
 
     fn poll(&mut self) -> futures::Poll<Option<Self::Item>, Self::Error> {
         self.receiver.poll()
+    }
+}
+
+pub struct Timeout {
+    receiver: futures_mpsc::UnboundedReceiver<()>,
+}
+
+impl Timeout {
+    pub fn new(context: &IOContext, timeout: time::Duration) -> Self {
+        let (sender, receiver) = futures_mpsc::unbounded();
+
+        let mut timers = context.0.timers.lock().unwrap();
+        let entry = TimerEntry {
+            time: time::Instant::now() + timeout,
+            id: TIMER_ENTRY_ID.fetch_add(1, atomic::Ordering::Relaxed),
+            interval: None,
+            sender,
+        };
+        timers.push(entry);
+
+        Self { receiver }
+    }
+}
+
+impl Future for Timeout {
+    type Item = ();
+    type Error = ();
+
+    fn poll(&mut self) -> futures::Poll<Self::Item, Self::Error> {
+        let res = self.receiver.poll()?;
+
+        match res {
+            Async::NotReady => Ok(Async::NotReady),
+            Async::Ready(None) => unreachable!(),
+            Async::Ready(Some(_)) => Ok(Async::Ready(())),
+        }
     }
 }
