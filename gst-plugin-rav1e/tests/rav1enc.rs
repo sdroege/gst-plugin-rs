@@ -128,8 +128,8 @@ fn test_encode(video_info: &gst_video::VideoInfo) {
     {
         let rav1enc = h.get_element().unwrap();
         rav1enc.set_property("speed-preset", &10u32).unwrap();
-        rav1enc.set_property("tile-cols-log2", &1u32).unwrap();
-        rav1enc.set_property("tile-rows-log2", &1u32).unwrap();
+        rav1enc.set_property("tile-cols", &2u32).unwrap();
+        rav1enc.set_property("tile-rows", &2u32).unwrap();
     }
     h.play();
     h.set_src_caps(video_info.to_caps().unwrap());

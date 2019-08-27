@@ -25,8 +25,9 @@ const DEFAULT_MIN_KEY_FRAME_INTERVAL: u64 = 12;
 const DEFAULT_MAX_KEY_FRAME_INTERVAL: u64 = 240;
 const DEFAULT_BITRATE: i32 = 0;
 const DEFAULT_QUANTIZER: usize = 100;
-const DEFAULT_TILE_COLS_LOG2: usize = 0;
-const DEFAULT_TILE_ROWS_LOG2: usize = 0;
+const DEFAULT_TILE_COLS: usize = 0;
+const DEFAULT_TILE_ROWS: usize = 0;
+const DEFAULT_TILES: usize = 0;
 const DEFAULT_THREADS: usize = 0;
 
 #[derive(Debug, Clone, Copy)]
@@ -37,8 +38,9 @@ struct Settings {
     max_key_frame_interval: u64,
     bitrate: i32,
     quantizer: usize,
-    tile_cols_log2: usize,
-    tile_rows_log2: usize,
+    tile_cols: usize,
+    tile_rows: usize,
+    tiles: usize,
     threads: usize,
 }
 
@@ -51,14 +53,15 @@ impl Default for Settings {
             max_key_frame_interval: DEFAULT_MAX_KEY_FRAME_INTERVAL,
             bitrate: DEFAULT_BITRATE,
             quantizer: DEFAULT_QUANTIZER,
-            tile_cols_log2: DEFAULT_TILE_COLS_LOG2,
-            tile_rows_log2: DEFAULT_TILE_ROWS_LOG2,
+            tile_cols: DEFAULT_TILE_COLS,
+            tile_rows: DEFAULT_TILE_ROWS,
+            tiles: DEFAULT_TILES,
             threads: DEFAULT_THREADS,
         }
     }
 }
 
-static PROPERTIES: [subclass::Property; 9] = [
+static PROPERTIES: [subclass::Property; 10] = [
     subclass::Property("speed-preset", |name| {
         glib::ParamSpec::uint(
             name,
@@ -123,25 +126,36 @@ static PROPERTIES: [subclass::Property; 9] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("tile-cols-log2", |name| {
+    subclass::Property("tile-cols", |name| {
         glib::ParamSpec::uint(
             name,
-            "Tile Cols Log2",
-            "Tile Cols Log2",
+            "Tile Cols",
+            "Tile Cols",
             0,
             std::u32::MAX,
-            DEFAULT_TILE_COLS_LOG2 as u32,
+            DEFAULT_TILE_COLS as u32,
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("tile-rows-log2", |name| {
+    subclass::Property("tile-rows", |name| {
         glib::ParamSpec::uint(
             name,
-            "Tile Rows Log2",
-            "Tile Rows Log2",
+            "Tile Rows",
+            "Tile Rows",
             0,
             std::u32::MAX,
-            DEFAULT_TILE_ROWS_LOG2 as u32,
+            DEFAULT_TILE_ROWS as u32,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("tiles", |name| {
+        glib::ParamSpec::uint(
+            name,
+            "Tiles",
+            "Tiles",
+            0,
+            std::u32::MAX,
+            DEFAULT_TILES as u32,
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -368,15 +382,19 @@ impl ObjectImpl for Rav1Enc {
                 settings.quantizer =
                     value.get_some::<u32>().expect("type checked upstream") as usize;
             }
-            subclass::Property("tile-cols-log2", ..) => {
+            subclass::Property("tile-cols", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.tile_cols_log2 =
+                settings.tile_cols =
                     value.get_some::<u32>().expect("type checked upstream") as usize;
             }
-            subclass::Property("tile-rows-log2", ..) => {
+            subclass::Property("tile-rows", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.tile_rows_log2 =
+                settings.tile_rows =
                     value.get_some::<u32>().expect("type checked upstream") as usize;
+            }
+            subclass::Property("tiles", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.tiles = value.get_some::<u32>().expect("type checked upstream") as usize;
             }
             subclass::Property("threads", ..) => {
                 let mut settings = self.settings.lock().unwrap();
@@ -414,13 +432,17 @@ impl ObjectImpl for Rav1Enc {
                 let settings = self.settings.lock().unwrap();
                 Ok((settings.quantizer as u32).to_value())
             }
-            subclass::Property("tile-cols-log2", ..) => {
+            subclass::Property("tile-cols", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok((settings.tile_cols_log2 as u32).to_value())
+                Ok((settings.tile_cols as u32).to_value())
             }
-            subclass::Property("tile-rows-log2", ..) => {
+            subclass::Property("tile-rows", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok((settings.tile_rows_log2 as u32).to_value())
+                Ok((settings.tile_rows as u32).to_value())
+            }
+            subclass::Property("tiles", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok((settings.tiles as u32).to_value())
             }
             subclass::Property("threads", ..) => {
                 let settings = self.settings.lock().unwrap();
@@ -556,8 +578,9 @@ impl VideoEncoderImpl for Rav1Enc {
                 max_key_frame_interval: settings.max_key_frame_interval,
                 bitrate: settings.bitrate,
                 quantizer: settings.quantizer,
-                tile_cols_log2: settings.tile_cols_log2,
-                tile_rows_log2: settings.tile_rows_log2,
+                tile_cols: settings.tile_cols,
+                tile_rows: settings.tile_rows,
+                tiles: settings.tiles,
                 ..Default::default()
             },
             threads: settings.threads,
@@ -565,9 +588,13 @@ impl VideoEncoderImpl for Rav1Enc {
 
         *self.state.lock().unwrap() = Some(State {
             context: if video_info.format_info().depth()[0] > 8 {
-                Context::Sixteen(cfg.new_context())
+                Context::Sixteen(cfg.new_context().map_err(|err| {
+                    gst_loggable_error!(self.cat, "Failed to create context: {:?}", err)
+                })?)
             } else {
-                Context::Eight(cfg.new_context())
+                Context::Eight(cfg.new_context().map_err(|err| {
+                    gst_loggable_error!(self.cat, "Failed to create context: {:?}", err)
+                })?)
             },
             video_info: video_info.clone(),
         });
