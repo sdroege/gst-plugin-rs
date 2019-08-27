@@ -114,7 +114,7 @@ gst_aggregator_start_time_selection_get_type (void)
       {0, NULL, NULL}
     };
 
-    gtype = g_enum_register_static ("GstAggregatorStartTimeSelection", values);
+    gtype = g_enum_register_static ("GstAggregatorFallbackStartTimeSelection", values);
   }
   return gtype;
 }
@@ -2708,7 +2708,7 @@ gst_aggregator_get_type (void)
     };
 
     _type = g_type_register_static (GST_TYPE_ELEMENT,
-        "GstAggregator", &info, G_TYPE_FLAG_ABSTRACT);
+        "GstAggregatorFallback", &info, G_TYPE_FLAG_ABSTRACT);
 
     aggregator_private_offset =
         g_type_add_instance_private (_type, sizeof (GstAggregatorPrivate));
