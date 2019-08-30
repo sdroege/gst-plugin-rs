@@ -17,7 +17,7 @@ use gstreamer_video as gst_video;
 use rav1e::color;
 use rav1e::config;
 use rav1e::data;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 const DEFAULT_SPEED_PRESET: u32 = 5;
 const DEFAULT_LOW_LATENCY: bool = false;
@@ -192,61 +192,80 @@ impl Context {
     fn send_frame(
         &mut self,
         in_frame: Option<&gst_video::VideoFrameRef<&gst::BufferRef>>,
+        force_keyframe: bool,
     ) -> Result<(), data::EncoderStatus> {
         match self {
             Context::Eight(ref mut context) => {
-                let enc_frame = in_frame.map(|in_frame| {
+                if let Some(in_frame) = in_frame {
                     let mut enc_frame = context.new_frame();
-                    let enc_frame_mut = Arc::get_mut(&mut enc_frame)
-                        .expect("newly created encoder frame not mutable");
-                    enc_frame_mut.planes[0].copy_from_raw_u8(
+                    enc_frame.planes[0].copy_from_raw_u8(
                         in_frame.plane_data(0).unwrap(),
                         in_frame.plane_stride()[0] as usize,
                         1,
                     );
 
                     if in_frame.n_planes() > 1 {
-                        enc_frame_mut.planes[1].copy_from_raw_u8(
+                        enc_frame.planes[1].copy_from_raw_u8(
                             in_frame.plane_data(1).unwrap(),
                             in_frame.plane_stride()[1] as usize,
                             1,
                         );
-                        enc_frame_mut.planes[2].copy_from_raw_u8(
+                        enc_frame.planes[2].copy_from_raw_u8(
                             in_frame.plane_data(2).unwrap(),
                             in_frame.plane_stride()[2] as usize,
                             1,
                         );
                     }
-                    enc_frame
-                });
-                context.send_frame(enc_frame)
+
+                    context.send_frame((
+                        enc_frame,
+                        Some(rav1e::data::FrameParameters {
+                            frame_type_override: if force_keyframe {
+                                rav1e::prelude::FrameTypeOverride::Key
+                            } else {
+                                rav1e::prelude::FrameTypeOverride::No
+                            },
+                        }),
+                    ))
+                } else {
+                    context.send_frame(None)
+                }
             }
             Context::Sixteen(ref mut context) => {
-                let enc_frame = in_frame.map(|in_frame| {
+                if let Some(in_frame) = in_frame {
                     let mut enc_frame = context.new_frame();
-                    let enc_frame_mut = Arc::get_mut(&mut enc_frame)
-                        .expect("newly created encoder frame not mutable");
-                    enc_frame_mut.planes[0].copy_from_raw_u8(
+                    enc_frame.planes[0].copy_from_raw_u8(
                         in_frame.plane_data(0).unwrap(),
                         in_frame.plane_stride()[0] as usize,
                         2,
                     );
 
                     if in_frame.n_planes() > 1 {
-                        enc_frame_mut.planes[1].copy_from_raw_u8(
+                        enc_frame.planes[1].copy_from_raw_u8(
                             in_frame.plane_data(1).unwrap(),
                             in_frame.plane_stride()[1] as usize,
                             2,
                         );
-                        enc_frame_mut.planes[2].copy_from_raw_u8(
+                        enc_frame.planes[2].copy_from_raw_u8(
                             in_frame.plane_data(2).unwrap(),
                             in_frame.plane_stride()[2] as usize,
                             2,
                         );
                     }
-                    enc_frame
-                });
-                context.send_frame(enc_frame)
+
+                    context.send_frame((
+                        enc_frame,
+                        Some(rav1e::data::FrameParameters {
+                            frame_type_override: if force_keyframe {
+                                rav1e::prelude::FrameTypeOverride::Key
+                            } else {
+                                rav1e::prelude::FrameTypeOverride::No
+                            },
+                        }),
+                    ))
+                } else {
+                    context.send_frame(None)
+                }
             }
         }
     }
@@ -636,7 +655,7 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let mut state_guard = self.state.lock().unwrap();
         if let Some(ref mut state) = *state_guard {
-            if let Err(data::EncoderStatus::Failure) = state.context.send_frame(None) {
+            if let Err(data::EncoderStatus::Failure) = state.context.send_frame(None, false) {
                 return Err(gst::FlowError::Error);
             }
             state.context.flush();
@@ -677,7 +696,12 @@ impl VideoEncoderImpl for Rav1Enc {
                 gst::FlowError::Error
             })?;
 
-        match state.context.send_frame(Some(&in_frame)) {
+        match state.context.send_frame(
+            Some(&in_frame),
+            frame
+                .get_flags()
+                .contains(gst_video::VideoCodecFrameFlags::FORCE_KEYFRAME),
+        ) {
             Ok(_) => {
                 gst_debug!(
                     self.cat,
