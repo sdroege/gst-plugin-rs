@@ -204,6 +204,8 @@ struct State {
     discont: bool,
     cancel: Option<oneshot::Sender<()>>,
     last_res: Result<gst::FlowSuccess, gst::FlowError>,
+    pending_future_id: Option<PendingFutureId>,
+    pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
 }
 
 impl Default for State {
@@ -232,6 +234,8 @@ impl Default for State {
             discont: false,
             cancel: None,
             last_res: Ok(gst::FlowSuccess::Ok),
+            pending_future_id: None,
+            pending_future_cancel: None,
         }
     }
 }
@@ -691,6 +695,29 @@ impl JitterBuffer {
         }
     }
 
+    fn send_io_context_event(&self, state: &State) -> Result<gst::FlowSuccess, gst::FlowError> {
+        if self.src_pad.check_reconfigure() {
+            if let (&Some(ref pending_future_id), &Some(ref io_context)) =
+                (&state.pending_future_id, &state.io_context)
+            {
+                let s = gst::Structure::new(
+                    "ts-io-context",
+                    &[
+                        ("io-context", &io_context),
+                        ("pending-future-id", &*pending_future_id),
+                    ],
+                );
+                let event = gst::Event::new_custom_downstream_sticky(s).build();
+
+                if !self.src_pad.push_event(event) {
+                    return Err(gst::FlowError::Error);
+                }
+            }
+        }
+
+        Ok(gst::FlowSuccess::Ok)
+    }
+
     fn pop_and_push(
         &self,
         state: &mut MutexGuard<State>,
@@ -731,6 +758,8 @@ impl JitterBuffer {
         state.num_pushed += 1;
 
         gst_debug!(self.cat, obj: &self.src_pad, "Pushing buffer {:?} with seq {}", buffer, seq);
+
+        self.send_io_context_event(&state)?;
 
         self.src_pad.push(buffer.to_owned())
     }
@@ -781,8 +810,7 @@ impl JitterBuffer {
             .and_then(move |_| {
                 let jb = Self::from_instance(&element_clone);
                 let mut state = jb.state.lock().unwrap();
-                /* Check earliest_pts after taking the lock again */
-                let mut cont = state.earliest_pts.is_some();
+                let now = jb.get_current_running_time(&element_clone);
 
                 gst_debug!(
                     jb.cat,
@@ -793,22 +821,41 @@ impl JitterBuffer {
 
                 let _ = state.cancel.take();
 
-                while cont {
-                    let (head_pts, head_seq) = state.jbuf.borrow().peek();
+                /* Check earliest PTS as we have just taken the lock */
+                if state.earliest_pts.is_some()
+                    && state.earliest_pts + latency_ns - state.packet_spacing < now
+                {
+                    loop {
+                        let (head_pts, head_seq) = state.jbuf.borrow().peek();
 
-                    if head_pts == state.earliest_pts && head_seq == state.earliest_seqnum as u32 {
-                        cont = false;
-                    }
+                        state.last_res = jb.pop_and_push(&mut state, &element_clone);
 
-                    state.last_res = jb.pop_and_push(&mut state, &element_clone);
+                        if let Some(pending_future_id) = state.pending_future_id {
+                            let (cancel, future) = state
+                                .io_context
+                                .as_ref()
+                                .unwrap()
+                                .drain_pending_futures(pending_future_id);
 
-                    if !cont {
-                        let (earliest_pts, earliest_seqnum) = state.jbuf.borrow().find_earliest();
-                        state.earliest_pts = earliest_pts;
-                        state.earliest_seqnum = earliest_seqnum as u16;
+                            state.pending_future_cancel = cancel;
 
-                        if state.earliest_pts.is_some() {
-                            cont = state.earliest_pts + latency_ns - state.packet_spacing < now;
+                            state.io_context.as_ref().unwrap().spawn(future);
+                        }
+
+                        if head_pts == state.earliest_pts
+                            && head_seq == state.earliest_seqnum as u32
+                        {
+                            let (earliest_pts, earliest_seqnum) =
+                                state.jbuf.borrow().find_earliest();
+                            state.earliest_pts = earliest_pts;
+                            state.earliest_seqnum = earliest_seqnum as u16;
+                        }
+
+                        if state.pending_future_cancel.is_some()
+                            || state.earliest_pts.is_none()
+                            || state.earliest_pts + latency_ns - state.packet_spacing >= now
+                        {
+                            break;
                         }
                     }
                 }
@@ -885,6 +932,7 @@ impl JitterBuffer {
     }
 
     fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+        let mut forward = true;
         use gst::EventView;
 
         gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
@@ -905,11 +953,21 @@ impl JitterBuffer {
                 let mut state = self.state.lock().unwrap();
                 self.drain(&mut state, element);
             }
+            EventView::CustomDownstreamSticky(e) => {
+                let s = e.get_structure().unwrap();
+                if s.get_name() == "ts-io-context" {
+                    forward = false;
+                }
+            }
             _ => (),
         };
 
-        gst_log!(self.cat, obj: pad, "Forwarding event {:?}", event);
-        self.src_pad.push_event(event)
+        if forward {
+            gst_log!(self.cat, obj: pad, "Forwarding event {:?}", event);
+            self.src_pad.push_event(event)
+        } else {
+            true
+        }
     }
 
     fn sink_query(
@@ -1210,6 +1268,17 @@ impl ElementImpl for JitterBuffer {
 
                 state.io_context =
                     Some(IOContext::new(&settings.context, settings.context_wait).unwrap());
+                state.pending_future_id = Some(
+                    state
+                        .io_context
+                        .as_ref()
+                        .unwrap()
+                        .acquire_pending_future_id(),
+                );
+            }
+            gst::StateChange::PausedToReady => {
+                let mut state = self.state.lock().unwrap();
+                let _ = state.pending_future_cancel.take();
             }
             gst::StateChange::ReadyToNull => {
                 let mut state = self.state.lock().unwrap();
