@@ -827,6 +827,11 @@ impl JitterBuffer {
             .and_then(move |_| {
                 let jb = Self::from_instance(&element_clone);
                 let mut state = jb.state.lock().unwrap();
+
+                if state.io_context.is_none() {
+                    return Ok(());
+                }
+
                 let now = jb.get_current_running_time(&element_clone);
 
                 gst_debug!(
@@ -1301,6 +1306,12 @@ impl ElementImpl for JitterBuffer {
             gst::StateChange::ReadyToNull => {
                 let mut state = self.state.lock().unwrap();
 
+                state
+                    .io_context
+                    .as_ref()
+                    .unwrap()
+                    .release_pending_future_id(state.pending_future_id.unwrap());
+                state.pending_future_id = None;
                 let _ = state.io_context.take();
             }
             _ => (),
