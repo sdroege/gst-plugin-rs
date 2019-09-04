@@ -12,6 +12,6 @@ keywords = ["gstreamer", "multimedia", "cargo"]
 edition = "2018"
 
 [dependencies]
-git2 = "0.9"
+git2 = "0.10"
 chrono = "0.4.6"
 toml = { version = "0.5", default-features = false }
