@@ -23,8 +23,6 @@ extern crate gstreamer_check as gst_check;
 
 extern crate gstthreadshare;
 
-use gstthreadshare::{RTPJitterBuffer, RTPJitterBufferItem};
-
 fn init() {
     use std::sync::Once;
     static INIT: Once = Once::new();
@@ -38,22 +36,6 @@ fn init() {
 #[test]
 fn test_push() {
     init();
-
-    let jb = RTPJitterBuffer::new();
-    let item = RTPJitterBufferItem::new(
-        gst::Buffer::new(),
-        gst::ClockTime(Some(57)),
-        gst::ClockTime(Some(72)),
-        135,
-        142,
-    );
-    jb.insert(item);
-    let (item, percent) = jb.pop();
-
-    let buffer = item.get_buffer();
-    eprintln!("Buffer: {:?}", buffer);
-
-    eprintln!("Percent, pts: {} , {}", percent, item.get_pts());
 
     let mut h = gst_check::Harness::new("ts-appsrc");
 
