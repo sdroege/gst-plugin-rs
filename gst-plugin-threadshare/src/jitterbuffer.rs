@@ -544,11 +544,10 @@ impl JitterBuffer {
 
         state.last_in_seqnum = seq as u32;
 
-        let jb_item = match estimated_dts {
-            true => {
-                RTPJitterBufferItem::new(buffer, gst::CLOCK_TIME_NONE, pts, seq as u32, rtptime)
-            }
-            false => RTPJitterBufferItem::new(buffer, dts, pts, seq as u32, rtptime),
+        let jb_item = if estimated_dts {
+            RTPJitterBufferItem::new(buffer, gst::CLOCK_TIME_NONE, pts, seq as u32, rtptime)
+        } else {
+            RTPJitterBufferItem::new(buffer, dts, pts, seq as u32, rtptime)
         };
 
         let (success, _, _) = state.jbuf.borrow().insert(jb_item);
@@ -606,17 +605,17 @@ impl JitterBuffer {
         );
 
         if state.last_popped_seqnum != std::u32::MAX {
-            let mut lost_seqnum = (state.last_popped_seqnum + 1 & 0xffff) as i64;
+            let mut lost_seqnum = ((state.last_popped_seqnum + 1) & 0xffff) as i64;
             let gap = gst_rtp::compare_seqnum(lost_seqnum as u16, seqnum as u16) as i64;
 
             if gap > 0 {
                 let interval = pts.nseconds().unwrap() as i64
                     - state.last_popped_pts.nseconds().unwrap() as i64;
-                let mut spacing: i64 = 0;
-
-                if interval >= 0 {
-                    spacing = interval / (gap as i64 + 1);
-                }
+                let spacing = if interval >= 0 {
+                    interval / (gap as i64 + 1)
+                } else {
+                    0
+                };
 
                 *discont = true;
 
@@ -653,11 +652,7 @@ impl JitterBuffer {
 
                 while lost_seqnum != seqnum as i64 {
                     let timestamp = state.last_popped_pts + gst::ClockTime(Some(spacing as u64));
-                    let mut duration = 0;
-
-                    if state.equidistant > 0 {
-                        duration = spacing;
-                    }
+                    let duration = if state.equidistant > 0 { spacing } else { 0 };
 
                     state.last_popped_pts = timestamp;
 
@@ -899,7 +894,7 @@ impl JitterBuffer {
                 break;
             }
 
-            if let Err(_) = self.pop_and_push(state, element) {
+            if self.pop_and_push(state, element).is_err() {
                 ret = false;
                 break;
             }
@@ -983,10 +978,7 @@ impl JitterBuffer {
             QueryView::Drain(..) => {
                 let mut state = self.state.lock().unwrap();
                 gst_info!(self.cat, obj: pad, "Draining");
-                match self.enqueue_item(&mut state, pad, element, None) {
-                    Err(_) => false,
-                    Ok(_) => true,
-                }
+                self.enqueue_item(&mut state, pad, element, None).is_ok()
             }
             _ => self.src_pad.peer_query(query),
         }

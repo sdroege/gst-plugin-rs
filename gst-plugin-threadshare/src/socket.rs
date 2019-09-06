@@ -104,7 +104,7 @@ impl<T: SocketRead + 'static> Socket<T> {
 
         assert_eq!(inner.state, SocketState::Unscheduled);
         inner.state = SocketState::Scheduled;
-        if let Err(_) = inner.buffer_pool.set_active(true) {
+        if inner.buffer_pool.set_active(true).is_err() {
             gst_error!(SOCKET_CAT, obj: &inner.element, "Failed to activate buffer pool");
             return Err(());
         }

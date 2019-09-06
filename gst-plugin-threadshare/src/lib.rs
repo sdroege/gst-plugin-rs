@@ -16,6 +16,7 @@
 // Boston, MA 02110-1335, USA.
 
 #![crate_type = "cdylib"]
+#![allow(clippy::cast_lossless)]
 
 extern crate libc;
 
@@ -275,14 +276,14 @@ impl RTPJitterBufferItem {
                 r#type: 0,
                 dts: dts.to_glib(),
                 pts: pts.to_glib(),
-                seqnum: seqnum,
+                seqnum,
                 count: 1,
-                rtptime: rtptime,
+                rtptime,
             })))
         }
     }
 
-    pub fn get_buffer(&self) -> &mut gst::BufferRef {
+    pub fn get_buffer(&mut self) -> &mut gst::BufferRef {
         unsafe {
             let item = self.0.as_ref().expect("Invalid wrapper");
             let buf = item.data as *mut gst_ffi::GstBuffer;
@@ -365,6 +366,12 @@ impl RTPPacketRateCtx {
 
     pub fn get_max_disorder(&mut self, time_ms: i32) -> u32 {
         unsafe { ffi::gst_rtp_packet_rate_ctx_get_max_disorder(&mut *self.0, time_ms) }
+    }
+}
+
+impl Default for RTPPacketRateCtx {
+    fn default() -> Self {
+        RTPPacketRateCtx::new()
     }
 }
 
@@ -500,5 +507,11 @@ impl RTPJitterBuffer {
 
     pub fn reset_skew(&self) {
         unsafe { ffi::rtp_jitter_buffer_reset_skew(self.to_glib_none().0) }
+    }
+}
+
+impl Default for RTPJitterBuffer {
+    fn default() -> Self {
+        RTPJitterBuffer::new()
     }
 }

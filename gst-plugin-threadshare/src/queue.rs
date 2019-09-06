@@ -191,9 +191,9 @@ impl Queue {
         match pending_queue {
             None => queue.push(item),
             Some(PendingQueue {
-                task: _,
                 scheduled: false,
                 ref mut items,
+                ..
             }) => {
                 let mut failed_item = None;
                 while let Some(item) = items.pop_front() {
@@ -225,7 +225,6 @@ impl Queue {
         gst_log!(self.cat, obj: element, "Scheduling pending queue now");
 
         let State {
-            queue: _,
             ref mut pending_queue,
             ref io_context_in,
             pending_future_id_in,
@@ -257,8 +256,8 @@ impl Queue {
 
             let res = if let Some(PendingQueue {
                 ref mut task,
-                scheduled: _,
                 ref mut items,
+                ..
             }) = *pending_queue
             {
                 let mut failed_item = None;
@@ -525,6 +524,8 @@ impl Queue {
         use gst::QueryView;
 
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
+        #[allow(clippy::redundant_pattern_matching)]
+        #[allow(clippy::single_match)]
         match query.view_mut() {
             QueryView::Scheduling(ref mut q) => {
                 let mut new_query = gst::Query::new_scheduling();

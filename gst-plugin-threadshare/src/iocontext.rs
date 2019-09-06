@@ -229,6 +229,11 @@ impl glib::subclass::boxed::BoxedType for IOContext {
 
 glib_boxed_derive_traits!(IOContext);
 
+type PendingFutures = Mutex<(
+    u64,
+    HashMap<u64, FuturesUnordered<Box<dyn Future<Item = (), Error = ()> + Send + 'static>>>,
+)>;
+
 struct IOContextInner {
     name: String,
     runtime_handle: Mutex<tokio_current_thread::Handle>,
@@ -236,10 +241,7 @@ struct IOContextInner {
     timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
     // Only used for dropping
     _shutdown: IOContextShutdown,
-    pending_futures: Mutex<(
-        u64,
-        HashMap<u64, FuturesUnordered<Box<dyn Future<Item = (), Error = ()> + Send + 'static>>>,
-    )>,
+    pending_futures: PendingFutures,
 }
 
 impl Drop for IOContextInner {

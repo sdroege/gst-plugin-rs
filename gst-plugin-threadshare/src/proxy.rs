@@ -480,9 +480,8 @@ impl ProxySink {
         }
 
         let state = self.state.lock().unwrap();
-        let queue = state.queue.as_ref().unwrap();
-        let res = queue.0.lock().unwrap().last_res;
-        res
+        let inner_queue = state.queue.as_ref().unwrap().0.lock().unwrap();
+        inner_queue.last_res
     }
 
     fn sink_chain(
@@ -924,6 +923,8 @@ impl ProxySrc {
                 use gst::EventView;
 
                 let mut new_event = None;
+                #[allow(clippy::redundant_pattern_matching)]
+                #[allow(clippy::single_match)]
                 match event.view() {
                     EventView::CustomDownstreamSticky(e) => {
                         let s = e.get_structure().unwrap();
