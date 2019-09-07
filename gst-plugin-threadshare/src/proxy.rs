@@ -923,8 +923,6 @@ impl ProxySrc {
                 use gst::EventView;
 
                 let mut new_event = None;
-                #[allow(clippy::redundant_pattern_matching)]
-                #[allow(clippy::single_match)]
                 match event.view() {
                     EventView::CustomDownstreamSticky(e) => {
                         let s = e.get_structure().unwrap();

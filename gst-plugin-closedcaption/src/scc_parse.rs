@@ -52,6 +52,8 @@ struct State {
     last_timecode: Option<gst_video::ValidVideoTimeCode>,
 }
 
+type CombineError<'a> = combine::easy::Errors<u8, &'a [u8], combine::stream::PointerOffset>;
+
 impl Default for State {
     fn default() -> Self {
         Self {
@@ -68,16 +70,7 @@ impl Default for State {
 }
 
 impl State {
-    fn get_line(
-        &mut self,
-        drain: bool,
-    ) -> Result<
-        Option<SccLine>,
-        (
-            &[u8],
-            combine::easy::Errors<u8, &[u8], combine::stream::PointerOffset>,
-        ),
-    > {
+    fn get_line(&mut self, drain: bool) -> Result<Option<SccLine>, (&[u8], CombineError)> {
         let line = match self.reader.get_line_with_drain(drain) {
             None => {
                 return Ok(None);
@@ -186,7 +179,7 @@ impl State {
         &mut self,
         buffer: &mut gst::buffer::Buffer,
         timecode: &gst_video::ValidVideoTimeCode,
-        framerate: &gst::Fraction,
+        framerate: gst::Fraction,
         element: &gst::Element,
     ) {
         let buffer = buffer.get_mut().unwrap();
@@ -341,7 +334,7 @@ impl SccParse {
                 buf_mut.copy_from_slice(0, d).unwrap();
             }
 
-            state.add_buffer_metadata(&mut buffer, &timecode, &framerate, element);
+            state.add_buffer_metadata(&mut buffer, &timecode, framerate, element);
             timecode.increment_frame();
             let buffers = buffers.get_mut().unwrap();
             buffers.add(buffer);

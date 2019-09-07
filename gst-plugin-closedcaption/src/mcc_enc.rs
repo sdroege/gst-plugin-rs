@@ -133,6 +133,7 @@ impl MccEnc {
         });
     }
 
+    #[allow(clippy::write_with_newline)]
     fn generate_headers(&self, _state: &State, buffer: &mut Vec<u8>) -> Result<(), gst::FlowError> {
         let settings = self.settings.lock().unwrap();
 

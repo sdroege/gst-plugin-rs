@@ -16,6 +16,7 @@ use gst::subclass::prelude::*;
 
 // Struct containing all the element data
 struct ProgressBin {
+    #[allow(dead_code)]
     cat: gst::DebugCategory,
     progress: gst::Element,
     srcpad: gst::GhostPad,

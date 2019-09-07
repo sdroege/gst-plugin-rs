@@ -524,8 +524,6 @@ impl Queue {
         use gst::QueryView;
 
         gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
-        #[allow(clippy::redundant_pattern_matching)]
-        #[allow(clippy::single_match)]
         match query.view_mut() {
             QueryView::Scheduling(ref mut q) => {
                 let mut new_query = gst::Query::new_scheduling();

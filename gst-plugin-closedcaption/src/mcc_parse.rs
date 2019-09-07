@@ -94,6 +94,8 @@ struct State {
     need_flush_stop: bool,
 }
 
+type CombineError<'a> = combine::easy::Errors<u8, &'a [u8], combine::stream::PointerOffset>;
+
 impl Default for State {
     fn default() -> Self {
         Self {
@@ -156,16 +158,7 @@ fn parse_timecode_rate(
 }
 
 impl State {
-    fn get_line(
-        &mut self,
-        drain: bool,
-    ) -> Result<
-        Option<MccLine>,
-        (
-            &[u8],
-            combine::easy::Errors<u8, &[u8], combine::stream::PointerOffset>,
-        ),
-    > {
+    fn get_line(&mut self, drain: bool) -> Result<Option<MccLine>, (&[u8], CombineError)> {
         let line = if self.replay_last_line {
             self.replay_last_line = false;
             &self.last_raw_line
@@ -706,12 +699,10 @@ impl MccParse {
         mode: gst::PadMode,
         active: bool,
     ) -> Result<(), gst::LoggableError> {
-        if active {
-            if mode == gst::PadMode::Pull {
+        if mode == gst::PadMode::Pull {
+            if active {
                 self.start_task(element)?;
-            }
-        } else {
-            if mode == gst::PadMode::Pull {
+            } else {
                 let _ = self.sinkpad.stop_task();
             }
         }

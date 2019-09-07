@@ -123,6 +123,7 @@ static PROPERTIES: [subclass::Property; 6] = [
     }),
 ];
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum State {
     Stopped,

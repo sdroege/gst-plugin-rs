@@ -46,6 +46,7 @@ struct FlvDemux {
     state: Mutex<State>,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 enum State {
     Stopped,
@@ -1419,6 +1420,7 @@ impl VideoFormat {
         }
     }
 
+    #[allow(clippy::useless_let_if_seq)]
     fn update_with_metadata(&mut self, metadata: &Metadata) -> bool {
         let mut changed = false;
 

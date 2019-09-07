@@ -85,7 +85,6 @@ clippy:
   extends: '.tarball_setup'
   image: "rust:slim"
   stage: 'extras'
-  allow_failure: true
   script:
     - rustup component add clippy-preview
-    - cargo clippy --color=always --all --all-features
+    - cargo clippy --color=always --all --all-features -- -A clippy::redundant_pattern_matching -A clippy::single_match -A clippy::cast_lossless

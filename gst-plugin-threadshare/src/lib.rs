@@ -16,7 +16,6 @@
 // Boston, MA 02110-1335, USA.
 
 #![crate_type = "cdylib"]
-#![allow(clippy::cast_lossless)]
 
 extern crate libc;
 

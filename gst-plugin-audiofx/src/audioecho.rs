@@ -54,6 +54,7 @@ struct State {
 }
 
 struct AudioEcho {
+    #[allow(dead_code)]
     cat: gst::DebugCategory,
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,

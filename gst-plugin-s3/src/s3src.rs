@@ -28,6 +28,7 @@ use gst_base::subclass::prelude::*;
 use crate::s3url::*;
 use crate::s3utils;
 
+#[allow(clippy::large_enum_variant)]
 enum StreamingState {
     Stopped,
     Started {
