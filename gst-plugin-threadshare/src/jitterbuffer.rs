@@ -719,13 +719,12 @@ impl JitterBuffer {
         element: &gst::Element,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut discont = false;
-        let (mut jb_item, _) = state.jbuf.borrow().pop();
+        let (jb_item, _) = state.jbuf.borrow().pop();
 
         let dts = jb_item.get_dts();
         let pts = jb_item.get_pts();
         let seq = jb_item.get_seqnum();
-        /* FIXME: this is awkward */
-        let mut buffer = jb_item.take_buffer();
+        let mut buffer = jb_item.get_buffer();
 
         let buffer = buffer.make_mut();
 

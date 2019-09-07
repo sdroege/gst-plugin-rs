@@ -63,9 +63,8 @@ mod jitterbuffer;
 mod proxy;
 mod queue;
 
+use glib::prelude::*;
 use glib::translate::*;
-use glib::ObjectExt;
-use gst::MiniObject;
 use std::mem;
 use std::ptr;
 
@@ -282,17 +281,9 @@ impl RTPJitterBufferItem {
         }
     }
 
-    pub fn get_buffer(&mut self) -> &mut gst::BufferRef {
+    pub fn get_buffer(&self) -> gst::Buffer {
         unsafe {
             let item = self.0.as_ref().expect("Invalid wrapper");
-            let buf = item.data as *mut gst_ffi::GstBuffer;
-            gst::BufferRef::from_mut_ptr(buf)
-        }
-    }
-
-    pub fn take_buffer(&mut self) -> gst::Buffer {
-        unsafe {
-            let item = self.0.take().expect("Invalid wrapper");
             let buf = item.data as *mut gst_ffi::GstBuffer;
             from_glib_none(buf)
         }
