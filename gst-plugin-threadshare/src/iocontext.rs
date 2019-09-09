@@ -184,6 +184,7 @@ impl IOContextRunner {
                             }
                         }),
                     };
+                    drop(timers);
 
                     gst_trace!(CONTEXT_CAT, "Sleeping for up to {:?}", wait);
                     current_thread.enter(enter).turn(wait).unwrap();
