@@ -12,9 +12,9 @@ glib-sys = { git = "https://github.com/gtk-rs/sys" }
 gobject-sys = { git = "https://github.com/gtk-rs/sys" }
 gio-sys = { git = "https://github.com/gtk-rs/sys" }
 gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
-glib = { git = "https://github.com/gtk-rs/glib", features = ["subclassing"] }
+glib = { git = "https://github.com/gtk-rs/glib" }
 gio = { git = "https://github.com/gtk-rs/gio" }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-net = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

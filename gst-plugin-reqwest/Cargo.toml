@@ -13,8 +13,8 @@ glib = { git = "https://github.com/gtk-rs/glib" }
 reqwest = "0.9"
 futures = "0.1.23"
 hyperx = "0.15"
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_10", "subclassing"] }
-gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_10"] }
+gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 tokio = "0.1"
 bytes = "0.4"
 

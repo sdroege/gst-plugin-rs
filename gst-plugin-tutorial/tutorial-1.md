@@ -40,9 +40,9 @@ license = "MIT/Apache-2.0"
 edition = "2018"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib", features = ["subclassing"] }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
-gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["subclassing"] }
+glib = { git = "https://github.com/gtk-rs/glib" }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 
 [lib]
