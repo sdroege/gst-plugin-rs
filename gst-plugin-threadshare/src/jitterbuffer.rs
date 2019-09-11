@@ -315,6 +315,14 @@ impl JitterBuffer {
                 } else {
                     state.packet_spacing = new_packet_spacing;
                 }
+
+                gst_debug!(
+                    self.cat,
+                    "new packet spacing {}, old packet spacing {} combined to {}",
+                    new_packet_spacing,
+                    old_packet_spacing,
+                    state.packet_spacing
+                );
             }
             state.ips_rtptime = rtptime;
             state.ips_pts = pts;
@@ -520,13 +528,17 @@ impl JitterBuffer {
             let gap = gst_rtp::compare_seqnum(state.last_in_seqnum as u16, seq);
             if gap == 1 {
                 self.calculate_packet_spacing(state, rtptime, pts);
-            } else if (gap != -1 && gap < -(max_misorder as i32)) || (gap >= max_dropout as i32) {
-                let reset = self.handle_big_gap_buffer(state, element, buffer, pt);
-                if reset {
-                    return self.reset(state, pad, element);
-                } else {
-                    return Ok(gst::FlowSuccess::Ok);
+            } else {
+                if (gap != -1 && gap < -(max_misorder as i32)) || (gap >= max_dropout as i32) {
+                    let reset = self.handle_big_gap_buffer(state, element, buffer, pt);
+                    if reset {
+                        return self.reset(state, pad, element);
+                    } else {
+                        return Ok(gst::FlowSuccess::Ok);
+                    }
                 }
+                state.ips_pts = gst::CLOCK_TIME_NONE;
+                state.ips_rtptime = 0;
             }
 
             state.gap_packets.as_mut().unwrap().clear();
