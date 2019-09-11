@@ -673,12 +673,16 @@ impl AggregatorImpl for FallbackSwitch {
                 )
                 .unwrap()
         } else if let Some(ref video_info) = pad_state.video_info {
-            gst::SECOND
-                .mul_div_floor(
-                    *video_info.fps().denom() as u64,
-                    *video_info.fps().numer() as u64,
-                )
-                .unwrap()
+            if *video_info.fps().numer() > 0 {
+                gst::SECOND
+                    .mul_div_floor(
+                        *video_info.fps().denom() as u64,
+                        *video_info.fps().numer() as u64,
+                    )
+                    .unwrap()
+            } else {
+                gst::CLOCK_TIME_NONE
+            }
         } else {
             unreachable!()
         };
@@ -704,7 +708,9 @@ impl AggregatorImpl for FallbackSwitch {
                     let buffer = buffer.make_mut();
                     buffer.set_pts(start);
                     buffer.set_dts(start);
-                    buffer.set_duration(stop - start);
+                    if duration.is_some() {
+                        buffer.set_duration(stop - start);
+                    }
                 }
 
                 buffer
