@@ -22,7 +22,6 @@
 #define __GST_AGGREGATOR_H__
 
 #include <gst/gst.h>
-#include <gst/base/base-prelude.h>
 
 G_BEGIN_DECLS
 
