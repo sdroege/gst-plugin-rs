@@ -15,6 +15,7 @@ members = [
     "gst-plugin-rav1e",
     "gst-plugin-s3",
     "gst-plugin-fallbackswitch",
+    "gst-plugin-lewton",
 ]
 
 [profile.release]
