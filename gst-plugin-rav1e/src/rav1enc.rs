@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use atomic_refcell::AtomicRefCell;
 use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
@@ -285,7 +286,7 @@ struct State {
 
 struct Rav1Enc {
     cat: gst::DebugCategory,
-    state: Mutex<Option<State>>,
+    state: AtomicRefCell<Option<State>>,
     settings: Mutex<Settings>,
 }
 
@@ -304,7 +305,7 @@ impl ObjectSubclass for Rav1Enc {
                 gst::DebugColorFlags::empty(),
                 Some("rav1e AV1 encoder"),
             ),
-            state: Mutex::new(None),
+            state: AtomicRefCell::new(None),
             settings: Mutex::new(Default::default()),
         }
     }
@@ -475,9 +476,10 @@ impl ObjectImpl for Rav1Enc {
 impl ElementImpl for Rav1Enc {}
 
 impl VideoEncoderImpl for Rav1Enc {
-    fn stop(&self, element: &gst_video::VideoEncoder) -> Result<(), gst::ErrorMessage> {
-        *self.state.lock().unwrap() = None;
-        self.parent_stop(element)
+    fn stop(&self, _element: &gst_video::VideoEncoder) -> Result<(), gst::ErrorMessage> {
+        *self.state.borrow_mut() = None;
+
+        Ok(())
     }
 
     fn set_format(
@@ -605,7 +607,7 @@ impl VideoEncoderImpl for Rav1Enc {
             threads: settings.threads,
         };
 
-        *self.state.lock().unwrap() = Some(State {
+        *self.state.borrow_mut() = Some(State {
             context: if video_info.format_info().depth()[0] > 8 {
                 Context::Sixteen(cfg.new_context().map_err(|err| {
                     gst_loggable_error!(self.cat, "Failed to create context: {:?}", err)
@@ -631,7 +633,7 @@ impl VideoEncoderImpl for Rav1Enc {
     fn flush(&self, element: &gst_video::VideoEncoder) -> bool {
         gst_debug!(self.cat, obj: element, "Flushing");
 
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
             state.context.flush();
             loop {
@@ -644,7 +646,7 @@ impl VideoEncoderImpl for Rav1Enc {
             }
         }
 
-        self.parent_flush(element)
+        true
     }
 
     fn finish(
@@ -653,15 +655,16 @@ impl VideoEncoderImpl for Rav1Enc {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(self.cat, obj: element, "Finishing");
 
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
             if let Err(data::EncoderStatus::Failure) = state.context.send_frame(None, false) {
                 return Err(gst::FlowError::Error);
             }
             state.context.flush();
+            self.output_frames(element, state)?;
         }
-        drop(state_guard);
-        self.output_frames(element)
+
+        Ok(gst::FlowSuccess::Ok)
     }
 
     fn handle_frame(
@@ -669,10 +672,10 @@ impl VideoEncoderImpl for Rav1Enc {
         element: &gst_video::VideoEncoder,
         frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        self.output_frames(element)?;
-
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.borrow_mut();
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
+
+        self.output_frames(element, state)?;
 
         gst_debug!(
             self.cat,
@@ -717,8 +720,7 @@ impl VideoEncoderImpl for Rav1Enc {
             Err(_) => (),
         }
 
-        drop(state_guard);
-        self.output_frames(element)
+        self.output_frames(element, state)
     }
 }
 
@@ -726,13 +728,8 @@ impl Rav1Enc {
     fn output_frames(
         &self,
         element: &gst_video::VideoEncoder,
+        state: &mut State,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state_guard = self.state.lock().unwrap();
-        let mut state = match *state_guard {
-            None => return Ok(gst::FlowSuccess::Ok),
-            Some(ref mut state) => state,
-        };
-
         loop {
             match state.context.receive_packet() {
                 Ok((packet_type, packet_number, packet_data)) => {
@@ -751,10 +748,7 @@ impl Rav1Enc {
                     }
                     let output_buffer = gst::Buffer::from_mut_slice(packet_data);
                     frame.set_output_buffer(output_buffer);
-                    drop(state_guard);
                     element.finish_frame(Some(frame))?;
-                    state_guard = self.state.lock().unwrap();
-                    state = state_guard.as_mut().expect("Not negotiated yet");
                 }
                 Err(data::EncoderStatus::Encoded) => {
                     gst_debug!(self.cat, obj: element, "Encoded but not output frame yet",);

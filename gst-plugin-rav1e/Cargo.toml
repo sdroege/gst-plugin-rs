@@ -13,6 +13,7 @@ gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 rav1e = { git = "https://github.com/xiph/rav1e.git", default-features=false }
+atomic_refcell = "0.1"
 
 [lib]
 name = "gstrav1e"
