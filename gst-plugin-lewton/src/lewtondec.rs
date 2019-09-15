@@ -11,9 +11,9 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst;
 use gst::subclass::prelude::*;
+use gst_audio;
 use gst_audio::prelude::*;
 use gst_audio::subclass::prelude::*;
-use gstreamer_audio as gst_audio;
 
 use atomic_refcell::AtomicRefCell;
 
@@ -401,21 +401,25 @@ impl LewtonDec {
         let audio_info = state.audio_info.as_ref().unwrap();
 
         // Decode the input packet
-        let decoded = lewton::audio::read_audio_packet_generic::<
+        let decoded = match lewton::audio::read_audio_packet_generic::<
             lewton::samples::InterleavedSamples<f32>,
         >(&headerset.0, &headerset.2, indata, &mut state.pwr)
-        .map_err(|err| {
-            gst_element_error!(
-                element,
-                gst::StreamError::Decode,
-                ["Failed to decode packet: {:?}", err]
-            );
-            gst::FlowError::Error
-        })?;
+        {
+            Ok(decoded) => decoded,
+            Err(err) => {
+                return gst_audio_decoder_error!(
+                    element,
+                    1,
+                    gst::StreamError::Decode,
+                    ["Failed to decode packet: {:?}", err]
+                );
+            }
+        };
 
         if decoded.channel_count != audio_info.channels() as usize {
-            gst_element_error!(
+            return gst_audio_decoder_error!(
                 element,
+                1,
                 gst::StreamError::Decode,
                 [
                     "Channel count mismatch (got {}, expected {})",
@@ -423,7 +427,6 @@ impl LewtonDec {
                     audio_info.channels()
                 ]
             );
-            return Err(gst::FlowError::Error);
         }
 
         let sample_count = decoded.samples.len() / audio_info.channels() as usize;
