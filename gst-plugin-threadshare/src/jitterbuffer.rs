@@ -524,6 +524,16 @@ impl JitterBuffer {
             false,
         );
 
+        if pts.is_none() {
+            gst_debug!(
+                self.cat,
+                obj: element,
+                "cannot calculate a valid pts for #{}, discard",
+                seq
+            );
+            return Ok(gst::FlowSuccess::Ok);
+        }
+
         if state.last_in_seqnum != std::u32::MAX {
             let gap = gst_rtp::compare_seqnum(state.last_in_seqnum as u16, seq);
             if gap == 1 {
