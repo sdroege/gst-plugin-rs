@@ -112,7 +112,7 @@ impl FallbackSwitch {
         &self,
         agg: &gst_base::Aggregator,
         state: &mut OutputState,
-        buffer: gst::Buffer,
+        mut buffer: gst::Buffer,
         fallback_sinkpad: Option<&gst_base::AggregatorPad>,
     ) -> Result<Option<(gst::Buffer, gst::Caps, bool)>, gst::FlowError> {
         // If we got a buffer on the sinkpad just handle it
@@ -131,6 +131,13 @@ impl FallbackSwitch {
                 gst_error!(self.cat, obj: agg, "Only TIME segments supported");
                 gst::FlowError::Error
             })?;
+
+        {
+            // FIXME: This will not work correctly for negative DTS
+            let buffer = buffer.make_mut();
+            buffer.set_pts(segment.to_running_time(buffer.get_pts()));
+            buffer.set_dts(segment.to_running_time(buffer.get_dts()));
+        }
 
         let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
         let pad_change = &*active_sinkpad != self.sinkpad.upcast_ref::<gst::Pad>();
@@ -202,7 +209,7 @@ impl FallbackSwitch {
         // If we have a fallback sinkpad and timeout, try to get a fallback buffer from here
         // and drop all too old buffers in the process
         loop {
-            let buffer = fallback_sinkpad
+            let mut buffer = fallback_sinkpad
                 .pop_buffer()
                 .ok_or(gst_base::AGGREGATOR_FLOW_NEED_DATA)?;
 
@@ -226,6 +233,13 @@ impl FallbackSwitch {
                     gst::FlowError::Error
                 })?;
             let running_time = fallback_segment.to_running_time(buffer.get_pts());
+
+            {
+                // FIXME: This will not work correctly for negative DTS
+                let buffer = buffer.make_mut();
+                buffer.set_pts(fallback_segment.to_running_time(buffer.get_pts()));
+                buffer.set_dts(fallback_segment.to_running_time(buffer.get_dts()));
+            }
 
             // If we never had a real buffer, initialize with the running time of the fallback
             // sinkpad so that we still output fallback buffers after the timeout
