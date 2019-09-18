@@ -123,13 +123,14 @@ impl FallbackSwitch {
             return Err(gst::FlowError::Error);
         }
 
-        let segment = match self.sinkpad.get_segment().downcast::<gst::ClockTime>() {
-            Ok(segment) => segment,
-            Err(_) => {
+        let segment = self
+            .sinkpad
+            .get_segment()
+            .downcast::<gst::ClockTime>()
+            .map_err(|_| {
                 gst_error!(self.cat, obj: agg, "Only TIME segments supported");
-                return Err(gst::FlowError::Error);
-            }
-        };
+                gst::FlowError::Error
+            })?;
 
         let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
         let pad_change = &*active_sinkpad != self.sinkpad.upcast_ref::<gst::Pad>();
@@ -143,13 +144,14 @@ impl FallbackSwitch {
 
         // Drop all older buffers from the fallback sinkpad
         if let Some(fallback_sinkpad) = fallback_sinkpad {
-            let fallback_segment = match self.sinkpad.get_segment().downcast::<gst::ClockTime>() {
-                Ok(segment) => segment,
-                Err(_) => {
+            let fallback_segment = self
+                .sinkpad
+                .get_segment()
+                .downcast::<gst::ClockTime>()
+                .map_err(|_| {
                     gst_error!(self.cat, obj: agg, "Only TIME segments supported");
-                    return Err(gst::FlowError::Error);
-                }
-            };
+                    gst::FlowError::Error
+                })?;
 
             while let Some(fallback_buffer) = fallback_sinkpad.peek_buffer() {
                 let fallback_pts = fallback_buffer.get_pts();
@@ -186,16 +188,9 @@ impl FallbackSwitch {
         // If we have a fallback sinkpad and timeout, try to get a fallback buffer from here
         // and drop all too old buffers in the process
         loop {
-            let buffer = if let Some(buffer) = fallback_sinkpad.pop_buffer() {
-                buffer
-            } else {
-                gst_debug!(
-                    self.cat,
-                    obj: agg,
-                    "Got no buffer on sinkpad and fallback sinkpad"
-                );
-                return Err(gst_base::AGGREGATOR_FLOW_NEED_DATA);
-            };
+            let buffer = fallback_sinkpad
+                .pop_buffer()
+                .ok_or(gst_base::AGGREGATOR_FLOW_NEED_DATA)?;
 
             gst_debug!(
                 self.cat,
@@ -209,14 +204,13 @@ impl FallbackSwitch {
                 return Err(gst::FlowError::Error);
             }
 
-            let fallback_segment = match fallback_sinkpad.get_segment().downcast::<gst::ClockTime>()
-            {
-                Ok(segment) => segment,
-                Err(_) => {
+            let fallback_segment = fallback_sinkpad
+                .get_segment()
+                .downcast::<gst::ClockTime>()
+                .map_err(|_| {
                     gst_error!(self.cat, obj: agg, "Only TIME segments supported");
-                    return Err(gst::FlowError::Error);
-                }
-            };
+                    gst::FlowError::Error
+                })?;
             let running_time = fallback_segment.to_running_time(buffer.get_pts());
 
             // If we never had a real buffer, initialize with the running time of the fallback
