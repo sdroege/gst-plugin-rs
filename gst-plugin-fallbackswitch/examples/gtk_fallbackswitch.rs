@@ -30,21 +30,41 @@ use gtk::prelude::*;
 use std::cell::RefCell;
 use std::env;
 
+const MAIN_PIPELINE: &str = "videotestsrc is-live=true pattern=ball";
+const FALLBACK_PIPELINE: &str = "videotestsrc is-live=true pattern=snow";
+
+//const MAIN_PIPELINE: &str = "videotestsrc is-live=true pattern=ball ! x264enc tune=zerolatency";
+//const FALLBACK_PIPELINE: &str = "videotestsrc is-live=true pattern=snow ! x264enc tune=zerolatency";
+
 fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
     let pipeline = gst::Pipeline::new(None);
 
-    let video_src = gst::ElementFactory::make("videotestsrc", None).unwrap();
-    video_src.set_property("is-live", &true).unwrap();
-    video_src.set_property_from_str("pattern", "ball");
-
-    let fallback_video_src = gst::ElementFactory::make("videotestsrc", None).unwrap();
+    let video_src = gst::parse_bin_from_description(MAIN_PIPELINE, true)
+        .unwrap()
+        .upcast();
+    let fallback_video_src = gst::parse_bin_from_description(&FALLBACK_PIPELINE, true)
+        .unwrap()
+        .upcast();
 
     let fallbackswitch = gst::ElementFactory::make("fallbackswitch", None).unwrap();
     fallbackswitch
         .set_property("timeout", &gst::SECOND)
         .unwrap();
 
+    let decodebin = gst::ElementFactory::make("decodebin", None).unwrap();
     let videoconvert = gst::ElementFactory::make("videoconvert", None).unwrap();
+
+    let videoconvert_clone = videoconvert.clone();
+    decodebin.connect_pad_added(move |_, pad| {
+        let caps = pad.get_current_caps().unwrap();
+        let s = caps.get_structure(0).unwrap();
+
+        let sinkpad = videoconvert_clone.get_static_pad("sink").unwrap();
+
+        if s.get_name() == "video/x-raw" && !sinkpad.is_linked() {
+            pad.link(&sinkpad).unwrap();
+        }
+    });
 
     let (video_sink, video_widget) =
         //if let Some(gtkglsink) = gst::ElementFactory::make("gtkglsink", None) {
@@ -65,6 +85,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
             &video_src,
             &fallback_video_src,
             &fallbackswitch,
+            &decodebin,
             &videoconvert,
             &video_sink,
         ])
@@ -77,7 +98,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
         .link_pads(Some("src"), &fallbackswitch, Some("fallback_sink"))
         .unwrap();
     fallbackswitch
-        .link_pads(Some("src"), &videoconvert, Some("sink"))
+        .link_pads(Some("src"), &decodebin, Some("sink"))
         .unwrap();
     videoconvert
         .link_pads(Some("src"), &video_sink, Some("sink"))
