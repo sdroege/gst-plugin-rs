@@ -558,7 +558,7 @@ fn stop_pipeline(mut pipeline: Pipeline) {
 
     // Signal shutdown to the clock thread
     let clock_id = clock.new_single_shot_id(0.into()).unwrap();
-    clock_id.wait();
+    let _ = clock_id.wait();
 
     let switch = pipeline.get_by_name("switch").unwrap();
     let switch_weak = switch.downgrade();
