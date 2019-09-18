@@ -114,7 +114,7 @@ impl FallbackSwitch {
         state: &mut OutputState,
         buffer: gst::Buffer,
         fallback_sinkpad: Option<&gst_base::AggregatorPad>,
-    ) -> Result<(gst::Buffer, gst::Caps, bool), gst::FlowError> {
+    ) -> Result<Option<(gst::Buffer, gst::Caps, bool)>, gst::FlowError> {
         // If we got a buffer on the sinkpad just handle it
         gst_debug!(self.cat, obj: agg, "Got buffer on sinkpad {:?}", buffer);
 
@@ -135,6 +135,20 @@ impl FallbackSwitch {
         let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
         let pad_change = &*active_sinkpad != self.sinkpad.upcast_ref::<gst::Pad>();
         if pad_change {
+            if buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT) {
+                gst_info!(
+                    self.cat,
+                    obj: agg,
+                    "Can't change back to sinkpad, waiting for keyframe"
+                );
+                self.sinkpad.push_event(
+                    gst_video::new_upstream_force_key_unit_event()
+                        .all_headers(true)
+                        .build(),
+                );
+                return Ok(None);
+            }
+
             gst_info!(self.cat, obj: agg, "Active pad changed to sinkpad");
             *active_sinkpad = self.sinkpad.clone().upcast();
         }
@@ -175,7 +189,7 @@ impl FallbackSwitch {
         let active_caps = pad_states.sinkpad.caps.as_ref().unwrap().clone();
         drop(pad_states);
 
-        Ok((buffer, active_caps, pad_change))
+        Ok(Some((buffer, active_caps, pad_change)))
     }
 
     fn get_fallback_buffer(
@@ -245,6 +259,20 @@ impl FallbackSwitch {
             let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
             let pad_change = &*active_sinkpad != fallback_sinkpad.upcast_ref::<gst::Pad>();
             if pad_change {
+                if buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT) {
+                    gst_info!(
+                        self.cat,
+                        obj: agg,
+                        "Can't change to fallback sinkpad yet, waiting for keyframe"
+                    );
+                    fallback_sinkpad.push_event(
+                        gst_video::new_upstream_force_key_unit_event()
+                            .all_headers(true)
+                            .build(),
+                    );
+                    continue;
+                }
+
                 gst_info!(self.cat, obj: agg, "Active pad changed to fallback sinkpad");
                 *active_sinkpad = fallback_sinkpad.clone().upcast();
             }
@@ -277,11 +305,17 @@ impl FallbackSwitch {
         gst_debug!(self.cat, obj: agg, "Aggregate called: timeout {}", timeout);
 
         if let Some(buffer) = self.sinkpad.pop_buffer() {
-            self.handle_main_buffer(agg, &mut *state, buffer, fallback_sinkpad.as_ref())
+            if let Some(res) =
+                self.handle_main_buffer(agg, &mut *state, buffer, fallback_sinkpad.as_ref())?
+            {
+                return Ok(res);
+            }
         } else if self.sinkpad.is_eos() {
             gst_log!(self.cat, obj: agg, "Sinkpad is EOS");
-            Err(gst::FlowError::Eos)
-        } else if let (false, Some(_)) = (timeout, &*fallback_sinkpad) {
+            return Err(gst::FlowError::Eos);
+        }
+
+        if let (false, Some(_)) = (timeout, &*fallback_sinkpad) {
             gst_debug!(
                 self.cat,
                 obj: agg,
@@ -348,15 +382,7 @@ impl ObjectSubclass for FallbackSwitch {
             "Sebastian Dröge <sebastian@centricular.com>",
         );
 
-        let caps = {
-            let mut caps = gst::Caps::new_empty();
-            {
-                let caps = caps.get_mut().unwrap();
-                caps.append_structure(gst::Structure::new_empty("video/x-raw"));
-                caps.append_structure(gst::Structure::new_empty("audio/x-raw"));
-            }
-            caps
-        };
+        let caps = gst::Caps::new_any();
         let src_pad_template = gst::PadTemplate::new_with_gtype(
             "src",
             gst::PadDirection::Src,
@@ -546,7 +572,8 @@ impl AggregatorImpl for FallbackSwitch {
                     audio_info = None;
                     video_info = gst_video::VideoInfo::from_caps(&caps);
                 } else {
-                    unreachable!()
+                    audio_info = None;
+                    video_info = None;
                 }
 
                 let new_pad_state = PadState {
@@ -656,6 +683,11 @@ impl AggregatorImpl for FallbackSwitch {
         } else {
             unreachable!()
         };
+
+        if pad_state.audio_info.is_none() && pad_state.video_info.is_none() {
+            // No clipping possible for non-raw formats
+            return Some(buffer);
+        }
 
         let duration = if buffer.get_duration().is_some() {
             buffer.get_duration()
