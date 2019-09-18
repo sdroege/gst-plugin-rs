@@ -161,7 +161,7 @@ impl FallbackSwitch {
         }
         drop(active_sinkpad);
 
-        state.last_sinkpad_time = segment.to_running_time(buffer.get_pts());
+        state.last_sinkpad_time = segment.to_running_time(buffer.get_dts_or_pts());
 
         // Drop all older buffers from the fallback sinkpad
         if let Some(fallback_sinkpad) = fallback_sinkpad {
@@ -175,7 +175,7 @@ impl FallbackSwitch {
                 })?;
 
             while let Some(fallback_buffer) = fallback_sinkpad.peek_buffer() {
-                let fallback_pts = fallback_buffer.get_pts();
+                let fallback_pts = fallback_buffer.get_dts_or_pts();
                 if fallback_pts.is_none()
                     || fallback_segment.to_running_time(fallback_pts) <= state.last_sinkpad_time
                 {
@@ -232,7 +232,7 @@ impl FallbackSwitch {
                     gst_error!(self.cat, obj: agg, "Only TIME segments supported");
                     gst::FlowError::Error
                 })?;
-            let running_time = fallback_segment.to_running_time(buffer.get_pts());
+            let running_time = fallback_segment.to_running_time(buffer.get_dts_or_pts());
 
             {
                 // FIXME: This will not work correctly for negative DTS
@@ -649,7 +649,7 @@ impl AggregatorImpl for FallbackSwitch {
                 }
             };
 
-            let running_time = segment.to_running_time(buffer.get_pts());
+            let running_time = segment.to_running_time(buffer.get_dts_or_pts());
             gst_debug!(
                 self.cat,
                 obj: agg,
