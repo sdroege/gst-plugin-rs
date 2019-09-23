@@ -783,6 +783,7 @@ impl JitterBuffer {
     fn schedule(&self, state: &mut MutexGuard<State>, element: &gst::Element) {
         let settings = self.settings.lock().unwrap().clone();
         let latency_ns = settings.latency_ms as u64 * gst::MSECOND;
+        let context_wait_ns = settings.context_wait as u64 * gst::MSECOND;
         drop(settings);
 
         let now = self.get_current_running_time(element);
@@ -839,7 +840,8 @@ impl JitterBuffer {
 
                 /* Check earliest PTS as we have just taken the lock */
                 if state.earliest_pts.is_some()
-                    && state.earliest_pts + latency_ns - state.packet_spacing < now
+                    && state.earliest_pts + latency_ns - state.packet_spacing - context_wait_ns / 2
+                        < now
                 {
                     loop {
                         let (head_pts, head_seq) = state.jbuf.borrow().peek();
@@ -869,7 +871,10 @@ impl JitterBuffer {
 
                         if state.pending_future_cancel.is_some()
                             || state.earliest_pts.is_none()
-                            || state.earliest_pts + latency_ns - state.packet_spacing >= now
+                            || state.earliest_pts + latency_ns
+                                - state.packet_spacing
+                                - context_wait_ns / 2
+                                >= now
                         {
                             break;
                         }
