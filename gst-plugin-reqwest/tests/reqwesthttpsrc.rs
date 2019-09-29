@@ -556,3 +556,69 @@ fn test_seek_after_buffer_received() {
         assert_eq!(&*map, &*read_buf);
     }
 }
+
+#[test]
+fn test_cookies() {
+    init();
+
+    // Set up a simple harness that returns "Hello World" for any HTTP request
+    let mut h = Harness::new(
+        |_req| {
+            use hyper::{Body, Response};
+
+            Response::builder()
+                .header("Set-Cookie", "foo=bar")
+                .body(Body::from("Hello World"))
+                .unwrap()
+        },
+        |_src| {
+            // No additional setup needed here
+        },
+    );
+
+    // Set the HTTP source to Playing so that everything can start
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    let mut num_bytes = 0;
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        num_bytes += buffer.get_size();
+    }
+    assert_eq!(num_bytes, 11);
+
+    // Set up a simple harness that returns "Hello World" for any HTTP request
+    let mut h2 = Harness::new(
+        |req| {
+            use hyper::{Body, Response};
+
+            let cookies = req
+                .headers()
+                .get("Cookie")
+                .expect("No cookies set")
+                .to_str()
+                .unwrap();
+            assert!(cookies.split(';').any(|c| c == "foo=bar"));
+            Response::builder()
+                .body(Body::from("Hello again!"))
+                .unwrap()
+        },
+        |_src| {
+            // No additional setup needed here
+        },
+    );
+
+    let context = h.src.get_context("gst.request.client").expect("No context");
+    h2.src.set_context(&context);
+
+    // Set the HTTP source to Playing so that everything can start
+    h2.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    let mut num_bytes = 0;
+    while let Some(buffer) = h2.wait_buffer_or_eos() {
+        num_bytes += buffer.get_size();
+    }
+    assert_eq!(num_bytes, 12);
+}
