@@ -701,13 +701,15 @@ impl StreamingState {
         element: &gst::Element,
         adapter: &mut gst_base::UniqueAdapter,
     ) -> Result<Option<SmallVec<[Event; 4]>>, gst::ErrorMessage> {
+        use nom::number::complete::be_u32;
+
         if adapter.available() < 15 {
             return Ok(None);
         }
 
         let data = adapter.map(15).unwrap();
 
-        match nom::be_u32(&data[0..4]) {
+        match be_u32::<(_, nom::error::ErrorKind)>(&data[0..4]) {
             Err(_) => unreachable!(),
             Ok((_, previous_size)) => {
                 gst_trace!(CAT, obj: element, "Previous tag size {}", previous_size);
