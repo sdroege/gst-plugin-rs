@@ -725,7 +725,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             Ok((Some(chunk), current_body)) => {
                 /* do something with the chunk and store the body again in the state */
 
-                gst_debug!(cat, obj: src, "Data Received {:?}", chunk);
+                gst_debug!(cat, obj: src, "Chunk of {} bytes received", chunk.len());
                 let size = chunk.len();
                 assert_ne!(chunk.len(), 0);
 
