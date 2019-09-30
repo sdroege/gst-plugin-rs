@@ -9,10 +9,6 @@ use bytes::Bytes;
 use futures::future::Either;
 use futures::sync::oneshot;
 use futures::{Future, Stream};
-use hyperx::header::{
-    AcceptRanges, ByteRangeSpec, Connection, ContentLength, ContentRange, ContentRangeSpec,
-    Headers, Range, RangeUnit, UserAgent,
-};
 use reqwest::r#async::{Client, Decoder};
 use reqwest::StatusCode;
 use std::mem;
@@ -42,6 +38,7 @@ const DEFAULT_USER_AGENT: &str = concat!(
 );
 const DEFAULT_IS_LIVE: bool = false;
 const DEFAULT_TIMEOUT: u32 = 15;
+const DEFAULT_COMPRESS: bool = false;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -50,6 +47,7 @@ struct Settings {
     user_id: Option<String>,
     user_pw: Option<String>,
     timeout: u32,
+    compress: bool,
 }
 
 impl Default for Settings {
@@ -60,11 +58,12 @@ impl Default for Settings {
             user_id: None,
             user_pw: None,
             timeout: DEFAULT_TIMEOUT,
+            compress: DEFAULT_COMPRESS,
         }
     }
 }
 
-static PROPERTIES: [subclass::Property; 6] = [
+static PROPERTIES: [subclass::Property; 7] = [
     subclass::Property("location", |name| {
         glib::ParamSpec::string(
             name,
@@ -118,6 +117,15 @@ static PROPERTIES: [subclass::Property; 6] = [
             0,
             3600,
             DEFAULT_TIMEOUT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("compress", |name| {
+        glib::ParamSpec::boolean(
+            name,
+            "Compress",
+            "Allow compressed content encodings",
+            DEFAULT_COMPRESS,
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -221,6 +229,11 @@ impl ReqwestHttpSrc {
         start: u64,
         stop: Option<u64>,
     ) -> Result<State, gst::ErrorMessage> {
+        use hyperx::header::{
+            qitem, AcceptEncoding, AcceptRanges, ByteRangeSpec, Connection, ContentLength,
+            ContentRange, ContentRangeSpec, Encoding, Headers, Range, RangeUnit, UserAgent,
+        };
+
         let cat = self.cat;
         let req = {
             let mut client_guard = self.client.lock().unwrap();
@@ -254,6 +267,7 @@ impl ReqwestHttpSrc {
                     let client = ClientContext(Arc::new(ClientContextInner {
                         client: Client::builder()
                             .cookie_store(true)
+                            .gzip(true)
                             .build()
                             .map_err(|err| {
                                 gst_error_msg!(
@@ -302,6 +316,11 @@ impl ReqwestHttpSrc {
         }
 
         headers.set(UserAgent::new(settings.user_agent.to_owned()));
+
+        if !settings.compress {
+            // Compression is the default
+            headers.set(AcceptEncoding(vec![qitem(Encoding::Identity)]));
+        };
 
         // Add all headers for the request here
         let req = req.headers(headers.into());
@@ -497,6 +516,11 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let timeout = value.get_some().expect("type checked upstream");
                 settings.timeout = timeout;
             }
+            subclass::Property("compress", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let compress = value.get_some().expect("type checked upstream");
+                settings.compress = compress;
+            }
             _ => unimplemented!(),
         };
     }
@@ -529,6 +553,10 @@ impl ObjectImpl for ReqwestHttpSrc {
             subclass::Property("timeout", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.timeout.to_value())
+            }
+            subclass::Property("compress", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.compress.to_value())
             }
             _ => unimplemented!(),
         }
