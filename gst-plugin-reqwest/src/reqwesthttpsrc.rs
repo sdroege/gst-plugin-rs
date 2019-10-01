@@ -662,6 +662,24 @@ impl BaseSrcImpl for ReqwestHttpSrc {
         Ok(())
     }
 
+    fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
+        use gst::QueryView;
+
+        match query.view_mut() {
+            QueryView::Scheduling(ref mut q) => {
+                q.set(
+                    gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED,
+                    1,
+                    -1,
+                    0,
+                );
+                q.add_scheduling_modes(&[gst::PadMode::Push]);
+                true
+            }
+            _ => BaseSrcImplExt::parent_query(self, element, query),
+        }
+    }
+
     fn do_seek(&self, src: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {
         let segment = segment.downcast_mut::<gst::format::Bytes>().unwrap();
 
