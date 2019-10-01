@@ -48,6 +48,8 @@ struct Settings {
     user_pw: Option<String>,
     timeout: u32,
     compress: bool,
+    extra_headers: Option<gst::Structure>,
+    cookies: Vec<String>,
 }
 
 impl Default for Settings {
@@ -59,11 +61,13 @@ impl Default for Settings {
             user_pw: None,
             timeout: DEFAULT_TIMEOUT,
             compress: DEFAULT_COMPRESS,
+            extra_headers: None,
+            cookies: Vec::new(),
         }
     }
 }
 
-static PROPERTIES: [subclass::Property; 7] = [
+static PROPERTIES: [subclass::Property; 9] = [
     subclass::Property("location", |name| {
         glib::ParamSpec::string(
             name,
@@ -126,6 +130,24 @@ static PROPERTIES: [subclass::Property; 7] = [
             "Compress",
             "Allow compressed content encodings",
             DEFAULT_COMPRESS,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("extra-headers", |name| {
+        glib::ParamSpec::boxed(
+            name,
+            "Extra Headers",
+            "Extra headers to append to the HTTP request",
+            gst::Structure::static_type(),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("cookies", |name| {
+        glib::ParamSpec::boxed(
+            name,
+            "Cookies",
+            "HTTP request cookies",
+            Vec::<String>::static_type(),
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -299,7 +321,7 @@ impl ReqwestHttpSrc {
     ) -> Result<State, Option<gst::ErrorMessage>> {
         use hyperx::header::{
             qitem, AcceptEncoding, AcceptRanges, ByteRangeSpec, Connection, ContentLength,
-            ContentRange, ContentRangeSpec, Encoding, Headers, Range, RangeUnit, UserAgent,
+            ContentRange, ContentRangeSpec, Cookie, Encoding, Headers, Range, RangeUnit, UserAgent,
         };
 
         gst_debug!(self.cat, obj: src, "Creating new request for {}", uri);
@@ -331,10 +353,88 @@ impl ReqwestHttpSrc {
             headers.set(AcceptEncoding(vec![qitem(Encoding::Identity)]));
         };
 
+        if let Some(ref extra_headers) = settings.extra_headers {
+            for (field, value) in extra_headers.iter() {
+                if let Ok(Some(values)) = value.get::<gst::Array>() {
+                    for value in values.as_slice() {
+                        if let Some(value) = value.transform::<String>() {
+                            let value = value.get::<&str>().unwrap().unwrap_or("");
+                            gst_debug!(
+                                self.cat,
+                                obj: src,
+                                "Appending extra-header: {}: {}",
+                                field,
+                                value
+                            );
+                            headers.append_raw(String::from(field), value);
+                        } else {
+                            gst_warning!(
+                                self.cat,
+                                obj: src,
+                                "Failed to transform extra-header '{}' to string",
+                                field
+                            );
+                        }
+                    }
+                } else if let Ok(Some(values)) = value.get::<gst::List>() {
+                    for value in values.as_slice() {
+                        if let Some(value) = value.transform::<String>() {
+                            let value = value.get::<&str>().unwrap().unwrap_or("");
+                            gst_debug!(
+                                self.cat,
+                                obj: src,
+                                "Appending extra-header: {}: {}",
+                                field,
+                                value
+                            );
+                            headers.append_raw(String::from(field), value);
+                        } else {
+                            gst_warning!(
+                                self.cat,
+                                obj: src,
+                                "Failed to transform extra-header '{}' to string",
+                                field
+                            );
+                        }
+                    }
+                } else if let Some(value) = value.transform::<String>() {
+                    let value = value.get::<&str>().unwrap().unwrap_or("");
+                    gst_debug!(
+                        self.cat,
+                        obj: src,
+                        "Appending extra-header: {}: {}",
+                        field,
+                        value
+                    );
+                    headers.append_raw(String::from(field), value);
+                } else {
+                    gst_warning!(
+                        self.cat,
+                        obj: src,
+                        "Failed to transform extra-header '{}' to string",
+                        field
+                    );
+                }
+            }
+        }
+
+        if !settings.cookies.is_empty() {
+            let mut cookies = Cookie::new();
+            for cookie in settings.cookies {
+                let mut split = cookie.splitn(2, '=');
+                let key = split.next();
+                let value = split.next();
+                if let (Some(key), Some(value)) = (key, value) {
+                    cookies.append(String::from(key), String::from(value));
+                }
+            }
+            headers.set(cookies);
+        }
+
         // Add all headers for the request here
         let req = req.headers(headers.into());
 
-        let req = if let Some(user_id) = settings.user_id {
+        let req = if let Some(ref user_id) = settings.user_id {
             // HTTP auth available
             req.basic_auth(user_id, settings.user_pw)
         } else {
@@ -534,6 +634,16 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let compress = value.get_some().expect("type checked upstream");
                 settings.compress = compress;
             }
+            subclass::Property("extra-headers", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let extra_headers = value.get().expect("type checked upstream");
+                settings.extra_headers = extra_headers;
+            }
+            subclass::Property("cookies", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let cookies = value.get().expect("type checked upstream");
+                settings.cookies = cookies.unwrap_or_else(Vec::new);
+            }
             _ => unimplemented!(),
         };
     }
@@ -571,6 +681,15 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.compress.to_value())
             }
+            subclass::Property("extra-headers", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.extra_headers.to_value())
+            }
+            subclass::Property("cookies", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.cookies.to_value())
+            }
+
             _ => unimplemented!(),
         }
     }
