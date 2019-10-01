@@ -20,10 +20,11 @@ where
     F: Send + Future<Error = gst::ErrorMessage> + 'static,
     F::Item: Send,
 {
-    let mut canceller = canceller.lock().unwrap();
+    let mut canceller_guard = canceller.lock().unwrap();
     let (sender, receiver) = oneshot::channel::<T>();
 
-    canceller.replace(sender);
+    canceller_guard.replace(sender);
+    drop(canceller_guard);
 
     let unlock_error = gst_error_msg!(gst::ResourceError::Busy, ["unlock"]);
 
@@ -40,7 +41,8 @@ where
         });
 
     /* Clear out the canceller */
-    *canceller = None;
+    canceller_guard = canceller.lock().unwrap();
+    *canceller_guard = None;
 
     res
 }

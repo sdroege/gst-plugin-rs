@@ -436,6 +436,7 @@ impl ReqwestHttpSrc {
         let (sender, receiver) = oneshot::channel::<Bytes>();
 
         canceller.replace(sender);
+        drop(canceller);
 
         // wrapping timeout around future
         let future_timeout = if timeout == 0 {
@@ -463,6 +464,7 @@ impl ReqwestHttpSrc {
             });
 
         /* Clear out the canceller */
+        canceller = self.canceller.lock().unwrap();
         *canceller = None;
 
         res
