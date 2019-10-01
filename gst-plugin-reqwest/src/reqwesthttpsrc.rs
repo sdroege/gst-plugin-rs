@@ -39,6 +39,7 @@ const DEFAULT_USER_AGENT: &str = concat!(
 const DEFAULT_IS_LIVE: bool = false;
 const DEFAULT_TIMEOUT: u32 = 15;
 const DEFAULT_COMPRESS: bool = false;
+const DEFAULT_IRADIO_MODE: bool = true;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -50,6 +51,7 @@ struct Settings {
     compress: bool,
     extra_headers: Option<gst::Structure>,
     cookies: Vec<String>,
+    iradio_mode: bool,
 }
 
 impl Default for Settings {
@@ -63,11 +65,12 @@ impl Default for Settings {
             compress: DEFAULT_COMPRESS,
             extra_headers: None,
             cookies: Vec::new(),
+            iradio_mode: DEFAULT_IRADIO_MODE,
         }
     }
 }
 
-static PROPERTIES: [subclass::Property; 9] = [
+static PROPERTIES: [subclass::Property; 10] = [
     subclass::Property("location", |name| {
         glib::ParamSpec::string(
             name,
@@ -151,6 +154,15 @@ static PROPERTIES: [subclass::Property; 9] = [
             glib::ParamFlags::READWRITE,
         )
     }),
+    subclass::Property("iradio-mode", |name| {
+        glib::ParamSpec::boolean(
+            name,
+            "I-Radio Mode",
+            "Enable internet radio mode (ask server to send shoutcast/icecast metadata interleaved with the actual stream data",
+            DEFAULT_IRADIO_MODE,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
 ];
 
 const REQWEST_CLIENT_CONTEXT: &str = "gst.request.client";
@@ -183,6 +195,8 @@ enum State {
         size: Option<u64>,
         start: u64,
         stop: Option<u64>,
+        caps: Option<gst::Caps>,
+        tags: Option<gst::TagList>,
     },
 }
 
@@ -321,7 +335,8 @@ impl ReqwestHttpSrc {
     ) -> Result<State, Option<gst::ErrorMessage>> {
         use hyperx::header::{
             qitem, AcceptEncoding, AcceptRanges, ByteRangeSpec, Connection, ContentLength,
-            ContentRange, ContentRangeSpec, Cookie, Encoding, Headers, Range, RangeUnit, UserAgent,
+            ContentRange, ContentRangeSpec, Cookie, Encoding, Headers, Range, RangeUnit, RawLike,
+            UserAgent,
         };
 
         gst_debug!(self.cat, obj: src, "Creating new request for {}", uri);
@@ -431,6 +446,10 @@ impl ReqwestHttpSrc {
             headers.set(cookies);
         }
 
+        if settings.iradio_mode {
+            headers.append_raw("icy-metadata", "1");
+        }
+
         // Add all headers for the request here
         let req = req.headers(headers.into());
 
@@ -522,6 +541,46 @@ impl ReqwestHttpSrc {
             )));
         }
 
+        let caps = headers
+            .get_raw("icy-metaint")
+            .and_then(|h| h.one())
+            .and_then(|s| std::str::from_utf8(s).ok())
+            .and_then(|s| s.parse::<i32>().ok())
+            .map(|icy_metaint| {
+                gst::Caps::builder("application/x-icy")
+                    .field("metadata-interval", &icy_metaint)
+                    .build()
+            });
+
+        let mut tags = gst::TagList::new();
+        {
+            let tags = tags.get_mut().unwrap();
+
+            if let Some(ref icy_name) = headers
+                .get_raw("icy-name")
+                .and_then(|h| h.one())
+                .and_then(|s| std::str::from_utf8(s).ok())
+            {
+                tags.add::<gst::tags::Organization>(icy_name, gst::TagMergeMode::Replace);
+            }
+
+            if let Some(ref icy_genre) = headers
+                .get_raw("icy-genre")
+                .and_then(|h| h.one())
+                .and_then(|s| std::str::from_utf8(s).ok())
+            {
+                tags.add::<gst::tags::Genre>(icy_genre, gst::TagMergeMode::Replace);
+            }
+
+            if let Some(ref icy_url) = headers
+                .get_raw("icy-url")
+                .and_then(|h| h.one())
+                .and_then(|s| std::str::from_utf8(s).ok())
+            {
+                tags.add::<gst::tags::Location>(icy_url, gst::TagMergeMode::Replace);
+            }
+        }
+
         gst_debug!(self.cat, obj: src, "Request successful");
 
         let body = mem::replace(res.body_mut(), Decoder::empty());
@@ -534,6 +593,8 @@ impl ReqwestHttpSrc {
             size,
             start,
             stop,
+            caps,
+            tags: if tags.n_tags() > 0 { Some(tags) } else { None },
         })
     }
 
@@ -644,6 +705,11 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let cookies = value.get().expect("type checked upstream");
                 settings.cookies = cookies.unwrap_or_else(Vec::new);
             }
+            subclass::Property("iradio-mode", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let iradio_mode = value.get_some().expect("type checked upstream");
+                settings.iradio_mode = iradio_mode;
+            }
             _ => unimplemented!(),
         };
     }
@@ -689,7 +755,10 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.cookies.to_value())
             }
-
+            subclass::Property("iradio-mode", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.iradio_mode.to_value())
+            }
             _ => unimplemented!(),
         }
     }
@@ -850,12 +919,14 @@ impl BaseSrcImpl for ReqwestHttpSrc {
     ) -> Result<gst::Buffer, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
-        let (body, position) = match *state {
+        let (body, position, caps, tags) = match *state {
             State::Started {
                 ref mut body,
                 ref mut position,
+                ref mut tags,
+                ref mut caps,
                 ..
-            } => (body, position),
+            } => (body, position, caps, tags),
             State::Stopped => {
                 gst_element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
 
@@ -887,7 +958,22 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             }
         };
 
+        let tags = tags.take();
+        let caps = caps.take();
         drop(state);
+
+        if let Some(caps) = caps {
+            gst_debug!(self.cat, obj: src, "Setting caps {:?}", caps);
+            src.set_caps(&caps)
+                .map_err(|_| gst::FlowError::NotNegotiated)?;
+        }
+
+        if let Some(tags) = tags {
+            gst_debug!(self.cat, obj: src, "Sending iradio tags {:?}", tags);
+            let pad = src.get_static_pad("src").unwrap();
+            pad.push_event(gst::Event::new_tag(tags).build());
+        }
+
         let res = self.wait(current_body.into_future().map_err(move |(err, _body)| {
             gst_error_msg!(
                 gst::ResourceError::Read,
