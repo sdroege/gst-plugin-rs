@@ -113,6 +113,7 @@ impl IOContextRunner {
         ::tokio_timer::with_default(&timer_handle, &mut enter, |mut enter| {
             ::tokio_reactor::with_default(&handle, &mut enter, |enter| loop {
                 if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
+                    gst_debug!(CONTEXT_CAT, "Shutting down loop");
                     break;
                 }
 
@@ -166,6 +167,13 @@ impl IOContextRunner {
                     .has_polled()
                 {}
                 gst_trace!(CONTEXT_CAT, "Turned current thread '{}'", self.name);
+
+                // We have to check again after turning in case we're supposed to shut down now
+                // and already handled the unpark above
+                if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
+                    gst_debug!(CONTEXT_CAT, "Shutting down loop");
+                    break;
+                }
 
                 let elapsed = now.elapsed();
                 gst_trace!(CONTEXT_CAT, "Elapsed {:?} after handling futures", elapsed);
