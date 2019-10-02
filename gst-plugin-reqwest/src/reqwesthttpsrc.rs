@@ -40,6 +40,7 @@ const DEFAULT_IS_LIVE: bool = false;
 const DEFAULT_TIMEOUT: u32 = 15;
 const DEFAULT_COMPRESS: bool = false;
 const DEFAULT_IRADIO_MODE: bool = true;
+const DEFAULT_KEEP_ALIVE: bool = true;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -52,6 +53,7 @@ struct Settings {
     extra_headers: Option<gst::Structure>,
     cookies: Vec<String>,
     iradio_mode: bool,
+    keep_alive: bool,
 }
 
 impl Default for Settings {
@@ -66,11 +68,12 @@ impl Default for Settings {
             extra_headers: None,
             cookies: Vec::new(),
             iradio_mode: DEFAULT_IRADIO_MODE,
+            keep_alive: DEFAULT_KEEP_ALIVE,
         }
     }
 }
 
-static PROPERTIES: [subclass::Property; 10] = [
+static PROPERTIES: [subclass::Property; 11] = [
     subclass::Property("location", |name| {
         glib::ParamSpec::string(
             name,
@@ -160,6 +163,15 @@ static PROPERTIES: [subclass::Property; 10] = [
             "I-Radio Mode",
             "Enable internet radio mode (ask server to send shoutcast/icecast metadata interleaved with the actual stream data",
             DEFAULT_IRADIO_MODE,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("keep-alive", |name| {
+        glib::ParamSpec::boolean(
+            name,
+            "Keep Alive",
+            "Use HTTP persistent connections",
+            DEFAULT_KEEP_ALIVE,
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -349,7 +361,11 @@ impl ReqwestHttpSrc {
 
         let mut headers = Headers::new();
 
-        headers.set(Connection::keep_alive());
+        if settings.keep_alive {
+            headers.set(Connection::keep_alive());
+        } else {
+            headers.set(Connection::close());
+        }
 
         match (start != 0, stop) {
             (false, None) => (),
@@ -710,6 +726,11 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let iradio_mode = value.get_some().expect("type checked upstream");
                 settings.iradio_mode = iradio_mode;
             }
+            subclass::Property("keep-alive", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let keep_alive = value.get_some().expect("type checked upstream");
+                settings.keep_alive = keep_alive;
+            }
             _ => unimplemented!(),
         };
     }
@@ -758,6 +779,10 @@ impl ObjectImpl for ReqwestHttpSrc {
             subclass::Property("iradio-mode", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.iradio_mode.to_value())
+            }
+            subclass::Property("keep-alive", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.keep_alive.to_value())
             }
             _ => unimplemented!(),
         }
