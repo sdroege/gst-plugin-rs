@@ -218,7 +218,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
         match *prop {
             Property::UInt("samples-per-buffer", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let samples_per_buffer = value.get().unwrap();
+                let samples_per_buffer = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: &element,
@@ -234,7 +234,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
             }
             Property::UInt("freq", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let freq = value.get().unwrap();
+                let freq = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: &element,
@@ -246,7 +246,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
             }
             Property::Double("volume", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let volume = value.get().unwrap();
+                let volume = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: &element,
@@ -258,7 +258,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
             }
             Property::Boolean("mute", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let mute = value.get().unwrap();
+                let mute = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: &element,
@@ -270,7 +270,7 @@ impl ObjectImpl<BaseSrc> for SineSrc {
             }
             Property::Boolean("is-live", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let is_live = value.get().unwrap();
+                let is_live = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: &element,
@@ -340,31 +340,16 @@ impl BaseSrcImpl<BaseSrc> for SineSrc {
     }
 }
 
-struct SineSrcStatic;
-
-// The basic trait for registering the type: This returns a name for the type and registers the
-// instance and class initializations functions with the type system, thus hooking everything
-// together.
-impl ImplTypeStatic<BaseSrc> for SineSrcStatic {
-    fn get_name(&self) -> &str {
-        "SineSrc"
-    }
-
-    fn new(&self, element: &BaseSrc) -> Box<BaseSrcImpl<BaseSrc>> {
-        SineSrc::new(element)
-    }
-
-    fn class_init(&self, klass: &mut BaseSrcClass) {
-        SineSrc::class_init(klass);
-    }
-}
-
 // Registers the type for our element, and then registers in GStreamer under
-// the name "sinesrc" for being able to instantiate it via e.g.
+// the name "rssinesrc" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) {
-    let type_ = register_type(SineSrcStatic);
-    gst::Element::register(plugin, "rssinesrc", 0, type_);
+    gst::Element::register(
+        Some(plugin),
+        "rssinesrc",
+        gst::Rank::None,
+        SineSrc::get_type(),
+    )
 }
 ```
 

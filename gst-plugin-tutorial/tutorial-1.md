@@ -49,9 +49,12 @@ gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs
 name = "gstrstutorial"
 crate-type = ["cdylib"]
 path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = {  git = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs" }
 ```
 
-We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later, and the `glib` crate to be able to use some GLib API that we’ll need. GStreamer is building upon GLib, and this leaks through in various places.
+We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later, and the `glib` crate to be able to use some GLib API that we’ll need. GStreamer is building upon GLib, and this leaks through in various places. We also have one build dependency on the `gst-plugin-version-helper` crate, which helps to get some information about the plugin for the `gst_plugin_define!` macro automatically.
 
 With the basic project structure being set-up, we should be able to compile the project with `cargo build` now, which will download and build all dependencies and then creates a file called `target/debug/libgstrstutorial.so` (or .dll on Windows, .dylib on macOS). This is going to be our GStreamer plugin.
 
@@ -81,16 +84,17 @@ Next we make use of the `gst_plugin_define!` `macro` from the `gstreamer` crate 
 ```rust
 gst_plugin_define!(
     rstutorial,
-    "Rust Tutorial Plugin",
+    env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
-    "1.0",
+    concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
     "MIT/X11",
-    "rstutorial",
-    "rstutorial",
-    "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs",
-    "2017-12-30"
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_NAME"),
+    env!("CARGO_PKG_REPOSITORY"),
+    env!("BUILD_REL_DATE")
 );
 ```
+
 GStreamer requires this information to be statically available in the shared library, not returned by a function.
 
 The static plugin metadata that we provide here is
@@ -103,6 +107,21 @@ The static plugin metadata that we provide here is
 1. binary package name (only really makes sense for e.g. Linux distributions)
 1. origin of the plugin
 1. release date of this version
+
+
+Next we create `build.rs` in the project main directory.
+
+```rust
+extern crate gst_plugin_version_helper;
+
+fn main() {
+    gst_plugin_version_helper::get_info()
+}
+```
+
+`build.rs` compiles and runs before anything else, [see](https://doc.rust-lang.org/cargo/reference/build-scripts.html).
+
+Therefore, `gst_plugin_version_helper::get_info()` will provide various information via `cargo` environment variables such as `COMMIT_ID` and `BUILD_REL_DATE` and these environment variables are then later accessed by our invocation of the `gst_plugin_define!` macro during compilation.
 
 In addition we’re defining an empty plugin entry point function that just returns `Ok(())`
 
@@ -177,7 +196,12 @@ impl ObjectSubclass for Rgb2Gray {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "rsrgb2gray", 0, Rgb2Gray::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "rsrgb2gray",
+        gst::Rank::None,
+        Rgb2Gray::get_type(),
+    )
 }
 
 ```
@@ -273,7 +297,12 @@ impl ElementImpl for Rgb2Gray {}
 impl BaseTransformImpl for Rgb2Gray {}
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "rsrgb2gray", 0, Rgb2Gray::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "rsrgb2gray",
+        gst::Rank::None,
+        Rgb2Gray::get_type(),
+    )
 }
 ```
 
@@ -762,7 +791,7 @@ impl ObjectImpl for Rgb2Gray {
         match *prop {
             subclass::Property("invert", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let invert = value.get().unwrap();
+                let invert = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: element,
@@ -774,7 +803,7 @@ impl ObjectImpl for Rgb2Gray {
             }
             subclass::Property("shift", ..) => {
                 let mut settings = self.settings.lock().unwrap();
-                let shift = value.get().unwrap();
+                let shift = value.get_some().expect("type checked upstream");
                 gst_info!(
                     self.cat,
                     obj: element,
