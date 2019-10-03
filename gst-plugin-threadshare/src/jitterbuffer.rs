@@ -1312,6 +1312,10 @@ impl ElementImpl for JitterBuffer {
                     .unwrap()
                     .release_pending_future_id(state.pending_future_id.unwrap());
                 state.pending_future_id = None;
+
+                state.jbuf.borrow().flush();
+
+                let _ = state.cancel.take();
                 let _ = state.io_context.take();
             }
             _ => (),

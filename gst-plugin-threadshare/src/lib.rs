@@ -322,7 +322,6 @@ impl Drop for RTPJitterBufferItem {
     fn drop(&mut self) {
         unsafe {
             if let Some(ref item) = self.0 {
-                eprintln!("Unreffing buffer!");
                 gst_ffi::gst_mini_object_unref(item.data as *mut _)
             }
         }
