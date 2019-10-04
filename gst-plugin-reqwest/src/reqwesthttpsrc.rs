@@ -481,7 +481,7 @@ impl ReqwestHttpSrc {
         let uri_clone = uri.clone();
         let res = self.wait(req.send().map_err(move |err| {
             gst_error_msg!(
-                gst::ResourceError::Read,
+                gst::ResourceError::OpenRead,
                 ["Failed to fetch {}: {:?}", uri_clone, err]
             )
         }));
@@ -633,7 +633,15 @@ impl ReqwestHttpSrc {
             Either::B(
                 future
                     .timeout(Duration::from_secs(timeout.into()))
-                    .map_err(|_err| gst_error_msg!(gst::ResourceError::Read, ["Request timeout"])),
+                    .map_err(|err| {
+                        if err.is_elapsed() {
+                            gst_error_msg!(gst::ResourceError::Read, ["Request timeout"])
+                        } else if err.is_inner() {
+                            err.into_inner().unwrap()
+                        } else {
+                            gst_error_msg!(gst::ResourceError::Read, ["Timer error: {}", err])
+                        }
+                    }),
             )
         };
 
