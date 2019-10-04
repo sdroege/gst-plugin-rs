@@ -712,7 +712,7 @@ impl UdpSrc {
                         gst::ResourceError::OpenRead,
                         ["Failed to create wrapped GIO socket: {}", err]
                     )
-                })?;;
+                })?;
                 let wrapper = GioSocketWrapper::new(&gio_socket);
                 self.settings.lock().unwrap().used_socket = Some(wrapper);
             }
@@ -738,7 +738,7 @@ impl UdpSrc {
                         gst::ResourceError::OpenRead,
                         ["Failed to create wrapped GIO socket: {}", err]
                     )
-                })?;;
+                })?;
                 let wrapper = GioSocketWrapper::new(&gio_socket);
                 self.settings.lock().unwrap().used_socket = Some(wrapper);
             }
