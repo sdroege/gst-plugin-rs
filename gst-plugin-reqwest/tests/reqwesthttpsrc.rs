@@ -608,7 +608,7 @@ fn test_cookies() {
         },
     );
 
-    let context = h.src.get_context("gst.request.client").expect("No context");
+    let context = h.src.get_context("gst.reqwest.client").expect("No context");
     h2.src.set_context(&context);
 
     // Set the HTTP source to Playing so that everything can start

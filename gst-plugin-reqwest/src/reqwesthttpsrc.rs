@@ -177,7 +177,7 @@ static PROPERTIES: [subclass::Property; 11] = [
     }),
 ];
 
-const REQWEST_CLIENT_CONTEXT: &str = "gst.request.client";
+const REQWEST_CLIENT_CONTEXT: &str = "gst.reqwest.client";
 
 #[derive(Clone, Debug)]
 struct ClientContext(Arc<ClientContextInner>);
