@@ -112,6 +112,7 @@ fn test_parse() {
 #[test]
 fn test_timecodes() {
     use std::convert::TryInto;
+    use std::str::FromStr;
 
     init();
     let data = include_bytes!("timecodes-cut-down-sample.scc").as_ref();
@@ -144,7 +145,7 @@ fn test_timecodes() {
     let mut valid_timecodes: VecDeque<ValidVideoTimeCode> = timecodes
         .iter()
         .map(|s| {
-            let mut t = VideoTimeCode::from_string(s).unwrap();
+            let mut t = VideoTimeCode::from_str(s).unwrap();
             t.set_fps(gst::Fraction::new(30000, 1001));
             t.set_flags(gst_video::VideoTimeCodeFlags::DROP_FRAME);
             t

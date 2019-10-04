@@ -98,7 +98,7 @@ fn run_test(inline_headers: bool) {
     assert_eq!(
         caps,
         gst::Caps::builder("audio/x-raw")
-            .field("format", &gst_audio::AUDIO_FORMAT_F32.to_string())
+            .field("format", &gst_audio::AUDIO_FORMAT_F32.to_str())
             .field("rate", &44_100i32)
             .field("channels", &1i32)
             .field("layout", &"interleaved")

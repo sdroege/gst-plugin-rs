@@ -164,8 +164,8 @@ impl ObjectSubclass for Rgb2Gray {
                 (
                     "format",
                     &gst::List::new(&[
-                        &gst_video::VideoFormat::Bgrx.to_string(),
-                        &gst_video::VideoFormat::Gray8.to_string(),
+                        &gst_video::VideoFormat::Bgrx.to_str(),
+                        &gst_video::VideoFormat::Gray8.to_str(),
                     ]),
                 ),
                 ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
@@ -195,7 +195,7 @@ impl ObjectSubclass for Rgb2Gray {
         let caps = gst::Caps::new_simple(
             "video/x-raw",
             &[
-                ("format", &gst_video::VideoFormat::Bgrx.to_string()),
+                ("format", &gst_video::VideoFormat::Bgrx.to_str()),
                 ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
                 ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
                 (
@@ -317,7 +317,7 @@ impl BaseTransformImpl for Rgb2Gray {
             let mut caps = caps.clone();
 
             for s in caps.make_mut().iter_mut() {
-                s.set("format", &gst_video::VideoFormat::Bgrx.to_string());
+                s.set("format", &gst_video::VideoFormat::Bgrx.to_str());
             }
 
             caps
@@ -333,7 +333,7 @@ impl BaseTransformImpl for Rgb2Gray {
 
                 for s in caps.iter() {
                     let mut s_gray = s.to_owned();
-                    s_gray.set("format", &gst_video::VideoFormat::Gray8.to_string());
+                    s_gray.set("format", &gst_video::VideoFormat::Gray8.to_str());
                     gray_caps.append_structure(s_gray);
                 }
                 gray_caps.append(caps.clone());

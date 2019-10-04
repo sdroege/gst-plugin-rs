@@ -69,7 +69,7 @@ impl ObjectSubclass for CdgDec {
         let src_caps = gst::Caps::new_simple(
             "video/x-raw",
             &[
-                ("format", &gst_video::VideoFormat::Rgba.to_string()),
+                ("format", &gst_video::VideoFormat::Rgba.to_str()),
                 ("width", &(CDG_WIDTH as i32)),
                 ("height", &(CDG_HEIGHT as i32)),
                 ("framerate", &gst::Fraction::new(0, 1)),

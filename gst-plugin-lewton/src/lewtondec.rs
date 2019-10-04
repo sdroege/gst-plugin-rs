@@ -76,7 +76,7 @@ impl ObjectSubclass for LewtonDec {
         let src_caps = gst::Caps::new_simple(
             "audio/x-raw",
             &[
-                ("format", &gst_audio::AUDIO_FORMAT_F32.to_string()),
+                ("format", &gst_audio::AUDIO_FORMAT_F32.to_str()),
                 ("rate", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
                 ("channels", &gst::IntRange::<i32>::new(1, 255)),
                 ("layout", &"interleaved"),

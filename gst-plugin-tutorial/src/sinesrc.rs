@@ -253,8 +253,8 @@ impl ObjectSubclass for SineSrc {
                 (
                     "format",
                     &gst::List::new(&[
-                        &gst_audio::AUDIO_FORMAT_F32.to_string(),
-                        &gst_audio::AUDIO_FORMAT_F64.to_string(),
+                        &gst_audio::AUDIO_FORMAT_F32.to_str(),
+                        &gst_audio::AUDIO_FORMAT_F64.to_str(),
                     ]),
                 ),
                 ("layout", &"interleaved"),
