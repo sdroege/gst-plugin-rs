@@ -325,10 +325,16 @@ fn test_basic_request() {
     use std::io::{Cursor, Read};
     init();
 
-    // Set up a simple harness that returns "Hello World" for any HTTP request
+    // Set up a harness that returns "Hello World" for any HTTP request and checks if the
+    // default headers are all sent
     let mut h = Harness::new(
-        |_req| {
+        |req| {
             use hyper::{Body, Response};
+
+            let headers = req.headers();
+            assert_eq!(headers.get("connection").unwrap(), "keep-alive");
+            assert_eq!(headers.get("accept-encoding").unwrap(), "identity");
+            assert_eq!(headers.get("icy-metadata").unwrap(), "1");
 
             Response::new(Body::from("Hello World"))
         },
@@ -369,10 +375,356 @@ fn test_basic_request() {
 }
 
 #[test]
+fn test_basic_request_inverted_defaults() {
+    use std::io::{Cursor, Read};
+    init();
+
+    // Set up a harness that returns "Hello World" for any HTTP request and override various
+    // default properties to check if the corresponding headers are set correctly
+    let mut h = Harness::new(
+        |req| {
+            use hyper::{Body, Response};
+
+            let headers = req.headers();
+            assert_eq!(headers.get("connection").unwrap(), "close");
+            assert_eq!(headers.get("accept-encoding").unwrap(), "gzip");
+            assert_eq!(headers.get("icy-metadata"), None);
+            assert_eq!(headers.get("user-agent").unwrap(), "test user-agent");
+
+            Response::new(Body::from("Hello World"))
+        },
+        |src| {
+            src.set_property("keep-alive", &false).unwrap();
+            src.set_property("compress", &true).unwrap();
+            src.set_property("iradio-mode", &false).unwrap();
+            src.set_property("user-agent", &"test user-agent").unwrap();
+        },
+    );
+
+    // Set the HTTP source to Playing so that everything can start
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    // And now check if the data we receive is exactly what we expect it to be
+    let expected_output = "Hello World";
+    let mut cursor = Cursor::new(expected_output);
+
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        // On the first buffer also check if the duration reported by the HTTP source is what we
+        // would expect it to be
+        if cursor.position() == 0 {
+            assert_eq!(
+                h.src.query_duration::<gst::format::Bytes>(),
+                Some(gst::format::Bytes::from(expected_output.len() as u64))
+            );
+        }
+
+        // Map the buffer readable and check if it contains exactly the data we would expect at
+        // this point after reading everything else we read in previous runs
+        let map = buffer.map_readable().unwrap();
+        let mut read_buf = vec![0; map.get_size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(&*map, &*read_buf);
+    }
+
+    // Check if everything was read
+    assert_eq!(cursor.position(), 11);
+}
+
+#[test]
+fn test_extra_headers() {
+    use std::io::{Cursor, Read};
+    init();
+
+    // Set up a harness that returns "Hello World" for any HTTP request and check if the
+    // extra-headers property works correctly for setting additional headers
+    let mut h = Harness::new(
+        |req| {
+            use hyper::{Body, Response};
+
+            let headers = req.headers();
+            assert_eq!(headers.get("foo").unwrap(), "bar");
+            assert_eq!(headers.get("baz").unwrap(), "1");
+            assert_eq!(
+                headers
+                    .get_all("list")
+                    .iter()
+                    .map(|v| v.to_str().unwrap())
+                    .collect::<Vec<&str>>(),
+                vec!["1", "2"]
+            );
+            assert_eq!(
+                headers
+                    .get_all("array")
+                    .iter()
+                    .map(|v| v.to_str().unwrap())
+                    .collect::<Vec<&str>>(),
+                vec!["1", "2"]
+            );
+
+            Response::new(Body::from("Hello World"))
+        },
+        |src| {
+            src.set_property(
+                "extra-headers",
+                &gst::Structure::builder("headers")
+                    .field("foo", &"bar")
+                    .field("baz", &1i32)
+                    .field("list", &gst::List::new(&[&1i32, &2i32]))
+                    .field("array", &gst::Array::new(&[&1i32, &2i32]))
+                    .build(),
+            )
+            .unwrap();
+        },
+    );
+
+    // Set the HTTP source to Playing so that everything can start
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    // And now check if the data we receive is exactly what we expect it to be
+    let expected_output = "Hello World";
+    let mut cursor = Cursor::new(expected_output);
+
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        // On the first buffer also check if the duration reported by the HTTP source is what we
+        // would expect it to be
+        if cursor.position() == 0 {
+            assert_eq!(
+                h.src.query_duration::<gst::format::Bytes>(),
+                Some(gst::format::Bytes::from(expected_output.len() as u64))
+            );
+        }
+
+        // Map the buffer readable and check if it contains exactly the data we would expect at
+        // this point after reading everything else we read in previous runs
+        let map = buffer.map_readable().unwrap();
+        let mut read_buf = vec![0; map.get_size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(&*map, &*read_buf);
+    }
+
+    // Check if everything was read
+    assert_eq!(cursor.position(), 11);
+}
+
+#[test]
+fn test_cookies_property() {
+    use std::io::{Cursor, Read};
+    init();
+
+    // Set up a harness that returns "Hello World" for any HTTP request and check if the
+    // cookies property can be used to set cookies correctly
+    let mut h = Harness::new(
+        |req| {
+            use hyper::{Body, Response};
+
+            let headers = req.headers();
+            assert_eq!(headers.get("cookie").unwrap(), "foo=1; bar=2; baz=3");
+
+            Response::new(Body::from("Hello World"))
+        },
+        |src| {
+            src.set_property(
+                "cookies",
+                &vec![
+                    String::from("foo=1"),
+                    String::from("bar=2"),
+                    String::from("baz=3"),
+                ],
+            )
+            .unwrap();
+        },
+    );
+
+    // Set the HTTP source to Playing so that everything can start
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    // And now check if the data we receive is exactly what we expect it to be
+    let expected_output = "Hello World";
+    let mut cursor = Cursor::new(expected_output);
+
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        // On the first buffer also check if the duration reported by the HTTP source is what we
+        // would expect it to be
+        if cursor.position() == 0 {
+            assert_eq!(
+                h.src.query_duration::<gst::format::Bytes>(),
+                Some(gst::format::Bytes::from(expected_output.len() as u64))
+            );
+        }
+
+        // Map the buffer readable and check if it contains exactly the data we would expect at
+        // this point after reading everything else we read in previous runs
+        let map = buffer.map_readable().unwrap();
+        let mut read_buf = vec![0; map.get_size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(&*map, &*read_buf);
+    }
+
+    // Check if everything was read
+    assert_eq!(cursor.position(), 11);
+}
+
+#[test]
+fn test_iradio_mode() {
+    use std::io::{Cursor, Read};
+    init();
+
+    // Set up a harness that returns "Hello World" for any HTTP request and check if the
+    // iradio-mode property works correctly, and especially the icy- headers are parsed correctly
+    // and put into caps/tags
+    let mut h = Harness::new(
+        |req| {
+            use hyper::{Body, Response};
+
+            let headers = req.headers();
+            assert_eq!(headers.get("icy-metadata").unwrap(), "1");
+
+            Response::builder()
+                .header("icy-metaint", "8192")
+                .header("icy-name", "Name")
+                .header("icy-genre", "Genre")
+                .header("icy-url", "http://www.example.com")
+                .body(Body::from("Hello World"))
+                .unwrap()
+        },
+        |_src| {
+            // No additional setup needed here
+        },
+    );
+
+    // Set the HTTP source to Playing so that everything can start
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    // And now check if the data we receive is exactly what we expect it to be
+    let expected_output = "Hello World";
+    let mut cursor = Cursor::new(expected_output);
+
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        // On the first buffer also check if the duration reported by the HTTP source is what we
+        // would expect it to be
+        if cursor.position() == 0 {
+            assert_eq!(
+                h.src.query_duration::<gst::format::Bytes>(),
+                Some(gst::format::Bytes::from(expected_output.len() as u64))
+            );
+        }
+
+        // Map the buffer readable and check if it contains exactly the data we would expect at
+        // this point after reading everything else we read in previous runs
+        let map = buffer.map_readable().unwrap();
+        let mut read_buf = vec![0; map.get_size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(&*map, &*read_buf);
+    }
+
+    // Check if everything was read
+    assert_eq!(cursor.position(), 11);
+
+    let srcpad = h.src.get_static_pad("src").unwrap();
+    let caps = srcpad.get_current_caps().unwrap();
+    assert_eq!(
+        caps,
+        gst::Caps::builder("application/x-icy")
+            .field("metadata-interval", &8192i32)
+            .build()
+    );
+
+    {
+        use gst::EventView;
+        let tag_event = srcpad.get_sticky_event(gst::EventType::Tag, 0).unwrap();
+        if let EventView::Tag(tags) = tag_event.view() {
+            let tags = tags.get_tag();
+            assert_eq!(
+                tags.get::<gst::tags::Organization>().unwrap().get(),
+                Some("Name")
+            );
+            assert_eq!(tags.get::<gst::tags::Genre>().unwrap().get(), Some("Genre"));
+            assert_eq!(
+                tags.get::<gst::tags::Location>().unwrap().get(),
+                Some("http://www.example.com"),
+            );
+        } else {
+            unreachable!();
+        }
+    }
+}
+
+#[test]
+fn test_authorization() {
+    use std::io::{Cursor, Read};
+    init();
+
+    // Set up a harness that returns "Hello World" for any HTTP request
+    // but requires authentication first
+    let mut h = Harness::new(
+        |req| {
+            use hyper::{Body, Response};
+            use reqwest::StatusCode;
+
+            let headers = req.headers();
+
+            if let Some(authorization) = headers.get("authorization") {
+                assert_eq!(authorization, "Basic dXNlcjpwYXNzd29yZA==");
+                Response::new(Body::from("Hello World"))
+            } else {
+                Response::builder()
+                    .status(StatusCode::UNAUTHORIZED.as_u16())
+                    .header("WWW-Authenticate", "Basic realm=\"realm\"")
+                    .body(Body::empty())
+                    .unwrap()
+            }
+        },
+        |src| {
+            src.set_property("user-id", &"user").unwrap();
+            src.set_property("user-pw", &"password").unwrap();
+        },
+    );
+
+    // Set the HTTP source to Playing so that everything can start
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    // And now check if the data we receive is exactly what we expect it to be
+    let expected_output = "Hello World";
+    let mut cursor = Cursor::new(expected_output);
+
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        // On the first buffer also check if the duration reported by the HTTP source is what we
+        // would expect it to be
+        if cursor.position() == 0 {
+            assert_eq!(
+                h.src.query_duration::<gst::format::Bytes>(),
+                Some(gst::format::Bytes::from(expected_output.len() as u64))
+            );
+        }
+
+        // Map the buffer readable and check if it contains exactly the data we would expect at
+        // this point after reading everything else we read in previous runs
+        let map = buffer.map_readable().unwrap();
+        let mut read_buf = vec![0; map.get_size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(&*map, &*read_buf);
+    }
+
+    // Check if everything was read
+    assert_eq!(cursor.position(), 11);
+}
+
+#[test]
 fn test_404_error() {
     use reqwest::StatusCode;
     init();
 
+    // Harness that always returns 404 and we check if that is mapped to the correct error code
     let mut h = Harness::new(
         |_req| {
             use hyper::{Body, Response};
@@ -396,16 +748,67 @@ fn test_404_error() {
 }
 
 #[test]
+fn test_403_error() {
+    use reqwest::StatusCode;
+    init();
+
+    // Harness that always returns 403 and we check if that is mapped to the correct error code
+    let mut h = Harness::new(
+        |_req| {
+            use hyper::{Body, Response};
+
+            Response::builder()
+                .status(StatusCode::FORBIDDEN.as_u16())
+                .body(Body::empty())
+                .unwrap()
+        },
+        |_src| {},
+    );
+
+    h.run(|src| {
+        let _ = src.set_state(gst::State::Playing);
+    });
+
+    let err_code = h.wait_for_error();
+    if let Some(err) = err_code.kind::<gst::ResourceError>() {
+        assert_eq!(err, gst::ResourceError::NotAuthorized);
+    }
+}
+
+#[test]
+fn test_network_error() {
+    init();
+
+    // Harness that always fails with a network error
+    let mut h = Harness::new(
+        |_req| unreachable!(),
+        |src| {
+            src.set_property("location", &"http://0.0.0.0:0").unwrap();
+        },
+    );
+
+    h.run(|src| {
+        let _ = src.set_state(gst::State::Playing);
+    });
+
+    let err_code = h.wait_for_error();
+    if let Some(err) = err_code.kind::<gst::ResourceError>() {
+        assert_eq!(err, gst::ResourceError::OpenRead);
+    }
+}
+
+#[test]
 fn test_seek_after_ready() {
     use std::io::{Cursor, Read};
     init();
 
+    // Harness that checks if seeking in Ready state works correctly
     let mut h = Harness::new(
         |req| {
             use hyper::{Body, Response};
 
-            if req.headers().contains_key("Range") {
-                let range = req.headers().get("Range").unwrap();
+            let headers = req.headers();
+            if let Some(range) = headers.get("Range") {
                 if range == "bytes=123-" {
                     let mut data_seek = vec![0; 8192 - 123];
                     for (i, d) in data_seek.iter_mut().enumerate() {
@@ -483,12 +886,14 @@ fn test_seek_after_buffer_received() {
     use std::io::{Cursor, Read};
     init();
 
+    // Harness that checks if seeking in Playing state after having received a buffer works
+    // correctly
     let mut h = Harness::new(
         |req| {
             use hyper::{Body, Response};
 
-            if req.headers().contains_key("Range") {
-                let range = req.headers().get("Range").unwrap();
+            let headers = req.headers();
+            if let Some(range) = headers.get("Range") {
                 if range == "bytes=123-" {
                     let mut data_seek = vec![0; 8192 - 123];
                     for (i, d) in data_seek.iter_mut().enumerate() {
@@ -558,10 +963,103 @@ fn test_seek_after_buffer_received() {
 }
 
 #[test]
+fn test_seek_with_stop_position() {
+    use std::io::{Cursor, Read};
+    init();
+
+    // Harness that checks if seeking in Playing state after having received a buffer works
+    // correctly
+    let mut h = Harness::new(
+        |req| {
+            use hyper::{Body, Response};
+
+            let headers = req.headers();
+            if let Some(range) = headers.get("Range") {
+                if range == "bytes=123-130" {
+                    let mut data_seek = vec![0; 8];
+                    for (i, d) in data_seek.iter_mut().enumerate() {
+                        *d = (i + 123 % 256) as u8;
+                    }
+
+                    Response::builder()
+                        .header("content-length", 8)
+                        .header("accept-ranges", "bytes")
+                        .header("content-range", "bytes 123-130/8192")
+                        .body(Body::from(data_seek))
+                        .unwrap()
+                } else {
+                    panic!("Received an unexpected Range header")
+                }
+            } else {
+                let mut data_full = vec![0; 8192];
+                for (i, d) in data_full.iter_mut().enumerate() {
+                    *d = (i % 256) as u8;
+                }
+
+                Response::builder()
+                    .header("content-length", 8192)
+                    .header("accept-ranges", "bytes")
+                    .body(Body::from(data_full))
+                    .unwrap()
+            }
+        },
+        |_src| {},
+    );
+
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    //wait for a buffer
+    let buffer = h.wait_buffer_or_eos().unwrap();
+    assert_eq!(buffer.get_offset(), 0);
+
+    //seek to a position after a buffer is Received
+    h.run(|src| {
+        src.seek(
+            1.0,
+            gst::SeekFlags::FLUSH,
+            gst::SeekType::Set,
+            gst::format::Bytes::from(123),
+            gst::SeekType::Set,
+            gst::format::Bytes::from(131),
+        )
+        .unwrap();
+    });
+
+    let segment = h.wait_for_segment(true);
+    assert_eq!(
+        gst::format::Bytes::from(segment.get_start()),
+        gst::format::Bytes::from(123)
+    );
+    assert_eq!(
+        gst::format::Bytes::from(segment.get_stop()),
+        gst::format::Bytes::from(131)
+    );
+
+    let mut expected_output = vec![0; 8];
+    for (i, d) in expected_output.iter_mut().enumerate() {
+        *d = ((123 + i) % 256) as u8;
+    }
+    let mut cursor = Cursor::new(expected_output);
+
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        assert_eq!(buffer.get_offset(), 123 + cursor.position());
+
+        let map = buffer.map_readable().unwrap();
+        let mut read_buf = vec![0; map.get_size()];
+
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(&*map, &*read_buf);
+    }
+}
+
+#[test]
 fn test_cookies() {
     init();
 
-    // Set up a simple harness that returns "Hello World" for any HTTP request
+    // Set up a harness that returns "Hello World" for any HTTP request and sets a cookie in our
+    // client
     let mut h = Harness::new(
         |_req| {
             use hyper::{Body, Response};
@@ -587,13 +1085,14 @@ fn test_cookies() {
     }
     assert_eq!(num_bytes, 11);
 
-    // Set up a simple harness that returns "Hello World" for any HTTP request
+    // Set up a second harness that returns "Hello World" for any HTTP request that checks if our
+    // client provides the cookie that was set in the previous request
     let mut h2 = Harness::new(
         |req| {
             use hyper::{Body, Response};
 
-            let cookies = req
-                .headers()
+            let headers = req.headers();
+            let cookies = headers
                 .get("Cookie")
                 .expect("No cookies set")
                 .to_str()
