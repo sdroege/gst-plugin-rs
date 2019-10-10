@@ -89,3 +89,13 @@ clippy:
   script:
     - rustup component add clippy-preview
     - cargo clippy --color=always --all --all-features -- -A clippy::redundant_pattern_matching -A clippy::single_match -A clippy::cast_lossless
+
+audit:
+  extends: '.tarball_setup'
+  image: "rust:slim-buster"
+  stage: 'extras'
+  only:
+    - schedules
+  script:
+    - cargo install cargo-audit
+    - cargo audit --deny-warnings
