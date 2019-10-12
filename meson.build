@@ -25,6 +25,7 @@ plugins_rep = {
   'gst-plugin-audiofx': 'libgstrsaudiofx',
   'gst-plugin-cdg': 'libgstcdg',
   'gst-plugin-closedcaption': 'libgstrsclosedcaption',
+  'gst-plugin-dav1d': 'libgstrsdav1d',
   'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
   'gst-plugin-file': 'libgstrsfile',
   'gst-plugin-flv': 'libgstrsflv',

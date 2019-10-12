@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "gst-plugin-dav1d",
     "gst-plugin-file",
     "gst-plugin-reqwest",
     "gst-plugin-flv",
