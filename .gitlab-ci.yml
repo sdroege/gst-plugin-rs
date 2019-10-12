@@ -10,8 +10,10 @@ stages:
     CARGO_HOME: "${CI_PROJECT_DIR}/.cargo_home"
     SODIUM_USE_PKG_CONFIG: "true"
     DEPENDENCIES: |
+      clang
       curl
       file
+      git
       libsodium-dev
       libssl-dev
       liborc-0.4-dev
@@ -24,10 +26,17 @@ stages:
       libgl1-mesa-dri
       libgl1-mesa-glx
       libwayland-egl1-mesa
+      llvm
+      nasm
+      python3-pip
+      python3-setuptools
+      python3-wheel
       xz-utils
   before_script:
     - apt-get update -yqq
     - apt-get install -yqq --no-install-recommends $DEPENDENCIES
+    - pip3 install --user meson ninja
+    - export PATH="$PATH:$HOME/.local/bin"
 
     - mkdir -p precompiled-gst && cd precompiled-gst
 
@@ -38,6 +47,11 @@ stages:
     - export GST_PLUGIN_SCANNER=$PWD/gstreamer/libexec/gstreamer-1.0/gst-plugin-scanner
     - export PATH=$PATH:$PWD/gstreamer/bin
     - export LD_LIBRARY_PATH=$PWD/gstreamer/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+    # The build feature is required for the dav1d plugin for building and
+    # statically linking the C dav1d library into the dav1d-rs bindings.
+    # FIXME: The feature name should explicitly mention the dav1d plugin but
+    # Cargo currently doesn't support passthrough for that scenario.
+    - export RUSTFLAGS='--cfg feature="build"'
 
     - cd "${CI_PROJECT_DIR}"
   cache:
