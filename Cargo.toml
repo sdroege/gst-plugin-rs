@@ -17,6 +17,7 @@ members = [
     "gst-plugin-rusoto",
     "gst-plugin-fallbackswitch",
     "gst-plugin-lewton",
+    "gst-plugin-claxon",
 ]
 
 [profile.release]
