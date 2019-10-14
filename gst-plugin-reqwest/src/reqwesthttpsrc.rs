@@ -347,8 +347,8 @@ impl ReqwestHttpSrc {
     ) -> Result<State, Option<gst::ErrorMessage>> {
         use hyperx::header::{
             qitem, AcceptEncoding, AcceptRanges, ByteRangeSpec, Connection, ContentLength,
-            ContentRange, ContentRangeSpec, Cookie, Encoding, Headers, Range, RangeUnit, RawLike,
-            UserAgent,
+            ContentRange, ContentRangeSpec, ContentType, Cookie, Encoding, Headers, Range,
+            RangeUnit, RawLike, UserAgent,
         };
 
         gst_debug!(self.cat, obj: src, "Creating new request for {}", uri);
@@ -557,7 +557,7 @@ impl ReqwestHttpSrc {
             )));
         }
 
-        let caps = headers
+        let mut caps = headers
             .get_raw("icy-metaint")
             .and_then(|h| h.one())
             .and_then(|s| std::str::from_utf8(s).ok())
@@ -567,6 +567,33 @@ impl ReqwestHttpSrc {
                     .field("metadata-interval", &icy_metaint)
                     .build()
             });
+
+        if let Some(ContentType(ref content_type)) = headers.get() {
+            gst_debug!(self.cat, obj: src, "Got content type {}", content_type);
+            if let Some(ref mut caps) = caps {
+                let caps = caps.get_mut().unwrap();
+                let s = caps.get_mut_structure(0).unwrap();
+                s.set("content-type", &content_type.as_ref());
+            } else if content_type.type_() == "audio" && content_type.subtype() == "L16" {
+                let channels = content_type
+                    .get_param("channels")
+                    .and_then(|s| s.as_ref().parse::<i32>().ok())
+                    .unwrap_or(2);
+                let rate = content_type
+                    .get_param("rate")
+                    .and_then(|s| s.as_ref().parse::<i32>().ok())
+                    .unwrap_or(44_100);
+
+                caps = Some(
+                    gst::Caps::builder("audio/x-unaligned-raw")
+                        .field("format", &"S16BE")
+                        .field("layout", &"interleaved")
+                        .field("channels", &channels)
+                        .field("rate", &rate)
+                        .build(),
+                );
+            }
+        }
 
         let mut tags = gst::TagList::new();
         {

@@ -590,6 +590,7 @@ fn test_iradio_mode() {
                 .header("icy-name", "Name")
                 .header("icy-genre", "Genre")
                 .header("icy-url", "http://www.example.com")
+                .header("Content-Type", "audio/mpeg; rate=44100")
                 .body(Body::from("Hello World"))
                 .unwrap()
         },
@@ -634,6 +635,7 @@ fn test_iradio_mode() {
         caps,
         gst::Caps::builder("application/x-icy")
             .field("metadata-interval", &8192i32)
+            .field("content-type", &"audio/mpeg; rate=44100")
             .build()
     );
 
@@ -655,6 +657,70 @@ fn test_iradio_mode() {
             unreachable!();
         }
     }
+}
+
+#[test]
+fn test_audio_l16() {
+    use std::io::{Cursor, Read};
+    init();
+
+    // Set up a harness that returns "Hello World" for any HTTP request and check if the
+    // audio/L16 content type is parsed correctly and put into the caps
+    let mut h = Harness::new(
+        |_req| {
+            use hyper::{Body, Response};
+
+            Response::builder()
+                .header("Content-Type", "audio/L16; rate=48000; channels=2")
+                .body(Body::from("Hello World"))
+                .unwrap()
+        },
+        |_src| {
+            // No additional setup needed here
+        },
+    );
+
+    // Set the HTTP source to Playing so that everything can start
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    // And now check if the data we receive is exactly what we expect it to be
+    let expected_output = "Hello World";
+    let mut cursor = Cursor::new(expected_output);
+
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        // On the first buffer also check if the duration reported by the HTTP source is what we
+        // would expect it to be
+        if cursor.position() == 0 {
+            assert_eq!(
+                h.src.query_duration::<gst::format::Bytes>(),
+                Some(gst::format::Bytes::from(expected_output.len() as u64))
+            );
+        }
+
+        // Map the buffer readable and check if it contains exactly the data we would expect at
+        // this point after reading everything else we read in previous runs
+        let map = buffer.map_readable().unwrap();
+        let mut read_buf = vec![0; map.get_size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(&*map, &*read_buf);
+    }
+
+    // Check if everything was read
+    assert_eq!(cursor.position(), 11);
+
+    let srcpad = h.src.get_static_pad("src").unwrap();
+    let caps = srcpad.get_current_caps().unwrap();
+    assert_eq!(
+        caps,
+        gst::Caps::builder("audio/x-unaligned-raw")
+            .field("format", &"S16BE")
+            .field("layout", &"interleaved")
+            .field("channels", &2i32)
+            .field("rate", &48_000i32)
+            .build()
+    );
 }
 
 #[test]
