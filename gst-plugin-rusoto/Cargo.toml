@@ -1,5 +1,5 @@
 [package]
-name = "gst-plugin-s3"
+name = "gst-plugin-rusoto"
 version = "0.6.0"
 authors = ["Arun Raghavan <arun@arunraghavan.net>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
@@ -20,7 +20,7 @@ percent-encoding = "2"
 tokio = "0.1"
 
 [lib]
-name = "gsts3"
+name = "gstrusoto"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 

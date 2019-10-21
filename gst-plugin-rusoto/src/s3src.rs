@@ -222,7 +222,7 @@ impl S3Src {
 }
 
 impl ObjectSubclass for S3Src {
-    const NAME: &'static str = "S3Src";
+    const NAME: &'static str = "RusotoS3Src";
     type ParentType = gst_base::BaseSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -234,13 +234,13 @@ impl ObjectSubclass for S3Src {
             url: Mutex::new(None),
             state: Mutex::new(StreamingState::Stopped),
             cat: gst::DebugCategory::new(
-                "s3src",
+                "rusotos3src",
                 gst::DebugColorFlags::empty(),
                 Some("Amazon S3 Source"),
             ),
             runtime: runtime::Builder::new()
                 .core_threads(1)
-                .name_prefix("gst-s3-tokio")
+                .name_prefix("rusotos3src-runtime")
                 .build()
                 .unwrap(),
             canceller: Mutex::new(None),
@@ -353,7 +353,7 @@ impl BaseSrcImpl for S3Src {
         let state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
-            unreachable!("S3Src is already started");
+            unreachable!("RusotoS3Src is already started");
         }
 
         /* Drop the lock as self.head() needs it */
@@ -448,5 +448,10 @@ impl BaseSrcImpl for S3Src {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "s3src", gst::Rank::Primary, S3Src::get_type())
+    gst::Element::register(
+        Some(plugin),
+        "rusotos3src",
+        gst::Rank::Primary,
+        S3Src::get_type(),
+    )
 }

@@ -13,7 +13,7 @@ members = [
     "gst-plugin-sodium",
     "gst-plugin-cdg",
     "gst-plugin-rav1e",
-    "gst-plugin-s3",
+    "gst-plugin-rusoto",
     "gst-plugin-fallbackswitch",
     "gst-plugin-lewton",
 ]

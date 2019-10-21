@@ -375,7 +375,7 @@ impl S3Sink {
 }
 
 impl ObjectSubclass for S3Sink {
-    const NAME: &'static str = "S3Sink";
+    const NAME: &'static str = "RusotoS3Sink";
     type ParentType = gst_base::BaseSink;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -387,14 +387,14 @@ impl ObjectSubclass for S3Sink {
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
             cat: gst::DebugCategory::new(
-                "s3sink",
+                "rusotos3sink",
                 gst::DebugColorFlags::empty(),
                 Some("Amazon S3 Sink"),
             ),
             canceller: Mutex::new(None),
             runtime: runtime::Builder::new()
                 .core_threads(1)
-                .name_prefix("S3-sink-runtime")
+                .name_prefix("rusotos3sink-runtime")
                 .build()
                 .unwrap(),
             client: Mutex::new(S3Client::new(Region::default())),
@@ -478,7 +478,7 @@ impl BaseSinkImpl for S3Sink {
     fn start(&self, _element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Started(_) = *state {
-            unreachable!("S3Sink already started");
+            unreachable!("RusotoS3Sink already started");
         }
 
         *state = State::Started(self.start()?);
@@ -560,7 +560,7 @@ impl BaseSinkImpl for S3Sink {
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "s3sink",
+        "rusotos3sink",
         gst::Rank::Primary,
         S3Sink::get_type(),
     )
