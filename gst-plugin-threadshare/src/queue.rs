@@ -153,11 +153,18 @@ impl Default for State {
 }
 
 struct Queue {
-    cat: gst::DebugCategory,
     sink_pad: gst::Pad,
     src_pad: gst::Pad,
     state: Mutex<State>,
     settings: Mutex<Settings>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "ts-queue",
+        gst::DebugColorFlags::empty(),
+        Some("Thread-sharing queue"),
+    );
 }
 
 impl Queue {
@@ -222,7 +229,7 @@ impl Queue {
         element: &gst::Element,
         state: &mut State,
     ) -> Option<impl Future<Item = (), Error = ()>> {
-        gst_log!(self.cat, obj: element, "Scheduling pending queue now");
+        gst_log!(CAT, obj: element, "Scheduling pending queue now");
 
         let State {
             ref mut pending_queue,
@@ -248,11 +255,7 @@ impl Queue {
                 return Ok(Async::Ready(()));
             }
 
-            gst_log!(
-                queue.cat,
-                obj: &element_clone,
-                "Trying to empty pending queue"
-            );
+            gst_log!(CAT, obj: &element_clone, "Trying to empty pending queue");
 
             let res = if let Some(PendingQueue {
                 ref mut task,
@@ -270,22 +273,14 @@ impl Queue {
                 if let Some(failed_item) = failed_item {
                     items.push_front(failed_item);
                     *task = Some(task::current());
-                    gst_log!(
-                        queue.cat,
-                        obj: &element_clone,
-                        "Waiting for more queue space"
-                    );
+                    gst_log!(CAT, obj: &element_clone, "Waiting for more queue space");
                     Ok(Async::NotReady)
                 } else {
-                    gst_log!(queue.cat, obj: &element_clone, "Pending queue is empty now");
+                    gst_log!(CAT, obj: &element_clone, "Pending queue is empty now");
                     Ok(Async::Ready(()))
                 }
             } else {
-                gst_log!(
-                    queue.cat,
-                    obj: &element_clone,
-                    "Flushing, dropping pending queue"
-                );
+                gst_log!(CAT, obj: &element_clone, "Flushing, dropping pending queue");
                 Ok(Async::Ready(()))
             };
 
@@ -347,7 +342,7 @@ impl Queue {
                     pending_queue.as_mut().unwrap().items.push_back(item);
 
                     gst_log!(
-                        self.cat,
+                        CAT,
                         obj: element,
                         "Queue is full - Pushing first item on pending queue"
                     );
@@ -355,7 +350,7 @@ impl Queue {
                     if schedule_now {
                         self.schedule_pending_queue(element, &mut state)
                     } else {
-                        gst_log!(self.cat, obj: element, "Scheduling pending queue later");
+                        gst_log!(CAT, obj: element, "Scheduling pending queue later");
 
                         None
                     }
@@ -371,11 +366,7 @@ impl Queue {
         };
 
         if let Some(wait_future) = wait_future {
-            gst_log!(
-                self.cat,
-                obj: element,
-                "Blocking until queue has space again"
-            );
+            gst_log!(CAT, obj: element, "Blocking until queue has space again");
             executor::current_thread::block_on_all(wait_future).map_err(|_| {
                 gst_element_error!(
                     element,
@@ -395,7 +386,7 @@ impl Queue {
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(self.cat, obj: pad, "Handling buffer {:?}", buffer);
+        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
         self.enqueue_item(pad, element, DataQueueItem::Buffer(buffer))
     }
 
@@ -405,14 +396,14 @@ impl Queue {
         element: &gst::Element,
         list: gst::BufferList,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(self.cat, obj: pad, "Handling buffer list {:?}", list);
+        gst_log!(CAT, obj: pad, "Handling buffer list {:?}", list);
         self.enqueue_item(pad, element, DataQueueItem::BufferList(list))
     }
 
     fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, mut event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
+        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
 
         let mut new_event = None;
         match event.view() {
@@ -441,7 +432,7 @@ impl Queue {
                         .expect("missing signal arg");
 
                     gst_debug!(
-                        self.cat,
+                        CAT,
                         obj: element,
                         "Got upstream pending future id {:?}",
                         pending_future_id
@@ -464,11 +455,11 @@ impl Queue {
         }
 
         if event.is_serialized() {
-            gst_log!(self.cat, obj: pad, "Queuing event {:?}", event);
+            gst_log!(CAT, obj: pad, "Queuing event {:?}", event);
             let _ = self.enqueue_item(pad, element, DataQueueItem::Event(event));
             true
         } else {
-            gst_log!(self.cat, obj: pad, "Forwarding event {:?}", event);
+            gst_log!(CAT, obj: pad, "Forwarding event {:?}", event);
             self.src_pad.push_event(event)
         }
     }
@@ -479,14 +470,14 @@ impl Queue {
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
+        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
 
         if query.is_serialized() {
             // FIXME: How can we do this?
-            gst_log!(self.cat, obj: pad, "Dropping serialized query {:?}", query);
+            gst_log!(CAT, obj: pad, "Dropping serialized query {:?}", query);
             false
         } else {
-            gst_log!(self.cat, obj: pad, "Forwarding query {:?}", query);
+            gst_log!(CAT, obj: pad, "Forwarding query {:?}", query);
             self.src_pad.peer_query(query)
         }
     }
@@ -494,7 +485,7 @@ impl Queue {
     fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
+        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::FlushStart(..) => {
@@ -511,7 +502,7 @@ impl Queue {
             _ => (),
         };
 
-        gst_log!(self.cat, obj: pad, "Forwarding event {:?}", event);
+        gst_log!(CAT, obj: pad, "Forwarding event {:?}", event);
         self.sink_pad.push_event(event)
     }
 
@@ -523,7 +514,7 @@ impl Queue {
     ) -> bool {
         use gst::QueryView;
 
-        gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
+        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
         match query.view_mut() {
             QueryView::Scheduling(ref mut q) => {
                 let mut new_query = gst::Query::new_scheduling();
@@ -532,7 +523,7 @@ impl Queue {
                     return res;
                 }
 
-                gst_log!(self.cat, obj: pad, "Upstream returned {:?}", new_query);
+                gst_log!(CAT, obj: pad, "Upstream returned {:?}", new_query);
 
                 let (flags, min, max, align) = new_query.get_result();
                 q.set(flags, min, max, align);
@@ -544,13 +535,13 @@ impl Queue {
                         .filter(|m| m != &gst::PadMode::Pull)
                         .collect::<Vec<_>>(),
                 );
-                gst_log!(self.cat, obj: pad, "Returning {:?}", q.get_mut_query());
+                gst_log!(CAT, obj: pad, "Returning {:?}", q.get_mut_query());
                 return true;
             }
             _ => (),
         };
 
-        gst_log!(self.cat, obj: pad, "Forwarding query {:?}", query);
+        gst_log!(CAT, obj: pad, "Forwarding query {:?}", query);
         self.sink_pad.peer_query(query)
     }
 
@@ -585,15 +576,15 @@ impl Queue {
 
         let res = match item {
             DataQueueItem::Buffer(buffer) => {
-                gst_log!(self.cat, obj: element, "Forwarding buffer {:?}", buffer);
+                gst_log!(CAT, obj: element, "Forwarding buffer {:?}", buffer);
                 self.src_pad.push(buffer).map(|_| ())
             }
             DataQueueItem::BufferList(list) => {
-                gst_log!(self.cat, obj: element, "Forwarding buffer list {:?}", list);
+                gst_log!(CAT, obj: element, "Forwarding buffer list {:?}", list);
                 self.src_pad.push_list(list).map(|_| ())
             }
             DataQueueItem::Event(event) => {
-                gst_log!(self.cat, obj: element, "Forwarding event {:?}", event);
+                gst_log!(CAT, obj: element, "Forwarding event {:?}", event);
                 self.src_pad.push_event(event);
                 Ok(())
             }
@@ -601,13 +592,13 @@ impl Queue {
 
         let res = match res {
             Ok(_) => {
-                gst_log!(self.cat, obj: element, "Successfully pushed item");
+                gst_log!(CAT, obj: element, "Successfully pushed item");
                 let mut state = self.state.lock().unwrap();
                 state.last_res = Ok(gst::FlowSuccess::Ok);
                 Ok(())
             }
             Err(gst::FlowError::Flushing) => {
-                gst_debug!(self.cat, obj: element, "Flushing");
+                gst_debug!(CAT, obj: element, "Flushing");
                 let mut state = self.state.lock().unwrap();
                 if let Some(ref queue) = state.queue {
                     queue.pause();
@@ -616,7 +607,7 @@ impl Queue {
                 Ok(())
             }
             Err(gst::FlowError::Eos) => {
-                gst_debug!(self.cat, obj: element, "EOS");
+                gst_debug!(CAT, obj: element, "EOS");
                 let mut state = self.state.lock().unwrap();
                 if let Some(ref queue) = state.queue {
                     queue.pause();
@@ -625,7 +616,7 @@ impl Queue {
                 Ok(())
             }
             Err(err) => {
-                gst_error!(self.cat, obj: element, "Got error {}", err);
+                gst_error!(CAT, obj: element, "Got error {}", err);
                 gst_element_error!(
                     element,
                     gst::StreamError::Failed,
@@ -662,7 +653,7 @@ impl Queue {
     }
 
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(self.cat, obj: element, "Preparing");
+        gst_debug!(CAT, obj: element, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
 
@@ -705,8 +696,7 @@ impl Queue {
                     queue.push_item(&element_clone, item)
                 },
                 move |err| {
-                    let queue = Self::from_instance(&element_clone2);
-                    gst_error!(queue.cat, obj: &element_clone2, "Got error {}", err);
+                    gst_error!(CAT, obj: &element_clone2, "Got error {}", err);
                     match err {
                         gst::FlowError::CustomError => (),
                         err => {
@@ -729,7 +719,7 @@ impl Queue {
 
         let pending_future_id = io_context.acquire_pending_future_id();
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Got pending future id {:?}",
             pending_future_id
@@ -739,13 +729,13 @@ impl Queue {
         state.queue = Some(dataqueue);
         state.pending_future_id = Some(pending_future_id);
 
-        gst_debug!(self.cat, obj: element, "Prepared");
+        gst_debug!(CAT, obj: element, "Prepared");
 
         Ok(())
     }
 
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(self.cat, obj: element, "Unpreparing");
+        gst_debug!(CAT, obj: element, "Unpreparing");
 
         // FIXME: The IO Context has to be alive longer than the queue,
         // otherwise the queue can't finish any remaining work
@@ -770,12 +760,12 @@ impl Queue {
         }
         drop(io_context);
 
-        gst_debug!(self.cat, obj: element, "Unprepared");
+        gst_debug!(CAT, obj: element, "Unprepared");
         Ok(())
     }
 
     fn start(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(self.cat, obj: element, "Starting");
+        gst_debug!(CAT, obj: element, "Starting");
         let mut state = self.state.lock().unwrap();
 
         if let Some(ref queue) = state.queue {
@@ -783,13 +773,13 @@ impl Queue {
         }
         state.last_res = Ok(gst::FlowSuccess::Ok);
 
-        gst_debug!(self.cat, obj: element, "Started");
+        gst_debug!(CAT, obj: element, "Started");
 
         Ok(())
     }
 
     fn stop(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(self.cat, obj: element, "Stopping");
+        gst_debug!(CAT, obj: element, "Stopping");
         let mut state = self.state.lock().unwrap();
 
         if let Some(ref queue) = state.queue {
@@ -805,7 +795,7 @@ impl Queue {
         let _ = state.pending_future_cancel.take();
         state.last_res = Err(gst::FlowError::Flushing);
 
-        gst_debug!(self.cat, obj: element, "Stopped");
+        gst_debug!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -901,11 +891,6 @@ impl ObjectSubclass for Queue {
         });
 
         Self {
-            cat: gst::DebugCategory::new(
-                "ts-queue",
-                gst::DebugColorFlags::empty(),
-                Some("Thread-sharing queue"),
-            ),
             sink_pad,
             src_pad,
             state: Mutex::new(State::default()),
@@ -991,7 +976,7 @@ impl ElementImpl for Queue {
         element: &gst::Element,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
+        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

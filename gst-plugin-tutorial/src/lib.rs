@@ -16,6 +16,8 @@ extern crate gstreamer_video as gst_video;
 
 extern crate byte_slice_cast;
 extern crate num_traits;
+#[macro_use]
+extern crate lazy_static;
 
 mod identity;
 mod progressbin;

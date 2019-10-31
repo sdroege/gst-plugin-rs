@@ -32,8 +32,15 @@ struct State {
 }
 
 struct LewtonDec {
-    cat: gst::DebugCategory,
     state: AtomicRefCell<Option<State>>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "lewtondec",
+        gst::DebugColorFlags::empty(),
+        Some("lewton Vorbis decoder"),
+    );
 }
 
 impl ObjectSubclass for LewtonDec {
@@ -46,11 +53,6 @@ impl ObjectSubclass for LewtonDec {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "lewtondec",
-                gst::DebugColorFlags::empty(),
-                Some("lewton Vorbis decoder"),
-            ),
             state: AtomicRefCell::new(None),
         }
     }
@@ -123,7 +125,7 @@ impl AudioDecoderImpl for LewtonDec {
         element: &gst_audio::AudioDecoder,
         caps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
-        gst_debug!(self.cat, obj: element, "Setting format {:?}", caps);
+        gst_debug!(CAT, obj: element, "Setting format {:?}", caps);
 
         // When the caps are changing we require new headers
         let mut state_guard = self.state.borrow_mut();
@@ -142,7 +144,7 @@ impl AudioDecoderImpl for LewtonDec {
             let streamheaders = streamheaders.as_slice();
             if streamheaders.len() < 3 {
                 gst_debug!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Not enough streamheaders, trying in-band"
                 );
@@ -155,7 +157,7 @@ impl AudioDecoderImpl for LewtonDec {
             if let (Ok(Some(ident_buf)), Ok(Some(comment_buf)), Ok(Some(setup_buf))) =
                 (ident_buf, comment_buf, setup_buf)
             {
-                gst_debug!(self.cat, obj: element, "Got streamheader buffers");
+                gst_debug!(CAT, obj: element, "Got streamheader buffers");
                 state.header_bufs = (Some(ident_buf), Some(comment_buf), Some(setup_buf));
             }
         }
@@ -164,7 +166,7 @@ impl AudioDecoderImpl for LewtonDec {
     }
 
     fn flush(&self, element: &gst_audio::AudioDecoder, _hard: bool) {
-        gst_debug!(self.cat, obj: element, "Flushing");
+        gst_debug!(CAT, obj: element, "Flushing");
 
         let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
@@ -177,7 +179,7 @@ impl AudioDecoderImpl for LewtonDec {
         element: &gst_audio::AudioDecoder,
         inbuf: Option<&gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(self.cat, obj: element, "Handling buffer {:?}", inbuf);
+        gst_debug!(CAT, obj: element, "Handling buffer {:?}", inbuf);
 
         let inbuf = match inbuf {
             None => return Ok(gst::FlowSuccess::Ok),
@@ -185,7 +187,7 @@ impl AudioDecoderImpl for LewtonDec {
         };
 
         let inmap = inbuf.map_readable().ok_or_else(|| {
-            gst_error!(self.cat, obj: element, "Failed to buffer readable");
+            gst_error!(CAT, obj: element, "Failed to buffer readable");
             gst::FlowError::Error
         })?;
 
@@ -199,11 +201,7 @@ impl AudioDecoderImpl for LewtonDec {
             if state.headerset.is_some() {
                 return Ok(gst::FlowSuccess::Ok);
             } else {
-                gst_error!(
-                    self.cat,
-                    obj: element,
-                    "Got empty packet before all headers"
-                );
+                gst_error!(CAT, obj: element, "Got empty packet before all headers");
                 return Err(gst::FlowError::Error);
             }
         }
@@ -232,30 +230,26 @@ impl LewtonDec {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         // ident header
         if indata[0] == 0x01 {
-            gst_debug!(self.cat, obj: element, "Got ident header buffer");
+            gst_debug!(CAT, obj: element, "Got ident header buffer");
             state.header_bufs = (Some(inbuf.clone()), None, None);
         } else if indata[0] == 0x03 {
             // comment header
             if state.header_bufs.0.is_none() {
-                gst_warning!(
-                    self.cat,
-                    obj: element,
-                    "Got comment header before ident header"
-                );
+                gst_warning!(CAT, obj: element, "Got comment header before ident header");
             } else {
-                gst_debug!(self.cat, obj: element, "Got comment header buffer");
+                gst_debug!(CAT, obj: element, "Got comment header buffer");
                 state.header_bufs.1 = Some(inbuf.clone());
             }
         } else if indata[0] == 0x05 {
             // setup header
             if state.header_bufs.0.is_none() || state.header_bufs.1.is_none() {
                 gst_warning!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Got setup header before ident/comment header"
                 );
             } else {
-                gst_debug!(self.cat, obj: element, "Got setup header buffer");
+                gst_debug!(CAT, obj: element, "Got setup header buffer");
                 state.header_bufs.2 = Some(inbuf.clone());
             }
         }
@@ -284,11 +278,7 @@ impl LewtonDec {
 
         // First try to parse the headers
         let ident_map = ident_buf.map_readable().ok_or_else(|| {
-            gst_error!(
-                self.cat,
-                obj: element,
-                "Failed to map ident buffer readable"
-            );
+            gst_error!(CAT, obj: element, "Failed to map ident buffer readable");
             gst::FlowError::Error
         })?;
         let ident = lewton::header::read_header_ident(ident_map.as_ref()).map_err(|err| {
@@ -301,11 +291,7 @@ impl LewtonDec {
         })?;
 
         let comment_map = comment_buf.map_readable().ok_or_else(|| {
-            gst_error!(
-                self.cat,
-                obj: element,
-                "Failed to map comment buffer readable"
-            );
+            gst_error!(CAT, obj: element, "Failed to map comment buffer readable");
             gst::FlowError::Error
         })?;
         let comment = lewton::header::read_header_comment(comment_map.as_ref()).map_err(|err| {
@@ -318,11 +304,7 @@ impl LewtonDec {
         })?;
 
         let setup_map = setup_buf.map_readable().ok_or_else(|| {
-            gst_error!(
-                self.cat,
-                obj: element,
-                "Failed to map setup buffer readable"
-            );
+            gst_error!(CAT, obj: element, "Failed to map setup buffer readable");
             gst::FlowError::Error
         })?;
         let setup = lewton::header::read_header_setup(
@@ -359,7 +341,7 @@ impl LewtonDec {
             let mut map = [0; 8];
             if let Err(_) = gst_audio::get_channel_reorder_map(from, to, &mut map[..channels]) {
                 gst_error!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Failed to generate channel reorder map from {:?} to {:?}",
                     from,
@@ -375,7 +357,7 @@ impl LewtonDec {
         let audio_info = audio_info.build().unwrap();
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Successfully parsed headers: {:?}",
             audio_info
@@ -430,12 +412,7 @@ impl LewtonDec {
         }
 
         let sample_count = decoded.samples.len() / audio_info.channels() as usize;
-        gst_debug!(
-            self.cat,
-            obj: element,
-            "Got {} decoded samples",
-            sample_count
-        );
+        gst_debug!(CAT, obj: element, "Got {} decoded samples", sample_count);
 
         if sample_count == 0 {
             return element.finish_frame(None, 1);

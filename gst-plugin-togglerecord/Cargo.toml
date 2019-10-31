@@ -15,6 +15,7 @@ gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs
 gtk = { git = "https://github.com/gtk-rs/gtk", optional = true }
 gio = { git = "https://github.com/gtk-rs/gio", optional = true }
 parking_lot = "0.9"
+lazy_static = "1.0"
 
 [dev-dependencies]
 either = "1.0"

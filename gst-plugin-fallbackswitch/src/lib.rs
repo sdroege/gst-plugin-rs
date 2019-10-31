@@ -39,6 +39,9 @@ mod gst_base {
     pub use super::base::*;
 }
 
+#[macro_use]
+extern crate lazy_static;
+
 mod fallbackswitch;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

@@ -62,9 +62,16 @@ impl Default for State {
 }
 
 pub struct FileSrc {
-    cat: gst::DebugCategory,
     settings: Mutex<Settings>,
     state: Mutex<State>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "rsfilesrc",
+        gst::DebugColorFlags::empty(),
+        Some("File Source"),
+    );
 }
 
 impl FileSrc {
@@ -101,7 +108,7 @@ impl FileSrc {
                 match settings.location {
                     Some(ref location_cur) => {
                         gst_info!(
-                            self.cat,
+                            CAT,
                             obj: element,
                             "Changing `location` from {:?} to {}",
                             location_cur,
@@ -109,13 +116,13 @@ impl FileSrc {
                         );
                     }
                     None => {
-                        gst_info!(self.cat, obj: element, "Setting `location to {}", location,);
+                        gst_info!(CAT, obj: element, "Setting `location to {}", location,);
                     }
                 }
                 Some(location)
             }
             None => {
-                gst_info!(self.cat, obj: element, "Resetting `location` to None",);
+                gst_info!(CAT, obj: element, "Resetting `location` to None",);
                 None
             }
         };
@@ -134,11 +141,6 @@ impl ObjectSubclass for FileSrc {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "rsfilesrc",
-                gst::DebugColorFlags::empty(),
-                Some("File Source"),
-            ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
         }
@@ -188,7 +190,7 @@ impl ObjectImpl for FileSrc {
 
                 if let Err(err) = res {
                     gst_error!(
-                        self.cat,
+                        CAT,
                         obj: element,
                         "Failed to set property `location`: {}",
                         err
@@ -264,11 +266,11 @@ impl BaseSrcImpl for FileSrc {
             )
         })?;
 
-        gst_debug!(self.cat, obj: element, "Opened file {:?}", file);
+        gst_debug!(CAT, obj: element, "Opened file {:?}", file);
 
         *state = State::Started { file, position: 0 };
 
-        gst_info!(self.cat, obj: element, "Started");
+        gst_info!(CAT, obj: element, "Started");
 
         Ok(())
     }
@@ -284,7 +286,7 @@ impl BaseSrcImpl for FileSrc {
 
         *state = State::Stopped;
 
-        gst_info!(self.cat, obj: element, "Stopped");
+        gst_info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }

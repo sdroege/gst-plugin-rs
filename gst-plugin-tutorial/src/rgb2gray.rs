@@ -71,9 +71,16 @@ struct State {
 
 // Struct containing all the element data
 struct Rgb2Gray {
-    cat: gst::DebugCategory,
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "rsrgb2gray",
+        gst::DebugColorFlags::empty(),
+        Some("Rust RGB-GRAY converter"),
+    );
 }
 
 impl Rgb2Gray {
@@ -119,11 +126,6 @@ impl ObjectSubclass for Rgb2Gray {
     // of our struct here.
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "rsrgb2gray",
-                gst::DebugColorFlags::empty(),
-                Some("Rust RGB-GRAY converter"),
-            ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(None),
         }
@@ -251,7 +253,7 @@ impl ObjectImpl for Rgb2Gray {
                 let mut settings = self.settings.lock().unwrap();
                 let invert = value.get_some().expect("type checked upstream");
                 gst_info!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Changing invert from {} to {}",
                     settings.invert,
@@ -263,7 +265,7 @@ impl ObjectImpl for Rgb2Gray {
                 let mut settings = self.settings.lock().unwrap();
                 let shift = value.get_some().expect("type checked upstream");
                 gst_info!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Changing shift from {} to {}",
                     settings.shift,
@@ -343,7 +345,7 @@ impl BaseTransformImpl for Rgb2Gray {
         };
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
@@ -389,7 +391,7 @@ impl BaseTransformImpl for Rgb2Gray {
         };
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Configured for caps {} to {}",
             incaps,
@@ -407,7 +409,7 @@ impl BaseTransformImpl for Rgb2Gray {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
-        gst_info!(self.cat, obj: element, "Stopped");
+        gst_info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }

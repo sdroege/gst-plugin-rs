@@ -14,6 +14,8 @@ extern crate glib;
 extern crate gstreamer as gst;
 #[macro_use]
 extern crate gstreamer_audio as gst_audio;
+#[macro_use]
+extern crate lazy_static;
 
 mod lewtondec;
 

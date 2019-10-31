@@ -24,8 +24,14 @@ use crate::constants::{
 
 const CDG_CMD_MEMORY_PRESET: u8 = 1;
 
-struct CdgParse {
-    cat: gst::DebugCategory,
+struct CdgParse;
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "cdgparse",
+        gst::DebugColorFlags::empty(),
+        Some("CDG parser"),
+    );
 }
 
 impl ObjectSubclass for CdgParse {
@@ -37,13 +43,7 @@ impl ObjectSubclass for CdgParse {
     glib_object_subclass!();
 
     fn new() -> Self {
-        Self {
-            cat: gst::DebugCategory::new(
-                "cdgparse",
-                gst::DebugColorFlags::empty(),
-                Some("CDG parser"),
-            ),
-        }
+        Self
     }
 
     fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
@@ -196,7 +196,7 @@ impl BaseParseImpl for CdgParse {
             buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
         }
 
-        gst_debug!(self.cat, obj: element, "Found frame pts={}", pts);
+        gst_debug!(CAT, obj: element, "Found frame pts={}", pts);
 
         element.finish_frame(frame, CDG_PACKET_SIZE as u32)?;
 

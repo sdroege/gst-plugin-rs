@@ -14,6 +14,8 @@ extern crate glib;
 extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
 extern crate url;
+#[macro_use]
+extern crate lazy_static;
 
 mod file_location;
 mod filesink;

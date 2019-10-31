@@ -241,11 +241,18 @@ impl Default for State {
 }
 
 struct JitterBuffer {
-    cat: gst::DebugCategory,
     sink_pad: gst::Pad,
     src_pad: gst::Pad,
     state: Mutex<State>,
     settings: Mutex<Settings>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "ts-jitterbuffer",
+        gst::DebugColorFlags::empty(),
+        Some("Thread-sharing jitterbuffer"),
+    );
 }
 
 impl JitterBuffer {
@@ -270,7 +277,7 @@ impl JitterBuffer {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let s = caps.get_structure(0).ok_or(gst::FlowError::Error)?;
 
-        gst_info!(self.cat, obj: element, "Parsing caps: {:?}", caps);
+        gst_info!(CAT, obj: element, "Parsing caps: {:?}", caps);
 
         let payload = s
             .get_some::<i32>("payload")
@@ -317,7 +324,7 @@ impl JitterBuffer {
                 }
 
                 gst_debug!(
-                    self.cat,
+                    CAT,
                     "new packet spacing {}, old packet spacing {} combined to {}",
                     new_packet_spacing,
                     old_packet_spacing,
@@ -342,7 +349,7 @@ impl JitterBuffer {
         let mut reset = false;
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Handling big gap, gap packets length: {}",
             gap_packets_length
@@ -361,7 +368,7 @@ impl JitterBuffer {
                 let gap_seq = rtp_buffer.get_seq();
 
                 gst_log!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Looking at gap packet with seq {}",
                     gap_seq
@@ -384,12 +391,7 @@ impl JitterBuffer {
                 }
             }
 
-            gst_debug!(
-                self.cat,
-                obj: element,
-                "all consecutive: {}",
-                all_consecutive
-            );
+            gst_debug!(CAT, obj: element, "all consecutive: {}", all_consecutive);
 
             if all_consecutive && gap_packets_length > 3 {
                 reset = true;
@@ -407,7 +409,7 @@ impl JitterBuffer {
         pad: &gst::Pad,
         element: &gst::Element,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_info!(self.cat, obj: element, "Resetting");
+        gst_info!(CAT, obj: element, "Resetting");
 
         state.jbuf.borrow().flush();
         state.jbuf.borrow().reset_skew();
@@ -456,7 +458,7 @@ impl JitterBuffer {
         drop(rtp_buffer);
 
         gst_log!(
-            self.cat,
+            CAT,
             obj: element,
             "Storing buffer, seq: {}, rtptime: {}, pt: {}",
             seq,
@@ -488,7 +490,7 @@ impl JitterBuffer {
             state.last_pt = pt as u32;
             state.clock_rate = -1;
 
-            gst_debug!(self.cat, obj: pad, "New payload type: {}", pt);
+            gst_debug!(CAT, obj: pad, "New payload type: {}", pt);
 
             if let Some(caps) = pad.get_current_caps() {
                 self.parse_caps(state, element, &caps, pt)?;
@@ -526,7 +528,7 @@ impl JitterBuffer {
 
         if pts.is_none() {
             gst_debug!(
-                self.cat,
+                CAT,
                 obj: element,
                 "cannot calculate a valid pts for #{}, discard",
                 seq
@@ -559,7 +561,7 @@ impl JitterBuffer {
 
             if gap <= 0 {
                 state.num_late += 1;
-                gst_debug!(self.cat, obj: element, "Dropping late {}", seq);
+                gst_debug!(CAT, obj: element, "Dropping late {}", seq);
                 return Ok(gst::FlowSuccess::Ok);
             }
         }
@@ -598,7 +600,7 @@ impl JitterBuffer {
             state.earliest_seqnum = seq;
         }
 
-        gst_log!(self.cat, obj: pad, "Stored buffer");
+        gst_log!(CAT, obj: pad, "Stored buffer");
 
         Ok(gst::FlowSuccess::Ok)
     }
@@ -619,7 +621,7 @@ impl JitterBuffer {
         let mut ret = true;
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Pushing lost events seq: {}, last popped seq: {}",
             seqnum,
@@ -773,7 +775,7 @@ impl JitterBuffer {
 
         state.num_pushed += 1;
 
-        gst_debug!(self.cat, obj: &self.src_pad, "Pushing buffer {:?} with seq {}", buffer, seq);
+        gst_debug!(CAT, obj: &self.src_pad, "Pushing buffer {:?} with seq {}", buffer, seq);
 
         self.send_io_context_event(&state)?;
 
@@ -789,7 +791,7 @@ impl JitterBuffer {
         let now = self.get_current_running_time(element);
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "now is {}, earliest pts is {}, packet_spacing {} and latency {}",
             now,
@@ -817,7 +819,7 @@ impl JitterBuffer {
 
             let element_clone = element.clone();
 
-            gst_debug!(self.cat, obj: element, "Scheduling wakeup in {}", timeout);
+            gst_debug!(CAT, obj: element, "Scheduling wakeup in {}", timeout);
 
             let timer = Timeout::new(
                 state.io_context.as_ref().unwrap(),
@@ -835,7 +837,7 @@ impl JitterBuffer {
                 let now = jb.get_current_running_time(&element_clone);
 
                 gst_debug!(
-                    jb.cat,
+                    CAT,
                     obj: &element_clone,
                     "Woke back up, earliest_pts {}",
                     state.earliest_pts
@@ -937,7 +939,7 @@ impl JitterBuffer {
     fn flush(&self, element: &gst::Element) {
         let mut state = self.state.lock().unwrap();
 
-        gst_info!(self.cat, obj: element, "Flushing");
+        gst_info!(CAT, obj: element, "Flushing");
 
         let io_context = state.io_context.take();
 
@@ -952,7 +954,7 @@ impl JitterBuffer {
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(self.cat, obj: pad, "Handling buffer {:?}", buffer);
+        gst_debug!(CAT, obj: pad, "Handling buffer {:?}", buffer);
         let mut state = self.state.lock().unwrap();
         self.enqueue_item(&mut state, pad, element, Some(buffer))
     }
@@ -961,7 +963,7 @@ impl JitterBuffer {
         let mut forward = true;
         use gst::EventView;
 
-        gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
+        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::FlushStop(..) => {
@@ -989,7 +991,7 @@ impl JitterBuffer {
         };
 
         if forward {
-            gst_log!(self.cat, obj: pad, "Forwarding event {:?}", event);
+            gst_log!(CAT, obj: pad, "Forwarding event {:?}", event);
             self.src_pad.push_event(event)
         } else {
             true
@@ -1003,12 +1005,12 @@ impl JitterBuffer {
         query: &mut gst::QueryRef,
     ) -> bool {
         use gst::QueryView;
-        gst_log!(self.cat, obj: pad, "Forwarding query {:?}", query);
+        gst_log!(CAT, obj: pad, "Forwarding query {:?}", query);
 
         match query.view_mut() {
             QueryView::Drain(..) => {
                 let mut state = self.state.lock().unwrap();
-                gst_info!(self.cat, obj: pad, "Draining");
+                gst_info!(CAT, obj: pad, "Draining");
                 self.enqueue_item(&mut state, pad, element, None).is_ok()
             }
             _ => self.src_pad.peer_query(query),
@@ -1023,7 +1025,7 @@ impl JitterBuffer {
     ) -> bool {
         use gst::QueryView;
 
-        gst_log!(self.cat, obj: pad, "Forwarding query {:?}", query);
+        gst_log!(CAT, obj: pad, "Forwarding query {:?}", query);
 
         match query.view_mut() {
             QueryView::Latency(ref mut q) => {
@@ -1059,7 +1061,7 @@ impl JitterBuffer {
     }
 
     fn clear_pt_map(&self, element: &gst::Element) {
-        gst_info!(self.cat, obj: element, "Clearing PT map");
+        gst_info!(CAT, obj: element, "Clearing PT map");
 
         let mut state = self.state.lock().unwrap();
         state.clock_rate = -1;
@@ -1164,11 +1166,6 @@ impl ObjectSubclass for JitterBuffer {
         });
 
         Self {
-            cat: gst::DebugCategory::new(
-                "ts-jitterbuffer",
-                gst::DebugColorFlags::empty(),
-                Some("Thread-sharing jitterbuffer"),
-            ),
             sink_pad,
             src_pad,
             state: Mutex::new(State::default()),
@@ -1282,7 +1279,7 @@ impl ElementImpl for JitterBuffer {
         element: &gst::Element,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
+        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

@@ -62,9 +62,16 @@ impl Default for State {
 }
 
 pub struct FileSink {
-    cat: gst::DebugCategory,
     settings: Mutex<Settings>,
     state: Mutex<State>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "rsfilesink",
+        gst::DebugColorFlags::empty(),
+        Some("File Sink"),
+    );
 }
 
 impl FileSink {
@@ -87,7 +94,7 @@ impl FileSink {
                 match settings.location {
                     Some(ref location_cur) => {
                         gst_info!(
-                            self.cat,
+                            CAT,
                             obj: element,
                             "Changing `location` from {:?} to {}",
                             location_cur,
@@ -95,13 +102,13 @@ impl FileSink {
                         );
                     }
                     None => {
-                        gst_info!(self.cat, obj: element, "Setting `location` to {}", location,);
+                        gst_info!(CAT, obj: element, "Setting `location` to {}", location,);
                     }
                 }
                 Some(location)
             }
             None => {
-                gst_info!(self.cat, obj: element, "Resetting `location` to None",);
+                gst_info!(CAT, obj: element, "Resetting `location` to None",);
                 None
             }
         };
@@ -120,11 +127,6 @@ impl ObjectSubclass for FileSink {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "rsfilesink",
-                gst::DebugColorFlags::empty(),
-                Some("File Sink"),
-            ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
         }
@@ -174,7 +176,7 @@ impl ObjectImpl for FileSink {
 
                 if let Err(err) = res {
                     gst_error!(
-                        self.cat,
+                        CAT,
                         obj: element,
                         "Failed to set property `location`: {}",
                         err
@@ -229,10 +231,10 @@ impl BaseSinkImpl for FileSink {
                 ]
             )
         })?;
-        gst_debug!(self.cat, obj: element, "Opened file {:?}", file);
+        gst_debug!(CAT, obj: element, "Opened file {:?}", file);
 
         *state = State::Started { file, position: 0 };
-        gst_info!(self.cat, obj: element, "Started");
+        gst_info!(CAT, obj: element, "Started");
 
         Ok(())
     }
@@ -247,7 +249,7 @@ impl BaseSinkImpl for FileSink {
         }
 
         *state = State::Stopped;
-        gst_info!(self.cat, obj: element, "Stopped");
+        gst_info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -271,7 +273,7 @@ impl BaseSinkImpl for FileSink {
             }
         };
 
-        gst_trace!(self.cat, obj: element, "Rendering {:?}", buffer);
+        gst_trace!(CAT, obj: element, "Rendering {:?}", buffer);
         let map = buffer.map_readable().ok_or_else(|| {
             gst_element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error

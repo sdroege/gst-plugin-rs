@@ -23,9 +23,13 @@ use std::sync::Mutex;
 use crate::constants::{CDG_HEIGHT, CDG_WIDTH};
 
 struct CdgDec {
-    cat: gst::DebugCategory,
     cdg_inter: Mutex<cdg_renderer::CdgInterpreter>,
     output_info: Mutex<Option<gst_video::VideoInfo>>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory =
+        gst::DebugCategory::new("cdgdec", gst::DebugColorFlags::empty(), Some("CDG decoder"),);
 }
 
 impl ObjectSubclass for CdgDec {
@@ -38,11 +42,6 @@ impl ObjectSubclass for CdgDec {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "cdgdec",
-                gst::DebugColorFlags::empty(),
-                Some("CDG decoder"),
-            ),
             cdg_inter: Mutex::new(cdg_renderer::CdgInterpreter::new()),
             output_info: Mutex::new(None),
         }
@@ -185,12 +184,7 @@ impl VideoDecoderImpl for CdgDec {
             }
         }
 
-        gst_debug!(
-            self.cat,
-            obj: element,
-            "Finish frame pts={}",
-            frame.get_pts()
-        );
+        gst_debug!(CAT, obj: element, "Finish frame pts={}", frame.get_pts());
 
         element.finish_frame(frame)
     }

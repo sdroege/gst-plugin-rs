@@ -95,10 +95,17 @@ struct Settings {
 pub struct S3Sink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
-    cat: gst::DebugCategory,
     runtime: runtime::Runtime,
     canceller: Mutex<Option<oneshot::Sender<()>>>,
     client: Mutex<S3Client>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "rusotos3sink",
+        gst::DebugColorFlags::empty(),
+        Some("Amazon S3 Sink"),
+    );
 }
 
 impl Default for Settings {
@@ -187,7 +194,7 @@ impl S3Sink {
             e_tag: output.e_tag.clone(),
             part_number: Some(part_number),
         });
-        gst_info!(self.cat, obj: element, "Uploaded part {}", part_number);
+        gst_info!(CAT, obj: element, "Uploaded part {}", part_number);
 
         Ok(())
     }
@@ -386,11 +393,6 @@ impl ObjectSubclass for S3Sink {
         Self {
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
-            cat: gst::DebugCategory::new(
-                "rusotos3sink",
-                gst::DebugColorFlags::empty(),
-                Some("Amazon S3 Sink"),
-            ),
             canceller: Mutex::new(None),
             runtime: runtime::Builder::new()
                 .core_threads(1)
@@ -489,7 +491,7 @@ impl BaseSinkImpl for S3Sink {
     fn stop(&self, element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         *state = State::Stopped;
-        gst_info!(self.cat, obj: element, "Stopped");
+        gst_info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -504,7 +506,7 @@ impl BaseSinkImpl for S3Sink {
             return Err(gst::FlowError::Error);
         }
 
-        gst_trace!(self.cat, obj: element, "Rendering {:?}", buffer);
+        gst_trace!(CAT, obj: element, "Rendering {:?}", buffer);
         let map = buffer.map_readable().ok_or_else(|| {
             gst_element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
@@ -515,7 +517,7 @@ impl BaseSinkImpl for S3Sink {
             Err(err) => match err {
                 Some(error_message) => {
                     gst_error!(
-                        self.cat,
+                        CAT,
                         obj: element,
                         "Multipart upload failed: {}",
                         error_message
@@ -524,7 +526,7 @@ impl BaseSinkImpl for S3Sink {
                     Err(gst::FlowError::Error)
                 }
                 _ => {
-                    gst_info!(self.cat, obj: element, "Upload interrupted. Flushing...");
+                    gst_info!(CAT, obj: element, "Upload interrupted. Flushing...");
                     Err(gst::FlowError::Flushing)
                 }
             },
@@ -542,7 +544,7 @@ impl BaseSinkImpl for S3Sink {
             gst::EventView::Eos(_) => {
                 if let Err(error_message) = self.finalize_upload(element) {
                     gst_error!(
-                        self.cat,
+                        CAT,
                         obj: element,
                         "Failed to finalize the upload: {}",
                         error_message

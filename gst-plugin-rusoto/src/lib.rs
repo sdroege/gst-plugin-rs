@@ -13,6 +13,8 @@ extern crate glib;
 #[macro_use]
 extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
+#[macro_use]
+extern crate lazy_static;
 
 mod s3sink;
 mod s3src;

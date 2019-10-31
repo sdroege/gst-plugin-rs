@@ -16,8 +16,6 @@ use gst::subclass::prelude::*;
 
 // Struct containing all the element data
 struct ProgressBin {
-    #[allow(dead_code)]
-    cat: gst::DebugCategory,
     progress: gst::Element,
     srcpad: gst::GhostPad,
     sinkpad: gst::GhostPad,
@@ -53,15 +51,8 @@ impl ObjectSubclass for ProgressBin {
         // Don't let progressreport print to stdout itself
         progress.set_property("silent", &true).unwrap();
 
-        // Return an instance of our struct and also include our debug category here.
-        // The debug category will be used later whenever we need to put something
-        // into the debug logs
+        // Return an instance of our struct
         Self {
-            cat: gst::DebugCategory::new(
-                "rsprogressbin",
-                gst::DebugColorFlags::empty(),
-                Some("Progress printing Bin"),
-            ),
             progress,
             srcpad,
             sinkpad,

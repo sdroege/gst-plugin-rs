@@ -19,6 +19,8 @@ extern crate hyperx;
 extern crate reqwest;
 extern crate tokio;
 extern crate url;
+#[macro_use]
+extern crate lazy_static;
 
 mod reqwesthttpsrc;
 

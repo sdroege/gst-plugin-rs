@@ -17,6 +17,7 @@ gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", fea
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 tokio = "0.1"
 bytes = "0.4"
+lazy_static = "1.0"
 
 [dev-dependencies]
 hyper = "0.12"

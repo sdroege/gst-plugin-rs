@@ -285,9 +285,16 @@ struct State {
 }
 
 struct Rav1Enc {
-    cat: gst::DebugCategory,
     state: AtomicRefCell<Option<State>>,
     settings: Mutex<Settings>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "rav1enc",
+        gst::DebugColorFlags::empty(),
+        Some("rav1e AV1 encoder"),
+    );
 }
 
 impl ObjectSubclass for Rav1Enc {
@@ -300,11 +307,6 @@ impl ObjectSubclass for Rav1Enc {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "rav1enc",
-                gst::DebugColorFlags::empty(),
-                Some("rav1e AV1 encoder"),
-            ),
             state: AtomicRefCell::new(None),
             settings: Mutex::new(Default::default()),
         }
@@ -488,10 +490,10 @@ impl VideoEncoderImpl for Rav1Enc {
         state: &gst_video::VideoCodecState<gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         self.finish(element)
-            .map_err(|_| gst_loggable_error!(self.cat, "Failed to drain"))?;
+            .map_err(|_| gst_loggable_error!(CAT, "Failed to drain"))?;
 
         let video_info = state.get_info();
-        gst_debug!(self.cat, obj: element, "Setting format {:?}", video_info);
+        gst_debug!(CAT, obj: element, "Setting format {:?}", video_info);
 
         let settings = self.settings.lock().unwrap();
 
@@ -610,11 +612,11 @@ impl VideoEncoderImpl for Rav1Enc {
         *self.state.borrow_mut() = Some(State {
             context: if video_info.format_info().depth()[0] > 8 {
                 Context::Sixteen(cfg.new_context().map_err(|err| {
-                    gst_loggable_error!(self.cat, "Failed to create context: {:?}", err)
+                    gst_loggable_error!(CAT, "Failed to create context: {:?}", err)
                 })?)
             } else {
                 Context::Eight(cfg.new_context().map_err(|err| {
-                    gst_loggable_error!(self.cat, "Failed to create context: {:?}", err)
+                    gst_loggable_error!(CAT, "Failed to create context: {:?}", err)
                 })?)
             },
             video_info: video_info.clone(),
@@ -622,16 +624,16 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let output_state = element
             .set_output_state(gst::Caps::new_simple("video/x-av1", &[]), Some(state))
-            .map_err(|_| gst_loggable_error!(self.cat, "Failed to set output state"))?;
+            .map_err(|_| gst_loggable_error!(CAT, "Failed to set output state"))?;
         element
             .negotiate(output_state)
-            .map_err(|_| gst_loggable_error!(self.cat, "Failed to negotiate"))?;
+            .map_err(|_| gst_loggable_error!(CAT, "Failed to negotiate"))?;
 
         self.parent_set_format(element, state)
     }
 
     fn flush(&self, element: &gst_video::VideoEncoder) -> bool {
-        gst_debug!(self.cat, obj: element, "Flushing");
+        gst_debug!(CAT, obj: element, "Flushing");
 
         let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
@@ -639,7 +641,7 @@ impl VideoEncoderImpl for Rav1Enc {
             loop {
                 match state.context.receive_packet() {
                     Ok(_) | Err(data::EncoderStatus::Encoded) => {
-                        gst_debug!(self.cat, obj: element, "Dropping packet on flush",);
+                        gst_debug!(CAT, obj: element, "Dropping packet on flush",);
                     }
                     _ => break,
                 }
@@ -653,7 +655,7 @@ impl VideoEncoderImpl for Rav1Enc {
         &self,
         element: &gst_video::VideoEncoder,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(self.cat, obj: element, "Finishing");
+        gst_debug!(CAT, obj: element, "Finishing");
 
         let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
@@ -678,7 +680,7 @@ impl VideoEncoderImpl for Rav1Enc {
         self.output_frames(element, state)?;
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Sending frame {}",
             frame.get_system_frame_number()
@@ -707,7 +709,7 @@ impl VideoEncoderImpl for Rav1Enc {
         ) {
             Ok(_) => {
                 gst_debug!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Sent frame {}",
                     frame.get_system_frame_number()
@@ -734,7 +736,7 @@ impl Rav1Enc {
             match state.context.receive_packet() {
                 Ok((packet_type, packet_number, packet_data)) => {
                     gst_debug!(
-                        self.cat,
+                        CAT,
                         obj: element,
                         "Received packet {} of size {}, frame type {:?}",
                         packet_number,
@@ -751,7 +753,7 @@ impl Rav1Enc {
                     element.finish_frame(Some(frame))?;
                 }
                 Err(data::EncoderStatus::Encoded) => {
-                    gst_debug!(self.cat, obj: element, "Encoded but not output frame yet",);
+                    gst_debug!(CAT, obj: element, "Encoded but not output frame yet",);
                 }
                 Err(data::EncoderStatus::Failure) => {
                     gst_element_error!(
@@ -763,7 +765,7 @@ impl Rav1Enc {
                 }
                 Err(err) => {
                     gst_debug!(
-                        self.cat,
+                        CAT,
                         obj: element,
                         "Soft error when receiving frame: {:?}",
                         err

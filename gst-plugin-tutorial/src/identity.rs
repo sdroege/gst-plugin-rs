@@ -16,9 +16,16 @@ use gst::subclass::prelude::*;
 
 // Struct containing all the element data
 struct Identity {
-    cat: gst::DebugCategory,
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "rsidentity",
+        gst::DebugColorFlags::empty(),
+        Some("Identity Element"),
+    );
 }
 
 impl Identity {
@@ -82,7 +89,7 @@ impl Identity {
         _element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(self.cat, obj: pad, "Handling buffer {:?}", buffer);
+        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
         self.srcpad.push(buffer)
     }
 
@@ -94,7 +101,7 @@ impl Identity {
     // See the documentation of gst::Event and gst::EventRef to see what can be done with
     // events, and especially the gst::EventView type for inspecting events.
     fn sink_event(&self, pad: &gst::Pad, _element: &gst::Element, event: gst::Event) -> bool {
-        gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
+        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
         self.srcpad.push_event(event)
     }
 
@@ -113,7 +120,7 @@ impl Identity {
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
+        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
         self.srcpad.peer_query(query)
     }
 
@@ -126,7 +133,7 @@ impl Identity {
     // See the documentation of gst::Event and gst::EventRef to see what can be done with
     // events, and especially the gst::EventView type for inspecting events.
     fn src_event(&self, pad: &gst::Pad, _element: &gst::Element, event: gst::Event) -> bool {
-        gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
+        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
         self.sinkpad.push_event(event)
     }
 
@@ -145,7 +152,7 @@ impl Identity {
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
+        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
         self.sinkpad.peer_query(query)
     }
 }
@@ -179,15 +186,7 @@ impl ObjectSubclass for Identity {
         // Return an instance of our struct and also include our debug category here.
         // The debug category will be used later whenever we need to put something
         // into the debug logs
-        Self {
-            cat: gst::DebugCategory::new(
-                "rsidentity",
-                gst::DebugColorFlags::empty(),
-                Some("Identity Element"),
-            ),
-            srcpad,
-            sinkpad,
-        }
+        Self { srcpad, sinkpad }
     }
 
     // Called exactly once when registering the type. Used for
@@ -263,7 +262,7 @@ impl ElementImpl for Identity {
         element: &gst::Element,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
+        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         // Call the parent class' implementation of ::change_state()
         self.parent_change_state(element, transition)

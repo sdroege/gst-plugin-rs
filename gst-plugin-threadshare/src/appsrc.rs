@@ -138,10 +138,17 @@ impl Default for State {
 }
 
 struct AppSrc {
-    cat: gst::DebugCategory,
     src_pad: gst::Pad,
     state: Mutex<State>,
     settings: Mutex<Settings>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "ts-appsrc",
+        gst::DebugColorFlags::empty(),
+        Some("Thread-sharing app source"),
+    );
 }
 
 impl AppSrc {
@@ -165,7 +172,7 @@ impl AppSrc {
     fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(self.cat, obj: pad, "Handling event {:?}", event);
+        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
@@ -187,9 +194,9 @@ impl AppSrc {
         };
 
         if ret {
-            gst_log!(self.cat, obj: pad, "Handled event {:?}", event);
+            gst_log!(CAT, obj: pad, "Handled event {:?}", event);
         } else {
-            gst_log!(self.cat, obj: pad, "Didn't handle event {:?}", event);
+            gst_log!(CAT, obj: pad, "Didn't handle event {:?}", event);
         }
 
         ret
@@ -203,7 +210,7 @@ impl AppSrc {
     ) -> bool {
         use gst::QueryView;
 
-        gst_log!(self.cat, obj: pad, "Handling query {:?}", query);
+        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
                 q.set(true, 0.into(), 0.into());
@@ -234,9 +241,9 @@ impl AppSrc {
         };
 
         if ret {
-            gst_log!(self.cat, obj: pad, "Handled query {:?}", query);
+            gst_log!(CAT, obj: pad, "Handled query {:?}", query);
         } else {
-            gst_log!(self.cat, obj: pad, "Didn't handle query {:?}", query);
+            gst_log!(CAT, obj: pad, "Didn't handle query {:?}", query);
         }
         ret
     }
@@ -253,7 +260,7 @@ impl AppSrc {
                 buffer.set_dts(now - base_time);
                 buffer.set_pts(gst::CLOCK_TIME_NONE);
             } else {
-                gst_error!(self.cat, obj: element, "Don't have a clock yet");
+                gst_error!(CAT, obj: element, "Don't have a clock yet");
                 return false;
             }
         }
@@ -263,7 +270,7 @@ impl AppSrc {
             match channel.try_send(Either::Left(buffer)) {
                 Ok(_) => true,
                 Err(err) => {
-                    gst_error!(self.cat, obj: element, "Failed to queue buffer: {}", err);
+                    gst_error!(CAT, obj: element, "Failed to queue buffer: {}", err);
                     false
                 }
             }
@@ -278,7 +285,7 @@ impl AppSrc {
             match channel.try_send(Either::Right(gst::Event::new_eos().build())) {
                 Ok(_) => true,
                 Err(err) => {
-                    gst_error!(self.cat, obj: element, "Failed to queue EOS: {}", err);
+                    gst_error!(CAT, obj: element, "Failed to queue EOS: {}", err);
                     false
                 }
             }
@@ -298,7 +305,7 @@ impl AppSrc {
         let mut events = Vec::new();
         let mut state = self.state.lock().unwrap();
         if state.need_initial_events {
-            gst_debug!(self.cat, obj: element, "Pushing initial events");
+            gst_debug!(CAT, obj: element, "Pushing initial events");
 
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
             events.push(gst::Event::new_stream_start(&stream_id).build());
@@ -330,11 +337,11 @@ impl AppSrc {
 
         let res = match item {
             Either::Left(buffer) => {
-                gst_log!(self.cat, obj: element, "Forwarding buffer {:?}", buffer);
+                gst_log!(CAT, obj: element, "Forwarding buffer {:?}", buffer);
                 self.src_pad.push(buffer).map(|_| ())
             }
             Either::Right(event) => {
-                gst_log!(self.cat, obj: element, "Forwarding event {:?}", event);
+                gst_log!(CAT, obj: element, "Forwarding event {:?}", event);
                 self.src_pad.push_event(event);
                 Ok(())
             }
@@ -342,15 +349,15 @@ impl AppSrc {
 
         let res = match res {
             Ok(_) => {
-                gst_log!(self.cat, obj: element, "Successfully pushed item");
+                gst_log!(CAT, obj: element, "Successfully pushed item");
                 Ok(())
             }
             Err(gst::FlowError::Flushing) | Err(gst::FlowError::Eos) => {
-                gst_debug!(self.cat, obj: element, "EOS");
+                gst_debug!(CAT, obj: element, "EOS");
                 Err(())
             }
             Err(err) => {
-                gst_error!(self.cat, obj: element, "Got error {}", err);
+                gst_error!(CAT, obj: element, "Got error {}", err);
                 gst_element_error!(
                     element,
                     gst::StreamError::Failed,
@@ -385,7 +392,7 @@ impl AppSrc {
     }
 
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(self.cat, obj: element, "Preparing");
+        gst_debug!(CAT, obj: element, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
 
@@ -401,7 +408,7 @@ impl AppSrc {
 
         let pending_future_id = io_context.acquire_pending_future_id();
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Got pending future id {:?}",
             pending_future_id
@@ -410,13 +417,13 @@ impl AppSrc {
         state.io_context = Some(io_context);
         state.pending_future_id = Some(pending_future_id);
 
-        gst_debug!(self.cat, obj: element, "Prepared");
+        gst_debug!(CAT, obj: element, "Prepared");
 
         Ok(())
     }
 
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(self.cat, obj: element, "Unpreparing");
+        gst_debug!(CAT, obj: element, "Unpreparing");
 
         // FIXME: The IO Context has to be alive longer than the other parts
         // of the state. Otherwise a deadlock can happen between shutting down
@@ -438,13 +445,13 @@ impl AppSrc {
 
         drop(io_context);
 
-        gst_debug!(self.cat, obj: element, "Unprepared");
+        gst_debug!(CAT, obj: element, "Unprepared");
 
         Ok(())
     }
 
     fn start(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(self.cat, obj: element, "Starting");
+        gst_debug!(CAT, obj: element, "Starting");
         let settings = self.settings.lock().unwrap().clone();
         let mut state = self.state.lock().unwrap();
 
@@ -466,19 +473,19 @@ impl AppSrc {
         io_context.spawn(future);
 
         *channel = Some(channel_sender);
-        gst_debug!(self.cat, obj: element, "Started");
+        gst_debug!(CAT, obj: element, "Started");
 
         Ok(())
     }
 
     fn stop(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(self.cat, obj: element, "Stopping");
+        gst_debug!(CAT, obj: element, "Stopping");
         let mut state = self.state.lock().unwrap();
 
         let _ = state.channel.take();
         let _ = state.pending_future_cancel.take();
 
-        gst_debug!(self.cat, obj: element, "Stopped");
+        gst_debug!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -569,11 +576,6 @@ impl ObjectSubclass for AppSrc {
         });
 
         Self {
-            cat: gst::DebugCategory::new(
-                "ts-appsrc",
-                gst::DebugColorFlags::empty(),
-                Some("Thread-sharing app source"),
-            ),
             src_pad,
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
@@ -659,7 +661,7 @@ impl ElementImpl for AppSrc {
         element: &gst::Element,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(self.cat, obj: element, "Changing state {:?}", transition);
+        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

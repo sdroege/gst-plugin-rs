@@ -15,6 +15,7 @@ gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs
 lewton = { version = "0.9", default-features = false }
 byte-slice-cast = "0.3"
 atomic_refcell = "0.1"
+lazy_static = "1.0"
 
 [lib]
 name = "gstlewton"

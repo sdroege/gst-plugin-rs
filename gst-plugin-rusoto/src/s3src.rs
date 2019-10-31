@@ -41,9 +41,16 @@ enum StreamingState {
 pub struct S3Src {
     url: Mutex<Option<GstS3Url>>,
     state: Mutex<StreamingState>,
-    cat: gst::DebugCategory,
     runtime: runtime::Runtime,
     canceller: Mutex<Option<oneshot::Sender<Bytes>>>,
+}
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "rusotos3src",
+        gst::DebugColorFlags::empty(),
+        Some("Amazon S3 Source"),
+    );
 }
 
 static PROPERTIES: [subclass::Property; 1] = [subclass::Property("uri", |name| {
@@ -136,12 +143,7 @@ impl S3Src {
         })?;
 
         if let Some(size) = output.content_length {
-            gst_info!(
-                self.cat,
-                obj: src,
-                "HEAD success, content length = {}",
-                size
-            );
+            gst_info!(CAT, obj: src, "HEAD success, content length = {}", size);
             Ok(size as u64)
         } else {
             Err(gst_error_msg!(
@@ -183,7 +185,7 @@ impl S3Src {
         };
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: src,
             "Requesting range: {}-{}",
             offset,
@@ -205,7 +207,7 @@ impl S3Src {
         )?;
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: src,
             "Read {} bytes",
             output.content_length.unwrap()
@@ -233,11 +235,6 @@ impl ObjectSubclass for S3Src {
         Self {
             url: Mutex::new(None),
             state: Mutex::new(StreamingState::Stopped),
-            cat: gst::DebugCategory::new(
-                "rusotos3src",
-                gst::DebugColorFlags::empty(),
-                Some("Amazon S3 Source"),
-            ),
             runtime: runtime::Builder::new()
                 .core_threads(1)
                 .name_prefix("rusotos3src-runtime")
@@ -430,7 +427,7 @@ impl BaseSrcImpl for S3Src {
             Err(None) => Err(gst::FlowError::Flushing),
             /* Actual Error */
             Err(Some(err)) => {
-                gst_error!(self.cat, obj: src, "Could not GET: {}", err);
+                gst_error!(CAT, obj: src, "Could not GET: {}", err);
                 Err(gst::FlowError::Error)
             }
         }

@@ -19,6 +19,7 @@ gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
 gtk = { git = "https://github.com/gtk-rs/gtk", optional = true }
 gio = { git = "https://github.com/gtk-rs/gio", optional = true }
+lazy_static = "1.0"
 
 [dev-dependencies]
 gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}

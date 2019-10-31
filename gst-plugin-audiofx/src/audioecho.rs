@@ -54,8 +54,6 @@ struct State {
 }
 
 struct AudioEcho {
-    #[allow(dead_code)]
-    cat: gst::DebugCategory,
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
 }
@@ -135,11 +133,6 @@ impl ObjectSubclass for AudioEcho {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "rsaudioecho",
-                gst::DebugColorFlags::empty(),
-                Some("Rust audioecho effect"),
-            ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(None),
         }
