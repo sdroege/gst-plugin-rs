@@ -23,6 +23,8 @@ use crate::constants::{
 };
 
 const CDG_CMD_MEMORY_PRESET: u8 = 1;
+const CDG_CMD_MEMORY_LOAD_COLOR_TABLE_1: u8 = 30;
+const CDG_CMD_MEMORY_LOAD_COLOR_TABLE_2: u8 = 31;
 
 struct CdgParse;
 
@@ -173,7 +175,7 @@ impl BaseParseImpl for CdgParse {
             return Ok((gst::FlowSuccess::Ok, skip));
         }
 
-        let keyframe = {
+        let (keyframe, header) = {
             let map = input.map_readable().ok_or_else(|| {
                 gst_element_error!(
                     element,
@@ -184,8 +186,15 @@ impl BaseParseImpl for CdgParse {
             })?;
             let data = map.as_slice();
 
-            // consider memory preset as keyframe as it clears the screen
-            data[1] & CDG_MASK == CDG_CMD_MEMORY_PRESET
+            match data[1] & CDG_MASK {
+                // consider memory preset as keyframe as it clears the screen
+                CDG_CMD_MEMORY_PRESET => (true, false),
+                // mark palette commands as headers
+                CDG_CMD_MEMORY_LOAD_COLOR_TABLE_1 | CDG_CMD_MEMORY_LOAD_COLOR_TABLE_2 => {
+                    (false, true)
+                }
+                _ => (false, false),
+            }
         };
 
         let pts = bytes_to_time(Bytes(Some(frame.get_offset())));
@@ -194,6 +203,9 @@ impl BaseParseImpl for CdgParse {
 
         if !keyframe {
             buffer.set_flags(gst::BufferFlags::DELTA_UNIT);
+        }
+        if header {
+            buffer.set_flags(gst::BufferFlags::HEADER);
         }
 
         gst_debug!(CAT, obj: element, "Found frame pts={}", pts);
