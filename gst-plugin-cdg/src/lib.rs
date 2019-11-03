@@ -21,18 +21,20 @@ mod constants;
 
 use constants::{CDG_COMMAND, CDG_MASK, CDG_PACKET_PERIOD, CDG_PACKET_SIZE};
 use gst::{Caps, TypeFind, TypeFindProbability};
+use std::cmp;
 
-const TYPEFIND_SEARCH_WINDOW_SEC: i64 = 13;
+const NB_WINDOWS: u64 = 8;
+const TYPEFIND_SEARCH_WINDOW_SEC: i64 = 4;
 const TYPEFIND_SEARCH_WINDOW: i64 =
     TYPEFIND_SEARCH_WINDOW_SEC * (CDG_PACKET_SIZE as i64 * CDG_PACKET_PERIOD as i64); /* in bytes */
 
 /* Return the percentage of CDG packets in the first @len bytes of @typefind */
-fn cdg_packets_ratio(typefind: &mut TypeFind, len: i64) -> i64 {
+fn cdg_packets_ratio(typefind: &mut TypeFind, start: i64, len: i64) -> i64 {
     let mut count = 0;
     let total = len / CDG_PACKET_SIZE as i64;
 
     for offset in (0..len).step_by(CDG_PACKET_SIZE as usize) {
-        match typefind.peek(offset, CDG_PACKET_SIZE as u32) {
+        match typefind.peek(start + offset, CDG_PACKET_SIZE as u32) {
             Some(data) => {
                 if data[0] & CDG_MASK == CDG_COMMAND {
                     count += 1;
@@ -44,12 +46,35 @@ fn cdg_packets_ratio(typefind: &mut TypeFind, len: i64) -> i64 {
     (count * 100) / total
 }
 
+/* Some CDG files starts drawing right away and then pause for a while
+ * (typically because of the song intro) while other wait for a few
+ * seconds before starting to draw.
+ * In order to support all variants, scan through all the file per block
+ * of size TYPEFIND_SEARCH_WINDOW and keep the highest ratio of CDG packets
+ * detected. */
 fn compute_probability(typefind: &mut TypeFind) -> TypeFindProbability {
-    match cdg_packets_ratio(typefind, TYPEFIND_SEARCH_WINDOW) {
-        0..=5 => TypeFindProbability::None,
-        6..=10 => TypeFindProbability::Possible,
-        _ => TypeFindProbability::Likely,
+    let mut best = TypeFindProbability::None;
+    // Try looking at the start of the file if its length isn't available
+    let len = typefind
+        .get_length()
+        .unwrap_or(TYPEFIND_SEARCH_WINDOW as u64 * NB_WINDOWS);
+    let step = len / NB_WINDOWS;
+
+    for offset in (0..len).step_by(step as usize) {
+        let proba = match cdg_packets_ratio(typefind, offset as i64, TYPEFIND_SEARCH_WINDOW) {
+            0..=5 => TypeFindProbability::None,
+            6..=10 => TypeFindProbability::Possible,
+            _ => TypeFindProbability::Likely,
+        };
+
+        if proba == TypeFindProbability::Likely {
+            return proba;
+        }
+
+        best = cmp::max(best, proba);
     }
+
+    best
 }
 
 fn typefind_register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
