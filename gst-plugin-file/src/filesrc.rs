@@ -82,7 +82,7 @@ impl FileSrc {
     ) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
-            return Err(gst::Error::new(
+            return Err(glib::Error::new(
                 gst::URIError::BadState,
                 "Changing the `location` property on a started `filesrc` is not supported",
             ));
@@ -92,14 +92,14 @@ impl FileSrc {
         settings.location = match location {
             Some(location) => {
                 if !location.exists() {
-                    return Err(gst::Error::new(
+                    return Err(glib::Error::new(
                         gst::URIError::BadReference,
                         format!("{} doesn't exist", location).as_str(),
                     ));
                 }
 
                 if !location.is_file() {
-                    return Err(gst::Error::new(
+                    return Err(glib::Error::new(
                         gst::URIError::BadReference,
                         format!("{} is not a file", location).as_str(),
                     ));

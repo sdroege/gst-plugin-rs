@@ -82,7 +82,7 @@ impl FileSink {
     ) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
-            return Err(gst::Error::new(
+            return Err(glib::Error::new(
                 gst::URIError::BadState,
                 "Changing the `location` property on a started `filesink` is not supported",
             ));

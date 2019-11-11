@@ -55,10 +55,10 @@ stages:
     - cargo build --color=always --all --examples --all-features
     - G_DEBUG=fatal_warnings cargo test --color=always --all --examples --all-features
 
-test 1.36:
-  # 1.36 img
+test 1.39:
+  # 1.39 img
   # https://hub.docker.com/_/rust/
-  image: "rust:1.36-slim-buster"
+  image: "rust:1.39-slim-buster"
   extends: '.cargo test'
 
 test stable:

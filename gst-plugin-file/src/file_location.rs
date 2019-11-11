@@ -24,14 +24,14 @@ impl FileLocation {
         match Url::parse(uri_str) {
             Ok(url) => {
                 if url.scheme() != "file" {
-                    return Err(gst::Error::new(
+                    return Err(glib::Error::new(
                         gst::URIError::UnsupportedProtocol,
                         format!("Unsupported URI {}", uri_str).as_str(),
                     ));
                 }
 
                 let path = url.to_file_path().or_else(|_| {
-                    Err(gst::Error::new(
+                    Err(glib::Error::new(
                         gst::URIError::BadUri,
                         format!("Unsupported URI {}", uri_str).as_str(),
                     ))
@@ -39,7 +39,7 @@ impl FileLocation {
 
                 FileLocation::try_from(path)
             }
-            Err(err) => Err(gst::Error::new(
+            Err(err) => Err(glib::Error::new(
                 gst::URIError::BadUri,
                 format!("Couldn't parse URI {}: {}", uri_str, err.to_string()).as_str(),
             )),
@@ -48,14 +48,14 @@ impl FileLocation {
 
     fn try_from(location: PathBuf) -> Result<Self, glib::Error> {
         let location_str = location.to_str().ok_or_else(|| {
-            gst::Error::new(
+            glib::Error::new(
                 gst::URIError::BadReference,
                 format!("Invalid path {:?}", location).as_str(),
             )
         })?;
 
         let file_name = location.file_name().ok_or_else(|| {
-            gst::Error::new(
+            glib::Error::new(
                 gst::URIError::BadReference,
                 format!("Expected a path with a filename, got {}", location_str,).as_str(),
             )
@@ -74,7 +74,7 @@ impl FileLocation {
         }
 
         let parent_canonical = parent_dir.canonicalize().map_err(|err| {
-            gst::Error::new(
+            glib::Error::new(
                 gst::URIError::BadReference,
                 format!(
                     "Could not resolve path {}: {}",
@@ -105,7 +105,7 @@ impl FileLocation {
         let location_canonical = parent_canonical.join(file_name);
         Url::from_file_path(&location_canonical)
             .map_err(|_| {
-                gst::Error::new(
+                glib::Error::new(
                     gst::URIError::BadReference,
                     format!("Could not resolve path to URL {}", location_str).as_str(),
                 )

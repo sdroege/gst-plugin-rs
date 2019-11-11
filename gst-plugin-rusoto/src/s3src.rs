@@ -85,7 +85,7 @@ impl S3Src {
         let state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
-            return Err(gst::Error::new(
+            return Err(glib::Error::new(
                 gst::URIError::BadState,
                 "Cannot set URI on a started s3src",
             ));
@@ -104,7 +104,7 @@ impl S3Src {
                 *url = Some(s3url);
                 Ok(())
             }
-            Err(_) => Err(gst::Error::new(
+            Err(_) => Err(glib::Error::new(
                 gst::URIError::BadUri,
                 "Could not parse URI",
             )),
