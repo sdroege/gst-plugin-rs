@@ -18,7 +18,7 @@ flavors = {git = "https://github.com/rust-av/flavors.git"}
 muldiv = "0.2"
 byteorder = "1.0"
 lazy_static = "1.0"
-smallvec = "0.6"
+smallvec = "1.0"
 
 [lib]
 name = "gstrsflv"
