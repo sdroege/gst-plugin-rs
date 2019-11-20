@@ -24,6 +24,14 @@ use byte_slice_cast::*;
 use num_traits::cast::{FromPrimitive, ToPrimitive};
 use num_traits::float::Float;
 
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "rsaudioecho",
+        gst::DebugColorFlags::empty(),
+        Some("Rust Audio Echo Filter"),
+    );
+}
+
 const DEFAULT_MAX_DELAY: u64 = gst::SECOND_VAL;
 const DEFAULT_DELAY: u64 = 500 * gst::MSECOND_VAL;
 const DEFAULT_INTENSITY: f64 = 0.5;
@@ -279,13 +287,16 @@ impl BaseTransformImpl for AudioEcho {
         _element: &gst_base::BaseTransform,
         incaps: &gst::Caps,
         outcaps: &gst::Caps,
-    ) -> bool {
+    ) -> Result<(), gst::LoggableError> {
         if incaps != outcaps {
-            return false;
+            return Err(gst_loggable_error!(
+                CAT,
+                "Input and output caps are not the same"
+            ));
         }
 
         let info = match gst_audio::AudioInfo::from_caps(incaps) {
-            None => return false,
+            None => return Err(gst_loggable_error!(CAT, "Failed to parse input caps")),
             Some(info) => info,
         };
 
@@ -298,7 +309,7 @@ impl BaseTransformImpl for AudioEcho {
             buffer: RingBuffer::new(buffer_size as usize),
         });
 
-        true
+        Ok(())
     }
 
     fn stop(&self, _element: &gst_base::BaseTransform) -> Result<(), gst::ErrorMessage> {

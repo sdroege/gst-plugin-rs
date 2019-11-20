@@ -380,13 +380,13 @@ impl BaseTransformImpl for Rgb2Gray {
         element: &gst_base::BaseTransform,
         incaps: &gst::Caps,
         outcaps: &gst::Caps,
-    ) -> bool {
+    ) -> Result<(), gst::LoggableError> {
         let in_info = match gst_video::VideoInfo::from_caps(incaps) {
-            None => return false,
+            None => return Err(gst_loggable_error!(CAT, "Failed to parse input caps")),
             Some(info) => info,
         };
         let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
-            None => return false,
+            None => return Err(gst_loggable_error!(CAT, "Failed to parse output caps")),
             Some(info) => info,
         };
 
@@ -400,7 +400,7 @@ impl BaseTransformImpl for Rgb2Gray {
 
         *self.state.lock().unwrap() = Some(State { in_info, out_info });
 
-        true
+        Ok(())
     }
 
     // Called when shutting down the element so we can release all stream-related state

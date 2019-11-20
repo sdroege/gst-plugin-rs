@@ -17,6 +17,9 @@ extern crate gstreamer_audio as gst_audio;
 extern crate gstreamer_base as gst_base;
 extern crate num_traits;
 
+#[macro_use]
+extern crate lazy_static;
+
 mod audioecho;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

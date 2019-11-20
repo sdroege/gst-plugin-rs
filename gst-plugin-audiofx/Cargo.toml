@@ -13,6 +13,7 @@ gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 byte-slice-cast = "0.3"
 num-traits = "0.2"
+lazy_static = "1.0"
 
 [lib]
 name = "gstrsaudiofx"
