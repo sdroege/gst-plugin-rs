@@ -339,7 +339,7 @@ impl LewtonDec {
             audio_info = audio_info.positions(to);
 
             let mut map = [0; 8];
-            if let Err(_) = gst_audio::get_channel_reorder_map(from, to, &mut map[..channels]) {
+            if gst_audio::get_channel_reorder_map(from, to, &mut map[..channels]).is_err() {
                 gst_error!(
                     CAT,
                     obj: element,

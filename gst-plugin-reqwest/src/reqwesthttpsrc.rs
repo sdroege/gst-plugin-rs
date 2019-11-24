@@ -857,11 +857,8 @@ impl ElementImpl for ReqwestHttpSrc {
         element: &gst::Element,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        match transition {
-            gst::StateChange::ReadyToNull => {
-                *self.client.lock().unwrap() = None;
-            }
-            _ => (),
+        if let gst::StateChange::ReadyToNull = transition {
+            *self.client.lock().unwrap() = None;
         }
 
         self.parent_change_state(element, transition)

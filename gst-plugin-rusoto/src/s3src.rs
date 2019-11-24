@@ -67,7 +67,7 @@ impl S3Src {
     fn cancel(&self) {
         let mut canceller = self.canceller.lock().unwrap();
 
-        if let Some(_) = canceller.take() {
+        if canceller.take().is_some() {
             /* We don't do anything, the Sender will be dropped, and that will cause the
              * Receiver to be cancelled */
         }
@@ -394,18 +394,15 @@ impl BaseSrcImpl for S3Src {
     }
 
     fn query(&self, src: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
-        match query.view_mut() {
-            gst::QueryView::Scheduling(ref mut q) => {
-                q.set(
-                    gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED,
-                    1,
-                    -1,
-                    0,
-                );
-                q.add_scheduling_modes(&[gst::PadMode::Push, gst::PadMode::Pull]);
-                return true;
-            }
-            _ => (),
+        if let gst::QueryView::Scheduling(ref mut q) = query.view_mut() {
+            q.set(
+                gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED,
+                1,
+                -1,
+                0,
+            );
+            q.add_scheduling_modes(&[gst::PadMode::Push, gst::PadMode::Pull]);
+            return true;
         }
 
         BaseSrcImplExt::parent_query(self, src, query)

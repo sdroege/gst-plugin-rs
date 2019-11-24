@@ -326,7 +326,7 @@ impl HandleData for gst::Buffer {
                 audio_info.rate(),
                 audio_info.bpf(),
             )
-        } else if let Some(_) = state.video_info {
+        } else if state.video_info.is_some() {
             segment.clip(pts, stop).map(move |(start, stop)| {
                 {
                     let buffer = self.make_mut();
@@ -1472,9 +1472,9 @@ impl ToggleRecord {
         };
 
         if pad == &stream.srcpad {
-            gst::Iterator::from_vec(vec![stream.sinkpad.clone()])
+            gst::Iterator::from_vec(vec![stream.sinkpad])
         } else {
-            gst::Iterator::from_vec(vec![stream.srcpad.clone()])
+            gst::Iterator::from_vec(vec![stream.srcpad])
         }
     }
 }

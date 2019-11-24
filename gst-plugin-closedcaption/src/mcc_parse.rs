@@ -673,7 +673,7 @@ impl MccParse {
     fn start_task(&self, element: &gst::Element) -> Result<(), gst::LoggableError> {
         let element_weak = element.downgrade();
         let pad_weak = self.sinkpad.downgrade();
-        if let Err(_) = self.sinkpad.start_task(move || {
+        let res = self.sinkpad.start_task(move || {
             let element = match element_weak.upgrade() {
                 Some(element) => element,
                 None => {
@@ -686,7 +686,8 @@ impl MccParse {
 
             let parse = Self::from_instance(&element);
             parse.loop_fn(&element);
-        }) {
+        });
+        if res.is_err() {
             return Err(gst_loggable_error!(CAT, "Failed to start pad task"));
         }
         Ok(())
@@ -771,24 +772,22 @@ impl MccParse {
             }
 
             while let Some(line) = reader.get_line_with_drain(true) {
-                match parser.parse_line(line, false).map_err(|err| (line, err)) {
-                    Ok(MccLine::Caption(tc, None)) => {
-                        let state = self.state.lock().unwrap();
-                        let (framerate, drop_frame) = parse_timecode_rate(state.timecode_rate)
-                            .map_err(|_| {
-                                gst_loggable_error!(CAT, "Failed to parse timecode rate")
-                            })?;
-                        last_tc = match parse_timecode(framerate, drop_frame, tc) {
-                            Ok(mut timecode) => {
-                                /* We're looking for the total duration */
-                                timecode.increment_frame();
-                                Some(timecode)
-                            }
-                            Err(_) => None,
+                if let Ok(MccLine::Caption(tc, None)) =
+                    parser.parse_line(line, false).map_err(|err| (line, err))
+                {
+                    let state = self.state.lock().unwrap();
+                    let (framerate, drop_frame) = parse_timecode_rate(state.timecode_rate)
+                        .map_err(|_| gst_loggable_error!(CAT, "Failed to parse timecode rate"))?;
+                    last_tc = match parse_timecode(framerate, drop_frame, tc) {
+                        Ok(mut timecode) => {
+                            /* We're looking for the total duration */
+                            timecode.increment_frame();
+                            Some(timecode)
                         }
+                        Err(_) => None,
                     }
-                    _ => { /* We ignore everything else including errors */ }
                 }
+                /* We ignore everything else including errors */
             }
 
             if last_tc.is_some() || offset == 0 {

@@ -610,7 +610,7 @@ impl AggregatorImpl for FallbackSwitch {
         // Otherwise if we have a fallback sinkpad and it has a buffer, then the timeout is going
         // to be its running time. We will then either output the buffer or drop it, depending on
         // its distance from the last sinkpad time
-        if let Some(_) = self.sinkpad.peek_buffer() {
+        if self.sinkpad.peek_buffer().is_some() {
             gst_debug!(CAT, obj: agg, "Have buffer on sinkpad, immediate timeout");
             0.into()
         } else if self.sinkpad.is_eos() {
@@ -731,7 +731,7 @@ impl AggregatorImpl for FallbackSwitch {
                 audio_info.rate(),
                 audio_info.bpf(),
             )
-        } else if let Some(_) = pad_state.video_info {
+        } else if pad_state.video_info.is_some() {
             segment.clip(pts, pts + duration).map(|(start, stop)| {
                 {
                     let buffer = buffer.make_mut();

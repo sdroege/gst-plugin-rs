@@ -416,11 +416,8 @@ impl ElementImpl for SineSrc {
         let basesrc = element.downcast_ref::<gst_base::BaseSrc>().unwrap();
 
         // Configure live'ness once here just before starting the source
-        match transition {
-            gst::StateChange::ReadyToPaused => {
-                basesrc.set_live(self.settings.lock().unwrap().is_live);
-            }
-            _ => (),
+        if let gst::StateChange::ReadyToPaused = transition {
+            basesrc.set_live(self.settings.lock().unwrap().is_live);
         }
 
         // Call the parent class' implementation of ::change_state()

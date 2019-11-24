@@ -619,7 +619,7 @@ impl VideoEncoderImpl for Rav1Enc {
                     gst_loggable_error!(CAT, "Failed to create context: {:?}", err)
                 })?)
             },
-            video_info: video_info.clone(),
+            video_info,
         });
 
         let output_state = element
@@ -638,13 +638,8 @@ impl VideoEncoderImpl for Rav1Enc {
         let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
             state.context.flush();
-            loop {
-                match state.context.receive_packet() {
-                    Ok(_) | Err(data::EncoderStatus::Encoded) => {
-                        gst_debug!(CAT, obj: element, "Dropping packet on flush",);
-                    }
-                    _ => break,
-                }
+            while let Ok(_) | Err(data::EncoderStatus::Encoded) = state.context.receive_packet() {
+                gst_debug!(CAT, obj: element, "Dropping packet on flush",);
             }
         }
 

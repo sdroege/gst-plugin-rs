@@ -13,9 +13,7 @@
 //! ```rust,ignore
 //! extern crate gst_plugin_version_helper;
 //!
-//! fn main() {
-//!     gst_plugin_version_helper::get_info()
-//! }
+//! gst_plugin_version_helper::get_info();
 //! ```
 //!
 //! Inside `lib.rs` of the plugin, the information provided by `get_info` are usable as follows:
@@ -101,7 +99,7 @@ pub fn get_info() {
         let dt = chrono::Utc.timestamp(timestamp, 0);
         commit_date = dt.format("%Y-%m-%d").to_string()
     } else if let Ok(release_file) = fs::File::open(release_file) {
-        let mut cargo_toml = crate_dir.clone();
+        let mut cargo_toml = crate_dir;
         cargo_toml.push("Cargo.toml");
 
         let cargo_toml = fs::File::open(cargo_toml).expect("Can't open Cargo.toml");

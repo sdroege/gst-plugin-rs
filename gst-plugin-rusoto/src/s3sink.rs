@@ -191,7 +191,7 @@ impl S3Sink {
             }
         };
         state.completed_parts.push(CompletedPart {
-            e_tag: output.e_tag.clone(),
+            e_tag: output.e_tag,
             part_number: Some(part_number),
         });
         gst_info!(CAT, obj: element, "Uploaded part {}", part_number);
@@ -374,7 +374,7 @@ impl S3Sink {
     fn cancel(&self) {
         let mut canceller = self.canceller.lock().unwrap();
 
-        if let Some(_) = canceller.take() {
+        if canceller.take().is_some() {
             /* We don't do anything, the Sender will be dropped, and that will cause the
              * Receiver to be cancelled */
         }
@@ -540,19 +540,16 @@ impl BaseSinkImpl for S3Sink {
     }
 
     fn event(&self, element: &gst_base::BaseSink, event: gst::Event) -> bool {
-        match event.view() {
-            gst::EventView::Eos(_) => {
-                if let Err(error_message) = self.finalize_upload(element) {
-                    gst_error!(
-                        CAT,
-                        obj: element,
-                        "Failed to finalize the upload: {}",
-                        error_message
-                    );
-                    return false;
-                }
+        if let gst::EventView::Eos(_) = event.view() {
+            if let Err(error_message) = self.finalize_upload(element) {
+                gst_error!(
+                    CAT,
+                    obj: element,
+                    "Failed to finalize the upload: {}",
+                    error_message
+                );
+                return false;
             }
-            _ => (),
         }
 
         BaseSinkImplExt::parent_event(self, element, event)

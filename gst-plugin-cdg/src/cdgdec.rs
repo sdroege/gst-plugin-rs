@@ -195,7 +195,10 @@ impl VideoDecoderImpl for CdgDec {
         query: &mut gst::QueryRef,
     ) -> Result<(), gst::ErrorMessage> {
         if let gst::query::QueryView::Allocation(allocation) = query.view() {
-            if let Some(_) = allocation.find_allocation_meta::<gst_video::VideoMeta>() {
+            if allocation
+                .find_allocation_meta::<gst_video::VideoMeta>()
+                .is_some()
+            {
                 let pools = allocation.get_allocation_pools();
                 if let Some((ref pool, _, _, _)) = pools.first() {
                     if let Some(pool) = pool {
