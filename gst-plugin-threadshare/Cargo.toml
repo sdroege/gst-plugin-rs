@@ -5,27 +5,26 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1+"
 description = "Threadshare Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+edition = "2018"
 
 [dependencies]
 libc = "0.2"
 glib-sys = { git = "https://github.com/gtk-rs/sys" }
 gobject-sys = { git = "https://github.com/gtk-rs/sys" }
 gio-sys = { git = "https://github.com/gtk-rs/sys" }
-gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
 glib = { git = "https://github.com/gtk-rs/glib" }
 gio = { git = "https://github.com/gtk-rs/gio" }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gstreamer-net = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gstreamer-rtp = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-
-tokio = "0.1"
-tokio-reactor = "0.1"
-tokio-executor = "0.1"
-tokio-timer = "0.2"
-tokio-current-thread = "0.1"
-futures = "0.1"
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
+tokio = "=0.2.0-alpha.6"
+tokio-executor = { version = "=0.2.0-alpha.6", features = ["current-thread"] }
+tokio-net = { version = "=0.2.0-alpha.6", features = ["tcp", "udp"] }
+tokio-timer = "=0.3.0-alpha.6"
+futures-preview = "0.3.0-alpha.19"
 lazy_static = "1.0"
 either = "1.0"
 rand = "0.7"

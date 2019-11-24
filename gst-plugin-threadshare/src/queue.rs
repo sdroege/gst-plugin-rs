@@ -15,27 +15,29 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use futures::prelude::*;
+
 use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
+use glib::{glib_object_impl, glib_object_subclass};
+
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+
+use lazy_static::lazy_static;
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
+use std::task::{self, Poll};
 use std::{u32, u64};
 
-use futures;
-use futures::future;
-use futures::task;
-use futures::{Async, Future};
+use tokio_executor::current_thread as tokio_current_thread;
 
-use tokio::executor;
-
-use dataqueue::*;
-use iocontext::*;
+use super::{dataqueue::*, iocontext::*};
 
 const DEFAULT_MAX_SIZE_BUFFERS: u32 = 200;
 const DEFAULT_MAX_SIZE_BYTES: u32 = 1024 * 1024;
@@ -121,7 +123,7 @@ static PROPERTIES: [subclass::Property; 5] = [
 ];
 
 struct PendingQueue {
-    task: Option<task::Task>,
+    waker: Option<task::Waker>,
     scheduled: bool,
     items: VecDeque<DataQueueItem>,
 }
@@ -134,7 +136,7 @@ struct State {
     queue: Option<DataQueue>,
     pending_queue: Option<PendingQueue>,
     last_res: Result<gst::FlowSuccess, gst::FlowError>,
-    pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
+    pending_future_abort_handle: Option<future::AbortHandle>,
 }
 
 impl Default for State {
@@ -147,7 +149,7 @@ impl Default for State {
             queue: None,
             pending_queue: None,
             last_res: Ok(gst::FlowSuccess::Ok),
-            pending_future_cancel: None,
+            pending_future_abort_handle: None,
         }
     }
 }
@@ -228,7 +230,7 @@ impl Queue {
         &self,
         element: &gst::Element,
         state: &mut State,
-    ) -> Option<impl Future<Item = (), Error = ()>> {
+    ) -> Option<impl Future<Output = Result<(), gst::FlowError>>> {
         gst_log!(CAT, obj: element, "Scheduling pending queue now");
 
         let State {
@@ -241,7 +243,7 @@ impl Queue {
         pending_queue.as_mut().unwrap().scheduled = true;
 
         let element_clone = element.clone();
-        let future = future::poll_fn(move || {
+        let future = future::poll_fn(move |cx| {
             let queue = Self::from_instance(&element_clone);
             let mut state = queue.state.lock().unwrap();
 
@@ -252,13 +254,13 @@ impl Queue {
             } = *state;
 
             if dq.is_none() {
-                return Ok(Async::Ready(()));
+                return Poll::Ready(Ok(()));
             }
 
             gst_log!(CAT, obj: &element_clone, "Trying to empty pending queue");
 
             let res = if let Some(PendingQueue {
-                ref mut task,
+                ref mut waker,
                 ref mut items,
                 ..
             }) = *pending_queue
@@ -272,19 +274,19 @@ impl Queue {
 
                 if let Some(failed_item) = failed_item {
                     items.push_front(failed_item);
-                    *task = Some(task::current());
+                    *waker = Some(cx.waker().clone());
                     gst_log!(CAT, obj: &element_clone, "Waiting for more queue space");
-                    Ok(Async::NotReady)
+                    Poll::Pending
                 } else {
                     gst_log!(CAT, obj: &element_clone, "Pending queue is empty now");
-                    Ok(Async::Ready(()))
+                    Poll::Ready(Ok(()))
                 }
             } else {
                 gst_log!(CAT, obj: &element_clone, "Flushing, dropping pending queue");
-                Ok(Async::Ready(()))
+                Poll::Ready(Ok(()))
             };
 
-            if res == Ok(Async::Ready(())) {
+            if res == Poll::Ready(Ok(())) {
                 *pending_queue = None;
             }
 
@@ -326,7 +328,7 @@ impl Queue {
                 {
                     if pending_queue.is_none() {
                         *pending_queue = Some(PendingQueue {
-                            task: None,
+                            waker: None,
                             scheduled: false,
                             items: VecDeque::new(),
                         });
@@ -367,7 +369,7 @@ impl Queue {
 
         if let Some(wait_future) = wait_future {
             gst_log!(CAT, obj: element, "Blocking until queue has space again");
-            executor::current_thread::block_on_all(wait_future).map_err(|_| {
+            tokio_current_thread::block_on_all(wait_future).map_err(|_| {
                 gst_element_error!(
                     element,
                     gst::StreamError::Failed,
@@ -424,12 +426,12 @@ impl Queue {
                     let mut state = self.state.lock().unwrap();
                     let io_context = s
                         .get::<&IOContext>("io-context")
-                        .expect("signal arg")
-                        .expect("missing signal arg");
+                        .expect("event field")
+                        .expect("missing event field");
                     let pending_future_id = s
                         .get::<&PendingFutureId>("pending-future-id")
-                        .expect("signal arg")
-                        .expect("missing signal arg");
+                        .expect("event field")
+                        .expect("missing event field");
 
                     gst_debug!(
                         CAT,
@@ -545,25 +547,20 @@ impl Queue {
         self.sink_pad.peer_query(query)
     }
 
-    fn push_item(
-        &self,
-        element: &gst::Element,
-        item: DataQueueItem,
-    ) -> future::Either<
-        Box<dyn Future<Item = (), Error = gst::FlowError> + Send + 'static>,
-        future::FutureResult<(), gst::FlowError>,
-    > {
+    async fn push_item(element: gst::Element, item: DataQueueItem) -> Result<(), gst::FlowError> {
+        let queue = Self::from_instance(&element);
+
         let event = {
-            let state = self.state.lock().unwrap();
+            let state = queue.state.lock().unwrap();
             if let Some(PendingQueue {
-                task: Some(ref task),
+                waker: Some(ref waker),
                 ..
             }) = state.pending_queue
             {
-                task.notify();
+                waker.wake_by_ref();
             }
 
-            if self.src_pad.check_reconfigure() {
+            if queue.src_pad.check_reconfigure() {
                 Self::create_io_context_event(&state)
             } else {
                 None
@@ -571,85 +568,82 @@ impl Queue {
         };
 
         if let Some(event) = event {
-            self.src_pad.push_event(event);
+            queue.src_pad.push_event(event);
         }
 
         let res = match item {
             DataQueueItem::Buffer(buffer) => {
-                gst_log!(CAT, obj: element, "Forwarding buffer {:?}", buffer);
-                self.src_pad.push(buffer).map(|_| ())
+                gst_log!(CAT, obj: &element, "Forwarding buffer {:?}", buffer);
+                queue.src_pad.push(buffer).map(|_| ())
             }
             DataQueueItem::BufferList(list) => {
-                gst_log!(CAT, obj: element, "Forwarding buffer list {:?}", list);
-                self.src_pad.push_list(list).map(|_| ())
+                gst_log!(CAT, obj: &element, "Forwarding buffer list {:?}", list);
+                queue.src_pad.push_list(list).map(|_| ())
             }
             DataQueueItem::Event(event) => {
-                gst_log!(CAT, obj: element, "Forwarding event {:?}", event);
-                self.src_pad.push_event(event);
+                gst_log!(CAT, obj: &element, "Forwarding event {:?}", event);
+                queue.src_pad.push_event(event);
                 Ok(())
-            }
-        };
-
-        let res = match res {
-            Ok(_) => {
-                gst_log!(CAT, obj: element, "Successfully pushed item");
-                let mut state = self.state.lock().unwrap();
-                state.last_res = Ok(gst::FlowSuccess::Ok);
-                Ok(())
-            }
-            Err(gst::FlowError::Flushing) => {
-                gst_debug!(CAT, obj: element, "Flushing");
-                let mut state = self.state.lock().unwrap();
-                if let Some(ref queue) = state.queue {
-                    queue.pause();
-                }
-                state.last_res = Err(gst::FlowError::Flushing);
-                Ok(())
-            }
-            Err(gst::FlowError::Eos) => {
-                gst_debug!(CAT, obj: element, "EOS");
-                let mut state = self.state.lock().unwrap();
-                if let Some(ref queue) = state.queue {
-                    queue.pause();
-                }
-                state.last_res = Err(gst::FlowError::Eos);
-                Ok(())
-            }
-            Err(err) => {
-                gst_error!(CAT, obj: element, "Got error {}", err);
-                gst_element_error!(
-                    element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason {}", err]
-                );
-                let mut state = self.state.lock().unwrap();
-                state.last_res = Err(err);
-                Err(gst::FlowError::CustomError)
             }
         };
 
         match res {
-            Ok(()) => {
-                let mut state = self.state.lock().unwrap();
-
-                if let State {
-                    io_context: Some(ref io_context),
-                    pending_future_id: Some(ref pending_future_id),
-                    ref mut pending_future_cancel,
-                    ..
-                } = *state
-                {
-                    let (cancel, future) = io_context.drain_pending_futures(*pending_future_id);
-                    *pending_future_cancel = cancel;
-
-                    future
-                } else {
-                    future::Either::B(future::ok(()))
-                }
+            Ok(_) => {
+                gst_log!(CAT, obj: &element, "Successfully pushed item");
+                let mut state = queue.state.lock().unwrap();
+                state.last_res = Ok(gst::FlowSuccess::Ok);
             }
-            Err(err) => future::Either::B(future::err(err)),
+            Err(gst::FlowError::Flushing) => {
+                gst_debug!(CAT, obj: &element, "Flushing");
+                let mut state = queue.state.lock().unwrap();
+                if let Some(ref queue) = state.queue {
+                    queue.pause();
+                }
+                state.last_res = Err(gst::FlowError::Flushing);
+            }
+            Err(gst::FlowError::Eos) => {
+                gst_debug!(CAT, obj: &element, "EOS");
+                let mut state = queue.state.lock().unwrap();
+                if let Some(ref queue) = state.queue {
+                    queue.pause();
+                }
+                state.last_res = Err(gst::FlowError::Eos);
+            }
+            Err(err) => {
+                gst_error!(CAT, obj: &element, "Got error {}", err);
+                gst_element_error!(
+                    &element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+                let mut state = queue.state.lock().unwrap();
+                state.last_res = Err(err);
+                return Err(gst::FlowError::CustomError);
+            }
         }
+
+        let abortable_drain = {
+            let mut state = queue.state.lock().unwrap();
+
+            if let State {
+                io_context: Some(ref io_context),
+                pending_future_id: Some(ref pending_future_id),
+                ref mut pending_future_abort_handle,
+                ..
+            } = *state
+            {
+                let (abort_handle, abortable_drain) =
+                    io_context.drain_pending_futures(*pending_future_id);
+                *pending_future_abort_handle = abort_handle;
+
+                abortable_drain
+            } else {
+                return Ok(());
+            }
+        };
+
+        abortable_drain.await
     }
 
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
@@ -691,10 +685,7 @@ impl Queue {
         dataqueue
             .schedule(
                 &io_context,
-                move |item| {
-                    let queue = Self::from_instance(&element_clone);
-                    queue.push_item(&element_clone, item)
-                },
+                move |item| Self::push_item(element_clone.clone(), item),
                 move |err| {
                     gst_error!(CAT, obj: &element_clone2, "Got error {}", err);
                     match err {
@@ -786,13 +777,18 @@ impl Queue {
             queue.pause();
             queue.clear(&self.src_pad);
         }
+
         if let Some(PendingQueue {
-            task: Some(task), ..
+            waker: Some(waker), ..
         }) = state.pending_queue.take()
         {
-            task.notify();
+            waker.wake();
         }
-        let _ = state.pending_future_cancel.take();
+
+        if let Some(abort_handle) = state.pending_future_abort_handle.take() {
+            abort_handle.abort();
+        }
+
         state.last_res = Err(gst::FlowError::Flushing);
 
         gst_debug!(CAT, obj: element, "Stopped");

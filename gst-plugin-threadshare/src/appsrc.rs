@@ -15,26 +15,30 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use either::Either;
+
+use futures::channel::mpsc;
+use futures::prelude::*;
+
 use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
+use glib::{glib_object_impl, glib_object_subclass};
+
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+
+use lazy_static::lazy_static;
+
+use rand;
 
 use std::sync::Mutex;
 use std::u32;
 
-use futures::future;
-use futures::sync::{mpsc, oneshot};
-use futures::{Future, Stream};
-
-use either::Either;
-
-use rand;
-
-use iocontext::*;
+use super::iocontext::*;
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
@@ -119,7 +123,7 @@ struct State {
     io_context: Option<IOContext>,
     pending_future_id: Option<PendingFutureId>,
     channel: Option<mpsc::Sender<Either<gst::Buffer, gst::Event>>>,
-    pending_future_cancel: Option<oneshot::Sender<()>>,
+    pending_future_abort_handle: Option<future::AbortHandle>,
     need_initial_events: bool,
     configured_caps: Option<gst::Caps>,
 }
@@ -130,7 +134,7 @@ impl Default for State {
             io_context: None,
             pending_future_id: None,
             channel: None,
-            pending_future_cancel: None,
+            pending_future_abort_handle: None,
             need_initial_events: true,
             configured_caps: None,
         }
@@ -294,101 +298,102 @@ impl AppSrc {
         }
     }
 
-    fn push_item(
-        &self,
-        element: &gst::Element,
+    async fn push_item(
+        element: gst::Element,
         item: Either<gst::Buffer, gst::Event>,
-    ) -> future::Either<
-        Box<dyn Future<Item = (), Error = ()> + Send + 'static>,
-        future::FutureResult<(), ()>,
-    > {
+    ) -> Result<(), gst::FlowError> {
+        let appsrc = Self::from_instance(&element);
         let mut events = Vec::new();
-        let mut state = self.state.lock().unwrap();
-        if state.need_initial_events {
-            gst_debug!(CAT, obj: element, "Pushing initial events");
 
-            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-            events.push(gst::Event::new_stream_start(&stream_id).build());
-            if let Some(ref caps) = self.settings.lock().unwrap().caps {
-                events.push(gst::Event::new_caps(&caps).build());
-                state.configured_caps = Some(caps.clone());
-            }
-            events.push(
-                gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-            );
+        {
+            let mut state = appsrc.state.lock().unwrap();
+            if state.need_initial_events {
+                gst_debug!(CAT, obj: &element, "Pushing initial events");
 
-            if let Some(event) = Self::create_io_context_event(&state) {
-                events.push(event);
+                let stream_id =
+                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+                events.push(
+                    gst::Event::new_stream_start(&stream_id)
+                        .group_id(gst::util_group_id_next())
+                        .build(),
+                );
+                if let Some(ref caps) = appsrc.settings.lock().unwrap().caps {
+                    events.push(gst::Event::new_caps(&caps).build());
+                    state.configured_caps = Some(caps.clone());
+                }
+                events.push(
+                    gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
+                        .build(),
+                );
 
-                // Get rid of reconfigure flag
-                self.src_pad.check_reconfigure();
-            }
-            state.need_initial_events = false;
-        } else if self.src_pad.check_reconfigure() {
-            if let Some(event) = Self::create_io_context_event(&state) {
-                events.push(event);
+                if let Some(event) = Self::create_io_context_event(&state) {
+                    events.push(event);
+
+                    // Get rid of reconfigure flag
+                    appsrc.src_pad.check_reconfigure();
+                }
+                state.need_initial_events = false;
+            } else if appsrc.src_pad.check_reconfigure() {
+                if let Some(event) = Self::create_io_context_event(&state) {
+                    events.push(event);
+                }
             }
         }
-        drop(state);
 
         for event in events {
-            self.src_pad.push_event(event);
+            appsrc.src_pad.push_event(event);
         }
 
         let res = match item {
             Either::Left(buffer) => {
-                gst_log!(CAT, obj: element, "Forwarding buffer {:?}", buffer);
-                self.src_pad.push(buffer).map(|_| ())
+                gst_log!(CAT, obj: &element, "Forwarding buffer {:?}", buffer);
+                appsrc.src_pad.push(buffer).map(|_| ())
             }
             Either::Right(event) => {
-                gst_log!(CAT, obj: element, "Forwarding event {:?}", event);
-                self.src_pad.push_event(event);
+                gst_log!(CAT, obj: &element, "Forwarding event {:?}", event);
+                appsrc.src_pad.push_event(event);
                 Ok(())
-            }
-        };
-
-        let res = match res {
-            Ok(_) => {
-                gst_log!(CAT, obj: element, "Successfully pushed item");
-                Ok(())
-            }
-            Err(gst::FlowError::Flushing) | Err(gst::FlowError::Eos) => {
-                gst_debug!(CAT, obj: element, "EOS");
-                Err(())
-            }
-            Err(err) => {
-                gst_error!(CAT, obj: element, "Got error {}", err);
-                gst_element_error!(
-                    element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason {}", err]
-                );
-                Err(())
             }
         };
 
         match res {
-            Ok(()) => {
-                let mut state = self.state.lock().unwrap();
-
-                if let State {
-                    io_context: Some(ref io_context),
-                    pending_future_id: Some(ref pending_future_id),
-                    ref mut pending_future_cancel,
-                    ..
-                } = *state
-                {
-                    let (cancel, future) = io_context.drain_pending_futures(*pending_future_id);
-                    *pending_future_cancel = cancel;
-
-                    future
-                } else {
-                    future::Either::B(future::ok(()))
-                }
+            Ok(()) => gst_log!(CAT, obj: &element, "Successfully pushed item"),
+            Err(gst::FlowError::Eos) => gst_debug!(CAT, obj: &element, "EOS"),
+            Err(gst::FlowError::Flushing) => gst_debug!(CAT, obj: &element, "Flushing"),
+            Err(err) => {
+                gst_error!(CAT, obj: &element, "Got error {}", err);
+                gst_element_error!(
+                    &element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
             }
-            Err(_) => future::Either::B(future::err(())),
         }
+
+        res?;
+
+        let abortable_drain = {
+            let mut state = appsrc.state.lock().unwrap();
+
+            if let State {
+                io_context: Some(ref io_context),
+                pending_future_id: Some(ref pending_future_id),
+                ref mut pending_future_abort_handle,
+                ..
+            } = *state
+            {
+                let (abort_handle, abortable_drain) =
+                    io_context.drain_pending_futures(*pending_future_id);
+                *pending_future_abort_handle = abort_handle;
+
+                abortable_drain
+            } else {
+                return Ok(());
+            }
+        };
+
+        abortable_drain.await
     }
 
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
@@ -466,10 +471,8 @@ impl AppSrc {
         let (channel_sender, channel_receiver) = mpsc::channel(settings.max_buffers as usize);
 
         let element_clone = element.clone();
-        let future = channel_receiver.for_each(move |item| {
-            let appsrc = Self::from_instance(&element_clone);
-            appsrc.push_item(&element_clone, item)
-        });
+        let future = channel_receiver
+            .for_each(move |item| Self::push_item(element_clone.clone(), item).map(|_| ()));
         io_context.spawn(future);
 
         *channel = Some(channel_sender);
@@ -483,7 +486,10 @@ impl AppSrc {
         let mut state = self.state.lock().unwrap();
 
         let _ = state.channel.take();
-        let _ = state.pending_future_cancel.take();
+
+        if let Some(abort_handle) = state.pending_future_abort_handle.take() {
+            abort_handle.abort();
+        }
 
         gst_debug!(CAT, obj: element, "Stopped");
 
@@ -651,7 +657,7 @@ impl ObjectImpl for AppSrc {
         let element = obj.downcast_ref::<gst::Element>().unwrap();
         element.add_pad(&self.src_pad).unwrap();
 
-        ::set_element_flags(element, gst::ElementFlags::SOURCE);
+        super::set_element_flags(element, gst::ElementFlags::SOURCE);
     }
 }
 

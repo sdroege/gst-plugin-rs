@@ -16,19 +16,23 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use std::io;
-use std::sync::{Arc, Mutex};
+use either::Either;
+use futures::{channel::oneshot, prelude::*};
 
 use gst;
 use gst::prelude::*;
+use gst::{gst_debug, gst_error};
 
-use futures::sync::oneshot;
-use futures::task;
-use futures::{Async, Future, IntoFuture, Poll, Stream};
+use lazy_static::lazy_static;
 
-use either::Either;
+use std::io;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
+use std::task::{self, Poll};
 
-use iocontext::*;
+use tokio_executor::current_thread as tokio_current_thread;
+
+use super::iocontext::*;
 
 lazy_static! {
     static ref SOCKET_CAT: gst::DebugCategory = gst::DebugCategory::new(
@@ -48,21 +52,22 @@ enum SocketState {
     Shutdown,
 }
 
-pub trait SocketRead: Send {
+pub trait SocketRead: Send + Unpin {
     const DO_TIMESTAMP: bool;
 
     fn poll_read(
-        &mut self,
+        self: Pin<&mut Self>,
+        cx: &mut task::Context<'_>,
         buf: &mut [u8],
-    ) -> Poll<(usize, Option<std::net::SocketAddr>), io::Error>;
+    ) -> Poll<io::Result<(usize, Option<std::net::SocketAddr>)>>;
 }
 
 struct SocketInner<T: SocketRead + 'static> {
     element: gst::Element,
     state: SocketState,
-    reader: T,
+    reader: Pin<Box<T>>,
     buffer_pool: gst::BufferPool,
-    current_task: Option<task::Task>,
+    waker: Option<task::Waker>,
     shutdown_receiver: Option<oneshot::Receiver<()>>,
     clock: Option<gst::Clock>,
     base_time: Option<gst::ClockTime>,
@@ -73,20 +78,24 @@ impl<T: SocketRead + 'static> Socket<T> {
         Socket(Arc::new(Mutex::new(SocketInner::<T> {
             element: element.clone(),
             state: SocketState::Unscheduled,
-            reader,
+            reader: Pin::new(Box::new(reader)),
             buffer_pool,
-            current_task: None,
+            waker: None,
             shutdown_receiver: None,
             clock: None,
             base_time: None,
         })))
     }
 
-    pub fn schedule<U, F, G>(&self, io_context: &IOContext, func: F, err_func: G) -> Result<(), ()>
+    pub fn schedule<F, G, Fut>(
+        &self,
+        io_context: &IOContext,
+        func: F,
+        err_func: G,
+    ) -> Result<(), ()>
     where
-        F: Fn((gst::Buffer, Option<std::net::SocketAddr>)) -> U + Send + 'static,
-        U: IntoFuture<Item = (), Error = gst::FlowError> + 'static,
-        <U as IntoFuture>::Future: Send + 'static,
+        F: Fn((gst::Buffer, Option<std::net::SocketAddr>)) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<(), gst::FlowError>> + Send + 'static,
         G: FnOnce(Either<gst::FlowError, io::Error>) + Send + 'static,
     {
         // Ready->Paused
@@ -109,13 +118,13 @@ impl<T: SocketRead + 'static> Socket<T> {
             return Err(());
         }
 
-        let (sender, receiver) = oneshot::channel::<()>();
+        let (sender, receiver) = oneshot::channel();
         inner.shutdown_receiver = Some(receiver);
 
         let element_clone = inner.element.clone();
         io_context.spawn(
             stream
-                .for_each(move |(buffer, saddr)| {
+                .try_for_each(move |(buffer, saddr)| {
                     func((buffer, saddr)).into_future().map_err(Either::Left)
                 })
                 .then(move |res| {
@@ -132,7 +141,7 @@ impl<T: SocketRead + 'static> Socket<T> {
 
                     let _ = sender.send(());
 
-                    Ok(())
+                    future::ready(())
                 }),
         );
         Ok(())
@@ -154,8 +163,8 @@ impl<T: SocketRead + 'static> Socket<T> {
         inner.clock = clock;
         inner.base_time = base_time;
 
-        if let Some(task) = inner.current_task.take() {
-            task.notify();
+        if let Some(waker) = inner.waker.take() {
+            waker.wake();
         }
     }
 
@@ -176,8 +185,8 @@ impl<T: SocketRead + 'static> Socket<T> {
         inner.clock = None;
         inner.base_time = None;
 
-        if let Some(task) = inner.current_task.take() {
-            task.notify();
+        if let Some(waker) = inner.waker.take() {
+            waker.wake();
         }
     }
 
@@ -197,15 +206,15 @@ impl<T: SocketRead + 'static> Socket<T> {
         assert!(inner.state == SocketState::Scheduled || inner.state == SocketState::Running);
         inner.state = SocketState::Shutdown;
 
-        if let Some(task) = inner.current_task.take() {
-            task.notify();
+        if let Some(waker) = inner.waker.take() {
+            waker.wake();
         }
 
         let shutdown_receiver = inner.shutdown_receiver.take().unwrap();
         gst_debug!(SOCKET_CAT, obj: &inner.element, "Waiting for socket to shut down");
         drop(inner);
 
-        shutdown_receiver.wait().expect("Already shut down");
+        tokio_current_thread::block_on_all(shutdown_receiver).expect("Already shut down");
 
         let mut inner = self.0.lock().unwrap();
         inner.state = SocketState::Unscheduled;
@@ -214,7 +223,7 @@ impl<T: SocketRead + 'static> Socket<T> {
     }
 }
 
-impl<T: SocketRead + 'static> Clone for Socket<T> {
+impl<T: SocketRead + Unpin + 'static> Clone for Socket<T> {
     fn clone(&self) -> Self {
         Socket::<T>(self.0.clone())
     }
@@ -232,49 +241,56 @@ struct SocketStream<T: SocketRead + 'static>(
 );
 
 impl<T: SocketRead + 'static> Stream for SocketStream<T> {
-    type Item = (gst::Buffer, Option<std::net::SocketAddr>);
-    type Error = Either<gst::FlowError, io::Error>;
+    type Item =
+        Result<(gst::Buffer, Option<std::net::SocketAddr>), Either<gst::FlowError, io::Error>>;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
+        // take the mapped_buffer before locking the socket so as to please the mighty borrow checker
+        let mut mapped_buffer = self.1.take();
+
         let mut inner = (self.0).0.lock().unwrap();
         if inner.state == SocketState::Shutdown {
             gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket shutting down");
-            return Ok(Async::Ready(None));
+            return Poll::Ready(None);
         } else if inner.state == SocketState::Scheduled {
             gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket not running");
-            inner.current_task = Some(task::current());
-            return Ok(Async::NotReady);
+            inner.waker = Some(cx.waker().clone());
+            drop(inner);
+            self.1 = mapped_buffer;
+            return Poll::Pending;
         }
 
         assert_eq!(inner.state, SocketState::Running);
 
         gst_debug!(SOCKET_CAT, obj: &inner.element, "Trying to read data");
         let (len, saddr, time) = {
-            let buffer = match self.1 {
+            let buffer = match mapped_buffer {
                 Some(ref mut buffer) => buffer,
                 None => match inner.buffer_pool.acquire_buffer(None) {
                     Ok(buffer) => {
-                        self.1 = Some(buffer.into_mapped_buffer_writable().unwrap());
-                        self.1.as_mut().unwrap()
+                        mapped_buffer = Some(buffer.into_mapped_buffer_writable().unwrap());
+                        mapped_buffer.as_mut().unwrap()
                     }
                     Err(err) => {
                         gst_debug!(SOCKET_CAT, obj: &inner.element, "Failed to acquire buffer {:?}", err);
-                        return Err(Either::Left(err));
+                        return Poll::Ready(Some(Err(Either::Left(err))));
                     }
                 },
             };
 
-            match inner.reader.poll_read(buffer.as_mut_slice()) {
-                Ok(Async::NotReady) => {
+            match inner.reader.as_mut().poll_read(cx, buffer.as_mut_slice()) {
+                Poll::Pending => {
                     gst_debug!(SOCKET_CAT, obj: &inner.element, "No data available");
-                    inner.current_task = Some(task::current());
-                    return Ok(Async::NotReady);
+                    inner.waker = Some(cx.waker().clone());
+                    drop(inner);
+                    self.1 = mapped_buffer;
+                    return Poll::Pending;
                 }
-                Err(err) => {
+                Poll::Ready(Err(err)) => {
                     gst_debug!(SOCKET_CAT, obj: &inner.element, "Read error {:?}", err);
-                    return Err(Either::Right(err));
+                    return Poll::Ready(Some(Err(Either::Right(err))));
                 }
-                Ok(Async::Ready((len, saddr))) => {
+                Poll::Ready(Ok((len, saddr))) => {
                     let dts = if T::DO_TIMESTAMP {
                         let time = inner.clock.as_ref().unwrap().get_time();
                         let running_time = time - inner.base_time.unwrap();
@@ -289,7 +305,7 @@ impl<T: SocketRead + 'static> Stream for SocketStream<T> {
             }
         };
 
-        let mut buffer = self.1.take().unwrap().into_buffer();
+        let mut buffer = mapped_buffer.unwrap().into_buffer();
         {
             let buffer = buffer.get_mut().unwrap();
             if len < buffer.get_size() {
@@ -298,6 +314,6 @@ impl<T: SocketRead + 'static> Stream for SocketStream<T> {
             buffer.set_dts(time);
         }
 
-        Ok(Async::Ready(Some((buffer, saddr))))
+        Poll::Ready(Some(Ok((buffer, saddr))))
     }
 }

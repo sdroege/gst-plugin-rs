@@ -15,26 +15,32 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use futures::channel::{mpsc, oneshot};
+use futures::future::{AbortHandle, Abortable, BoxFuture};
+use futures::prelude::*;
+use futures::ready;
+use futures::stream::futures_unordered::FuturesUnordered;
+
+use glib;
+use glib::{glib_boxed_derive_traits, glib_boxed_type};
+
+use gst;
+use gst::{gst_debug, gst_log, gst_trace};
+
+use lazy_static::lazy_static;
+
 use std::cmp;
 use std::collections::{BinaryHeap, HashMap};
 use std::io;
 use std::mem;
-use std::sync::{atomic, mpsc};
+use std::pin::Pin;
+use std::sync::atomic;
 use std::sync::{Arc, Mutex, Weak};
+use std::task::{self, Poll};
 use std::thread;
 use std::time;
 
-use futures::future;
-use futures::stream::futures_unordered::FuturesUnordered;
-use futures::sync::mpsc as futures_mpsc;
-use futures::sync::oneshot;
-use futures::{Async, Future, Stream};
-use tokio::reactor;
-use tokio_current_thread;
-use tokio_timer::timer;
-
-use glib;
-use gst;
+use tokio_executor::current_thread as tokio_current_thread;
 
 lazy_static! {
     static ref CONTEXTS: Mutex<HashMap<String, Weak<IOContextInner>>> = Mutex::new(HashMap::new());
@@ -58,7 +64,7 @@ impl IOContextRunner {
     fn start(
         name: &str,
         wait: u32,
-        reactor: reactor::Reactor,
+        reactor: tokio_net::driver::Reactor,
         timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
     ) -> (tokio_current_thread::Handle, IOContextShutdown) {
         let handle = reactor.handle().clone();
@@ -71,7 +77,7 @@ impl IOContextRunner {
             name: name_clone,
         };
 
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = oneshot::channel();
 
         let join = thread::spawn(move || {
             runner.run(wait, reactor, sender, timers);
@@ -84,7 +90,8 @@ impl IOContextRunner {
             join: Some(join),
         };
 
-        let runtime_handle = receiver.recv().unwrap();
+        let runtime_handle =
+            tokio_current_thread::block_on_all(receiver).expect("Runtime init failed");
 
         (runtime_handle, shutdown)
     }
@@ -92,127 +99,130 @@ impl IOContextRunner {
     fn run(
         &mut self,
         wait: u32,
-        reactor: reactor::Reactor,
-        sender: mpsc::Sender<tokio_current_thread::Handle>,
+        reactor: tokio_net::driver::Reactor,
+        sender: oneshot::Sender<tokio_current_thread::Handle>,
         timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
     ) {
-        let wait = time::Duration::from_millis(wait as u64);
+        use std::time::{Duration, Instant};
 
         gst_debug!(CONTEXT_CAT, "Started reactor thread '{}'", self.name);
 
+        let wait = Duration::from_millis(wait as u64);
+
         let handle = reactor.handle();
-        let mut enter = ::tokio_executor::enter().unwrap();
-        let timer = timer::Timer::new(reactor);
+        let timer = tokio_timer::Timer::new(reactor);
         let timer_handle = timer.handle();
+
         let mut current_thread = tokio_current_thread::CurrentThread::new_with_park(timer);
 
-        let _ = sender.send(current_thread.handle());
+        sender
+            .send(current_thread.handle())
+            .expect("Couldn't send Runtime handle");
 
-        let mut now = time::Instant::now();
+        let _timer_guard = tokio_timer::set_default(&timer_handle);
+        let _reactor_guard = tokio_net::driver::set_default(&handle);
 
-        ::tokio_timer::with_default(&timer_handle, &mut enter, |mut enter| {
-            ::tokio_reactor::with_default(&handle, &mut enter, |enter| loop {
-                if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
-                    gst_debug!(CONTEXT_CAT, "Shutting down loop");
-                    break;
-                }
+        let mut now = Instant::now();
 
-                gst_trace!(CONTEXT_CAT, "Elapsed {:?} since last loop", now.elapsed());
+        loop {
+            if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
+                break;
+            }
 
-                // Handle timers
+            gst_trace!(CONTEXT_CAT, "Elapsed {:?} since last loop", now.elapsed());
+
+            // Handle timers
+            {
+                // Trigger all timers that would be expired before the middle of the loop wait
+                // time
+                let timer_threshold = now + wait / 2;
+                let mut timers = timers.lock().unwrap();
+                while timers
+                    .peek()
+                    .and_then(|entry| {
+                        if entry.time < timer_threshold {
+                            Some(())
+                        } else {
+                            None
+                        }
+                    })
+                    .is_some()
                 {
-                    // Trigger all timers that would be expired before the middle of the loop wait
-                    // time
-                    let timer_threshold = now + wait / 2;
-                    let mut timers = timers.lock().unwrap();
-                    while timers
-                        .peek()
-                        .and_then(|entry| {
-                            if entry.time < timer_threshold {
-                                Some(())
-                            } else {
-                                None
-                            }
-                        })
-                        .is_some()
-                    {
-                        let TimerEntry {
-                            time,
-                            interval,
+                    let TimerEntry {
+                        time,
+                        interval,
+                        sender,
+                        ..
+                    } = timers.pop().unwrap();
+
+                    if sender.is_closed() {
+                        continue;
+                    }
+
+                    let _ = sender.unbounded_send(());
+                    if let Some(interval) = interval {
+                        timers.push(TimerEntry {
+                            time: time + interval,
+                            id: TIMER_ENTRY_ID.fetch_add(1, atomic::Ordering::Relaxed),
+                            interval: Some(interval),
                             sender,
-                            ..
-                        } = timers.pop().unwrap();
-
-                        if sender.is_closed() {
-                            continue;
-                        }
-
-                        let _ = sender.unbounded_send(());
-                        if let Some(interval) = interval {
-                            timers.push(TimerEntry {
-                                time: time + interval,
-                                id: TIMER_ENTRY_ID.fetch_add(1, atomic::Ordering::Relaxed),
-                                interval: Some(interval),
-                                sender,
-                            });
-                        }
+                        });
                     }
                 }
+            }
 
-                gst_trace!(CONTEXT_CAT, "Turning current thread '{}'", self.name);
-                while current_thread
-                    .enter(enter)
-                    .turn(Some(time::Duration::from_millis(0)))
-                    .unwrap()
-                    .has_polled()
-                {}
-                gst_trace!(CONTEXT_CAT, "Turned current thread '{}'", self.name);
+            gst_trace!(CONTEXT_CAT, "Turning current thread '{}'", self.name);
+            while current_thread
+                .turn(Some(time::Duration::from_millis(0)))
+                .unwrap()
+                .has_polled()
+            {}
+            gst_trace!(CONTEXT_CAT, "Turned current thread '{}'", self.name);
 
-                // We have to check again after turning in case we're supposed to shut down now
-                // and already handled the unpark above
-                if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
-                    gst_debug!(CONTEXT_CAT, "Shutting down loop");
-                    break;
-                }
+            // We have to check again after turning in case we're supposed to shut down now
+            // and already handled the unpark above
+            if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
+                gst_debug!(CONTEXT_CAT, "Shutting down loop");
+                break;
+            }
 
-                let elapsed = now.elapsed();
-                gst_trace!(CONTEXT_CAT, "Elapsed {:?} after handling futures", elapsed);
+            let elapsed = now.elapsed();
+            gst_trace!(CONTEXT_CAT, "Elapsed {:?} after handling futures", elapsed);
 
-                if wait == time::Duration::from_millis(0) {
-                    let timers = timers.lock().unwrap();
-                    let wait = match timers.peek().map(|entry| entry.time) {
-                        None => None,
-                        Some(time) => Some({
-                            let tmp = time::Instant::now();
+            if wait == time::Duration::from_millis(0) {
+                let timers = timers.lock().unwrap();
+                let wait = match timers.peek().map(|entry| entry.time) {
+                    None => None,
+                    Some(time) => Some({
+                        let tmp = time::Instant::now();
 
-                            if time < tmp {
-                                time::Duration::from_millis(0)
-                            } else {
-                                time.duration_since(tmp)
-                            }
-                        }),
-                    };
-                    drop(timers);
+                        if time < tmp {
+                            time::Duration::from_millis(0)
+                        } else {
+                            time.duration_since(tmp)
+                        }
+                    }),
+                };
+                drop(timers);
 
-                    gst_trace!(CONTEXT_CAT, "Sleeping for up to {:?}", wait);
-                    current_thread.enter(enter).turn(wait).unwrap();
+                gst_trace!(CONTEXT_CAT, "Sleeping for up to {:?}", wait);
+                current_thread.turn(wait).unwrap();
+                gst_trace!(CONTEXT_CAT, "Slept for {:?}", now.elapsed());
+                now = time::Instant::now();
+            } else {
+                if elapsed < wait {
+                    gst_trace!(
+                        CONTEXT_CAT,
+                        "Waiting for {:?} before polling again",
+                        wait - elapsed
+                    );
+                    thread::sleep(wait - elapsed);
                     gst_trace!(CONTEXT_CAT, "Slept for {:?}", now.elapsed());
-                    now = time::Instant::now();
-                } else {
-                    if elapsed < wait {
-                        gst_trace!(
-                            CONTEXT_CAT,
-                            "Waiting for {:?} before polling again",
-                            wait - elapsed
-                        );
-                        thread::sleep(wait - elapsed);
-                        gst_trace!(CONTEXT_CAT, "Slept for {:?}", now.elapsed());
-                    }
-
-                    now += wait;
                 }
-            })
-        });
+
+                now += wait;
+            }
+        }
     }
 }
 
@@ -225,7 +235,7 @@ impl Drop for IOContextRunner {
 struct IOContextShutdown {
     name: String,
     shutdown: Arc<atomic::AtomicUsize>,
-    handle: reactor::Handle,
+    handle: tokio_net::driver::Handle,
     join: Option<thread::JoinHandle<()>>,
 }
 
@@ -255,19 +265,17 @@ impl glib::subclass::boxed::BoxedType for IOContext {
 
 glib_boxed_derive_traits!(IOContext);
 
-type PendingFutures = Mutex<(
-    u64,
-    HashMap<u64, FuturesUnordered<Box<dyn Future<Item = (), Error = ()> + Send + 'static>>>,
-)>;
+pub type PendingFuturesOutput = Result<(), gst::FlowError>;
+type PendingFutureQueue = FuturesUnordered<BoxFuture<'static, PendingFuturesOutput>>;
 
 struct IOContextInner {
     name: String,
     runtime_handle: Mutex<tokio_current_thread::Handle>,
-    reactor_handle: reactor::Handle,
+    reactor_handle: tokio_net::driver::Handle,
     timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
     // Only used for dropping
     _shutdown: IOContextShutdown,
-    pending_futures: PendingFutures,
+    pending_futures: Mutex<(u64, HashMap<u64, PendingFutureQueue>)>,
 }
 
 impl Drop for IOContextInner {
@@ -288,7 +296,7 @@ impl IOContext {
             }
         }
 
-        let reactor = reactor::Reactor::new()?;
+        let reactor = tokio_net::driver::Reactor::new()?;
         let reactor_handle = reactor.handle().clone();
 
         let timers = Arc::new(Mutex::new(BinaryHeap::new()));
@@ -310,14 +318,14 @@ impl IOContext {
         Ok(IOContext(context))
     }
 
-    pub fn spawn<F>(&self, future: F)
+    pub fn spawn<Fut>(&self, future: Fut)
     where
-        F: Future<Item = (), Error = ()> + Send + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
     {
         self.0.runtime_handle.lock().unwrap().spawn(future).unwrap();
     }
 
-    pub fn reactor_handle(&self) -> &reactor::Handle {
+    pub fn reactor_handle(&self) -> &tokio_net::driver::Handle {
         &self.0.reactor_handle
     }
 
@@ -333,23 +341,29 @@ impl IOContext {
     pub fn release_pending_future_id(&self, id: PendingFutureId) {
         let mut pending_futures = self.0.pending_futures.lock().unwrap();
         if let Some(fs) = pending_futures.1.remove(&id.0) {
-            self.spawn(fs.for_each(|_| Ok(())));
+            self.spawn(fs.try_for_each(|_| future::ok(())).map(|_| ()));
         }
     }
 
     pub fn add_pending_future<F>(&self, id: PendingFutureId, future: F)
     where
-        F: Future<Item = (), Error = ()> + Send + 'static,
+        F: Future<Output = PendingFuturesOutput> + Send + 'static,
     {
         let mut pending_futures = self.0.pending_futures.lock().unwrap();
         let fs = pending_futures.1.get_mut(&id.0).unwrap();
-        fs.push(Box::new(future))
+        fs.push(future.boxed())
     }
 
-    pub fn drain_pending_futures<E: Send + 'static>(
+    pub fn drain_pending_futures(
         &self,
         id: PendingFutureId,
-    ) -> (Option<oneshot::Sender<()>>, PendingFuturesFuture<E>) {
+    ) -> (
+        Option<AbortHandle>,
+        future::Either<
+            BoxFuture<'static, PendingFuturesOutput>,
+            future::Ready<PendingFuturesOutput>,
+        >,
+    ) {
         let mut pending_futures = self.0.pending_futures.lock().unwrap();
         let fs = pending_futures.1.get_mut(&id.0).unwrap();
 
@@ -364,24 +378,28 @@ impl IOContext {
                 id,
             );
 
-            let (sender, receiver) = oneshot::channel();
+            let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
-            let future = pending_futures
-                .for_each(|_| Ok(()))
-                .select(receiver.then(|_| Ok(())))
-                .then(|_| Ok(()));
+            let abortable = Abortable::new(
+                pending_futures.try_for_each(|_| future::ok(())),
+                abort_registration,
+            )
+            .map(|res| {
+                res.unwrap_or_else(|_| {
+                    gst_trace!(CONTEXT_CAT, "Aborting");
 
-            (Some(sender), future::Either::A(Box::new(future)))
+                    Err(gst::FlowError::Flushing)
+                })
+            })
+            .boxed()
+            .left_future();
+
+            (Some(abort_handle), abortable)
         } else {
-            (None, future::Either::B(future::ok(())))
+            (None, future::ok(()).right_future())
         }
     }
 }
-
-pub type PendingFuturesFuture<E> = future::Either<
-    Box<dyn Future<Item = (), Error = E> + Send + 'static>,
-    future::FutureResult<(), E>,
->;
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct PendingFutureId(u64);
@@ -401,7 +419,7 @@ pub struct TimerEntry {
     time: time::Instant,
     id: usize, // for producing a total order
     interval: Option<time::Duration>,
-    sender: futures_mpsc::UnboundedSender<()>,
+    sender: mpsc::UnboundedSender<()>,
 }
 
 impl PartialEq for TimerEntry {
@@ -429,7 +447,7 @@ impl Ord for TimerEntry {
 
 #[allow(unused)]
 pub struct Interval {
-    receiver: futures_mpsc::UnboundedReceiver<()>,
+    receiver: mpsc::UnboundedReceiver<()>,
 }
 
 impl Interval {
@@ -437,7 +455,7 @@ impl Interval {
     pub fn new(context: &IOContext, interval: time::Duration) -> Self {
         use tokio_executor::park::Unpark;
 
-        let (sender, receiver) = futures_mpsc::unbounded();
+        let (sender, receiver) = mpsc::unbounded();
 
         let mut timers = context.0.timers.lock().unwrap();
         let entry = TimerEntry {
@@ -455,20 +473,19 @@ impl Interval {
 
 impl Stream for Interval {
     type Item = ();
-    type Error = ();
 
-    fn poll(&mut self) -> futures::Poll<Option<Self::Item>, Self::Error> {
-        self.receiver.poll()
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
+        self.receiver.poll_next_unpin(cx)
     }
 }
 
 pub struct Timeout {
-    receiver: futures_mpsc::UnboundedReceiver<()>,
+    receiver: mpsc::UnboundedReceiver<()>,
 }
 
 impl Timeout {
     pub fn new(context: &IOContext, timeout: time::Duration) -> Self {
-        let (sender, receiver) = futures_mpsc::unbounded();
+        let (sender, receiver) = mpsc::unbounded();
 
         let mut timers = context.0.timers.lock().unwrap();
         let entry = TimerEntry {
@@ -484,16 +501,12 @@ impl Timeout {
 }
 
 impl Future for Timeout {
-    type Item = ();
-    type Error = ();
+    type Output = ();
 
-    fn poll(&mut self) -> futures::Poll<Self::Item, Self::Error> {
-        let res = self.receiver.poll()?;
-
-        match res {
-            Async::NotReady => Ok(Async::NotReady),
-            Async::Ready(None) => unreachable!(),
-            Async::Ready(Some(_)) => Ok(Async::Ready(())),
+    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+        match ready!(self.receiver.poll_next_unpin(cx)) {
+            Some(_) => Poll::Ready(()),
+            None => unreachable!(),
         }
     }
 }

@@ -17,40 +17,6 @@
 
 #![crate_type = "cdylib"]
 
-extern crate libc;
-
-extern crate gio_sys as gio_ffi;
-extern crate glib_sys as glib_ffi;
-extern crate gobject_sys as gobject_ffi;
-extern crate gstreamer_sys as gst_ffi;
-
-extern crate gio;
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gstreamer as gst;
-extern crate gstreamer_net as gst_net;
-extern crate gstreamer_rtp as gst_rtp;
-
-extern crate futures;
-extern crate tokio;
-extern crate tokio_current_thread;
-extern crate tokio_executor;
-extern crate tokio_reactor;
-extern crate tokio_timer;
-
-extern crate either;
-
-extern crate rand;
-
-#[macro_use]
-extern crate lazy_static;
-
-extern crate net2;
-
-#[cfg(windows)]
-extern crate winapi;
-
 mod iocontext;
 
 mod socket;
@@ -63,10 +29,11 @@ mod jitterbuffer;
 mod proxy;
 mod queue;
 
-use glib::prelude::*;
-use glib::translate::*;
-use std::mem;
-use std::ptr;
+use glib_sys as glib_ffi;
+
+use gst;
+use gst::gst_plugin_define;
+use gstreamer_sys as gst_ffi;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     udpsrc::register(plugin)?;
@@ -123,7 +90,10 @@ impl<'a> Drop for MutexGuard<'a> {
 
 pub mod ffi {
     use glib_ffi::{gboolean, gpointer, GList, GType};
+    use glib_sys as glib_ffi;
+
     use gst_ffi::GstClockTime;
+    use gstreamer_sys as gst_ffi;
     use libc::{c_int, c_uint, c_ulonglong, c_ushort, c_void};
 
     #[repr(C)]
@@ -213,6 +183,13 @@ pub mod ffi {
         ) -> c_uint;
     }
 }
+
+use glib::prelude::*;
+use glib::translate::*;
+use glib::{glib_object_wrapper, glib_wrapper};
+
+use std::mem;
+use std::ptr;
 
 glib_wrapper! {
     pub struct RTPJitterBuffer(Object<ffi::RTPJitterBuffer, RTPJitterBufferClass>);
@@ -335,9 +312,9 @@ unsafe impl Send for RTPPacketRateCtx {}
 impl RTPPacketRateCtx {
     pub fn new() -> RTPPacketRateCtx {
         unsafe {
-            let mut ptr: ffi::RTPPacketRateCtx = std::mem::uninitialized();
-            ffi::gst_rtp_packet_rate_ctx_reset(&mut ptr, -1);
-            RTPPacketRateCtx(Box::new(ptr))
+            let mut ptr = std::mem::MaybeUninit::uninit();
+            ffi::gst_rtp_packet_rate_ctx_reset(ptr.as_mut_ptr(), -1);
+            RTPPacketRateCtx(Box::new(ptr.assume_init()))
         }
     }
 
@@ -432,29 +409,35 @@ impl RTPJitterBuffer {
 
     pub fn insert(&self, mut item: RTPJitterBufferItem) -> (bool, bool, i32) {
         unsafe {
-            let mut head = mem::uninitialized();
-            let mut percent = mem::uninitialized();
+            let mut head = mem::MaybeUninit::uninit();
+            let mut percent = mem::MaybeUninit::uninit();
             let box_ = item.0.take().expect("Invalid wrapper");
             let ptr = Box::into_raw(box_);
             let ret: bool = from_glib(ffi::rtp_jitter_buffer_insert(
                 self.to_glib_none().0,
                 ptr,
-                &mut head,
-                &mut percent,
+                head.as_mut_ptr(),
+                percent.as_mut_ptr(),
             ));
             if !ret {
                 item.0 = Some(Box::from_raw(ptr));
             }
-            (ret, from_glib(head), percent)
+            (ret, from_glib(head.assume_init()), percent.assume_init())
         }
     }
 
     pub fn find_earliest(&self) -> (gst::ClockTime, u32) {
         unsafe {
-            let mut pts = mem::uninitialized();
-            let mut seqnum = mem::uninitialized();
+            let mut pts = mem::MaybeUninit::uninit();
+            let mut seqnum = mem::MaybeUninit::uninit();
 
-            ffi::rtp_jitter_buffer_find_earliest(self.to_glib_none().0, &mut pts, &mut seqnum);
+            ffi::rtp_jitter_buffer_find_earliest(
+                self.to_glib_none().0,
+                pts.as_mut_ptr(),
+                seqnum.as_mut_ptr(),
+            );
+            let pts = pts.assume_init();
+            let seqnum = seqnum.assume_init();
 
             if pts == gst_ffi::GST_CLOCK_TIME_NONE {
                 (gst::CLOCK_TIME_NONE, seqnum)
@@ -466,10 +449,13 @@ impl RTPJitterBuffer {
 
     pub fn pop(&self) -> (RTPJitterBufferItem, i32) {
         unsafe {
-            let mut percent = mem::uninitialized();
-            let item = ffi::rtp_jitter_buffer_pop(self.to_glib_none().0, &mut percent);
+            let mut percent = mem::MaybeUninit::uninit();
+            let item = ffi::rtp_jitter_buffer_pop(self.to_glib_none().0, percent.as_mut_ptr());
 
-            (RTPJitterBufferItem(Some(Box::from_raw(item))), percent)
+            (
+                RTPJitterBufferItem(Some(Box::from_raw(item))),
+                percent.assume_init(),
+            )
         }
     }
 

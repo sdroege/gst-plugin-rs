@@ -16,30 +16,35 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use either::Either;
+use futures::ready;
+use futures::{future::BoxFuture, prelude::*};
+
 use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
+use glib::{glib_object_impl, glib_object_subclass};
+
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
 
-use std::io;
-use std::sync::Mutex;
-use std::u16;
-
-use futures;
-use futures::future;
-use futures::{Async, Future, Poll};
-use tokio::io::AsyncRead;
-use tokio::net;
-
-use either::Either;
+use lazy_static::lazy_static;
 
 use rand;
 
-use iocontext::*;
-use socket::*;
+use std::io;
+use std::pin::Pin;
+use std::sync::Mutex;
+use std::task::{Context, Poll};
+use std::u16;
+
+use tokio::io::AsyncRead;
+
+use super::iocontext::*;
+use super::socket::*;
 
 const DEFAULT_ADDRESS: Option<&str> = Some("127.0.0.1");
 const DEFAULT_PORT: u32 = 5000;
@@ -135,14 +140,17 @@ static PROPERTIES: [subclass::Property; 6] = [
 ];
 
 pub struct TcpClientReader {
-    connect_future: net::tcp::ConnectFuture,
-    socket: Option<net::TcpStream>,
+    connect_future: BoxFuture<'static, io::Result<tokio::net::TcpStream>>,
+    socket: Option<tokio::net::TcpStream>,
 }
 
 impl TcpClientReader {
-    pub fn new(connect_future: net::tcp::ConnectFuture) -> Self {
+    pub fn new<Fut>(connect_future: Fut) -> Self
+    where
+        Fut: Future<Output = io::Result<tokio::net::TcpStream>> + Send + 'static,
+    {
         Self {
-            connect_future,
+            connect_future: connect_future.boxed(),
             socket: None,
         }
     }
@@ -152,27 +160,23 @@ impl SocketRead for TcpClientReader {
     const DO_TIMESTAMP: bool = false;
 
     fn poll_read(
-        &mut self,
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
         buf: &mut [u8],
-    ) -> Poll<(usize, Option<std::net::SocketAddr>), io::Error> {
+    ) -> Poll<io::Result<(usize, Option<std::net::SocketAddr>)>> {
         let socket = match self.socket {
             Some(ref mut socket) => socket,
-            None => match self.connect_future.poll() {
-                Ok(Async::Ready(stream)) => {
-                    self.socket = Some(stream);
-                    self.socket.as_mut().unwrap()
-                }
-                Err(err) => {
-                    return Err(err);
-                }
-                _ => return Ok(Async::NotReady),
-            },
+            None => {
+                let stream = ready!(self.connect_future.as_mut().poll(cx))?;
+                self.socket = Some(stream);
+                self.socket.as_mut().unwrap()
+            }
         };
-        match socket.poll_read(buf) {
-            Ok(Async::Ready(result)) => Ok(Async::Ready((result, None))),
-            Ok(Async::NotReady) => Ok(Async::NotReady),
-            Err(result) => Err(result),
-        }
+
+        Pin::new(socket)
+            .as_mut()
+            .poll_read(cx, buf)
+            .map_ok(|read_size| (read_size, None))
     }
 }
 
@@ -182,7 +186,7 @@ struct State {
     socket: Option<Socket<TcpClientReader>>,
     need_initial_events: bool,
     configured_caps: Option<gst::Caps>,
-    pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
+    pending_future_abort_handle: Option<future::AbortHandle>,
 }
 
 impl Default for State {
@@ -193,7 +197,7 @@ impl Default for State {
             socket: None,
             need_initial_events: true,
             configured_caps: None,
-            pending_future_cancel: None,
+            pending_future_abort_handle: None,
         }
     }
 }
@@ -308,106 +312,101 @@ impl TcpClientSrc {
         }
     }
 
-    fn push_buffer(
-        &self,
-        element: &gst::Element,
-        buffer: gst::Buffer,
-    ) -> future::Either<
-        Box<dyn Future<Item = (), Error = gst::FlowError> + Send + 'static>,
-        future::FutureResult<(), gst::FlowError>,
-    > {
+    async fn push_buffer(element: gst::Element, buffer: gst::Buffer) -> Result<(), gst::FlowError> {
+        let tcpclientsrc = Self::from_instance(&element);
         let mut events = Vec::new();
-        let mut state = self.state.lock().unwrap();
-        if state.need_initial_events {
-            gst_debug!(CAT, obj: element, "Pushing initial events");
+        {
+            let mut state = tcpclientsrc.state.lock().unwrap();
+            if state.need_initial_events {
+                gst_debug!(CAT, obj: &element, "Pushing initial events");
 
-            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-            events.push(gst::Event::new_stream_start(&stream_id).build());
-            if let Some(ref caps) = self.settings.lock().unwrap().caps {
-                events.push(gst::Event::new_caps(&caps).build());
-                state.configured_caps = Some(caps.clone());
+                let stream_id =
+                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+                events.push(
+                    gst::Event::new_stream_start(&stream_id)
+                        .group_id(gst::util_group_id_next())
+                        .build(),
+                );
+                if let Some(ref caps) = tcpclientsrc.settings.lock().unwrap().caps {
+                    events.push(gst::Event::new_caps(&caps).build());
+                    state.configured_caps = Some(caps.clone());
+                }
+                events.push(
+                    gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
+                        .build(),
+                );
+
+                if let Some(event) = Self::create_io_context_event(&state) {
+                    events.push(event);
+
+                    // Get rid of reconfigure flag
+                    tcpclientsrc.src_pad.check_reconfigure();
+                }
+                state.need_initial_events = false;
+            } else if tcpclientsrc.src_pad.check_reconfigure() {
+                if let Some(event) = Self::create_io_context_event(&state) {
+                    events.push(event);
+                }
             }
-            events.push(
-                gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-            );
 
-            if let Some(event) = Self::create_io_context_event(&state) {
-                events.push(event);
-
-                // Get rid of reconfigure flag
-                self.src_pad.check_reconfigure();
-            }
-            state.need_initial_events = false;
-        } else if self.src_pad.check_reconfigure() {
-            if let Some(event) = Self::create_io_context_event(&state) {
-                events.push(event);
+            if buffer.get_size() == 0 {
+                events.push(gst::Event::new_eos().build());
             }
         }
-
-        if buffer.get_size() == 0 {
-            events.push(gst::Event::new_eos().build());
-        }
-
-        drop(state);
 
         for event in events {
-            self.src_pad.push_event(event);
+            tcpclientsrc.src_pad.push_event(event);
         }
 
-        let res = match self.src_pad.push(buffer) {
-            Ok(_) => {
-                gst_log!(CAT, obj: element, "Successfully pushed buffer");
-                Ok(())
-            }
+        match tcpclientsrc.src_pad.push(buffer) {
+            Ok(_) => gst_log!(CAT, obj: &element, "Successfully pushed buffer"),
             Err(gst::FlowError::Flushing) => {
-                gst_debug!(CAT, obj: element, "Flushing");
-                let state = self.state.lock().unwrap();
+                gst_debug!(CAT, obj: &element, "Flushing");
+                let state = tcpclientsrc.state.lock().unwrap();
                 if let Some(ref socket) = state.socket {
                     socket.pause();
                 }
-                Ok(())
             }
             Err(gst::FlowError::Eos) => {
-                gst_debug!(CAT, obj: element, "EOS");
-                let state = self.state.lock().unwrap();
+                gst_debug!(CAT, obj: &element, "EOS");
+                let state = tcpclientsrc.state.lock().unwrap();
                 if let Some(ref socket) = state.socket {
                     socket.pause();
                 }
-                Ok(())
             }
             Err(err) => {
-                gst_error!(CAT, obj: element, "Got error {}", err);
+                gst_error!(CAT, obj: &element, "Got error {}", err);
                 gst_element_error!(
                     element,
                     gst::StreamError::Failed,
                     ("Internal data stream error"),
                     ["streaming stopped, reason {}", err]
                 );
-                Err(gst::FlowError::CustomError)
+                return Err(gst::FlowError::CustomError);
+            }
+        }
+
+        let abortable_drain = {
+            let mut state = tcpclientsrc.state.lock().unwrap();
+
+            if let State {
+                io_context: Some(ref io_context),
+                pending_future_id: Some(ref pending_future_id),
+                ref mut pending_future_abort_handle,
+                ..
+            } = *state
+            {
+                let (cancel, abortable_drain) =
+                    io_context.drain_pending_futures(*pending_future_id);
+                *pending_future_abort_handle = cancel;
+
+                abortable_drain
+            } else {
+                return Ok(());
             }
         };
 
-        match res {
-            Ok(()) => {
-                let mut state = self.state.lock().unwrap();
-
-                if let State {
-                    io_context: Some(ref io_context),
-                    pending_future_id: Some(ref pending_future_id),
-                    ref mut pending_future_cancel,
-                    ..
-                } = *state
-                {
-                    let (cancel, future) = io_context.drain_pending_futures(*pending_future_id);
-                    *pending_future_cancel = cancel;
-
-                    future
-                } else {
-                    future::Either::B(future::ok(()))
-                }
-            }
-            Err(err) => future::Either::B(future::err(err)),
-        }
+        abortable_drain.await
     }
 
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
@@ -448,7 +447,7 @@ impl TcpClientSrc {
 
         let saddr = SocketAddr::new(addr, port as u16);
         gst_debug!(CAT, obj: element, "Connecting to {:?}", saddr);
-        let socket = net::TcpStream::connect(&saddr);
+        let socket = tokio::net::TcpStream::connect(saddr);
 
         let buffer_pool = gst::BufferPool::new();
         let mut config = buffer_pool.get_config();
@@ -471,10 +470,7 @@ impl TcpClientSrc {
         socket
             .schedule(
                 &io_context,
-                move |(buffer, _)| {
-                    let tcpclientsrc = Self::from_instance(&element_clone);
-                    tcpclientsrc.push_buffer(&element_clone, buffer)
-                },
+                move |(buffer, _)| Self::push_buffer(element_clone.clone(), buffer),
                 move |err| {
                     gst_error!(CAT, obj: &element_clone2, "Got error {}", err);
                     match err {
@@ -568,7 +564,10 @@ impl TcpClientSrc {
         if let Some(ref socket) = state.socket {
             socket.pause();
         }
-        let _ = state.pending_future_cancel.take();
+
+        if let Some(abort_handle) = state.pending_future_abort_handle.take() {
+            abort_handle.abort();
+        }
 
         gst_debug!(CAT, obj: element, "Stopped");
 
@@ -708,7 +707,7 @@ impl ObjectImpl for TcpClientSrc {
         let element = obj.downcast_ref::<gst::Element>().unwrap();
         element.add_pad(&self.src_pad).unwrap();
 
-        ::set_element_flags(element, gst::ElementFlags::SOURCE);
+        super::set_element_flags(element, gst::ElementFlags::SOURCE);
     }
 }
 

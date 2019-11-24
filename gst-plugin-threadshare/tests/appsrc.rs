@@ -15,13 +15,12 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-extern crate glib;
 use glib::prelude::*;
 
-extern crate gstreamer as gst;
-extern crate gstreamer_check as gst_check;
+use gst;
+use gst_check;
 
-extern crate gstthreadshare;
+use gstthreadshare;
 
 fn init() {
     use std::sync::Once;

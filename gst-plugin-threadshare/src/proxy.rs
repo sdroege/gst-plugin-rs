@@ -15,28 +15,29 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use futures::prelude::*;
+
 use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
+use glib::{glib_object_impl, glib_object_subclass};
+
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
 
-use std::collections::HashMap;
-use std::collections::VecDeque;
+use lazy_static::lazy_static;
+
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex, Weak};
+use std::task::{self, Poll};
 use std::{u32, u64};
 
-use futures;
-use futures::future;
-use futures::task;
-use futures::{Async, Future};
+use tokio_executor::current_thread as tokio_current_thread;
 
-use tokio::executor;
-
-use dataqueue::*;
-use iocontext::*;
+use super::{dataqueue::*, iocontext::*};
 
 lazy_static! {
     static ref CONTEXTS: Mutex<HashMap<String, Weak<Mutex<SharedQueueInner>>>> =
@@ -200,7 +201,7 @@ impl SharedQueue {
                 queue: None,
                 last_res: Err(gst::FlowError::Flushing),
                 pending_queue: None,
-                pending_future_cancel: None,
+                pending_future_abort_handle: None,
                 have_sink: as_sink,
                 have_src: !as_sink,
             }));
@@ -220,15 +221,17 @@ impl Drop for SharedQueue {
             let mut inner = self.0.lock().unwrap();
             assert!(inner.have_sink);
             inner.have_sink = false;
-            if let Some((Some(task), _, _)) = inner.pending_queue.take() {
-                task.notify();
+            if let Some((Some(waker), _, _)) = inner.pending_queue.take() {
+                waker.wake();
             }
         } else {
             let mut inner = self.0.lock().unwrap();
             assert!(inner.have_src);
             inner.have_src = false;
             let _ = inner.queue.take();
-            let _ = inner.pending_future_cancel.take();
+            if let Some(abort_handle) = inner.pending_future_abort_handle.take() {
+                abort_handle.abort();
+            }
         }
     }
 }
@@ -237,8 +240,8 @@ struct SharedQueueInner {
     name: String,
     queue: Option<DataQueue>,
     last_res: Result<gst::FlowSuccess, gst::FlowError>,
-    pending_queue: Option<(Option<task::Task>, bool, VecDeque<DataQueueItem>)>,
-    pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
+    pending_queue: Option<(Option<task::Waker>, bool, VecDeque<DataQueueItem>)>,
+    pending_future_abort_handle: Option<future::AbortHandle>,
     have_sink: bool,
     have_src: bool,
 }
@@ -377,7 +380,7 @@ impl ProxySink {
                         queue.pending_queue.as_mut().unwrap().1 = true;
 
                         let element_clone = element.clone();
-                        let future = future::poll_fn(move || {
+                        let future = future::poll_fn(move |cx| {
                             let sink = Self::from_instance(&element_clone);
                             let state = sink.state.lock().unwrap();
 
@@ -390,7 +393,7 @@ impl ProxySink {
                             let mut queue = match state.queue {
                                 Some(ref queue) => queue.0.lock().unwrap(),
                                 None => {
-                                    return Ok(Async::Ready(()));
+                                    return Poll::Ready(Ok(()));
                                 }
                             };
 
@@ -400,51 +403,51 @@ impl ProxySink {
                                 ..
                             } = *queue;
 
-                            let res = if let Some((ref mut task, _, ref mut items)) = *pending_queue
-                            {
-                                if let Some(ref queue) = queue {
-                                    let mut failed_item = None;
-                                    while let Some(item) = items.pop_front() {
-                                        if let Err(item) = queue.push(item) {
-                                            failed_item = Some(item);
+                            let res =
+                                if let Some((ref mut waker, _, ref mut items)) = *pending_queue {
+                                    if let Some(ref queue) = queue {
+                                        let mut failed_item = None;
+                                        while let Some(item) = items.pop_front() {
+                                            if let Err(item) = queue.push(item) {
+                                                failed_item = Some(item);
+                                            }
                                         }
-                                    }
 
-                                    if let Some(failed_item) = failed_item {
-                                        items.push_front(failed_item);
-                                        *task = Some(task::current());
-                                        gst_log!(
-                                            SINK_CAT,
-                                            obj: &element_clone,
-                                            "Waiting for more queue space"
-                                        );
-                                        Ok(Async::NotReady)
+                                        if let Some(failed_item) = failed_item {
+                                            items.push_front(failed_item);
+                                            *waker = Some(cx.waker().clone());
+                                            gst_log!(
+                                                SINK_CAT,
+                                                obj: &element_clone,
+                                                "Waiting for more queue space"
+                                            );
+                                            Poll::Pending
+                                        } else {
+                                            gst_log!(
+                                                SINK_CAT,
+                                                obj: &element_clone,
+                                                "Pending queue is empty now"
+                                            );
+                                            Poll::Ready(Ok(()))
+                                        }
                                     } else {
                                         gst_log!(
                                             SINK_CAT,
                                             obj: &element_clone,
-                                            "Pending queue is empty now"
+                                            "Waiting for queue to be allocated"
                                         );
-                                        Ok(Async::Ready(()))
+                                        Poll::Pending
                                     }
                                 } else {
                                     gst_log!(
                                         SINK_CAT,
                                         obj: &element_clone,
-                                        "Waiting for queue to be allocated"
+                                        "Flushing, dropping pending queue"
                                     );
-                                    Ok(Async::NotReady)
-                                }
-                            } else {
-                                gst_log!(
-                                    SINK_CAT,
-                                    obj: &element_clone,
-                                    "Flushing, dropping pending queue"
-                                );
-                                Ok(Async::Ready(()))
-                            };
+                                    Poll::Ready(Ok(()))
+                                };
 
-                            if res == Ok(Async::Ready(())) {
+                            if res == Poll::Ready(Ok(())) {
                                 *pending_queue = None;
                             }
 
@@ -476,7 +479,7 @@ impl ProxySink {
 
         if let Some(wait_future) = wait_future {
             gst_log!(SINK_CAT, obj: element, "Blocking until queue becomes empty");
-            executor::current_thread::block_on_all(wait_future).map_err(|_| {
+            tokio_current_thread::block_on_all(wait_future).map_err(|_| {
                 gst_element_error!(
                     element,
                     gst::StreamError::Failed,
@@ -537,12 +540,12 @@ impl ProxySink {
                     let mut state = self.state.lock().unwrap();
                     let io_context = s
                         .get::<&IOContext>("io-context")
-                        .expect("signal arg")
-                        .expect("missing signal arg");
+                        .expect("event field")
+                        .expect("missing event field");
                     let pending_future_id = s
                         .get::<&PendingFutureId>("pending-future-id")
-                        .expect("signal arg")
-                        .expect("missing signal arg");
+                        .expect("event field")
+                        .expect("missing event field");
 
                     gst_debug!(
                         SINK_CAT,
@@ -627,8 +630,8 @@ impl ProxySink {
 
         let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
 
-        if let Some((Some(task), _, _)) = queue.pending_queue.take() {
-            task.notify();
+        if let Some((Some(waker), _, _)) = queue.pending_queue.take() {
+            waker.wake();
         }
         queue.last_res = Err(gst::FlowError::Flushing);
 
@@ -745,7 +748,7 @@ impl ObjectImpl for ProxySink {
         let element = obj.downcast_ref::<gst::Element>().unwrap();
         element.add_pad(&self.sink_pad).unwrap();
 
-        ::set_element_flags(element, gst::ElementFlags::SINK);
+        super::set_element_flags(element, gst::ElementFlags::SINK);
     }
 }
 
@@ -893,22 +896,17 @@ impl ProxySrc {
         ret
     }
 
-    fn push_item(
-        &self,
-        element: &gst::Element,
-        item: DataQueueItem,
-    ) -> future::Either<
-        Box<dyn Future<Item = (), Error = gst::FlowError> + Send + 'static>,
-        future::FutureResult<(), gst::FlowError>,
-    > {
+    async fn push_item(element: gst::Element, item: DataQueueItem) -> Result<(), gst::FlowError> {
+        let src = Self::from_instance(&element);
+
         let event = {
-            let state = self.state.lock().unwrap();
+            let state = src.state.lock().unwrap();
             let queue = state.queue.as_ref().unwrap().0.lock().unwrap();
-            if let Some((Some(ref task), _, _)) = queue.pending_queue {
-                task.notify();
+            if let Some((Some(ref waker), _, _)) = queue.pending_queue {
+                waker.wake_by_ref();
             }
 
-            if self.src_pad.check_reconfigure() {
+            if src.src_pad.check_reconfigure() {
                 Self::create_io_context_event(&state)
             } else {
                 None
@@ -916,17 +914,17 @@ impl ProxySrc {
         };
 
         if let Some(event) = event {
-            self.src_pad.push_event(event);
+            src.src_pad.push_event(event);
         }
 
         let res = match item {
             DataQueueItem::Buffer(buffer) => {
-                gst_log!(SRC_CAT, obj: element, "Forwarding buffer {:?}", buffer);
-                self.src_pad.push(buffer).map(|_| ())
+                gst_log!(SRC_CAT, obj: &element, "Forwarding buffer {:?}", buffer);
+                src.src_pad.push(buffer).map(|_| ())
             }
             DataQueueItem::BufferList(list) => {
-                gst_log!(SRC_CAT, obj: element, "Forwarding buffer list {:?}", list);
-                self.src_pad.push_list(list).map(|_| ())
+                gst_log!(SRC_CAT, obj: &element, "Forwarding buffer list {:?}", list);
+                src.src_pad.push_list(list).map(|_| ())
             }
             DataQueueItem::Event(event) => {
                 use gst::EventView;
@@ -936,7 +934,7 @@ impl ProxySrc {
                     EventView::CustomDownstreamSticky(e) => {
                         let s = e.get_structure().unwrap();
                         if s.get_name() == "ts-io-context" {
-                            let state = self.state.lock().unwrap();
+                            let state = src.state.lock().unwrap();
                             new_event = Self::create_io_context_event(&state);
                         }
                     }
@@ -945,82 +943,79 @@ impl ProxySrc {
 
                 match new_event {
                     Some(event) => {
-                        gst_log!(SRC_CAT, obj: element, "Forwarding new event {:?}", event);
-                        self.src_pad.push_event(event);
+                        gst_log!(SRC_CAT, obj: &element, "Forwarding new event {:?}", event);
+                        src.src_pad.push_event(event);
                     }
                     None => {
-                        gst_log!(SRC_CAT, obj: element, "Forwarding event {:?}", event);
-                        self.src_pad.push_event(event);
+                        gst_log!(SRC_CAT, obj: &element, "Forwarding event {:?}", event);
+                        src.src_pad.push_event(event);
                     }
                 }
                 Ok(())
             }
         };
 
-        let res = match res {
+        match res {
             Ok(_) => {
-                gst_log!(SRC_CAT, obj: element, "Successfully pushed item");
-                let state = self.state.lock().unwrap();
+                gst_log!(SRC_CAT, obj: &element, "Successfully pushed item");
+                let state = src.state.lock().unwrap();
                 let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
                 queue.last_res = Ok(gst::FlowSuccess::Ok);
-                Ok(())
             }
             Err(gst::FlowError::Flushing) => {
-                gst_debug!(SRC_CAT, obj: element, "Flushing");
-                let state = self.state.lock().unwrap();
+                gst_debug!(SRC_CAT, obj: &element, "Flushing");
+                let state = src.state.lock().unwrap();
                 let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
                 if let Some(ref queue) = queue.queue {
                     queue.pause();
                 }
                 queue.last_res = Err(gst::FlowError::Flushing);
-                Ok(())
             }
             Err(gst::FlowError::Eos) => {
-                gst_debug!(SRC_CAT, obj: element, "EOS");
-                let state = self.state.lock().unwrap();
+                gst_debug!(SRC_CAT, obj: &element, "EOS");
+                let state = src.state.lock().unwrap();
                 let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
                 if let Some(ref queue) = queue.queue {
                     queue.pause();
                 }
                 queue.last_res = Err(gst::FlowError::Eos);
-                Ok(())
             }
             Err(err) => {
-                gst_error!(SRC_CAT, obj: element, "Got error {}", err);
+                gst_error!(SRC_CAT, obj: &element, "Got error {}", err);
                 gst_element_error!(
                     element,
                     gst::StreamError::Failed,
                     ("Internal data stream error"),
                     ["streaming stopped, reason {}", err]
                 );
-                let state = self.state.lock().unwrap();
+                let state = src.state.lock().unwrap();
                 let mut queue = state.queue.as_ref().unwrap().0.lock().unwrap();
                 queue.last_res = Err(err);
-                Err(gst::FlowError::CustomError)
+                return Err(gst::FlowError::CustomError);
+            }
+        }
+
+        let abortable_drain = {
+            let state = src.state.lock().unwrap();
+
+            if let StateSrc {
+                io_context: Some(ref io_context),
+                pending_future_id: Some(ref pending_future_id),
+                queue: Some(ref queue),
+                ..
+            } = *state
+            {
+                let (abort_handle, abortable_drain) =
+                    io_context.drain_pending_futures(*pending_future_id);
+                queue.0.lock().unwrap().pending_future_abort_handle = abort_handle;
+
+                abortable_drain
+            } else {
+                return Ok(());
             }
         };
 
-        match res {
-            Ok(()) => {
-                let state = self.state.lock().unwrap();
-
-                if let StateSrc {
-                    io_context: Some(ref io_context),
-                    pending_future_id: Some(ref pending_future_id),
-                    queue: Some(ref queue),
-                    ..
-                } = *state
-                {
-                    let (cancel, future) = io_context.drain_pending_futures(*pending_future_id);
-                    queue.0.lock().unwrap().pending_future_cancel = cancel;
-
-                    future
-                } else {
-                    future::Either::B(future::ok(()))
-                }
-            }
-            Err(err) => future::Either::B(future::err(err)),
-        }
+        abortable_drain.await
     }
 
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
@@ -1066,10 +1061,7 @@ impl ProxySrc {
         dataqueue
             .schedule(
                 &io_context,
-                move |item| {
-                    let src = Self::from_instance(&element_clone);
-                    src.push_item(&element_clone, item)
-                },
+                move |item| Self::push_item(element_clone.clone(), item),
                 move |err| {
                     gst_error!(SRC_CAT, obj: &element_clone2, "Got error {}", err);
                     match err {
@@ -1172,7 +1164,9 @@ impl ProxySrc {
             queue.pause();
             queue.clear(&self.src_pad);
         }
-        let _ = queue.pending_future_cancel.take();
+        if let Some(abort_handle) = queue.pending_future_abort_handle.take() {
+            abort_handle.abort();
+        }
 
         gst_debug!(SRC_CAT, obj: element, "Stopped");
 
@@ -1320,7 +1314,7 @@ impl ObjectImpl for ProxySrc {
         let element = obj.downcast_ref::<gst::Element>().unwrap();
         element.add_pad(&self.src_pad).unwrap();
 
-        ::set_element_flags(element, gst::ElementFlags::SOURCE);
+        super::set_element_flags(element, gst::ElementFlags::SOURCE);
     }
 }
 

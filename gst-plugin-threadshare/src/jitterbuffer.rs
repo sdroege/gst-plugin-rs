@@ -19,24 +19,27 @@ use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
+use glib::{glib_object_impl, glib_object_subclass};
+
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_info, gst_log, gst_trace};
 use gst_rtp::RTPBuffer;
+
+use lazy_static::lazy_static;
 
 use std::cmp::{max, min, Ordering};
 use std::collections::BTreeSet;
 use std::sync::{Mutex, MutexGuard};
 use std::time;
 
-use futures::sync::oneshot;
-use futures::Future;
+use futures::future::{AbortHandle, Abortable};
+use futures::prelude::*;
 
-use iocontext::*;
+use crate::iocontext::*;
 
-use RTPJitterBuffer;
-use RTPJitterBufferItem;
-use RTPPacketRateCtx;
+use crate::{RTPJitterBuffer, RTPJitterBufferItem, RTPPacketRateCtx};
 
 const DEFAULT_LATENCY_MS: u32 = 200;
 const DEFAULT_DO_LOST: bool = false;
@@ -202,10 +205,10 @@ struct State {
     earliest_seqnum: u16,
     last_popped_pts: gst::ClockTime,
     discont: bool,
-    cancel: Option<oneshot::Sender<()>>,
+    abort_handle: Option<AbortHandle>,
     last_res: Result<gst::FlowSuccess, gst::FlowError>,
     pending_future_id: Option<PendingFutureId>,
-    pending_future_cancel: Option<futures::sync::oneshot::Sender<()>>,
+    pending_future_abort_handle: Option<AbortHandle>,
 }
 
 impl Default for State {
@@ -232,10 +235,10 @@ impl Default for State {
             earliest_seqnum: 0,
             last_popped_pts: gst::CLOCK_TIME_NONE,
             discont: false,
-            cancel: None,
+            abort_handle: None,
             last_res: Ok(gst::FlowSuccess::Ok),
             pending_future_id: None,
-            pending_future_cancel: None,
+            pending_future_abort_handle: None,
         }
     }
 }
@@ -811,11 +814,11 @@ impl JitterBuffer {
                 }
             };
 
-            if let Some(cancel) = state.cancel.take() {
-                let _ = cancel.send(());
+            if let Some(abort_handle) = state.abort_handle.take() {
+                abort_handle.abort();
             }
 
-            let (cancel, cancel_handler) = oneshot::channel();
+            let (abort_handle, abort_registration) = AbortHandle::new_pair();
 
             let element_clone = element.clone();
 
@@ -825,13 +828,12 @@ impl JitterBuffer {
                 state.io_context.as_ref().unwrap(),
                 time::Duration::from_nanos(timeout),
             )
-            .map_err(|e| panic!("timer failed; err={:?}", e))
-            .and_then(move |_| {
+            .map(move |_| {
                 let jb = Self::from_instance(&element_clone);
                 let mut state = jb.state.lock().unwrap();
 
                 if state.io_context.is_none() {
-                    return Ok(());
+                    return;
                 }
 
                 let now = jb.get_current_running_time(&element_clone);
@@ -843,7 +845,9 @@ impl JitterBuffer {
                     state.earliest_pts
                 );
 
-                let _ = state.cancel.take();
+                if let Some(abort_handle) = state.abort_handle.take() {
+                    abort_handle.abort();
+                }
 
                 /* Check earliest PTS as we have just taken the lock */
                 if state.earliest_pts.is_some()
@@ -856,15 +860,19 @@ impl JitterBuffer {
                         state.last_res = jb.pop_and_push(&mut state, &element_clone);
 
                         if let Some(pending_future_id) = state.pending_future_id {
-                            let (cancel, future) = state
+                            let (abort_handle, abortable_drain) = state
                                 .io_context
                                 .as_ref()
                                 .unwrap()
                                 .drain_pending_futures(pending_future_id);
 
-                            state.pending_future_cancel = cancel;
+                            state.pending_future_abort_handle = abort_handle;
 
-                            state.io_context.as_ref().unwrap().spawn(future);
+                            state
+                                .io_context
+                                .as_ref()
+                                .unwrap()
+                                .spawn(abortable_drain.map(|_| ()));
                         }
 
                         if head_pts == state.earliest_pts
@@ -876,7 +884,7 @@ impl JitterBuffer {
                             state.earliest_seqnum = earliest_seqnum as u16;
                         }
 
-                        if state.pending_future_cancel.is_some()
+                        if state.pending_future_abort_handle.is_some()
                             || state.earliest_pts.is_none()
                             || state.earliest_pts + latency_ns
                                 - state.packet_spacing
@@ -889,15 +897,17 @@ impl JitterBuffer {
                 }
 
                 jb.schedule(&mut state, &element_clone);
-
-                Ok(())
             });
 
-            let future = timer.select(cancel_handler).then(|_| Ok(()));
+            let abortable_timer = Abortable::new(timer, abort_registration);
 
-            state.cancel = Some(cancel);
+            state.abort_handle = Some(abort_handle);
 
-            state.io_context.as_ref().unwrap().spawn(future);
+            state
+                .io_context
+                .as_ref()
+                .unwrap()
+                .spawn(abortable_timer.map(|_| ()));
         }
     }
 
@@ -1298,7 +1308,9 @@ impl ElementImpl for JitterBuffer {
             }
             gst::StateChange::PausedToReady => {
                 let mut state = self.state.lock().unwrap();
-                let _ = state.pending_future_cancel.take();
+                if let Some(abort_handle) = state.pending_future_abort_handle.take() {
+                    abort_handle.abort();
+                }
             }
             gst::StateChange::ReadyToNull => {
                 let mut state = self.state.lock().unwrap();
@@ -1312,7 +1324,9 @@ impl ElementImpl for JitterBuffer {
 
                 state.jbuf.borrow().flush();
 
-                let _ = state.cancel.take();
+                if let Some(abort_handle) = state.abort_handle.take() {
+                    abort_handle.abort();
+                }
                 let _ = state.io_context.take();
             }
             _ => (),

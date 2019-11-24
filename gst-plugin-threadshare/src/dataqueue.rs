@@ -15,18 +15,24 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use futures::channel::oneshot;
+use futures::prelude::*;
+
 use gst;
+use gst::gst_debug;
 use gst::prelude::*;
 
+use lazy_static::lazy_static;
+
 use std::collections::VecDeque;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::task::{self, Poll};
 use std::{u32, u64};
 
-use futures::sync::oneshot;
-use futures::task;
-use futures::{Async, Future, IntoFuture, Poll, Stream};
+use tokio_executor::current_thread as tokio_current_thread;
 
-use iocontext::*;
+use super::iocontext::*;
 
 lazy_static! {
     static ref DATA_QUEUE_CAT: gst::DebugCategory = gst::DebugCategory::new(
@@ -89,7 +95,7 @@ struct DataQueueInner {
     max_size_bytes: Option<u32>,
     max_size_time: Option<u64>,
 
-    current_task: Option<task::Task>,
+    waker: Option<task::Waker>,
     shutdown_receiver: Option<oneshot::Receiver<()>>,
 }
 
@@ -109,16 +115,20 @@ impl DataQueue {
             max_size_buffers,
             max_size_bytes,
             max_size_time,
-            current_task: None,
+            waker: None,
             shutdown_receiver: None,
         })))
     }
 
-    pub fn schedule<U, F, G>(&self, io_context: &IOContext, func: F, err_func: G) -> Result<(), ()>
+    pub fn schedule<F, G, Fut>(
+        &self,
+        io_context: &IOContext,
+        func: F,
+        err_func: G,
+    ) -> Result<(), ()>
     where
-        F: Fn(DataQueueItem) -> U + Send + 'static,
-        U: IntoFuture<Item = (), Error = gst::FlowError> + 'static,
-        <U as IntoFuture>::Future: Send + 'static,
+        F: Fn(DataQueueItem) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<(), gst::FlowError>> + Send + 'static,
         G: FnOnce(gst::FlowError) + Send + 'static,
     {
         // Ready->Paused
@@ -136,12 +146,12 @@ impl DataQueue {
         assert_eq!(inner.state, DataQueueState::Unscheduled);
         inner.state = DataQueueState::Scheduled;
 
-        let (sender, receiver) = oneshot::channel::<()>();
+        let (sender, receiver) = oneshot::channel();
         inner.shutdown_receiver = Some(receiver);
 
         let queue_clone = self.clone();
         let element_clone = inner.element.clone();
-        io_context.spawn(queue_clone.for_each(func).then(move |res| {
+        io_context.spawn(queue_clone.try_for_each(func).then(move |res| {
             gst_debug!(
                 DATA_QUEUE_CAT,
                 obj: &element_clone,
@@ -155,8 +165,9 @@ impl DataQueue {
 
             let _ = sender.send(());
 
-            Ok(())
+            future::ready(())
         }));
+
         Ok(())
     }
 
@@ -164,6 +175,7 @@ impl DataQueue {
         // Paused->Playing
         //
         // Change state to Running and signal task
+
         let mut inner = self.0.lock().unwrap();
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Unpausing data queue");
         if inner.state == DataQueueState::Running {
@@ -174,8 +186,8 @@ impl DataQueue {
         assert_eq!(inner.state, DataQueueState::Scheduled);
         inner.state = DataQueueState::Running;
 
-        if let Some(task) = inner.current_task.take() {
-            task.notify();
+        if let Some(waker) = inner.waker.take() {
+            waker.wake();
         }
     }
 
@@ -194,8 +206,8 @@ impl DataQueue {
         assert_eq!(inner.state, DataQueueState::Running);
         inner.state = DataQueueState::Scheduled;
 
-        if let Some(task) = inner.current_task.take() {
-            task.notify();
+        if let Some(waker) = inner.waker.take() {
+            waker.wake();
         }
     }
 
@@ -215,15 +227,15 @@ impl DataQueue {
         assert!(inner.state == DataQueueState::Scheduled || inner.state == DataQueueState::Running);
         inner.state = DataQueueState::Shutdown;
 
-        if let Some(task) = inner.current_task.take() {
-            task.notify();
+        if let Some(waker) = inner.waker.take() {
+            waker.wake();
         }
 
         let shutdown_receiver = inner.shutdown_receiver.take().unwrap();
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Waiting for data queue to shut down");
         drop(inner);
 
-        shutdown_receiver.wait().expect("Already shut down");
+        tokio_current_thread::block_on_all(shutdown_receiver).expect("Already shut down");
 
         let mut inner = self.0.lock().unwrap();
         inner.state = DataQueueState::Unscheduled;
@@ -287,8 +299,8 @@ impl DataQueue {
         inner.cur_size_buffers += count;
         inner.cur_size_bytes += bytes;
 
-        if let Some(task) = inner.current_task.take() {
-            task.notify();
+        if let Some(waker) = inner.waker.take() {
+            waker.wake();
         }
 
         Ok(())
@@ -302,18 +314,17 @@ impl Drop for DataQueueInner {
 }
 
 impl Stream for DataQueue {
-    type Item = DataQueueItem;
-    type Error = gst::FlowError;
+    type Item = Result<DataQueueItem, gst::FlowError>;
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
         let mut inner = self.0.lock().unwrap();
         if inner.state == DataQueueState::Shutdown {
             gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue shutting down");
-            return Ok(Async::Ready(None));
+            return Poll::Ready(None);
         } else if inner.state == DataQueueState::Scheduled {
             gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue not running");
-            inner.current_task = Some(task::current());
-            return Ok(Async::NotReady);
+            inner.waker = Some(cx.waker().clone());
+            return Poll::Pending;
         }
 
         assert_eq!(inner.state, DataQueueState::Running);
@@ -322,8 +333,8 @@ impl Stream for DataQueue {
         match inner.queue.pop_front() {
             None => {
                 gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue is empty");
-                inner.current_task = Some(task::current());
-                Ok(Async::NotReady)
+                inner.waker = Some(cx.waker().clone());
+                Poll::Pending
             }
             Some(item) => {
                 gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Popped item {:?}", item);
@@ -332,7 +343,7 @@ impl Stream for DataQueue {
                 inner.cur_size_buffers -= count;
                 inner.cur_size_bytes -= bytes;
 
-                Ok(Async::Ready(Some(item)))
+                Poll::Ready(Some(Ok(item)))
             }
         }
     }
