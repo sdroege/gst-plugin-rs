@@ -17,7 +17,8 @@
 
 #![crate_type = "cdylib"]
 
-mod iocontext;
+mod runtime;
+use runtime::executor as iocontext;
 
 mod socket;
 mod tcpclientsrc;
