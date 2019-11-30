@@ -36,10 +36,9 @@
 //! [`PadSrc`]: struct.PadSrc.html
 //! [`PadSink`]: struct.PadSink.html
 
-use futures::channel::mpsc as future_mpsc;
+use futures::channel::oneshot;
 use futures::future::BoxFuture;
 use futures::prelude::*;
-use futures::ready;
 use futures::stream::futures_unordered::FuturesUnordered;
 
 use glib;
@@ -50,19 +49,13 @@ use gst::{gst_debug, gst_log, gst_trace};
 
 use lazy_static::lazy_static;
 
-use std::cmp;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::HashMap;
 use std::io;
 use std::mem;
-use std::pin::Pin;
 use std::sync::mpsc as sync_mpsc;
-use std::sync::{atomic, Arc, Mutex, Weak};
-use std::task::Poll;
+use std::sync::{Arc, Mutex, Weak};
 use std::thread;
-use std::time::{Duration, Instant};
-
-use tokio_executor::current_thread as tokio_current_thread;
-use tokio_executor::park::Unpark;
+use std::time::Duration;
 
 use super::RUNTIME_CAT;
 
@@ -82,170 +75,52 @@ lazy_static! {
 
 struct ContextThread {
     name: String,
-    shutdown: Arc<atomic::AtomicBool>,
 }
 
 impl ContextThread {
-    fn start(
-        name: &str,
-        wait: u32,
-        reactor: tokio_net::driver::Reactor,
-        timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
-    ) -> (tokio_current_thread::Handle, ContextShutdown) {
-        let handle = reactor.handle();
-        let shutdown = Arc::new(atomic::AtomicBool::new(false));
-        let shutdown_clone = shutdown.clone();
+    fn start(name: &str, wait: u32) -> (tokio::runtime::Handle, ContextShutdown) {
         let name_clone = name.into();
 
-        let mut context_thread = ContextThread {
-            shutdown: shutdown_clone,
-            name: name_clone,
-        };
+        let mut context_thread = ContextThread { name: name_clone };
 
-        let (sender, receiver) = sync_mpsc::channel();
+        let (handle_sender, handle_receiver) = sync_mpsc::channel();
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         let join = thread::spawn(move || {
-            context_thread.spawn(wait, reactor, sender, timers);
+            context_thread.spawn(wait, handle_sender, shutdown_receiver);
         });
+
+        let handle = handle_receiver.recv().expect("Context thread init failed");
 
         let shutdown = ContextShutdown {
             name: name.into(),
-            shutdown,
-            handle,
+            shutdown: Some(shutdown_sender),
             join: Some(join),
         };
 
-        let thread_handle = receiver.recv().expect("Context thread init failed");
-
-        (thread_handle, shutdown)
+        (handle, shutdown)
     }
 
     fn spawn(
         &mut self,
         wait: u32,
-        reactor: tokio_net::driver::Reactor,
-        sender: sync_mpsc::Sender<tokio_current_thread::Handle>,
-        timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
+        handle_sender: sync_mpsc::Sender<tokio::runtime::Handle>,
+        shutdown_receiver: oneshot::Receiver<()>,
     ) {
         gst_debug!(RUNTIME_CAT, "Started context thread '{}'", self.name);
 
-        let wait = Duration::from_millis(wait as u64);
+        let mut runtime = tokio::runtime::Builder::new()
+            .basic_scheduler()
+            .enable_all()
+            .max_throttling(Duration::from_millis(wait as u64))
+            .build()
+            .expect("Couldn't build the runtime");
 
-        let handle = reactor.handle();
-        let timer = tokio_timer::Timer::new(reactor);
-        let timer_handle = timer.handle();
-
-        let mut current_thread = tokio_current_thread::CurrentThread::new_with_park(timer);
-
-        sender
-            .send(current_thread.handle())
+        handle_sender
+            .send(runtime.handle().clone())
             .expect("Couldn't send context thread handle");
 
-        let _timer_guard = tokio_timer::set_default(&timer_handle);
-        let _reactor_guard = tokio_net::driver::set_default(&handle);
-
-        let mut now = Instant::now();
-
-        loop {
-            if self.shutdown.load(atomic::Ordering::SeqCst) {
-                gst_debug!(RUNTIME_CAT, "Shutting down loop");
-                break;
-            }
-
-            gst_trace!(RUNTIME_CAT, "Elapsed {:?} since last loop", now.elapsed());
-
-            // Handle timers
-            {
-                // Trigger all timers that would be expired before the middle of the loop wait
-                // time
-                let timer_threshold = now + wait / 2;
-                let mut timers = timers.lock().unwrap();
-                while timers
-                    .peek()
-                    .and_then(|entry| {
-                        if entry.time < timer_threshold {
-                            Some(())
-                        } else {
-                            None
-                        }
-                    })
-                    .is_some()
-                {
-                    let TimerEntry {
-                        time,
-                        interval,
-                        sender,
-                        ..
-                    } = timers.pop().unwrap();
-
-                    if sender.is_closed() {
-                        continue;
-                    }
-
-                    let _ = sender.unbounded_send(());
-                    if let Some(interval) = interval {
-                        timers.push(TimerEntry {
-                            time: time + interval,
-                            id: TIMER_ENTRY_ID.fetch_add(1, atomic::Ordering::Relaxed),
-                            interval: Some(interval),
-                            sender,
-                        });
-                    }
-                }
-            }
-
-            gst_trace!(RUNTIME_CAT, "Turning thread '{}'", self.name);
-            while current_thread
-                .turn(Some(Duration::from_millis(0)))
-                .unwrap()
-                .has_polled()
-            {}
-            gst_trace!(RUNTIME_CAT, "Turned thread '{}'", self.name);
-
-            // We have to check again after turning in case we're supposed to shut down now
-            // and already handled the unpark above
-            if self.shutdown.load(atomic::Ordering::SeqCst) {
-                gst_debug!(RUNTIME_CAT, "Shutting down loop");
-                break;
-            }
-
-            let elapsed = now.elapsed();
-            gst_trace!(RUNTIME_CAT, "Elapsed {:?} after handling futures", elapsed);
-
-            if wait == Duration::from_millis(0) {
-                let timers = timers.lock().unwrap();
-                let wait = match timers.peek().map(|entry| entry.time) {
-                    None => None,
-                    Some(time) => Some({
-                        let tmp = Instant::now();
-
-                        if time < tmp {
-                            Duration::from_millis(0)
-                        } else {
-                            time.duration_since(tmp)
-                        }
-                    }),
-                };
-                drop(timers);
-
-                gst_trace!(RUNTIME_CAT, "Sleeping for up to {:?}", wait);
-                current_thread.turn(wait).unwrap();
-                gst_trace!(RUNTIME_CAT, "Slept for {:?}", now.elapsed());
-                now = Instant::now();
-            } else {
-                if elapsed < wait {
-                    gst_trace!(
-                        RUNTIME_CAT,
-                        "Waiting for {:?} before polling again",
-                        wait - elapsed
-                    );
-                    thread::sleep(wait - elapsed);
-                    gst_trace!(RUNTIME_CAT, "Slept for {:?}", now.elapsed());
-                }
-
-                now += wait;
-            }
-        }
+        let _ = runtime.block_on(shutdown_receiver);
     }
 }
 
@@ -258,8 +133,7 @@ impl Drop for ContextThread {
 #[derive(Debug)]
 struct ContextShutdown {
     name: String,
-    shutdown: Arc<atomic::AtomicBool>,
-    handle: tokio_net::driver::Handle,
+    shutdown: Option<oneshot::Sender<()>>,
     join: Option<thread::JoinHandle<()>>,
 }
 
@@ -270,16 +144,13 @@ impl Drop for ContextShutdown {
             "Shutting down context thread thread '{}'",
             self.name
         );
-        self.shutdown.store(true, atomic::Ordering::SeqCst);
+        self.shutdown.take().unwrap();
+
         gst_trace!(
             RUNTIME_CAT,
             "Waiting for context thread '{}' to shutdown",
             self.name
         );
-        // After being unparked, the next turn() is guaranteed to finish immediately,
-        // as such there is no race condition between checking for shutdown and setting
-        // shutdown.
-        self.handle.unpark();
         let _ = self.join.take().unwrap().join();
     }
 }
@@ -301,9 +172,7 @@ type TaskQueue = FuturesUnordered<BoxFuture<'static, TaskOutput>>;
 #[derive(Debug)]
 struct ContextInner {
     name: String,
-    thread_handle: Mutex<tokio_current_thread::Handle>,
-    reactor_handle: tokio_net::driver::Handle,
-    timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
+    handle: Mutex<tokio::runtime::Handle>,
     // Only used for dropping
     _shutdown: ContextShutdown,
     task_queues: Mutex<(u64, HashMap<u64, TaskQueue>)>,
@@ -352,19 +221,11 @@ impl Context {
             }
         }
 
-        let reactor = tokio_net::driver::Reactor::new()?;
-        let reactor_handle = reactor.handle();
-
-        let timers = Arc::new(Mutex::new(BinaryHeap::new()));
-
-        let (thread_handle, shutdown) =
-            ContextThread::start(context_name, wait, reactor, timers.clone());
+        let (handle, shutdown) = ContextThread::start(context_name, wait);
 
         let context = Context(Arc::new(ContextInner {
             name: context_name.into(),
-            thread_handle: Mutex::new(thread_handle),
-            reactor_handle,
-            timers,
+            handle: Mutex::new(handle),
             _shutdown: shutdown,
             task_queues: Mutex::new((0, HashMap::new())),
         }));
@@ -391,15 +252,12 @@ impl Context {
         self.0.name.as_str()
     }
 
-    pub fn reactor_handle(&self) -> &tokio_net::driver::Handle {
-        &self.0.reactor_handle
-    }
-
-    pub fn spawn<Fut>(&self, future: Fut)
+    pub fn spawn<Fut>(&self, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
     where
-        Fut: Future<Output = ()> + Send + 'static,
+        Fut: Future + Send + 'static,
+        Fut::Output: Send + 'static,
     {
-        self.0.thread_handle.lock().unwrap().spawn(future).unwrap();
+        self.0.handle.lock().unwrap().spawn(future)
     }
 
     pub fn release_task_queue(&self, id: TaskQueueId) -> Option<TaskQueue> {
@@ -451,169 +309,59 @@ impl Context {
         }
     }
 
-    pub fn add_timer(
-        &self,
-        time: Instant,
-        interval: Option<Duration>,
-    ) -> future_mpsc::UnboundedReceiver<()> {
-        let (sender, receiver) = future_mpsc::unbounded();
-
-        let mut timers = self.0.timers.lock().unwrap();
-        let entry = TimerEntry {
-            time,
-            id: TIMER_ENTRY_ID.fetch_add(1, atomic::Ordering::Relaxed),
-            interval,
-            sender,
-        };
-
-        timers.push(entry);
-        self.0.reactor_handle.unpark();
-
-        receiver
-    }
-
-    pub fn new_interval(&self, interval: Duration) -> Interval {
-        Interval::new(&self, interval)
-    }
-
     /// Builds a `Future` to execute an `action` at [`Interval`]s.
     ///
     /// [`Interval`]: struct.Interval.html
-    pub fn interval<F, Fut>(&self, interval: Duration, f: F) -> impl Future<Output = Fut::Output>
+    pub fn interval<F, E, Fut>(&self, interval: Duration, f: F) -> impl Future<Output = Fut::Output>
     where
         F: Fn() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<(), ()>> + Send + 'static,
+        E: Send + 'static,
+        Fut: Future<Output = Result<(), E>> + Send + 'static,
     {
-        let f = Arc::new(f);
-        self.new_interval(interval).try_for_each(move |_| {
-            let f = Arc::clone(&f);
-            f()
-        })
-    }
-
-    pub fn new_timeout(&self, timeout: Duration) -> Timeout {
-        Timeout::new(&self, timeout)
+        async move {
+            let mut interval = tokio::time::interval(interval);
+            loop {
+                interval.tick().await;
+                if let Err(err) = f().await {
+                    break Err(err);
+                }
+            }
+        }
     }
 
     /// Builds a `Future` to execute an action after the given `delay` has elapsed.
     pub fn delay_for<F, Fut>(&self, delay: Duration, f: F) -> impl Future<Output = Fut::Output>
     where
         F: FnOnce() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
+        Fut: Future + Send + 'static,
     {
-        self.new_timeout(delay).then(move |_| f())
-    }
-}
-
-static TIMER_ENTRY_ID: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
-
-// Ad-hoc interval timer implementation for our throttled event loop above
-#[derive(Debug)]
-struct TimerEntry {
-    time: Instant,
-    id: usize, // for producing a total order
-    interval: Option<Duration>,
-    sender: future_mpsc::UnboundedSender<()>,
-}
-
-impl PartialEq for TimerEntry {
-    fn eq(&self, other: &Self) -> bool {
-        self.time.eq(&other.time) && self.id.eq(&other.id)
-    }
-}
-
-impl Eq for TimerEntry {}
-
-impl PartialOrd for TimerEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        Some(self.cmp(&other))
-    }
-}
-
-impl Ord for TimerEntry {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        other
-            .time
-            .cmp(&self.time)
-            .then_with(|| other.id.cmp(&self.id))
-    }
-}
-
-/// A `Stream` that yields a tick at `interval`s.
-#[derive(Debug)]
-pub struct Interval {
-    receiver: future_mpsc::UnboundedReceiver<()>,
-}
-
-impl Interval {
-    fn new(context: &Context, interval: Duration) -> Self {
-        Self {
-            receiver: context.add_timer(Instant::now(), Some(interval)),
-        }
-    }
-}
-
-impl Stream for Interval {
-    type Item = Result<(), ()>;
-
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context,
-    ) -> Poll<Option<Self::Item>> {
-        self.receiver
-            .poll_next_unpin(cx)
-            .map(|item_opt| item_opt.map(Ok))
-    }
-}
-
-/// A `Future` that completes after a `timeout` is elapsed.
-#[derive(Debug)]
-pub struct Timeout {
-    receiver: future_mpsc::UnboundedReceiver<()>,
-}
-
-impl Timeout {
-    fn new(context: &Context, timeout: Duration) -> Self {
-        Self {
-            receiver: context.add_timer(Instant::now() + timeout, None),
-        }
-    }
-}
-
-impl Future for Timeout {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
-        match ready!(self.receiver.poll_next_unpin(cx)) {
-            Some(_) => Poll::Ready(()),
-            None => unreachable!(),
+        async move {
+            tokio::time::delay_for(delay).await;
+            f().await
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use futures::channel::{mpsc, oneshot};
-    use futures::future::Aborted;
+    use futures::channel::mpsc;
+    use futures::future::abortable;
     use futures::lock::Mutex;
 
     use gst;
 
     use std::sync::Arc;
-    use std::time::{Duration, Instant};
-
-    use crate::block_on;
-    use crate::runtime::future::abortable_waitable;
+    use std::time::Instant;
 
     use super::*;
 
     type Item = i32;
 
     const SLEEP_DURATION: u32 = 2;
-    const INTERVAL: Duration = Duration::from_millis(100 * SLEEP_DURATION as u64);
+    const INTERVAL: Duration = std::time::Duration::from_millis(100 * SLEEP_DURATION as u64);
 
-    #[test]
-    fn user_drain_pending_tasks() {
+    #[tokio::test]
+    async fn user_drain_pending_tasks() {
         // Setup
         gst::init().unwrap();
 
@@ -649,15 +397,15 @@ mod tests {
         // User triggered drain
         receiver.try_next().unwrap_err();
 
-        block_on!(drain).unwrap();
+        drain.await.unwrap();
         assert_eq!(receiver.try_next().unwrap(), Some(0));
 
         add_task(1).unwrap();
         receiver.try_next().unwrap_err();
     }
 
-    #[test]
-    fn delay_for() {
+    #[tokio::test]
+    async fn delay_for() {
         gst::init().unwrap();
 
         let context = Context::acquire("delay_for", SLEEP_DURATION).unwrap();
@@ -665,41 +413,21 @@ mod tests {
         let (sender, receiver) = oneshot::channel();
 
         let start = Instant::now();
-        let delayed_by_fut = context.delay_for(INTERVAL, move || async {
-            sender.send(42).unwrap();
+        let delayed_by_fut = context.delay_for(INTERVAL, move || {
+            async {
+                sender.send(42).unwrap();
+            }
         });
         context.spawn(delayed_by_fut);
 
-        let _ = block_on!(receiver).unwrap();
+        let _ = receiver.await.unwrap();
         let delta = Instant::now() - start;
         assert!(delta >= INTERVAL);
         assert!(delta < INTERVAL * 2);
     }
 
-    #[test]
-    fn delay_for_abort() {
-        gst::init().unwrap();
-
-        let context = Context::acquire("delay_for_abort", SLEEP_DURATION).unwrap();
-
-        let (sender, receiver) = oneshot::channel();
-
-        let delay_for_fut = context.delay_for(INTERVAL, move || async {
-            sender.send(42).unwrap();
-        });
-        let (abortable_delay_for, abort_handle) = abortable_waitable(delay_for_fut);
-        context.spawn(abortable_delay_for.map(move |res| {
-            if let Err(Aborted) = res {
-                gst_debug!(RUNTIME_CAT, "Aborted delay_for");
-            }
-        }));
-
-        block_on!(abort_handle.abort_and_wait()).unwrap();
-        block_on!(receiver).unwrap_err();
-    }
-
-    #[test]
-    fn interval_ok() {
+    #[tokio::test]
+    async fn interval_ok() {
         gst::init().unwrap();
 
         let context = Context::acquire("interval_ok", SLEEP_DURATION).unwrap();
@@ -707,37 +435,36 @@ mod tests {
         let (sender, mut receiver) = mpsc::channel(1);
         let sender: Arc<Mutex<mpsc::Sender<Instant>>> = Arc::new(Mutex::new(sender));
 
-        let interval_fut = context.interval(INTERVAL, move || {
+        let (interval_fut, handle) = abortable(context.interval(INTERVAL, move || {
             let sender = Arc::clone(&sender);
             async move {
                 let instant = Instant::now();
                 sender.lock().await.send(instant).await.map_err(drop)
             }
-        });
+        }));
         context.spawn(interval_fut.map(drop));
 
-        block_on!(async {
-            let mut idx: u32 = 0;
-            let mut first = Instant::now();
-            while let Some(instant) = receiver.next().await {
-                if idx > 0 {
-                    let delta = instant - first;
-                    assert!(delta > INTERVAL * (idx - 1));
-                    assert!(delta < INTERVAL * (idx + 1));
-                } else {
-                    first = instant;
-                }
-                if idx == 3 {
-                    break;
-                }
-
-                idx += 1;
+        let mut idx: u32 = 0;
+        let mut first = Instant::now();
+        while let Some(instant) = receiver.next().await {
+            if idx > 0 {
+                let delta = instant - first;
+                assert!(delta > INTERVAL * (idx - 1));
+                assert!(delta < INTERVAL * (idx + 1));
+            } else {
+                first = instant;
             }
-        });
+            if idx == 3 {
+                handle.abort();
+                break;
+            }
+
+            idx += 1;
+        }
     }
 
-    #[test]
-    fn interval_err() {
+    #[tokio::test]
+    async fn interval_err() {
         gst::init().unwrap();
 
         let context = Context::acquire("interval_err", SLEEP_DURATION).unwrap();
@@ -763,68 +490,20 @@ mod tests {
         });
         context.spawn(interval_fut.map(drop));
 
-        block_on!(async {
-            let mut idx: u32 = 0;
-            let mut first = Instant::now();
-            while let Some(instant) = receiver.next().await {
-                if idx > 0 {
-                    let delta = instant - first;
-                    assert!(delta > INTERVAL * (idx - 1));
-                    assert!(delta < INTERVAL * (idx + 1));
-                } else {
-                    first = instant;
-                }
-
-                idx += 1;
+        let mut idx: u32 = 0;
+        let mut first = Instant::now();
+        while let Some(instant) = receiver.next().await {
+            if idx > 0 {
+                let delta = instant - first;
+                assert!(delta > INTERVAL * (idx - 1));
+                assert!(delta < INTERVAL * (idx + 1));
+            } else {
+                first = instant;
             }
 
-            assert_eq!(idx, 3);
-        });
-    }
+            idx += 1;
+        }
 
-    #[test]
-    fn interval_abort() {
-        gst::init().unwrap();
-
-        let context = Context::acquire("interval_abort", SLEEP_DURATION).unwrap();
-
-        let (sender, mut receiver) = mpsc::channel(1);
-        let sender: Arc<Mutex<mpsc::Sender<Instant>>> = Arc::new(Mutex::new(sender));
-
-        let interval_fut = context.interval(INTERVAL, move || {
-            let sender = Arc::clone(&sender);
-            async move {
-                let instant = Instant::now();
-                sender.lock().await.send(instant).await.map_err(drop)
-            }
-        });
-        let (abortable_interval, abort_handle) = abortable_waitable(interval_fut);
-        context.spawn(abortable_interval.map(move |res| {
-            if let Err(Aborted) = res {
-                gst_debug!(RUNTIME_CAT, "Aborted timeout");
-            }
-        }));
-
-        block_on!(async {
-            let mut idx: u32 = 0;
-            let mut first = Instant::now();
-            while let Some(instant) = receiver.next().await {
-                if idx > 0 {
-                    let delta = instant - first;
-                    assert!(delta > INTERVAL * (idx - 1));
-                    assert!(delta < INTERVAL * (idx + 1));
-                } else {
-                    first = instant;
-                }
-                if idx == 3 {
-                    abort_handle.abort_and_wait().await.unwrap();
-                    break;
-                }
-
-                idx += 1;
-            }
-
-            assert_eq!(receiver.next().await, None);
-        });
+        assert_eq!(idx, 3);
     }
 }

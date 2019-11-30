@@ -17,8 +17,9 @@
 
 use either::Either;
 
+use futures::executor::block_on;
 use futures::future::BoxFuture;
-use futures::future::{abortable, AbortHandle};
+use futures::future::{abortable, AbortHandle, Aborted};
 use futures::lock::{Mutex, MutexGuard};
 use futures::prelude::*;
 
@@ -41,7 +42,6 @@ use std::cmp::{max, min, Ordering};
 use std::collections::{BTreeSet, VecDeque};
 use std::time::Duration;
 
-use crate::runtime::future::{abortable_waitable, AbortWaitHandle};
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadContext, PadContextWeak, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
@@ -226,7 +226,7 @@ impl PadSinkHandler for JitterBufferPadSinkHandler {
             }.boxed())
         } else {
             if let EventView::FlushStop(..) = event.view() {
-                block_on!(jitterbuffer.flush(element));
+                block_on(jitterbuffer.flush(element));
             }
 
             gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized event {:?}", event);
@@ -247,7 +247,7 @@ impl PadSinkHandler for JitterBufferPadSinkHandler {
         match query.view_mut() {
             QueryView::Drain(..) => {
                 gst_info!(CAT, obj: pad.gst_pad(), "Draining");
-                block_on!(jitterbuffer.enqueue_item(pad.gst_pad(), element, None)).is_ok()
+                block_on(jitterbuffer.enqueue_item(pad.gst_pad(), element, None)).is_ok()
             }
             _ => jitterbuffer.src_pad.gst_pad().peer_query(query),
         }
@@ -278,7 +278,7 @@ impl PadSrcHandler for JitterBufferPadSrcHandler {
                 if ret {
                     let (_, mut min_latency, _) = peer_query.get_result();
                     let our_latency =
-                        block_on!(jitterbuffer.settings.lock()).latency_ms as u64 * gst::MSECOND;
+                        block_on(jitterbuffer.settings.lock()).latency_ms as u64 * gst::MSECOND;
 
                     min_latency += our_latency;
                     let max_latency = gst::CLOCK_TIME_NONE;
@@ -292,7 +292,7 @@ impl PadSrcHandler for JitterBufferPadSrcHandler {
                 if q.get_format() != gst::Format::Time {
                     jitterbuffer.sink_pad.gst_pad().peer_query(query)
                 } else {
-                    q.set(block_on!(jitterbuffer.state.lock()).segment.get_position());
+                    q.set(block_on(jitterbuffer.state.lock()).segment.get_position());
                     true
                 }
             }
@@ -354,7 +354,8 @@ struct State {
     discont: bool,
     last_res: Result<gst::FlowSuccess, gst::FlowError>,
     task_queue_abort_handle: Option<AbortHandle>,
-    wakeup_abort_handle: Option<AbortWaitHandle>,
+    wakeup_abort_handle: Option<AbortHandle>,
+    wakeup_join_handle: Option<tokio::task::JoinHandle<Result<(), Aborted>>>,
 }
 
 impl Default for State {
@@ -383,6 +384,7 @@ impl Default for State {
             last_res: Ok(gst::FlowSuccess::Ok),
             task_queue_abort_handle: None,
             wakeup_abort_handle: None,
+            wakeup_join_handle: None,
         }
     }
 }
@@ -941,6 +943,9 @@ impl JitterBuffer {
         if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
             wakeup_abort_handle.abort();
         }
+        if let Some(wakeup_join_handle) = state.wakeup_join_handle.take() {
+            let _ = wakeup_join_handle.await;
+        }
 
         let pad_src_state = self.src_pad.lock_state().await;
         let pad_ctx = pad_src_state.pad_context().unwrap();
@@ -953,9 +958,8 @@ impl JitterBuffer {
             Self::wakeup_fut(latency_ns, context_wait_ns, element, pad_ctx_weak)
         });
 
-        let (wakeup_fut, abort_handle) = abortable_waitable(wakeup_fut);
-        pad_ctx.spawn(wakeup_fut.map(drop));
-
+        let (wakeup_fut, abort_handle) = abortable(wakeup_fut);
+        state.wakeup_join_handle = Some(pad_ctx.spawn(wakeup_fut));
         state.wakeup_abort_handle = Some(abort_handle);
     }
 
@@ -1136,7 +1140,7 @@ impl ObjectSubclass for JitterBuffer {
                     .expect("signal arg")
                     .expect("missing signal arg");
                 let jitterbuffer = Self::from_instance(&element);
-                block_on!(jitterbuffer.clear_pt_map(&element));
+                block_on(jitterbuffer.clear_pt_map(&element));
                 None
             },
         );
@@ -1176,10 +1180,10 @@ impl ObjectImpl for JitterBuffer {
 
         match *prop {
             subclass::Property("latency", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.latency_ms = value.get_some().expect("type checked upstream");
 
-                block_on!(self.state.lock())
+                block_on(self.state.lock())
                     .jbuf
                     .borrow()
                     .set_delay(settings.latency_ms as u64 * gst::MSECOND);
@@ -1187,26 +1191,26 @@ impl ObjectImpl for JitterBuffer {
                 /* TODO: post message */
             }
             subclass::Property("do-lost", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.do_lost = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-dropout-time", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.max_dropout_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-misorder-time", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.max_misorder_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -1218,23 +1222,23 @@ impl ObjectImpl for JitterBuffer {
 
         match *prop {
             subclass::Property("latency", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.latency_ms.to_value())
             }
             subclass::Property("do-lost", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.do_lost.to_value())
             }
             subclass::Property("max-dropout-time", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.max_dropout_time.to_value())
             }
             subclass::Property("max-misorder-time", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.max_misorder_time.to_value())
             }
             subclass::Property("stats", ..) => {
-                let state = block_on!(self.state.lock());
+                let state = block_on(self.state.lock());
                 let s = gst::Structure::new(
                     "application/x-rtp-jitterbuffer-stats",
                     &[
@@ -1246,11 +1250,11 @@ impl ObjectImpl for JitterBuffer {
                 Ok(s.to_value())
             }
             subclass::Property("context", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),
@@ -1275,7 +1279,7 @@ impl ElementImpl for JitterBuffer {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
-            gst::StateChange::NullToReady => block_on!(async {
+            gst::StateChange::NullToReady => block_on(async {
                 let _state = self.state.lock().await;
                 let settings = self.settings.lock().await;
 
@@ -1294,7 +1298,7 @@ impl ElementImpl for JitterBuffer {
 
                 self.sink_pad.prepare(&JitterBufferPadSinkHandler {}).await;
             }),
-            gst::StateChange::PausedToReady => block_on!(async {
+            gst::StateChange::PausedToReady => block_on(async {
                 let mut state = self.state.lock().await;
 
                 if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
@@ -1305,7 +1309,7 @@ impl ElementImpl for JitterBuffer {
                     abort_handle.abort();
                 }
             }),
-            gst::StateChange::ReadyToNull => block_on!(async {
+            gst::StateChange::ReadyToNull => block_on(async {
                 let mut state = self.state.lock().await;
 
                 self.sink_pad.unprepare().await;

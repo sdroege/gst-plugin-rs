@@ -55,32 +55,17 @@ stages:
     - cargo build --color=always --all --examples --all-features
     - G_DEBUG=fatal_warnings cargo test --color=always --all --examples --all-features
 
-#test 1.39:
+test 1.39:
   # 1.39 img
   # https://hub.docker.com/_/rust/
-#  image: "rust:1.39-slim-buster"
-#  extends: '.cargo test'
+  image: "rust:1.39-slim-buster"
+  extends: '.cargo test'
 
-#test stable:
+test stable:
   # Stable img
   # https://hub.docker.com/_/rust/
-#  image: "rust:slim-buster"
-#  extends: '.cargo test'
-
-test beta:
-  # https://hub.docker.com/_/rust/
   image: "rust:slim-buster"
-  extends: '.tarball_setup'
-  script:
-    - export CARGO_HOME=/usr/local/cargo # will install a new toolchain, reset CARGO_HOME to its default path
-    - rustup toolchain install beta
-    - export CARGO_HOME=${CI_PROJECT_DIR}/.cargo_home
-    - rustup override set beta
-    - rustc --version
-    - cargo build --color=always --all
-    - G_DEBUG=fatal_warnings cargo test --color=always --all
-    - cargo build --color=always --all --examples --all-features
-    - G_DEBUG=fatal_warnings cargo test --color=always --all --examples --all-features
+  extends: '.cargo test'
 
 test nightly:
   # Nightly
@@ -91,15 +76,9 @@ test nightly:
 
 rustfmt:
   image: "rust:slim-buster"
-  extends: '.tarball_setup'
   stage: "lint"
   script:
-    - export CARGO_HOME=/usr/local/cargo # will install a new toolchain, reset CARGO_HOME to its default path
-    - rustup toolchain install beta
-    - rustup component add rustfmt --toolchain beta
-    - export CARGO_HOME=${CI_PROJECT_DIR}/.cargo_home
-    - rustup override set beta
-    - rustc --version
+    - rustup component add rustfmt
     - cargo fmt --version
     - cargo fmt -- --color=always --check
 
@@ -108,12 +87,7 @@ clippy:
   image: "rust:slim-buster"
   stage: 'extras'
   script:
-    - export CARGO_HOME=/usr/local/cargo # will install a new toolchain, reset CARGO_HOME to its default path
-    - rustup toolchain install beta
-    - rustup component add clippy --toolchain beta
-    - export CARGO_HOME=${CI_PROJECT_DIR}/.cargo_home
-    - rustup override set beta
-    - rustc --version
+    - rustup component add clippy-preview
     - cargo clippy --color=always --all --all-features -- -A clippy::redundant_pattern_matching -A clippy::single_match -A clippy::cast_lossless
 
 audit:

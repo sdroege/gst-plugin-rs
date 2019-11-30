@@ -24,7 +24,7 @@
 #![recursion_limit = "1024"]
 #![crate_type = "cdylib"]
 
-pub use tokio_executor;
+pub use tokio;
 
 #[macro_use]
 pub mod runtime;

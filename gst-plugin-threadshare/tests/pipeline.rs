@@ -167,7 +167,8 @@ fn multiple_contexts_queue() {
         };
 
         glib::Continue(true)
-    });
+    })
+    .unwrap();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -326,7 +327,8 @@ fn multiple_contexts_proxy() {
         };
 
         glib::Continue(true)
-    });
+    })
+    .unwrap();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -421,39 +423,43 @@ fn eos() {
     });
 
     let l_clone = l.clone();
-    pipeline.get_bus().unwrap().add_watch(move |_, msg| {
-        use gst::MessageView;
+    pipeline
+        .get_bus()
+        .unwrap()
+        .add_watch(move |_, msg| {
+            use gst::MessageView;
 
-        match msg.view() {
-            MessageView::StateChanged(state_changed) => {
-                if let Some(source) = state_changed.get_src() {
-                    if source.get_type() != gst::Pipeline::static_type() {
-                        return glib::Continue(true);
-                    }
-                    if state_changed.get_old() == gst::State::Paused
-                        && state_changed.get_current() == gst::State::Playing
-                    {
-                        if let Some(scenario) = scenario.take() {
-                            std::thread::spawn(scenario);
+            match msg.view() {
+                MessageView::StateChanged(state_changed) => {
+                    if let Some(source) = state_changed.get_src() {
+                        if source.get_type() != gst::Pipeline::static_type() {
+                            return glib::Continue(true);
+                        }
+                        if state_changed.get_old() == gst::State::Paused
+                            && state_changed.get_current() == gst::State::Playing
+                        {
+                            if let Some(scenario) = scenario.take() {
+                                std::thread::spawn(scenario);
+                            }
                         }
                     }
                 }
-            }
-            MessageView::Error(err) => {
-                gst_error!(
-                    CAT,
-                    "eos: Error from {:?}: {} ({:?})",
-                    err.get_src().map(|s| s.get_path_string()),
-                    err.get_error(),
-                    err.get_debug()
-                );
-                l_clone.quit();
-            }
-            _ => (),
-        };
+                MessageView::Error(err) => {
+                    gst_error!(
+                        CAT,
+                        "eos: Error from {:?}: {} ({:?})",
+                        err.get_src().map(|s| s.get_path_string()),
+                        err.get_error(),
+                        err.get_debug()
+                    );
+                    l_clone.quit();
+                }
+                _ => (),
+            };
 
-        glib::Continue(true)
-    });
+            glib::Continue(true)
+        })
+        .unwrap();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -569,39 +575,43 @@ fn premature_shutdown() {
     });
 
     let l_clone = l.clone();
-    pipeline.get_bus().unwrap().add_watch(move |_, msg| {
-        use gst::MessageView;
+    pipeline
+        .get_bus()
+        .unwrap()
+        .add_watch(move |_, msg| {
+            use gst::MessageView;
 
-        match msg.view() {
-            MessageView::StateChanged(state_changed) => {
-                if let Some(source) = state_changed.get_src() {
-                    if source.get_type() != gst::Pipeline::static_type() {
-                        return glib::Continue(true);
-                    }
-                    if state_changed.get_old() == gst::State::Paused
-                        && state_changed.get_current() == gst::State::Playing
-                    {
-                        if let Some(scenario) = scenario.take() {
-                            std::thread::spawn(scenario);
+            match msg.view() {
+                MessageView::StateChanged(state_changed) => {
+                    if let Some(source) = state_changed.get_src() {
+                        if source.get_type() != gst::Pipeline::static_type() {
+                            return glib::Continue(true);
+                        }
+                        if state_changed.get_old() == gst::State::Paused
+                            && state_changed.get_current() == gst::State::Playing
+                        {
+                            if let Some(scenario) = scenario.take() {
+                                std::thread::spawn(scenario);
+                            }
                         }
                     }
                 }
-            }
-            MessageView::Error(err) => {
-                gst_error!(
-                    CAT,
-                    "premature_shutdown: Error from {:?}: {} ({:?})",
-                    err.get_src().map(|s| s.get_path_string()),
-                    err.get_error(),
-                    err.get_debug()
-                );
-                l_clone.quit();
-            }
-            _ => (),
-        };
+                MessageView::Error(err) => {
+                    gst_error!(
+                        CAT,
+                        "premature_shutdown: Error from {:?}: {} ({:?})",
+                        err.get_src().map(|s| s.get_path_string()),
+                        err.get_error(),
+                        err.get_debug()
+                    );
+                    l_clone.quit();
+                }
+                _ => (),
+            };
 
-        glib::Continue(true)
-    });
+            glib::Continue(true)
+        })
+        .unwrap();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 

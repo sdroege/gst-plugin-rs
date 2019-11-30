@@ -18,6 +18,7 @@
 use either::Either;
 
 use futures::channel::mpsc;
+use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::lock::{Mutex, MutexGuard};
 use futures::prelude::*;
@@ -42,7 +43,6 @@ use std::convert::TryInto;
 use std::sync::Arc;
 use std::u32;
 
-use crate::block_on;
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSrc, PadSrcRef};
 
@@ -280,7 +280,7 @@ impl PadSrcHandler for AppSrcPadHandler {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = block_on!(app_src.pause(element));
+                let _ = block_on(app_src.pause(element));
                 true
             }
             EventView::FlushStop(..) => {
@@ -288,7 +288,7 @@ impl PadSrcHandler for AppSrcPadHandler {
                 if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
                     || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
-                    let _ = block_on!(app_src.start(element));
+                    let _ = block_on(app_src.start(element));
                 }
                 true
             }
@@ -325,7 +325,7 @@ impl PadSrcHandler for AppSrcPadHandler {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let inner = block_on!(self.lock());
+                let inner = block_on(self.lock());
                 let caps = if let Some(ref caps) = inner.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
@@ -540,7 +540,7 @@ impl ObjectSubclass for AppSrc {
                     .expect("missing signal arg");
                 let appsrc = Self::from_instance(&element);
 
-                Some(block_on!(appsrc.push_buffer(&element, buffer)).to_value())
+                Some(block_on(appsrc.push_buffer(&element, buffer)).to_value())
             },
         );
 
@@ -555,7 +555,7 @@ impl ObjectSubclass for AppSrc {
                     .expect("signal arg")
                     .expect("missing signal arg");
                 let appsrc = Self::from_instance(&element);
-                Some(block_on!(appsrc.end_of_stream(&element)).to_value())
+                Some(block_on(appsrc.end_of_stream(&element)).to_value())
             },
         );
     }
@@ -581,26 +581,26 @@ impl ObjectImpl for AppSrc {
 
         match *prop {
             subclass::Property("context", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             subclass::Property("caps", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.caps = value.get().expect("type checked upstream");
             }
             subclass::Property("max-buffers", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.max_buffers = value.get_some().expect("type checked upstream");
             }
             subclass::Property("do-timestamp", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.do_timestamp = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -612,23 +612,23 @@ impl ObjectImpl for AppSrc {
 
         match *prop {
             subclass::Property("context", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.context_wait.to_value())
             }
             subclass::Property("caps", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.caps.to_value())
             }
             subclass::Property("max-buffers", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.max_buffers.to_value())
             }
             subclass::Property("do-timestamp", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.do_timestamp.to_value())
             }
             _ => unimplemented!(),
@@ -655,16 +655,16 @@ impl ElementImpl for AppSrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on!(self.prepare(element)).map_err(|err| {
+                block_on(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                block_on!(self.pause(element)).map_err(|_| gst::StateChangeError)?;
+                block_on(self.pause(element)).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                block_on!(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
+                block_on(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -676,10 +676,10 @@ impl ElementImpl for AppSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                block_on!(self.start(element)).map_err(|_| gst::StateChangeError)?;
+                block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PausedToReady => {
-                block_on!(async {
+                block_on(async {
                     self.src_pad_handler.lock().await.need_initial_events = true;
                 });
             }

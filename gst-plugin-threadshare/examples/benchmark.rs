@@ -60,10 +60,10 @@ fn main() {
     let pipeline = gst::Pipeline::new(None);
 
     for i in 0..n_streams {
-        let fakesink =
+        let sink =
             gst::ElementFactory::make("fakesink", Some(format!("sink-{}", i).as_str())).unwrap();
-        fakesink.set_property("sync", &false).unwrap();
-        fakesink.set_property("async", &false).unwrap();
+        sink.set_property("sync", &false).unwrap();
+        sink.set_property("async", &false).unwrap();
 
         let source = match source.as_str() {
             "udpsrc" => {
@@ -117,7 +117,7 @@ fn main() {
                     .set_property("samplesperbuffer", &((wait as i32) * 8000 / 1000))
                     .unwrap();
 
-                fakesink.set_property("sync", &true).unwrap();
+                sink.set_property("sync", &true).unwrap();
 
                 source
             }
@@ -138,8 +138,8 @@ fn main() {
             _ => unimplemented!(),
         };
 
-        pipeline.add_many(&[&source, &fakesink]).unwrap();
-        source.link(&fakesink).unwrap();
+        pipeline.add_many(&[&source, &sink]).unwrap();
+        source.link(&sink).unwrap();
     }
 
     let bus = pipeline.get_bus().unwrap();

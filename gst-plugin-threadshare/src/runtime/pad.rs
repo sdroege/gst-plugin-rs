@@ -65,6 +65,7 @@
 
 use either::Either;
 
+use futures::executor::block_on;
 use futures::future;
 use futures::future::BoxFuture;
 use futures::lock::{Mutex, MutexGuard};
@@ -80,8 +81,6 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::sync;
 use std::sync::{Arc, Weak};
-
-use crate::block_on;
 
 use super::executor::Context;
 use super::pad_context::{PadContext, PadContextRef, PadContextWeak};
@@ -400,7 +399,7 @@ impl<'a> PadSrcRef<'a> {
         }
 
         if !active {
-            block_on!(async {
+            block_on(async {
                 self.strong.lock_state().await.is_initialized = false;
             });
         }
@@ -1198,9 +1197,9 @@ impl PadSink {
                     pad_ctx.add_pending_task(fut.map(|res| res.map(drop)));
                     Ok(FlowSuccess::Ok)
                 }
-                None => block_on!(fut),
+                None => block_on(fut),
             },
-            None => block_on!(fut),
+            None => block_on(fut),
         }
     }
 

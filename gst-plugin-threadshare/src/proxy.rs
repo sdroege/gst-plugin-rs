@@ -18,6 +18,7 @@
 use either::Either;
 
 use futures::channel::oneshot;
+use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::lock::{Mutex, MutexGuard};
 use futures::prelude::*;
@@ -40,7 +41,6 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Weak};
 use std::{u32, u64};
 
-use crate::block_on;
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
@@ -364,7 +364,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         } else {
             match event.view() {
                 EventView::FlushStart(..) => {
-                    let _ = block_on!(proxysink.stop(element));
+                    let _ = block_on(proxysink.stop(element));
                 }
                 EventView::FlushStop(..) => {
                     let (res, state, pending) = element.get_state(0.into());
@@ -372,7 +372,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
                         || res == Ok(gst::StateChangeSuccess::Async)
                             && pending == gst::State::Paused
                     {
-                        let _ = block_on!(proxysink.start(&element));
+                        let _ = block_on(proxysink.start(&element));
                     }
                 }
                 _ => (),
@@ -380,7 +380,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
 
             gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Fowarding non-serialized event {:?}", event);
             // FIXME proxysink can't forward directly to the src_pad of the proxysrc
-            let _ = block_on!(proxysink.enqueue_item(&element, DataQueueItem::Event(event)));
+            let _ = block_on(proxysink.enqueue_item(&element, DataQueueItem::Event(event)));
 
             Either::Left(true)
         }
@@ -706,7 +706,7 @@ impl ObjectImpl for ProxySink {
 
         match *prop {
             subclass::Property("proxy-context", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.proxy_context = value
                     .get()
                     .expect("type checked upstream")
@@ -721,7 +721,7 @@ impl ObjectImpl for ProxySink {
 
         match *prop {
             subclass::Property("proxy-context", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.proxy_context.to_value())
             }
             _ => unimplemented!(),
@@ -748,16 +748,16 @@ impl ElementImpl for ProxySink {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on!(self.prepare(element)).map_err(|err| {
+                block_on(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PausedToReady => {
-                block_on!(self.stop(element)).map_err(|_| gst::StateChangeError)?;
+                block_on(self.stop(element)).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                block_on!(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
+                block_on(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -765,7 +765,7 @@ impl ElementImpl for ProxySink {
         let success = self.parent_change_state(element, transition)?;
 
         if transition == gst::StateChange::ReadyToPaused {
-            block_on!(self.start(element)).map_err(|_| gst::StateChangeError)?;
+            block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
         }
 
         Ok(success)
@@ -881,7 +881,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = block_on!(proxysrc.pause(element));
+                let _ = block_on(proxysrc.pause(element));
                 true
             }
             EventView::FlushStop(..) => {
@@ -889,7 +889,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
                 if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
                     || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
-                    let _ = block_on!(proxysrc.start(element));
+                    let _ = block_on(proxysrc.start(element));
                 }
                 true
             }
@@ -1157,30 +1157,30 @@ impl ObjectImpl for ProxySrc {
 
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.max_size_buffers = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-bytes", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.max_size_bytes = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-time", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.max_size_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             subclass::Property("proxy-context", ..) => {
-                let mut settings = block_on!(self.settings.lock());
+                let mut settings = block_on(self.settings.lock());
                 settings.proxy_context = value
                     .get()
                     .expect("type checked upstream")
@@ -1195,27 +1195,27 @@ impl ObjectImpl for ProxySrc {
 
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.max_size_buffers.to_value())
             }
             subclass::Property("max-size-bytes", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.max_size_bytes.to_value())
             }
             subclass::Property("max-size-time", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.max_size_time.to_value())
             }
             subclass::Property("context", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.context_wait.to_value())
             }
             subclass::Property("proxy-context", ..) => {
-                let settings = block_on!(self.settings.lock());
+                let settings = block_on(self.settings.lock());
                 Ok(settings.proxy_context.to_value())
             }
             _ => unimplemented!(),
@@ -1242,16 +1242,16 @@ impl ElementImpl for ProxySrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on!(self.prepare(element)).map_err(|err| {
+                block_on(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                block_on!(self.pause(element)).map_err(|_| gst::StateChangeError)?;
+                block_on(self.pause(element)).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                block_on!(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
+                block_on(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -1263,7 +1263,7 @@ impl ElementImpl for ProxySrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                block_on!(self.start(element)).map_err(|_| gst::StateChangeError)?;
+                block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

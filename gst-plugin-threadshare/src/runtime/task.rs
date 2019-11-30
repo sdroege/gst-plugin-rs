@@ -19,8 +19,7 @@
 //!
 //! [`Context`]: ../executor/struct.Context.html
 
-use futures::channel::oneshot;
-use futures::future::{self, BoxFuture};
+use futures::future::{self, abortable, AbortHandle, Aborted, BoxFuture};
 use futures::lock::Mutex;
 use futures::prelude::*;
 
@@ -30,7 +29,6 @@ use gst::{gst_debug, gst_log, gst_trace, gst_warning};
 use std::fmt;
 use std::sync::Arc;
 
-use super::future::{abortable_waitable, AbortWaitHandle};
 use super::{Context, RUNTIME_CAT};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,8 +50,8 @@ impl std::error::Error for TaskError {}
 struct TaskInner {
     context: Option<Context>,
     state: TaskState,
-    loop_end_sender: Option<oneshot::Sender<()>>,
-    loop_handle: Option<AbortWaitHandle>,
+    abort_handle: Option<AbortHandle>,
+    loop_handle: Option<tokio::task::JoinHandle<Result<(), Aborted>>>,
 }
 
 impl Default for TaskInner {
@@ -61,7 +59,7 @@ impl Default for TaskInner {
         TaskInner {
             context: None,
             state: TaskState::Stopped,
-            loop_end_sender: None,
+            abort_handle: None,
             loop_handle: None,
         }
     }
@@ -136,17 +134,13 @@ impl Task {
 
         gst_debug!(RUNTIME_CAT, "Starting Task");
 
-        let (loop_fut, loop_handle) = abortable_waitable(async move {
+        let (loop_fut, abort_handle) = abortable(async move {
             loop {
                 func().await;
 
-                let mut inner = inner_clone.lock().await;
-                match inner.state {
+                match inner_clone.lock().await.state {
                     TaskState::Started => (),
                     TaskState::Paused | TaskState::Stopped => {
-                        inner.loop_handle = None;
-                        inner.loop_end_sender.take();
-
                         break;
                     }
                     other => unreachable!("Unexpected Task state {:?}", other),
@@ -154,12 +148,13 @@ impl Task {
             }
         });
 
-        inner
+        let loop_handle = inner
             .context
             .as_ref()
             .expect("Context not set")
-            .spawn(loop_fut.map(drop));
+            .spawn(loop_fut);
 
+        inner.abort_handle = Some(abort_handle);
         inner.loop_handle = Some(loop_handle);
         inner.state = TaskState::Started;
 
@@ -175,11 +170,10 @@ impl Task {
 
                 inner.state = TaskState::Paused;
 
-                let (sender, receiver) = oneshot::channel();
-                inner.loop_end_sender = Some(sender);
+                let loop_handle = inner.loop_handle.take().unwrap();
 
                 async move {
-                    let _ = receiver.await;
+                    let _ = loop_handle.await;
                     gst_log!(RUNTIME_CAT, "Task Paused");
                 }
                 .boxed()
@@ -206,8 +200,12 @@ impl Task {
 
         gst_debug!(RUNTIME_CAT, "Stopping Task");
 
+        if let Some(abort_handle) = inner.abort_handle.take() {
+            abort_handle.abort();
+        }
+
         if let Some(loop_handle) = inner.loop_handle.take() {
-            let _ = loop_handle.abort_and_wait().await;
+            let _ = loop_handle.await;
         }
 
         inner.state = TaskState::Stopped;

@@ -28,7 +28,8 @@
 //! The `threadshare` `runtime` is a framework to build `Element`s for such applications. It
 //! uses light-weight threading to allow multiple `Element`s share a reduced number of OS `thread`s.
 //!
-//! See this [talk] ([slides]) for a presentation of the motivations and principles.
+//! See this [talk] ([slides]) for a presentation of the motivations and principles,
+//! and this [blog post].
 //!
 //! Current implementation uses the crate [`tokio`].
 //!
@@ -37,17 +38,13 @@
 //!
 //! [talk]: https://gstconf.ubicast.tv/videos/when-adding-more-threads-adds-more-problems-thread-sharing-between-elements-in-gstreamer/
 //! [slides]: https://gstreamer.freedesktop.org/data/events/gstreamer-conference/2018/Sebastian%20Dr%C3%B6ge%20-%20When%20adding%20more%20threads%20adds%20more%20problems:%20Thread-sharing%20between%20elements%20in%20GStreamer.pdf
+//! [blog post]: https://coaxion.net/blog/2018/04/improving-gstreamer-performance-on-a-high-number-of-network-streams-by-sharing-threads-between-elements-with-rusts-tokio-crate
 //! [`tokio`]: https://crates.io/crates/tokio
 //! [`PadSrc`]: pad/struct.PadSrc.html
 //! [`PadSink`]: pad/struct.PadSink.html
 
 pub mod executor;
-pub use executor::{Context, Interval, TaskOutput, Timeout};
-
-pub mod future;
-
-#[macro_use]
-pub mod macros;
+pub use executor::{Context, TaskOutput};
 
 pub mod pad;
 pub use pad::{PadSink, PadSinkRef, PadSrc, PadSrcRef, PadSrcWeak};
