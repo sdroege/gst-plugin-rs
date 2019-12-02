@@ -20,11 +20,12 @@ gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org
 gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
+pin-project = "0.4"
 tokio = "=0.2.0-alpha.6"
 tokio-executor = { version = "=0.2.0-alpha.6", features = ["current-thread"] }
 tokio-net = { version = "=0.2.0-alpha.6", features = ["tcp", "udp"] }
 tokio-timer = "=0.3.0-alpha.6"
-futures-preview = "0.3.0-alpha.19"
+futures = "0.3"
 lazy_static = "1.0"
 either = "1.0"
 rand = "0.7"

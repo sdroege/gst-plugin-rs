@@ -18,6 +18,8 @@
 use either::Either;
 
 use futures::channel::mpsc;
+use futures::future::BoxFuture;
+use futures::lock::{Mutex, MutexGuard};
 use futures::prelude::*;
 
 use glib;
@@ -30,15 +32,19 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+use gst::{EventView, QueryView};
 
 use lazy_static::lazy_static;
 
 use rand;
 
-use std::sync::Mutex;
+use std::convert::TryInto;
+use std::sync::Arc;
 use std::u32;
 
-use super::iocontext::*;
+use crate::block_on;
+use crate::runtime::prelude::*;
+use crate::runtime::{Context, PadSrc, PadSrcRef};
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
@@ -119,34 +125,6 @@ static PROPERTIES: [subclass::Property; 5] = [
     }),
 ];
 
-struct State {
-    io_context: Option<IOContext>,
-    pending_future_id: Option<PendingFutureId>,
-    channel: Option<mpsc::Sender<Either<gst::Buffer, gst::Event>>>,
-    pending_future_abort_handle: Option<future::AbortHandle>,
-    need_initial_events: bool,
-    configured_caps: Option<gst::Caps>,
-}
-
-impl Default for State {
-    fn default() -> State {
-        State {
-            io_context: None,
-            pending_future_id: None,
-            channel: None,
-            pending_future_abort_handle: None,
-            need_initial_events: true,
-            configured_caps: None,
-        }
-    }
-}
-
-struct AppSrc {
-    src_pad: gst::Pad,
-    state: Mutex<State>,
-    settings: Mutex<Settings>,
-}
-
 lazy_static! {
     static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
         "ts-appsrc",
@@ -155,32 +133,154 @@ lazy_static! {
     );
 }
 
-impl AppSrc {
-    fn create_io_context_event(state: &State) -> Option<gst::Event> {
-        if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-            (&state.pending_future_id, &state.io_context)
-        {
-            let s = gst::Structure::new(
-                "ts-io-context",
-                &[
-                    ("io-context", &io_context),
-                    ("pending-future-id", &*pending_future_id),
-                ],
-            );
-            Some(gst::Event::new_custom_downstream_sticky(s).build())
-        } else {
-            None
+#[derive(Debug)]
+enum StreamItem {
+    Buffer(gst::Buffer),
+    Event(gst::Event),
+}
+
+#[derive(Debug)]
+struct AppSrcPadHandlerInner {
+    need_initial_events: bool,
+    configured_caps: Option<gst::Caps>,
+}
+
+impl Default for AppSrcPadHandlerInner {
+    fn default() -> Self {
+        AppSrcPadHandlerInner {
+            need_initial_events: true,
+            configured_caps: None,
         }
     }
+}
 
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
-        use gst::EventView;
+#[derive(Clone, Debug)]
+struct AppSrcPadHandler(Arc<Mutex<AppSrcPadHandlerInner>>);
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+impl AppSrcPadHandler {
+    fn new() -> Self {
+        AppSrcPadHandler(Arc::new(Mutex::new(AppSrcPadHandlerInner::default())))
+    }
+
+    #[inline]
+    async fn lock(&self) -> MutexGuard<'_, AppSrcPadHandlerInner> {
+        self.0.lock().await
+    }
+
+    async fn start_task(
+        &self,
+        pad: PadSrcRef<'_>,
+        element: &gst::Element,
+        receiver: mpsc::Receiver<StreamItem>,
+    ) {
+        let this = self.clone();
+        let pad_weak = pad.downgrade();
+        let element = element.clone();
+        let receiver = Arc::new(Mutex::new(receiver));
+        pad.start_task(move || {
+            let this = this.clone();
+            let pad_weak = pad_weak.clone();
+            let element = element.clone();
+            let receiver = Arc::clone(&receiver);
+            async move {
+                let item = receiver.lock().await.next().await;
+
+                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
+                let item = match item {
+                    Some(item) => item,
+                    None => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "SrcPad channel aborted");
+                        pad.pause_task().await;
+                        return;
+                    }
+                };
+
+                this.push_item(pad, &element, item).await;
+            }
+        })
+        .await;
+    }
+
+    async fn push_item(self, pad: PadSrcRef<'_>, element: &gst::Element, item: StreamItem) {
+        // Don't keep the `events` in scope so as to reduce the `Future`'s size
+        {
+            let mut events = Vec::new();
+
+            {
+                let mut inner = self.lock().await;
+                if inner.need_initial_events {
+                    gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
+
+                    let stream_id =
+                        format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+                    events.push(
+                        gst::Event::new_stream_start(&stream_id)
+                            .group_id(gst::util_group_id_next())
+                            .build(),
+                    );
+                    let appsrc = AppSrc::from_instance(element);
+                    if let Some(ref caps) = appsrc.settings.lock().await.caps {
+                        events.push(gst::Event::new_caps(&caps).build());
+                        inner.configured_caps = Some(caps.clone());
+                    }
+                    events.push(
+                        gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
+                            .build(),
+                    );
+
+                    inner.need_initial_events = false;
+                }
+            }
+
+            for event in events {
+                pad.push_event(event).await;
+            }
+        }
+
+        let res = match item {
+            StreamItem::Buffer(buffer) => {
+                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding buffer {:?}", buffer);
+                pad.push(buffer).await
+            }
+            StreamItem::Event(event) => {
+                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding event {:?}", event);
+                pad.push_event(event).await;
+                Ok(gst::FlowSuccess::Ok)
+            }
+        };
+
+        match res {
+            Ok(_) => gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed item"),
+            Err(gst::FlowError::Eos) => gst_debug!(CAT, obj: pad.gst_pad(), "EOS"),
+            Err(gst::FlowError::Flushing) => gst_debug!(CAT, obj: pad.gst_pad(), "Flushing"),
+            Err(err) => {
+                gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
+                gst_element_error!(
+                    &element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+            }
+        }
+    }
+}
+
+impl PadSrcHandler for AppSrcPadHandler {
+    type ElementImpl = AppSrc;
+
+    fn src_event(
+        &self,
+        pad: PadSrcRef,
+        app_src: &AppSrc,
+        element: &gst::Element,
+        event: gst::Event,
+    ) -> Either<bool, BoxFuture<'static, bool>> {
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = self.stop(element);
+                let _ = block_on!(app_src.pause(element));
                 true
             }
             EventView::FlushStop(..) => {
@@ -188,7 +288,7 @@ impl AppSrc {
                 if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
                     || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
-                    let _ = self.start(element);
+                    let _ = block_on!(app_src.start(element));
                 }
                 true
             }
@@ -198,23 +298,22 @@ impl AppSrc {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad, "Handled event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled event {:?}", event);
         } else {
-            gst_log!(CAT, obj: pad, "Didn't handle event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle event {:?}", event);
         }
 
-        ret
+        Either::Left(ret)
     }
 
     fn src_query(
         &self,
-        pad: &gst::Pad,
+        pad: PadSrcRef,
+        _app_src: &AppSrc,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
-
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
                 q.set(true, 0.into(), 0.into());
@@ -226,8 +325,8 @@ impl AppSrc {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let state = self.state.lock().unwrap();
-                let caps = if let Some(ref caps) = state.configured_caps {
+                let inner = block_on!(self.lock());
+                let caps = if let Some(ref caps) = inner.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
@@ -245,17 +344,34 @@ impl AppSrc {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad, "Handled query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled query {:?}", query);
         } else {
-            gst_log!(CAT, obj: pad, "Didn't handle query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle query {:?}", query);
         }
         ret
     }
+}
 
-    fn push_buffer(&self, element: &gst::Element, mut buffer: gst::Buffer) -> bool {
-        let settings = self.settings.lock().unwrap().clone();
+struct State {
+    sender: Option<mpsc::Sender<StreamItem>>,
+}
 
-        if settings.do_timestamp {
+impl Default for State {
+    fn default() -> Self {
+        State { sender: None }
+    }
+}
+
+struct AppSrc {
+    src_pad: PadSrc,
+    src_pad_handler: AppSrcPadHandler,
+    state: Mutex<State>,
+    settings: Mutex<Settings>,
+}
+
+impl AppSrc {
+    async fn push_buffer(&self, element: &gst::Element, mut buffer: gst::Buffer) -> bool {
+        if self.settings.lock().await.do_timestamp {
             if let Some(clock) = element.get_clock() {
                 let base_time = element.get_base_time();
                 let now = clock.get_time();
@@ -269,229 +385,111 @@ impl AppSrc {
             }
         }
 
-        let mut state = self.state.lock().unwrap();
-        if let Some(ref mut channel) = state.channel {
-            match channel.try_send(Either::Left(buffer)) {
-                Ok(_) => true,
-                Err(err) => {
-                    gst_error!(CAT, obj: element, "Failed to queue buffer: {}", err);
-                    false
-                }
-            }
-        } else {
-            false
-        }
-    }
-
-    fn end_of_stream(&self, element: &gst::Element) -> bool {
-        let mut state = self.state.lock().unwrap();
-        if let Some(ref mut channel) = state.channel {
-            match channel.try_send(Either::Right(gst::Event::new_eos().build())) {
-                Ok(_) => true,
-                Err(err) => {
-                    gst_error!(CAT, obj: element, "Failed to queue EOS: {}", err);
-                    false
-                }
-            }
-        } else {
-            false
-        }
-    }
-
-    async fn push_item(
-        element: gst::Element,
-        item: Either<gst::Buffer, gst::Event>,
-    ) -> Result<(), gst::FlowError> {
-        let appsrc = Self::from_instance(&element);
-        let mut events = Vec::new();
-
-        {
-            let mut state = appsrc.state.lock().unwrap();
-            if state.need_initial_events {
-                gst_debug!(CAT, obj: &element, "Pushing initial events");
-
-                let stream_id =
-                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-                events.push(
-                    gst::Event::new_stream_start(&stream_id)
-                        .group_id(gst::util_group_id_next())
-                        .build(),
-                );
-                if let Some(ref caps) = appsrc.settings.lock().unwrap().caps {
-                    events.push(gst::Event::new_caps(&caps).build());
-                    state.configured_caps = Some(caps.clone());
-                }
-                events.push(
-                    gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
-                        .build(),
-                );
-
-                if let Some(event) = Self::create_io_context_event(&state) {
-                    events.push(event);
-
-                    // Get rid of reconfigure flag
-                    appsrc.src_pad.check_reconfigure();
-                }
-                state.need_initial_events = false;
-            } else if appsrc.src_pad.check_reconfigure() {
-                if let Some(event) = Self::create_io_context_event(&state) {
-                    events.push(event);
-                }
-            }
-        }
-
-        for event in events {
-            appsrc.src_pad.push_event(event);
-        }
-
-        let res = match item {
-            Either::Left(buffer) => {
-                gst_log!(CAT, obj: &element, "Forwarding buffer {:?}", buffer);
-                appsrc.src_pad.push(buffer).map(|_| ())
-            }
-            Either::Right(event) => {
-                gst_log!(CAT, obj: &element, "Forwarding event {:?}", event);
-                appsrc.src_pad.push_event(event);
-                Ok(())
-            }
+        let mut state = self.state.lock().await;
+        let sender = match state.sender.as_mut() {
+            Some(sender) => sender,
+            None => return false,
         };
-
-        match res {
-            Ok(()) => gst_log!(CAT, obj: &element, "Successfully pushed item"),
-            Err(gst::FlowError::Eos) => gst_debug!(CAT, obj: &element, "EOS"),
-            Err(gst::FlowError::Flushing) => gst_debug!(CAT, obj: &element, "Flushing"),
+        match sender.send(StreamItem::Buffer(buffer)).await {
+            Ok(_) => true,
             Err(err) => {
-                gst_error!(CAT, obj: &element, "Got error {}", err);
-                gst_element_error!(
-                    &element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason {}", err]
-                );
+                gst_error!(CAT, obj: element, "Failed to queue buffer: {}", err);
+                false
             }
         }
-
-        res?;
-
-        let abortable_drain = {
-            let mut state = appsrc.state.lock().unwrap();
-
-            if let State {
-                io_context: Some(ref io_context),
-                pending_future_id: Some(ref pending_future_id),
-                ref mut pending_future_abort_handle,
-                ..
-            } = *state
-            {
-                let (abort_handle, abortable_drain) =
-                    io_context.drain_pending_futures(*pending_future_id);
-                *pending_future_abort_handle = abort_handle;
-
-                abortable_drain
-            } else {
-                return Ok(());
-            }
-        };
-
-        abortable_drain.await
     }
 
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    async fn end_of_stream(&self, element: &gst::Element) -> bool {
+        let mut state = self.state.lock().await;
+        let sender = match state.sender.as_mut() {
+            Some(sender) => sender,
+            None => return false,
+        };
+        let eos = StreamItem::Event(gst::Event::new_eos().build());
+        match sender.send(eos).await {
+            Ok(_) => true,
+            Err(err) => {
+                gst_error!(CAT, obj: element, "Failed to queue EOS: {}", err);
+                false
+            }
+        }
+    }
+
+    async fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+        let _state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Preparing");
 
-        let settings = self.settings.lock().unwrap().clone();
+        let settings = self.settings.lock().await;
 
-        let mut state = self.state.lock().unwrap();
-
-        let io_context =
-            IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
+        let context =
+            Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
-                    ["Failed to create IO context: {}", err]
+                    ["Failed to acquire Context: {}", err]
                 )
             })?;
 
-        let pending_future_id = io_context.acquire_pending_future_id();
-        gst_debug!(
-            CAT,
-            obj: element,
-            "Got pending future id {:?}",
-            pending_future_id
-        );
-
-        state.io_context = Some(io_context);
-        state.pending_future_id = Some(pending_future_id);
+        self.src_pad
+            .prepare(context, &self.src_pad_handler)
+            .await
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Error preparing src_pads: {:?}", err]
+                )
+            })?;
 
         gst_debug!(CAT, obj: element, "Prepared");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+    async fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+        let _state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        // FIXME: The IO Context has to be alive longer than the other parts
-        // of the state. Otherwise a deadlock can happen between shutting down
-        // the IO context (thread join while the state lock is held) and stuff
-        // happening on the IO context (which might take the state lock).
-        let io_context = {
-            let mut state = self.state.lock().unwrap();
-
-            if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-                (&state.pending_future_id, &state.io_context)
-            {
-                io_context.release_pending_future_id(*pending_future_id);
-            }
-
-            let io_context = state.io_context.take();
-            *state = State::default();
-            io_context
-        };
-
-        drop(io_context);
+        self.src_pad.stop_task().await;
+        let _ = self.src_pad.unprepare().await;
+        self.src_pad_handler.lock().await.configured_caps = None;
 
         gst_debug!(CAT, obj: element, "Unprepared");
 
         Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), ()> {
+    async fn start(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Starting");
-        let settings = self.settings.lock().unwrap().clone();
-        let mut state = self.state.lock().unwrap();
 
-        let State {
-            ref io_context,
-            ref mut channel,
-            ..
-        } = *state;
+        let max_buffers = self.settings.lock().await.max_buffers.try_into().unwrap();
+        let (sender, receiver) = mpsc::channel(max_buffers);
+        state.sender = Some(sender);
 
-        let io_context = io_context.as_ref().unwrap();
+        self.src_pad_handler
+            .start_task(self.src_pad.as_ref(), element, receiver)
+            .await;
 
-        let (channel_sender, channel_receiver) = mpsc::channel(settings.max_buffers as usize);
-
-        let element_clone = element.clone();
-        let future = channel_receiver
-            .for_each(move |item| Self::push_item(element_clone.clone(), item).map(|_| ()));
-        io_context.spawn(future);
-
-        *channel = Some(channel_sender);
         gst_debug!(CAT, obj: element, "Started");
 
         Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(CAT, obj: element, "Stopping");
-        let mut state = self.state.lock().unwrap();
+    async fn pause(&self, element: &gst::Element) -> Result<(), ()> {
+        let pause_completion = {
+            let mut state = self.state.lock().await;
+            gst_debug!(CAT, obj: element, "Pausing");
 
-        let _ = state.channel.take();
+            let pause_completion = self.src_pad.pause_task().await;
+            // Prevent subsequent items from being enqueued
+            state.sender = None;
 
-        if let Some(abort_handle) = state.pending_future_abort_handle.take() {
-            abort_handle.abort();
-        }
+            pause_completion
+        };
 
-        gst_debug!(CAT, obj: element, "Stopped");
+        gst_debug!(CAT, obj: element, "Waiting for Task Pause to complete");
+        pause_completion.await;
+
+        gst_debug!(CAT, obj: element, "Paused");
 
         Ok(())
     }
@@ -542,7 +540,7 @@ impl ObjectSubclass for AppSrc {
                     .expect("missing signal arg");
                 let appsrc = Self::from_instance(&element);
 
-                Some(appsrc.push_buffer(&element, buffer).to_value())
+                Some(block_on!(appsrc.push_buffer(&element, buffer)).to_value())
             },
         );
 
@@ -557,32 +555,18 @@ impl ObjectSubclass for AppSrc {
                     .expect("signal arg")
                     .expect("missing signal arg");
                 let appsrc = Self::from_instance(&element);
-                Some(appsrc.end_of_stream(&element).to_value())
+                Some(block_on!(appsrc.end_of_stream(&element)).to_value())
             },
         );
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, Some("src"));
-
-        src_pad.set_event_function(|pad, parent, event| {
-            AppSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_event(pad, element, event),
-            )
-        });
-        src_pad.set_query_function(|pad, parent, query| {
-            AppSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_query(pad, element, query),
-            )
-        });
+        let src_pad = PadSrc::new_from_template(&templ, Some("src"));
 
         Self {
             src_pad,
+            src_pad_handler: AppSrcPadHandler::new(),
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
         }
@@ -597,26 +581,26 @@ impl ObjectImpl for AppSrc {
 
         match *prop {
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             subclass::Property("caps", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.caps = value.get().expect("type checked upstream");
             }
             subclass::Property("max-buffers", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.max_buffers = value.get_some().expect("type checked upstream");
             }
             subclass::Property("do-timestamp", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.do_timestamp = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -628,23 +612,23 @@ impl ObjectImpl for AppSrc {
 
         match *prop {
             subclass::Property("context", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context_wait.to_value())
             }
             subclass::Property("caps", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.caps.to_value())
             }
             subclass::Property("max-buffers", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.max_buffers.to_value())
             }
             subclass::Property("do-timestamp", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.do_timestamp.to_value())
             }
             _ => unimplemented!(),
@@ -655,7 +639,7 @@ impl ObjectImpl for AppSrc {
         self.parent_constructed(obj);
 
         let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.src_pad).unwrap();
+        element.add_pad(self.src_pad.gst_pad()).unwrap();
 
         super::set_element_flags(element, gst::ElementFlags::SOURCE);
     }
@@ -671,16 +655,16 @@ impl ElementImpl for AppSrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
+                block_on!(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                block_on!(self.pause(element)).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+                block_on!(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -692,11 +676,12 @@ impl ElementImpl for AppSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                block_on!(self.start(element)).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PausedToReady => {
-                let mut state = self.state.lock().unwrap();
-                state.need_initial_events = true;
+                block_on!(async {
+                    self.src_pad_handler.lock().await.need_initial_events = true;
+                });
             }
             _ => (),
         }

@@ -15,6 +15,13 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use either::Either;
+
+use futures::future::BoxFuture;
+use futures::future::{abortable, AbortHandle};
+use futures::lock::{Mutex, MutexGuard};
+use futures::prelude::*;
+
 use glib;
 use glib::prelude::*;
 use glib::subclass;
@@ -24,20 +31,19 @@ use glib::{glib_object_impl, glib_object_subclass};
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_info, gst_log, gst_trace};
+use gst::{gst_debug, gst_error_msg, gst_info, gst_log, gst_trace};
+use gst::{EventView, QueryView};
 use gst_rtp::RTPBuffer;
 
 use lazy_static::lazy_static;
 
 use std::cmp::{max, min, Ordering};
-use std::collections::BTreeSet;
-use std::sync::{Mutex, MutexGuard};
-use std::time;
+use std::collections::{BTreeSet, VecDeque};
+use std::time::Duration;
 
-use futures::future::{AbortHandle, Abortable};
-use futures::prelude::*;
-
-use crate::iocontext::*;
+use crate::runtime::future::{abortable_waitable, AbortWaitHandle};
+use crate::runtime::prelude::*;
+use crate::runtime::{Context, PadContext, PadContextWeak, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
 use crate::{RTPJitterBuffer, RTPJitterBufferItem, RTPPacketRateCtx};
 
@@ -46,7 +52,7 @@ const DEFAULT_DO_LOST: bool = false;
 const DEFAULT_MAX_DROPOUT_TIME: u32 = 60000;
 const DEFAULT_MAX_MISORDER_TIME: u32 = 2000;
 const DEFAULT_CONTEXT: &str = "";
-const DEFAULT_CONTEXT_WAIT: u32 = 20;
+const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -145,6 +151,156 @@ static PROPERTIES: [subclass::Property; 7] = [
     }),
 ];
 
+#[derive(Clone, Debug)]
+struct JitterBufferPadSinkHandler;
+
+impl PadSinkHandler for JitterBufferPadSinkHandler {
+    type ElementImpl = JitterBuffer;
+
+    fn sink_chain(
+        &self,
+        pad: PadSinkRef,
+        _jitterbuffer: &JitterBuffer,
+        element: &gst::Element,
+        buffer: gst::Buffer,
+    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
+        let pad_weak = pad.downgrade();
+        let element = element.clone();
+        async move {
+            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+
+            gst_debug!(CAT, obj: pad.gst_pad(), "Handling buffer {:?}", buffer);
+            let jitterbuffer = JitterBuffer::from_instance(&element);
+            jitterbuffer
+                .enqueue_item(pad.gst_pad(), &element, Some(buffer))
+                .await
+        }
+        .boxed()
+    }
+
+    fn sink_event(
+        &self,
+        pad: PadSinkRef,
+        jitterbuffer: &JitterBuffer,
+        element: &gst::Element,
+        event: gst::Event,
+    ) -> Either<bool, BoxFuture<'static, bool>> {
+        if event.is_serialized() {
+            let pad_weak = pad.downgrade();
+            let element = element.clone();
+            Either::Right(async move {
+                let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+
+                let mut forward = true;
+
+                gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
+
+                let jitterbuffer = JitterBuffer::from_instance(&element);
+                match event.view() {
+                    EventView::Segment(e) => {
+                        let mut state = jitterbuffer.state.lock().await;
+                        state.segment = e
+                            .get_segment()
+                            .clone()
+                            .downcast::<gst::format::Time>()
+                            .unwrap();
+                    }
+                    EventView::Eos(..) => {
+                        let mut state = jitterbuffer.state.lock().await;
+                        jitterbuffer.drain(&mut state, &element).await;
+                    }
+                    EventView::CustomDownstreamSticky(e) => {
+                        if PadContext::is_pad_context_sticky_event(&e) {
+                            forward = false;
+                        }
+                    }
+                    _ => (),
+                };
+
+                if forward {
+                    gst_log!(CAT, obj: pad.gst_pad(), "Forwarding serialized event {:?}", event);
+                    jitterbuffer.src_pad.push_event(event).await
+                } else {
+                    true
+                }
+            }.boxed())
+        } else {
+            if let EventView::FlushStop(..) = event.view() {
+                block_on!(jitterbuffer.flush(element));
+            }
+
+            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized event {:?}", event);
+
+            Either::Left(jitterbuffer.src_pad.gst_pad().push_event(event))
+        }
+    }
+
+    fn sink_query(
+        &self,
+        pad: PadSinkRef,
+        jitterbuffer: &JitterBuffer,
+        element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
+        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+
+        match query.view_mut() {
+            QueryView::Drain(..) => {
+                gst_info!(CAT, obj: pad.gst_pad(), "Draining");
+                block_on!(jitterbuffer.enqueue_item(pad.gst_pad(), element, None)).is_ok()
+            }
+            _ => jitterbuffer.src_pad.gst_pad().peer_query(query),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct JitterBufferPadSrcHandler;
+
+impl PadSrcHandler for JitterBufferPadSrcHandler {
+    type ElementImpl = JitterBuffer;
+
+    fn src_query(
+        &self,
+        pad: PadSrcRef,
+        jitterbuffer: &JitterBuffer,
+        _element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
+        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+
+        match query.view_mut() {
+            QueryView::Latency(ref mut q) => {
+                let mut peer_query = gst::query::Query::new_latency();
+
+                let ret = jitterbuffer.sink_pad.gst_pad().peer_query(&mut peer_query);
+
+                if ret {
+                    let (_, mut min_latency, _) = peer_query.get_result();
+                    let our_latency =
+                        block_on!(jitterbuffer.settings.lock()).latency_ms as u64 * gst::MSECOND;
+
+                    min_latency += our_latency;
+                    let max_latency = gst::CLOCK_TIME_NONE;
+
+                    q.set(true, min_latency, max_latency);
+                }
+
+                ret
+            }
+            QueryView::Position(ref mut q) => {
+                if q.get_format() != gst::Format::Time {
+                    jitterbuffer.sink_pad.gst_pad().peer_query(query)
+                } else {
+                    q.set(block_on!(jitterbuffer.state.lock()).segment.get_position());
+                    true
+                }
+            }
+            _ => jitterbuffer.sink_pad.gst_pad().peer_query(query),
+        }
+    }
+}
+
 #[derive(Eq)]
 struct GapPacket(gst::Buffer);
 
@@ -159,15 +315,7 @@ impl Ord for GapPacket {
         drop(rtp_buffer);
         drop(other_rtp_buffer);
 
-        let gap = gst_rtp::compare_seqnum(seq, other_seq);
-
-        if gap < 0 {
-            Ordering::Greater
-        } else if gap == 0 {
-            Ordering::Equal
-        } else {
-            Ordering::Less
-        }
+        0.cmp(&gst_rtp::compare_seqnum(seq, other_seq))
     }
 }
 
@@ -184,7 +332,6 @@ impl PartialEq for GapPacket {
 }
 
 struct State {
-    io_context: Option<IOContext>,
     jbuf: glib::SendUniqueCell<RTPJitterBuffer>,
     packet_rate_ctx: RTPPacketRateCtx,
     clock_rate: i32,
@@ -205,16 +352,14 @@ struct State {
     earliest_seqnum: u16,
     last_popped_pts: gst::ClockTime,
     discont: bool,
-    abort_handle: Option<AbortHandle>,
     last_res: Result<gst::FlowSuccess, gst::FlowError>,
-    pending_future_id: Option<PendingFutureId>,
-    pending_future_abort_handle: Option<AbortHandle>,
+    task_queue_abort_handle: Option<AbortHandle>,
+    wakeup_abort_handle: Option<AbortWaitHandle>,
 }
 
 impl Default for State {
     fn default() -> State {
         State {
-            io_context: None,
             jbuf: glib::SendUniqueCell::new(RTPJitterBuffer::new()).unwrap(),
             packet_rate_ctx: RTPPacketRateCtx::new(),
             clock_rate: -1,
@@ -235,17 +380,16 @@ impl Default for State {
             earliest_seqnum: 0,
             last_popped_pts: gst::CLOCK_TIME_NONE,
             discont: false,
-            abort_handle: None,
             last_res: Ok(gst::FlowSuccess::Ok),
-            pending_future_id: None,
-            pending_future_abort_handle: None,
+            task_queue_abort_handle: None,
+            wakeup_abort_handle: None,
         }
     }
 }
 
 struct JitterBuffer {
-    sink_pad: gst::Pad,
-    src_pad: gst::Pad,
+    sink_pad: PadSink,
+    src_pad: PadSrc,
     state: Mutex<State>,
     settings: Mutex<Settings>,
 }
@@ -408,10 +552,9 @@ impl JitterBuffer {
 
     fn reset(
         &self,
-        state: &mut MutexGuard<State>,
-        pad: &gst::Pad,
+        state: &mut MutexGuard<'_, State>,
         element: &gst::Element,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    ) -> BTreeSet<GapPacket> {
         gst_info!(CAT, obj: element, "Resetting");
 
         state.jbuf.borrow().flush();
@@ -421,44 +564,39 @@ impl JitterBuffer {
         state.last_in_seqnum = std::u32::MAX;
         state.ips_rtptime = 0;
         state.ips_pts = gst::CLOCK_TIME_NONE;
-        let mut ret = Ok(gst::FlowSuccess::Ok);
 
         let gap_packets = state.gap_packets.take();
-
         state.gap_packets = Some(BTreeSet::new());
 
-        for gap_packet in &gap_packets.unwrap() {
-            ret = self.enqueue_item(state, pad, element, Some(gap_packet.0.to_owned()));
-
-            if ret != Ok(gst::FlowSuccess::Ok) {
-                break;
-            }
-        }
-
-        ret
+        // Handle gap_packets in caller to avoid recursion
+        gap_packets.unwrap()
     }
 
-    fn store(
+    async fn store(
         &self,
-        state: &mut MutexGuard<State>,
+        state: &mut MutexGuard<'_, State>,
         pad: &gst::Pad,
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let settings = self.settings.lock().unwrap().clone();
-        let max_misorder_time = settings.max_misorder_time;
-        let max_dropout_time = settings.max_dropout_time;
-        drop(settings);
+        let (max_misorder_time, max_dropout_time) = {
+            let settings = self.settings.lock().await;
+            (settings.max_misorder_time, settings.max_dropout_time)
+        };
 
-        let mut rtp_buffer =
-            RTPBuffer::from_buffer_readable(&buffer).map_err(|_| gst::FlowError::Error)?;
-        let seq = rtp_buffer.get_seq();
-        let rtptime = rtp_buffer.get_timestamp();
-        let pt = rtp_buffer.get_payload_type();
+        let (seq, rtptime, pt) = {
+            let mut rtp_buffer =
+                RTPBuffer::from_buffer_readable(&buffer).map_err(|_| gst::FlowError::Error)?;
+            (
+                rtp_buffer.get_seq(),
+                rtp_buffer.get_timestamp(),
+                rtp_buffer.get_payload_type(),
+            )
+        };
+
         let mut pts = buffer.get_pts();
         let mut dts = buffer.get_dts();
         let mut estimated_dts = false;
-        drop(rtp_buffer);
 
         gst_log!(
             CAT,
@@ -547,7 +685,8 @@ impl JitterBuffer {
                 if (gap != -1 && gap < -(max_misorder as i32)) || (gap >= max_dropout as i32) {
                     let reset = self.handle_big_gap_buffer(state, element, buffer, pt);
                     if reset {
-                        return self.reset(state, pad, element);
+                        // Handle reset in `enqueue_item` to avoid recursion
+                        return Err(gst::FlowError::CustomError);
                     } else {
                         return Ok(gst::FlowSuccess::Ok);
                     }
@@ -608,18 +747,21 @@ impl JitterBuffer {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn push_lost_events(
+    async fn push_lost_events(
         &self,
-        state: &mut MutexGuard<State>,
+        state: &mut MutexGuard<'_, State>,
         element: &gst::Element,
         seqnum: u32,
         pts: gst::ClockTime,
         discont: &mut bool,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let settings = self.settings.lock().unwrap().clone();
-        let latency_ns = settings.latency_ms as i64 * gst::MSECOND.nseconds().unwrap() as i64;
-        let do_lost = settings.do_lost;
-        drop(settings);
+        let (latency_ns, do_lost) = {
+            let settings = self.settings.lock().await;
+            (
+                settings.latency_ms as i64 * gst::MSECOND.nseconds().unwrap() as i64,
+                settings.do_lost,
+            )
+        };
 
         let mut ret = true;
 
@@ -665,7 +807,7 @@ impl JitterBuffer {
 
                         let event = gst::Event::new_custom_downstream(s).build();
 
-                        ret = self.src_pad.push_event(event);
+                        ret = self.src_pad.push_event(event).await;
                     }
 
                     lost_seqnum = (lost_seqnum + n_packets) & 0xffff;
@@ -696,7 +838,7 @@ impl JitterBuffer {
 
                         let event = gst::Event::new_custom_downstream(s).build();
 
-                        ret = self.src_pad.push_event(event);
+                        ret = self.src_pad.push_event(event).await;
                     }
 
                     state.num_lost += 1;
@@ -717,32 +859,9 @@ impl JitterBuffer {
         }
     }
 
-    fn send_io_context_event(&self, state: &State) -> Result<gst::FlowSuccess, gst::FlowError> {
-        if self.src_pad.check_reconfigure() {
-            if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-                (&state.pending_future_id, &state.io_context)
-            {
-                let s = gst::Structure::new(
-                    "ts-io-context",
-                    &[
-                        ("io-context", &io_context),
-                        ("pending-future-id", &*pending_future_id),
-                    ],
-                );
-                let event = gst::Event::new_custom_downstream_sticky(s).build();
-
-                if !self.src_pad.push_event(event) {
-                    return Err(gst::FlowError::Error);
-                }
-            }
-        }
-
-        Ok(gst::FlowSuccess::Ok)
-    }
-
-    fn pop_and_push(
+    async fn pop_and_push(
         &self,
-        state: &mut MutexGuard<State>,
+        state: &mut MutexGuard<'_, State>,
         element: &gst::Element,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut discont = false;
@@ -762,7 +881,8 @@ impl JitterBuffer {
             buffer.set_pts(state.last_popped_pts)
         }
 
-        self.push_lost_events(state, element, seq, pts, &mut discont)?;
+        self.push_lost_events(state, element, seq, pts, &mut discont)
+            .await?;
 
         if state.discont {
             discont = true;
@@ -778,18 +898,19 @@ impl JitterBuffer {
 
         state.num_pushed += 1;
 
-        gst_debug!(CAT, obj: &self.src_pad, "Pushing buffer {:?} with seq {}", buffer, seq);
+        gst_debug!(CAT, obj: self.src_pad.gst_pad(), "Pushing buffer {:?} with seq {}", buffer, seq);
 
-        self.send_io_context_event(&state)?;
-
-        self.src_pad.push(buffer.to_owned())
+        self.src_pad.push(buffer.to_owned()).await
     }
 
-    fn schedule(&self, state: &mut MutexGuard<State>, element: &gst::Element) {
-        let settings = self.settings.lock().unwrap().clone();
-        let latency_ns = settings.latency_ms as u64 * gst::MSECOND;
-        let context_wait_ns = settings.context_wait as u64 * gst::MSECOND;
-        drop(settings);
+    async fn schedule(&self, state: &mut MutexGuard<'_, State>, element: &gst::Element) {
+        let (latency_ns, context_wait_ns) = {
+            let settings = self.settings.lock().await;
+            (
+                settings.latency_ms as u64 * gst::MSECOND,
+                settings.context_wait as u64 * gst::MSECOND,
+            )
+        };
 
         let now = self.get_current_running_time(element);
 
@@ -803,131 +924,139 @@ impl JitterBuffer {
             latency_ns
         );
 
-        if state.earliest_pts.is_some() {
-            let next_wakeup = state.earliest_pts + latency_ns - state.packet_spacing;
-
-            let timeout = {
-                if next_wakeup > now {
-                    (next_wakeup - now).nseconds().unwrap()
-                } else {
-                    0
-                }
-            };
-
-            if let Some(abort_handle) = state.abort_handle.take() {
-                abort_handle.abort();
-            }
-
-            let (abort_handle, abort_registration) = AbortHandle::new_pair();
-
-            let element_clone = element.clone();
-
-            gst_debug!(CAT, obj: element, "Scheduling wakeup in {}", timeout);
-
-            let timer = Timeout::new(
-                state.io_context.as_ref().unwrap(),
-                time::Duration::from_nanos(timeout),
-            )
-            .map(move |_| {
-                let jb = Self::from_instance(&element_clone);
-                let mut state = jb.state.lock().unwrap();
-
-                if state.io_context.is_none() {
-                    return;
-                }
-
-                let now = jb.get_current_running_time(&element_clone);
-
-                gst_debug!(
-                    CAT,
-                    obj: &element_clone,
-                    "Woke back up, earliest_pts {}",
-                    state.earliest_pts
-                );
-
-                if let Some(abort_handle) = state.abort_handle.take() {
-                    abort_handle.abort();
-                }
-
-                /* Check earliest PTS as we have just taken the lock */
-                if state.earliest_pts.is_some()
-                    && state.earliest_pts + latency_ns - state.packet_spacing - context_wait_ns / 2
-                        < now
-                {
-                    loop {
-                        let (head_pts, head_seq) = state.jbuf.borrow().peek();
-
-                        state.last_res = jb.pop_and_push(&mut state, &element_clone);
-
-                        if let Some(pending_future_id) = state.pending_future_id {
-                            let (abort_handle, abortable_drain) = state
-                                .io_context
-                                .as_ref()
-                                .unwrap()
-                                .drain_pending_futures(pending_future_id);
-
-                            state.pending_future_abort_handle = abort_handle;
-
-                            state
-                                .io_context
-                                .as_ref()
-                                .unwrap()
-                                .spawn(abortable_drain.map(|_| ()));
-                        }
-
-                        if head_pts == state.earliest_pts
-                            && head_seq == state.earliest_seqnum as u32
-                        {
-                            let (earliest_pts, earliest_seqnum) =
-                                state.jbuf.borrow().find_earliest();
-                            state.earliest_pts = earliest_pts;
-                            state.earliest_seqnum = earliest_seqnum as u16;
-                        }
-
-                        if state.pending_future_abort_handle.is_some()
-                            || state.earliest_pts.is_none()
-                            || state.earliest_pts + latency_ns
-                                - state.packet_spacing
-                                - context_wait_ns / 2
-                                >= now
-                        {
-                            break;
-                        }
-                    }
-                }
-
-                jb.schedule(&mut state, &element_clone);
-            });
-
-            let abortable_timer = Abortable::new(timer, abort_registration);
-
-            state.abort_handle = Some(abort_handle);
-
-            state
-                .io_context
-                .as_ref()
-                .unwrap()
-                .spawn(abortable_timer.map(|_| ()));
+        if state.earliest_pts.is_none() {
+            return;
         }
+
+        let next_wakeup = state.earliest_pts + latency_ns - state.packet_spacing;
+
+        let delay = {
+            if next_wakeup > now {
+                (next_wakeup - now).nseconds().unwrap()
+            } else {
+                0
+            }
+        };
+
+        if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
+            wakeup_abort_handle.abort();
+        }
+
+        let pad_src_state = self.src_pad.lock_state().await;
+        let pad_ctx = pad_src_state.pad_context().unwrap();
+
+        gst_debug!(CAT, obj: element, "Scheduling wakeup in {}", delay);
+
+        let element = element.clone();
+        let pad_ctx_weak = pad_ctx.downgrade();
+        let wakeup_fut = pad_ctx.delay_for(Duration::from_nanos(delay), move || {
+            Self::wakeup_fut(latency_ns, context_wait_ns, element, pad_ctx_weak)
+        });
+
+        let (wakeup_fut, abort_handle) = abortable_waitable(wakeup_fut);
+        pad_ctx.spawn(wakeup_fut.map(drop));
+
+        state.wakeup_abort_handle = Some(abort_handle);
     }
 
-    fn enqueue_item(
+    fn wakeup_fut(
+        latency_ns: gst::ClockTime,
+        context_wait_ns: gst::ClockTime,
+        element: gst::Element,
+        pad_ctx_weak: PadContextWeak,
+    ) -> BoxFuture<'static, ()> {
+        async move {
+            let jb = Self::from_instance(&element);
+            let mut state = jb.state.lock().await;
+
+            let pad_ctx = match pad_ctx_weak.upgrade() {
+                Some(pad_ctx) => pad_ctx,
+                None => return,
+            };
+
+            let now = jb.get_current_running_time(&element);
+
+            gst_debug!(
+                CAT,
+                obj: &element,
+                "Woke back up, earliest_pts {}",
+                state.earliest_pts
+            );
+
+            /* Check earliest PTS as we have just taken the lock */
+            if state.earliest_pts.is_some()
+                && state.earliest_pts + latency_ns - state.packet_spacing - context_wait_ns / 2
+                    < now
+            {
+                loop {
+                    let (head_pts, head_seq) = state.jbuf.borrow().peek();
+
+                    state.last_res = jb.pop_and_push(&mut state, &element).await;
+
+                    if let Some(drain_fut) = pad_ctx.drain_pending_tasks() {
+                        let (abortable_drain, abort_handle) = abortable(drain_fut);
+                        state.task_queue_abort_handle = Some(abort_handle);
+
+                        pad_ctx.spawn(abortable_drain.map(drop));
+                    } else {
+                        state.task_queue_abort_handle = None;
+                    }
+
+                    let has_pending_tasks = state.task_queue_abort_handle.is_some();
+
+                    if head_pts == state.earliest_pts && head_seq == state.earliest_seqnum as u32 {
+                        let (earliest_pts, earliest_seqnum) = state.jbuf.borrow().find_earliest();
+                        state.earliest_pts = earliest_pts;
+                        state.earliest_seqnum = earliest_seqnum as u16;
+                    }
+
+                    if has_pending_tasks
+                        || state.earliest_pts.is_none()
+                        || state.earliest_pts + latency_ns - state.packet_spacing >= now
+                    {
+                        break;
+                    }
+                }
+            }
+
+            jb.schedule(&mut state, &element).await;
+        }
+        .boxed()
+    }
+
+    async fn enqueue_item(
         &self,
-        state: &mut MutexGuard<State>,
         pad: &gst::Pad,
         element: &gst::Element,
         buffer: Option<gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut state = self.state.lock().await;
+
+        let mut buffers = VecDeque::new();
         if let Some(buf) = buffer {
-            self.store(state, pad, element, buf)?;
+            buffers.push_back(buf);
         }
 
-        self.schedule(state, element);
+        // This is to avoid recursion with `store`, `reset` and `enqueue_item`
+        while let Some(buf) = buffers.pop_front() {
+            if let Err(err) = self.store(&mut state, pad, element, buf).await {
+                match err {
+                    gst::FlowError::CustomError => {
+                        for gap_packet in &self.reset(&mut state, element) {
+                            buffers.push_back(gap_packet.0.to_owned());
+                        }
+                    }
+                    other => return Err(other),
+                }
+            }
+        }
+
+        self.schedule(&mut state, element).await;
 
         state.last_res
     }
 
-    fn drain(&self, state: &mut MutexGuard<State>, element: &gst::Element) -> bool {
+    async fn drain(&self, state: &mut MutexGuard<'_, State>, element: &gst::Element) -> bool {
         let mut ret = true;
 
         loop {
@@ -937,7 +1066,7 @@ impl JitterBuffer {
                 break;
             }
 
-            if self.pop_and_push(state, element).is_err() {
+            if self.pop_and_push(state, element).await.is_err() {
                 ret = false;
                 break;
             }
@@ -946,134 +1075,18 @@ impl JitterBuffer {
         ret
     }
 
-    fn flush(&self, element: &gst::Element) {
-        let mut state = self.state.lock().unwrap();
+    async fn flush(&self, element: &gst::Element) {
+        let mut state = self.state.lock().await;
 
         gst_info!(CAT, obj: element, "Flushing");
 
-        let io_context = state.io_context.take();
-
         *state = State::default();
-
-        state.io_context = io_context;
     }
 
-    fn sink_chain(
-        &self,
-        pad: &gst::Pad,
-        element: &gst::Element,
-        buffer: gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(CAT, obj: pad, "Handling buffer {:?}", buffer);
-        let mut state = self.state.lock().unwrap();
-        self.enqueue_item(&mut state, pad, element, Some(buffer))
-    }
-
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
-        let mut forward = true;
-        use gst::EventView;
-
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
-
-        match event.view() {
-            EventView::FlushStop(..) => {
-                self.flush(element);
-            }
-            EventView::Segment(e) => {
-                let mut state = self.state.lock().unwrap();
-                state.segment = e
-                    .get_segment()
-                    .clone()
-                    .downcast::<gst::format::Time>()
-                    .unwrap();
-            }
-            EventView::Eos(..) => {
-                let mut state = self.state.lock().unwrap();
-                self.drain(&mut state, element);
-            }
-            EventView::CustomDownstreamSticky(e) => {
-                let s = e.get_structure().unwrap();
-                if s.get_name() == "ts-io-context" {
-                    forward = false;
-                }
-            }
-            _ => (),
-        };
-
-        if forward {
-            gst_log!(CAT, obj: pad, "Forwarding event {:?}", event);
-            self.src_pad.push_event(event)
-        } else {
-            true
-        }
-    }
-
-    fn sink_query(
-        &self,
-        pad: &gst::Pad,
-        element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        use gst::QueryView;
-        gst_log!(CAT, obj: pad, "Forwarding query {:?}", query);
-
-        match query.view_mut() {
-            QueryView::Drain(..) => {
-                let mut state = self.state.lock().unwrap();
-                gst_info!(CAT, obj: pad, "Draining");
-                self.enqueue_item(&mut state, pad, element, None).is_ok()
-            }
-            _ => self.src_pad.peer_query(query),
-        }
-    }
-
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        use gst::QueryView;
-
-        gst_log!(CAT, obj: pad, "Forwarding query {:?}", query);
-
-        match query.view_mut() {
-            QueryView::Latency(ref mut q) => {
-                let mut peer_query = gst::query::Query::new_latency();
-
-                let ret = self.sink_pad.peer_query(&mut peer_query);
-
-                if ret {
-                    let (_, mut min_latency, _) = peer_query.get_result();
-                    let settings = self.settings.lock().unwrap().clone();
-                    let our_latency = settings.latency_ms as u64 * gst::MSECOND;
-                    drop(settings);
-
-                    min_latency += our_latency;
-                    let max_latency = gst::CLOCK_TIME_NONE;
-
-                    q.set(true, min_latency, max_latency);
-                }
-
-                ret
-            }
-            QueryView::Position(ref mut q) => {
-                if q.get_format() != gst::Format::Time {
-                    self.sink_pad.peer_query(query)
-                } else {
-                    let state = self.state.lock().unwrap();
-                    q.set(state.segment.get_position());
-                    true
-                }
-            }
-            _ => self.sink_pad.peer_query(query),
-        }
-    }
-
-    fn clear_pt_map(&self, element: &gst::Element) {
+    async fn clear_pt_map(&self, element: &gst::Element) {
         gst_info!(CAT, obj: element, "Clearing PT map");
 
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().await;
         state.clock_rate = -1;
         state.jbuf.borrow().reset_skew();
     }
@@ -1123,7 +1136,7 @@ impl ObjectSubclass for JitterBuffer {
                     .expect("signal arg")
                     .expect("missing signal arg");
                 let jitterbuffer = Self::from_instance(&element);
-                jitterbuffer.clear_pt_map(&element);
+                block_on!(jitterbuffer.clear_pt_map(&element));
                 None
             },
         );
@@ -1141,39 +1154,10 @@ impl ObjectSubclass for JitterBuffer {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sink_pad = gst::Pad::new_from_template(&templ, Some("sink"));
+        let sink_pad = PadSink::new_from_template(&templ, Some("sink"));
+
         let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, Some("src"));
-
-        sink_pad.set_chain_function(|pad, parent, buffer| {
-            JitterBuffer::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |queue, element| queue.sink_chain(pad, element, buffer),
-            )
-        });
-        sink_pad.set_event_function(|pad, parent, event| {
-            JitterBuffer::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.sink_event(pad, element, event),
-            )
-        });
-        sink_pad.set_query_function(|pad, parent, query| {
-            JitterBuffer::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.sink_query(pad, element, query),
-            )
-        });
-
-        src_pad.set_query_function(|pad, parent, query| {
-            JitterBuffer::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_query(pad, element, query),
-            )
-        });
+        let src_pad = PadSrc::new_from_template(&templ, Some("src"));
 
         Self {
             sink_pad,
@@ -1192,11 +1176,10 @@ impl ObjectImpl for JitterBuffer {
 
         match *prop {
             subclass::Property("latency", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.latency_ms = value.get_some().expect("type checked upstream");
 
-                let state = self.state.lock().unwrap();
-                state
+                block_on!(self.state.lock())
                     .jbuf
                     .borrow()
                     .set_delay(settings.latency_ms as u64 * gst::MSECOND);
@@ -1204,26 +1187,26 @@ impl ObjectImpl for JitterBuffer {
                 /* TODO: post message */
             }
             subclass::Property("do-lost", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.do_lost = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-dropout-time", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.max_dropout_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-misorder-time", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.max_misorder_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -1235,23 +1218,23 @@ impl ObjectImpl for JitterBuffer {
 
         match *prop {
             subclass::Property("latency", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.latency_ms.to_value())
             }
             subclass::Property("do-lost", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.do_lost.to_value())
             }
             subclass::Property("max-dropout-time", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.max_dropout_time.to_value())
             }
             subclass::Property("max-misorder-time", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.max_misorder_time.to_value())
             }
             subclass::Property("stats", ..) => {
-                let state = self.state.lock().unwrap();
+                let state = block_on!(self.state.lock());
                 let s = gst::Structure::new(
                     "application/x-rtp-jitterbuffer-stats",
                     &[
@@ -1263,11 +1246,11 @@ impl ObjectImpl for JitterBuffer {
                 Ok(s.to_value())
             }
             subclass::Property("context", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),
@@ -1278,8 +1261,8 @@ impl ObjectImpl for JitterBuffer {
         self.parent_constructed(obj);
 
         let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sink_pad).unwrap();
-        element.add_pad(&self.src_pad).unwrap();
+        element.add_pad(self.sink_pad.gst_pad()).unwrap();
+        element.add_pad(self.src_pad.gst_pad()).unwrap();
     }
 }
 
@@ -1292,43 +1275,48 @@ impl ElementImpl for JitterBuffer {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
-            gst::StateChange::NullToReady => {
-                let settings = self.settings.lock().unwrap().clone();
-                let mut state = self.state.lock().unwrap();
+            gst::StateChange::NullToReady => block_on!(async {
+                let _state = self.state.lock().await;
+                let settings = self.settings.lock().await;
 
-                state.io_context =
-                    Some(IOContext::new(&settings.context, settings.context_wait).unwrap());
-                state.pending_future_id = Some(
-                    state
-                        .io_context
-                        .as_ref()
-                        .unwrap()
-                        .acquire_pending_future_id(),
-                );
-            }
-            gst::StateChange::PausedToReady => {
-                let mut state = self.state.lock().unwrap();
-                if let Some(abort_handle) = state.pending_future_abort_handle.take() {
+                let context = Context::acquire(&settings.context, settings.context_wait).unwrap();
+                let _ = self
+                    .src_pad
+                    .prepare(context, &JitterBufferPadSrcHandler {})
+                    .await
+                    .map_err(|err| {
+                        gst_error_msg!(
+                            gst::ResourceError::OpenRead,
+                            ["Error preparing src_pad: {:?}", err]
+                        );
+                        gst::StateChangeError
+                    });
+
+                self.sink_pad.prepare(&JitterBufferPadSinkHandler {}).await;
+            }),
+            gst::StateChange::PausedToReady => block_on!(async {
+                let mut state = self.state.lock().await;
+
+                if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
+                    wakeup_abort_handle.abort();
+                }
+
+                if let Some(abort_handle) = state.task_queue_abort_handle.take() {
                     abort_handle.abort();
                 }
-            }
-            gst::StateChange::ReadyToNull => {
-                let mut state = self.state.lock().unwrap();
+            }),
+            gst::StateChange::ReadyToNull => block_on!(async {
+                let mut state = self.state.lock().await;
 
-                state
-                    .io_context
-                    .as_ref()
-                    .unwrap()
-                    .release_pending_future_id(state.pending_future_id.unwrap());
-                state.pending_future_id = None;
+                self.sink_pad.unprepare().await;
+                let _ = self.src_pad.unprepare().await;
 
                 state.jbuf.borrow().flush();
 
-                if let Some(abort_handle) = state.abort_handle.take() {
-                    abort_handle.abort();
+                if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
+                    wakeup_abort_handle.abort();
                 }
-                let _ = state.io_context.take();
-            }
+            }),
             _ => (),
         }
 

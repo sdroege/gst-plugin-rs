@@ -15,6 +15,11 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use either::Either;
+
+use futures::channel::oneshot;
+use futures::future::BoxFuture;
+use futures::lock::Mutex;
 use futures::prelude::*;
 
 use glib;
@@ -27,17 +32,18 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+use gst::{EventView, QueryView};
 
 use lazy_static::lazy_static;
 
 use std::collections::VecDeque;
-use std::sync::Mutex;
-use std::task::{self, Poll};
 use std::{u32, u64};
 
-use tokio_executor::current_thread as tokio_current_thread;
+use crate::block_on;
+use crate::runtime::prelude::*;
+use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
-use super::{dataqueue::*, iocontext::*};
+use super::dataqueue::{DataQueue, DataQueueItem};
 
 const DEFAULT_MAX_SIZE_BUFFERS: u32 = 200;
 const DEFAULT_MAX_SIZE_BYTES: u32 = 1024 * 1024;
@@ -122,41 +128,327 @@ static PROPERTIES: [subclass::Property; 5] = [
     }),
 ];
 
+#[derive(Debug)]
 struct PendingQueue {
-    waker: Option<task::Waker>,
+    more_queue_space_sender: Option<oneshot::Sender<()>>,
     scheduled: bool,
     items: VecDeque<DataQueueItem>,
 }
 
+impl PendingQueue {
+    fn notify_more_queue_space(&mut self) {
+        self.more_queue_space_sender.take();
+    }
+}
+
+#[derive(Clone, Debug)]
+struct QueuePadSinkHandler;
+
+impl PadSinkHandler for QueuePadSinkHandler {
+    type ElementImpl = Queue;
+
+    fn sink_chain(
+        &self,
+        pad: PadSinkRef,
+        _queue: &Queue,
+        element: &gst::Element,
+        buffer: gst::Buffer,
+    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
+        let pad_weak = pad.downgrade();
+        let element = element.clone();
+        async move {
+            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+            gst_log!(CAT, obj: pad.gst_pad(), "Handling buffer {:?}", buffer);
+            let queue = Queue::from_instance(&element);
+            queue
+                .enqueue_item(&element, DataQueueItem::Buffer(buffer))
+                .await
+        }
+        .boxed()
+    }
+
+    fn sink_chain_list(
+        &self,
+        pad: PadSinkRef,
+        _queue: &Queue,
+        element: &gst::Element,
+        list: gst::BufferList,
+    ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
+        let pad_weak = pad.downgrade();
+        let element = element.clone();
+        async move {
+            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+            gst_log!(CAT, obj: pad.gst_pad(), "Handling buffer list {:?}", list);
+            let queue = Queue::from_instance(&element);
+            queue
+                .enqueue_item(&element, DataQueueItem::BufferList(list))
+                .await
+        }
+        .boxed()
+    }
+
+    fn sink_event(
+        &self,
+        pad: PadSinkRef,
+        queue: &Queue,
+        element: &gst::Element,
+        event: gst::Event,
+    ) -> Either<bool, BoxFuture<'static, bool>> {
+        if event.is_serialized() {
+            let pad_weak = pad.downgrade();
+            let element = element.clone();
+
+            Either::Right(
+                async move {
+                    let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+                    gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
+
+                    let queue = Queue::from_instance(&element);
+                    match event.view() {
+                        EventView::FlushStart(..) => {
+                            let _ = queue.stop(&element).await;
+                        }
+                        EventView::FlushStop(..) => {
+                            let (res, state, pending) = element.get_state(0.into());
+                            if res == Ok(gst::StateChangeSuccess::Success)
+                                && state == gst::State::Paused
+                                || res == Ok(gst::StateChangeSuccess::Async)
+                                    && pending == gst::State::Paused
+                            {
+                                let _ = queue.start(&element).await;
+                            }
+                        }
+                        _ => (),
+                    }
+
+                    gst_log!(CAT, obj: pad.gst_pad(), "Queuing serialized event {:?}", event);
+                    queue
+                        .enqueue_item(&element, DataQueueItem::Event(event))
+                        .await
+                        .is_ok()
+                }
+                .boxed(),
+            )
+        } else {
+            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized event {:?}", event);
+
+            Either::Left(queue.src_pad.gst_pad().push_event(event))
+        }
+    }
+
+    fn sink_query(
+        &self,
+        pad: PadSinkRef,
+        queue: &Queue,
+        _element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
+
+        if query.is_serialized() {
+            // FIXME: How can we do this?
+            gst_log!(CAT, obj: pad.gst_pad(), "Dropping serialized query {:?}", query);
+            false
+        } else {
+            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+            queue.src_pad.gst_pad().peer_query(query)
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct QueuePadSrcHandler;
+
+impl QueuePadSrcHandler {
+    async fn start_task(pad: PadSrcRef<'_>, element: &gst::Element, dataqueue: DataQueue) {
+        let pad_weak = pad.downgrade();
+        let element = element.clone();
+        let dataqueue = dataqueue.clone();
+        pad.start_task(move || {
+            let pad_weak = pad_weak.clone();
+            let element = element.clone();
+            let mut dataqueue = dataqueue.clone();
+            async move {
+                let item = dataqueue.next().await;
+
+                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
+                let item = match item {
+                    Some(item) => item,
+                    None => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "DataQueue Stopped");
+                        pad.pause_task().await;
+                        return;
+                    }
+                };
+
+                Self::push_item(pad, &element, item).await;
+            }
+        })
+        .await;
+    }
+
+    async fn push_item(pad: PadSrcRef<'_>, element: &gst::Element, item: DataQueueItem) {
+        let queue = Queue::from_instance(element);
+
+        if let Some(ref mut pending_queue) = queue.state.lock().await.pending_queue {
+            pending_queue.notify_more_queue_space();
+        }
+
+        let res = match item {
+            DataQueueItem::Buffer(buffer) => {
+                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding buffer {:?}", buffer);
+                pad.push(buffer).await.map(drop)
+            }
+            DataQueueItem::BufferList(list) => {
+                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding buffer list {:?}", list);
+                pad.push_list(list).await.map(drop)
+            }
+            DataQueueItem::Event(event) => {
+                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding event {:?}", event);
+                pad.push_event(event).await;
+                Ok(())
+            }
+        };
+
+        match res {
+            Ok(()) => {
+                gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed item");
+                let mut state = queue.state.lock().await;
+                state.last_res = Ok(gst::FlowSuccess::Ok);
+            }
+            Err(gst::FlowError::Flushing) => {
+                gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
+                let mut state = queue.state.lock().await;
+                pad.pause_task().await;
+                state.last_res = Err(gst::FlowError::Flushing);
+            }
+            Err(gst::FlowError::Eos) => {
+                gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
+                let mut state = queue.state.lock().await;
+                pad.pause_task().await;
+                state.last_res = Err(gst::FlowError::Eos);
+            }
+            Err(err) => {
+                gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
+                gst_element_error!(
+                    element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+                let mut state = queue.state.lock().await;
+                state.last_res = Err(err);
+            }
+        }
+    }
+}
+
+impl PadSrcHandler for QueuePadSrcHandler {
+    type ElementImpl = Queue;
+
+    fn src_event(
+        &self,
+        pad: PadSrcRef,
+        queue: &Queue,
+        element: &gst::Element,
+        event: gst::Event,
+    ) -> Either<bool, BoxFuture<'static, bool>> {
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
+
+        if event.is_serialized() {
+            let pad_weak = pad.downgrade();
+            let element = element.clone();
+
+            Either::Right(
+                async move {
+                    let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
+                    gst_log!(CAT, obj: pad.gst_pad(), "Forwarding serialized event {:?}", event);
+
+                    let queue = Queue::from_instance(&element);
+                    queue.sink_pad.gst_pad().push_event(event)
+                }
+                .boxed(),
+            )
+        } else {
+            match event.view() {
+                EventView::FlushStart(..) => {
+                    let _ = block_on!(queue.stop(element));
+                }
+                EventView::FlushStop(..) => {
+                    let (res, state, pending) = element.get_state(0.into());
+                    if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
+                        || res == Ok(gst::StateChangeSuccess::Async)
+                            && pending == gst::State::Playing
+                    {
+                        let _ = block_on!(queue.start(element));
+                    }
+                }
+                _ => (),
+            };
+
+            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized event {:?}", event);
+            Either::Left(queue.sink_pad.gst_pad().push_event(event))
+        }
+    }
+
+    fn src_query(
+        &self,
+        pad: PadSrcRef,
+        queue: &Queue,
+        _element: &gst::Element,
+        query: &mut gst::QueryRef,
+    ) -> bool {
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
+
+        if let QueryView::Scheduling(ref mut q) = query.view_mut() {
+            let mut new_query = gst::Query::new_scheduling();
+            let res = queue.sink_pad.gst_pad().peer_query(&mut new_query);
+            if !res {
+                return res;
+            }
+
+            gst_log!(CAT, obj: pad.gst_pad(), "Upstream returned {:?}", new_query);
+
+            let (flags, min, max, align) = new_query.get_result();
+            q.set(flags, min, max, align);
+            q.add_scheduling_modes(
+                &new_query
+                    .get_scheduling_modes()
+                    .iter()
+                    .cloned()
+                    .filter(|m| m != &gst::PadMode::Pull)
+                    .collect::<Vec<_>>(),
+            );
+            gst_log!(CAT, obj: pad.gst_pad(), "Returning {:?}", q.get_mut_query());
+            return true;
+        }
+
+        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+        queue.sink_pad.gst_pad().peer_query(query)
+    }
+}
+
+#[derive(Debug)]
 struct State {
-    io_context: Option<IOContext>,
-    pending_future_id: Option<PendingFutureId>,
-    io_context_in: Option<IOContext>,
-    pending_future_id_in: Option<PendingFutureId>,
     queue: Option<DataQueue>,
     pending_queue: Option<PendingQueue>,
     last_res: Result<gst::FlowSuccess, gst::FlowError>,
-    pending_future_abort_handle: Option<future::AbortHandle>,
 }
 
 impl Default for State {
     fn default() -> State {
         State {
-            io_context: None,
-            pending_future_id: None,
-            io_context_in: None,
-            pending_future_id_in: None,
             queue: None,
             pending_queue: None,
             last_res: Ok(gst::FlowSuccess::Ok),
-            pending_future_abort_handle: None,
         }
     }
 }
 
+#[derive(Debug)]
 struct Queue {
-    sink_pad: gst::Pad,
-    src_pad: gst::Pad,
+    sink_pad: PadSink,
+    src_pad: PadSrc,
     state: Mutex<State>,
     settings: Mutex<Settings>,
 }
@@ -170,35 +462,18 @@ lazy_static! {
 }
 
 impl Queue {
-    fn create_io_context_event(state: &State) -> Option<gst::Event> {
-        if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-            (&state.pending_future_id, &state.io_context)
-        {
-            let s = gst::Structure::new(
-                "ts-io-context",
-                &[
-                    ("io-context", &io_context),
-                    ("pending-future-id", &*pending_future_id),
-                ],
-            );
-            Some(gst::Event::new_custom_downstream_sticky(s).build())
-        } else {
-            None
-        }
-    }
-
     /* Try transfering all the items from the pending queue to the DataQueue, then
      * the current item. Errors out if the DataQueue was full, or the pending queue
      * is already scheduled, in which case the current item should be added to the
      * pending queue */
-    fn queue_until_full(
+    async fn queue_until_full(
         &self,
         queue: &DataQueue,
         pending_queue: &mut Option<PendingQueue>,
         item: DataQueueItem,
     ) -> Result<(), DataQueueItem> {
         match pending_queue {
-            None => queue.push(item),
+            None => queue.push(item).await,
             Some(PendingQueue {
                 scheduled: false,
                 ref mut items,
@@ -206,7 +481,7 @@ impl Queue {
             }) => {
                 let mut failed_item = None;
                 while let Some(item) = items.pop_front() {
-                    if let Err(item) = queue.push(item) {
+                    if let Err(item) = queue.push(item).await {
                         failed_item = Some(item);
                     }
                 }
@@ -216,7 +491,7 @@ impl Queue {
 
                     Err(item)
                 } else {
-                    queue.push(item)
+                    queue.push(item).await
                 }
             }
             _ => Err(item),
@@ -224,103 +499,87 @@ impl Queue {
     }
 
     /* Schedules emptying of the pending queue. If there is an upstream
-     * io context, the new pending future is added to it, it is otherwise
+     * TaskContext, the new task is spawned, it is otherwise
      * returned, for the caller to block on */
     fn schedule_pending_queue(
         &self,
         element: &gst::Element,
-        state: &mut State,
-    ) -> Option<impl Future<Output = Result<(), gst::FlowError>>> {
+        pending_queue: &mut Option<PendingQueue>,
+    ) -> impl Future<Output = ()> {
         gst_log!(CAT, obj: element, "Scheduling pending queue now");
-
-        let State {
-            ref mut pending_queue,
-            ref io_context_in,
-            pending_future_id_in,
-            ..
-        } = *state;
 
         pending_queue.as_mut().unwrap().scheduled = true;
 
-        let element_clone = element.clone();
-        let future = future::poll_fn(move |cx| {
-            let queue = Self::from_instance(&element_clone);
-            let mut state = queue.state.lock().unwrap();
+        let element = element.clone();
+        async move {
+            let queue = Self::from_instance(&element);
 
-            let State {
-                queue: ref dq,
-                ref mut pending_queue,
-                ..
-            } = *state;
+            loop {
+                let more_queue_space_receiver = {
+                    let mut state = queue.state.lock().await;
+                    let State {
+                        queue: ref dq,
+                        pending_queue: ref mut pq,
+                        ..
+                    } = *state;
 
-            if dq.is_none() {
-                return Poll::Ready(Ok(()));
-            }
-
-            gst_log!(CAT, obj: &element_clone, "Trying to empty pending queue");
-
-            let res = if let Some(PendingQueue {
-                ref mut waker,
-                ref mut items,
-                ..
-            }) = *pending_queue
-            {
-                let mut failed_item = None;
-                while let Some(item) = items.pop_front() {
-                    if let Err(item) = dq.as_ref().unwrap().push(item) {
-                        failed_item = Some(item);
+                    if dq.is_none() {
+                        return;
                     }
-                }
 
-                if let Some(failed_item) = failed_item {
-                    items.push_front(failed_item);
-                    *waker = Some(cx.waker().clone());
-                    gst_log!(CAT, obj: &element_clone, "Waiting for more queue space");
-                    Poll::Pending
-                } else {
-                    gst_log!(CAT, obj: &element_clone, "Pending queue is empty now");
-                    Poll::Ready(Ok(()))
-                }
-            } else {
-                gst_log!(CAT, obj: &element_clone, "Flushing, dropping pending queue");
-                Poll::Ready(Ok(()))
-            };
+                    gst_log!(CAT, obj: &element, "Trying to empty pending queue");
 
-            if res == Poll::Ready(Ok(())) {
-                *pending_queue = None;
+                    if let Some(ref mut pending_queue) = *pq {
+                        let mut failed_item = None;
+                        while let Some(item) = pending_queue.items.pop_front() {
+                            if let Err(item) = dq.as_ref().unwrap().push(item).await {
+                                failed_item = Some(item);
+                            }
+                        }
+
+                        if let Some(failed_item) = failed_item {
+                            pending_queue.items.push_front(failed_item);
+                            let (sender, receiver) = oneshot::channel();
+                            pending_queue.more_queue_space_sender = Some(sender);
+
+                            receiver
+                        } else {
+                            gst_log!(CAT, obj: &element, "Pending queue is empty now");
+                            *pq = None;
+                            return;
+                        }
+                    } else {
+                        gst_log!(CAT, obj: &element, "Flushing, dropping pending queue");
+                        *pq = None;
+                        return;
+                    }
+                };
+
+                gst_log!(CAT, obj: &element, "Waiting for more queue space");
+                let _ = more_queue_space_receiver.await;
             }
-
-            res
-        });
-
-        if let (Some(io_context_in), Some(pending_future_id_in)) =
-            (io_context_in.as_ref(), pending_future_id_in.as_ref())
-        {
-            io_context_in.add_pending_future(*pending_future_id_in, future);
-            None
-        } else {
-            Some(future)
         }
     }
 
-    fn enqueue_item(
+    async fn enqueue_item(
         &self,
-        _pad: &gst::Pad,
         element: &gst::Element,
         item: DataQueueItem,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let wait_future = {
-            let mut state = self.state.lock().unwrap();
+        let wait_fut = {
+            let mut state = self.state.lock().await;
             let State {
                 ref queue,
                 ref mut pending_queue,
-                ref io_context_in,
                 ..
             } = *state;
 
-            let queue = queue.as_ref().ok_or(gst::FlowError::Error)?;
+            let queue = queue.as_ref().ok_or_else(|| {
+                gst_error!(CAT, obj: element, "No Queue");
+                gst::FlowError::Error
+            })?;
 
-            if let Err(item) = self.queue_until_full(queue, pending_queue, item) {
+            if let Err(item) = self.queue_until_full(queue, pending_queue, item).await {
                 if pending_queue
                     .as_ref()
                     .map(|pq| !pq.scheduled)
@@ -328,7 +587,7 @@ impl Queue {
                 {
                     if pending_queue.is_none() {
                         *pending_queue = Some(PendingQueue {
-                            waker: None,
+                            more_queue_space_sender: None,
                             scheduled: false,
                             items: VecDeque::new(),
                         });
@@ -350,16 +609,14 @@ impl Queue {
                     );
 
                     if schedule_now {
-                        self.schedule_pending_queue(element, &mut state)
+                        let wait_fut = self.schedule_pending_queue(element, pending_queue);
+                        Some(wait_fut)
                     } else {
                         gst_log!(CAT, obj: element, "Scheduling pending queue later");
-
                         None
                     }
                 } else {
-                    assert!(io_context_in.is_some());
                     pending_queue.as_mut().unwrap().items.push_back(item);
-
                     None
                 }
             } else {
@@ -367,401 +624,93 @@ impl Queue {
             }
         };
 
-        if let Some(wait_future) = wait_future {
+        if let Some(wait_fut) = wait_fut {
             gst_log!(CAT, obj: element, "Blocking until queue has space again");
-            tokio_current_thread::block_on_all(wait_future).map_err(|_| {
-                gst_element_error!(
-                    element,
-                    gst::StreamError::Failed,
-                    ["failed to wait for queue to have space again"]
-                );
-                gst::FlowError::Error
-            })?;
+            wait_fut.await;
         }
 
-        self.state.lock().unwrap().last_res
+        self.state.lock().await.last_res
     }
 
-    fn sink_chain(
-        &self,
-        pad: &gst::Pad,
-        element: &gst::Element,
-        buffer: gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
-        self.enqueue_item(pad, element, DataQueueItem::Buffer(buffer))
-    }
-
-    fn sink_chain_list(
-        &self,
-        pad: &gst::Pad,
-        element: &gst::Element,
-        list: gst::BufferList,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad, "Handling buffer list {:?}", list);
-        self.enqueue_item(pad, element, DataQueueItem::BufferList(list))
-    }
-
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, mut event: gst::Event) -> bool {
-        use gst::EventView;
-
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
-
-        let mut new_event = None;
-        match event.view() {
-            EventView::FlushStart(..) => {
-                let _ = self.stop(element);
-            }
-            EventView::FlushStop(..) => {
-                let (res, state, pending) = element.get_state(0.into());
-                if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Paused
-                    || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Paused
-                {
-                    let _ = self.start(element);
-                }
-            }
-            EventView::CustomDownstreamSticky(e) => {
-                let s = e.get_structure().unwrap();
-                if s.get_name() == "ts-io-context" {
-                    let mut state = self.state.lock().unwrap();
-                    let io_context = s
-                        .get::<&IOContext>("io-context")
-                        .expect("event field")
-                        .expect("missing event field");
-                    let pending_future_id = s
-                        .get::<&PendingFutureId>("pending-future-id")
-                        .expect("event field")
-                        .expect("missing event field");
-
-                    gst_debug!(
-                        CAT,
-                        obj: element,
-                        "Got upstream pending future id {:?}",
-                        pending_future_id
-                    );
-
-                    state.io_context_in = Some(io_context.clone());
-                    state.pending_future_id_in = Some(*pending_future_id);
-
-                    new_event = Self::create_io_context_event(&state);
-
-                    // Get rid of reconfigure flag
-                    self.src_pad.check_reconfigure();
-                }
-            }
-            _ => (),
-        };
-
-        if let Some(new_event) = new_event {
-            event = new_event;
-        }
-
-        if event.is_serialized() {
-            gst_log!(CAT, obj: pad, "Queuing event {:?}", event);
-            let _ = self.enqueue_item(pad, element, DataQueueItem::Event(event));
-            true
-        } else {
-            gst_log!(CAT, obj: pad, "Forwarding event {:?}", event);
-            self.src_pad.push_event(event)
-        }
-    }
-
-    fn sink_query(
-        &self,
-        pad: &gst::Pad,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
-
-        if query.is_serialized() {
-            // FIXME: How can we do this?
-            gst_log!(CAT, obj: pad, "Dropping serialized query {:?}", query);
-            false
-        } else {
-            gst_log!(CAT, obj: pad, "Forwarding query {:?}", query);
-            self.src_pad.peer_query(query)
-        }
-    }
-
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
-        use gst::EventView;
-
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
-
-        match event.view() {
-            EventView::FlushStart(..) => {
-                let _ = self.stop(element);
-            }
-            EventView::FlushStop(..) => {
-                let (res, state, pending) = element.get_state(0.into());
-                if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
-                    || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
-                {
-                    let _ = self.start(element);
-                }
-            }
-            _ => (),
-        };
-
-        gst_log!(CAT, obj: pad, "Forwarding event {:?}", event);
-        self.sink_pad.push_event(event)
-    }
-
-    fn src_query(
-        &self,
-        pad: &gst::Pad,
-        _element: &gst::Element,
-        query: &mut gst::QueryRef,
-    ) -> bool {
-        use gst::QueryView;
-
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
-        match query.view_mut() {
-            QueryView::Scheduling(ref mut q) => {
-                let mut new_query = gst::Query::new_scheduling();
-                let res = self.sink_pad.peer_query(&mut new_query);
-                if !res {
-                    return res;
-                }
-
-                gst_log!(CAT, obj: pad, "Upstream returned {:?}", new_query);
-
-                let (flags, min, max, align) = new_query.get_result();
-                q.set(flags, min, max, align);
-                q.add_scheduling_modes(
-                    &new_query
-                        .get_scheduling_modes()
-                        .iter()
-                        .cloned()
-                        .filter(|m| m != &gst::PadMode::Pull)
-                        .collect::<Vec<_>>(),
-                );
-                gst_log!(CAT, obj: pad, "Returning {:?}", q.get_mut_query());
-                return true;
-            }
-            _ => (),
-        };
-
-        gst_log!(CAT, obj: pad, "Forwarding query {:?}", query);
-        self.sink_pad.peer_query(query)
-    }
-
-    async fn push_item(element: gst::Element, item: DataQueueItem) -> Result<(), gst::FlowError> {
-        let queue = Self::from_instance(&element);
-
-        let event = {
-            let state = queue.state.lock().unwrap();
-            if let Some(PendingQueue {
-                waker: Some(ref waker),
-                ..
-            }) = state.pending_queue
-            {
-                waker.wake_by_ref();
-            }
-
-            if queue.src_pad.check_reconfigure() {
-                Self::create_io_context_event(&state)
-            } else {
-                None
-            }
-        };
-
-        if let Some(event) = event {
-            queue.src_pad.push_event(event);
-        }
-
-        let res = match item {
-            DataQueueItem::Buffer(buffer) => {
-                gst_log!(CAT, obj: &element, "Forwarding buffer {:?}", buffer);
-                queue.src_pad.push(buffer).map(|_| ())
-            }
-            DataQueueItem::BufferList(list) => {
-                gst_log!(CAT, obj: &element, "Forwarding buffer list {:?}", list);
-                queue.src_pad.push_list(list).map(|_| ())
-            }
-            DataQueueItem::Event(event) => {
-                gst_log!(CAT, obj: &element, "Forwarding event {:?}", event);
-                queue.src_pad.push_event(event);
-                Ok(())
-            }
-        };
-
-        match res {
-            Ok(_) => {
-                gst_log!(CAT, obj: &element, "Successfully pushed item");
-                let mut state = queue.state.lock().unwrap();
-                state.last_res = Ok(gst::FlowSuccess::Ok);
-            }
-            Err(gst::FlowError::Flushing) => {
-                gst_debug!(CAT, obj: &element, "Flushing");
-                let mut state = queue.state.lock().unwrap();
-                if let Some(ref queue) = state.queue {
-                    queue.pause();
-                }
-                state.last_res = Err(gst::FlowError::Flushing);
-            }
-            Err(gst::FlowError::Eos) => {
-                gst_debug!(CAT, obj: &element, "EOS");
-                let mut state = queue.state.lock().unwrap();
-                if let Some(ref queue) = state.queue {
-                    queue.pause();
-                }
-                state.last_res = Err(gst::FlowError::Eos);
-            }
-            Err(err) => {
-                gst_error!(CAT, obj: &element, "Got error {}", err);
-                gst_element_error!(
-                    &element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason {}", err]
-                );
-                let mut state = queue.state.lock().unwrap();
-                state.last_res = Err(err);
-                return Err(gst::FlowError::CustomError);
-            }
-        }
-
-        let abortable_drain = {
-            let mut state = queue.state.lock().unwrap();
-
-            if let State {
-                io_context: Some(ref io_context),
-                pending_future_id: Some(ref pending_future_id),
-                ref mut pending_future_abort_handle,
-                ..
-            } = *state
-            {
-                let (abort_handle, abortable_drain) =
-                    io_context.drain_pending_futures(*pending_future_id);
-                *pending_future_abort_handle = abort_handle;
-
-                abortable_drain
-            } else {
-                return Ok(());
-            }
-        };
-
-        abortable_drain.await
-    }
-
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    async fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+        let mut state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Preparing");
 
-        let settings = self.settings.lock().unwrap().clone();
+        let settings = self.settings.lock().await;
 
-        let mut state = self.state.lock().unwrap();
-
-        let io_context =
-            IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to create IO context: {}", err]
-                )
-            })?;
-
-        let dataqueue = DataQueue::new(
-            &element.clone().upcast(),
-            if settings.max_size_buffers == 0 {
-                None
-            } else {
-                Some(settings.max_size_buffers)
-            },
-            if settings.max_size_bytes == 0 {
-                None
-            } else {
-                Some(settings.max_size_bytes)
-            },
-            if settings.max_size_time == 0 {
-                None
-            } else {
-                Some(settings.max_size_time)
-            },
-        );
-
-        let element_clone = element.clone();
-        let element_clone2 = element.clone();
-        dataqueue
-            .schedule(
-                &io_context,
-                move |item| Self::push_item(element_clone.clone(), item),
-                move |err| {
-                    gst_error!(CAT, obj: &element_clone2, "Got error {}", err);
-                    match err {
-                        gst::FlowError::CustomError => (),
-                        err => {
-                            gst_element_error!(
-                                element_clone2,
-                                gst::StreamError::Failed,
-                                ("Internal data stream error"),
-                                ["streaming stopped, reason {}", err]
-                            );
-                        }
-                    }
+        {
+            let dataqueue = DataQueue::new(
+                &element.clone().upcast(),
+                self.src_pad.gst_pad(),
+                if settings.max_size_buffers == 0 {
+                    None
+                } else {
+                    Some(settings.max_size_buffers)
                 },
-            )
-            .map_err(|_| {
+                if settings.max_size_bytes == 0 {
+                    None
+                } else {
+                    Some(settings.max_size_bytes)
+                },
+                if settings.max_size_time == 0 {
+                    None
+                } else {
+                    Some(settings.max_size_time)
+                },
+            );
+
+            state.queue = Some(dataqueue);
+        }
+
+        let context =
+            Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
-                    ["Failed to schedule data queue"]
+                    ["Failed to acquire Context: {}", err]
                 )
             })?;
 
-        let pending_future_id = io_context.acquire_pending_future_id();
-        gst_debug!(
-            CAT,
-            obj: element,
-            "Got pending future id {:?}",
-            pending_future_id
-        );
-
-        state.io_context = Some(io_context);
-        state.queue = Some(dataqueue);
-        state.pending_future_id = Some(pending_future_id);
+        self.src_pad
+            .prepare(context, &QueuePadSrcHandler {})
+            .await
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Error joining Context: {:?}", err]
+                )
+            })?;
+        self.sink_pad.prepare(&QueuePadSinkHandler {}).await;
 
         gst_debug!(CAT, obj: element, "Prepared");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+    async fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        // FIXME: The IO Context has to be alive longer than the queue,
-        // otherwise the queue can't finish any remaining work
-        let (mut queue, io_context) = {
-            let mut state = self.state.lock().unwrap();
-            if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-                (&state.pending_future_id, &state.io_context)
-            {
-                io_context.release_pending_future_id(*pending_future_id);
-            }
+        self.src_pad.stop_task().await;
 
-            let queue = state.queue.take();
-            let io_context = state.io_context.take();
+        self.sink_pad.unprepare().await;
+        let _ = self.src_pad.unprepare().await;
 
-            *state = State::default();
-
-            (queue, io_context)
-        };
-
-        if let Some(ref queue) = queue.take() {
-            queue.shutdown();
-        }
-        drop(io_context);
+        *state = State::default();
 
         gst_debug!(CAT, obj: element, "Unprepared");
+
         Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), ()> {
+    async fn start(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Starting");
-        let mut state = self.state.lock().unwrap();
 
-        if let Some(ref queue) = state.queue {
-            queue.unpause();
-        }
+        let dataqueue = state.queue.as_ref().unwrap().clone();
+        dataqueue.start().await;
+
+        QueuePadSrcHandler::start_task(self.src_pad.as_ref(), element, dataqueue).await;
+
         state.last_res = Ok(gst::FlowSuccess::Ok);
 
         gst_debug!(CAT, obj: element, "Started");
@@ -769,27 +718,30 @@ impl Queue {
         Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(CAT, obj: element, "Stopping");
-        let mut state = self.state.lock().unwrap();
+    async fn stop(&self, element: &gst::Element) -> Result<(), ()> {
+        let pause_completion = {
+            let mut state = self.state.lock().await;
+            gst_debug!(CAT, obj: element, "Stopping");
 
-        if let Some(ref queue) = state.queue {
-            queue.pause();
-            queue.clear(&self.src_pad);
-        }
+            let pause_completion = self.src_pad.pause_task().await;
 
-        if let Some(PendingQueue {
-            waker: Some(waker), ..
-        }) = state.pending_queue.take()
-        {
-            waker.wake();
-        }
+            if let Some(ref dataqueue) = state.queue {
+                dataqueue.pause().await;
+                dataqueue.clear().await;
+                dataqueue.stop().await;
+            }
 
-        if let Some(abort_handle) = state.pending_future_abort_handle.take() {
-            abort_handle.abort();
-        }
+            if let Some(ref mut pending_queue) = state.pending_queue {
+                pending_queue.notify_more_queue_space();
+            }
 
-        state.last_res = Err(gst::FlowError::Flushing);
+            pause_completion
+        };
+
+        gst_debug!(CAT, obj: element, "Waiting for Task Pause to complete");
+        pause_completion.await;
+
+        self.state.lock().await.last_res = Err(gst::FlowError::Flushing);
 
         gst_debug!(CAT, obj: element, "Stopped");
 
@@ -838,53 +790,10 @@ impl ObjectSubclass for Queue {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sink_pad = gst::Pad::new_from_template(&templ, Some("sink"));
+        let sink_pad = PadSink::new_from_template(&templ, Some("sink"));
+
         let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, Some("src"));
-
-        sink_pad.set_chain_function(|pad, parent, buffer| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |queue, element| queue.sink_chain(pad, element, buffer),
-            )
-        });
-        sink_pad.set_chain_list_function(|pad, parent, list| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |queue, element| queue.sink_chain_list(pad, element, list),
-            )
-        });
-        sink_pad.set_event_function(|pad, parent, event| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.sink_event(pad, element, event),
-            )
-        });
-        sink_pad.set_query_function(|pad, parent, query| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.sink_query(pad, element, query),
-            )
-        });
-
-        src_pad.set_event_function(|pad, parent, event| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_event(pad, element, event),
-            )
-        });
-        src_pad.set_query_function(|pad, parent, query| {
-            Queue::catch_panic_pad_function(
-                parent,
-                || false,
-                |queue, element| queue.src_query(pad, element, query),
-            )
-        });
+        let src_pad = PadSrc::new_from_template(&templ, Some("src"));
 
         Self {
             sink_pad,
@@ -903,26 +812,26 @@ impl ObjectImpl for Queue {
 
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.max_size_buffers = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-bytes", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.max_size_bytes = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-time", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.max_size_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -934,23 +843,23 @@ impl ObjectImpl for Queue {
 
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.max_size_buffers.to_value())
             }
             subclass::Property("max-size-bytes", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.max_size_bytes.to_value())
             }
             subclass::Property("max-size-time", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.max_size_time.to_value())
             }
             subclass::Property("context", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),
@@ -961,8 +870,8 @@ impl ObjectImpl for Queue {
         self.parent_constructed(obj);
 
         let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sink_pad).unwrap();
-        element.add_pad(&self.src_pad).unwrap();
+        element.add_pad(self.sink_pad.gst_pad()).unwrap();
+        element.add_pad(self.src_pad.gst_pad()).unwrap();
     }
 }
 
@@ -976,16 +885,16 @@ impl ElementImpl for Queue {
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
+                block_on!(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                block_on!(self.stop(element)).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+                block_on!(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -993,7 +902,7 @@ impl ElementImpl for Queue {
         let success = self.parent_change_state(element, transition)?;
 
         if transition == gst::StateChange::ReadyToPaused {
-            self.start(element).map_err(|_| gst::StateChangeError)?;
+            block_on!(self.start(element)).map_err(|_| gst::StateChangeError)?;
         }
 
         Ok(success)

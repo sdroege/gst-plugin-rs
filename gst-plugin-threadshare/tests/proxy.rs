@@ -87,7 +87,7 @@ fn test_push() {
                 eos = true;
                 break;
             }
-            MessageView::Error(..) => unreachable!(),
+            MessageView::Error(err) => unreachable!("proxy::test_push {:?}", err),
             _ => (),
         }
     }

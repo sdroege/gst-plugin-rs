@@ -15,17 +15,26 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+//! A collection of GStreamer plugins which leverage the `threadshare` [`runtime`].
+//!
+//! [`runtime`]: runtime/index.html
+
+// Needed for `select!` in `Socket::next`
+// see https://docs.rs/futures/0.3.1/futures/macro.select.html
+#![recursion_limit = "1024"]
 #![crate_type = "cdylib"]
 
-mod runtime;
-use runtime::executor as iocontext;
+pub use tokio_executor;
 
-mod socket;
+#[macro_use]
+pub mod runtime;
+
+pub mod socket;
 mod tcpclientsrc;
 mod udpsrc;
 
 mod appsrc;
-mod dataqueue;
+pub mod dataqueue;
 mod jitterbuffer;
 mod proxy;
 mod queue;

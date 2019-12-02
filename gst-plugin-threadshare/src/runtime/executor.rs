@@ -15,8 +15,29 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use futures::channel::{mpsc, oneshot};
-use futures::future::{AbortHandle, Abortable, BoxFuture};
+//! The `Executor` for the `threadshare` GStreamer plugins framework.
+//!
+//! The [`threadshare`]'s `Executor` consists in a set of [`Context`]s. Each [`Context`] is
+//! identified by a `name` and runs a loop in a dedicated `thread`. Users can use the [`Context`]
+//! to spawn `Future`s. `Future`s are asynchronous processings which allow waiting for resources
+//! in a non-blocking way. Examples of non-blocking operations are:
+//!
+//! * Waiting for an incoming packet on a Socket.
+//! * Waiting for an asynchronous `Mutex` `lock` to succeed.
+//! * Waiting for a `Timeout` to be elapsed.
+//!
+//! [`Context`]s instantiators define the minimum time between two iterations of the [`Context`]
+//! loop, which acts as a throttle, saving CPU usage when no operations are to be executed.
+//!
+//! `Element` implementations should use [`PadSrc`] & [`PadSink`] which provides high-level features.
+//!
+//! [`threadshare`]: ../index.html
+//! [`Context`]: struct.Context.html
+//! [`PadSrc`]: struct.PadSrc.html
+//! [`PadSink`]: struct.PadSink.html
+
+use futures::channel::mpsc as future_mpsc;
+use futures::future::BoxFuture;
 use futures::prelude::*;
 use futures::ready;
 use futures::stream::futures_unordered::FuturesUnordered;
@@ -34,78 +55,79 @@ use std::collections::{BinaryHeap, HashMap};
 use std::io;
 use std::mem;
 use std::pin::Pin;
-use std::sync::atomic;
-use std::sync::{Arc, Mutex, Weak};
-use std::task::{self, Poll};
+use std::sync::mpsc as sync_mpsc;
+use std::sync::{atomic, Arc, Mutex, Weak};
+use std::task::Poll;
 use std::thread;
-use std::time;
+use std::time::{Duration, Instant};
 
 use tokio_executor::current_thread as tokio_current_thread;
+use tokio_executor::park::Unpark;
 
+use super::RUNTIME_CAT;
+
+// We are bound to using `sync` for the `runtime` `Mutex`es. Attempts to use `async` `Mutex`es
+// lead to the following issues:
+//
+// * `CONTEXTS`: can't `spawn` a `Future` when called from a `Context` thread via `ffi`.
+// * `timers`: can't automatically `remove` the timer from `BinaryHeap` because `async drop`
+//    is not available.
+// * `task_queues`: can't `add` a pending task when called from a `Context` thread via `ffi`.
+//
+// Also, we want to be able to `acquire` a `Context` outside of an `async` context.
+// These `Mutex`es must be `lock`ed for a short period.
 lazy_static! {
-    static ref CONTEXTS: Mutex<HashMap<String, Weak<IOContextInner>>> = Mutex::new(HashMap::new());
-    static ref CONTEXT_CAT: gst::DebugCategory = gst::DebugCategory::new(
-        "ts-context",
-        gst::DebugColorFlags::empty(),
-        Some("Thread-sharing Context"),
-    );
+    static ref CONTEXTS: Mutex<HashMap<String, Weak<ContextInner>>> = Mutex::new(HashMap::new());
 }
 
-// Our own simplified implementation of reactor::Background to allow hooking into its internals
-const RUNNING: usize = 0;
-const SHUTDOWN_NOW: usize = 1;
-
-struct IOContextRunner {
+struct ContextThread {
     name: String,
-    shutdown: Arc<atomic::AtomicUsize>,
+    shutdown: Arc<atomic::AtomicBool>,
 }
 
-impl IOContextRunner {
+impl ContextThread {
     fn start(
         name: &str,
         wait: u32,
         reactor: tokio_net::driver::Reactor,
         timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
-    ) -> (tokio_current_thread::Handle, IOContextShutdown) {
-        let handle = reactor.handle().clone();
-        let shutdown = Arc::new(atomic::AtomicUsize::new(RUNNING));
+    ) -> (tokio_current_thread::Handle, ContextShutdown) {
+        let handle = reactor.handle();
+        let shutdown = Arc::new(atomic::AtomicBool::new(false));
         let shutdown_clone = shutdown.clone();
         let name_clone = name.into();
 
-        let mut runner = IOContextRunner {
+        let mut context_thread = ContextThread {
             shutdown: shutdown_clone,
             name: name_clone,
         };
 
-        let (sender, receiver) = oneshot::channel();
+        let (sender, receiver) = sync_mpsc::channel();
 
         let join = thread::spawn(move || {
-            runner.run(wait, reactor, sender, timers);
+            context_thread.spawn(wait, reactor, sender, timers);
         });
 
-        let shutdown = IOContextShutdown {
+        let shutdown = ContextShutdown {
             name: name.into(),
             shutdown,
             handle,
             join: Some(join),
         };
 
-        let runtime_handle =
-            tokio_current_thread::block_on_all(receiver).expect("Runtime init failed");
+        let thread_handle = receiver.recv().expect("Context thread init failed");
 
-        (runtime_handle, shutdown)
+        (thread_handle, shutdown)
     }
 
-    fn run(
+    fn spawn(
         &mut self,
         wait: u32,
         reactor: tokio_net::driver::Reactor,
-        sender: oneshot::Sender<tokio_current_thread::Handle>,
+        sender: sync_mpsc::Sender<tokio_current_thread::Handle>,
         timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
     ) {
-        use std::time::{Duration, Instant};
-
-        gst_debug!(CONTEXT_CAT, "Started reactor thread '{}'", self.name);
+        gst_debug!(RUNTIME_CAT, "Started context thread '{}'", self.name);
 
         let wait = Duration::from_millis(wait as u64);
 
@@ -117,7 +139,7 @@ impl IOContextRunner {
 
         sender
             .send(current_thread.handle())
-            .expect("Couldn't send Runtime handle");
+            .expect("Couldn't send context thread handle");
 
         let _timer_guard = tokio_timer::set_default(&timer_handle);
         let _reactor_guard = tokio_net::driver::set_default(&handle);
@@ -125,11 +147,12 @@ impl IOContextRunner {
         let mut now = Instant::now();
 
         loop {
-            if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
+            if self.shutdown.load(atomic::Ordering::SeqCst) {
+                gst_debug!(RUNTIME_CAT, "Shutting down loop");
                 break;
             }
 
-            gst_trace!(CONTEXT_CAT, "Elapsed {:?} since last loop", now.elapsed());
+            gst_trace!(RUNTIME_CAT, "Elapsed {:?} since last loop", now.elapsed());
 
             // Handle timers
             {
@@ -171,33 +194,33 @@ impl IOContextRunner {
                 }
             }
 
-            gst_trace!(CONTEXT_CAT, "Turning current thread '{}'", self.name);
+            gst_trace!(RUNTIME_CAT, "Turning thread '{}'", self.name);
             while current_thread
-                .turn(Some(time::Duration::from_millis(0)))
+                .turn(Some(Duration::from_millis(0)))
                 .unwrap()
                 .has_polled()
             {}
-            gst_trace!(CONTEXT_CAT, "Turned current thread '{}'", self.name);
+            gst_trace!(RUNTIME_CAT, "Turned thread '{}'", self.name);
 
             // We have to check again after turning in case we're supposed to shut down now
             // and already handled the unpark above
-            if self.shutdown.load(atomic::Ordering::SeqCst) > RUNNING {
-                gst_debug!(CONTEXT_CAT, "Shutting down loop");
+            if self.shutdown.load(atomic::Ordering::SeqCst) {
+                gst_debug!(RUNTIME_CAT, "Shutting down loop");
                 break;
             }
 
             let elapsed = now.elapsed();
-            gst_trace!(CONTEXT_CAT, "Elapsed {:?} after handling futures", elapsed);
+            gst_trace!(RUNTIME_CAT, "Elapsed {:?} after handling futures", elapsed);
 
-            if wait == time::Duration::from_millis(0) {
+            if wait == Duration::from_millis(0) {
                 let timers = timers.lock().unwrap();
                 let wait = match timers.peek().map(|entry| entry.time) {
                     None => None,
                     Some(time) => Some({
-                        let tmp = time::Instant::now();
+                        let tmp = Instant::now();
 
                         if time < tmp {
-                            time::Duration::from_millis(0)
+                            Duration::from_millis(0)
                         } else {
                             time.duration_since(tmp)
                         }
@@ -205,19 +228,19 @@ impl IOContextRunner {
                 };
                 drop(timers);
 
-                gst_trace!(CONTEXT_CAT, "Sleeping for up to {:?}", wait);
+                gst_trace!(RUNTIME_CAT, "Sleeping for up to {:?}", wait);
                 current_thread.turn(wait).unwrap();
-                gst_trace!(CONTEXT_CAT, "Slept for {:?}", now.elapsed());
-                now = time::Instant::now();
+                gst_trace!(RUNTIME_CAT, "Slept for {:?}", now.elapsed());
+                now = Instant::now();
             } else {
                 if elapsed < wait {
                     gst_trace!(
-                        CONTEXT_CAT,
+                        RUNTIME_CAT,
                         "Waiting for {:?} before polling again",
                         wait - elapsed
                     );
                     thread::sleep(wait - elapsed);
-                    gst_trace!(CONTEXT_CAT, "Slept for {:?}", now.elapsed());
+                    gst_trace!(RUNTIME_CAT, "Slept for {:?}", now.elapsed());
                 }
 
                 now += wait;
@@ -226,26 +249,33 @@ impl IOContextRunner {
     }
 }
 
-impl Drop for IOContextRunner {
+impl Drop for ContextThread {
     fn drop(&mut self) {
-        gst_debug!(CONTEXT_CAT, "Shut down reactor thread '{}'", self.name);
+        gst_debug!(RUNTIME_CAT, "Terminated: context thread '{}'", self.name);
     }
 }
 
-struct IOContextShutdown {
+#[derive(Debug)]
+struct ContextShutdown {
     name: String,
-    shutdown: Arc<atomic::AtomicUsize>,
+    shutdown: Arc<atomic::AtomicBool>,
     handle: tokio_net::driver::Handle,
     join: Option<thread::JoinHandle<()>>,
 }
 
-impl Drop for IOContextShutdown {
+impl Drop for ContextShutdown {
     fn drop(&mut self) {
-        use tokio_executor::park::Unpark;
-
-        gst_debug!(CONTEXT_CAT, "Shutting down reactor thread '{}'", self.name);
-        self.shutdown.store(SHUTDOWN_NOW, atomic::Ordering::SeqCst);
-        gst_trace!(CONTEXT_CAT, "Waiting for reactor '{}' shutdown", self.name);
+        gst_debug!(
+            RUNTIME_CAT,
+            "Shutting down context thread thread '{}'",
+            self.name
+        );
+        self.shutdown.store(true, atomic::Ordering::SeqCst);
+        gst_trace!(
+            RUNTIME_CAT,
+            "Waiting for context thread '{}' to shutdown",
+            self.name
+        );
         // After being unparked, the next turn() is guaranteed to finish immediately,
         // as such there is no race condition between checking for shutdown and setting
         // shutdown.
@@ -254,172 +284,236 @@ impl Drop for IOContextShutdown {
     }
 }
 
-#[derive(Clone)]
-pub struct IOContext(Arc<IOContextInner>);
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+pub struct TaskQueueId(u64);
 
-impl glib::subclass::boxed::BoxedType for IOContext {
-    const NAME: &'static str = "TsIOContext";
+impl glib::subclass::boxed::BoxedType for TaskQueueId {
+    const NAME: &'static str = "TsTaskQueueId";
 
     glib_boxed_type!();
 }
 
-glib_boxed_derive_traits!(IOContext);
+glib_boxed_derive_traits!(TaskQueueId);
 
-pub type PendingFuturesOutput = Result<(), gst::FlowError>;
-type PendingFutureQueue = FuturesUnordered<BoxFuture<'static, PendingFuturesOutput>>;
+pub type TaskOutput = Result<(), gst::FlowError>;
+type TaskQueue = FuturesUnordered<BoxFuture<'static, TaskOutput>>;
 
-struct IOContextInner {
+#[derive(Debug)]
+struct ContextInner {
     name: String,
-    runtime_handle: Mutex<tokio_current_thread::Handle>,
+    thread_handle: Mutex<tokio_current_thread::Handle>,
     reactor_handle: tokio_net::driver::Handle,
     timers: Arc<Mutex<BinaryHeap<TimerEntry>>>,
     // Only used for dropping
-    _shutdown: IOContextShutdown,
-    pending_futures: Mutex<(u64, HashMap<u64, PendingFutureQueue>)>,
+    _shutdown: ContextShutdown,
+    task_queues: Mutex<(u64, HashMap<u64, TaskQueue>)>,
 }
 
-impl Drop for IOContextInner {
+impl Drop for ContextInner {
     fn drop(&mut self) {
         let mut contexts = CONTEXTS.lock().unwrap();
-        gst_debug!(CONTEXT_CAT, "Finalizing context '{}'", self.name);
+        gst_debug!(RUNTIME_CAT, "Finalizing context '{}'", self.name);
         contexts.remove(&self.name);
     }
 }
 
-impl IOContext {
-    pub fn new(name: &str, wait: u32) -> Result<Self, io::Error> {
+#[derive(Clone, Debug)]
+pub struct ContextWeak(Weak<ContextInner>);
+
+impl ContextWeak {
+    pub fn upgrade(&self) -> Option<Context> {
+        self.0.upgrade().map(Context)
+    }
+}
+
+/// A `threadshare` `runtime` `Context`.
+///
+/// The `Context` provides low-level asynchronous processing features to
+/// multiplex task execution on a single thread.
+///
+/// `Element` implementations should use [`PadSrc`] and [`PadSink`] which
+///  provide high-level features.
+///
+/// See the [module-level documentation](index.html) for more.
+///
+/// [`PadSrc`]: ../struct.PadSrc.html
+/// [`PadSink`]: ../struct.PadSink.html
+#[derive(Clone, Debug)]
+pub struct Context(Arc<ContextInner>);
+
+impl Context {
+    pub fn acquire(context_name: &str, wait: u32) -> Result<Self, io::Error> {
         let mut contexts = CONTEXTS.lock().unwrap();
-        if let Some(context) = contexts.get(name) {
-            if let Some(context) = context.upgrade() {
-                gst_debug!(CONTEXT_CAT, "Reusing existing context '{}'", name);
-                return Ok(IOContext(context));
+
+        if let Some(inner_weak) = contexts.get(context_name) {
+            if let Some(inner_strong) = inner_weak.upgrade() {
+                gst_debug!(RUNTIME_CAT, "Joining Context '{}'", inner_strong.name);
+                return Ok(Context(inner_strong));
             }
         }
 
         let reactor = tokio_net::driver::Reactor::new()?;
-        let reactor_handle = reactor.handle().clone();
+        let reactor_handle = reactor.handle();
 
         let timers = Arc::new(Mutex::new(BinaryHeap::new()));
 
-        let (runtime_handle, shutdown) =
-            IOContextRunner::start(name, wait, reactor, timers.clone());
+        let (thread_handle, shutdown) =
+            ContextThread::start(context_name, wait, reactor, timers.clone());
 
-        let context = Arc::new(IOContextInner {
-            name: name.into(),
-            runtime_handle: Mutex::new(runtime_handle),
+        let context = Context(Arc::new(ContextInner {
+            name: context_name.into(),
+            thread_handle: Mutex::new(thread_handle),
             reactor_handle,
             timers,
             _shutdown: shutdown,
-            pending_futures: Mutex::new((0, HashMap::new())),
-        });
-        contexts.insert(name.into(), Arc::downgrade(&context));
+            task_queues: Mutex::new((0, HashMap::new())),
+        }));
+        contexts.insert(context_name.into(), Arc::downgrade(&context.0));
 
-        gst_debug!(CONTEXT_CAT, "Created new context '{}'", name);
-        Ok(IOContext(context))
+        gst_debug!(RUNTIME_CAT, "New Context '{}'", context.0.name);
+        Ok(context)
     }
 
-    pub fn spawn<Fut>(&self, future: Fut)
-    where
-        Fut: Future<Output = ()> + Send + 'static,
-    {
-        self.0.runtime_handle.lock().unwrap().spawn(future).unwrap();
+    pub fn downgrade(&self) -> ContextWeak {
+        ContextWeak(Arc::downgrade(&self.0))
+    }
+
+    pub fn acquire_task_queue_id(&self) -> TaskQueueId {
+        let mut task_queues = self.0.task_queues.lock().unwrap();
+        let id = task_queues.0;
+        task_queues.0 += 1;
+        task_queues.1.insert(id, FuturesUnordered::new());
+
+        TaskQueueId(id)
+    }
+
+    pub fn name(&self) -> &str {
+        self.0.name.as_str()
     }
 
     pub fn reactor_handle(&self) -> &tokio_net::driver::Handle {
         &self.0.reactor_handle
     }
 
-    pub fn acquire_pending_future_id(&self) -> PendingFutureId {
-        let mut pending_futures = self.0.pending_futures.lock().unwrap();
-        let id = pending_futures.0;
-        pending_futures.0 += 1;
-        pending_futures.1.insert(id, FuturesUnordered::new());
-
-        PendingFutureId(id)
+    pub fn spawn<Fut>(&self, future: Fut)
+    where
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        self.0.thread_handle.lock().unwrap().spawn(future).unwrap();
     }
 
-    pub fn release_pending_future_id(&self, id: PendingFutureId) {
-        let mut pending_futures = self.0.pending_futures.lock().unwrap();
-        if let Some(fs) = pending_futures.1.remove(&id.0) {
-            self.spawn(fs.try_for_each(|_| future::ok(())).map(|_| ()));
+    pub fn release_task_queue(&self, id: TaskQueueId) -> Option<TaskQueue> {
+        let mut task_queues = self.0.task_queues.lock().unwrap();
+        task_queues.1.remove(&id.0)
+    }
+
+    pub fn add_task<T>(&self, id: TaskQueueId, task: T) -> Result<(), ()>
+    where
+        T: Future<Output = TaskOutput> + Send + 'static,
+    {
+        let mut task_queues = self.0.task_queues.lock().unwrap();
+        match task_queues.1.get_mut(&id.0) {
+            Some(task_queue) => {
+                task_queue.push(task.boxed());
+                Ok(())
+            }
+            None => Err(()),
         }
     }
 
-    pub fn add_pending_future<F>(&self, id: PendingFutureId, future: F)
-    where
-        F: Future<Output = PendingFuturesOutput> + Send + 'static,
-    {
-        let mut pending_futures = self.0.pending_futures.lock().unwrap();
-        let fs = pending_futures.1.get_mut(&id.0).unwrap();
-        fs.push(future.boxed())
+    pub fn clear_task_queue(&self, id: TaskQueueId) {
+        let mut task_queues = self.0.task_queues.lock().unwrap();
+        let task_queue = task_queues.1.get_mut(&id.0).unwrap();
+
+        *task_queue = FuturesUnordered::new();
     }
 
-    pub fn drain_pending_futures(
-        &self,
-        id: PendingFutureId,
-    ) -> (
-        Option<AbortHandle>,
-        future::Either<
-            BoxFuture<'static, PendingFuturesOutput>,
-            future::Ready<PendingFuturesOutput>,
-        >,
-    ) {
-        let mut pending_futures = self.0.pending_futures.lock().unwrap();
-        let fs = pending_futures.1.get_mut(&id.0).unwrap();
+    pub fn drain_task_queue(&self, id: TaskQueueId) -> Option<impl Future<Output = TaskOutput>> {
+        let task_queue = {
+            let mut task_queues = self.0.task_queues.lock().unwrap();
+            let task_queue = task_queues.1.get_mut(&id.0).unwrap();
 
-        let pending_futures = mem::replace(fs, FuturesUnordered::new());
+            mem::replace(task_queue, FuturesUnordered::new())
+        };
 
-        if !pending_futures.is_empty() {
+        if !task_queue.is_empty() {
             gst_log!(
-                CONTEXT_CAT,
-                "Scheduling {} pending futures for context '{}' with pending future id {:?}",
-                pending_futures.len(),
-                self.0.name,
+                RUNTIME_CAT,
+                "Scheduling {} tasks from {:?} on '{}'",
+                task_queue.len(),
                 id,
+                self.0.name,
             );
 
-            let (abort_handle, abort_registration) = AbortHandle::new_pair();
-
-            let abortable = Abortable::new(
-                pending_futures.try_for_each(|_| future::ok(())),
-                abort_registration,
-            )
-            .map(|res| {
-                res.unwrap_or_else(|_| {
-                    gst_trace!(CONTEXT_CAT, "Aborting");
-
-                    Err(gst::FlowError::Flushing)
-                })
-            })
-            .boxed()
-            .left_future();
-
-            (Some(abort_handle), abortable)
+            Some(task_queue.try_for_each(|_| future::ok(())))
         } else {
-            (None, future::ok(()).right_future())
+            None
         }
     }
+
+    pub fn add_timer(
+        &self,
+        time: Instant,
+        interval: Option<Duration>,
+    ) -> future_mpsc::UnboundedReceiver<()> {
+        let (sender, receiver) = future_mpsc::unbounded();
+
+        let mut timers = self.0.timers.lock().unwrap();
+        let entry = TimerEntry {
+            time,
+            id: TIMER_ENTRY_ID.fetch_add(1, atomic::Ordering::Relaxed),
+            interval,
+            sender,
+        };
+
+        timers.push(entry);
+        self.0.reactor_handle.unpark();
+
+        receiver
+    }
+
+    pub fn new_interval(&self, interval: Duration) -> Interval {
+        Interval::new(&self, interval)
+    }
+
+    /// Builds a `Future` to execute an `action` at [`Interval`]s.
+    ///
+    /// [`Interval`]: struct.Interval.html
+    pub fn interval<F, Fut>(&self, interval: Duration, f: F) -> impl Future<Output = Fut::Output>
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<(), ()>> + Send + 'static,
+    {
+        let f = Arc::new(f);
+        self.new_interval(interval).try_for_each(move |_| {
+            let f = Arc::clone(&f);
+            f()
+        })
+    }
+
+    pub fn new_timeout(&self, timeout: Duration) -> Timeout {
+        Timeout::new(&self, timeout)
+    }
+
+    /// Builds a `Future` to execute an action after the given `delay` has elapsed.
+    pub fn delay_for<F, Fut>(&self, delay: Duration, f: F) -> impl Future<Output = Fut::Output>
+    where
+        F: FnOnce() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        self.new_timeout(delay).then(move |_| f())
+    }
 }
-
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
-pub struct PendingFutureId(u64);
-
-impl glib::subclass::boxed::BoxedType for PendingFutureId {
-    const NAME: &'static str = "TsPendingFutureId";
-
-    glib_boxed_type!();
-}
-
-glib_boxed_derive_traits!(PendingFutureId);
 
 static TIMER_ENTRY_ID: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
 
 // Ad-hoc interval timer implementation for our throttled event loop above
-pub struct TimerEntry {
-    time: time::Instant,
+#[derive(Debug)]
+struct TimerEntry {
+    time: Instant,
     id: usize, // for producing a total order
-    interval: Option<time::Duration>,
-    sender: mpsc::UnboundedSender<()>,
+    interval: Option<Duration>,
+    sender: future_mpsc::UnboundedSender<()>,
 }
 
 impl PartialEq for TimerEntry {
@@ -445,68 +539,292 @@ impl Ord for TimerEntry {
     }
 }
 
-#[allow(unused)]
+/// A `Stream` that yields a tick at `interval`s.
+#[derive(Debug)]
 pub struct Interval {
-    receiver: mpsc::UnboundedReceiver<()>,
+    receiver: future_mpsc::UnboundedReceiver<()>,
 }
 
 impl Interval {
-    #[allow(unused)]
-    pub fn new(context: &IOContext, interval: time::Duration) -> Self {
-        use tokio_executor::park::Unpark;
-
-        let (sender, receiver) = mpsc::unbounded();
-
-        let mut timers = context.0.timers.lock().unwrap();
-        let entry = TimerEntry {
-            time: time::Instant::now(),
-            id: TIMER_ENTRY_ID.fetch_add(1, atomic::Ordering::Relaxed),
-            interval: Some(interval),
-            sender,
-        };
-        timers.push(entry);
-        context.reactor_handle().unpark();
-
-        Self { receiver }
+    fn new(context: &Context, interval: Duration) -> Self {
+        Self {
+            receiver: context.add_timer(Instant::now(), Some(interval)),
+        }
     }
 }
 
 impl Stream for Interval {
-    type Item = ();
+    type Item = Result<(), ()>;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
-        self.receiver.poll_next_unpin(cx)
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context,
+    ) -> Poll<Option<Self::Item>> {
+        self.receiver
+            .poll_next_unpin(cx)
+            .map(|item_opt| item_opt.map(Ok))
     }
 }
 
+/// A `Future` that completes after a `timeout` is elapsed.
+#[derive(Debug)]
 pub struct Timeout {
-    receiver: mpsc::UnboundedReceiver<()>,
+    receiver: future_mpsc::UnboundedReceiver<()>,
 }
 
 impl Timeout {
-    pub fn new(context: &IOContext, timeout: time::Duration) -> Self {
-        let (sender, receiver) = mpsc::unbounded();
-
-        let mut timers = context.0.timers.lock().unwrap();
-        let entry = TimerEntry {
-            time: time::Instant::now() + timeout,
-            id: TIMER_ENTRY_ID.fetch_add(1, atomic::Ordering::Relaxed),
-            interval: None,
-            sender,
-        };
-        timers.push(entry);
-
-        Self { receiver }
+    fn new(context: &Context, timeout: Duration) -> Self {
+        Self {
+            receiver: context.add_timer(Instant::now() + timeout, None),
+        }
     }
 }
 
 impl Future for Timeout {
     type Output = ();
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
         match ready!(self.receiver.poll_next_unpin(cx)) {
             Some(_) => Poll::Ready(()),
             None => unreachable!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::channel::{mpsc, oneshot};
+    use futures::future::Aborted;
+    use futures::lock::Mutex;
+
+    use gst;
+
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    use crate::block_on;
+    use crate::runtime::future::abortable_waitable;
+
+    use super::*;
+
+    type Item = i32;
+
+    const SLEEP_DURATION: u32 = 2;
+    const INTERVAL: Duration = Duration::from_millis(100 * SLEEP_DURATION as u64);
+
+    #[test]
+    fn user_drain_pending_tasks() {
+        // Setup
+        gst::init().unwrap();
+
+        let context = Context::acquire("user_drain_task_queue", SLEEP_DURATION).unwrap();
+        let queue_id = context.acquire_task_queue_id();
+
+        let (sender, mut receiver) = mpsc::channel(1);
+        let sender: Arc<Mutex<mpsc::Sender<Item>>> = Arc::new(Mutex::new(sender));
+
+        let ctx_weak = context.downgrade();
+        let queue_id_clone = queue_id.clone();
+        let add_task = move |item| {
+            let sender_task = Arc::clone(&sender);
+            let context = ctx_weak.upgrade().unwrap();
+            context.add_task(queue_id_clone, async move {
+                sender_task
+                    .lock()
+                    .await
+                    .send(item)
+                    .await
+                    .map_err(|_| gst::FlowError::Error)
+            })
+        };
+
+        // Tests
+        assert!(context.drain_task_queue(queue_id).is_none());
+
+        add_task(0).unwrap();
+        receiver.try_next().unwrap_err();
+
+        let drain = context.drain_task_queue(queue_id).unwrap();
+
+        // User triggered drain
+        receiver.try_next().unwrap_err();
+
+        block_on!(drain).unwrap();
+        assert_eq!(receiver.try_next().unwrap(), Some(0));
+
+        add_task(1).unwrap();
+        receiver.try_next().unwrap_err();
+    }
+
+    #[test]
+    fn delay_for() {
+        gst::init().unwrap();
+
+        let context = Context::acquire("delay_for", SLEEP_DURATION).unwrap();
+
+        let (sender, receiver) = oneshot::channel();
+
+        let start = Instant::now();
+        let delayed_by_fut = context.delay_for(INTERVAL, move || async {
+            sender.send(42).unwrap();
+        });
+        context.spawn(delayed_by_fut);
+
+        let _ = block_on!(receiver).unwrap();
+        let delta = Instant::now() - start;
+        assert!(delta >= INTERVAL);
+        assert!(delta < INTERVAL * 2);
+    }
+
+    #[test]
+    fn delay_for_abort() {
+        gst::init().unwrap();
+
+        let context = Context::acquire("delay_for_abort", SLEEP_DURATION).unwrap();
+
+        let (sender, receiver) = oneshot::channel();
+
+        let delay_for_fut = context.delay_for(INTERVAL, move || async {
+            sender.send(42).unwrap();
+        });
+        let (abortable_delay_for, abort_handle) = abortable_waitable(delay_for_fut);
+        context.spawn(abortable_delay_for.map(move |res| {
+            if let Err(Aborted) = res {
+                gst_debug!(RUNTIME_CAT, "Aborted delay_for");
+            }
+        }));
+
+        block_on!(abort_handle.abort_and_wait()).unwrap();
+        block_on!(receiver).unwrap_err();
+    }
+
+    #[test]
+    fn interval_ok() {
+        gst::init().unwrap();
+
+        let context = Context::acquire("interval_ok", SLEEP_DURATION).unwrap();
+
+        let (sender, mut receiver) = mpsc::channel(1);
+        let sender: Arc<Mutex<mpsc::Sender<Instant>>> = Arc::new(Mutex::new(sender));
+
+        let interval_fut = context.interval(INTERVAL, move || {
+            let sender = Arc::clone(&sender);
+            async move {
+                let instant = Instant::now();
+                sender.lock().await.send(instant).await.map_err(drop)
+            }
+        });
+        context.spawn(interval_fut.map(drop));
+
+        block_on!(async {
+            let mut idx: u32 = 0;
+            let mut first = Instant::now();
+            while let Some(instant) = receiver.next().await {
+                if idx > 0 {
+                    let delta = instant - first;
+                    assert!(delta > INTERVAL * (idx - 1));
+                    assert!(delta < INTERVAL * (idx + 1));
+                } else {
+                    first = instant;
+                }
+                if idx == 3 {
+                    break;
+                }
+
+                idx += 1;
+            }
+        });
+    }
+
+    #[test]
+    fn interval_err() {
+        gst::init().unwrap();
+
+        let context = Context::acquire("interval_err", SLEEP_DURATION).unwrap();
+
+        let (sender, mut receiver) = mpsc::channel(1);
+        let sender: Arc<Mutex<mpsc::Sender<Instant>>> = Arc::new(Mutex::new(sender));
+        let interval_idx: Arc<Mutex<Item>> = Arc::new(Mutex::new(0));
+
+        let interval_fut = context.interval(INTERVAL, move || {
+            let sender = Arc::clone(&sender);
+            let interval_idx = Arc::clone(&interval_idx);
+            async move {
+                let instant = Instant::now();
+                let mut idx = interval_idx.lock().await;
+                sender.lock().await.send(instant).await.unwrap();
+                *idx += 1;
+                if *idx < 3 {
+                    Ok(())
+                } else {
+                    Err(())
+                }
+            }
+        });
+        context.spawn(interval_fut.map(drop));
+
+        block_on!(async {
+            let mut idx: u32 = 0;
+            let mut first = Instant::now();
+            while let Some(instant) = receiver.next().await {
+                if idx > 0 {
+                    let delta = instant - first;
+                    assert!(delta > INTERVAL * (idx - 1));
+                    assert!(delta < INTERVAL * (idx + 1));
+                } else {
+                    first = instant;
+                }
+
+                idx += 1;
+            }
+
+            assert_eq!(idx, 3);
+        });
+    }
+
+    #[test]
+    fn interval_abort() {
+        gst::init().unwrap();
+
+        let context = Context::acquire("interval_abort", SLEEP_DURATION).unwrap();
+
+        let (sender, mut receiver) = mpsc::channel(1);
+        let sender: Arc<Mutex<mpsc::Sender<Instant>>> = Arc::new(Mutex::new(sender));
+
+        let interval_fut = context.interval(INTERVAL, move || {
+            let sender = Arc::clone(&sender);
+            async move {
+                let instant = Instant::now();
+                sender.lock().await.send(instant).await.map_err(drop)
+            }
+        });
+        let (abortable_interval, abort_handle) = abortable_waitable(interval_fut);
+        context.spawn(abortable_interval.map(move |res| {
+            if let Err(Aborted) = res {
+                gst_debug!(RUNTIME_CAT, "Aborted timeout");
+            }
+        }));
+
+        block_on!(async {
+            let mut idx: u32 = 0;
+            let mut first = Instant::now();
+            while let Some(instant) = receiver.next().await {
+                if idx > 0 {
+                    let delta = instant - first;
+                    assert!(delta > INTERVAL * (idx - 1));
+                    assert!(delta < INTERVAL * (idx + 1));
+                } else {
+                    first = instant;
+                }
+                if idx == 3 {
+                    abort_handle.abort_and_wait().await.unwrap();
+                    break;
+                }
+
+                idx += 1;
+            }
+
+            assert_eq!(receiver.next().await, None);
+        });
     }
 }

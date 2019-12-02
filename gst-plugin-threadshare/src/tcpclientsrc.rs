@@ -17,8 +17,9 @@
 // Boston, MA 02110-1335, USA.
 
 use either::Either;
-use futures::ready;
-use futures::{future::BoxFuture, prelude::*};
+use futures::future::BoxFuture;
+use futures::lock::{Mutex, MutexGuard};
+use futures::prelude::*;
 
 use glib;
 use glib::prelude::*;
@@ -30,21 +31,24 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+use gst::{EventView, QueryView};
 
 use lazy_static::lazy_static;
 
 use rand;
 
 use std::io;
-use std::pin::Pin;
-use std::sync::Mutex;
-use std::task::{Context, Poll};
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::u16;
 
-use tokio::io::AsyncRead;
+use tokio::io::AsyncReadExt;
 
-use super::iocontext::*;
-use super::socket::*;
+use crate::block_on;
+use crate::runtime::prelude::*;
+use crate::runtime::{Context, PadSrc, PadSrcRef};
+
+use super::socket::{Socket, SocketRead, SocketStream};
 
 const DEFAULT_ADDRESS: Option<&str> = Some("127.0.0.1");
 const DEFAULT_PORT: u32 = 5000;
@@ -139,92 +143,227 @@ static PROPERTIES: [subclass::Property; 6] = [
     }),
 ];
 
-pub struct TcpClientReader {
-    connect_future: BoxFuture<'static, io::Result<tokio::net::TcpStream>>,
+struct TcpClientReaderInner {
+    connect_future: Option<BoxFuture<'static, io::Result<tokio::net::TcpStream>>>,
     socket: Option<tokio::net::TcpStream>,
 }
+
+impl TcpClientReaderInner {
+    fn new<Fut>(connect_future: Fut) -> Self
+    where
+        Fut: Future<Output = io::Result<tokio::net::TcpStream>> + Send + 'static,
+    {
+        Self {
+            connect_future: Some(connect_future.boxed()),
+            socket: None,
+        }
+    }
+}
+
+pub struct TcpClientReader(Arc<Mutex<TcpClientReaderInner>>);
 
 impl TcpClientReader {
     pub fn new<Fut>(connect_future: Fut) -> Self
     where
         Fut: Future<Output = io::Result<tokio::net::TcpStream>> + Send + 'static,
     {
-        Self {
-            connect_future: connect_future.boxed(),
-            socket: None,
-        }
+        TcpClientReader(Arc::new(Mutex::new(TcpClientReaderInner::new(
+            connect_future,
+        ))))
     }
 }
 
 impl SocketRead for TcpClientReader {
     const DO_TIMESTAMP: bool = false;
 
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<(usize, Option<std::net::SocketAddr>)>> {
-        let socket = match self.socket {
-            Some(ref mut socket) => socket,
-            None => {
-                let stream = ready!(self.connect_future.as_mut().poll(cx))?;
-                self.socket = Some(stream);
-                self.socket.as_mut().unwrap()
-            }
-        };
+    fn read<'buf>(
+        &self,
+        buffer: &'buf mut [u8],
+    ) -> BoxFuture<'buf, io::Result<(usize, Option<std::net::SocketAddr>)>> {
+        let this = Arc::clone(&self.0);
 
-        Pin::new(socket)
-            .as_mut()
-            .poll_read(cx, buf)
-            .map_ok(|read_size| (read_size, None))
+        async move {
+            let mut this = this.lock().await;
+
+            let socket = match this.socket {
+                Some(ref mut socket) => socket,
+                None => {
+                    let stream = this.connect_future.take().unwrap().await?;
+                    this.socket = Some(stream);
+                    this.socket.as_mut().unwrap()
+                }
+            };
+
+            socket.read(buffer).await.map(|read_size| (read_size, None))
+        }
+        .boxed()
     }
 }
 
-struct State {
-    io_context: Option<IOContext>,
-    pending_future_id: Option<PendingFutureId>,
-    socket: Option<Socket<TcpClientReader>>,
+struct TcpClientSrcPadHandlerInner {
+    socket_stream: Option<SocketStream<TcpClientReader>>,
     need_initial_events: bool,
     configured_caps: Option<gst::Caps>,
-    pending_future_abort_handle: Option<future::AbortHandle>,
 }
 
-impl Default for State {
-    fn default() -> State {
-        State {
-            io_context: None,
-            pending_future_id: None,
-            socket: None,
+impl Default for TcpClientSrcPadHandlerInner {
+    fn default() -> Self {
+        TcpClientSrcPadHandlerInner {
+            socket_stream: None,
             need_initial_events: true,
             configured_caps: None,
-            pending_future_abort_handle: None,
         }
     }
 }
 
-struct TcpClientSrc {
-    src_pad: gst::Pad,
-    state: Mutex<State>,
-    settings: Mutex<Settings>,
+#[derive(Clone)]
+struct TcpClientSrcPadHandler(Arc<Mutex<TcpClientSrcPadHandlerInner>>);
+
+impl TcpClientSrcPadHandler {
+    fn new() -> Self {
+        TcpClientSrcPadHandler(Arc::new(Mutex::new(TcpClientSrcPadHandlerInner::default())))
+    }
+
+    #[inline]
+    async fn lock(&self) -> MutexGuard<'_, TcpClientSrcPadHandlerInner> {
+        self.0.lock().await
+    }
+
+    async fn start_task(&self, pad: PadSrcRef<'_>, element: &gst::Element) {
+        let this = self.clone();
+        let pad_weak = pad.downgrade();
+        let element = element.clone();
+        pad.start_task(move || {
+            let this = this.clone();
+            let pad_weak = pad_weak.clone();
+            let element = element.clone();
+            async move {
+                let item = this
+                    .lock()
+                    .await
+                    .socket_stream
+                    .as_mut()
+                    .expect("Missing SocketStream")
+                    .next()
+                    .await;
+
+                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
+                let buffer = match item {
+                    Some(Ok((buffer, _))) => buffer,
+                    Some(Err(err)) => {
+                        gst_error!(CAT, obj: &element, "Got error {}", err);
+                        match err {
+                            Either::Left(gst::FlowError::CustomError) => (),
+                            Either::Left(err) => {
+                                gst_element_error!(
+                                    element,
+                                    gst::StreamError::Failed,
+                                    ("Internal data stream error"),
+                                    ["streaming stopped, reason {}", err]
+                                );
+                            }
+                            Either::Right(err) => {
+                                gst_element_error!(
+                                    element,
+                                    gst::StreamError::Failed,
+                                    ("I/O error"),
+                                    ["streaming stopped, I/O error {}", err]
+                                );
+                            }
+                        }
+                        return;
+                    }
+                    None => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "SocketStream Stopped");
+                        pad.pause_task().await;
+                        return;
+                    }
+                };
+
+                this.push_buffer(pad, &element, buffer).await;
+            }
+        })
+        .await;
+    }
+
+    async fn push_buffer(&self, pad: PadSrcRef<'_>, element: &gst::Element, buffer: gst::Buffer) {
+        {
+            let mut events = Vec::new();
+            {
+                let mut inner = self.lock().await;
+                if inner.need_initial_events {
+                    gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
+
+                    let stream_id =
+                        format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+                    events.push(
+                        gst::Event::new_stream_start(&stream_id)
+                            .group_id(gst::util_group_id_next())
+                            .build(),
+                    );
+                    let tcpclientsrc = TcpClientSrc::from_instance(element);
+                    if let Some(ref caps) = tcpclientsrc.settings.lock().await.caps {
+                        events.push(gst::Event::new_caps(&caps).build());
+                        inner.configured_caps = Some(caps.clone());
+                    }
+                    events.push(
+                        gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
+                            .build(),
+                    );
+
+                    inner.need_initial_events = false;
+                }
+
+                if buffer.get_size() == 0 {
+                    events.push(gst::Event::new_eos().build());
+                }
+            }
+
+            for event in events {
+                pad.push_event(event).await;
+            }
+        }
+
+        match pad.push(buffer).await {
+            Ok(_) => {
+                gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed buffer");
+            }
+            Err(gst::FlowError::Flushing) => {
+                gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
+                pad.pause_task().await;
+            }
+            Err(gst::FlowError::Eos) => {
+                gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
+                pad.pause_task().await;
+            }
+            Err(err) => {
+                gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
+                gst_element_error!(
+                    element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+            }
+        }
+    }
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
-        "ts-tcpclientsrc",
-        gst::DebugColorFlags::empty(),
-        Some("Thread-sharing TCP Client source"),
-    );
-}
+impl PadSrcHandler for TcpClientSrcPadHandler {
+    type ElementImpl = TcpClientSrc;
 
-impl TcpClientSrc {
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
-        use gst::EventView;
-
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+    fn src_event(
+        &self,
+        pad: PadSrcRef,
+        tcpclientsrc: &TcpClientSrc,
+        element: &gst::Element,
+        event: gst::Event,
+    ) -> Either<bool, BoxFuture<'static, bool>> {
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = self.stop(element);
+                let _ = block_on!(tcpclientsrc.pause(element));
                 true
             }
             EventView::FlushStop(..) => {
@@ -232,7 +371,7 @@ impl TcpClientSrc {
                 if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
                     || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
-                    let _ = self.start(element);
+                    let _ = block_on!(tcpclientsrc.start(element));
                 }
                 true
             }
@@ -242,22 +381,22 @@ impl TcpClientSrc {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad, "Handled event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled event {:?}", event);
         } else {
-            gst_log!(CAT, obj: pad, "Didn't handle event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle event {:?}", event);
         }
-        ret
+
+        Either::Left(ret)
     }
 
     fn src_query(
         &self,
-        pad: &gst::Pad,
+        pad: PadSrcRef,
+        _tcpclientsrc: &TcpClientSrc,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
-
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
                 q.set(false, 0.into(), 0.into());
@@ -269,8 +408,8 @@ impl TcpClientSrc {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let state = self.state.lock().unwrap();
-                let caps = if let Some(ref caps) = state.configured_caps {
+                let inner = block_on!(self.lock());
+                let caps = if let Some(ref caps) = inner.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
@@ -288,143 +427,46 @@ impl TcpClientSrc {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad, "Handled query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled query {:?}", query);
         } else {
-            gst_log!(CAT, obj: pad, "Didn't handle query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle query {:?}", query);
         }
+
         ret
     }
+}
 
-    fn create_io_context_event(state: &State) -> Option<gst::Event> {
-        if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-            (&state.pending_future_id, &state.io_context)
-        {
-            let s = gst::Structure::new(
-                "ts-io-context",
-                &[
-                    ("io-context", &io_context),
-                    ("pending-future-id", &*pending_future_id),
-                ],
-            );
-            Some(gst::Event::new_custom_downstream_sticky(s).build())
-        } else {
-            None
-        }
+struct State {
+    socket: Option<Socket<TcpClientReader>>,
+}
+
+impl Default for State {
+    fn default() -> State {
+        State { socket: None }
     }
+}
 
-    async fn push_buffer(element: gst::Element, buffer: gst::Buffer) -> Result<(), gst::FlowError> {
-        let tcpclientsrc = Self::from_instance(&element);
-        let mut events = Vec::new();
-        {
-            let mut state = tcpclientsrc.state.lock().unwrap();
-            if state.need_initial_events {
-                gst_debug!(CAT, obj: &element, "Pushing initial events");
+struct TcpClientSrc {
+    src_pad: PadSrc,
+    src_pad_handler: TcpClientSrcPadHandler,
+    state: Mutex<State>,
+    settings: Mutex<Settings>,
+}
 
-                let stream_id =
-                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-                events.push(
-                    gst::Event::new_stream_start(&stream_id)
-                        .group_id(gst::util_group_id_next())
-                        .build(),
-                );
-                if let Some(ref caps) = tcpclientsrc.settings.lock().unwrap().caps {
-                    events.push(gst::Event::new_caps(&caps).build());
-                    state.configured_caps = Some(caps.clone());
-                }
-                events.push(
-                    gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
-                        .build(),
-                );
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "ts-tcpclientsrc",
+        gst::DebugColorFlags::empty(),
+        Some("Thread-sharing TCP Client source"),
+    );
+}
 
-                if let Some(event) = Self::create_io_context_event(&state) {
-                    events.push(event);
-
-                    // Get rid of reconfigure flag
-                    tcpclientsrc.src_pad.check_reconfigure();
-                }
-                state.need_initial_events = false;
-            } else if tcpclientsrc.src_pad.check_reconfigure() {
-                if let Some(event) = Self::create_io_context_event(&state) {
-                    events.push(event);
-                }
-            }
-
-            if buffer.get_size() == 0 {
-                events.push(gst::Event::new_eos().build());
-            }
-        }
-
-        for event in events {
-            tcpclientsrc.src_pad.push_event(event);
-        }
-
-        match tcpclientsrc.src_pad.push(buffer) {
-            Ok(_) => gst_log!(CAT, obj: &element, "Successfully pushed buffer"),
-            Err(gst::FlowError::Flushing) => {
-                gst_debug!(CAT, obj: &element, "Flushing");
-                let state = tcpclientsrc.state.lock().unwrap();
-                if let Some(ref socket) = state.socket {
-                    socket.pause();
-                }
-            }
-            Err(gst::FlowError::Eos) => {
-                gst_debug!(CAT, obj: &element, "EOS");
-                let state = tcpclientsrc.state.lock().unwrap();
-                if let Some(ref socket) = state.socket {
-                    socket.pause();
-                }
-            }
-            Err(err) => {
-                gst_error!(CAT, obj: &element, "Got error {}", err);
-                gst_element_error!(
-                    element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason {}", err]
-                );
-                return Err(gst::FlowError::CustomError);
-            }
-        }
-
-        let abortable_drain = {
-            let mut state = tcpclientsrc.state.lock().unwrap();
-
-            if let State {
-                io_context: Some(ref io_context),
-                pending_future_id: Some(ref pending_future_id),
-                ref mut pending_future_abort_handle,
-                ..
-            } = *state
-            {
-                let (cancel, abortable_drain) =
-                    io_context.drain_pending_futures(*pending_future_id);
-                *pending_future_abort_handle = cancel;
-
-                abortable_drain
-            } else {
-                return Ok(());
-            }
-        };
-
-        abortable_drain.await
-    }
-
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
-        use std::net::{IpAddr, SocketAddr};
-
+impl TcpClientSrc {
+    async fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+        let mut state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Preparing");
 
-        let settings = self.settings.lock().unwrap().clone();
-
-        let mut state = self.state.lock().unwrap();
-
-        let io_context =
-            IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to create IO context: {}", err]
-                )
-            })?;
+        let settings = self.settings.lock().await;
 
         let addr: IpAddr = match settings.address {
             None => {
@@ -444,6 +486,14 @@ impl TcpClientSrc {
             },
         };
         let port = settings.port;
+
+        let context =
+            Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to acquire Context: {}", err]
+                )
+            })?;
 
         let saddr = SocketAddr::new(addr, port as u16);
         gst_debug!(CAT, obj: element, "Connecting to {:?}", saddr);
@@ -465,111 +515,80 @@ impl TcpClientSrc {
             buffer_pool,
         );
 
-        let element_clone = element.clone();
-        let element_clone2 = element.clone();
-        socket
-            .schedule(
-                &io_context,
-                move |(buffer, _)| Self::push_buffer(element_clone.clone(), buffer),
-                move |err| {
-                    gst_error!(CAT, obj: &element_clone2, "Got error {}", err);
-                    match err {
-                        Either::Left(gst::FlowError::CustomError) => (),
-                        Either::Left(err) => {
-                            gst_element_error!(
-                                element_clone2,
-                                gst::StreamError::Failed,
-                                ("Internal data stream error"),
-                                ["streaming stopped, reason {}", err]
-                            );
-                        }
-                        Either::Right(err) => {
-                            gst_element_error!(
-                                element_clone2,
-                                gst::StreamError::Failed,
-                                ("I/O error"),
-                                ["streaming stopped, I/O error {}", err]
-                            );
-                        }
-                    }
-                },
-            )
-            .map_err(|_| {
-                gst_error_msg!(gst::ResourceError::OpenRead, ["Failed to schedule socket"])
+        let socket_stream = socket.prepare().await.map_err(|_| {
+            gst_error_msg!(gst::ResourceError::OpenRead, ["Failed to prepare socket"])
+        })?;
+
+        self.src_pad_handler.lock().await.socket_stream = Some(socket_stream);
+        self.src_pad
+            .prepare(context, &self.src_pad_handler)
+            .await
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Error preparing src_pads: {:?}", err]
+                )
             })?;
 
-        let pending_future_id = io_context.acquire_pending_future_id();
-        gst_debug!(
-            CAT,
-            obj: element,
-            "Got pending future id {:?}",
-            pending_future_id
-        );
-
         state.socket = Some(socket);
-        state.io_context = Some(io_context);
-        state.pending_future_id = Some(pending_future_id);
 
         gst_debug!(CAT, obj: element, "Prepared");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+    async fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        // FIXME: The IO Context has to be alive longer than the queue,
-        // otherwise the queue can't finish any remaining work
-        let (mut socket, io_context) = {
-            let mut state = self.state.lock().unwrap();
+        self.src_pad.stop_task().await;
 
-            if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-                (&state.pending_future_id, &state.io_context)
-            {
-                io_context.release_pending_future_id(*pending_future_id);
-            }
-
-            let socket = state.socket.take();
-            let io_context = state.io_context.take();
-            *state = State::default();
-            (socket, io_context)
-        };
-
-        if let Some(ref socket) = socket.take() {
-            socket.shutdown();
+        {
+            let socket = state.socket.take().unwrap();
+            socket.unprepare().await.unwrap();
         }
-        drop(io_context);
+
+        let _ = self.src_pad.unprepare().await;
+        self.src_pad_handler.lock().await.configured_caps = None;
 
         gst_debug!(CAT, obj: element, "Unprepared");
         Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), ()> {
+    async fn start(&self, element: &gst::Element) -> Result<(), ()> {
+        let state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Starting");
-        let state = self.state.lock().unwrap();
 
         if let Some(ref socket) = state.socket {
-            socket.unpause(None, None);
+            socket
+                .start(element.get_clock(), Some(element.get_base_time()))
+                .await;
         }
+
+        self.src_pad_handler
+            .start_task(self.src_pad.as_ref(), element)
+            .await;
 
         gst_debug!(CAT, obj: element, "Started");
 
         Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(CAT, obj: element, "Stopping");
-        let mut state = self.state.lock().unwrap();
+    async fn pause(&self, element: &gst::Element) -> Result<(), ()> {
+        let pause_completion = {
+            let state = self.state.lock().await;
+            gst_debug!(CAT, obj: element, "Pausing");
 
-        if let Some(ref socket) = state.socket {
-            socket.pause();
-        }
+            let pause_completion = self.src_pad.pause_task().await;
+            state.socket.as_ref().unwrap().pause().await;
 
-        if let Some(abort_handle) = state.pending_future_abort_handle.take() {
-            abort_handle.abort();
-        }
+            pause_completion
+        };
 
-        gst_debug!(CAT, obj: element, "Stopped");
+        gst_debug!(CAT, obj: element, "Waiting for Task Pause to complete");
+        pause_completion.await;
+
+        gst_debug!(CAT, obj: element, "Paused");
 
         Ok(())
     }
@@ -606,25 +625,11 @@ impl ObjectSubclass for TcpClientSrc {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, Some("src"));
-
-        src_pad.set_event_function(|pad, parent, event| {
-            TcpClientSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |tcpclientsrc, element| tcpclientsrc.src_event(pad, element, event),
-            )
-        });
-        src_pad.set_query_function(|pad, parent, query| {
-            TcpClientSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |tcpclientsrc, element| tcpclientsrc.src_query(pad, element, query),
-            )
-        });
+        let src_pad = PadSrc::new_from_template(&templ, Some("src"));
 
         Self {
             src_pad,
+            src_pad_handler: TcpClientSrcPadHandler::new(),
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
         }
@@ -639,30 +644,30 @@ impl ObjectImpl for TcpClientSrc {
 
         match *prop {
             subclass::Property("address", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.address = value.get().expect("type checked upstream");
             }
             subclass::Property("port", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.port = value.get_some().expect("type checked upstream");
             }
             subclass::Property("caps", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.caps = value.get().expect("type checked upstream");
             }
             subclass::Property("chunk-size", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.chunk_size = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -674,27 +679,27 @@ impl ObjectImpl for TcpClientSrc {
 
         match *prop {
             subclass::Property("address", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.address.to_value())
             }
             subclass::Property("port", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.port.to_value())
             }
             subclass::Property("caps", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.caps.to_value())
             }
             subclass::Property("chunk-size", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.chunk_size.to_value())
             }
             subclass::Property("context", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),
@@ -705,7 +710,7 @@ impl ObjectImpl for TcpClientSrc {
         self.parent_constructed(obj);
 
         let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.src_pad).unwrap();
+        element.add_pad(self.src_pad.gst_pad()).unwrap();
 
         super::set_element_flags(element, gst::ElementFlags::SOURCE);
     }
@@ -721,17 +726,20 @@ impl ElementImpl for TcpClientSrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element)
+                block_on!(self.prepare(element))
                     .map_err(|err| {
                         element.post_error_message(&err);
                         gst::StateChangeError
                     })
-                    .and_then(|_| self.start(element).map_err(|_| gst::StateChangeError))?;
+                    .and_then(|_| {
+                        block_on!(self.start(element)).map_err(|_| gst::StateChangeError)
+                    })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.stop(element)
-                    .and_then(|_| self.unprepare(element))
-                    .map_err(|_| gst::StateChangeError)?;
+                block_on!(self.pause(element)).map_err(|_| gst::StateChangeError)?;
+            }
+            gst::StateChange::ReadyToNull => {
+                block_on!(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -743,8 +751,8 @@ impl ElementImpl for TcpClientSrc {
                 success = gst::StateChangeSuccess::Success;
             }
             gst::StateChange::PausedToReady => {
-                let mut state = self.state.lock().unwrap();
-                state.need_initial_events = true;
+                let mut src_pad_handler = block_on!(self.src_pad_handler.lock());
+                src_pad_handler.need_initial_events = true;
             }
             _ => (),
         }

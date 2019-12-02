@@ -15,8 +15,8 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use futures::channel::oneshot;
-use futures::prelude::*;
+use futures::future::{self, abortable, AbortHandle};
+use futures::lock::Mutex;
 
 use gst;
 use gst::gst_debug;
@@ -25,14 +25,8 @@ use gst::prelude::*;
 use lazy_static::lazy_static;
 
 use std::collections::VecDeque;
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use std::task::{self, Poll};
+use std::sync::Arc;
 use std::{u32, u64};
-
-use tokio_executor::current_thread as tokio_current_thread;
-
-use super::iocontext::*;
 
 lazy_static! {
     static ref DATA_QUEUE_CAT: gst::DebugCategory = gst::DebugCategory::new(
@@ -74,17 +68,18 @@ impl DataQueueItem {
 
 #[derive(PartialEq, Eq, Debug)]
 enum DataQueueState {
-    Unscheduled,
-    Scheduled,
-    Running,
-    Shutdown,
+    Paused,
+    Started,
+    Stopped,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DataQueue(Arc<Mutex<DataQueueInner>>);
 
+#[derive(Debug)]
 struct DataQueueInner {
     element: gst::Element,
+    src_pad: gst::Pad,
 
     state: DataQueueState,
     queue: VecDeque<DataQueueItem>,
@@ -95,157 +90,80 @@ struct DataQueueInner {
     max_size_bytes: Option<u32>,
     max_size_time: Option<u64>,
 
-    waker: Option<task::Waker>,
-    shutdown_receiver: Option<oneshot::Receiver<()>>,
+    pending_handle: Option<AbortHandle>,
+}
+
+impl DataQueueInner {
+    fn wake(&mut self) {
+        if let Some(pending_handle) = self.pending_handle.take() {
+            pending_handle.abort();
+        }
+    }
 }
 
 impl DataQueue {
     pub fn new(
         element: &gst::Element,
+        src_pad: &gst::Pad,
         max_size_buffers: Option<u32>,
         max_size_bytes: Option<u32>,
         max_size_time: Option<u64>,
     ) -> DataQueue {
         DataQueue(Arc::new(Mutex::new(DataQueueInner {
             element: element.clone(),
-            state: DataQueueState::Unscheduled,
+            src_pad: src_pad.clone(),
+            state: DataQueueState::Stopped,
             queue: VecDeque::new(),
             cur_size_buffers: 0,
             cur_size_bytes: 0,
             max_size_buffers,
             max_size_bytes,
             max_size_time,
-            waker: None,
-            shutdown_receiver: None,
+            pending_handle: None,
         })))
     }
 
-    pub fn schedule<F, G, Fut>(
-        &self,
-        io_context: &IOContext,
-        func: F,
-        err_func: G,
-    ) -> Result<(), ()>
-    where
-        F: Fn(DataQueueItem) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), gst::FlowError>> + Send + 'static,
-        G: FnOnce(gst::FlowError) + Send + 'static,
-    {
-        // Ready->Paused
-        //
-        // Need to wait for a possible shutdown to finish first
-        // spawn() on the reactor, change state to Scheduled
-
-        let mut inner = self.0.lock().unwrap();
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Scheduling data queue");
-        if inner.state == DataQueueState::Scheduled {
-            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already scheduled");
-            return Ok(());
-        }
-
-        assert_eq!(inner.state, DataQueueState::Unscheduled);
-        inner.state = DataQueueState::Scheduled;
-
-        let (sender, receiver) = oneshot::channel();
-        inner.shutdown_receiver = Some(receiver);
-
-        let queue_clone = self.clone();
-        let element_clone = inner.element.clone();
-        io_context.spawn(queue_clone.try_for_each(func).then(move |res| {
-            gst_debug!(
-                DATA_QUEUE_CAT,
-                obj: &element_clone,
-                "Data queue finished: {:?}",
-                res
-            );
-
-            if let Err(err) = res {
-                err_func(err);
-            }
-
-            let _ = sender.send(());
-
-            future::ready(())
-        }));
-
-        Ok(())
-    }
-
-    pub fn unpause(&self) {
-        // Paused->Playing
-        //
-        // Change state to Running and signal task
-
-        let mut inner = self.0.lock().unwrap();
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Unpausing data queue");
-        if inner.state == DataQueueState::Running {
-            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already unpaused");
+    pub async fn start(&self) {
+        let mut inner = self.0.lock().await;
+        if inner.state == DataQueueState::Started {
+            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Started");
             return;
         }
-
-        assert_eq!(inner.state, DataQueueState::Scheduled);
-        inner.state = DataQueueState::Running;
-
-        if let Some(waker) = inner.waker.take() {
-            waker.wake();
-        }
+        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Starting data queue");
+        inner.state = DataQueueState::Started;
+        inner.wake();
     }
 
-    pub fn pause(&self) {
-        // Playing->Paused
-        //
-        // Change state to Scheduled and signal task
-
-        let mut inner = self.0.lock().unwrap();
+    pub async fn pause(&self) {
+        let mut inner = self.0.lock().await;
+        if inner.state == DataQueueState::Paused {
+            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Paused");
+            return;
+        }
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Pausing data queue");
-        if inner.state == DataQueueState::Scheduled {
-            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already paused");
-            return;
-        }
-
-        assert_eq!(inner.state, DataQueueState::Running);
-        inner.state = DataQueueState::Scheduled;
-
-        if let Some(waker) = inner.waker.take() {
-            waker.wake();
-        }
+        assert_eq!(DataQueueState::Started, inner.state);
+        inner.state = DataQueueState::Paused;
+        inner.wake();
     }
 
-    pub fn shutdown(&self) {
-        // Paused->Ready
-        //
-        // Change state to Shutdown and signal task, wait for our future to be finished
-        // Requires scheduled function to be unblocked! Pad must be deactivated before
-
-        let mut inner = self.0.lock().unwrap();
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Shutting down data queue");
-        if inner.state == DataQueueState::Unscheduled {
-            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already shut down");
+    pub async fn stop(&self) {
+        let mut inner = self.0.lock().await;
+        if inner.state == DataQueueState::Stopped {
+            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Stopped");
             return;
         }
-
-        assert!(inner.state == DataQueueState::Scheduled || inner.state == DataQueueState::Running);
-        inner.state = DataQueueState::Shutdown;
-
-        if let Some(waker) = inner.waker.take() {
-            waker.wake();
-        }
-
-        let shutdown_receiver = inner.shutdown_receiver.take().unwrap();
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Waiting for data queue to shut down");
-        drop(inner);
-
-        tokio_current_thread::block_on_all(shutdown_receiver).expect("Already shut down");
-
-        let mut inner = self.0.lock().unwrap();
-        inner.state = DataQueueState::Unscheduled;
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue shut down");
+        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Stopping data queue");
+        inner.state = DataQueueState::Stopped;
+        inner.wake();
     }
 
-    pub fn clear(&self, src_pad: &gst::Pad) {
-        let mut inner = self.0.lock().unwrap();
+    pub async fn clear(&self) {
+        let mut inner = self.0.lock().await;
 
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Clearing queue");
+        assert_eq!(inner.state, DataQueueState::Paused);
+        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Clearing data queue");
+
+        let src_pad = inner.src_pad.clone();
         for item in inner.queue.drain(..) {
             if let DataQueueItem::Event(event) = item {
                 if event.is_sticky()
@@ -256,10 +174,23 @@ impl DataQueue {
                 }
             }
         }
+
+        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue cleared");
     }
 
-    pub fn push(&self, item: DataQueueItem) -> Result<(), DataQueueItem> {
-        let mut inner = self.0.lock().unwrap();
+    pub async fn push(&self, item: DataQueueItem) -> Result<(), DataQueueItem> {
+        let mut inner = self.0.lock().await;
+
+        if inner.state != DataQueueState::Started {
+            gst_debug!(
+                DATA_QUEUE_CAT,
+                obj: &inner.element,
+                "Rejecting item {:?} in state {:?}",
+                item,
+                inner.state
+            );
+            return Err(item);
+        }
 
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Pushing item {:?}", item);
 
@@ -299,52 +230,50 @@ impl DataQueue {
         inner.cur_size_buffers += count;
         inner.cur_size_bytes += bytes;
 
-        if let Some(waker) = inner.waker.take() {
-            waker.wake();
-        }
+        inner.wake();
 
         Ok(())
     }
-}
 
-impl Drop for DataQueueInner {
-    fn drop(&mut self) {
-        assert_eq!(self.state, DataQueueState::Unscheduled);
-    }
-}
+    // Implementing `next` as an `async fn` instead of a `Stream` because of the `async` `Mutex`
+    // See https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/merge_requests/204#note_322774
+    #[allow(clippy::should_implement_trait)]
+    pub async fn next(&mut self) -> Option<DataQueueItem> {
+        loop {
+            let pending_fut = {
+                let mut inner = self.0.lock().await;
+                match inner.state {
+                    DataQueueState::Started => match inner.queue.pop_front() {
+                        None => {
+                            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue is empty");
+                        }
+                        Some(item) => {
+                            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Popped item {:?}", item);
 
-impl Stream for DataQueue {
-    type Item = Result<DataQueueItem, gst::FlowError>;
+                            let (count, bytes) = item.size();
+                            inner.cur_size_buffers -= count;
+                            inner.cur_size_bytes -= bytes;
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut inner = self.0.lock().unwrap();
-        if inner.state == DataQueueState::Shutdown {
-            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue shutting down");
-            return Poll::Ready(None);
-        } else if inner.state == DataQueueState::Scheduled {
-            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue not running");
-            inner.waker = Some(cx.waker().clone());
-            return Poll::Pending;
-        }
+                            return Some(item);
+                        }
+                    },
+                    DataQueueState::Paused => {
+                        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue Paused");
+                        return None;
+                    }
+                    DataQueueState::Stopped => {
+                        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue Stopped");
+                        return None;
+                    }
+                }
 
-        assert_eq!(inner.state, DataQueueState::Running);
+                let (pending_fut, abort_handle) = abortable(future::pending::<()>());
+                inner.pending_handle = Some(abort_handle);
 
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Trying to read data");
-        match inner.queue.pop_front() {
-            None => {
-                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue is empty");
-                inner.waker = Some(cx.waker().clone());
-                Poll::Pending
-            }
-            Some(item) => {
-                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Popped item {:?}", item);
+                pending_fut
+            };
 
-                let (count, bytes) = item.size();
-                inner.cur_size_buffers -= count;
-                inner.cur_size_bytes -= bytes;
-
-                Poll::Ready(Some(Ok(item)))
-            }
+            let _ = pending_fut.await;
         }
     }
 }

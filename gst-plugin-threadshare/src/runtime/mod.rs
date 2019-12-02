@@ -15,4 +15,59 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+//! A `runtime` for the `threadshare` GStreamer plugins framework.
+//!
+//! Many `GStreamer` `Element`s internally spawn OS `thread`s. For most applications, this is not an
+//! issue. However, in applications which process many `Stream`s in parallel, the high number of
+//! `threads` leads to reduced efficiency due to:
+//!
+//! * context switches,
+//! * scheduler overhead,
+//! * most of the threads waiting for some resources to be available.
+//!
+//! The `threadshare` `runtime` is a framework to build `Element`s for such applications. It
+//! uses light-weight threading to allow multiple `Element`s share a reduced number of OS `thread`s.
+//!
+//! See this [talk] ([slides]) for a presentation of the motivations and principles.
+//!
+//! Current implementation uses the crate [`tokio`].
+//!
+//! Most `Element`s implementations should use the high-level features provided by [`PadSrc`] &
+//! [`PadSink`].
+//!
+//! [talk]: https://gstconf.ubicast.tv/videos/when-adding-more-threads-adds-more-problems-thread-sharing-between-elements-in-gstreamer/
+//! [slides]: https://gstreamer.freedesktop.org/data/events/gstreamer-conference/2018/Sebastian%20Dr%C3%B6ge%20-%20When%20adding%20more%20threads%20adds%20more%20problems:%20Thread-sharing%20between%20elements%20in%20GStreamer.pdf
+//! [`tokio`]: https://crates.io/crates/tokio
+//! [`PadSrc`]: pad/struct.PadSrc.html
+//! [`PadSink`]: pad/struct.PadSink.html
+
 pub mod executor;
+pub use executor::{Context, Interval, TaskOutput, Timeout};
+
+pub mod future;
+
+#[macro_use]
+pub mod macros;
+
+pub mod pad;
+pub use pad::{PadSink, PadSinkRef, PadSrc, PadSrcRef, PadSrcWeak};
+
+pub mod pad_context;
+pub use pad_context::{PadContext, PadContextWeak};
+
+pub mod prelude {
+    pub use super::pad::{PadSinkHandler, PadSrcHandler};
+}
+
+pub mod task;
+
+use gst;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref RUNTIME_CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "ts-runtime",
+        gst::DebugColorFlags::empty(),
+        Some("Thread-sharing Runtime"),
+    );
+}

@@ -16,6 +16,9 @@
 // Boston, MA 02110-1335, USA.
 
 use either::Either;
+
+use futures::future::BoxFuture;
+use futures::lock::{Mutex, MutexGuard};
 use futures::prelude::*;
 
 use gio;
@@ -33,6 +36,7 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+use gst::{EventView, QueryView};
 use gst_net::*;
 
 use lazy_static::lazy_static;
@@ -40,9 +44,8 @@ use lazy_static::lazy_static;
 use rand;
 
 use std::io;
-use std::pin::Pin;
-use std::sync::Mutex;
-use std::task::{Context, Poll};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::sync::Arc;
 use std::u16;
 
 #[cfg(unix)]
@@ -51,7 +54,11 @@ use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
 
-use super::{iocontext::*, socket::*};
+use crate::block_on;
+use crate::runtime::prelude::*;
+use crate::runtime::{Context, PadSrc, PadSrcRef};
+
+use super::socket::{Socket, SocketRead, SocketStream};
 
 const DEFAULT_ADDRESS: Option<&str> = Some("127.0.0.1");
 const DEFAULT_PORT: u32 = 5000;
@@ -286,76 +293,220 @@ static PROPERTIES: [subclass::Property; 10] = [
     }),
 ];
 
-pub struct UdpReader {
+#[derive(Debug)]
+struct UdpReaderInner {
     socket: tokio::net::udp::UdpSocket,
 }
 
+#[derive(Debug)]
+pub struct UdpReader(Arc<Mutex<UdpReaderInner>>);
+
 impl UdpReader {
     fn new(socket: tokio::net::udp::UdpSocket) -> Self {
-        Self { socket }
+        UdpReader(Arc::new(Mutex::new(UdpReaderInner { socket })))
     }
 }
 
 impl SocketRead for UdpReader {
     const DO_TIMESTAMP: bool = true;
 
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<(usize, Option<std::net::SocketAddr>)>> {
-        Pin::new(&mut self.socket.recv_from(buf).boxed())
-            .as_mut()
-            .poll(cx)
-            .map(|res| res.map(|(read_size, saddr)| (read_size, Some(saddr))))
+    fn read<'buf>(
+        &self,
+        buffer: &'buf mut [u8],
+    ) -> BoxFuture<'buf, io::Result<(usize, Option<std::net::SocketAddr>)>> {
+        let this = Arc::clone(&self.0);
+
+        async move {
+            this.lock()
+                .await
+                .socket
+                .recv_from(buffer)
+                .await
+                .map(|(read_size, saddr)| (read_size, Some(saddr)))
+        }
+        .boxed()
     }
 }
 
-struct State {
-    io_context: Option<IOContext>,
-    pending_future_id: Option<PendingFutureId>,
-    socket: Option<Socket<UdpReader>>,
+#[derive(Debug)]
+struct UdpSrcPadHandlerInner {
+    retrieve_sender_address: bool,
+    socket_stream: Option<SocketStream<UdpReader>>,
     need_initial_events: bool,
     configured_caps: Option<gst::Caps>,
-    pending_future_abort_handle: Option<future::AbortHandle>,
 }
 
-impl Default for State {
-    fn default() -> State {
-        State {
-            io_context: None,
-            pending_future_id: None,
-            socket: None,
+impl Default for UdpSrcPadHandlerInner {
+    fn default() -> Self {
+        UdpSrcPadHandlerInner {
+            retrieve_sender_address: true,
+            socket_stream: None,
             need_initial_events: true,
             configured_caps: None,
-            pending_future_abort_handle: None,
         }
     }
 }
 
-struct UdpSrc {
-    src_pad: gst::Pad,
-    state: Mutex<State>,
-    settings: Mutex<Settings>,
+#[derive(Clone, Debug)]
+struct UdpSrcPadHandler(Arc<Mutex<UdpSrcPadHandlerInner>>);
+
+impl UdpSrcPadHandler {
+    fn new() -> Self {
+        UdpSrcPadHandler(Arc::new(Mutex::new(UdpSrcPadHandlerInner::default())))
+    }
+
+    #[inline]
+    async fn lock(&self) -> MutexGuard<'_, UdpSrcPadHandlerInner> {
+        self.0.lock().await
+    }
+
+    async fn start_task(&self, pad: PadSrcRef<'_>, element: &gst::Element) {
+        let this = self.clone();
+        let pad_weak = pad.downgrade();
+        let element = element.clone();
+        pad.start_task(move || {
+            let this = this.clone();
+            let pad_weak = pad_weak.clone();
+            let element = element.clone();
+            async move {
+                let item = this
+                    .lock()
+                    .await
+                    .socket_stream
+                    .as_mut()
+                    .expect("Missing SocketStream")
+                    .next()
+                    .await;
+
+                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
+                let (mut buffer, saddr) = match item {
+                    Some(Ok((buffer, saddr))) => (buffer, saddr),
+                    Some(Err(err)) => {
+                        gst_error!(CAT, obj: &element, "Got error {}", err);
+                        match err {
+                            Either::Left(gst::FlowError::CustomError) => (),
+                            Either::Left(err) => {
+                                gst_element_error!(
+                                    element,
+                                    gst::StreamError::Failed,
+                                    ("Internal data stream error"),
+                                    ["streaming stopped, reason {}", err]
+                                );
+                            }
+                            Either::Right(err) => {
+                                gst_element_error!(
+                                    element,
+                                    gst::StreamError::Failed,
+                                    ("I/O error"),
+                                    ["streaming stopped, I/O error {}", err]
+                                );
+                            }
+                        }
+                        return;
+                    }
+                    None => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "SocketStream Stopped");
+                        pad.pause_task().await;
+                        return;
+                    }
+                };
+
+                if let Some(saddr) = saddr {
+                    if this.lock().await.retrieve_sender_address {
+                        let inet_addr = match saddr.ip() {
+                            IpAddr::V4(ip) => gio::InetAddress::new_from_bytes(
+                                gio::InetAddressBytes::V4(&ip.octets()),
+                            ),
+                            IpAddr::V6(ip) => gio::InetAddress::new_from_bytes(
+                                gio::InetAddressBytes::V6(&ip.octets()),
+                            ),
+                        };
+                        let inet_socket_addr =
+                            &gio::InetSocketAddress::new(&inet_addr, saddr.port());
+                        NetAddressMeta::add(buffer.get_mut().unwrap(), inet_socket_addr);
+                    }
+                }
+
+                this.push_buffer(pad, &element, buffer).await;
+            }
+        })
+        .await;
+    }
+
+    async fn push_buffer(&self, pad: PadSrcRef<'_>, element: &gst::Element, buffer: gst::Buffer) {
+        {
+            let mut events = Vec::new();
+            {
+                let mut inner = self.lock().await;
+                if inner.need_initial_events {
+                    gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
+
+                    let stream_id =
+                        format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+                    events.push(
+                        gst::Event::new_stream_start(&stream_id)
+                            .group_id(gst::util_group_id_next())
+                            .build(),
+                    );
+                    let udpsrc = UdpSrc::from_instance(element);
+                    if let Some(ref caps) = udpsrc.settings.lock().await.caps {
+                        events.push(gst::Event::new_caps(&caps).build());
+                        inner.configured_caps = Some(caps.clone());
+                    }
+                    events.push(
+                        gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
+                            .build(),
+                    );
+
+                    inner.need_initial_events = false;
+                }
+            }
+
+            for event in events {
+                pad.push_event(event).await;
+            }
+        }
+
+        match pad.push(buffer).await {
+            Ok(_) => {
+                gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed buffer");
+            }
+            Err(gst::FlowError::Flushing) => {
+                gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
+                pad.pause_task().await;
+            }
+            Err(gst::FlowError::Eos) => {
+                gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
+                pad.pause_task().await;
+            }
+            Err(err) => {
+                gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
+                gst_element_error!(
+                    element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["streaming stopped, reason {}", err]
+                );
+            }
+        }
+    }
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
-        "ts-udpsrc",
-        gst::DebugColorFlags::empty(),
-        Some("Thread-sharing UDP source"),
-    );
-}
+impl PadSrcHandler for UdpSrcPadHandler {
+    type ElementImpl = UdpSrc;
 
-impl UdpSrc {
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
-        use gst::EventView;
-
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+    fn src_event(
+        &self,
+        pad: PadSrcRef,
+        udpsrc: &UdpSrc,
+        element: &gst::Element,
+        event: gst::Event,
+    ) -> Either<bool, BoxFuture<'static, bool>> {
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = self.stop(element);
+                let _ = block_on!(udpsrc.pause(element));
                 true
             }
             EventView::FlushStop(..) => {
@@ -363,7 +514,7 @@ impl UdpSrc {
                 if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
                     || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
-                    let _ = self.start(element);
+                    let _ = block_on!(udpsrc.start(element));
                 }
                 true
             }
@@ -373,22 +524,23 @@ impl UdpSrc {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad, "Handled event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled event {:?}", event);
         } else {
-            gst_log!(CAT, obj: pad, "Didn't handle event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle event {:?}", event);
         }
-        ret
+
+        Either::Left(ret)
     }
 
     fn src_query(
         &self,
-        pad: &gst::Pad,
+        pad: PadSrcRef,
+        _udpsrc: &UdpSrc,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
                 q.set(true, 0.into(), 0.into());
@@ -400,8 +552,8 @@ impl UdpSrc {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let state = self.state.lock().unwrap();
-                let caps = if let Some(ref caps) = state.configured_caps {
+                let inner = block_on!(self.lock());
+                let caps = if let Some(ref caps) = inner.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
@@ -419,139 +571,54 @@ impl UdpSrc {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad, "Handled query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled query {:?}", query);
         } else {
-            gst_log!(CAT, obj: pad, "Didn't handle query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle query {:?}", query);
         }
+
         ret
     }
+}
 
-    fn create_io_context_event(state: &State) -> Option<gst::Event> {
-        if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-            (&state.pending_future_id, &state.io_context)
-        {
-            let s = gst::Structure::new(
-                "ts-io-context",
-                &[
-                    ("io-context", &io_context),
-                    ("pending-future-id", &*pending_future_id),
-                ],
-            );
-            Some(gst::Event::new_custom_downstream_sticky(s).build())
-        } else {
-            None
-        }
+#[derive(Debug)]
+struct State {
+    socket: Option<Socket<UdpReader>>,
+}
+
+impl Default for State {
+    fn default() -> State {
+        State { socket: None }
     }
+}
 
-    async fn push_buffer(element: gst::Element, buffer: gst::Buffer) -> Result<(), gst::FlowError> {
-        let udpsrc = Self::from_instance(&element);
-        let mut events = Vec::new();
-        {
-            let mut state = udpsrc.state.lock().unwrap();
-            if state.need_initial_events {
-                gst_debug!(CAT, obj: &element, "Pushing initial events");
+#[derive(Debug)]
+struct UdpSrc {
+    src_pad: PadSrc,
+    src_pad_handler: UdpSrcPadHandler,
+    state: Mutex<State>,
+    settings: Mutex<Settings>,
+}
 
-                let stream_id =
-                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-                events.push(
-                    gst::Event::new_stream_start(&stream_id)
-                        .group_id(gst::util_group_id_next())
-                        .build(),
-                );
-                if let Some(ref caps) = udpsrc.settings.lock().unwrap().caps {
-                    events.push(gst::Event::new_caps(&caps).build());
-                    state.configured_caps = Some(caps.clone());
-                }
-                events.push(
-                    gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
-                        .build(),
-                );
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "ts-udpsrc",
+        gst::DebugColorFlags::empty(),
+        Some("Thread-sharing UDP source"),
+    );
+}
 
-                if let Some(event) = Self::create_io_context_event(&state) {
-                    events.push(event);
-
-                    // Get rid of reconfigure flag
-                    udpsrc.src_pad.check_reconfigure();
-                }
-                state.need_initial_events = false;
-            } else if udpsrc.src_pad.check_reconfigure() {
-                if let Some(event) = Self::create_io_context_event(&state) {
-                    events.push(event);
-                }
-            }
-        }
-
-        for event in events {
-            udpsrc.src_pad.push_event(event);
-        }
-
-        match udpsrc.src_pad.push(buffer) {
-            Ok(_) => {
-                gst_log!(CAT, obj: &element, "Successfully pushed buffer");
-            }
-            Err(gst::FlowError::Flushing) => {
-                gst_debug!(CAT, obj: &element, "Flushing");
-                let state = udpsrc.state.lock().unwrap();
-                if let Some(ref socket) = state.socket {
-                    socket.pause();
-                }
-            }
-            Err(gst::FlowError::Eos) => {
-                gst_debug!(CAT, obj: &element, "EOS");
-                let state = udpsrc.state.lock().unwrap();
-                if let Some(ref socket) = state.socket {
-                    socket.pause();
-                }
-            }
-            Err(err) => {
-                gst_error!(CAT, obj: &element, "Got error {}", err);
-                gst_element_error!(
-                    element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason {}", err]
-                );
-                return Err(gst::FlowError::CustomError);
-            }
-        }
-
-        let abortable_drain = {
-            let mut state = udpsrc.state.lock().unwrap();
-
-            if let State {
-                io_context: Some(ref io_context),
-                pending_future_id: Some(ref pending_future_id),
-                ref mut pending_future_abort_handle,
-                ..
-            } = *state
-            {
-                let (cancel, abortable_drain) =
-                    io_context.drain_pending_futures(*pending_future_id);
-                *pending_future_abort_handle = cancel;
-
-                abortable_drain
-            } else {
-                return Ok(());
-            }
-        };
-
-        abortable_drain.await
-    }
-
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
-        use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-
+impl UdpSrc {
+    async fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+        let mut state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Preparing");
 
-        let settings = self.settings.lock().unwrap().clone();
+        let mut settings = self.settings.lock().await.clone();
 
-        let mut state = self.state.lock().unwrap();
-
-        let io_context =
-            IOContext::new(&settings.context, settings.context_wait).map_err(|err| {
+        let context =
+            Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
-                    ["Failed to create IO context: {}", err]
+                    ["Failed to acquire Context: {}", err]
                 )
             })?;
 
@@ -569,7 +636,7 @@ impl UdpSrc {
                 socket = wrapped_socket.get()
             }
 
-            let socket = tokio::net::UdpSocket::from_std(socket, io_context.reactor_handle())
+            let socket = tokio::net::UdpSocket::from_std(socket, context.reactor_handle())
                 .map_err(|err| {
                     gst_error_msg!(
                         gst::ResourceError::OpenRead,
@@ -577,7 +644,7 @@ impl UdpSrc {
                     )
                 })?;
 
-            self.settings.lock().unwrap().used_socket = Some(wrapped_socket.clone());
+            settings.used_socket = Some(wrapped_socket.clone());
 
             socket
         } else {
@@ -664,7 +731,7 @@ impl UdpSrc {
                 )
             })?;
 
-            let socket = tokio::net::UdpSocket::from_std(socket, io_context.reactor_handle())
+            let socket = tokio::net::UdpSocket::from_std(socket, context.reactor_handle())
                 .map_err(|err| {
                     gst_error_msg!(
                         gst::ResourceError::OpenRead,
@@ -719,7 +786,7 @@ impl UdpSrc {
                     )
                 })?;
                 let wrapper = GioSocketWrapper::new(&gio_socket);
-                self.settings.lock().unwrap().used_socket = Some(wrapper);
+                settings.used_socket = Some(wrapper);
             }
             #[cfg(windows)]
             unsafe {
@@ -745,7 +812,7 @@ impl UdpSrc {
                     )
                 })?;
                 let wrapper = GioSocketWrapper::new(&gio_socket);
-                self.settings.lock().unwrap().used_socket = Some(wrapper);
+                settings.used_socket = Some(wrapper);
             }
 
             socket
@@ -762,72 +829,27 @@ impl UdpSrc {
         })?;
 
         let socket = Socket::new(element.upcast_ref(), UdpReader::new(socket), buffer_pool);
+        let socket_stream = socket.prepare().await.map_err(|_| {
+            gst_error_msg!(gst::ResourceError::OpenRead, ["Failed to prepare socket"])
+        })?;
 
-        let element_clone = element.clone();
-        let element_clone2 = element.clone();
+        {
+            let mut src_pad_handler = self.src_pad_handler.lock().await;
+            src_pad_handler.retrieve_sender_address = settings.retrieve_sender_address;
+            src_pad_handler.socket_stream = Some(socket_stream);
+        }
 
-        let retrieve_sender_address = self.settings.lock().unwrap().retrieve_sender_address;
-
-        socket
-            .schedule(
-                &io_context,
-                move |(mut buffer, saddr)| {
-                    if let Some(saddr) = saddr {
-                        if retrieve_sender_address {
-                            let inet_addr = match saddr.ip() {
-                                IpAddr::V4(ip) => gio::InetAddress::new_from_bytes(
-                                    gio::InetAddressBytes::V4(&ip.octets()),
-                                ),
-                                IpAddr::V6(ip) => gio::InetAddress::new_from_bytes(
-                                    gio::InetAddressBytes::V6(&ip.octets()),
-                                ),
-                            };
-                            let inet_socket_addr =
-                                &gio::InetSocketAddress::new(&inet_addr, saddr.port());
-                            NetAddressMeta::add(buffer.get_mut().unwrap(), inet_socket_addr);
-                        }
-                    }
-
-                    Self::push_buffer(element_clone.clone(), buffer)
-                },
-                move |err| {
-                    gst_error!(CAT, obj: &element_clone2, "Got error {}", err);
-                    match err {
-                        Either::Left(gst::FlowError::CustomError) => (),
-                        Either::Left(err) => {
-                            gst_element_error!(
-                                element_clone2,
-                                gst::StreamError::Failed,
-                                ("Internal data stream error"),
-                                ["streaming stopped, reason {}", err]
-                            );
-                        }
-                        Either::Right(err) => {
-                            gst_element_error!(
-                                element_clone2,
-                                gst::StreamError::Failed,
-                                ("I/O error"),
-                                ["streaming stopped, I/O error {}", err]
-                            );
-                        }
-                    }
-                },
-            )
-            .map_err(|_| {
-                gst_error_msg!(gst::ResourceError::OpenRead, ["Failed to schedule socket"])
+        self.src_pad
+            .prepare(context, &self.src_pad_handler)
+            .await
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Error preparing src_pads: {:?}", err]
+                )
             })?;
 
-        let pending_future_id = io_context.acquire_pending_future_id();
-        gst_debug!(
-            CAT,
-            obj: element,
-            "Got pending future id {:?}",
-            pending_future_id
-        );
-
         state.socket = Some(socket);
-        state.io_context = Some(io_context);
-        state.pending_future_id = Some(pending_future_id);
 
         gst_debug!(CAT, obj: element, "Prepared");
         drop(state);
@@ -837,63 +859,60 @@ impl UdpSrc {
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+    async fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        self.settings.lock().unwrap().used_socket = None;
+        self.settings.lock().await.used_socket = None;
 
-        // FIXME: The IO Context has to be alive longer than the queue,
-        // otherwise the queue can't finish any remaining work
-        let (mut socket, io_context) = {
-            let mut state = self.state.lock().unwrap();
+        self.src_pad.stop_task().await;
 
-            if let (&Some(ref pending_future_id), &Some(ref io_context)) =
-                (&state.pending_future_id, &state.io_context)
-            {
-                io_context.release_pending_future_id(*pending_future_id);
-            }
-
-            let socket = state.socket.take();
-            let io_context = state.io_context.take();
-            *state = State::default();
-            (socket, io_context)
-        };
-
-        if let Some(ref socket) = socket.take() {
-            socket.shutdown();
+        {
+            let socket = state.socket.take().unwrap();
+            socket.unprepare().await.unwrap();
         }
-        drop(io_context);
+
+        let _ = self.src_pad.unprepare().await;
+        self.src_pad_handler.lock().await.configured_caps = None;
 
         gst_debug!(CAT, obj: element, "Unprepared");
         Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), ()> {
+    async fn start(&self, element: &gst::Element) -> Result<(), ()> {
+        let state = self.state.lock().await;
         gst_debug!(CAT, obj: element, "Starting");
-        let state = self.state.lock().unwrap();
 
         if let Some(ref socket) = state.socket {
-            socket.unpause(element.get_clock(), Some(element.get_base_time()));
+            socket
+                .start(element.get_clock(), Some(element.get_base_time()))
+                .await;
         }
+
+        self.src_pad_handler
+            .start_task(self.src_pad.as_ref(), element)
+            .await;
 
         gst_debug!(CAT, obj: element, "Started");
 
         Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(CAT, obj: element, "Stopping");
-        let mut state = self.state.lock().unwrap();
+    async fn pause(&self, element: &gst::Element) -> Result<(), ()> {
+        let pause_completion = {
+            let state = self.state.lock().await;
+            gst_debug!(CAT, obj: element, "Pausing");
 
-        if let Some(ref socket) = state.socket {
-            socket.pause();
-        }
+            let pause_completion = self.src_pad.pause_task().await;
+            state.socket.as_ref().unwrap().pause().await;
 
-        if let Some(abort_handle) = state.pending_future_abort_handle.take() {
-            abort_handle.abort();
-        }
+            pause_completion
+        };
 
-        gst_debug!(CAT, obj: element, "Stopped");
+        gst_debug!(CAT, obj: element, "Waiting for Task Pause to complete");
+        pause_completion.await;
+
+        gst_debug!(CAT, obj: element, "Paused");
 
         Ok(())
     }
@@ -946,25 +965,11 @@ impl ObjectSubclass for UdpSrc {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = gst::Pad::new_from_template(&templ, Some("src"));
-
-        src_pad.set_event_function(|pad, parent, event| {
-            UdpSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |udpsrc, element| udpsrc.src_event(pad, element, event),
-            )
-        });
-        src_pad.set_query_function(|pad, parent, query| {
-            UdpSrc::catch_panic_pad_function(
-                parent,
-                || false,
-                |udpsrc, element| udpsrc.src_query(pad, element, query),
-            )
-        });
+        let src_pad = PadSrc::new_from_template(&templ, Some("src"));
 
         Self {
             src_pad,
+            src_pad_handler: UdpSrcPadHandler::new(),
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
         }
@@ -979,27 +984,27 @@ impl ObjectImpl for UdpSrc {
 
         match *prop {
             subclass::Property("address", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.address = value.get().expect("type checked upstream");
             }
             subclass::Property("port", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.port = value.get_some().expect("type checked upstream");
             }
             subclass::Property("reuse", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.reuse = value.get_some().expect("type checked upstream");
             }
             subclass::Property("caps", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.caps = value.get().expect("type checked upstream");
             }
             subclass::Property("mtu", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.mtu = value.get_some().expect("type checked upstream");
             }
             subclass::Property("socket", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.socket = value
                     .get::<gio::Socket>()
                     .expect("type checked upstream")
@@ -1009,18 +1014,18 @@ impl ObjectImpl for UdpSrc {
                 unreachable!();
             }
             subclass::Property("context", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             subclass::Property("retrieve-sender-address", ..) => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = block_on!(self.settings.lock());
                 settings.retrieve_sender_address = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -1032,27 +1037,27 @@ impl ObjectImpl for UdpSrc {
 
         match *prop {
             subclass::Property("address", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.address.to_value())
             }
             subclass::Property("port", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.port.to_value())
             }
             subclass::Property("reuse", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.reuse.to_value())
             }
             subclass::Property("caps", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.caps.to_value())
             }
             subclass::Property("mtu", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.mtu.to_value())
             }
             subclass::Property("socket", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings
                     .socket
                     .as_ref()
@@ -1060,7 +1065,7 @@ impl ObjectImpl for UdpSrc {
                     .to_value())
             }
             subclass::Property("used-socket", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings
                     .used_socket
                     .as_ref()
@@ -1068,15 +1073,15 @@ impl ObjectImpl for UdpSrc {
                     .to_value())
             }
             subclass::Property("context", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.context_wait.to_value())
             }
             subclass::Property("retrieve-sender-address", ..) => {
-                let settings = self.settings.lock().unwrap();
+                let settings = block_on!(self.settings.lock());
                 Ok(settings.retrieve_sender_address.to_value())
             }
             _ => unimplemented!(),
@@ -1087,7 +1092,7 @@ impl ObjectImpl for UdpSrc {
         self.parent_constructed(obj);
 
         let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.src_pad).unwrap();
+        element.add_pad(self.src_pad.gst_pad()).unwrap();
         super::set_element_flags(element, gst::ElementFlags::SOURCE);
     }
 }
@@ -1102,16 +1107,16 @@ impl ElementImpl for UdpSrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
+                block_on!(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                block_on!(self.pause(element)).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+                block_on!(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -1123,11 +1128,12 @@ impl ElementImpl for UdpSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                block_on!(self.start(element)).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PausedToReady => {
-                let mut state = self.state.lock().unwrap();
-                state.need_initial_events = true;
+                block_on!(async {
+                    self.src_pad_handler.lock().await.need_initial_events = true;
+                });
             }
             _ => (),
         }
