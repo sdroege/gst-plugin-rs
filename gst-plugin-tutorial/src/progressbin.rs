@@ -156,11 +156,9 @@ impl BinImpl for ProgressBin {
                         .unwrap_or(false) =>
             {
                 let s = msg.get_structure().unwrap();
-                let percent = s
-                    .get_some::<f64>("percent-double")
-                    .expect("ProgressBin::handle_message");
-
-                println!("progress: {:5.1}%", percent);
+                if let Ok(percent) = s.get_some::<f64>("percent-double") {
+                    println!("progress: {:5.1}%", percent);
+                }
             }
             _ => self.parent_handle_message(bin, msg),
         }
