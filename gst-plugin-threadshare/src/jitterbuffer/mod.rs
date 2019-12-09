@@ -198,11 +198,11 @@ impl RTPJitterBufferItem {
         }
     }
 
-    pub fn get_buffer(&self) -> gst::Buffer {
+    pub fn into_buffer(mut self) -> gst::Buffer {
         unsafe {
-            let item = self.0.as_ref().expect("Invalid wrapper");
+            let item = self.0.take().expect("Invalid wrapper");
             let buf = item.data as *mut gst_ffi::GstBuffer;
-            from_glib_none(buf)
+            from_glib_full(buf)
         }
     }
 
