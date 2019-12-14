@@ -573,7 +573,7 @@ impl AggregatorImpl for FallbackSwitch {
                 let audio_info;
                 let video_info;
                 if caps.get_structure(0).unwrap().get_name() == "audio/x-raw" {
-                    audio_info = gst_audio::AudioInfo::from_caps(&caps);
+                    audio_info = gst_audio::AudioInfo::from_caps(&caps).ok();
                     video_info = None;
                 } else if caps.get_structure(0).unwrap().get_name() == "video/x-raw" {
                     audio_info = None;

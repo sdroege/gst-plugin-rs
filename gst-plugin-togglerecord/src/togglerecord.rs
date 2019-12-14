@@ -1161,7 +1161,7 @@ impl ToggleRecord {
                 let caps = c.get_caps();
                 let s = caps.get_structure(0).unwrap();
                 if s.get_name().starts_with("audio/") {
-                    state.audio_info = gst_audio::AudioInfo::from_caps(caps);
+                    state.audio_info = gst_audio::AudioInfo::from_caps(caps).ok();
                     gst_log!(CAT, obj: pad, "Got audio caps {:?}", state.audio_info);
                     state.video_info = None;
                 } else if s.get_name().starts_with("video/") {

@@ -443,9 +443,11 @@ impl BaseSrcImpl for SineSrc {
     ) -> Result<(), gst::LoggableError> {
         use std::f64::consts::PI;
 
-        let info = gst_audio::AudioInfo::from_caps(caps).ok_or_else(|| {
-            gst_loggable_error!(CAT, "Failed to build `AudioInfo` from caps {}", caps)
-        })?;
+        let info = gst_audio::AudioInfo::from_caps(caps).or(Err(gst_loggable_error!(
+            CAT,
+            "Failed to build `AudioInfo` from caps {}",
+            caps
+        )))?;
 
         gst_debug!(CAT, obj: element, "Configuring for caps {}", caps);
 
