@@ -67,24 +67,6 @@ where
     from_str(take_while1(|c: u8| c >= b'0' && c <= b'9').message("while parsing digits"))
 }
 
-/// Copy from std::ops::RangeBounds as it's not stabilized yet.
-///
-/// Checks if `item` is in the range `range`.
-fn contains<R: std::ops::RangeBounds<U>, U>(range: &R, item: &U) -> bool
-where
-    U: ?Sized + PartialOrd<U>,
-{
-    (match range.start_bound() {
-        std::ops::Bound::Included(ref start) => *start <= item,
-        std::ops::Bound::Excluded(ref start) => *start < item,
-        std::ops::Bound::Unbounded => true,
-    }) && (match range.end_bound() {
-        std::ops::Bound::Included(ref end) => item <= *end,
-        std::ops::Bound::Excluded(ref end) => item < *end,
-        std::ops::Bound::Unbounded => true,
-    })
-}
-
 /// Parser for a run of decimal digits, that converts them into a `u32` and checks if the result is
 /// in the allowed range.
 fn digits_range<'a, I: 'a, R: std::ops::RangeBounds<u32>>(
@@ -95,7 +77,7 @@ where
     I::Error: ParseError<I::Item, I::Range, I::Position>,
 {
     digits().then(move |v| {
-        if contains(&range, &v) {
+        if range.contains(&v) {
             value(v).left()
         } else {
             unexpected_any("digits out of range").right()
