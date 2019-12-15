@@ -1166,7 +1166,7 @@ impl ToggleRecord {
                     state.video_info = None;
                 } else if s.get_name().starts_with("video/") {
                     state.audio_info = None;
-                    state.video_info = gst_video::VideoInfo::from_caps(caps);
+                    state.video_info = gst_video::VideoInfo::from_caps(caps).ok();
                     gst_log!(CAT, obj: pad, "Got video caps {:?}", state.video_info);
                 } else {
                     state.audio_info = None;

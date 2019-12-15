@@ -366,7 +366,9 @@ impl BaseTransformImpl for Rgb2Gray {
     // to the given caps. This is used for allocating a big enough output buffer and
     // sanity checking the input buffer size, among other things.
     fn get_unit_size(&self, _element: &gst_base::BaseTransform, caps: &gst::Caps) -> Option<usize> {
-        gst_video::VideoInfo::from_caps(caps).map(|info| info.size())
+        gst_video::VideoInfo::from_caps(caps)
+            .map(|info| info.size())
+            .ok()
     }
 
     // Called whenever the input/output caps are changing, i.e. in the very beginning before data
@@ -382,12 +384,12 @@ impl BaseTransformImpl for Rgb2Gray {
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
         let in_info = match gst_video::VideoInfo::from_caps(incaps) {
-            None => return Err(gst_loggable_error!(CAT, "Failed to parse input caps")),
-            Some(info) => info,
+            Err(_) => return Err(gst_loggable_error!(CAT, "Failed to parse input caps")),
+            Ok(info) => info,
         };
         let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
-            None => return Err(gst_loggable_error!(CAT, "Failed to parse output caps")),
-            Some(info) => info,
+            Err(_) => return Err(gst_loggable_error!(CAT, "Failed to parse output caps")),
+            Ok(info) => info,
         };
 
         gst_debug!(
