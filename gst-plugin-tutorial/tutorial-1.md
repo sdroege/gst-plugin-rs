@@ -38,6 +38,7 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
 license = "MIT/Apache-2.0"
 edition = "2018"
+description = "Rust Tutorial Plugin"
 
 [dependencies]
 glib = { git = "https://github.com/gtk-rs/glib" }
