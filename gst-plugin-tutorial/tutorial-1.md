@@ -45,6 +45,7 @@ glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+lazy_static = "1.0"
 
 [lib]
 name = "gstrstutorial"
@@ -55,7 +56,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper = {  git = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs" }
 ```
 
-We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later, and the `glib` crate to be able to use some GLib API that we’ll need. GStreamer is building upon GLib, and this leaks through in various places. We also have one build dependency on the `gst-plugin-version-helper` crate, which helps to get some information about the plugin for the `gst_plugin_define!` macro automatically.
+We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later, and the `glib` crate to be able to use some GLib API that we’ll need. GStreamer is building upon GLib, and this leaks through in various places. We also have one build dependency on the `gst-plugin-version-helper` crate, which helps to get some information about the plugin for the `gst_plugin_define!` macro automatically, and the `lazy_static` crate, which allows to declare lazily initialized global variables.
 
 With the basic project structure being set-up, we should be able to compile the project with `cargo build` now, which will download and build all dependencies and then creates a file called `target/debug/libgstrstutorial.so` (or .dll on Windows, .dylib on macOS). This is going to be our GStreamer plugin.
 
@@ -78,6 +79,8 @@ extern crate glib;
 extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
 extern crate gstreamer_video as gst_video;
+#[macro_use]
+extern crate lazy_static;
 ```
 
 Next we make use of the `gst_plugin_define!` `macro` from the `gstreamer` crate to set-up the static metadata of the plugin (and make the shared library recognizeable by GStreamer to be a valid plugin), and to define the name of our entry point function (`plugin_init`) where we will register all the elements that this plugin provides.
@@ -192,7 +195,7 @@ impl ObjectSubclass for Rgb2Gray {
     }
 
     fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
-        
+
     }
 }
 
@@ -211,15 +214,14 @@ This defines a struct `Rgb2Gray` which is empty for now and an empty implementat
 
 `ObjectSubclass` has an associated constant which contains the name of the type, some associated types, and functions for initializing/returning a new instance of our element (`new`) and for initializing the class metadata (`class_init`, more on that later). We simply let those functions proxy to associated functions on the `Rgb2Gray` struct that we’re going to define at a later time.
 
-In addition, we also define a `register` function (the one that is already called from our `plugin_init` function). When `register` function is called it registers the element factory with GStreamer based on the type ID, to be able to create new instances of it with the name “rsrgb2gray” (e.g. when using [`gst::ElementFactory::make`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.ElementFactory.html#method.make)). The `get_type` function will register the type with the GObject type system on the first call and the next time it's called (or on all the following calls) it will return the type ID. 
+In addition, we also define a `register` function (the one that is already called from our `plugin_init` function). When `register` function is called it registers the element factory with GStreamer based on the type ID, to be able to create new instances of it with the name “rsrgb2gray” (e.g. when using [`gst::ElementFactory::make`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.ElementFactory.html#method.make)). The `get_type` function will register the type with the GObject type system on the first call and the next time it's called (or on all the following calls) it will return the type ID.
 
 ## Type Class & Instance Initialization
 
-As a next step we implement the `new` funtion and `class_init` functions. In the first version, this struct is almost empty but we will later use it to store all state of our element.
+As a next step we implement the `new` funtion and `class_init` functions. In the first version, this struct is empty for now but we will later use it to store all state of our element.
 
 ```rust
 struct Rgb2Gray {
-    cat: gst::DebugCategory,
 }
 
 impl Rgb2Gray{}
@@ -229,11 +231,6 @@ impl ObjectSubclass for Rgb2Gray {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "rsrgb2gray",
-                gst::DebugColorFlags::empty(),
-                Some("Rust RGB-GRAY converter"),
-            ),
         }
     }
 
@@ -255,11 +252,11 @@ impl ObjectSubclass for Rgb2Gray {
 ```
 
 
-In the `new` function we return our struct, containing a newly created GStreamer debug category of name “rsrgb2gray”. We’re going to use this debug category later for making use of GStreamer’s debug logging system for logging the state and changes of our element.
+In the `new` function we return our empty struct.
 
 In the `class_init` function we, again, set up some metadata for our new element. In this case these are a description, a classification of our element, a longer description and the author. The metadata can later be retrieved and made use of via the [`Registry`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.Registry.html) and [`PluginFeature`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.PluginFeature.html)/[`ElementFactory`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.ElementFactory.html) API. We also configure the `BaseTransform` class and define that we will never operate in-place (producing our output in the input buffer), and that we don’t want to work in passthrough mode if the input/output formats are the same.
 
-Additionally we need to implement various traits on the Rgb2Gray struct, which will later be used to override virtual methods of the various parent classes of our element. For now we can keep the trait implementations empty, except for `ObjectImpl` trait which should simply call the `glib_object_impl!()` macro for some boilerplate code. There is one trait implementation required per parent class. 
+Additionally we need to implement various traits on the Rgb2Gray struct, which will later be used to override virtual methods of the various parent classes of our element. For now we can keep the trait implementations empty, except for `ObjectImpl` trait which should simply call the `glib_object_impl!()` macro for some boilerplate code. There is one trait implementation required per parent class.
 
 ```rust
 impl ObjectImpl for Rgb2Gray {
@@ -306,6 +303,27 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     )
 }
 ```
+
+## Debug Category
+
+To be able to later have a debug category available for our new element that
+can be used for logging, we make use of the `lazy_static!` macro from the
+crate with the same name. This crate allows to declare lazily initialized
+global variables, i.e. on the very first use the provided code will be
+executed and the result will be stored for all later uses.
+
+```rust
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "rsrgb2gray",
+        gst::DebugColorFlags::empty(),
+        Some("Rust RGB-GRAY converter"),
+    );
+}
+```
+
+We give the debug category the same name as our element, which generally is
+the convention with GStreamer elements.
 
 ## Caps & Pad Templates
 
@@ -387,7 +405,6 @@ struct State {
 }
 
 struct Rgb2Gray {
-    cat: gst::DebugCategory,
     state: Mutex<Option<State>>
 }
 
@@ -398,11 +415,6 @@ impl ObjectSubclass for Rgb2Gray {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "rsrgb2gray",
-                gst::DebugColorFlags::empty(),
-                "Rust RGB-GRAY converter",
-            ),
             state: Mutex::new(None),
         }
     }
@@ -431,7 +443,7 @@ impl BaseTransformImpl for Rgb2Gray {
         };
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Configured for caps {} to {}",
             incaps,
@@ -447,7 +459,7 @@ impl BaseTransformImpl for Rgb2Gray {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
-        gst_info!(self.cat, obj: element, "Stopped");
+        gst_info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -511,7 +523,7 @@ impl BaseTransformImpl for Rgb2Gray {
         };
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Transformed caps from {} to {} in direction {:?}",
             caps,
@@ -554,8 +566,8 @@ impl Rgb2Gray {
         let r = u32::from(in_p[2]);
 
         let gray = ((r * R_Y) + (g * G_Y) + (b * B_Y)) / 65536;
-        
-        (gray as u8)
+
+        gray as u8
     }
 }
 ```
@@ -574,7 +586,6 @@ impl BaseTransformImpl for Rgb2Gray {
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().ok_or_else(|| {
             gst_element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
@@ -745,7 +756,6 @@ static PROPERTIES: [subclass::Property; 2] = [
 ];
 
 struct Rgb2Gray {
-    cat: gst::DebugCategory,
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
 }
@@ -757,11 +767,6 @@ impl ObjectSubclass for Rgb2Gray {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "rsrgb2gray",
-                gst::DebugColorFlags::empty(),
-                "Rust RGB-GRAY converter",
-            ),
             settings: Mutex::new(Default::default()),
             state: Mutex::new(None),
         }
@@ -794,7 +799,7 @@ impl ObjectImpl for Rgb2Gray {
                 let mut settings = self.settings.lock().unwrap();
                 let invert = value.get_some().expect("type checked upstream");
                 gst_info!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Changing invert from {} to {}",
                     settings.invert,
@@ -806,7 +811,7 @@ impl ObjectImpl for Rgb2Gray {
                 let mut settings = self.settings.lock().unwrap();
                 let shift = value.get_some().expect("type checked upstream");
                 gst_info!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Changing shift from {} to {}",
                     settings.shift,
