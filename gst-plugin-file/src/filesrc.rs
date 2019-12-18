@@ -325,7 +325,7 @@ impl BaseSrcImpl for FileSrc {
         }
 
         let size = {
-            let mut map = buffer.map_writable().ok_or_else(|| {
+            let mut map = buffer.map_writable().map_err(|_| {
                 gst_element_error!(element, gst::LibraryError::Failed, ["Failed to map buffer"]);
                 gst::FlowError::Error
             })?;

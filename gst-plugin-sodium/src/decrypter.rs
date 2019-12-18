@@ -128,7 +128,7 @@ impl State {
         buffer: &gst::Buffer,
         chunk_index: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let map = buffer.map_readable().ok_or_else(|| {
+        let map = buffer.map_readable().map_err(|_| {
             gst_element_error!(
                 element,
                 gst::StreamError::Format,
@@ -406,7 +406,7 @@ impl Decrypter {
             return Err(err);
         }
 
-        let map = buffer.map_readable().ok_or_else(|| {
+        let map = buffer.map_readable().map_err(|_| {
             let err = gst_loggable_error!(CAT, "Failed to map buffer readable");
             err.log_with_object(element);
             err

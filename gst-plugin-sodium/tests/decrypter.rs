@@ -109,7 +109,7 @@ fn test_pipeline() {
             // Add a handler to the "new-sample" signal.
             .new_sample(move |appsink| {
                 // Pull the sample in question out of the appsink's buffer.
-                let sample = appsink.pull_sample().ok_or(gst::FlowError::Eos)?;
+                let sample = appsink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
                 let buffer = sample.get_buffer().ok_or(gst::FlowError::Error)?;
 
                 let mut adapter = adapter_clone.lock().unwrap();

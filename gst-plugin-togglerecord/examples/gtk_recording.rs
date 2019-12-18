@@ -57,7 +57,7 @@ fn create_pipeline() -> (
     let video_convert2 = gst::ElementFactory::make("videoconvert", None).unwrap();
 
     let (video_sink, video_widget) =
-        if let Some(gtkglsink) = gst::ElementFactory::make("gtkglsink", None) {
+        if let Ok(gtkglsink) = gst::ElementFactory::make("gtkglsink", None) {
             let glsinkbin = gst::ElementFactory::make("glsinkbin", None).unwrap();
             glsinkbin.set_property("sink", &gtkglsink).unwrap();
 
@@ -325,7 +325,8 @@ fn create_ui(app: &gtk::Application) {
         };
 
         glib::Continue(true)
-    });
+    })
+    .expect("Failed to add bus watch");
 
     pipeline.set_state(gst::State::Playing).unwrap();
 

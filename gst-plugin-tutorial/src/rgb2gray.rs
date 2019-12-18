@@ -445,7 +445,7 @@ impl BaseTransformImpl for Rgb2Gray {
         // info that is passed here
         let in_frame =
             gst_video::VideoFrameRef::from_buffer_ref_readable(inbuf.as_ref(), &state.in_info)
-                .ok_or_else(|| {
+                .map_err(|_| {
                     gst_element_error!(
                         element,
                         gst::CoreError::Failed,
@@ -456,15 +456,16 @@ impl BaseTransformImpl for Rgb2Gray {
 
         // And now map the output buffer writable, so we can fill it.
         let mut out_frame =
-            gst_video::VideoFrameRef::from_buffer_ref_writable(outbuf, &state.out_info)
-                .ok_or_else(|| {
+            gst_video::VideoFrameRef::from_buffer_ref_writable(outbuf, &state.out_info).map_err(
+                |_| {
                     gst_element_error!(
                         element,
                         gst::CoreError::Failed,
                         ["Failed to map output buffer writable"]
                     );
                     gst::FlowError::Error
-                })?;
+                },
+            )?;
 
         // Keep the various metadata we need for working with the video frames in
         // local variables. This saves some typing below.

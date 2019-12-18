@@ -345,7 +345,7 @@ impl MccEnc {
 
         let _ = write!(outbuf, "{}\t", meta.get_tc());
 
-        let map = buffer.map_readable().ok_or_else(|| {
+        let map = buffer.map_readable().map_err(|_| {
             gst_element_error!(
                 element,
                 gst::StreamError::Format,

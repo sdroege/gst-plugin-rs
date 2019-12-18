@@ -253,7 +253,7 @@ fn recv_buffers(
 #[test]
 fn test_create() {
     init();
-    assert!(gst::ElementFactory::make("togglerecord", None).is_some());
+    assert!(gst::ElementFactory::make("togglerecord", None).is_ok());
 }
 
 #[test]

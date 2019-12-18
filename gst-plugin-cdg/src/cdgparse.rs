@@ -152,7 +152,7 @@ impl BaseParseImpl for CdgParse {
         // Scan for CDG instruction
         let input = frame.get_buffer().unwrap();
         let skip = {
-            let map = input.map_readable().ok_or_else(|| {
+            let map = input.map_readable().map_err(|_| {
                 gst_element_error!(
                     element,
                     gst::CoreError::Failed,
@@ -176,7 +176,7 @@ impl BaseParseImpl for CdgParse {
         }
 
         let (keyframe, header) = {
-            let map = input.map_readable().ok_or_else(|| {
+            let map = input.map_readable().map_err(|_| {
                 gst_element_error!(
                     element,
                     gst::CoreError::Failed,

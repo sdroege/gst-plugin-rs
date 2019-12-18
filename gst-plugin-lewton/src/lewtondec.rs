@@ -186,7 +186,7 @@ impl AudioDecoderImpl for LewtonDec {
             Some(inbuf) => inbuf,
         };
 
-        let inmap = inbuf.map_readable().ok_or_else(|| {
+        let inmap = inbuf.map_readable().map_err(|_| {
             gst_error!(CAT, obj: element, "Failed to buffer readable");
             gst::FlowError::Error
         })?;
@@ -277,7 +277,7 @@ impl LewtonDec {
         };
 
         // First try to parse the headers
-        let ident_map = ident_buf.map_readable().ok_or_else(|| {
+        let ident_map = ident_buf.map_readable().map_err(|_| {
             gst_error!(CAT, obj: element, "Failed to map ident buffer readable");
             gst::FlowError::Error
         })?;
@@ -290,7 +290,7 @@ impl LewtonDec {
             gst::FlowError::Error
         })?;
 
-        let comment_map = comment_buf.map_readable().ok_or_else(|| {
+        let comment_map = comment_buf.map_readable().map_err(|_| {
             gst_error!(CAT, obj: element, "Failed to map comment buffer readable");
             gst::FlowError::Error
         })?;
@@ -303,7 +303,7 @@ impl LewtonDec {
             gst::FlowError::Error
         })?;
 
-        let setup_map = setup_buf.map_readable().ok_or_else(|| {
+        let setup_map = setup_buf.map_readable().map_err(|_| {
             gst_error!(CAT, obj: element, "Failed to map setup buffer readable");
             gst::FlowError::Error
         })?;
@@ -420,7 +420,7 @@ impl LewtonDec {
 
         let mut outbuf = element
             .allocate_output_buffer(sample_count as usize * audio_info.bpf() as usize)
-            .ok_or_else(|| {
+            .map_err(|_| {
                 gst_element_error!(
                     element,
                     gst::StreamError::Decode,
@@ -433,7 +433,7 @@ impl LewtonDec {
         // while reordering the channels to the GStreamer channel order
         {
             let outbuf = outbuf.get_mut().unwrap();
-            let mut outmap = outbuf.map_writable().ok_or_else(|| {
+            let mut outmap = outbuf.map_writable().map_err(|_| {
                 gst_element_error!(
                     element,
                     gst::StreamError::Decode,

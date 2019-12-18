@@ -507,7 +507,7 @@ impl BaseSinkImpl for S3Sink {
         }
 
         gst_trace!(CAT, obj: element, "Rendering {:?}", buffer);
-        let map = buffer.map_readable().ok_or_else(|| {
+        let map = buffer.map_readable().map_err(|_| {
             gst_element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
         })?;

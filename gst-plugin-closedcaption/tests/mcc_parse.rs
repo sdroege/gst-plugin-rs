@@ -148,7 +148,7 @@ fn test_pull() {
         while h.events_in_queue() != 0 {
             let event = h.pull_event();
 
-            if let Some(event) = event {
+            if let Ok(event) = event {
                 match event.view() {
                     EventView::Eos(_) => {
                         done = true;
@@ -185,7 +185,7 @@ fn test_pull() {
         let mut done = false;
 
         while h.buffers_in_queue() != 0 {
-            if let Some(buffer) = h.pull() {
+            if let Ok(buffer) = h.pull() {
                 let pts = buffer.get_pts();
                 assert!(pts > gst::SECOND && pts < 2 * gst::SECOND);
             }
@@ -194,7 +194,7 @@ fn test_pull() {
         while h.events_in_queue() != 0 {
             let event = h.pull_event();
 
-            if let Some(event) = event {
+            if let Ok(event) = event {
                 match event.view() {
                     EventView::Eos(_) => {
                         done = true;

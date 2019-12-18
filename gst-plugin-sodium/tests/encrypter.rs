@@ -94,7 +94,7 @@ fn encrypt_file() {
     h.push_event(gst::Event::new_eos().build());
 
     println!("Pulling buffer...");
-    while let Some(buf) = h.pull() {
+    while let Ok(buf) = h.pull() {
         adapter.push(buf);
         if adapter.available() >= expected_output.len() {
             break;

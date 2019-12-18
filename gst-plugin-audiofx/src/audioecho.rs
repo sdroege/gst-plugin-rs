@@ -265,7 +265,7 @@ impl BaseTransformImpl for AudioEcho {
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
-        let mut map = buf.map_writable().ok_or(gst::FlowError::Error)?;
+        let mut map = buf.map_writable().map_err(|_| gst::FlowError::Error)?;
 
         match state.info.format() {
             gst_audio::AUDIO_FORMAT_F64 => {

@@ -692,7 +692,7 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let in_frame =
             gst_video::VideoFrameRef::from_buffer_ref_readable(&*input_buffer, &state.video_info)
-                .ok_or_else(|| {
+                .map_err(|_| {
                 gst_element_error!(
                     element,
                     gst::CoreError::Failed,

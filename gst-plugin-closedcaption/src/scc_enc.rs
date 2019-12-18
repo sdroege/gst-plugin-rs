@@ -158,7 +158,7 @@ impl State {
 
         let first_buf = self.internal_buffer.first().unwrap();
         for buffer in self.internal_buffer.iter() {
-            let map = buffer.map_readable().ok_or_else(|| {
+            let map = buffer.map_readable().map_err(|_| {
                 gst_element_error!(
                     element,
                     gst::StreamError::Format,

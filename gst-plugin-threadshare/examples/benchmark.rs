@@ -162,7 +162,8 @@ fn main() {
         };
 
         glib::Continue(true)
-    });
+    })
+    .expect("Failed to add bus watch");
 
     pipeline.set_state(gst::State::Playing).unwrap();
 

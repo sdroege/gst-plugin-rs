@@ -123,7 +123,7 @@ impl VideoDecoderImpl for CdgDec {
 
         let cmd = {
             let input = frame.get_input_buffer().unwrap();
-            let map = input.map_readable().ok_or_else(|| {
+            let map = input.map_readable().map_err(|_| {
                 gst_element_error!(
                     element,
                     gst::CoreError::Failed,
@@ -155,7 +155,7 @@ impl VideoDecoderImpl for CdgDec {
 
             let mut out_frame =
                 gst_video::VideoFrameRef::from_buffer_ref_writable(output, info.as_ref().unwrap())
-                    .ok_or_else(|| {
+                    .map_err(|_| {
                         gst_element_error!(
                             element,
                             gst::CoreError::Failed,
