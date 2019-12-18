@@ -102,7 +102,7 @@ impl VideoDecoderImpl for CdgDec {
     fn handle_frame(
         &self,
         element: &gst_video::VideoDecoder,
-        frame: gst_video::VideoCodecFrame,
+        mut frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         {
             let mut out_info = self.output_info.lock().unwrap();
@@ -148,9 +148,9 @@ impl VideoDecoderImpl for CdgDec {
         let mut cdg_inter = self.cdg_inter.lock().unwrap();
         cdg_inter.handle_cmd(cmd);
 
-        element.allocate_output_frame(&frame, None)?;
+        element.allocate_output_frame(&mut frame, None)?;
         {
-            let output = frame.get_output_buffer().unwrap();
+            let output = frame.get_output_buffer_mut().unwrap();
             let info = self.output_info.lock().unwrap();
 
             let mut out_frame =

@@ -131,7 +131,7 @@ impl BaseParseImpl for CdgParse {
     fn handle_frame(
         &self,
         element: &gst_base::BaseParse,
-        frame: gst_base::BaseParseFrame,
+        mut frame: gst_base::BaseParseFrame,
     ) -> Result<(gst::FlowSuccess, u32), gst::FlowError> {
         let pad = element.get_src_pad();
         if pad.get_current_caps().is_none() {
@@ -198,7 +198,7 @@ impl BaseParseImpl for CdgParse {
         };
 
         let pts = bytes_to_time(Bytes(Some(frame.get_offset())));
-        let buffer = frame.get_buffer().unwrap();
+        let buffer = frame.get_buffer_mut().unwrap();
         buffer.set_pts(pts);
 
         if !keyframe {
