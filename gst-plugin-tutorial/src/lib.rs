@@ -21,6 +21,7 @@ extern crate lazy_static;
 
 mod identity;
 mod progressbin;
+mod progressbin_output_enum;
 mod rgb2gray;
 mod sinesrc;
 

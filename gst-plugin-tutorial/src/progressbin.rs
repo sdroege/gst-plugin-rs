@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::progressbin_output_enum::ProgressBinOutput;
 use glib;
 use glib::prelude::*;
 use glib::subclass;
@@ -13,13 +14,40 @@ use glib::subclass::prelude::*;
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use std::sync::Mutex;
+
+const DEFAULT_OUTPUT_TYPE: ProgressBinOutput = ProgressBinOutput::Println;
+
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "progressbin",
+        gst::DebugColorFlags::empty(),
+        Some("Rust Progress Reporter"),
+    );
+}
 
 // Struct containing all the element data
 struct ProgressBin {
     progress: gst::Element,
     srcpad: gst::GhostPad,
     sinkpad: gst::GhostPad,
+    // We put the output_type property behind a mutex, as we want
+    // change it in the set_property function, which can be called
+    // from any thread.
+    output_type: Mutex<ProgressBinOutput>,
 }
+
+// Metadata for the element's properties
+static PROPERTIES: [subclass::Property; 1] = [subclass::Property("output", |name| {
+    glib::ParamSpec::enum_(
+        name,
+        "Output",
+        "Defines the output type of the progressbin",
+        ProgressBinOutput::static_type(),
+        DEFAULT_OUTPUT_TYPE as i32,
+        glib::ParamFlags::READWRITE,
+    )
+})];
 
 // This trait registers our type with the GObject object system and
 // provides the entry points for creating a new instance and setting
@@ -56,6 +84,7 @@ impl ObjectSubclass for ProgressBin {
             progress,
             srcpad,
             sinkpad,
+            output_type: Mutex::new(ProgressBinOutput::Println),
         }
     }
 
@@ -101,6 +130,9 @@ impl ObjectSubclass for ProgressBin {
         )
         .unwrap();
         klass.add_pad_template(sink_pad_template);
+
+        // Install all our properties
+        klass.install_properties(&PROPERTIES);
     }
 }
 
@@ -108,6 +140,45 @@ impl ObjectSubclass for ProgressBin {
 impl ObjectImpl for ProgressBin {
     // This macro provides some boilerplate
     glib_object_impl!();
+
+    // Called whenever a value of a property is changed. It can be called
+    // at any time from any thread.
+    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
+        let element = obj.downcast_ref::<gst_base::BaseTransform>().unwrap();
+
+        match *prop {
+            subclass::Property("output", ..) => {
+                let mut output_type = self.output_type.lock().unwrap();
+                let new_output_type = value
+                    .get_some::<ProgressBinOutput>()
+                    .expect("type checked upstream");
+                gst_info!(
+                    CAT,
+                    obj: element,
+                    "Changing output from {:?} to {:?}",
+                    output_type,
+                    new_output_type
+                );
+                *output_type = new_output_type;
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    // Called whenever a value of a property is read. It can be called
+    // at any time from any thread.
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
+
+        match *prop {
+            subclass::Property("output", ..) => {
+                let output_type = self.output_type.lock().unwrap();
+                Ok(output_type.to_value())
+            }
+            _ => unimplemented!(),
+        }
+    }
 
     // Called right after construction of a new instance
     fn constructed(&self, obj: &glib::Object) {
@@ -157,7 +228,13 @@ impl BinImpl for ProgressBin {
             {
                 let s = msg.get_structure().unwrap();
                 if let Ok(percent) = s.get_some::<f64>("percent-double") {
-                    println!("progress: {:5.1}%", percent);
+                    let output_type = self.output_type.lock().unwrap();
+                    match *output_type {
+                        ProgressBinOutput::Println => println!("progress: {:5.1}%", percent),
+                        ProgressBinOutput::DebugCategory => {
+                            gst_info!(CAT, "progress: {:5.1}%", percent);
+                        }
+                    };
                 }
             }
             _ => self.parent_handle_message(bin, msg),
