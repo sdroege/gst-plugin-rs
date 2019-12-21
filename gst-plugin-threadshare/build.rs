@@ -13,8 +13,8 @@ fn main() {
         build.include(p);
     }
 
-    build.file("src/rtpjitterbuffer.c");
-    build.file("src/rtpstats.c");
+    build.file("src/jitterbuffer/rtpjitterbuffer.c");
+    build.file("src/jitterbuffer/rtpstats.c");
 
     build.compile("libthreadshare-c.a");
 
