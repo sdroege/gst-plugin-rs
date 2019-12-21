@@ -45,7 +45,7 @@ use std::time::Duration;
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadContext, PadContextWeak, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
-use crate::{RTPJitterBuffer, RTPJitterBufferItem, RTPPacketRateCtx};
+use super::{RTPJitterBuffer, RTPJitterBufferItem, RTPPacketRateCtx};
 
 const DEFAULT_LATENCY_MS: u32 = 200;
 const DEFAULT_DO_LOST: bool = false;

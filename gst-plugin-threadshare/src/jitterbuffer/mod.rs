@@ -18,6 +18,7 @@
 use glib_sys as glib_ffi;
 use gstreamer_sys as gst_ffi;
 
+#[allow(clippy::module_inception)]
 pub mod jitterbuffer;
 
 pub mod ffi {
@@ -64,11 +65,15 @@ pub mod ffi {
     extern "C" {
         pub fn rtp_jitter_buffer_new() -> *mut RTPJitterBuffer;
         pub fn rtp_jitter_buffer_get_type() -> GType;
+        #[allow(dead_code)]
         pub fn rtp_jitter_buffer_get_mode(jbuf: *mut RTPJitterBuffer) -> RTPJitterBufferMode;
+        #[allow(dead_code)]
         pub fn rtp_jitter_buffer_set_mode(jbuf: *mut RTPJitterBuffer, mode: RTPJitterBufferMode);
+        #[allow(dead_code)]
         pub fn rtp_jitter_buffer_get_delay(jbuf: *mut RTPJitterBuffer) -> GstClockTime;
         pub fn rtp_jitter_buffer_set_delay(jbuf: *mut RTPJitterBuffer, delay: GstClockTime);
         pub fn rtp_jitter_buffer_set_clock_rate(jbuf: *mut RTPJitterBuffer, clock_rate: c_uint);
+        #[allow(dead_code)]
         pub fn rtp_jitter_buffer_get_clock_rate(jbuf: *mut RTPJitterBuffer) -> c_uint;
         pub fn rtp_jitter_buffer_reset_skew(jbuf: *mut RTPJitterBuffer);
 
@@ -109,6 +114,7 @@ pub mod ffi {
             ctx: *mut RTPPacketRateCtx,
             time_ms: c_int,
         ) -> c_uint;
+        #[allow(dead_code)]
         pub fn gst_rtp_packet_rate_ctx_get_max_disorder(
             ctx: *mut RTPPacketRateCtx,
             time_ms: c_int,
@@ -221,6 +227,7 @@ impl RTPJitterBufferItem {
         item.seqnum
     }
 
+    #[allow(dead_code)]
     pub fn get_rtptime(&self) -> u32 {
         let item = self.0.as_ref().expect("Invalid wrapper");
         item.rtptime
@@ -262,6 +269,7 @@ impl RTPPacketRateCtx {
         unsafe { ffi::gst_rtp_packet_rate_ctx_get_max_dropout(&mut *self.0, time_ms) }
     }
 
+    #[allow(dead_code)]
     pub fn get_max_disorder(&mut self, time_ms: i32) -> u32 {
         unsafe { ffi::gst_rtp_packet_rate_ctx_get_max_disorder(&mut *self.0, time_ms) }
     }
@@ -287,14 +295,17 @@ impl RTPJitterBuffer {
         unsafe { from_glib_full(ffi::rtp_jitter_buffer_new()) }
     }
 
+    #[allow(dead_code)]
     pub fn get_mode(&self) -> RTPJitterBufferMode {
         unsafe { from_glib(ffi::rtp_jitter_buffer_get_mode(self.to_glib_none().0)) }
     }
 
+    #[allow(dead_code)]
     pub fn set_mode(&self, mode: RTPJitterBufferMode) {
         unsafe { ffi::rtp_jitter_buffer_set_mode(self.to_glib_none().0, mode.to_glib()) }
     }
 
+    #[allow(dead_code)]
     pub fn get_delay(&self) -> gst::ClockTime {
         unsafe { from_glib(ffi::rtp_jitter_buffer_get_delay(self.to_glib_none().0)) }
     }
@@ -307,6 +318,7 @@ impl RTPJitterBuffer {
         unsafe { ffi::rtp_jitter_buffer_set_clock_rate(self.to_glib_none().0, clock_rate) }
     }
 
+    #[allow(dead_code)]
     pub fn get_clock_rate(&self) -> u32 {
         unsafe { ffi::rtp_jitter_buffer_get_clock_rate(self.to_glib_none().0) }
     }
