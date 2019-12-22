@@ -372,11 +372,10 @@ mod tests {
         let sender: Arc<Mutex<mpsc::Sender<Item>>> = Arc::new(Mutex::new(sender));
 
         let ctx_weak = context.downgrade();
-        let queue_id_clone = queue_id.clone();
         let add_task = move |item| {
             let sender_task = Arc::clone(&sender);
             let context = ctx_weak.upgrade().unwrap();
-            context.add_task(queue_id_clone, async move {
+            context.add_task(queue_id, async move {
                 sender_task
                     .lock()
                     .await

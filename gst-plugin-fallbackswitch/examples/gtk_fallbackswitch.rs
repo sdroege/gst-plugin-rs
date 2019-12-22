@@ -161,10 +161,8 @@ fn create_ui(app: &gtk::Application) {
                 *drop_id = video_src_pad
                     .add_probe(gst::PadProbeType::BUFFER, |_, _| gst::PadProbeReturn::Drop);
             }
-        } else {
-            if let Some(drop_id) = drop_id.borrow_mut().take() {
-                video_src_pad.remove_probe(drop_id);
-            }
+        } else if let Some(drop_id) = drop_id.borrow_mut().take() {
+            video_src_pad.remove_probe(drop_id);
         }
     });
 

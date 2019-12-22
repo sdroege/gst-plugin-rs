@@ -94,8 +94,7 @@ fn test_cdgdec() {
                     err.get_error()
                 );
                 eprintln!("Debugging information: {:?}", err.get_debug());
-                assert!(true);
-                break;
+                unreachable!();
             }
             MessageView::Eos(..) => break,
             _ => (),

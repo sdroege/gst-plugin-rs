@@ -135,8 +135,7 @@ fn test_pipeline() {
                     err.get_error()
                 );
                 eprintln!("Debugging information: {:?}", err.get_debug());
-                assert!(true);
-                break;
+                unreachable!();
             }
             MessageView::Eos(..) => break,
             _ => (),
@@ -268,7 +267,7 @@ fn test_pull_range() {
     assert_eq!(res, Err(gst::FlowError::Eos));
 
     // read 100 bytes way past eos
-    let res = srcpad.get_range(424242, 100);
+    let res = srcpad.get_range(424_242, 100);
     assert_eq!(res, Err(gst::FlowError::Eos));
 
     // read 10 bytes at eos -1, should return a single byte

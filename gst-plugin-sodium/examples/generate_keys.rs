@@ -48,9 +48,10 @@ impl Keys {
                 path.into()
             };
 
-            let file = File::create(&path).expect(&format!("Failed to create file at {}", path));
+            let file =
+                File::create(&path).unwrap_or_else(|_| panic!("Failed to create file at {}", path));
             serde_json::to_writer(file, &self)
-                .expect(&format!("Failed to write to file at {}", path));
+                .unwrap_or_else(|_| panic!("Failed to write to file at {}", path));
         } else {
             use std::io::Write;
             use std::path::PathBuf;
@@ -58,16 +59,16 @@ impl Keys {
             let mut private = PathBuf::from(path);
             private.set_extension("prv");
             let mut file = File::create(&private)
-                .expect(&format!("Failed to create file at {}", private.display()));
+                .unwrap_or_else(|_| panic!("Failed to create file at {}", private.display()));
             file.write_all(&self.private.0)
-                .expect(&format!("Failed to write to file at {}", private.display()));
+                .unwrap_or_else(|_| panic!("Failed to write to file at {}", private.display()));
 
             let mut public = PathBuf::from(path);
             public.set_extension("pub");
             let mut file = File::create(&public)
-                .expect(&format!("Failed to create file at {}", public.display()));
+                .unwrap_or_else(|_| panic!("Failed to create file at {}", public.display()));
             file.write_all(self.public.as_ref())
-                .expect(&format!("Failed to write to file at {}", public.display()));
+                .unwrap_or_else(|_| panic!("Failed to write to file at {}", public.display()));
         }
     }
 }

@@ -85,7 +85,9 @@ fn test_parse() {
             } else {
                 expected_timecode = Some(tc_meta.get_tc());
             }
-            expected_timecode.as_mut().map(|tc| tc.increment_frame());
+            if let Some(ref mut tc) = expected_timecode {
+                tc.increment_frame();
+            }
         }
         data = &data[l..];
     }
@@ -108,13 +110,15 @@ fn test_parse() {
         } else {
             expected_timecode = Some(tc_meta.get_tc());
         }
-        expected_timecode.as_mut().map(|tc| tc.increment_frame());
+        if let Some(ref mut tc) = expected_timecode {
+            tc.increment_frame();
+        }
     }
 
     assert!(expected_timecode.is_some());
-    assert_eq!(input_len, 28818);
-    assert_eq!(output_len, 42383);
-    assert_eq!(checksum, 3988480);
+    assert_eq!(input_len, 28_818);
+    assert_eq!(output_len, 42_383);
+    assert_eq!(checksum, 3_988_480);
 
     let caps = h
         .get_sinkpad()
@@ -174,9 +178,9 @@ fn test_pull() {
             1.0,
             gst::SeekFlags::FLUSH,
             gst::SeekType::Set,
-            gst::GenericFormattedValue::Time(gst::SECOND.into()),
+            gst::GenericFormattedValue::Time(gst::SECOND),
             gst::SeekType::Set,
-            gst::GenericFormattedValue::Time((2 * gst::SECOND).into()),
+            gst::GenericFormattedValue::Time(2 * gst::SECOND),
         )
         .build(),
     );

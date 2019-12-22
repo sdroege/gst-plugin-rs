@@ -65,15 +65,15 @@ macro_rules! assert_buffer {
 fn test_no_fallback_no_drops() {
     let pipeline = setup_pipeline(None);
 
-    push_buffer(&pipeline, 0 * gst::SECOND);
-    set_time(&pipeline, 0 * gst::SECOND);
+    push_buffer(&pipeline, 0.into());
+    set_time(&pipeline, 0.into());
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, 0 * gst::SECOND);
+    assert_buffer!(buffer, 0.into());
 
-    push_buffer(&pipeline, 1 * gst::SECOND);
-    set_time(&pipeline, 1 * gst::SECOND);
+    push_buffer(&pipeline, gst::SECOND);
+    set_time(&pipeline, gst::SECOND);
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, 1 * gst::SECOND);
+    assert_buffer!(buffer, gst::SECOND);
 
     push_buffer(&pipeline, 2 * gst::SECOND);
     set_time(&pipeline, 2 * gst::SECOND);
@@ -99,17 +99,17 @@ fn test_no_drops_not_live() {
 fn test_no_drops(live: bool) {
     let pipeline = setup_pipeline(Some(live));
 
-    push_buffer(&pipeline, 0 * gst::SECOND);
-    push_fallback_buffer(&pipeline, 0 * gst::SECOND);
-    set_time(&pipeline, 0 * gst::SECOND);
+    push_buffer(&pipeline, 0.into());
+    push_fallback_buffer(&pipeline, 0.into());
+    set_time(&pipeline, 0.into());
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, 0 * gst::SECOND);
+    assert_buffer!(buffer, 0.into());
 
-    push_fallback_buffer(&pipeline, 1 * gst::SECOND);
-    push_buffer(&pipeline, 1 * gst::SECOND);
-    set_time(&pipeline, 1 * gst::SECOND);
+    push_fallback_buffer(&pipeline, gst::SECOND);
+    push_buffer(&pipeline, gst::SECOND);
+    set_time(&pipeline, gst::SECOND);
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, 1 * gst::SECOND);
+    assert_buffer!(buffer, gst::SECOND);
 
     push_buffer(&pipeline, 2 * gst::SECOND);
     push_fallback_buffer(&pipeline, 2 * gst::SECOND);
@@ -137,17 +137,17 @@ fn test_no_drops_but_no_fallback_frames_not_live() {
 fn test_no_drops_but_no_fallback_frames(live: bool) {
     let pipeline = setup_pipeline(Some(live));
 
-    push_buffer(&pipeline, 0 * gst::SECOND);
+    push_buffer(&pipeline, 0.into());
     // +10ms needed here because the immediate timeout will be always at running time 0, but
     // aggregator also adds the latency to it so we end up at 10ms instead.
-    set_time(&pipeline, 0 * gst::SECOND + 10 * gst::MSECOND);
+    set_time(&pipeline, 10 * gst::MSECOND);
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, 0 * gst::SECOND);
+    assert_buffer!(buffer, 0.into());
 
-    push_buffer(&pipeline, 1 * gst::SECOND);
-    set_time(&pipeline, 1 * gst::SECOND);
+    push_buffer(&pipeline, gst::SECOND);
+    set_time(&pipeline, gst::SECOND);
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, 1 * gst::SECOND);
+    assert_buffer!(buffer, gst::SECOND);
 
     push_buffer(&pipeline, 2 * gst::SECOND);
     set_time(&pipeline, 2 * gst::SECOND);
@@ -174,17 +174,17 @@ fn test_short_drop_not_live() {
 fn test_short_drop(live: bool) {
     let pipeline = setup_pipeline(Some(live));
 
-    push_buffer(&pipeline, 0 * gst::SECOND);
-    push_fallback_buffer(&pipeline, 0 * gst::SECOND);
-    set_time(&pipeline, 0 * gst::SECOND);
+    push_buffer(&pipeline, 0.into());
+    push_fallback_buffer(&pipeline, 0.into());
+    set_time(&pipeline, 0.into());
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, 0 * gst::SECOND);
+    assert_buffer!(buffer, 0.into());
 
     // A timeout at 1s will get rid of the fallback buffer
     // but not output anything
-    push_fallback_buffer(&pipeline, 1 * gst::SECOND);
+    push_fallback_buffer(&pipeline, gst::SECOND);
     // Time out the fallback buffer at +10ms
-    set_time(&pipeline, 1 * gst::SECOND + 10 * gst::MSECOND);
+    set_time(&pipeline, gst::SECOND + 10 * gst::MSECOND);
 
     push_fallback_buffer(&pipeline, 2 * gst::SECOND);
     push_buffer(&pipeline, 2 * gst::SECOND);
@@ -213,15 +213,15 @@ fn test_long_drop_and_eos(live: bool) {
     let pipeline = setup_pipeline(Some(live));
 
     // Produce the first frame
-    push_buffer(&pipeline, 0 * gst::SECOND);
-    push_fallback_buffer(&pipeline, 0 * gst::SECOND);
-    set_time(&pipeline, 0 * gst::SECOND);
+    push_buffer(&pipeline, 0.into());
+    push_fallback_buffer(&pipeline, 0.into());
+    set_time(&pipeline, 0.into());
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, 0 * gst::SECOND);
+    assert_buffer!(buffer, 0.into());
 
     // Produce a second frame but only from the fallback source
-    push_fallback_buffer(&pipeline, 1 * gst::SECOND);
-    set_time(&pipeline, 1 * gst::SECOND + 10 * gst::MSECOND);
+    push_fallback_buffer(&pipeline, gst::SECOND);
+    set_time(&pipeline, gst::SECOND + 10 * gst::MSECOND);
 
     // Produce a third frame but only from the fallback source
     push_fallback_buffer(&pipeline, 2 * gst::SECOND);
@@ -263,15 +263,15 @@ fn test_long_drop_and_recover(live: bool) {
     let pipeline = setup_pipeline(Some(live));
 
     // Produce the first frame
-    push_buffer(&pipeline, 0 * gst::SECOND);
-    push_fallback_buffer(&pipeline, 0 * gst::SECOND);
-    set_time(&pipeline, 0 * gst::SECOND);
+    push_buffer(&pipeline, 0.into());
+    push_fallback_buffer(&pipeline, 0.into());
+    set_time(&pipeline, 0.into());
     let buffer = pull_buffer(&pipeline);
-    assert_buffer!(buffer, 0 * gst::SECOND);
+    assert_buffer!(buffer, 0.into());
 
     // Produce a second frame but only from the fallback source
-    push_fallback_buffer(&pipeline, 1 * gst::SECOND);
-    set_time(&pipeline, 1 * gst::SECOND + 10 * gst::MSECOND);
+    push_fallback_buffer(&pipeline, gst::SECOND);
+    set_time(&pipeline, gst::SECOND + 10 * gst::MSECOND);
 
     // Produce a third frame but only from the fallback source
     push_fallback_buffer(&pipeline, 2 * gst::SECOND);
@@ -339,14 +339,14 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
     gst_debug!(TEST_CAT, "Setting up pipeline");
 
     let clock = gst_check::TestClock::new();
-    clock.set_time(0 * gst::SECOND);
+    clock.set_time(0.into());
     let pipeline = gst::Pipeline::new(None);
 
     // Running time 0 in our pipeline is going to be clock time 1s. All
     // clock ids before 1s are used for signalling to our clock advancing
     // thread.
     pipeline.use_clock(Some(&clock));
-    pipeline.set_base_time(1 * gst::SECOND);
+    pipeline.set_base_time(gst::SECOND);
     pipeline.set_start_time(gst::CLOCK_TIME_NONE);
 
     let src = gst::ElementFactory::make("appsrc", Some("src"))
@@ -416,10 +416,7 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    let clock_clone = clock.clone();
     let clock_join_handle = std::thread::spawn(move || {
-        let clock = clock_clone;
-
         loop {
             while let Some(clock_id) = clock.peek_next_pending_id().and_then(|clock_id| {
                 // Process if the clock ID is in the past or now

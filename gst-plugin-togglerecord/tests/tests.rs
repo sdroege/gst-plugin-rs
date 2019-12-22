@@ -46,6 +46,7 @@ enum SendData {
     Eos,
 }
 
+#[allow(clippy::type_complexity)]
 fn setup_sender_receiver(
     pipeline: &gst::Pipeline,
     togglerecord: &gst::Element,

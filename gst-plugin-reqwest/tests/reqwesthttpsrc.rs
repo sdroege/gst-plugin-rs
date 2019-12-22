@@ -925,10 +925,7 @@ fn test_seek_after_ready() {
     });
 
     let segment = h.wait_for_segment(false);
-    assert_eq!(
-        gst::format::Bytes::from(segment.get_start()),
-        gst::format::Bytes::from(123)
-    );
+    assert_eq!(segment.get_start(), gst::format::Bytes::from(123));
 
     let mut expected_output = vec![0; 8192 - 123];
     for (i, d) in expected_output.iter_mut().enumerate() {
@@ -1006,10 +1003,7 @@ fn test_seek_after_buffer_received() {
     });
 
     let segment = h.wait_for_segment(true);
-    assert_eq!(
-        gst::format::Bytes::from(segment.get_start()),
-        gst::format::Bytes::from(123)
-    );
+    assert_eq!(segment.get_start(), gst::format::Bytes::from(123));
 
     let mut expected_output = vec![0; 8192 - 123];
     for (i, d) in expected_output.iter_mut().enumerate() {
@@ -1094,14 +1088,8 @@ fn test_seek_with_stop_position() {
     });
 
     let segment = h.wait_for_segment(true);
-    assert_eq!(
-        gst::format::Bytes::from(segment.get_start()),
-        gst::format::Bytes::from(123)
-    );
-    assert_eq!(
-        gst::format::Bytes::from(segment.get_stop()),
-        gst::format::Bytes::from(131)
-    );
+    assert_eq!(segment.get_start(), gst::format::Bytes::from(123));
+    assert_eq!(segment.get_stop(), gst::format::Bytes::from(131));
 
     let mut expected_output = vec![0; 8];
     for (i, d) in expected_output.iter_mut().enumerate() {

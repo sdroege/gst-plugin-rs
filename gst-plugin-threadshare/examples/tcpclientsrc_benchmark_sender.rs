@@ -33,12 +33,11 @@ fn main() {
     let buffer = [0; 160];
     let wait = time::Duration::from_millis(20);
 
-    let streams = sockets.clone();
     loop {
         let now = time::Instant::now();
 
-        for mut stream in streams.lock().unwrap().iter() {
-            let _ = stream.write(&buffer);
+        for mut socket in sockets.lock().unwrap().iter() {
+            let _ = socket.write(&buffer);
         }
 
         let elapsed = now.elapsed();

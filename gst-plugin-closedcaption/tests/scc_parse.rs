@@ -90,9 +90,9 @@ fn test_parse() {
         );
     }
 
-    assert_eq!(input_len, 241152);
+    assert_eq!(input_len, 241_152);
     assert_eq!(output_len, 89084);
-    assert_eq!(checksum, 12554799);
+    assert_eq!(checksum, 12_554_799);
 
     let caps = h
         .get_sinkpad()
@@ -186,7 +186,7 @@ fn test_timecodes() {
     }
 
     assert_eq!(output_len, 1268);
-    assert_eq!(checksum, 174295);
+    assert_eq!(checksum, 174_295);
 
     let caps = h
         .get_sinkpad()

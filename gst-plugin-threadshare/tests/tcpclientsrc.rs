@@ -48,14 +48,12 @@ fn test_push() {
         use std::net;
 
         let listener = net::TcpListener::bind("0.0.0.0:5000").unwrap();
-        for stream in listener.incoming() {
-            let buffer = [0; 160];
-            let mut socket = stream.unwrap();
-            for _ in 0..3 {
-                let _ = socket.write(&buffer);
-                thread::sleep(time::Duration::from_millis(20));
-            }
-            break;
+        let stream = listener.incoming().next().unwrap();
+        let buffer = [0; 160];
+        let mut socket = stream.unwrap();
+        for _ in 0..3 {
+            let _ = socket.write(&buffer);
+            thread::sleep(time::Duration::from_millis(20));
         }
     });
 

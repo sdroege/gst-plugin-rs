@@ -142,13 +142,12 @@ fn multiple_contexts_queue() {
         match msg.view() {
             MessageView::StateChanged(state_changed) => {
                 if let Some(source) = state_changed.get_src() {
-                    if source.get_type() == gst::Pipeline::static_type() {
-                        if state_changed.get_old() == gst::State::Paused
-                            && state_changed.get_current() == gst::State::Playing
-                        {
-                            if let Some(test_scenario) = test_scenario.take() {
-                                std::thread::spawn(test_scenario);
-                            }
+                    if source.get_type() == gst::Pipeline::static_type()
+                        && state_changed.get_old() == gst::State::Paused
+                        && state_changed.get_current() == gst::State::Playing
+                    {
+                        if let Some(test_scenario) = test_scenario.take() {
+                            std::thread::spawn(test_scenario);
                         }
                     }
                 }
@@ -302,13 +301,12 @@ fn multiple_contexts_proxy() {
         match msg.view() {
             MessageView::StateChanged(state_changed) => {
                 if let Some(source) = state_changed.get_src() {
-                    if source.get_type() == gst::Pipeline::static_type() {
-                        if state_changed.get_old() == gst::State::Paused
-                            && state_changed.get_current() == gst::State::Playing
-                        {
-                            if let Some(test_scenario) = test_scenario.take() {
-                                std::thread::spawn(test_scenario);
-                            }
+                    if source.get_type() == gst::Pipeline::static_type()
+                        && state_changed.get_old() == gst::State::Paused
+                        && state_changed.get_current() == gst::State::Playing
+                    {
+                        if let Some(test_scenario) = test_scenario.take() {
+                            std::thread::spawn(test_scenario);
                         }
                     }
                 }

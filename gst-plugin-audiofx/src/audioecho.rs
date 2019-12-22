@@ -296,7 +296,7 @@ impl BaseTransformImpl for AudioEcho {
         }
 
         let info = gst_audio::AudioInfo::from_caps(incaps)
-            .or(Err(gst_loggable_error!(CAT, "Failed to parse input caps")))?;
+            .or_else(|_| Err(gst_loggable_error!(CAT, "Failed to parse input caps")))?;
         let max_delay = self.settings.lock().unwrap().max_delay;
         let size = max_delay * (info.rate() as u64) / gst::SECOND_VAL;
         let buffer_size = size * (info.channels() as u64);
