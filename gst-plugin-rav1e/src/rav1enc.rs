@@ -487,7 +487,7 @@ impl VideoEncoderImpl for Rav1Enc {
     fn set_format(
         &self,
         element: &gst_video::VideoEncoder,
-        state: &gst_video::VideoCodecState<gst_video::video_codec_state::Readable>,
+        state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         self.finish(element)
             .map_err(|_| gst_loggable_error!(CAT, "Failed to drain"))?;
