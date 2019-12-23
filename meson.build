@@ -44,6 +44,34 @@ foreach p, lib : plugins_rep
   output += [lib + '.' + ext]
 endforeach
 
+# Need to depends on all gstreamer-rs deps to ensure they are built
+# before gstreamer-rs when building with gst-build.
+# Custom targets can't depend on dependency() objects so we have to depend
+# on the library variable from the subproject instead.
+gst_req = '>= 1.14.0'
+depends = []
+
+deps = [
+  # name, subproject name, subproject dep, library object
+  ['gstreamer-1.0', 'gstreamer', 'gst_dep', 'libgst'],
+  ['gstreamer-app-1.0', 'gst-plugins-base', 'app_dep', 'gstapp'],
+  ['gstreamer-audio-1.0', 'gst-plugins-base', 'audio_dep', 'gstaudio'],
+  ['gstreamer-base-1.0', 'gstreamer', 'gst_base_dep', 'gst_base'],
+  ['gstreamer-check-1.0', 'gstreamer', 'gst_check_dep', 'gst_check'],
+  ['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net'],
+  ['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp'],
+  ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
+]
+
+foreach d: deps
+  dep = dependency(d[0], version : gst_req,
+    fallback : [d[1], d[2]])
+  if dep.type_name() == 'internal'
+    lib = subproject(d[1]).get_variable(d[3])
+    depends += lib
+  endif
+endforeach
+
 # Always build the target so we don't have to list all source files as input
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
@@ -51,6 +79,7 @@ rs_plugins = custom_target('gst-plugins-rs',
   console: true,
   install: false,
   build_always_stale: true,
+  depends: depends,
   command: [cargo_script,
     meson.current_build_dir(),
     meson.current_source_dir(),
