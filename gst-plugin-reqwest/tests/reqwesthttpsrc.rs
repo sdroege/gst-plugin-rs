@@ -51,10 +51,9 @@ impl Harness {
         http_func: F,
         setup_func: G,
     ) -> Harness {
-        use hyper::service::{make_service_fn, service_fn_ok};
+        use hyper::service::{make_service_fn, service_fn};
         use hyper::Server;
         use std::sync::{Arc, Mutex};
-        use tokio::prelude::*;
 
         // Create the HTTP source
         let src = gst::ElementFactory::make("reqwesthttpsrc", None).unwrap();
@@ -94,8 +93,10 @@ impl Harness {
         pad.set_active(true).unwrap();
 
         // Create the tokio runtime used for the HTTP server in this test
-        let mut rt = tokio::runtime::Builder::new()
+        let rt = tokio::runtime::Builder::new()
             .core_threads(1)
+            .enable_all()
+            .threaded_scheduler()
             .build()
             .unwrap();
 
@@ -108,20 +109,34 @@ impl Harness {
         let http_func = Arc::new(Mutex::new(http_func));
         let make_service = make_service_fn(move |_ctx| {
             let http_func = http_func.clone();
-            service_fn_ok(move |req| (&mut *http_func.lock().unwrap())(req))
+            async move {
+                let http_func = http_func.clone();
+                Ok::<_, hyper::Error>(service_fn(move |req| {
+                    let http_func = http_func.clone();
+                    async move { Ok::<_, hyper::Error>((&mut *http_func.lock().unwrap())(req)) }
+                }))
+            }
         });
 
-        // Bind the server, retrieve the local port that was selected in the end and set this as
-        // the location property on the source
-        let server = Server::bind(&addr).serve(make_service);
-        let local_addr = server.local_addr();
-        src.set_property("location", &format!("http://{}/", local_addr))
-            .unwrap();
+        let (local_addr_sender, local_addr_receiver) = tokio::sync::oneshot::channel();
 
         // Spawn the server in the background so that it can handle requests
-        rt.spawn(server.map_err(move |e| {
-            let _ = sender.send(Message::ServerError(format!("{:?}", e)));
-        }));
+        rt.spawn(async move {
+            // Bind the server, retrieve the local port that was selected in the end and set this as
+            // the location property on the source
+            let server = Server::bind(&addr).serve(make_service);
+            let local_addr = server.local_addr();
+
+            local_addr_sender.send(local_addr).unwrap();
+
+            if let Err(e) = server.await {
+                let _ = sender.send(Message::ServerError(format!("{:?}", e)));
+            }
+        });
+
+        let local_addr = futures::executor::block_on(local_addr_receiver).unwrap();
+        src.set_property("location", &format!("http://{}/", local_addr))
+            .unwrap();
 
         // Let the test setup anything needed on the HTTP source now
         setup_func(&src);
@@ -301,8 +316,6 @@ impl Harness {
 
 impl Drop for Harness {
     fn drop(&mut self) {
-        use tokio::prelude::*;
-
         // Shut down everything that was set up for this test harness
         // and wait until the tokio runtime exited
         let bus = self.src.get_bus().unwrap();
@@ -316,7 +329,7 @@ impl Drop for Harness {
         self.pad.set_active(false).unwrap();
         self.src.set_state(gst::State::Null).unwrap();
 
-        self.rt.take().unwrap().shutdown_now().wait().unwrap();
+        self.rt.take().unwrap();
     }
 }
 
