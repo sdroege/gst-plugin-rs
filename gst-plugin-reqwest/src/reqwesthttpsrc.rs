@@ -687,42 +687,13 @@ impl ReqwestHttpSrc {
             }
         };
 
-        let res = match block_on(&*RUNTIME, future) {
-            Ok(res) => res,
-            Err(_) => Err(Some(gst_error_msg!(
-                gst::ResourceError::Read,
-                ["Join error"]
-            ))),
-        };
+        let res = RUNTIME.enter(|| futures::executor::block_on(future));
 
         /* Clear out the canceller */
         let _ = self.canceller.lock().unwrap().take();
 
         res
     }
-}
-
-// Until tokio 0.2.0-alpha.6 `Runtime::block_on()` didn't require a mutable reference
-// to the runtime. Now it does and we need to work around that.
-// See https://github.com/tokio-rs/tokio/issues/2042
-fn block_on<F>(
-    runtime: &tokio::runtime::Runtime,
-    future: F,
-) -> Result<F::Output, tokio::task::JoinError>
-where
-    F: Send + Future,
-    F::Output: Send + 'static,
-{
-    use futures::task::FutureObj;
-    use std::mem;
-
-    let future = FutureObj::new(Box::pin(future));
-
-    // We make sure here to block until the future is completely handled before returning
-    let future = unsafe { mem::transmute::<_, FutureObj<'static, _>>(future) };
-
-    let join_handle = runtime.spawn(future);
-    futures::executor::block_on(join_handle)
 }
 
 impl ObjectImpl for ReqwestHttpSrc {
