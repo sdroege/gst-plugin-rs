@@ -296,7 +296,8 @@ rtp_stats_calculate_rtcp_interval (RTPSessionStats * stats, gboolean we_send,
  * Returns: the new RTCP interval.
  */
 GstClockTime
-rtp_stats_add_rtcp_jitter (RTPSessionStats * stats G_GNUC_UNUSED, GstClockTime interval)
+rtp_stats_add_rtcp_jitter (RTPSessionStats * stats G_GNUC_UNUSED,
+    GstClockTime interval)
 {
   gdouble temp;
 

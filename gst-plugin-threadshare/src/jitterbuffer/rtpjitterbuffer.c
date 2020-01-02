@@ -217,8 +217,8 @@ rtp_jitter_buffer_get_clock_rate (RTPJitterBuffer * jbuf)
 }
 
 static void
-media_clock_synced_cb (GstClock * clock G_GNUC_UNUSED, gboolean synced G_GNUC_UNUSED,
-    RTPJitterBuffer * jbuf)
+media_clock_synced_cb (GstClock * clock G_GNUC_UNUSED,
+    gboolean synced G_GNUC_UNUSED, RTPJitterBuffer * jbuf)
 {
   GstClockTime internal, external;
 
@@ -388,7 +388,8 @@ get_buffer_level (RTPJitterBuffer * jbuf)
   /* first buffer with timestamp */
   high_buf = (RTPJitterBufferItem *) g_queue_peek_tail_link (jbuf->packets);
   while (high_buf) {
-    if (high_buf->dts != GST_CLOCK_TIME_NONE || high_buf->pts != GST_CLOCK_TIME_NONE)
+    if (high_buf->dts != GST_CLOCK_TIME_NONE
+        || high_buf->pts != GST_CLOCK_TIME_NONE)
       break;
 
     high_buf = (RTPJitterBufferItem *) g_list_previous (high_buf);
@@ -396,7 +397,8 @@ get_buffer_level (RTPJitterBuffer * jbuf)
 
   low_buf = (RTPJitterBufferItem *) g_queue_peek_head_link (jbuf->packets);
   while (low_buf) {
-    if (low_buf->dts != GST_CLOCK_TIME_NONE || low_buf->pts != GST_CLOCK_TIME_NONE)
+    if (low_buf->dts != GST_CLOCK_TIME_NONE
+        || low_buf->pts != GST_CLOCK_TIME_NONE)
       break;
 
     low_buf = (RTPJitterBufferItem *) g_list_next (low_buf);
@@ -407,7 +409,8 @@ get_buffer_level (RTPJitterBuffer * jbuf)
   } else {
     guint64 high_ts, low_ts;
 
-    high_ts = high_buf->dts != GST_CLOCK_TIME_NONE ? high_buf->dts : high_buf->pts;
+    high_ts =
+        high_buf->dts != GST_CLOCK_TIME_NONE ? high_buf->dts : high_buf->pts;
     low_ts = low_buf->dts != GST_CLOCK_TIME_NONE ? low_buf->dts : low_buf->pts;
 
     if (high_ts > low_ts)
@@ -545,7 +548,8 @@ calculate_skew (RTPJitterBuffer * jbuf, guint64 ext_rtptime,
 
   /* we don't have an arrival timestamp so we can't do skew detection. we
    * should still apply a timestamp based on RTP timestamp and base_time */
-  if (time == GST_CLOCK_TIME_NONE || jbuf->base_time == GST_CLOCK_TIME_NONE || is_rtx)
+  if (time == GST_CLOCK_TIME_NONE || jbuf->base_time == GST_CLOCK_TIME_NONE
+      || is_rtx)
     goto no_skew;
 
   /* elapsed time at receiver, includes the jitter */
@@ -662,7 +666,7 @@ no_skew:
   if (jbuf->base_time != GST_CLOCK_TIME_NONE) {
     out_time = jbuf->base_time + send_diff;
     /* skew can be negative and we don't want to make invalid timestamps */
-    if (jbuf->skew < 0 && out_time < (GstClockTime) -jbuf->skew) {
+    if (jbuf->skew < 0 && out_time < (GstClockTime) - jbuf->skew) {
       out_time = 0;
     } else {
       out_time += jbuf->skew;
@@ -716,7 +720,8 @@ rtp_jitter_buffer_calculate_pts (RTPJitterBuffer * jbuf, GstClockTime dts,
    * (in seek and state change cycles), but not so much for TCP input */
   if (GST_CLOCK_TIME_IS_VALID (dts) && !estimated_dts &&
       jbuf->mode != RTP_JITTER_BUFFER_MODE_SLAVE &&
-      jbuf->base_time != GST_CLOCK_TIME_NONE && jbuf->last_rtptime != GST_CLOCK_TIME_NONE) {
+      jbuf->base_time != GST_CLOCK_TIME_NONE
+      && jbuf->last_rtptime != GST_CLOCK_TIME_NONE) {
     GstClockTime ext_rtptime = jbuf->ext_rtptime;
 
     ext_rtptime = gst_rtp_buffer_ext_timestamp (&ext_rtptime, rtptime);
@@ -739,7 +744,8 @@ rtp_jitter_buffer_calculate_pts (RTPJitterBuffer * jbuf, GstClockTime dts,
 
   /* Return the last time if we got the same RTP timestamp again */
   ext_rtptime = gst_rtp_buffer_ext_timestamp (&jbuf->ext_rtptime, rtptime);
-  if (jbuf->last_rtptime != GST_CLOCK_TIME_NONE && ext_rtptime == jbuf->last_rtptime) {
+  if (jbuf->last_rtptime != GST_CLOCK_TIME_NONE
+      && ext_rtptime == jbuf->last_rtptime) {
     return jbuf->prev_out_time;
   }
 
@@ -931,7 +937,8 @@ rtp_jitter_buffer_calculate_pts (RTPJitterBuffer * jbuf, GstClockTime dts,
 
   /* check if timestamps are not going backwards, we can only check this if we
    * have a previous out time and a previous send_diff */
-  if (G_LIKELY (pts != GST_CLOCK_TIME_NONE && jbuf->prev_out_time != GST_CLOCK_TIME_NONE
+  if (G_LIKELY (pts != GST_CLOCK_TIME_NONE
+          && jbuf->prev_out_time != GST_CLOCK_TIME_NONE
           && jbuf->prev_send_diff != -1)) {
     /* now check for backwards timestamps */
     if (G_UNLIKELY (
@@ -1379,7 +1386,8 @@ rtp_jitter_buffer_is_full (RTPJitterBuffer * jbuf)
 }
 
 void
-rtp_jitter_buffer_find_earliest (RTPJitterBuffer * jbuf, GstClockTime *pts, guint * seqnum)
+rtp_jitter_buffer_find_earliest (RTPJitterBuffer * jbuf, GstClockTime * pts,
+    guint * seqnum)
 {
   GList *tmp;
   RTPJitterBufferItem *earliest = NULL;
