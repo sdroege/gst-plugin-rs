@@ -10,7 +10,7 @@ else
 endif
 
 cargo = find_program('cargo', version:'>=1.39')
-cargo_script = find_program('cargo.py')
+cargo_wrapper = find_program('cargo_wrapper.py')
 
 system = build_machine.system()
 if system == 'windows'
@@ -88,7 +88,7 @@ rs_plugins = custom_target('gst-plugins-rs',
   install: false,
   build_always_stale: true,
   depends: depends,
-  command: [cargo_script,
+  command: [cargo_wrapper,
     meson.current_build_dir(),
     meson.current_source_dir(),
     meson.build_root(),
