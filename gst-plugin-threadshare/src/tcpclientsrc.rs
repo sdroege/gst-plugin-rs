@@ -17,7 +17,6 @@
 // Boston, MA 02110-1335, USA.
 
 use either::Either;
-use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::lock::{Mutex, MutexGuard};
 use futures::prelude::*;
@@ -44,10 +43,9 @@ use std::sync::Arc;
 use std::u16;
 
 use tokio::io::AsyncReadExt;
-use tokio::task::JoinHandle;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSrc, PadSrcRef};
+use crate::runtime::{self, Context, JoinHandle, PadSrc, PadSrcRef};
 
 use super::socket::{Socket, SocketRead, SocketStream};
 
@@ -340,7 +338,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = block_on(tcpclientsrc.pause(element));
+                let _ = runtime::executor::block_on(tcpclientsrc.pause(element));
                 true
             }
             EventView::FlushStop(..) => {
@@ -348,7 +346,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
                 if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
                     || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
-                    let _ = block_on(tcpclientsrc.start(element));
+                    let _ = runtime::executor::block_on(tcpclientsrc.start(element));
                 }
                 true
             }
@@ -385,7 +383,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let inner = block_on(self.lock());
+                let inner = runtime::executor::block_on(self.lock());
                 let caps = if let Some(ref caps) = inner.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
@@ -675,32 +673,27 @@ impl ObjectImpl for TcpClientSrc {
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
+        let mut settings = runtime::executor::block_on(self.settings.lock());
         match *prop {
             subclass::Property("address", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.address = value.get().expect("type checked upstream");
             }
             subclass::Property("port", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.port = value.get_some().expect("type checked upstream");
             }
             subclass::Property("caps", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.caps = value.get().expect("type checked upstream");
             }
             subclass::Property("chunk-size", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.chunk_size = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -710,31 +703,14 @@ impl ObjectImpl for TcpClientSrc {
     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
+        let settings = runtime::executor::block_on(self.settings.lock());
         match *prop {
-            subclass::Property("address", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.address.to_value())
-            }
-            subclass::Property("port", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.port.to_value())
-            }
-            subclass::Property("caps", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.caps.to_value())
-            }
-            subclass::Property("chunk-size", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.chunk_size.to_value())
-            }
-            subclass::Property("context", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.context.to_value())
-            }
-            subclass::Property("context-wait", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.context_wait.to_value())
-            }
+            subclass::Property("address", ..) => Ok(settings.address.to_value()),
+            subclass::Property("port", ..) => Ok(settings.port.to_value()),
+            subclass::Property("caps", ..) => Ok(settings.caps.to_value()),
+            subclass::Property("chunk-size", ..) => Ok(settings.chunk_size.to_value()),
+            subclass::Property("context", ..) => Ok(settings.context.to_value()),
+            subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
             _ => unimplemented!(),
         }
     }
@@ -759,22 +735,24 @@ impl ElementImpl for TcpClientSrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on(self.prepare(element)).map_err(|err| {
+                runtime::executor::block_on(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::ReadyToPaused => {
-                block_on(self.complete_preparation(element)).map_err(|err| {
+                runtime::executor::block_on(self.complete_preparation(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                block_on(self.pause(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.pause(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                block_on(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.unprepare(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -786,10 +764,11 @@ impl ElementImpl for TcpClientSrc {
                 success = gst::StateChangeSuccess::Success;
             }
             gst::StateChange::PausedToPlaying => {
-                block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.start(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PausedToReady => {
-                let mut src_pad_handler = block_on(self.src_pad_handler.lock());
+                let mut src_pad_handler = runtime::executor::block_on(self.src_pad_handler.lock());
                 src_pad_handler.need_initial_events = true;
             }
             _ => (),

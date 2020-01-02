@@ -18,7 +18,6 @@
 use either::Either;
 
 use futures::channel::oneshot;
-use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::prelude::*;
@@ -41,7 +40,7 @@ use std::collections::VecDeque;
 use std::{u32, u64};
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
+use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
 use super::dataqueue::{DataQueue, DataQueueItem};
 
@@ -372,7 +371,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
         } else {
             match event.view() {
                 EventView::FlushStart(..) => {
-                    let _ = block_on(queue.stop(element));
+                    let _ = runtime::executor::block_on(queue.stop(element));
                 }
                 EventView::FlushStop(..) => {
                     let (res, state, pending) = element.get_state(0.into());
@@ -380,7 +379,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
                         || res == Ok(gst::StateChangeSuccess::Async)
                             && pending == gst::State::Playing
                     {
-                        let _ = block_on(queue.start(element));
+                        let _ = runtime::executor::block_on(queue.start(element));
                     }
                 }
                 _ => (),
@@ -671,7 +670,7 @@ impl Queue {
             })?;
 
         self.src_pad
-            .prepare(context, &QueuePadSrcHandler {})
+            .prepare(context, &QueuePadSrcHandler)
             .await
             .map_err(|err| {
                 gst_error_msg!(
@@ -679,7 +678,7 @@ impl Queue {
                     ["Error joining Context: {:?}", err]
                 )
             })?;
-        self.sink_pad.prepare(&QueuePadSinkHandler {}).await;
+        self.sink_pad.prepare(&QueuePadSinkHandler).await;
 
         gst_debug!(CAT, obj: element, "Prepared");
 
@@ -812,26 +811,26 @@ impl ObjectImpl for Queue {
 
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let mut settings = block_on(self.settings.lock());
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.max_size_buffers = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-bytes", ..) => {
-                let mut settings = block_on(self.settings.lock());
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.max_size_bytes = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-time", ..) => {
-                let mut settings = block_on(self.settings.lock());
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.max_size_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
-                let mut settings = block_on(self.settings.lock());
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = block_on(self.settings.lock());
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -843,23 +842,23 @@ impl ObjectImpl for Queue {
 
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let settings = block_on(self.settings.lock());
+                let settings = runtime::executor::block_on(self.settings.lock());
                 Ok(settings.max_size_buffers.to_value())
             }
             subclass::Property("max-size-bytes", ..) => {
-                let settings = block_on(self.settings.lock());
+                let settings = runtime::executor::block_on(self.settings.lock());
                 Ok(settings.max_size_bytes.to_value())
             }
             subclass::Property("max-size-time", ..) => {
-                let settings = block_on(self.settings.lock());
+                let settings = runtime::executor::block_on(self.settings.lock());
                 Ok(settings.max_size_time.to_value())
             }
             subclass::Property("context", ..) => {
-                let settings = block_on(self.settings.lock());
+                let settings = runtime::executor::block_on(self.settings.lock());
                 Ok(settings.context.to_value())
             }
             subclass::Property("context-wait", ..) => {
-                let settings = block_on(self.settings.lock());
+                let settings = runtime::executor::block_on(self.settings.lock());
                 Ok(settings.context_wait.to_value())
             }
             _ => unimplemented!(),
@@ -885,16 +884,18 @@ impl ElementImpl for Queue {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on(self.prepare(element)).map_err(|err| {
+                runtime::executor::block_on(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PausedToReady => {
-                block_on(self.stop(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.stop(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                block_on(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.unprepare(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -902,7 +903,7 @@ impl ElementImpl for Queue {
         let success = self.parent_change_state(element, transition)?;
 
         if transition == gst::StateChange::ReadyToPaused {
-            block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
+            runtime::executor::block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
         }
 
         Ok(success)

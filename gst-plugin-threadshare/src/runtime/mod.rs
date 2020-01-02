@@ -44,19 +44,21 @@
 //! [`PadSink`]: pad/struct.PadSink.html
 
 pub mod executor;
-pub use executor::{Context, TaskOutput};
+pub use executor::{Context, JoinHandle, TaskOutput};
 
 pub mod pad;
 pub use pad::{PadSink, PadSinkRef, PadSrc, PadSrcRef, PadSrcWeak};
 
 pub mod pad_context;
-pub use pad_context::{PadContext, PadContextWeak};
+pub use pad_context::{PadContext, PadContextRef, PadContextWeak};
 
 pub mod prelude {
     pub use super::pad::{PadSinkHandler, PadSrcHandler};
 }
 
 pub mod task;
+
+pub mod time;
 
 use gst;
 use lazy_static::lazy_static;

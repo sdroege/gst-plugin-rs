@@ -17,7 +17,6 @@
 
 use either::Either;
 
-use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::lock::{Mutex, MutexGuard};
 use futures::prelude::*;
@@ -55,10 +54,8 @@ use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
 
-use tokio::task::JoinHandle;
-
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSrc, PadSrcRef};
+use crate::runtime::{self, Context, JoinHandle, PadSrc, PadSrcRef};
 
 use super::socket::{Socket, SocketRead, SocketStream};
 
@@ -508,7 +505,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = block_on(udpsrc.pause(element));
+                let _ = runtime::executor::block_on(udpsrc.pause(element));
                 true
             }
             EventView::FlushStop(..) => {
@@ -516,7 +513,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
                 if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
                     || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
-                    let _ = block_on(udpsrc.start(element));
+                    let _ = runtime::executor::block_on(udpsrc.start(element));
                 }
                 true
             }
@@ -554,7 +551,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let inner = block_on(self.lock());
+                let inner = runtime::executor::block_on(self.lock());
                 let caps = if let Some(ref caps) = inner.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
@@ -1032,29 +1029,24 @@ impl ObjectImpl for UdpSrc {
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
+        let mut settings = runtime::executor::block_on(self.settings.lock());
         match *prop {
             subclass::Property("address", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.address = value.get().expect("type checked upstream");
             }
             subclass::Property("port", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.port = value.get_some().expect("type checked upstream");
             }
             subclass::Property("reuse", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.reuse = value.get_some().expect("type checked upstream");
             }
             subclass::Property("caps", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.caps = value.get().expect("type checked upstream");
             }
             subclass::Property("mtu", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.mtu = value.get_some().expect("type checked upstream");
             }
             subclass::Property("socket", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.socket = value
                     .get::<gio::Socket>()
                     .expect("type checked upstream")
@@ -1064,18 +1056,15 @@ impl ObjectImpl for UdpSrc {
                 unreachable!();
             }
             subclass::Property("context", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             subclass::Property("retrieve-sender-address", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.retrieve_sender_address = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -1085,53 +1074,26 @@ impl ObjectImpl for UdpSrc {
     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
+        let settings = runtime::executor::block_on(self.settings.lock());
         match *prop {
-            subclass::Property("address", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.address.to_value())
-            }
-            subclass::Property("port", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.port.to_value())
-            }
-            subclass::Property("reuse", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.reuse.to_value())
-            }
-            subclass::Property("caps", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.caps.to_value())
-            }
-            subclass::Property("mtu", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.mtu.to_value())
-            }
-            subclass::Property("socket", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings
-                    .socket
-                    .as_ref()
-                    .map(GioSocketWrapper::as_socket)
-                    .to_value())
-            }
-            subclass::Property("used-socket", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings
-                    .used_socket
-                    .as_ref()
-                    .map(GioSocketWrapper::as_socket)
-                    .to_value())
-            }
-            subclass::Property("context", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.context.to_value())
-            }
-            subclass::Property("context-wait", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.context_wait.to_value())
-            }
+            subclass::Property("address", ..) => Ok(settings.address.to_value()),
+            subclass::Property("port", ..) => Ok(settings.port.to_value()),
+            subclass::Property("reuse", ..) => Ok(settings.reuse.to_value()),
+            subclass::Property("caps", ..) => Ok(settings.caps.to_value()),
+            subclass::Property("mtu", ..) => Ok(settings.mtu.to_value()),
+            subclass::Property("socket", ..) => Ok(settings
+                .socket
+                .as_ref()
+                .map(GioSocketWrapper::as_socket)
+                .to_value()),
+            subclass::Property("used-socket", ..) => Ok(settings
+                .used_socket
+                .as_ref()
+                .map(GioSocketWrapper::as_socket)
+                .to_value()),
+            subclass::Property("context", ..) => Ok(settings.context.to_value()),
+            subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
             subclass::Property("retrieve-sender-address", ..) => {
-                let settings = block_on(self.settings.lock());
                 Ok(settings.retrieve_sender_address.to_value())
             }
             _ => unimplemented!(),
@@ -1157,22 +1119,24 @@ impl ElementImpl for UdpSrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on(self.prepare(element)).map_err(|err| {
+                runtime::executor::block_on(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::ReadyToPaused => {
-                block_on(self.complete_preparation(element)).map_err(|err| {
+                runtime::executor::block_on(self.complete_preparation(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                block_on(self.pause(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.pause(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                block_on(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.unprepare(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -1184,10 +1148,11 @@ impl ElementImpl for UdpSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.start(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PausedToReady => {
-                block_on(async {
+                runtime::executor::block_on(async {
                     self.src_pad_handler.lock().await.need_initial_events = true;
                 });
             }

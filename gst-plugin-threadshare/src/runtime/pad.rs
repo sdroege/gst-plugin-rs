@@ -65,7 +65,6 @@
 
 use either::Either;
 
-use futures::executor::block_on;
 use futures::future;
 use futures::future::BoxFuture;
 use futures::lock::{Mutex, MutexGuard};
@@ -74,7 +73,7 @@ use futures::prelude::*;
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log, gst_loggable_error};
+use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_loggable_error};
 use gst::{FlowError, FlowSuccess};
 
 use std::fmt;
@@ -82,7 +81,7 @@ use std::marker::PhantomData;
 use std::sync;
 use std::sync::{Arc, Weak};
 
-use super::executor::Context;
+use super::executor::{self, Context};
 use super::pad_context::{PadContext, PadContextRef, PadContextWeak};
 use super::task::Task;
 use super::RUNTIME_CAT;
@@ -399,7 +398,7 @@ impl<'a> PadSrcRef<'a> {
         }
 
         if !active {
-            block_on(async {
+            executor::block_on(async {
                 self.strong.lock_state().await.is_initialized = false;
             });
         }
@@ -597,7 +596,7 @@ impl PadSrc {
         self.0.lock_state().await
     }
 
-    fn init_pad_functions<H: PadSrcHandler>(&self, handler: &H, context: Context) {
+    fn init_pad_functions<H: PadSrcHandler>(&self, handler: &H) {
         let handler_clone = handler.clone();
         let this_weak = self.downgrade();
         self.gst_pad()
@@ -649,7 +648,6 @@ impl PadSrc {
             .set_event_full_function(move |_gst_pad, parent, event| {
                 let handler = handler_clone.clone();
                 let this_weak = this_weak.clone();
-                let context = context.clone();
                 H::ElementImpl::catch_panic_pad_function(
                     parent,
                     || Err(FlowError::Error),
@@ -657,13 +655,11 @@ impl PadSrc {
                         let this_ref = this_weak.upgrade().expect("PadSrc no longer exists");
                         match handler.src_event_full(this_ref, imp, &element, event) {
                             Either::Left(res) => res,
-                            Either::Right(fut) => {
-                                // FIXME if we could check whether current thread is already
-                                // associated to an executor or not, we could `.await` here.
-                                // But I couldn't find a solution for this with current version
-                                // of `tokio`
-                                context.spawn(fut.map(drop));
-                                Ok(FlowSuccess::Ok)
+                            Either::Right(_fut) => {
+                                // See these threads:
+                                // https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/merge_requests/240#note_378446
+                                // https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/merge_requests/240#note_378454
+                                unimplemented!("Future handling in src_event*");
                             }
                         }
                     },
@@ -681,7 +677,12 @@ impl PadSrc {
                     || false,
                     move |imp, element| {
                         let this_ref = this_weak.upgrade().expect("PadSrc no longer exists");
-                        handler.src_query(this_ref, imp, &element, query)
+                        if !query.is_serialized() {
+                            handler.src_query(this_ref, imp, &element, query)
+                        } else {
+                            gst_fixme!(RUNTIME_CAT, obj: this_ref.gst_pad(), "Serialized Query not supported");
+                            false
+                        }
                     },
                 )
             });
@@ -706,9 +707,9 @@ impl PadSrc {
             .await
             .map_err(|_| PadContextError::ActiveTask)?;
 
-        state.pad_context = Some(PadContext::new(context.clone()));
+        state.pad_context = Some(PadContext::new(context));
 
-        self.init_pad_functions(handler, context);
+        self.init_pad_functions(handler);
 
         Ok(())
     }
@@ -1181,7 +1182,12 @@ impl PadSink {
                     || false,
                     move |imp, element| {
                         let this_ref = this_weak.upgrade().expect("PadSink no longer exists");
-                        handler.sink_query(this_ref, imp, &element, query)
+                        if !query.is_serialized() {
+                            handler.sink_query(this_ref, imp, &element, query)
+                        } else {
+                            gst_fixme!(RUNTIME_CAT, obj: this_ref.gst_pad(), "Serialized Query not supported");
+                            false
+                        }
                     },
                 )
             });
@@ -1191,15 +1197,24 @@ impl PadSink {
         pad_ctx: Arc<sync::Mutex<Option<PadContextWeak>>>,
         fut: impl Future<Output = Result<FlowSuccess, FlowError>> + Send + 'static,
     ) -> Result<FlowSuccess, FlowError> {
-        match *pad_ctx.lock().unwrap() {
-            Some(ref pad_ctx_weak) => match pad_ctx_weak.upgrade() {
-                Some(pad_ctx) => {
-                    pad_ctx.add_pending_task(fut.map(|res| res.map(drop)));
+        match pad_ctx
+            .lock()
+            .unwrap()
+            .as_ref()
+            .and_then(|pad_ctx_weak| pad_ctx_weak.upgrade())
+        {
+            Some(pad_ctx) => {
+                pad_ctx.add_pending_task(fut.map(|res| res.map(drop)));
+                Ok(FlowSuccess::Ok)
+            }
+            None => match Context::current() {
+                None => executor::block_on(fut),
+                Some(context) => {
+                    // Don't block the Context thread
+                    context.spawn(fut);
                     Ok(FlowSuccess::Ok)
                 }
-                None => block_on(fut),
             },
-            None => block_on(fut),
         }
     }
 

@@ -18,7 +18,6 @@
 use either::Either;
 
 use futures::channel::oneshot;
-use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::lock::{Mutex, MutexGuard};
 use futures::prelude::*;
@@ -42,7 +41,7 @@ use std::sync::{Arc, Weak};
 use std::{u32, u64};
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
+use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
 use super::dataqueue::{DataQueue, DataQueueItem};
 
@@ -364,7 +363,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         } else {
             match event.view() {
                 EventView::FlushStart(..) => {
-                    let _ = block_on(proxysink.stop(element));
+                    let _ = runtime::executor::block_on(proxysink.stop(element));
                 }
                 EventView::FlushStop(..) => {
                     let (res, state, pending) = element.get_state(0.into());
@@ -372,7 +371,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
                         || res == Ok(gst::StateChangeSuccess::Async)
                             && pending == gst::State::Paused
                     {
-                        let _ = block_on(proxysink.start(&element));
+                        let _ = runtime::executor::block_on(proxysink.start(&element));
                     }
                 }
                 _ => (),
@@ -380,7 +379,9 @@ impl PadSinkHandler for ProxySinkPadHandler {
 
             gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Fowarding non-serialized event {:?}", event);
             // FIXME proxysink can't forward directly to the src_pad of the proxysrc
-            let _ = block_on(proxysink.enqueue_item(&element, DataQueueItem::Event(event)));
+            let _ = runtime::executor::block_on(
+                proxysink.enqueue_item(&element, DataQueueItem::Event(event)),
+            );
 
             Either::Left(true)
         }
@@ -599,8 +600,8 @@ impl ProxySink {
         let mut state = self.state.lock().await;
         gst_debug!(SINK_CAT, obj: element, "Preparing");
 
-        let settings = self.settings.lock().await;
-        state.queue = match SharedQueue::get(&settings.proxy_context, true).await {
+        state.queue = match SharedQueue::get(&self.settings.lock().await.proxy_context, true).await
+        {
             Some(queue) => Some(queue),
             None => {
                 return Err(gst_error_msg!(
@@ -706,7 +707,7 @@ impl ObjectImpl for ProxySink {
 
         match *prop {
             subclass::Property("proxy-context", ..) => {
-                let mut settings = block_on(self.settings.lock());
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.proxy_context = value
                     .get()
                     .expect("type checked upstream")
@@ -721,7 +722,7 @@ impl ObjectImpl for ProxySink {
 
         match *prop {
             subclass::Property("proxy-context", ..) => {
-                let settings = block_on(self.settings.lock());
+                let settings = runtime::executor::block_on(self.settings.lock());
                 Ok(settings.proxy_context.to_value())
             }
             _ => unimplemented!(),
@@ -748,16 +749,18 @@ impl ElementImpl for ProxySink {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on(self.prepare(element)).map_err(|err| {
+                runtime::executor::block_on(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PausedToReady => {
-                block_on(self.stop(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.stop(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                block_on(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.unprepare(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -765,7 +768,7 @@ impl ElementImpl for ProxySink {
         let success = self.parent_change_state(element, transition)?;
 
         if transition == gst::StateChange::ReadyToPaused {
-            block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
+            runtime::executor::block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
         }
 
         Ok(success)
@@ -881,7 +884,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = block_on(proxysrc.pause(element));
+                let _ = runtime::executor::block_on(proxysrc.pause(element));
                 true
             }
             EventView::FlushStop(..) => {
@@ -889,7 +892,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
                 if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
                     || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
-                    let _ = block_on(proxysrc.start(element));
+                    let _ = runtime::executor::block_on(proxysrc.start(element));
                 }
                 true
             }
@@ -1032,7 +1035,7 @@ impl ProxySrc {
             })?;
 
         self.src_pad
-            .prepare(context, &ProxySrcPadHandler {})
+            .prepare(context, &ProxySrcPadHandler)
             .await
             .map_err(|err| {
                 gst_error_msg!(
@@ -1155,32 +1158,27 @@ impl ObjectImpl for ProxySrc {
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES_SRC[id];
 
+        let mut settings = runtime::executor::block_on(self.settings.lock());
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.max_size_buffers = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-bytes", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.max_size_bytes = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-time", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.max_size_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             subclass::Property("proxy-context", ..) => {
-                let mut settings = block_on(self.settings.lock());
                 settings.proxy_context = value
                     .get()
                     .expect("type checked upstream")
@@ -1193,31 +1191,14 @@ impl ObjectImpl for ProxySrc {
     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES_SRC[id];
 
+        let settings = runtime::executor::block_on(self.settings.lock());
         match *prop {
-            subclass::Property("max-size-buffers", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.max_size_buffers.to_value())
-            }
-            subclass::Property("max-size-bytes", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.max_size_bytes.to_value())
-            }
-            subclass::Property("max-size-time", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.max_size_time.to_value())
-            }
-            subclass::Property("context", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.context.to_value())
-            }
-            subclass::Property("context-wait", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.context_wait.to_value())
-            }
-            subclass::Property("proxy-context", ..) => {
-                let settings = block_on(self.settings.lock());
-                Ok(settings.proxy_context.to_value())
-            }
+            subclass::Property("max-size-buffers", ..) => Ok(settings.max_size_buffers.to_value()),
+            subclass::Property("max-size-bytes", ..) => Ok(settings.max_size_bytes.to_value()),
+            subclass::Property("max-size-time", ..) => Ok(settings.max_size_time.to_value()),
+            subclass::Property("context", ..) => Ok(settings.context.to_value()),
+            subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
+            subclass::Property("proxy-context", ..) => Ok(settings.proxy_context.to_value()),
             _ => unimplemented!(),
         }
     }
@@ -1242,16 +1223,18 @@ impl ElementImpl for ProxySrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on(self.prepare(element)).map_err(|err| {
+                runtime::executor::block_on(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                block_on(self.pause(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.pause(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                block_on(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.unprepare(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -1263,7 +1246,8 @@ impl ElementImpl for ProxySrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.start(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

@@ -27,9 +27,8 @@ use glib;
 use glib::{glib_boxed_derive_traits, glib_boxed_type};
 
 use std::marker::PhantomData;
-use std::time::Duration;
 
-use super::executor::{Context, ContextWeak, TaskOutput, TaskQueueId};
+use super::executor::{Context, ContextWeak, JoinHandle, TaskOutput, TaskQueueId};
 
 #[derive(Clone)]
 pub struct PadContextWeak {
@@ -91,7 +90,7 @@ impl<'a> PadContextRef<'a> {
         self.strong.downgrade()
     }
 
-    pub fn spawn<Fut>(&self, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+    pub fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
     where
         Fut: Future + Send + 'static,
         Fut::Output: Send + 'static,
@@ -116,27 +115,6 @@ impl<'a> PadContextRef<'a> {
 
     pub fn context(&self) -> &Context {
         &self.strong.context
-    }
-
-    /// Builds a `Future` to execute an `action` at [`Interval`]s.
-    ///
-    /// [`Interval`]: struct.Interval.html
-    pub fn interval<F, E, Fut>(&self, interval: Duration, f: F) -> impl Future<Output = Fut::Output>
-    where
-        F: Fn() -> Fut + Send + Sync + 'static,
-        E: Send + 'static,
-        Fut: Future<Output = Result<(), E>> + Send + 'static,
-    {
-        self.strong.interval(interval, f)
-    }
-
-    /// Builds a `Future` to execute an action after the given `delay` has elapsed.
-    pub fn delay_for<F, Fut>(&self, delay: Duration, f: F) -> impl Future<Output = Fut::Output>
-    where
-        F: FnOnce() -> Fut + Send + Sync + 'static,
-        Fut: Future + Send + 'static,
-    {
-        self.strong.delay_for(delay, f)
     }
 }
 
@@ -180,25 +158,6 @@ impl PadContextStrong {
     fn clear_pending_tasks(&self) {
         self.context.clear_task_queue(self.queue_id);
     }
-
-    #[inline]
-    fn interval<F, E, Fut>(&self, interval: Duration, f: F) -> impl Future<Output = Fut::Output>
-    where
-        F: Fn() -> Fut + Send + Sync + 'static,
-        E: Send + 'static,
-        Fut: Future<Output = Result<(), E>> + Send + 'static,
-    {
-        self.context.interval(interval, f)
-    }
-
-    #[inline]
-    pub fn delay_for<F, Fut>(&self, delay: Duration, f: F) -> impl Future<Output = Fut::Output>
-    where
-        F: FnOnce() -> Fut + Send + Sync + 'static,
-        Fut: Future + Send + 'static,
-    {
-        self.context.delay_for(delay, f)
-    }
 }
 
 impl std::fmt::Display for PadContextStrong {
@@ -231,7 +190,7 @@ impl PadContext {
         PadContextRef::new(self.0.context.clone(), self.0.queue_id)
     }
 
-    pub fn spawn<Fut>(&self, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+    pub fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
     where
         Fut: Future + Send + 'static,
         Fut::Output: Send + 'static,
@@ -245,27 +204,6 @@ impl PadContext {
 
     pub fn clear_pending_tasks(&self) {
         self.0.clear_pending_tasks();
-    }
-
-    /// Builds a `Future` to execute an `action` at [`Interval`]s.
-    ///
-    /// [`Interval`]: struct.Interval.html
-    pub fn interval<F, E, Fut>(&self, interval: Duration, f: F) -> impl Future<Output = Fut::Output>
-    where
-        F: Fn() -> Fut + Send + Sync + 'static,
-        E: Send + 'static,
-        Fut: Future<Output = Result<(), E>> + Send + 'static,
-    {
-        self.0.interval(interval, f)
-    }
-
-    /// Builds a `Future` to execute an action after the given `delay` has elapsed.
-    pub fn delay_for<F, Fut>(&self, delay: Duration, f: F) -> impl Future<Output = Fut::Output>
-    where
-        F: FnOnce() -> Fut + Send + Sync + 'static,
-        Fut: Future + Send + 'static,
-    {
-        self.0.delay_for(delay, f)
     }
 
     pub(super) fn new_sticky_event(&self) -> gst::Event {

@@ -1,4 +1,5 @@
-// Copyright (C) 2018 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2018-2019 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2019-2020 François Laignel <fengalin@free.fr>
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Library General Public
@@ -49,11 +50,15 @@ use gst::{gst_debug, gst_log, gst_trace};
 
 use lazy_static::lazy_static;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt;
 use std::io;
 use std::mem;
+use std::pin::Pin;
 use std::sync::mpsc as sync_mpsc;
 use std::sync::{Arc, Mutex, Weak};
+use std::task::Poll;
 use std::thread;
 use std::time::Duration;
 
@@ -73,52 +78,78 @@ lazy_static! {
     static ref CONTEXTS: Mutex<HashMap<String, Weak<ContextInner>>> = Mutex::new(HashMap::new());
 }
 
+thread_local!(static CURRENT_THREAD_CONTEXT: RefCell<Option<ContextWeak>> = RefCell::new(None));
+
+/// Blocks on `future`.
+///
+/// This function must NOT be called within a [`Context`] thread.
+///
+/// The reason is this would prevent any task operating on the
+/// [`Context`] from making progress.
+///
+/// # Panics
+///
+/// This function panics if called within a [`Context`] thread.
+///
+/// [`Context`]: struct.Context.html
+pub fn block_on<Fut: Future>(future: Fut) -> Fut::Output {
+    if Context::is_context_thread() {
+        panic!("Attempt to `block_on` within a `Context` thread");
+    }
+
+    // Not running in a Context thread so we can block
+    futures::executor::block_on(future)
+}
+
 struct ContextThread {
     name: String,
 }
 
 impl ContextThread {
-    fn start(name: &str, wait: u32) -> (tokio::runtime::Handle, ContextShutdown) {
-        let name_clone = name.into();
-
-        let mut context_thread = ContextThread { name: name_clone };
-
-        let (handle_sender, handle_receiver) = sync_mpsc::channel();
-        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
-
+    fn start(name: &str, wait: u32) -> Context {
+        let context_thread = ContextThread { name: name.into() };
+        let (context_sender, context_receiver) = sync_mpsc::channel();
         let join = thread::spawn(move || {
-            context_thread.spawn(wait, handle_sender, shutdown_receiver);
+            context_thread.spawn(wait, context_sender);
         });
 
-        let handle = handle_receiver.recv().expect("Context thread init failed");
+        let context = context_receiver.recv().expect("Context thread init failed");
+        *context.0.shutdown.join.lock().unwrap() = Some(join);
 
-        let shutdown = ContextShutdown {
-            name: name.into(),
-            shutdown: Some(shutdown_sender),
-            join: Some(join),
-        };
-
-        (handle, shutdown)
+        context
     }
 
-    fn spawn(
-        &mut self,
-        wait: u32,
-        handle_sender: sync_mpsc::Sender<tokio::runtime::Handle>,
-        shutdown_receiver: oneshot::Receiver<()>,
-    ) {
+    fn spawn(&self, wait: u32, context_sender: sync_mpsc::Sender<Context>) {
         gst_debug!(RUNTIME_CAT, "Started context thread '{}'", self.name);
 
         let mut runtime = tokio::runtime::Builder::new()
             .basic_scheduler()
+            .thread_name(self.name.clone())
             .enable_all()
             .max_throttling(Duration::from_millis(wait as u64))
             .build()
             .expect("Couldn't build the runtime");
 
-        handle_sender
-            .send(runtime.handle().clone())
-            .expect("Couldn't send context thread handle");
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+
+        let shutdown = ContextShutdown {
+            name: self.name.clone(),
+            shutdown: Some(shutdown_sender),
+            join: Mutex::new(None),
+        };
+
+        let context = Context(Arc::new(ContextInner {
+            name: self.name.clone(),
+            handle: Mutex::new(runtime.handle().clone()),
+            shutdown,
+            task_queues: Mutex::new((0, HashMap::new())),
+        }));
+
+        CURRENT_THREAD_CONTEXT.with(|cur_ctx| {
+            *cur_ctx.borrow_mut() = Some(context.downgrade());
+        });
+
+        context_sender.send(context).unwrap();
 
         let _ = runtime.block_on(shutdown_receiver);
     }
@@ -134,7 +165,7 @@ impl Drop for ContextThread {
 struct ContextShutdown {
     name: String,
     shutdown: Option<oneshot::Sender<()>>,
-    join: Option<thread::JoinHandle<()>>,
+    join: Mutex<Option<thread::JoinHandle<()>>>,
 }
 
 impl Drop for ContextShutdown {
@@ -151,7 +182,8 @@ impl Drop for ContextShutdown {
             "Waiting for context thread '{}' to shutdown",
             self.name
         );
-        let _ = self.join.take().unwrap().join();
+        let join_handle = self.join.lock().unwrap().take().unwrap();
+        let _ = join_handle.join();
     }
 }
 
@@ -169,12 +201,65 @@ glib_boxed_derive_traits!(TaskQueueId);
 pub type TaskOutput = Result<(), gst::FlowError>;
 type TaskQueue = FuturesUnordered<BoxFuture<'static, TaskOutput>>;
 
+pub struct JoinError(tokio::task::JoinError);
+
+impl fmt::Display for JoinError {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, fmt)
+    }
+}
+
+impl fmt::Debug for JoinError {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, fmt)
+    }
+}
+
+impl std::error::Error for JoinError {}
+
+impl From<tokio::task::JoinError> for JoinError {
+    fn from(src: tokio::task::JoinError) -> Self {
+        JoinError(src)
+    }
+}
+
+/// Wrapper for the underlying runtime JoinHandle implementation.
+pub struct JoinHandle<T>(tokio::task::JoinHandle<T>);
+
+unsafe impl<T: Send> Send for JoinHandle<T> {}
+unsafe impl<T: Send> Sync for JoinHandle<T> {}
+
+impl<T> From<tokio::task::JoinHandle<T>> for JoinHandle<T> {
+    fn from(src: tokio::task::JoinHandle<T>) -> Self {
+        JoinHandle(src)
+    }
+}
+
+impl<T> Unpin for JoinHandle<T> {}
+
+impl<T> Future for JoinHandle<T> {
+    type Output = Result<T, JoinError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        self.as_mut().0.poll_unpin(cx).map_err(JoinError::from)
+    }
+}
+
+impl<T> fmt::Debug for JoinHandle<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt.debug_struct("JoinHandle").finish()
+    }
+}
+
 #[derive(Debug)]
 struct ContextInner {
     name: String,
     handle: Mutex<tokio::runtime::Handle>,
     // Only used for dropping
-    _shutdown: ContextShutdown,
+    shutdown: ContextShutdown,
     task_queues: Mutex<(u64, HashMap<u64, TaskQueue>)>,
 }
 
@@ -221,14 +306,7 @@ impl Context {
             }
         }
 
-        let (handle, shutdown) = ContextThread::start(context_name, wait);
-
-        let context = Context(Arc::new(ContextInner {
-            name: context_name.into(),
-            handle: Mutex::new(handle),
-            _shutdown: shutdown,
-            task_queues: Mutex::new((0, HashMap::new())),
-        }));
+        let context = ContextThread::start(context_name, wait);
         contexts.insert(context_name.into(), Arc::downgrade(&context.0));
 
         gst_debug!(RUNTIME_CAT, "New Context '{}'", context.0.name);
@@ -252,12 +330,34 @@ impl Context {
         self.0.name.as_str()
     }
 
-    pub fn spawn<Fut>(&self, future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+    /// Returns `true` if a `Context` is running on current thread.
+    pub fn is_context_thread() -> bool {
+        CURRENT_THREAD_CONTEXT.with(|cur_ctx| cur_ctx.borrow().is_some())
+    }
+
+    /// Returns the `Context` running on current thread, if any.
+    pub fn current() -> Option<Context> {
+        CURRENT_THREAD_CONTEXT.with(|cur_ctx| {
+            cur_ctx
+                .borrow()
+                .as_ref()
+                .and_then(|ctx_weak| ctx_weak.upgrade())
+        })
+    }
+
+    pub fn enter<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        self.0.handle.lock().unwrap().enter(f)
+    }
+
+    pub fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
     where
         Fut: Future + Send + 'static,
         Fut::Output: Send + 'static,
     {
-        self.0.handle.lock().unwrap().spawn(future)
+        self.0.handle.lock().unwrap().spawn(future).into()
     }
 
     pub fn release_task_queue(&self, id: TaskQueueId) -> Option<TaskQueue> {
@@ -308,64 +408,35 @@ impl Context {
             None
         }
     }
-
-    /// Builds a `Future` to execute an `action` at [`Interval`]s.
-    ///
-    /// [`Interval`]: struct.Interval.html
-    pub fn interval<F, E, Fut>(&self, interval: Duration, f: F) -> impl Future<Output = Fut::Output>
-    where
-        F: Fn() -> Fut + Send + Sync + 'static,
-        E: Send + 'static,
-        Fut: Future<Output = Result<(), E>> + Send + 'static,
-    {
-        async move {
-            let mut interval = tokio::time::interval(interval);
-            loop {
-                interval.tick().await;
-                if let Err(err) = f().await {
-                    break Err(err);
-                }
-            }
-        }
-    }
-
-    /// Builds a `Future` to execute an action after the given `delay` has elapsed.
-    pub fn delay_for<F, Fut>(&self, delay: Duration, f: F) -> impl Future<Output = Fut::Output>
-    where
-        F: FnOnce() -> Fut + Send + Sync + 'static,
-        Fut: Future + Send + 'static,
-    {
-        async move {
-            tokio::time::delay_for(delay).await;
-            f().await
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
+    use futures;
     use futures::channel::mpsc;
-    use futures::future::abortable;
     use futures::lock::Mutex;
+    use futures::prelude::*;
 
     use gst;
 
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
     use std::sync::Arc;
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
 
-    use super::*;
+    use super::Context;
 
     type Item = i32;
 
-    const SLEEP_DURATION: u32 = 2;
-    const INTERVAL: Duration = std::time::Duration::from_millis(100 * SLEEP_DURATION as u64);
+    const SLEEP_DURATION_MS: u32 = 2;
+    const SLEEP_DURATION: Duration = Duration::from_millis(SLEEP_DURATION_MS as u64);
+    const DELAY: Duration = Duration::from_millis(SLEEP_DURATION_MS as u64 * 10);
 
     #[tokio::test]
     async fn user_drain_pending_tasks() {
         // Setup
         gst::init().unwrap();
 
-        let context = Context::acquire("user_drain_task_queue", SLEEP_DURATION).unwrap();
+        let context = Context::acquire("user_drain_task_queue", SLEEP_DURATION_MS).unwrap();
         let queue_id = context.acquire_task_queue_id();
 
         let (sender, mut receiver) = mpsc::channel(1);
@@ -404,105 +475,120 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delay_for() {
+    async fn block_on_within_tokio() {
+        let context = Context::acquire("block_on_within_tokio", SLEEP_DURATION_MS).unwrap();
+
+        let bytes_sent = crate::runtime::executor::block_on(context.spawn(async {
+            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
+            let socket = UdpSocket::bind(saddr).unwrap();
+            let mut socket = tokio::net::UdpSocket::from_std(socket).unwrap();
+            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4000);
+            socket.send_to(&[0; 10], saddr).await.unwrap()
+        }))
+        .unwrap();
+        assert_eq!(bytes_sent, 10);
+
+        let elapsed = crate::runtime::executor::block_on(context.spawn(async {
+            let now = Instant::now();
+            crate::runtime::time::delay_for(DELAY).await;
+            now.elapsed()
+        }))
+        .unwrap();
+        // Due to throttling, `Delay` may be fired earlier
+        assert!(elapsed + SLEEP_DURATION / 2 >= DELAY);
+    }
+
+    #[test]
+    fn block_on_from_sync() {
+        let context = Context::acquire("block_on_from_sync", SLEEP_DURATION_MS).unwrap();
+
+        let bytes_sent = crate::runtime::executor::block_on(context.spawn(async {
+            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5001);
+            let socket = UdpSocket::bind(saddr).unwrap();
+            let mut socket = tokio::net::UdpSocket::from_std(socket).unwrap();
+            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4000);
+            socket.send_to(&[0; 10], saddr).await.unwrap()
+        }))
+        .unwrap();
+        assert_eq!(bytes_sent, 10);
+
+        let elapsed = crate::runtime::executor::block_on(context.spawn(async {
+            let now = Instant::now();
+            crate::runtime::time::delay_for(DELAY).await;
+            now.elapsed()
+        }))
+        .unwrap();
+        // Due to throttling, `Delay` may be fired earlier
+        assert!(elapsed + SLEEP_DURATION / 2 >= DELAY);
+    }
+
+    #[test]
+    fn block_on_from_context() {
         gst::init().unwrap();
 
-        let context = Context::acquire("delay_for", SLEEP_DURATION).unwrap();
-
-        let (sender, receiver) = oneshot::channel();
-
-        let start = Instant::now();
-        let delayed_by_fut = context.delay_for(INTERVAL, move || {
-            async {
-                sender.send(42).unwrap();
-            }
+        let context = Context::acquire("block_on_from_context", SLEEP_DURATION_MS).unwrap();
+        let join_handle = context.spawn(async {
+            crate::runtime::executor::block_on(async {
+                crate::runtime::time::delay_for(DELAY).await;
+            });
         });
-        context.spawn(delayed_by_fut);
-
-        let _ = receiver.await.unwrap();
-        let delta = Instant::now() - start;
-        assert!(delta >= INTERVAL);
-        assert!(delta < INTERVAL * 2);
+        // Panic: attempt to `runtime::executor::block_on` within a `Context` thread
+        futures::executor::block_on(join_handle).unwrap_err();
     }
 
     #[tokio::test]
-    async fn interval_ok() {
+    async fn enter_context_from_tokio() {
         gst::init().unwrap();
 
-        let context = Context::acquire("interval_ok", SLEEP_DURATION).unwrap();
+        let context = Context::acquire("enter_context_from_tokio", SLEEP_DURATION_MS).unwrap();
+        let mut socket = context
+            .enter(|| {
+                let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5002);
+                let socket = UdpSocket::bind(saddr).unwrap();
+                tokio::net::UdpSocket::from_std(socket)
+            })
+            .unwrap();
 
-        let (sender, mut receiver) = mpsc::channel(1);
-        let sender: Arc<Mutex<mpsc::Sender<Instant>>> = Arc::new(Mutex::new(sender));
+        let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4000);
+        let bytes_sent = socket.send_to(&[0; 10], saddr).await.unwrap();
+        assert_eq!(bytes_sent, 10);
 
-        let (interval_fut, handle) = abortable(context.interval(INTERVAL, move || {
-            let sender = Arc::clone(&sender);
-            async move {
-                let instant = Instant::now();
-                sender.lock().await.send(instant).await.map_err(drop)
-            }
-        }));
-        context.spawn(interval_fut.map(drop));
-
-        let mut idx: u32 = 0;
-        let mut first = Instant::now();
-        while let Some(instant) = receiver.next().await {
-            if idx > 0 {
-                let delta = instant - first;
-                assert!(delta > INTERVAL * (idx - 1));
-                assert!(delta < INTERVAL * (idx + 1));
-            } else {
-                first = instant;
-            }
-            if idx == 3 {
-                handle.abort();
-                break;
-            }
-
-            idx += 1;
-        }
+        let elapsed = context.enter(|| {
+            futures::executor::block_on(async {
+                let now = Instant::now();
+                crate::runtime::time::delay_for(DELAY).await;
+                now.elapsed()
+            })
+        });
+        // Due to throttling, `Delay` may be fired earlier
+        assert!(elapsed + SLEEP_DURATION / 2 >= DELAY);
     }
 
-    #[tokio::test]
-    async fn interval_err() {
+    #[test]
+    fn enter_context_from_sync() {
         gst::init().unwrap();
 
-        let context = Context::acquire("interval_err", SLEEP_DURATION).unwrap();
+        let context = Context::acquire("enter_context_from_sync", SLEEP_DURATION_MS).unwrap();
+        let mut socket = context
+            .enter(|| {
+                let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5003);
+                let socket = UdpSocket::bind(saddr).unwrap();
+                tokio::net::UdpSocket::from_std(socket)
+            })
+            .unwrap();
 
-        let (sender, mut receiver) = mpsc::channel(1);
-        let sender: Arc<Mutex<mpsc::Sender<Instant>>> = Arc::new(Mutex::new(sender));
-        let interval_idx: Arc<Mutex<Item>> = Arc::new(Mutex::new(0));
+        let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4000);
+        let bytes_sent = futures::executor::block_on(socket.send_to(&[0; 10], saddr)).unwrap();
+        assert_eq!(bytes_sent, 10);
 
-        let interval_fut = context.interval(INTERVAL, move || {
-            let sender = Arc::clone(&sender);
-            let interval_idx = Arc::clone(&interval_idx);
-            async move {
-                let instant = Instant::now();
-                let mut idx = interval_idx.lock().await;
-                sender.lock().await.send(instant).await.unwrap();
-                *idx += 1;
-                if *idx < 3 {
-                    Ok(())
-                } else {
-                    Err(())
-                }
-            }
+        let elapsed = context.enter(|| {
+            futures::executor::block_on(async {
+                let now = Instant::now();
+                crate::runtime::time::delay_for(DELAY).await;
+                now.elapsed()
+            })
         });
-        context.spawn(interval_fut.map(drop));
-
-        let mut idx: u32 = 0;
-        let mut first = Instant::now();
-        while let Some(instant) = receiver.next().await {
-            if idx > 0 {
-                let delta = instant - first;
-                assert!(delta > INTERVAL * (idx - 1));
-                assert!(delta < INTERVAL * (idx + 1));
-            } else {
-                first = instant;
-            }
-
-            idx += 1;
-        }
-
-        assert_eq!(idx, 3);
+        // Due to throttling, `Delay` may be fired earlier
+        assert!(elapsed + SLEEP_DURATION / 2 >= DELAY);
     }
 }

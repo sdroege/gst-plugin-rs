@@ -1,4 +1,4 @@
-// Copyright (C) 2019 François Laignel <fengalin@free.fr>
+// Copyright (C) 2019-2020 François Laignel <fengalin@free.fr>
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Library General Public
@@ -18,7 +18,6 @@
 use either::Either;
 
 use futures::channel::mpsc;
-use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::prelude::*;
@@ -38,7 +37,7 @@ use std::boxed::Box;
 use std::sync::Arc;
 
 use gstthreadshare::runtime::prelude::*;
-use gstthreadshare::runtime::{Context, PadContext, PadSink, PadSinkRef, PadSrc, PadSrcRef};
+use gstthreadshare::runtime::{self, Context, PadContext, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
 const DEFAULT_CONTEXT: &str = "";
 const SLEEP_DURATION: u32 = 2;
@@ -151,7 +150,7 @@ impl PadSrcHandler for PadSrcHandlerTest {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = block_on(elem_src_test.pause(element));
+                let _ = runtime::executor::block_on(elem_src_test.pause(element));
                 true
             }
             EventView::FlushStop(..) => {
@@ -159,7 +158,7 @@ impl PadSrcHandler for PadSrcHandlerTest {
                 if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
                     || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
                 {
-                    let _ = block_on(elem_src_test.start(element));
+                    let _ = runtime::executor::block_on(elem_src_test.start(element));
                 }
                 true
             }
@@ -209,14 +208,13 @@ impl ElementSrcTest {
         let _state = self.state.lock().await;
         gst_debug!(SRC_CAT, obj: element, "Preparing");
 
-        let settings = self.settings.lock().await;
-
-        let context = Context::acquire(&settings.context, SLEEP_DURATION).map_err(|err| {
-            gst_error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Failed to acquire Context: {}", err]
-            )
-        })?;
+        let context = Context::acquire(&self.settings.lock().await.context, SLEEP_DURATION)
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to acquire Context: {}", err]
+                )
+            })?;
 
         self.src_pad
             .prepare(context, &self.src_pad_handler)
@@ -320,7 +318,7 @@ impl ObjectSubclass for ElementSrcTest {
 
         ElementSrcTest {
             src_pad,
-            src_pad_handler: PadSrcHandlerTest {},
+            src_pad_handler: PadSrcHandlerTest,
             state: Mutex::new(ElementSrcState::default()),
             settings: Mutex::new(settings),
         }
@@ -340,7 +338,7 @@ impl ObjectImpl for ElementSrcTest {
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
 
-                block_on(self.settings.lock()).context = context;
+                runtime::executor::block_on(self.settings.lock()).context = context;
             }
             _ => unimplemented!(),
         }
@@ -364,16 +362,18 @@ impl ElementImpl for ElementSrcTest {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on(self.prepare(element)).map_err(|err| {
+                runtime::executor::block_on(self.prepare(element)).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                block_on(self.pause(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.pause(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                block_on(self.unprepare(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.unprepare(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -382,7 +382,8 @@ impl ElementImpl for ElementSrcTest {
 
         match transition {
             gst::StateChange::PausedToPlaying => {
-                block_on(self.start(element)).map_err(|_| gst::StateChangeError)?;
+                runtime::executor::block_on(self.start(element))
+                    .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
@@ -516,7 +517,7 @@ impl PadSinkHandler for PadSinkHandlerTest {
         } else {
             gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Fowarding non-serialized event {:?}", event);
             Either::Left(
-                block_on(elem_sink_test.sender.lock())
+                runtime::executor::block_on(elem_sink_test.sender.lock())
                     .as_mut()
                     .expect("ItemSender not set")
                     .try_send(Item::Event(event))
@@ -633,7 +634,7 @@ impl ObjectImpl for ElementSinkTest {
                     .expect("type checked upstream")
                     .expect("ItemSender not found")
                     .clone();
-                *block_on(self.sender.lock()) = Some(sender);
+                *runtime::executor::block_on(self.sender.lock()) = Some(sender);
             }
             _ => unimplemented!(),
         }
@@ -657,10 +658,10 @@ impl ElementImpl for ElementSinkTest {
 
         match transition {
             gst::StateChange::NullToReady => {
-                block_on(self.sink_pad.prepare(&PadSinkHandlerTest {}));
+                runtime::executor::block_on(self.sink_pad.prepare(&PadSinkHandlerTest));
             }
             gst::StateChange::ReadyToNull => {
-                block_on(self.sink_pad.unprepare());
+                runtime::executor::block_on(self.sink_pad.unprepare());
             }
             _ => (),
         }
@@ -714,7 +715,7 @@ fn task() {
     pipeline.set_state(gst::State::Playing).unwrap();
 
     // Initial events
-    block_on(
+    runtime::executor::block_on(
         elem_src_test.try_push(Item::Event(
             gst::Event::new_stream_start("stream_id_task_test")
                 .group_id(gst::util_group_id_next())
@@ -723,7 +724,7 @@ fn task() {
     )
     .unwrap();
 
-    match block_on(receiver.next()).unwrap() {
+    match runtime::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             gst::EventView::CustomDownstreamSticky(e) => {
                 assert!(PadContext::is_pad_context_sticky_event(&e))
@@ -733,7 +734,7 @@ fn task() {
         other => panic!("Unexpected item {:?}", other),
     }
 
-    match block_on(receiver.next()).unwrap() {
+    match runtime::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             gst::EventView::StreamStart(_) => (),
             other => panic!("Unexpected event {:?}", other),
@@ -741,12 +742,12 @@ fn task() {
         other => panic!("Unexpected item {:?}", other),
     }
 
-    block_on(elem_src_test.try_push(Item::Event(
+    runtime::executor::block_on(elem_src_test.try_push(Item::Event(
         gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
     )))
     .unwrap();
 
-    match block_on(receiver.next()).unwrap() {
+    match runtime::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             gst::EventView::Segment(_) => (),
             other => panic!("Unexpected event {:?}", other),
@@ -755,10 +756,12 @@ fn task() {
     }
 
     // Buffer
-    block_on(elem_src_test.try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4]))))
-        .unwrap();
+    runtime::executor::block_on(
+        elem_src_test.try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4]))),
+    )
+    .unwrap();
 
-    match block_on(receiver.next()).unwrap() {
+    match runtime::executor::block_on(receiver.next()).unwrap() {
         Item::Buffer(buffer) => {
             let data = buffer.map_readable().unwrap();
             assert_eq!(data.as_slice(), vec![1, 2, 3, 4].as_slice());
@@ -771,9 +774,9 @@ fn task() {
     list.get_mut()
         .unwrap()
         .add(gst::Buffer::from_slice(vec![1, 2, 3, 4]));
-    block_on(elem_src_test.try_push(Item::BufferList(list))).unwrap();
+    runtime::executor::block_on(elem_src_test.try_push(Item::BufferList(list))).unwrap();
 
-    match block_on(receiver.next()).unwrap() {
+    match runtime::executor::block_on(receiver.next()).unwrap() {
         Item::BufferList(_) => (),
         other => panic!("Unexpected item {:?}", other),
     }
@@ -782,8 +785,10 @@ fn task() {
     pipeline.set_state(gst::State::Paused).unwrap();
 
     // Items not longer accepted
-    block_on(elem_src_test.try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4]))))
-        .unwrap_err();
+    runtime::executor::block_on(
+        elem_src_test.try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4]))),
+    )
+    .unwrap_err();
 
     // Nothing forwarded
     receiver.try_next().unwrap_err();
@@ -810,8 +815,9 @@ fn task() {
         .unwrap());
 
     // EOS
-    block_on(elem_src_test.try_push(Item::Event(gst::Event::new_eos().build()))).unwrap();
-    match block_on(receiver.next()).unwrap() {
+    runtime::executor::block_on(elem_src_test.try_push(Item::Event(gst::Event::new_eos().build())))
+        .unwrap();
+    match runtime::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
             gst::EventView::Eos(_) => (),
             other => panic!("Unexpected event {:?}", other),
@@ -823,7 +829,7 @@ fn task() {
     pipeline.set_state(gst::State::Ready).unwrap();
 
     // Receiver was dropped when stopping => can't send anymore
-    block_on(
+    runtime::executor::block_on(
         elem_src_test.try_push(Item::Event(
             gst::Event::new_stream_start("stream_id_task_test_past_stop")
                 .group_id(gst::util_group_id_next())

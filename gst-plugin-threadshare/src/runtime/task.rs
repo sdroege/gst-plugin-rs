@@ -29,7 +29,7 @@ use gst::{gst_debug, gst_log, gst_trace, gst_warning};
 use std::fmt;
 use std::sync::Arc;
 
-use super::{Context, RUNTIME_CAT};
+use super::{Context, JoinHandle, RUNTIME_CAT};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TaskError {
@@ -51,7 +51,7 @@ struct TaskInner {
     context: Option<Context>,
     state: TaskState,
     abort_handle: Option<AbortHandle>,
-    loop_handle: Option<tokio::task::JoinHandle<Result<(), Aborted>>>,
+    loop_handle: Option<JoinHandle<Result<(), Aborted>>>,
 }
 
 impl Default for TaskInner {

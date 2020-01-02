@@ -21,7 +21,7 @@ gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gst
 gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
 pin-project = "0.4"
-tokio = { git = "https://github.com/fengalin/tokio", branch = "fengalin/0.2.5-throttling", features = ["io-util", "macros", "rt-core", "sync", "time", "tcp", "udp"] }
+tokio = { git = "https://github.com/fengalin/tokio", branch = "fengalin/throttling_20200105", features = ["io-util", "macros", "rt-core", "sync", "stream", "time", "tcp", "udp"] }
 futures = "0.3"
 lazy_static = "1.0"
 either = "1.0"
