@@ -114,7 +114,9 @@ gst_aggregator_start_time_selection_get_type (void)
       {0, NULL, NULL}
     };
 
-    gtype = g_enum_register_static ("GstAggregatorFallbackStartTimeSelection", values);
+    gtype =
+        g_enum_register_static ("GstAggregatorFallbackStartTimeSelection",
+        values);
   }
   return gtype;
 }
@@ -405,7 +407,8 @@ gst_aggregator_pad_queue_is_empty (GstAggregatorPad * pad)
  * their queue
  */
 static gboolean
-gst_aggregator_check_pads_ready (GstAggregator * self, gboolean * have_event_or_query_ret)
+gst_aggregator_check_pads_ready (GstAggregator * self,
+    gboolean * have_event_or_query_ret)
 {
   GstAggregatorPad *pad = NULL;
   GList *l, *sinkpads;
@@ -429,8 +432,9 @@ gst_aggregator_check_pads_ready (GstAggregator * self, gboolean * have_event_or_
      * have taken the top buffer out and stored it as clip_buffer, remember
      * that and exit the loop. We first have to handle all events/queries
      * before we handle any buffers. */
-    if (!pad->priv->clipped_buffer && (GST_IS_EVENT (g_queue_peek_tail (&pad->priv->data)) ||
-        GST_IS_QUERY (g_queue_peek_tail (&pad->priv->data)))) {
+    if (!pad->priv->clipped_buffer
+        && (GST_IS_EVENT (g_queue_peek_tail (&pad->priv->data))
+            || GST_IS_QUERY (g_queue_peek_tail (&pad->priv->data)))) {
       PAD_UNLOCK (pad);
       have_event_or_query = TRUE;
       break;
@@ -438,7 +442,8 @@ gst_aggregator_check_pads_ready (GstAggregator * self, gboolean * have_event_or_
 
     /* Otherwise check if we have a clipped buffer or a buffer at the top of
      * the queue, and if not then this pad is not ready unless it is also EOS */
-    if (!pad->priv->clipped_buffer && !GST_IS_BUFFER (g_queue_peek_tail (&pad->priv->data))) {
+    if (!pad->priv->clipped_buffer
+        && !GST_IS_BUFFER (g_queue_peek_tail (&pad->priv->data))) {
       /* We must not have any buffers at all in this pad then as otherwise we
        * would've had an event/query at the top of the queue */
       g_assert (pad->priv->num_buffers == 0);
@@ -497,7 +502,8 @@ pad_not_ready:
   }
 pad_not_ready_but_event_or_query:
   {
-    GST_LOG_OBJECT (pad, "pad not ready to be aggregated yet, need to handle serialized event or query first");
+    GST_LOG_OBJECT (pad,
+        "pad not ready to be aggregated yet, need to handle serialized event or query first");
     GST_OBJECT_UNLOCK (self);
 
     if (have_event_or_query_ret)
