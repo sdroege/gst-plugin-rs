@@ -29,6 +29,7 @@ fn main() {
         "PACKAGE_BUGREPORT",
         "\"https://gitlab.freedesktop.org/gstreamer/gstreamer/issues/new\"",
     );
+    build.extra_warnings(false);
     build.define("GstAggregator", "GstAggregatorFallback");
     build.define("GstAggregatorClass", "GstAggregatorFallbackClass");
     build.define("GstAggregatorPrivate", "GstAggregatorFallbackPrivate");
