@@ -25,7 +25,6 @@ plugins_rep = {
   'gst-plugin-audiofx': 'libgstrsaudiofx',
   'gst-plugin-cdg': 'libgstcdg',
   'gst-plugin-closedcaption': 'libgstrsclosedcaption',
-  'gst-plugin-dav1d': 'libgstrsdav1d',
   'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
   'gst-plugin-file': 'libgstrsfile',
   'gst-plugin-flv': 'libgstrsflv',
@@ -37,6 +36,14 @@ plugins_rep = {
   'gst-plugin-threadshare': 'libgstthreadshare',
   'gst-plugin-togglerecord': 'libgsttogglerecord',
 }
+
+exclude = []
+
+if dependency('dav1d', required : false).found()
+  plugins_rep += {'gst-plugin-dav1d' : 'libgstrsdav1d'}
+else
+  exclude += ['gst-plugin-dav1d']
+endif
 
 output = []
 
@@ -86,7 +93,8 @@ rs_plugins = custom_target('gst-plugins-rs',
     meson.current_source_dir(),
     meson.build_root(),
     target,
-    ext])
+    ext,
+    ','.join(exclude)])
 
 # FIXME: raises a warning as the target has multiple outputs and meson will use
 # only the first one. All the plugins have the same basedir, hence

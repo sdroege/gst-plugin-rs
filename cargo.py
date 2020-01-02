@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import sys
 
-meson_build_dir, meson_current_source_dir, meson_build_root, target, ext = sys.argv[1:]
+meson_build_dir, meson_current_source_dir, meson_build_root, target, ext, exclude = sys.argv[1:]
 
 cargo_target_dir = os.path.join(meson_build_dir, 'target')
 
@@ -27,9 +27,14 @@ env['PKG_CONFIG_PATH'] = ':'.join(pkg_config_path)
 
 # cargo build
 cargo_cmd = ['cargo', 'build', '--manifest-path',
-             os.path.join(meson_current_source_dir, 'Cargo.toml')]
+             os.path.join(meson_current_source_dir, 'Cargo.toml'),
+             '--workspace']
 if target == 'release':
     cargo_cmd.append('--release')
+
+for e in exclude.split(','):
+    cargo_cmd.append('--exclude')
+    cargo_cmd.append(e)
 
 try:
     subprocess.run(cargo_cmd, env=env, check=True)
