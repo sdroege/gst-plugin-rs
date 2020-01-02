@@ -498,6 +498,10 @@ impl ObjectSubclass for SccParse {
 
         let caps = gst::Caps::builder("closedcaption/x-cea-608")
             .field("format", &"raw")
+            .field(
+                "framerate",
+                &gst::List::new(&[&gst::Fraction::new(30000, 1001), &gst::Fraction::new(30, 1)]),
+            )
             .build();
         let src_pad_template = gst::PadTemplate::new(
             "src",

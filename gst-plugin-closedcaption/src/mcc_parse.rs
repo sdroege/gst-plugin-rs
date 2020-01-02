@@ -1205,14 +1205,20 @@ impl ObjectSubclass for MccParse {
         let mut caps = gst::Caps::new_empty();
         {
             let caps = caps.get_mut().unwrap();
+            let framerate = gst::FractionRange::new(
+                gst::Fraction::new(1, std::i32::MAX),
+                gst::Fraction::new(std::i32::MAX, 1),
+            );
 
             let s = gst::Structure::builder("closedcaption/x-cea-708")
                 .field("format", &"cdp")
+                .field("framerate", &framerate)
                 .build();
             caps.append_structure(s);
 
             let s = gst::Structure::builder("closedcaption/x-cea-608")
                 .field("format", &"s334-1a")
+                .field("framerate", &framerate)
                 .build();
             caps.append_structure(s);
         }
