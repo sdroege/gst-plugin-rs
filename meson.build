@@ -39,7 +39,7 @@ plugins_rep = {
 
 exclude = []
 
-if dependency('dav1d', required : false).found()
+if dependency('dav1d', required : get_option('dav1d')).found()
   plugins_rep += {'gst-plugin-dav1d' : 'libgstrsdav1d'}
 else
   exclude += ['gst-plugin-dav1d']

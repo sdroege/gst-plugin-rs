@@ -1,0 +1,1 @@
+option('dav1d', type : 'feature', value : 'auto', description : 'Build dav1d plugin')
