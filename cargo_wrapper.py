@@ -32,9 +32,10 @@ cargo_cmd = ['cargo', 'build', '--manifest-path',
 if target == 'release':
     cargo_cmd.append('--release')
 
-for e in exclude.split(','):
-    cargo_cmd.append('--exclude')
-    cargo_cmd.append(e)
+if len(exclude) > 0:
+    for e in exclude.split(','):
+        cargo_cmd.append('--exclude')
+        cargo_cmd.append(e)
 
 try:
     subprocess.run(cargo_cmd, env=env, check=True)
