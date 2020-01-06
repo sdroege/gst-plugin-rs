@@ -15,11 +15,7 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-//! A wrapper on a [`Context`] with additional features for [`PadSrc`] & [`PadSink`].
-//!
-//! [`Context`]: ../executor/struct.Context.html
-//! [`PadSrc`]: ../pad/struct.PadSrc.html
-//! [`PadSink`]: ../pad/struct.PadSink.html
+//! Types that allow `Pad`s to operate within the threadshare runtime.
 
 use futures::prelude::*;
 
@@ -214,6 +210,15 @@ impl PadContext {
     #[inline]
     pub fn is_pad_context_sticky_event(event: &gst::event::CustomDownstreamSticky) -> bool {
         event.get_structure().unwrap().get_name() == "ts-pad-context"
+    }
+
+    #[inline]
+    pub fn is_pad_context_event(event: &gst::Event) -> bool {
+        if let gst::EventView::CustomDownstreamSticky(e) = event.view() {
+            return Self::is_pad_context_sticky_event(&e);
+        }
+
+        false
     }
 
     pub fn check_pad_context_event(event: &gst::Event) -> Option<PadContextWeak> {

@@ -32,7 +32,6 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error_msg, gst_info, gst_log, gst_trace};
-use gst::{EventView, QueryView};
 use gst_rtp::RTPBuffer;
 
 use lazy_static::lazy_static;
@@ -43,7 +42,7 @@ use std::time::Duration;
 
 use crate::runtime::prelude::*;
 use crate::runtime::{
-    self, Context, JoinHandle, PadContext, PadContextRef, PadSink, PadSinkRef, PadSrc, PadSrcRef,
+    self, Context, JoinHandle, PadContext, PadSink, PadSinkRef, PadSrc, PadSrcRef, PadSrcWeak,
 };
 
 use super::{RTPJitterBuffer, RTPJitterBufferItem, RTPPacketRateCtx};
@@ -160,7 +159,7 @@ impl PadSinkHandler for JitterBufferPadSinkHandler {
 
     fn sink_chain(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         _jitterbuffer: &JitterBuffer,
         element: &gst::Element,
         buffer: gst::Buffer,
@@ -170,7 +169,7 @@ impl PadSinkHandler for JitterBufferPadSinkHandler {
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
 
-            gst_debug!(CAT, obj: pad.gst_pad(), "Handling buffer {:?}", buffer);
+            gst_debug!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
             let jitterbuffer = JitterBuffer::from_instance(&element);
             jitterbuffer
                 .enqueue_item(pad.gst_pad(), &element, Some(buffer))
@@ -181,69 +180,74 @@ impl PadSinkHandler for JitterBufferPadSinkHandler {
 
     fn sink_event(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         jitterbuffer: &JitterBuffer,
         element: &gst::Element,
         event: gst::Event,
     ) -> Either<bool, BoxFuture<'static, bool>> {
+        use gst::EventView;
+
         if event.is_serialized() {
             let pad_weak = pad.downgrade();
             let element = element.clone();
-            Either::Right(async move {
-                let pad = pad_weak.upgrade().expect("PadSink no longer exists");
+            Either::Right(
+                async move {
+                    let pad = pad_weak.upgrade().expect("PadSink no longer exists");
 
-                let mut forward = true;
+                    let mut forward = true;
 
-                gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
+                    gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
-                let jitterbuffer = JitterBuffer::from_instance(&element);
-                match event.view() {
-                    EventView::Segment(e) => {
-                        let mut state = jitterbuffer.state.lock().await;
-                        state.segment = e
-                            .get_segment()
-                            .clone()
-                            .downcast::<gst::format::Time>()
-                            .unwrap();
-                    }
-                    EventView::Eos(..) => {
-                        let mut state = jitterbuffer.state.lock().await;
-                        jitterbuffer.drain(&mut state, &element).await;
-                    }
-                    EventView::CustomDownstreamSticky(e) => {
-                        if PadContext::is_pad_context_sticky_event(&e) {
-                            forward = false;
+                    let jitterbuffer = JitterBuffer::from_instance(&element);
+                    match event.view() {
+                        EventView::FlushStop(..) => {
+                            jitterbuffer.flush(&element).await;
                         }
+                        EventView::Segment(e) => {
+                            let mut state = jitterbuffer.state.lock().await;
+                            state.segment = e
+                                .get_segment()
+                                .clone()
+                                .downcast::<gst::format::Time>()
+                                .unwrap();
+                        }
+                        EventView::Eos(..) => {
+                            let mut state = jitterbuffer.state.lock().await;
+                            jitterbuffer.drain(&mut state, &element).await;
+                        }
+                        EventView::CustomDownstreamSticky(e) => {
+                            if PadContext::is_pad_context_sticky_event(&e) {
+                                forward = false;
+                            }
+                        }
+                        _ => (),
+                    };
+
+                    if forward {
+                        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding serialized {:?}", event);
+                        jitterbuffer.src_pad.push_event(event).await
+                    } else {
+                        true
                     }
-                    _ => (),
-                };
-
-                if forward {
-                    gst_log!(CAT, obj: pad.gst_pad(), "Forwarding serialized event {:?}", event);
-                    jitterbuffer.src_pad.push_event(event).await
-                } else {
-                    true
                 }
-            }.boxed())
+                .boxed(),
+            )
         } else {
-            if let EventView::FlushStop(..) = event.view() {
-                runtime::executor::block_on(jitterbuffer.flush(element));
-            }
-
-            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized event {:?}", event);
-
+            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized {:?}", event);
             Either::Left(jitterbuffer.src_pad.gst_pad().push_event(event))
         }
     }
 
     fn sink_query(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         jitterbuffer: &JitterBuffer,
         element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+        use gst::QueryView;
+
+        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
 
         match query.view_mut() {
             QueryView::Drain(..) => {
@@ -264,12 +268,14 @@ impl PadSrcHandler for JitterBufferPadSrcHandler {
 
     fn src_query(
         &self,
-        pad: PadSrcRef,
+        pad: &PadSrcRef,
         jitterbuffer: &JitterBuffer,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+        use gst::QueryView;
+
+        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
 
         match query.view_mut() {
             QueryView::Latency(ref mut q) => {
@@ -433,7 +439,7 @@ impl JitterBuffer {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let s = caps.get_structure(0).ok_or(gst::FlowError::Error)?;
 
-        gst_info!(CAT, obj: element, "Parsing caps: {:?}", caps);
+        gst_info!(CAT, obj: element, "Parsing {:?}", caps);
 
         let payload = s
             .get_some::<i32>("payload")
@@ -907,7 +913,7 @@ impl JitterBuffer {
 
         state.num_pushed += 1;
 
-        gst_debug!(CAT, obj: self.src_pad.gst_pad(), "Pushing buffer {:?} with seq {}", buffer, seq);
+        gst_debug!(CAT, obj: self.src_pad.gst_pad(), "Pushing {:?} with seq {}", buffer, seq);
 
         self.src_pad.push(buffer.to_owned()).await
     }
@@ -954,9 +960,6 @@ impl JitterBuffer {
             let _ = wakeup_join_handle.await;
         }
 
-        let pad_src_state = self.src_pad.lock_state().await;
-        let pad_ctx = pad_src_state.pad_context().unwrap();
-
         gst_debug!(CAT, obj: element, "Scheduling wakeup in {}", delay);
 
         let (wakeup_fut, abort_handle) = abortable(Self::wakeup_fut(
@@ -964,9 +967,9 @@ impl JitterBuffer {
             latency_ns,
             context_wait_ns,
             &element,
-            &pad_ctx,
+            self.src_pad.downgrade(),
         ));
-        state.wakeup_join_handle = Some(pad_ctx.spawn(wakeup_fut));
+        state.wakeup_join_handle = Some(self.src_pad.spawn(wakeup_fut));
         state.wakeup_abort_handle = Some(abort_handle);
     }
 
@@ -975,17 +978,22 @@ impl JitterBuffer {
         latency_ns: gst::ClockTime,
         context_wait_ns: gst::ClockTime,
         element: &gst::Element,
-        pad_ctx: &PadContextRef,
+        pad_src_weak: PadSrcWeak,
     ) -> BoxFuture<'static, ()> {
         let element = element.clone();
-        let pad_ctx_weak = pad_ctx.downgrade();
         async move {
             runtime::time::delay_for(delay).await;
 
             let jb = Self::from_instance(&element);
             let mut state = jb.state.lock().await;
 
-            let pad_ctx = match pad_ctx_weak.upgrade() {
+            let pad_src = match pad_src_weak.upgrade() {
+                Some(pad_src) => pad_src,
+                None => return,
+            };
+
+            let pad_ctx = pad_src.pad_context();
+            let pad_ctx = match pad_ctx.upgrade() {
                 Some(pad_ctx) => pad_ctx,
                 None => return,
             };
@@ -1013,7 +1021,7 @@ impl JitterBuffer {
                         let (abortable_drain, abort_handle) = abortable(drain_fut);
                         state.task_queue_abort_handle = Some(abort_handle);
 
-                        pad_ctx.spawn(abortable_drain.map(drop));
+                        pad_src.spawn(abortable_drain.map(drop));
                     } else {
                         state.task_queue_abort_handle = None;
                     }
@@ -1190,34 +1198,42 @@ impl ObjectImpl for JitterBuffer {
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
-        let mut settings = runtime::executor::block_on(self.settings.lock());
         match *prop {
             subclass::Property("latency", ..) => {
-                settings.latency_ms = value.get_some().expect("type checked upstream");
+                let latency_ms = {
+                    let mut settings = runtime::executor::block_on(self.settings.lock());
+                    settings.latency_ms = value.get_some().expect("type checked upstream");
+                    settings.latency_ms as u64
+                };
 
                 runtime::executor::block_on(self.state.lock())
                     .jbuf
                     .borrow()
-                    .set_delay(settings.latency_ms as u64 * gst::MSECOND);
+                    .set_delay(latency_ms * gst::MSECOND);
 
                 /* TODO: post message */
             }
             subclass::Property("do-lost", ..) => {
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.do_lost = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-dropout-time", ..) => {
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.max_dropout_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-misorder-time", ..) => {
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.max_misorder_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
+                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),

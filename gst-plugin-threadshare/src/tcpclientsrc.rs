@@ -18,7 +18,7 @@
 
 use either::Either;
 use futures::future::BoxFuture;
-use futures::lock::{Mutex, MutexGuard};
+use futures::lock::Mutex;
 use futures::prelude::*;
 
 use glib;
@@ -31,7 +31,6 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
-use gst::{EventView, QueryView};
 
 use lazy_static::lazy_static;
 
@@ -39,7 +38,7 @@ use rand;
 
 use std::io;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::sync::{self, Arc};
 use std::u16;
 
 use tokio::io::AsyncReadExt;
@@ -175,35 +174,34 @@ impl SocketRead for TcpClientReader {
     }
 }
 
-struct TcpClientSrcPadHandlerInner {
-    socket_stream: Option<SocketStream<TcpClientReader>>,
+#[derive(Debug)]
+struct TcpClientSrcPadHandlerState {
     need_initial_events: bool,
+    caps: Option<gst::Caps>,
     configured_caps: Option<gst::Caps>,
 }
 
-impl Default for TcpClientSrcPadHandlerInner {
+impl Default for TcpClientSrcPadHandlerState {
     fn default() -> Self {
-        TcpClientSrcPadHandlerInner {
-            socket_stream: None,
+        TcpClientSrcPadHandlerState {
             need_initial_events: true,
+            caps: None,
             configured_caps: None,
         }
     }
 }
 
-#[derive(Clone)]
-struct TcpClientSrcPadHandler(Arc<Mutex<TcpClientSrcPadHandlerInner>>);
+#[derive(Debug, Default)]
+struct TcpClientSrcPadHandlerInner {
+    state: sync::RwLock<TcpClientSrcPadHandlerState>,
+    socket_stream: Mutex<Option<SocketStream<TcpClientReader>>>,
+    flush_join_handle: sync::Mutex<Option<JoinHandle<Result<(), ()>>>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct TcpClientSrcPadHandler(Arc<TcpClientSrcPadHandlerInner>);
 
 impl TcpClientSrcPadHandler {
-    fn new() -> Self {
-        TcpClientSrcPadHandler(Arc::new(Mutex::new(TcpClientSrcPadHandlerInner::default())))
-    }
-
-    #[inline]
-    async fn lock(&self) -> MutexGuard<'_, TcpClientSrcPadHandlerInner> {
-        self.0.lock().await
-    }
-
     async fn start_task(&self, pad: PadSrcRef<'_>, element: &gst::Element) {
         let this = self.clone();
         let pad_weak = pad.downgrade();
@@ -214,9 +212,10 @@ impl TcpClientSrcPadHandler {
             let element = element.clone();
             async move {
                 let item = this
+                    .0
+                    .socket_stream
                     .lock()
                     .await
-                    .socket_stream
                     .as_mut()
                     .expect("Missing SocketStream")
                     .next()
@@ -265,8 +264,13 @@ impl TcpClientSrcPadHandler {
         {
             let mut events = Vec::new();
             {
-                let mut inner = self.lock().await;
-                if inner.need_initial_events {
+                // Only `read` the state in the hot path
+                if self.0.state.read().unwrap().need_initial_events {
+                    // We will need to `write` and we also want to prevent
+                    // any changes on the state while we are handling initial events
+                    let mut state = self.0.state.write().unwrap();
+                    assert!(state.need_initial_events);
+
                     gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
 
                     let stream_id =
@@ -276,17 +280,17 @@ impl TcpClientSrcPadHandler {
                             .group_id(gst::util_group_id_next())
                             .build(),
                     );
-                    let tcpclientsrc = TcpClientSrc::from_instance(element);
-                    if let Some(ref caps) = tcpclientsrc.settings.lock().await.caps {
+
+                    if let Some(ref caps) = state.caps {
                         events.push(gst::Event::new_caps(&caps).build());
-                        inner.configured_caps = Some(caps.clone());
+                        state.configured_caps = Some(caps.clone());
                     }
                     events.push(
                         gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
                             .build(),
                     );
 
-                    inner.need_initial_events = false;
+                    state.need_initial_events = false;
                 }
 
                 if buffer.get_size() == 0 {
@@ -329,26 +333,69 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
 
     fn src_event(
         &self,
-        pad: PadSrcRef,
-        tcpclientsrc: &TcpClientSrc,
+        pad: &PadSrcRef,
+        _tcpclientsrc: &TcpClientSrc,
         element: &gst::Element,
         event: gst::Event,
     ) -> Either<bool, BoxFuture<'static, bool>> {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
+        use gst::EventView;
+
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = runtime::executor::block_on(tcpclientsrc.pause(element));
+                let mut flush_join_handle = self.0.flush_join_handle.lock().unwrap();
+                if flush_join_handle.is_none() {
+                    let element = element.clone();
+                    let pad_weak = pad.downgrade();
+
+                    *flush_join_handle = Some(pad.spawn(async move {
+                        let res = TcpClientSrc::from_instance(&element).pause(&element).await;
+                        let pad = pad_weak.upgrade().unwrap();
+                        if res.is_ok() {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart complete");
+                        } else {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart failed");
+                        }
+
+                        res
+                    }));
+                } else {
+                    gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart ignored: previous Flush in progress");
+                }
+
                 true
             }
             EventView::FlushStop(..) => {
-                let (res, state, pending) = element.get_state(0.into());
-                if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
-                    || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
-                {
-                    let _ = runtime::executor::block_on(tcpclientsrc.start(element));
+                let element = element.clone();
+                let inner_weak = Arc::downgrade(&self.0);
+                let pad_weak = pad.downgrade();
+
+                let fut = async move {
+                    let mut ret = false;
+
+                    let pad = pad_weak.upgrade().unwrap();
+                    let inner_weak = inner_weak.upgrade().unwrap();
+                    let flush_join_handle = inner_weak.flush_join_handle.lock().unwrap().take();
+                    if let Some(flush_join_handle) = flush_join_handle {
+                        if let Ok(Ok(())) = flush_join_handle.await {
+                            ret = TcpClientSrc::from_instance(&element)
+                                .start(&element)
+                                .await
+                                .is_ok();
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop complete");
+                        } else {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop aborted: FlushStart failed");
+                        }
+                    } else {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop ignored: no Flush in progress");
+                    }
+
+                    ret
                 }
-                true
+                .boxed();
+
+                return Either::Right(fut);
             }
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
@@ -356,9 +403,9 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad.gst_pad(), "Handled event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled {:?}", event);
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", event);
         }
 
         Either::Left(ret)
@@ -366,12 +413,14 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
 
     fn src_query(
         &self,
-        pad: PadSrcRef,
+        pad: &PadSrcRef,
         _tcpclientsrc: &TcpClientSrc,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
+        use gst::QueryView;
+
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
                 q.set(false, 0.into(), 0.into());
@@ -383,8 +432,8 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let inner = runtime::executor::block_on(self.lock());
-                let caps = if let Some(ref caps) = inner.configured_caps {
+                let state = self.0.state.read().unwrap();
+                let caps = if let Some(ref caps) = state.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
@@ -402,9 +451,9 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad.gst_pad(), "Handled query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled {:?}", query);
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", query);
         }
 
         ret
@@ -450,6 +499,9 @@ impl TcpClientSrc {
 
         let context = {
             let settings = self.settings.lock().await;
+
+            self.src_pad_handler.0.state.write().unwrap().caps = settings.caps.clone();
+
             Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
@@ -526,7 +578,7 @@ impl TcpClientSrc {
             )
         })?;
 
-        this.src_pad_handler.lock().await.socket_stream = Some(socket_stream);
+        *this.src_pad_handler.0.socket_stream.lock().await = Some(socket_stream);
 
         this.state.lock().await.socket = Some(socket);
 
@@ -536,17 +588,18 @@ impl TcpClientSrc {
     }
 
     async fn complete_preparation(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+        let preparation_set = self.preparation_set.lock().await.take();
+        if preparation_set.is_none() {
+            gst_log!(CAT, obj: element, "Preparation already completed");
+            return Ok(());
+        }
+
         gst_debug!(CAT, obj: element, "Completing preparation");
 
         let PreparationSet {
             join_handle,
             context,
-        } = self
-            .preparation_set
-            .lock()
-            .await
-            .take()
-            .expect("preparation_set already taken");
+        } = preparation_set.unwrap();
 
         join_handle
             .await
@@ -579,7 +632,12 @@ impl TcpClientSrc {
         }
 
         let _ = self.src_pad.unprepare().await;
-        self.src_pad_handler.lock().await.configured_caps = None;
+        self.src_pad_handler
+            .0
+            .state
+            .write()
+            .unwrap()
+            .configured_caps = None;
 
         gst_debug!(CAT, obj: element, "Unprepared");
         Ok(())
@@ -659,7 +717,7 @@ impl ObjectSubclass for TcpClientSrc {
 
         Self {
             src_pad,
-            src_pad_handler: TcpClientSrcPadHandler::new(),
+            src_pad_handler: TcpClientSrcPadHandler::default(),
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
             preparation_set: Mutex::new(None),
@@ -768,8 +826,12 @@ impl ElementImpl for TcpClientSrc {
                     .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PausedToReady => {
-                let mut src_pad_handler = runtime::executor::block_on(self.src_pad_handler.lock());
-                src_pad_handler.need_initial_events = true;
+                self.src_pad_handler
+                    .0
+                    .state
+                    .write()
+                    .unwrap()
+                    .need_initial_events = true;
             }
             _ => (),
         }

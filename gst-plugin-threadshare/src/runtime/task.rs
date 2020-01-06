@@ -15,9 +15,7 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-//! An execution loop to run asynchronous processing on a [`Context`].
-//!
-//! [`Context`]: ../executor/struct.Context.html
+//! An execution loop to run asynchronous processing.
 
 use futures::future::{self, abortable, AbortHandle, Aborted, BoxFuture};
 use futures::lock::Mutex;
@@ -77,7 +75,7 @@ impl Drop for TaskInner {
 
 /// A `Task` operating on a `threadshare` [`Context`].
 ///
-/// [`Context`]: struct.Context.html
+/// [`Context`]: ../executor/struct.Context.html
 #[derive(Debug)]
 pub struct Task(Arc<Mutex<TaskInner>>);
 

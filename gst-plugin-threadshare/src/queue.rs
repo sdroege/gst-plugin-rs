@@ -32,15 +32,15 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
-use gst::{EventView, QueryView};
 
 use lazy_static::lazy_static;
 
 use std::collections::VecDeque;
+use std::sync::{self, Arc};
 use std::{u32, u64};
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
+use crate::runtime::{self, Context, JoinHandle, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
 use super::dataqueue::{DataQueue, DataQueueItem};
 
@@ -140,15 +140,30 @@ impl PendingQueue {
     }
 }
 
+#[derive(Debug)]
+struct QueuePadSinkHandlerInner {
+    flush_join_handle: sync::Mutex<Option<JoinHandle<Result<(), ()>>>>,
+    context: Context,
+}
+
 #[derive(Clone, Debug)]
-struct QueuePadSinkHandler;
+struct QueuePadSinkHandler(Arc<QueuePadSinkHandlerInner>);
+
+impl QueuePadSinkHandler {
+    fn new(context: Context) -> Self {
+        QueuePadSinkHandler(Arc::new(QueuePadSinkHandlerInner {
+            flush_join_handle: sync::Mutex::new(None),
+            context,
+        }))
+    }
+}
 
 impl PadSinkHandler for QueuePadSinkHandler {
     type ElementImpl = Queue;
 
     fn sink_chain(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         _queue: &Queue,
         element: &gst::Element,
         buffer: gst::Buffer,
@@ -157,7 +172,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         let element = element.clone();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            gst_log!(CAT, obj: pad.gst_pad(), "Handling buffer {:?}", buffer);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
             let queue = Queue::from_instance(&element);
             queue
                 .enqueue_item(&element, DataQueueItem::Buffer(buffer))
@@ -168,7 +183,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
 
     fn sink_chain_list(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         _queue: &Queue,
         element: &gst::Element,
         list: gst::BufferList,
@@ -177,7 +192,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         let element = element.clone();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            gst_log!(CAT, obj: pad.gst_pad(), "Handling buffer list {:?}", list);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", list);
             let queue = Queue::from_instance(&element);
             queue
                 .enqueue_item(&element, DataQueueItem::BufferList(list))
@@ -188,39 +203,42 @@ impl PadSinkHandler for QueuePadSinkHandler {
 
     fn sink_event(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         queue: &Queue,
         element: &gst::Element,
         event: gst::Event,
     ) -> Either<bool, BoxFuture<'static, bool>> {
+        use gst::EventView;
+
         if event.is_serialized() {
             let pad_weak = pad.downgrade();
             let element = element.clone();
+            let inner_weak = Arc::downgrade(&self.0);
 
             Either::Right(
                 async move {
                     let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-                    gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
+                    gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
                     let queue = Queue::from_instance(&element);
-                    match event.view() {
-                        EventView::FlushStart(..) => {
-                            let _ = queue.stop(&element).await;
-                        }
-                        EventView::FlushStop(..) => {
-                            let (res, state, pending) = element.get_state(0.into());
-                            if res == Ok(gst::StateChangeSuccess::Success)
-                                && state == gst::State::Paused
-                                || res == Ok(gst::StateChangeSuccess::Async)
-                                    && pending == gst::State::Paused
-                            {
+
+                    if let EventView::FlushStop(..) = event.view() {
+                        let inner = inner_weak.upgrade().unwrap();
+
+                        let flush_join_handle = inner.flush_join_handle.lock().unwrap().take();
+                        if let Some(flush_join_handle) = flush_join_handle {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "Waiting for FlushStart to complete");
+                            if let Ok(Ok(())) = flush_join_handle.await {
                                 let _ = queue.start(&element).await;
+                            } else {
+                                gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop ignored: FlushStart failed to complete");
                             }
+                        } else {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop ignored: no Flush in progress");
                         }
-                        _ => (),
                     }
 
-                    gst_log!(CAT, obj: pad.gst_pad(), "Queuing serialized event {:?}", event);
+                    gst_log!(CAT, obj: pad.gst_pad(), "Queuing serialized {:?}", event);
                     queue
                         .enqueue_item(&element, DataQueueItem::Event(event))
                         .await
@@ -229,7 +247,21 @@ impl PadSinkHandler for QueuePadSinkHandler {
                 .boxed(),
             )
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized event {:?}", event);
+            if let EventView::FlushStart(..) = event.view() {
+                let mut flush_join_handle = self.0.flush_join_handle.lock().unwrap();
+                if flush_join_handle.is_none() {
+                    gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+                    let element = element.clone();
+                    *flush_join_handle =
+                        Some(self.0.context.spawn(async move {
+                            Queue::from_instance(&element).stop(&element).await
+                        }));
+                } else {
+                    gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart ignored: previous Flush in progress");
+                }
+            }
+
+            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized {:?}", event);
 
             Either::Left(queue.src_pad.gst_pad().push_event(event))
         }
@@ -237,26 +269,31 @@ impl PadSinkHandler for QueuePadSinkHandler {
 
     fn sink_query(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         queue: &Queue,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         if query.is_serialized() {
             // FIXME: How can we do this?
-            gst_log!(CAT, obj: pad.gst_pad(), "Dropping serialized query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Dropping serialized {:?}", query);
             false
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
             queue.src_pad.gst_pad().peer_query(query)
         }
     }
 }
 
-#[derive(Clone, Debug)]
-struct QueuePadSrcHandler;
+#[derive(Debug, Default)]
+struct QueuePadSrcHandlerInner {
+    flush_join_handle: sync::Mutex<Option<JoinHandle<Result<(), ()>>>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct QueuePadSrcHandler(Arc<QueuePadSrcHandlerInner>);
 
 impl QueuePadSrcHandler {
     async fn start_task(pad: PadSrcRef<'_>, element: &gst::Element, dataqueue: DataQueue) {
@@ -295,15 +332,15 @@ impl QueuePadSrcHandler {
 
         let res = match item {
             DataQueueItem::Buffer(buffer) => {
-                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding buffer {:?}", buffer);
+                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
                 pad.push(buffer).await.map(drop)
             }
             DataQueueItem::BufferList(list) => {
-                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding buffer list {:?}", list);
+                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", list);
                 pad.push_list(list).await.map(drop)
             }
             DataQueueItem::Event(event) => {
-                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding event {:?}", event);
+                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
                 pad.push_event(event).await;
                 Ok(())
             }
@@ -347,57 +384,98 @@ impl PadSrcHandler for QueuePadSrcHandler {
 
     fn src_event(
         &self,
-        pad: PadSrcRef,
+        pad: &PadSrcRef,
         queue: &Queue,
         element: &gst::Element,
         event: gst::Event,
     ) -> Either<bool, BoxFuture<'static, bool>> {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
+        use gst::EventView;
+
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         if event.is_serialized() {
-            let pad_weak = pad.downgrade();
             let element = element.clone();
+            let inner_weak = Arc::downgrade(&self.0);
+            let pad_weak = pad.downgrade();
 
             Either::Right(
                 async move {
-                    let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
-                    gst_log!(CAT, obj: pad.gst_pad(), "Forwarding serialized event {:?}", event);
+                    let ret = if let EventView::FlushStop(..) = event.view() {
+                        let mut ret = false;
 
-                    let queue = Queue::from_instance(&element);
-                    queue.sink_pad.gst_pad().push_event(event)
+                        let pad = pad_weak.upgrade().unwrap();
+                        let inner_weak = inner_weak.upgrade().unwrap();
+                        let flush_join_handle = inner_weak.flush_join_handle.lock().unwrap().take();
+                        if let Some(flush_join_handle) = flush_join_handle {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "Waiting for FlushStart to complete");
+                            if let Ok(Ok(())) = flush_join_handle.await {
+                                ret = Queue::from_instance(&element)
+                                    .start(&element)
+                                    .await
+                                    .is_ok();
+                                gst_log!(CAT, obj: pad.gst_pad(), "FlushStop complete");
+                            } else {
+                                gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop aborted: FlushStart failed");
+                            }
+                        } else {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop ignored: no Flush in progress");
+                        }
+
+                        ret
+                    } else {
+                        true
+                    };
+
+                    if ret {
+                        let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
+                        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding serialized {:?}", event);
+
+                        let queue = Queue::from_instance(&element);
+                        queue.sink_pad.gst_pad().push_event(event)
+                    } else {
+                        false
+                    }
                 }
                 .boxed(),
             )
         } else {
-            match event.view() {
-                EventView::FlushStart(..) => {
-                    let _ = runtime::executor::block_on(queue.stop(element));
-                }
-                EventView::FlushStop(..) => {
-                    let (res, state, pending) = element.get_state(0.into());
-                    if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
-                        || res == Ok(gst::StateChangeSuccess::Async)
-                            && pending == gst::State::Playing
-                    {
-                        let _ = runtime::executor::block_on(queue.start(element));
-                    }
-                }
-                _ => (),
-            };
+            if let EventView::FlushStart(..) = event.view() {
+                let mut flush_join_handle = self.0.flush_join_handle.lock().unwrap();
+                if flush_join_handle.is_none() {
+                    let element = element.clone();
+                    let pad_weak = pad.downgrade();
 
-            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized event {:?}", event);
+                    *flush_join_handle = Some(pad.spawn(async move {
+                        let res = Queue::from_instance(&element).stop(&element).await;
+                        let pad = pad_weak.upgrade().unwrap();
+                        if res.is_ok() {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart complete");
+                        } else {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart failed");
+                        }
+
+                        res
+                    }));
+                } else {
+                    gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart ignored: previous Flush in progress");
+                }
+            }
+
+            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized {:?}", event);
             Either::Left(queue.sink_pad.gst_pad().push_event(event))
         }
     }
 
     fn src_query(
         &self,
-        pad: PadSrcRef,
+        pad: &PadSrcRef,
         queue: &Queue,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
+        use gst::QueryView;
+
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         if let QueryView::Scheduling(ref mut q) = query.view_mut() {
             let mut new_query = gst::Query::new_scheduling();
@@ -422,7 +500,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
             return true;
         }
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
         queue.sink_pad.gst_pad().peer_query(query)
     }
 }
@@ -670,7 +748,7 @@ impl Queue {
             })?;
 
         self.src_pad
-            .prepare(context, &QueuePadSrcHandler)
+            .prepare(context.clone(), &QueuePadSrcHandler::default())
             .await
             .map_err(|err| {
                 gst_error_msg!(
@@ -678,7 +756,9 @@ impl Queue {
                     ["Error joining Context: {:?}", err]
                 )
             })?;
-        self.sink_pad.prepare(&QueuePadSinkHandler).await;
+        self.sink_pad
+            .prepare(&QueuePadSinkHandler::new(context))
+            .await;
 
         gst_debug!(CAT, obj: element, "Prepared");
 
@@ -809,28 +889,24 @@ impl ObjectImpl for Queue {
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
+        let mut settings = runtime::executor::block_on(self.settings.lock());
         match *prop {
             subclass::Property("max-size-buffers", ..) => {
-                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.max_size_buffers = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-bytes", ..) => {
-                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.max_size_bytes = value.get_some().expect("type checked upstream");
             }
             subclass::Property("max-size-time", ..) => {
-                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.max_size_time = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
-                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             subclass::Property("context-wait", ..) => {
-                let mut settings = runtime::executor::block_on(self.settings.lock());
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
@@ -840,27 +916,13 @@ impl ObjectImpl for Queue {
     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
+        let settings = runtime::executor::block_on(self.settings.lock());
         match *prop {
-            subclass::Property("max-size-buffers", ..) => {
-                let settings = runtime::executor::block_on(self.settings.lock());
-                Ok(settings.max_size_buffers.to_value())
-            }
-            subclass::Property("max-size-bytes", ..) => {
-                let settings = runtime::executor::block_on(self.settings.lock());
-                Ok(settings.max_size_bytes.to_value())
-            }
-            subclass::Property("max-size-time", ..) => {
-                let settings = runtime::executor::block_on(self.settings.lock());
-                Ok(settings.max_size_time.to_value())
-            }
-            subclass::Property("context", ..) => {
-                let settings = runtime::executor::block_on(self.settings.lock());
-                Ok(settings.context.to_value())
-            }
-            subclass::Property("context-wait", ..) => {
-                let settings = runtime::executor::block_on(self.settings.lock());
-                Ok(settings.context_wait.to_value())
-            }
+            subclass::Property("max-size-buffers", ..) => Ok(settings.max_size_buffers.to_value()),
+            subclass::Property("max-size-bytes", ..) => Ok(settings.max_size_bytes.to_value()),
+            subclass::Property("max-size-time", ..) => Ok(settings.max_size_time.to_value()),
+            subclass::Property("context", ..) => Ok(settings.context.to_value()),
+            subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
             _ => unimplemented!(),
         }
     }

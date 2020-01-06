@@ -34,13 +34,16 @@ use gst::{gst_debug, gst_error_msg, gst_log};
 use lazy_static::lazy_static;
 
 use std::boxed::Box;
-use std::sync::Arc;
+use std::sync::{self, Arc};
 
+use gstthreadshare::runtime::executor::block_on;
 use gstthreadshare::runtime::prelude::*;
-use gstthreadshare::runtime::{self, Context, PadContext, PadSink, PadSinkRef, PadSrc, PadSrcRef};
+use gstthreadshare::runtime::{
+    self, Context, JoinHandle, PadContext, PadSink, PadSinkRef, PadSrc, PadSrcRef,
+};
 
 const DEFAULT_CONTEXT: &str = "";
-const SLEEP_DURATION: u32 = 2;
+const THROTTLING_DURATION: u32 = 2;
 
 fn init() {
     use std::sync::Once;
@@ -78,8 +81,10 @@ lazy_static! {
     );
 }
 
-#[derive(Clone, Debug)]
-struct PadSrcHandlerTest;
+#[derive(Clone, Debug, Default)]
+struct PadSrcHandlerTest {
+    flush_join_handle: Arc<sync::Mutex<Option<JoinHandle<Result<(), ()>>>>>,
+}
 
 impl PadSrcHandlerTest {
     async fn start_task(&self, pad: PadSrcRef<'_>, receiver: mpsc::Receiver<Item>) {
@@ -128,7 +133,7 @@ impl PadSrcHandler for PadSrcHandlerTest {
 
     fn src_activatemode(
         &self,
-        _pad: PadSrcRef,
+        _pad: &PadSrcRef,
         _elem_src_test: &ElementSrcTest,
         _element: &gst::Element,
         mode: gst::PadMode,
@@ -141,34 +146,79 @@ impl PadSrcHandler for PadSrcHandlerTest {
 
     fn src_event(
         &self,
-        pad: PadSrcRef,
-        elem_src_test: &ElementSrcTest,
+        pad: &PadSrcRef,
+        _elem_src_test: &ElementSrcTest,
         element: &gst::Element,
         event: gst::Event,
     ) -> Either<bool, BoxFuture<'static, bool>> {
-        gst_log!(SRC_CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
+        gst_log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = runtime::executor::block_on(elem_src_test.pause(element));
+                let mut flush_join_handle = self.flush_join_handle.lock().unwrap();
+                if flush_join_handle.is_none() {
+                    let element = element.clone();
+                    let pad_weak = pad.downgrade();
+
+                    *flush_join_handle = Some(pad.spawn(async move {
+                        let res = ElementSrcTest::from_instance(&element)
+                            .pause(&element)
+                            .await;
+                        let pad = pad_weak.upgrade().unwrap();
+                        if res.is_ok() {
+                            gst_debug!(SRC_CAT, obj: pad.gst_pad(), "FlushStart complete");
+                        } else {
+                            gst_debug!(SRC_CAT, obj: pad.gst_pad(), "FlushStart failed");
+                        }
+
+                        res
+                    }));
+                } else {
+                    gst_debug!(SRC_CAT, obj: pad.gst_pad(), "FlushStart ignored: previous Flush in progress");
+                }
+
                 true
             }
             EventView::FlushStop(..) => {
-                let (res, state, pending) = element.get_state(0.into());
-                if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
-                    || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
-                {
-                    let _ = runtime::executor::block_on(elem_src_test.start(element));
+                let element = element.clone();
+                let flush_join_handle_weak = Arc::downgrade(&self.flush_join_handle);
+                let pad_weak = pad.downgrade();
+
+                let fut = async move {
+                    let mut ret = false;
+
+                    let pad = pad_weak.upgrade().unwrap();
+
+                    let flush_join_handle = flush_join_handle_weak.upgrade().unwrap();
+                    let flush_join_handle = flush_join_handle.lock().unwrap().take();
+                    if let Some(flush_join_handle) = flush_join_handle {
+                        gst_debug!(SRC_CAT, obj: pad.gst_pad(), "Waiting for FlushStart to complete");
+                        if let Ok(Ok(())) = flush_join_handle.await {
+                            ret = ElementSrcTest::from_instance(&element)
+                                .start(&element)
+                                .await
+                                .is_ok();
+                            gst_debug!(SRC_CAT, obj: pad.gst_pad(), "FlushStop complete");
+                        } else {
+                            gst_debug!(SRC_CAT, obj: pad.gst_pad(), "FlushStop aborted: FlushStart failed");
+                        }
+                    } else {
+                        gst_debug!(SRC_CAT, obj: pad.gst_pad(), "FlushStop ignored: no Flush in progress");
+                    }
+
+                    ret
                 }
-                true
+                .boxed();
+
+                return Either::Right(fut);
             }
             _ => false,
         };
 
         if ret {
-            gst_log!(SRC_CAT, obj: pad.gst_pad(), "Handled event {:?}", event);
+            gst_log!(SRC_CAT, obj: pad.gst_pad(), "Handled {:?}", event);
         } else {
-            gst_log!(SRC_CAT, obj: pad.gst_pad(), "Didn't handle event {:?}", event);
+            gst_log!(SRC_CAT, obj: pad.gst_pad(), "Didn't handle {:?}", event);
         }
 
         Either::Left(ret)
@@ -208,7 +258,7 @@ impl ElementSrcTest {
         let _state = self.state.lock().await;
         gst_debug!(SRC_CAT, obj: element, "Preparing");
 
-        let context = Context::acquire(&self.settings.lock().await.context, SLEEP_DURATION)
+        let context = Context::acquire(&self.settings.lock().await.context, THROTTLING_DURATION)
             .map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
@@ -280,7 +330,7 @@ impl ElementSrcTest {
 }
 
 impl ObjectSubclass for ElementSrcTest {
-    const NAME: &'static str = "RsTsElementSrcTest";
+    const NAME: &'static str = "TsElementSrcTest";
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = glib::subclass::simple::ClassStruct<Self>;
@@ -318,7 +368,7 @@ impl ObjectSubclass for ElementSrcTest {
 
         ElementSrcTest {
             src_pad,
-            src_pad_handler: PadSrcHandlerTest,
+            src_pad_handler: PadSrcHandlerTest::default(),
             state: Mutex::new(ElementSrcState::default()),
             settings: Mutex::new(settings),
         }
@@ -426,111 +476,180 @@ static SINK_PROPERTIES: [glib::subclass::Property; 1] =
         )
     })];
 
+#[derive(Debug)]
+struct PadSinkHandlerTestInner {
+    flush_join_handle: sync::Mutex<Option<JoinHandle<()>>>,
+    context: Context,
+}
+
 #[derive(Clone, Debug)]
-struct PadSinkHandlerTest;
+struct PadSinkHandlerTest(Arc<PadSinkHandlerTestInner>);
+
+impl Default for PadSinkHandlerTest {
+    fn default() -> Self {
+        PadSinkHandlerTest(Arc::new(PadSinkHandlerTestInner {
+            flush_join_handle: sync::Mutex::new(None),
+            context: Context::acquire("PadSinkHandlerTest", THROTTLING_DURATION).unwrap(),
+        }))
+    }
+}
 
 impl PadSinkHandler for PadSinkHandlerTest {
     type ElementImpl = ElementSinkTest;
 
     fn sink_chain(
         &self,
-        pad: PadSinkRef,
-        elem_sink_test: &ElementSinkTest,
-        _element: &gst::Element,
+        _pad: &PadSinkRef,
+        _elem_sink_test: &ElementSinkTest,
+        element: &gst::Element,
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        let pad_weak = pad.downgrade();
-        let sender = Arc::clone(&elem_sink_test.sender);
+        let element = element.clone();
         async move {
-            let pad = pad_weak
-                .upgrade()
-                .expect("PadSink no longer exists in sink_chain");
-
-            gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Fowarding {:?}", buffer);
-            sender
-                .lock()
+            let elem_sink_test = ElementSinkTest::from_instance(&element);
+            elem_sink_test
+                .forward_item(&element, Item::Buffer(buffer))
                 .await
-                .as_mut()
-                .expect("ItemSender not set")
-                .send(Item::Buffer(buffer))
-                .await
-                .map(|_| gst::FlowSuccess::Ok)
-                .map_err(|_| gst::FlowError::CustomError)
         }
         .boxed()
     }
 
     fn sink_chain_list(
         &self,
-        pad: PadSinkRef,
-        elem_sink_test: &ElementSinkTest,
-        _element: &gst::Element,
+        _pad: &PadSinkRef,
+        _elem_sink_test: &ElementSinkTest,
+        element: &gst::Element,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
-        let pad_weak = pad.downgrade();
-        let sender = Arc::clone(&elem_sink_test.sender);
+        let element = element.clone();
         async move {
-            let pad = pad_weak
-                .upgrade()
-                .expect("PadSink no longer exists in sink_chain_list");
-
-            gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Fowarding {:?}", list);
-            sender
-                .lock()
+            let elem_sink_test = ElementSinkTest::from_instance(&element);
+            elem_sink_test
+                .forward_item(&element, Item::BufferList(list))
                 .await
-                .as_mut()
-                .expect("ItemSender not set")
-                .send(Item::BufferList(list))
-                .await
-                .map(|_| gst::FlowSuccess::Ok)
-                .map_err(|_| gst::FlowError::CustomError)
         }
         .boxed()
     }
 
     fn sink_event(
         &self,
-        pad: PadSinkRef,
-        elem_sink_test: &ElementSinkTest,
-        _element: &gst::Element,
+        pad: &PadSinkRef,
+        _elem_sink_test: &ElementSinkTest,
+        element: &gst::Element,
         event: gst::Event,
     ) -> Either<bool, BoxFuture<'static, bool>> {
         if event.is_serialized() {
+            gst_log!(SINK_CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
+
             let pad_weak = pad.downgrade();
-            let sender = Arc::clone(&elem_sink_test.sender);
+            let element = element.clone();
+            let inner_weak = Arc::downgrade(&self.0);
 
             Either::Right(async move {
-                let pad = pad_weak
-                    .upgrade()
-                    .expect("PadSink no longer exists in sink_event");
+                let elem_sink_test = ElementSinkTest::from_instance(&element);
 
-                    gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Fowarding serialized event {:?}", event);
-                    sender
-                        .lock()
-                        .await
-                        .as_mut()
-                        .expect("ItemSender not set")
-                        .send(Item::Event(event))
-                        .await
-                        .is_ok()
+                if let EventView::FlushStop(..) = event.view() {
+                    let pad = pad_weak
+                        .upgrade()
+                        .expect("PadSink no longer exists in sink_event");
+
+                    let inner = inner_weak.upgrade().unwrap();
+                    let flush_join_handle = inner.flush_join_handle.lock().unwrap().take();
+                    if let Some(flush_join_handle) = flush_join_handle {
+                        gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Waiting for FlushStart to complete");
+                        if let Ok(()) = flush_join_handle.await {
+                            elem_sink_test.start(&element).await;
+                        } else {
+                            gst_debug!(SINK_CAT, obj: pad.gst_pad(), "FlushStop ignored: FlushStart failed to complete");
+                        }
+                    } else {
+                        gst_debug!(SINK_CAT, obj: pad.gst_pad(), "FlushStop ignored: no Flush in progress");
+                    }
+                }
+
+                elem_sink_test.forward_item(&element, Item::Event(event)).await.is_ok()
             }.boxed())
         } else {
-            gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Fowarding non-serialized event {:?}", event);
-            Either::Left(
-                runtime::executor::block_on(elem_sink_test.sender.lock())
-                    .as_mut()
-                    .expect("ItemSender not set")
-                    .try_send(Item::Event(event))
-                    .is_ok(),
-            )
+            gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
+
+            let ret = match event.view() {
+                EventView::FlushStart(..) => {
+                    let mut flush_join_handle = self.0.flush_join_handle.lock().unwrap();
+                    if flush_join_handle.is_none() {
+                        gst_log!(SINK_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+                        let element = element.clone();
+                        *flush_join_handle = Some(self.0.context.spawn(async move {
+                            ElementSinkTest::from_instance(&element)
+                                .stop(&element)
+                                .await;
+                        }));
+                    } else {
+                        gst_debug!(SINK_CAT, obj: pad.gst_pad(), "FlushStart ignored: previous Flush in progress");
+                    }
+
+                    true
+                }
+                _ => false,
+            };
+
+            // Should forward item here
+            Either::Left(ret)
         }
     }
+}
+
+#[derive(Debug, Default)]
+struct ElementSinkState {
+    flushing: bool,
+    sender: Option<mpsc::Sender<Item>>,
 }
 
 #[derive(Debug)]
 struct ElementSinkTest {
     sink_pad: PadSink,
-    sender: Arc<Mutex<Option<mpsc::Sender<Item>>>>,
+    state: Mutex<ElementSinkState>,
+}
+
+impl ElementSinkTest {
+    async fn forward_item(
+        &self,
+        element: &gst::Element,
+        item: Item,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut state = self.state.lock().await;
+        if !state.flushing {
+            gst_debug!(SINK_CAT, obj: element, "Fowarding {:?}", item);
+            state
+                .sender
+                .as_mut()
+                .expect("Item Sender not set")
+                .send(item)
+                .await
+                .map(|_| gst::FlowSuccess::Ok)
+                .map_err(|_| gst::FlowError::CustomError)
+        } else {
+            gst_debug!(
+                SINK_CAT,
+                obj: element,
+                "Not fowarding {:?} due to flushing",
+                item
+            );
+            Err(gst::FlowError::Flushing)
+        }
+    }
+
+    async fn start(&self, element: &gst::Element) {
+        gst_debug!(SINK_CAT, obj: element, "Starting");
+        let mut state = self.state.lock().await;
+        state.flushing = false;
+        gst_debug!(SINK_CAT, obj: element, "Started");
+    }
+
+    async fn stop(&self, element: &gst::Element) {
+        gst_debug!(SINK_CAT, obj: element, "Stopping");
+        self.state.lock().await.flushing = true;
+        gst_debug!(SINK_CAT, obj: element, "Stopped");
+    }
 }
 
 lazy_static! {
@@ -542,7 +661,7 @@ lazy_static! {
 }
 
 impl ObjectSubclass for ElementSinkTest {
-    const NAME: &'static str = "RsTsElementSinkTest";
+    const NAME: &'static str = "TsElementSinkTest";
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = glib::subclass::simple::ClassStruct<Self>;
@@ -580,6 +699,7 @@ impl ObjectSubclass for ElementSinkTest {
                     .expect("signal arg")
                     .expect("missing signal arg");
                 let this = Self::from_instance(&element);
+                gst_debug!(SINK_CAT, obj: &element, "Pushing FlushStart");
                 Some(
                     this.sink_pad
                         .gst_pad()
@@ -600,6 +720,7 @@ impl ObjectSubclass for ElementSinkTest {
                     .expect("signal arg")
                     .expect("missing signal arg");
                 let this = Self::from_instance(&element);
+                gst_debug!(SINK_CAT, obj: &element, "Pushing FlushStop");
                 Some(
                     this.sink_pad
                         .gst_pad()
@@ -616,7 +737,7 @@ impl ObjectSubclass for ElementSinkTest {
 
         ElementSinkTest {
             sink_pad,
-            sender: Arc::new(Mutex::new(None)),
+            state: Mutex::new(ElementSinkState::default()),
         }
     }
 }
@@ -634,7 +755,7 @@ impl ObjectImpl for ElementSinkTest {
                     .expect("type checked upstream")
                     .expect("ItemSender not found")
                     .clone();
-                *runtime::executor::block_on(self.sender.lock()) = Some(sender);
+                runtime::executor::block_on(self.state.lock()).sender = Some(sender);
             }
             _ => unimplemented!(),
         }
@@ -658,7 +779,10 @@ impl ElementImpl for ElementSinkTest {
 
         match transition {
             gst::StateChange::NullToReady => {
-                runtime::executor::block_on(self.sink_pad.prepare(&PadSinkHandlerTest));
+                runtime::executor::block_on(self.sink_pad.prepare(&PadSinkHandlerTest::default()));
+            }
+            gst::StateChange::PausedToReady => {
+                runtime::executor::block_on(self.stop(element));
             }
             gst::StateChange::ReadyToNull => {
                 runtime::executor::block_on(self.sink_pad.unprepare());
@@ -666,12 +790,20 @@ impl ElementImpl for ElementSinkTest {
             _ => (),
         }
 
-        self.parent_change_state(element, transition)
+        let success = self.parent_change_state(element, transition)?;
+
+        if transition == gst::StateChange::ReadyToPaused {
+            runtime::executor::block_on(self.start(element));
+        }
+
+        Ok(success)
     }
 }
 
 fn setup(
     context_name: &str,
+    mut middle_element_1: Option<gst::Element>,
+    mut middle_element_2: Option<gst::Element>,
 ) -> (
     gst::Pipeline,
     gst::Element,
@@ -680,53 +812,69 @@ fn setup(
 ) {
     init();
 
+    let pipeline = gst::Pipeline::new(None);
+
     // Src
     let src_element = glib::Object::new(ElementSrcTest::get_type(), &[])
         .unwrap()
         .downcast::<gst::Element>()
         .unwrap();
     src_element.set_property("context", &context_name).unwrap();
+    pipeline.add(&src_element).unwrap();
+
+    let mut last_element = src_element.clone();
+
+    if let Some(middle_element) = middle_element_1.take() {
+        pipeline.add(&middle_element).unwrap();
+        last_element.link(&middle_element).unwrap();
+        last_element = middle_element;
+    }
+
+    if let Some(middle_element) = middle_element_2.take() {
+        // Don't link the 2 middle elements: this is used for ts-proxy
+        pipeline.add(&middle_element).unwrap();
+        last_element = middle_element;
+    }
 
     // Sink
     let sink_element = glib::Object::new(ElementSinkTest::get_type(), &[])
         .unwrap()
         .downcast::<gst::Element>()
         .unwrap();
+    pipeline.add(&sink_element).unwrap();
+    last_element.link(&sink_element).unwrap();
 
     let (sender, receiver) = mpsc::channel::<Item>(10);
     sink_element
         .set_property("sender", &ItemSender { sender })
         .unwrap();
 
-    let pipeline = gst::Pipeline::new(None);
-    pipeline.add_many(&[&src_element, &sink_element]).unwrap();
-
-    src_element.link(&sink_element).unwrap();
-
     (pipeline, src_element, sink_element, receiver)
 }
 
-#[test]
-fn task() {
-    let (pipeline, src_element, sink_element, mut receiver) = setup("task");
-
+fn nominal_scenario(
+    scenario_name: &str,
+    pipeline: gst::Pipeline,
+    src_element: gst::Element,
+    mut receiver: mpsc::Receiver<Item>,
+) {
     let elem_src_test = ElementSrcTest::from_instance(&src_element);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
     // Initial events
-    runtime::executor::block_on(
+    block_on(
         elem_src_test.try_push(Item::Event(
-            gst::Event::new_stream_start("stream_id_task_test")
+            gst::Event::new_stream_start(scenario_name)
                 .group_id(gst::util_group_id_next())
                 .build(),
         )),
     )
     .unwrap();
 
-    match runtime::executor::block_on(receiver.next()).unwrap() {
+    match block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
-            gst::EventView::CustomDownstreamSticky(e) => {
+            EventView::CustomDownstreamSticky(e) => {
                 assert!(PadContext::is_pad_context_sticky_event(&e))
             }
             other => panic!("Unexpected event {:?}", other),
@@ -734,34 +882,32 @@ fn task() {
         other => panic!("Unexpected item {:?}", other),
     }
 
-    match runtime::executor::block_on(receiver.next()).unwrap() {
+    match block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
-            gst::EventView::StreamStart(_) => (),
+            EventView::StreamStart(_) => (),
             other => panic!("Unexpected event {:?}", other),
         },
         other => panic!("Unexpected item {:?}", other),
     }
 
-    runtime::executor::block_on(elem_src_test.try_push(Item::Event(
+    block_on(elem_src_test.try_push(Item::Event(
         gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
     )))
     .unwrap();
 
-    match runtime::executor::block_on(receiver.next()).unwrap() {
+    match block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
-            gst::EventView::Segment(_) => (),
+            EventView::Segment(_) => (),
             other => panic!("Unexpected event {:?}", other),
         },
         other => panic!("Unexpected item {:?}", other),
     }
 
     // Buffer
-    runtime::executor::block_on(
-        elem_src_test.try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4]))),
-    )
-    .unwrap();
+    block_on(elem_src_test.try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4]))))
+        .unwrap();
 
-    match runtime::executor::block_on(receiver.next()).unwrap() {
+    match block_on(receiver.next()).unwrap() {
         Item::Buffer(buffer) => {
             let data = buffer.map_readable().unwrap();
             assert_eq!(data.as_slice(), vec![1, 2, 3, 4].as_slice());
@@ -774,9 +920,9 @@ fn task() {
     list.get_mut()
         .unwrap()
         .add(gst::Buffer::from_slice(vec![1, 2, 3, 4]));
-    runtime::executor::block_on(elem_src_test.try_push(Item::BufferList(list))).unwrap();
+    block_on(elem_src_test.try_push(Item::BufferList(list))).unwrap();
 
-    match runtime::executor::block_on(receiver.next()).unwrap() {
+    match block_on(receiver.next()).unwrap() {
         Item::BufferList(_) => (),
         other => panic!("Unexpected item {:?}", other),
     }
@@ -785,10 +931,8 @@ fn task() {
     pipeline.set_state(gst::State::Paused).unwrap();
 
     // Items not longer accepted
-    runtime::executor::block_on(
-        elem_src_test.try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4]))),
-    )
-    .unwrap_err();
+    block_on(elem_src_test.try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4]))))
+        .unwrap_err();
 
     // Nothing forwarded
     receiver.try_next().unwrap_err();
@@ -800,41 +944,106 @@ fn task() {
     receiver.try_next().unwrap_err();
 
     // Flush
-    assert!(sink_element
-        .emit("flush-start", &[])
-        .unwrap()
-        .unwrap()
-        .get_some::<bool>()
-        .unwrap());
-
-    assert!(sink_element
-        .emit("flush-stop", &[])
-        .unwrap()
-        .unwrap()
-        .get_some::<bool>()
-        .unwrap());
-
-    // EOS
-    runtime::executor::block_on(elem_src_test.try_push(Item::Event(gst::Event::new_eos().build())))
+    block_on(elem_src_test.try_push(Item::Event(gst::Event::new_flush_start().build()))).unwrap();
+    block_on(elem_src_test.try_push(Item::Event(gst::Event::new_flush_stop(false).build())))
         .unwrap();
-    match runtime::executor::block_on(receiver.next()).unwrap() {
+
+    match block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
-            gst::EventView::Eos(_) => (),
+            EventView::FlushStop(_) => (),
             other => panic!("Unexpected event {:?}", other),
         },
         other => panic!("Unexpected item {:?}", other),
     }
 
-    // Stop the Pad task
+    // EOS
+    block_on(elem_src_test.try_push(Item::Event(gst::Event::new_eos().build()))).unwrap();
+
+    match block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::Eos(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
     pipeline.set_state(gst::State::Ready).unwrap();
 
     // Receiver was dropped when stopping => can't send anymore
-    runtime::executor::block_on(
+    block_on(
         elem_src_test.try_push(Item::Event(
-            gst::Event::new_stream_start("stream_id_task_test_past_stop")
+            gst::Event::new_stream_start(&format!("{}_past_stop", scenario_name))
                 .group_id(gst::util_group_id_next())
                 .build(),
         )),
     )
     .unwrap_err();
+}
+
+#[test]
+fn src_sink_nominal() {
+    let name = "src_sink_nominal";
+
+    let (pipeline, src_element, _sink_element, receiver) = setup(&name, None, None);
+
+    nominal_scenario(&name, pipeline, src_element, receiver);
+}
+
+#[test]
+fn src_tsqueue_sink_nominal() {
+    init();
+
+    let name = "src_tsqueue_sink";
+
+    let ts_queue = gst::ElementFactory::make("ts-queue", Some("ts-queue")).unwrap();
+    ts_queue
+        .set_property("context", &format!("{}_queue", name))
+        .unwrap();
+    ts_queue
+        .set_property("context-wait", &THROTTLING_DURATION)
+        .unwrap();
+
+    let (pipeline, src_element, _sink_element, receiver) = setup(name, Some(ts_queue), None);
+
+    nominal_scenario(&name, pipeline, src_element, receiver);
+}
+
+#[test]
+fn src_queue_sink_nominal() {
+    init();
+
+    let name = "src_queue_sink";
+
+    let queue = gst::ElementFactory::make("queue", Some("queue")).unwrap();
+    let (pipeline, src_element, _sink_element, receiver) = setup(name, Some(queue), None);
+
+    nominal_scenario(&name, pipeline, src_element, receiver);
+}
+
+#[test]
+fn src_tsproxy_sink_nominal() {
+    init();
+
+    let name = "src_tsproxy_sink";
+
+    let ts_proxy_sink = gst::ElementFactory::make("ts-proxysink", Some("ts-proxysink")).unwrap();
+    ts_proxy_sink
+        .set_property("proxy-context", &format!("{}_proxy_context", name))
+        .unwrap();
+
+    let ts_proxy_src = gst::ElementFactory::make("ts-proxysrc", Some("ts-proxysrc")).unwrap();
+    ts_proxy_src
+        .set_property("proxy-context", &format!("{}_proxy_context", name))
+        .unwrap();
+    ts_proxy_src
+        .set_property("context", &format!("{}_context", name))
+        .unwrap();
+    ts_proxy_src
+        .set_property("context-wait", &THROTTLING_DURATION)
+        .unwrap();
+
+    let (pipeline, src_element, _sink_element, receiver) =
+        setup(name, Some(ts_proxy_sink), Some(ts_proxy_src));
+
+    nominal_scenario(&name, pipeline, src_element, receiver);
 }

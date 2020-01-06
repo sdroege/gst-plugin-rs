@@ -47,7 +47,7 @@ pub mod executor;
 pub use executor::{Context, JoinHandle, TaskOutput};
 
 pub mod pad;
-pub use pad::{PadSink, PadSinkRef, PadSrc, PadSrcRef, PadSrcWeak};
+pub use pad::{PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, PadSrcWeak};
 
 pub mod pad_context;
 pub use pad_context::{PadContext, PadContextRef, PadContextWeak};

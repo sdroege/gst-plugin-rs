@@ -25,17 +25,14 @@
 //!
 //! * Waiting for an incoming packet on a Socket.
 //! * Waiting for an asynchronous `Mutex` `lock` to succeed.
-//! * Waiting for a `Timeout` to be elapsed.
-//!
-//! [`Context`]s instantiators define the minimum time between two iterations of the [`Context`]
-//! loop, which acts as a throttle, saving CPU usage when no operations are to be executed.
+//! * Waiting for a time related `Future`.
 //!
 //! `Element` implementations should use [`PadSrc`] & [`PadSink`] which provides high-level features.
 //!
-//! [`threadshare`]: ../index.html
+//! [`threadshare`]: ../../index.html
 //! [`Context`]: struct.Context.html
-//! [`PadSrc`]: struct.PadSrc.html
-//! [`PadSink`]: struct.PadSink.html
+//! [`PadSrc`]: ../pad/struct.PadSrc.html
+//! [`PadSink`]: ../pad/struct.PadSink.html
 
 use futures::channel::oneshot;
 use futures::future::BoxFuture;
@@ -82,8 +79,10 @@ thread_local!(static CURRENT_THREAD_CONTEXT: RefCell<Option<ContextWeak>> = RefC
 
 /// Blocks on `future`.
 ///
-/// This function must NOT be called within a [`Context`] thread.
+/// IO & time related `Future`s must be handled within their own [`Context`].
+/// Wait for the result using a [`JoinHandle`] or a `channel`.
 ///
+/// This function must NOT be called within a [`Context`] thread.
 /// The reason is this would prevent any task operating on the
 /// [`Context`] from making progress.
 ///
@@ -92,6 +91,7 @@ thread_local!(static CURRENT_THREAD_CONTEXT: RefCell<Option<ContextWeak>> = RefC
 /// This function panics if called within a [`Context`] thread.
 ///
 /// [`Context`]: struct.Context.html
+/// [`JoinHandle`]: enum.JoinHandle.html
 pub fn block_on<Fut: Future>(future: Fut) -> Fut::Output {
     if Context::is_context_thread() {
         panic!("Attempt to `block_on` within a `Context` thread");
@@ -290,8 +290,8 @@ impl ContextWeak {
 ///
 /// See the [module-level documentation](index.html) for more.
 ///
-/// [`PadSrc`]: ../struct.PadSrc.html
-/// [`PadSink`]: ../struct.PadSink.html
+/// [`PadSrc`]: ../pad/struct.PadSrc.html
+/// [`PadSink`]: ../pad/struct.PadSink.html
 #[derive(Clone, Debug)]
 pub struct Context(Arc<ContextInner>);
 

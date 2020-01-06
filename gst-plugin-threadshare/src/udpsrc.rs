@@ -18,7 +18,7 @@
 use either::Either;
 
 use futures::future::BoxFuture;
-use futures::lock::{Mutex, MutexGuard};
+use futures::lock::Mutex;
 use futures::prelude::*;
 
 use gio;
@@ -36,7 +36,6 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
-use gst::{EventView, QueryView};
 use gst_net::*;
 
 use lazy_static::lazy_static;
@@ -45,7 +44,7 @@ use rand;
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::sync::Arc;
+use std::sync::{self, Arc};
 use std::u16;
 
 #[cfg(unix)]
@@ -328,37 +327,35 @@ impl SocketRead for UdpReader {
 }
 
 #[derive(Debug)]
-struct UdpSrcPadHandlerInner {
+struct UdpSrcPadHandlerState {
     retrieve_sender_address: bool,
-    socket_stream: Option<SocketStream<UdpReader>>,
     need_initial_events: bool,
+    caps: Option<gst::Caps>,
     configured_caps: Option<gst::Caps>,
 }
 
-impl Default for UdpSrcPadHandlerInner {
+impl Default for UdpSrcPadHandlerState {
     fn default() -> Self {
-        UdpSrcPadHandlerInner {
+        UdpSrcPadHandlerState {
             retrieve_sender_address: true,
-            socket_stream: None,
             need_initial_events: true,
+            caps: None,
             configured_caps: None,
         }
     }
 }
 
-#[derive(Clone, Debug)]
-struct UdpSrcPadHandler(Arc<Mutex<UdpSrcPadHandlerInner>>);
+#[derive(Debug, Default)]
+struct UdpSrcPadHandlerInner {
+    state: sync::RwLock<UdpSrcPadHandlerState>,
+    socket_stream: Mutex<Option<SocketStream<UdpReader>>>,
+    flush_join_handle: sync::Mutex<Option<JoinHandle<Result<(), ()>>>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct UdpSrcPadHandler(Arc<UdpSrcPadHandlerInner>);
 
 impl UdpSrcPadHandler {
-    fn new() -> Self {
-        UdpSrcPadHandler(Arc::new(Mutex::new(UdpSrcPadHandlerInner::default())))
-    }
-
-    #[inline]
-    async fn lock(&self) -> MutexGuard<'_, UdpSrcPadHandlerInner> {
-        self.0.lock().await
-    }
-
     async fn start_task(&self, pad: PadSrcRef<'_>, element: &gst::Element) {
         let this = self.clone();
         let pad_weak = pad.downgrade();
@@ -369,9 +366,10 @@ impl UdpSrcPadHandler {
             let element = element.clone();
             async move {
                 let item = this
+                    .0
+                    .socket_stream
                     .lock()
                     .await
-                    .socket_stream
                     .as_mut()
                     .expect("Missing SocketStream")
                     .next()
@@ -411,7 +409,7 @@ impl UdpSrcPadHandler {
                 };
 
                 if let Some(saddr) = saddr {
-                    if this.lock().await.retrieve_sender_address {
+                    if this.0.state.read().unwrap().retrieve_sender_address {
                         let inet_addr = match saddr.ip() {
                             IpAddr::V4(ip) => gio::InetAddress::new_from_bytes(
                                 gio::InetAddressBytes::V4(&ip.octets()),
@@ -436,8 +434,13 @@ impl UdpSrcPadHandler {
         {
             let mut events = Vec::new();
             {
-                let mut inner = self.lock().await;
-                if inner.need_initial_events {
+                // Only `read` the state in the hot path
+                if self.0.state.read().unwrap().need_initial_events {
+                    // We will need to `write` and we also want to prevent
+                    // any changes on the state while we are handling initial events
+                    let mut state = self.0.state.write().unwrap();
+                    assert!(state.need_initial_events);
+
                     gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
 
                     let stream_id =
@@ -447,17 +450,17 @@ impl UdpSrcPadHandler {
                             .group_id(gst::util_group_id_next())
                             .build(),
                     );
-                    let udpsrc = UdpSrc::from_instance(element);
-                    if let Some(ref caps) = udpsrc.settings.lock().await.caps {
+
+                    if let Some(ref caps) = state.caps {
                         events.push(gst::Event::new_caps(&caps).build());
-                        inner.configured_caps = Some(caps.clone());
+                        state.configured_caps = Some(caps.clone());
                     }
                     events.push(
                         gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
                             .build(),
                     );
 
-                    inner.need_initial_events = false;
+                    state.need_initial_events = false;
                 }
             }
 
@@ -496,26 +499,69 @@ impl PadSrcHandler for UdpSrcPadHandler {
 
     fn src_event(
         &self,
-        pad: PadSrcRef,
-        udpsrc: &UdpSrc,
+        pad: &PadSrcRef,
+        _udpsrc: &UdpSrc,
         element: &gst::Element,
         event: gst::Event,
     ) -> Either<bool, BoxFuture<'static, bool>> {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling event {:?}", event);
+        use gst::EventView;
+
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let _ = runtime::executor::block_on(udpsrc.pause(element));
+                let mut flush_join_handle = self.0.flush_join_handle.lock().unwrap();
+                if flush_join_handle.is_none() {
+                    let element = element.clone();
+                    let pad_weak = pad.downgrade();
+
+                    *flush_join_handle = Some(pad.spawn(async move {
+                        let res = UdpSrc::from_instance(&element).pause(&element).await;
+                        let pad = pad_weak.upgrade().unwrap();
+                        if res.is_ok() {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart complete");
+                        } else {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart failed");
+                        }
+
+                        res
+                    }));
+                } else {
+                    gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart ignored: previous Flush in progress");
+                }
+
                 true
             }
             EventView::FlushStop(..) => {
-                let (res, state, pending) = element.get_state(0.into());
-                if res == Ok(gst::StateChangeSuccess::Success) && state == gst::State::Playing
-                    || res == Ok(gst::StateChangeSuccess::Async) && pending == gst::State::Playing
-                {
-                    let _ = runtime::executor::block_on(udpsrc.start(element));
+                let element = element.clone();
+                let inner_weak = Arc::downgrade(&self.0);
+                let pad_weak = pad.downgrade();
+
+                let fut = async move {
+                    let mut ret = false;
+
+                    let pad = pad_weak.upgrade().unwrap();
+                    let inner_weak = inner_weak.upgrade().unwrap();
+                    let flush_join_handle = inner_weak.flush_join_handle.lock().unwrap().take();
+                    if let Some(flush_join_handle) = flush_join_handle {
+                        if let Ok(Ok(())) = flush_join_handle.await {
+                            ret = UdpSrc::from_instance(&element)
+                                .start(&element)
+                                .await
+                                .is_ok();
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop complete");
+                        } else {
+                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop aborted: FlushStart failed");
+                        }
+                    } else {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop ignored: no Flush in progress");
+                    }
+
+                    ret
                 }
-                true
+                .boxed();
+
+                return Either::Right(fut);
             }
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
@@ -523,9 +569,9 @@ impl PadSrcHandler for UdpSrcPadHandler {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad.gst_pad(), "Handled event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled {:?}", event);
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle event {:?}", event);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", event);
         }
 
         Either::Left(ret)
@@ -533,12 +579,14 @@ impl PadSrcHandler for UdpSrcPadHandler {
 
     fn src_query(
         &self,
-        pad: PadSrcRef,
+        pad: &PadSrcRef,
         _udpsrc: &UdpSrc,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
+        use gst::QueryView;
+
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
@@ -551,8 +599,8 @@ impl PadSrcHandler for UdpSrcPadHandler {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let inner = runtime::executor::block_on(self.lock());
-                let caps = if let Some(ref caps) = inner.configured_caps {
+                let state = self.0.state.read().unwrap();
+                let caps = if let Some(ref caps) = state.configured_caps {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
@@ -570,9 +618,9 @@ impl PadSrcHandler for UdpSrcPadHandler {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad.gst_pad(), "Handled query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Handled {:?}", query);
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle query {:?}", query);
+            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", query);
         }
 
         ret
@@ -620,6 +668,12 @@ impl UdpSrc {
 
         let context = {
             let settings = self.settings.lock().await.clone();
+
+            {
+                let mut src_pad_handler_state = self.src_pad_handler.0.state.write().unwrap();
+                src_pad_handler_state.retrieve_sender_address = settings.retrieve_sender_address;
+                src_pad_handler_state.caps = settings.caps.clone();
+            }
 
             Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
                 gst_error_msg!(
@@ -857,11 +911,7 @@ impl UdpSrc {
             )
         })?;
 
-        {
-            let mut src_pad_handler = this.src_pad_handler.lock().await;
-            src_pad_handler.retrieve_sender_address = settings.retrieve_sender_address;
-            src_pad_handler.socket_stream = Some(socket_stream);
-        }
+        *this.src_pad_handler.0.socket_stream.lock().await = Some(socket_stream);
 
         this.state.lock().await.socket = Some(socket);
 
@@ -919,7 +969,12 @@ impl UdpSrc {
         }
 
         let _ = self.src_pad.unprepare().await;
-        self.src_pad_handler.lock().await.configured_caps = None;
+        self.src_pad_handler
+            .0
+            .state
+            .write()
+            .unwrap()
+            .configured_caps = None;
 
         gst_debug!(CAT, obj: element, "Unprepared");
         Ok(())
@@ -1015,7 +1070,7 @@ impl ObjectSubclass for UdpSrc {
 
         Self {
             src_pad,
-            src_pad_handler: UdpSrcPadHandler::new(),
+            src_pad_handler: UdpSrcPadHandler::default(),
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
             preparation_set: Mutex::new(None),
@@ -1152,9 +1207,12 @@ impl ElementImpl for UdpSrc {
                     .map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PausedToReady => {
-                runtime::executor::block_on(async {
-                    self.src_pad_handler.lock().await.need_initial_events = true;
-                });
+                self.src_pad_handler
+                    .0
+                    .state
+                    .write()
+                    .unwrap()
+                    .need_initial_events = true;
             }
             _ => (),
         }
