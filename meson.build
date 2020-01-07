@@ -80,6 +80,8 @@ foreach d: deps
   endif
 endforeach
 
+exclude = ','.join(exclude)
+
 # Always build the target so we don't have to list all source files as input
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
@@ -94,10 +96,20 @@ rs_plugins = custom_target('gst-plugins-rs',
     meson.current_source_dir(),
     meson.build_root(),
     target,
-    ext,
-    ','.join(exclude)])
+    exclude,
+    ext])
 
 # FIXME: raises a warning as the target has multiple outputs and meson will use
 # only the first one. All the plugins have the same basedir, hence
 # GST_PLUGIN_PATH will include them all, so that's ok.
 plugins = [rs_plugins]
+
+test('tests',
+  cargo_wrapper,
+  args: ['test',
+    meson.current_build_dir(),
+    meson.current_source_dir(),
+    meson.build_root(),
+    target,
+    exclude],
+  timeout: 600)

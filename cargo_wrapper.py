@@ -7,8 +7,8 @@ import shutil
 import subprocess
 import sys
 
-command, meson_build_dir, meson_current_source_dir, meson_build_root, target, ext, exclude = sys.argv[
-    1:]
+command, meson_build_dir, meson_current_source_dir, meson_build_root, target, exclude = sys.argv[
+    1:7]
 
 cargo_target_dir = os.path.join(meson_build_dir, 'target')
 
@@ -28,11 +28,17 @@ env['PKG_CONFIG_PATH'] = ':'.join(pkg_config_path)
 
 if command == 'build':
     # cargo build
+    ext = sys.argv[7]
     cargo_cmd = ['cargo', 'build', '--manifest-path',
                  os.path.join(meson_current_source_dir, 'Cargo.toml'),
                  '--workspace']
     if target == 'release':
         cargo_cmd.append('--release')
+elif command == 'test':
+    # cargo test
+    cargo_cmd = ['cargo', 'test', '--no-fail-fast', '--color=always', '--manifest-path',
+                 os.path.join(meson_current_source_dir, 'Cargo.toml'),
+                 '--workspace']
 else:
     print("Unknown command:", command)
     sys.exit(1)
