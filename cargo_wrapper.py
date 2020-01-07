@@ -7,7 +7,8 @@ import shutil
 import subprocess
 import sys
 
-meson_build_dir, meson_current_source_dir, meson_build_root, target, ext, exclude = sys.argv[1:]
+command, meson_build_dir, meson_current_source_dir, meson_build_root, target, ext, exclude = sys.argv[
+    1:]
 
 cargo_target_dir = os.path.join(meson_build_dir, 'target')
 
@@ -25,12 +26,16 @@ pkg_config_path.append(os.path.join(
     meson_build_root, 'subprojects', 'gst-plugins-base', 'pkgconfig'))
 env['PKG_CONFIG_PATH'] = ':'.join(pkg_config_path)
 
-# cargo build
-cargo_cmd = ['cargo', 'build', '--manifest-path',
-             os.path.join(meson_current_source_dir, 'Cargo.toml'),
-             '--workspace']
-if target == 'release':
-    cargo_cmd.append('--release')
+if command == 'build':
+    # cargo build
+    cargo_cmd = ['cargo', 'build', '--manifest-path',
+                 os.path.join(meson_current_source_dir, 'Cargo.toml'),
+                 '--workspace']
+    if target == 'release':
+        cargo_cmd.append('--release')
+else:
+    print("Unknown command:", command)
+    sys.exit(1)
 
 if len(exclude) > 0:
     for e in exclude.split(','):
@@ -42,6 +47,7 @@ try:
 except subprocess.SubprocessError:
     sys.exit(1)
 
-# Copy so files to build dir
-for f in glob.glob(os.path.join(cargo_target_dir, target, '*.' + ext)):
-    shutil.copy(f, meson_build_dir)
+if command == 'build':
+    # Copy so files to build dir
+    for f in glob.glob(os.path.join(cargo_target_dir, target, '*.' + ext)):
+        shutil.copy(f, meson_build_dir)
