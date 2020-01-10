@@ -24,6 +24,10 @@ gst-plugin-togglerecord is licensed under the Lesser General Public License
 ([LICENSE-LGPLv2](LICENSE-LGPLv2)) version 2.1 or (at your option) any later
 version.
 
+gst-plugin-csound is licensed under the Lesser General Public License
+([LICENSE-LGPLv2](LICENSE-LGPLv2)) version 2.1 or (at your option) any later
+version.
+
 GStreamer itself is licensed under the Lesser General Public License version
 2.1 or (at your option) any later version:
 https://www.gnu.org/licenses/lgpl-2.1.html

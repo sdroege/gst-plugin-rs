@@ -19,6 +19,7 @@ members = [
     "gst-plugin-lewton",
     "gst-plugin-claxon",
     "gst-plugin-gif",
+    "gst-plugin-csound",
 ]
 
 [profile.release]

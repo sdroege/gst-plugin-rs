@@ -1,5 +1,6 @@
 project('gst-plugins-rs',
         'rust',
+        'c',
         version: '0.13.0',
         meson_version : '>= 0.52')
 
@@ -57,6 +58,28 @@ elif sodium == 'built-in'
   plugins_rep += {'gst-plugin-sodium': 'libgstsodium'}
 else
   exclude += ['gst-plugin-sodium']
+endif
+
+cc = meson.get_compiler('c')
+csound_option = get_option('csound')
+csound_dep = dependency('', required: false) # not-found dependency
+if not csound_option.disabled()
+  csound_dep = cc.find_library('csound64', required: false)
+  if not csound_dep.found()
+    python3 = import('python').find_installation('python3')
+    res = run_command(python3, '-c', 'import os; print(os.environ["CSOUND_LIB_DIR"])')
+    if res.returncode() == 0
+      csound_dep = cc.find_library('csound64', dirs: res.stdout(), required: csound_option)
+    elif csound_option.enabled()
+      error('csound option is enabled, but csound64 library could not be found and CSOUND_LIB_DIR was not set')
+    endif
+  endif
+endif
+
+if csound_dep.found()
+  plugins_rep += {'gst-plugin-csound' : 'libgstcsound'}
+else
+  exclude += ['gst-plugin-csound']
 endif
 
 output = []

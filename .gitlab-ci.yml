@@ -28,6 +28,7 @@ stages:
       libwayland-egl1-mesa
       llvm
       nasm
+      libcsound64-dev
       python3-pip
       python3-setuptools
       python3-wheel
@@ -52,7 +53,6 @@ stages:
     # FIXME: The feature name should explicitly mention the dav1d plugin but
     # Cargo currently doesn't support passthrough for that scenario.
     - export RUSTFLAGS='--cfg feature="build"'
-
     - cd "${CI_PROJECT_DIR}"
   cache:
     key: "gst"

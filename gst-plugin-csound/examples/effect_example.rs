@@ -1,0 +1,144 @@
+// Copyright (C) 2020 Natanael Mojica <neithanmo@gmail.com>
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Library General Public
+// License as published by the Free Software Foundation; either
+// version 2 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Library General Public License for more details.
+//
+// You should have received a copy of the GNU Library General Public
+// License along with this library; if not, write to the
+// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
+// Boston, MA 02110-1335, USA.
+
+use glib;
+use glib::prelude::*;
+
+use gst;
+use gst::prelude::*;
+
+use gstcsound;
+
+use std::error::Error;
+
+const AUDIO_SRC: &str = "audiotestsrc";
+const AUDIO_SINK: &str = "audioconvert ! autoaudiosink";
+
+// This example defines two instruments, the first instrument send to the output that is at its input and accumulates the received audio samples
+// into a global variable called gasig. The execution of this instrument last the first 2 seconds.
+// The second instrument starts it execution at 1.8 second, This instrument creates two audio buffers with samples that are read
+// from the global accumulator(gasig), then reads these buffers at a fixed delay time, creating the adelL, adelM and adelR buffers,
+// also, It multiplies the audio samples in the right channel by 0.5 * kdel, being kdel a line of values starting at 0.5 at increments of 0.001.
+// Finally, those buffers are mixed with the accumulator, and an audio envelop is applied(aseg) to them.
+// The result is similar to an audio echo in which the buffered samples are read at different delay times and also modified in frecuency(right channel),
+// this creates an space effect using just one channel audio input.
+const CSD: &str = "
+    <CsoundSynthesizer>
+    <CsOptions>
+    </CsOptions>
+    <CsInstruments>
+
+    sr = 44100
+    ksmps = 7
+
+    nchnls_i = 1 
+    nchnls = 2   
+
+    gasig  init 0
+    gidel  = 1	
+
+    instr 1
+
+        ain in
+            outs ain, ain
+
+        vincr gasig, ain	
+    endin
+
+    instr 2
+
+        ifeedback = p4
+
+        aseg linseg 1., p3, 0.0 
+
+        abuf2	delayr	gidel
+        adelL 	deltap	.4
+        adelM 	deltap	.5
+            delayw	gasig + (adelL * ifeedback)
+
+        abuf3	delayr	gidel
+        kdel	line    .5, p3, .001
+        adelR 	deltap  .5 * kdel
+            delayw	gasig + (adelR * ifeedback)
+    	outs	(adelL + adelM) * aseg, (adelR + adelM) * aseg
+        clear	gasig
+    endin
+
+    </CsInstruments>
+    <CsScore>
+
+    i 1 0 2
+    i 2 1.8 5 .8
+    e
+    </CsScore>
+    </CsoundSynthesizer>";
+
+fn create_pipeline() -> Result<gst::Pipeline, Box<dyn Error>> {
+    let pipeline = gst::Pipeline::new(None);
+
+    let audio_src = gst::parse_bin_from_description(AUDIO_SRC, true)?.upcast();
+
+    let audio_sink = gst::parse_bin_from_description(AUDIO_SINK, true)?.upcast();
+
+    let csoundfilter = gst::ElementFactory::make("csoundfilter", None)?;
+    csoundfilter.set_property("csd-text", &CSD)?;
+
+    pipeline.add_many(&[&audio_src, &csoundfilter, &audio_sink])?;
+
+    audio_src.link_pads(Some("src"), &csoundfilter, Some("sink"))?;
+    csoundfilter.link_pads(Some("src"), &audio_sink, Some("sink"))?;
+
+    Ok(pipeline)
+}
+
+fn main_loop(pipeline: gst::Pipeline) -> Result<(), Box<dyn Error>> {
+    pipeline.set_state(gst::State::Playing)?;
+
+    let bus = pipeline
+        .get_bus()
+        .expect("Pipeline without bus. Shouldn't happen!");
+
+    for msg in bus.iter_timed(gst::CLOCK_TIME_NONE) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Eos(..) => break,
+            MessageView::Error(err) => {
+                println!(
+                    "Error from {:?}: {} ({:?})",
+                    msg.get_src().map(|s| s.get_path_string()),
+                    err.get_error(),
+                    err.get_debug()
+                );
+                break;
+            }
+            _ => (),
+        }
+    }
+
+    pipeline.set_state(gst::State::Null)?;
+
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    gst::init().unwrap();
+
+    gstcsound::plugin_register_static().expect("Failed to register csound plugin");
+
+    create_pipeline().and_then(main_loop)
+}

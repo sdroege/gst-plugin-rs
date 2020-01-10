@@ -2,3 +2,4 @@ option('dav1d', type : 'feature', value : 'auto', description : 'Build dav1d plu
 option('sodium', type : 'combo',
     choices : ['system', 'built-in', 'disabled'], value : 'built-in',
     description : 'Weither to use libsodium from the system or the built-in version from the sodiumoxide crate')
+option('csound', type : 'feature', value : 'auto', description : 'Build csound plugin')
