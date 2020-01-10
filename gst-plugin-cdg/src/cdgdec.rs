@@ -99,6 +99,14 @@ impl VideoDecoderImpl for CdgDec {
         self.parent_start(element)
     }
 
+    fn stop(&self, element: &gst_video::VideoDecoder) -> Result<(), gst::ErrorMessage> {
+        {
+            let mut cdg_inter = self.cdg_inter.lock().unwrap();
+            cdg_inter.reset(true);
+        }
+        self.parent_stop(element)
+    }
+
     fn handle_frame(
         &self,
         element: &gst_video::VideoDecoder,
