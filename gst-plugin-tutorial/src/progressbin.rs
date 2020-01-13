@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::progressbin_output_enum::ProgressBinOutput;
 use glib;
+use glib::gobject_sys;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
@@ -15,6 +15,25 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::sync::Mutex;
+
+// This enum may be used to control what type of output the progressbin should produce.
+// It also serves the secondary purpose of illustrating how to add enum-type properties
+// to a plugin written in rust.
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
+#[repr(u32)]
+#[genum(type_name = "GstProgressBinOutput")]
+pub(crate) enum ProgressBinOutput {
+    #[genum(
+        name = "Println: Outputs the progress using a println! macro.",
+        nick = "println"
+    )]
+    Println = 0,
+    #[genum(
+        name = "Debug Category: Outputs the progress as info logs under the element's debug category.",
+        nick = "debug-category"
+    )]
+    DebugCategory = 1,
+}
 
 const DEFAULT_OUTPUT_TYPE: ProgressBinOutput = ProgressBinOutput::Println;
 
