@@ -29,8 +29,9 @@ env['PKG_CONFIG_PATH'] = ':'.join(pkg_config_path)
 if command == 'build':
     # cargo build
     ext = sys.argv[7]
-    cargo_cmd = ['cargo', 'build', '--manifest-path',
-                 os.path.join(meson_current_source_dir, 'Cargo.toml'),
+    cargo_cmd = ['cargo', 'build', '--all-targets',
+                 '--manifest-path', os.path.join(
+                     meson_current_source_dir, 'Cargo.toml'),
                  '--workspace']
     if target == 'release':
         cargo_cmd.append('--release')
