@@ -527,6 +527,14 @@ impl UdpSink {
                     );
                     gst::FlowError::Error
                 })?;
+            } else {
+                gst_element_error!(
+                    element,
+                    gst::StreamError::Failed,
+                    ("I/O error"),
+                    ["No socket available for sending to {}", client]
+                );
+                return Err(gst::FlowError::Error);
             }
         }
 
@@ -617,13 +625,21 @@ impl UdpSink {
                 net2::UdpBuilder::new_v6()
             } else {
                 net2::UdpBuilder::new_v4()
-            }
-            .map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenWrite,
-                    ["Failed to create socket: {}", err]
-                )
-            })?;
+            };
+
+            let builder = match builder {
+                Ok(builder) => builder,
+                Err(err) => {
+                    gst_warning!(
+                        CAT,
+                        obj: element,
+                        "Failed to create {} socket builder: {}",
+                        if ipv6 { "IPv6" } else { "IPv4" },
+                        err
+                    );
+                    return Ok(());
+                }
+            };
 
             let socket = builder.bind(&saddr).map_err(|err| {
                 gst_error_msg!(
