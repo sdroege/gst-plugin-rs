@@ -221,7 +221,7 @@ static PROPERTIES: [subclass::Property; 19] = [
             name,
             "Bind Address V6",
             "Address to bind the V6 socket to",
-            Some(DEFAULT_BIND_ADDRESS),
+            Some(DEFAULT_BIND_ADDRESS_V6),
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -232,7 +232,7 @@ static PROPERTIES: [subclass::Property; 19] = [
             "Port to bind the V6 socket to",
             0,
             u16::MAX as u32,
-            DEFAULT_BIND_PORT,
+            DEFAULT_BIND_PORT_V6,
             glib::ParamFlags::READWRITE,
         )
     }),
