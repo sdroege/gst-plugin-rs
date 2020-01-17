@@ -33,17 +33,28 @@ plugins_rep = {
   'gst-plugin-rav1e': 'libgstrav1e',
   'gst-plugin-reqwest': 'libgstreqwest',
   'gst-plugin-rusoto': 'libgstrusoto',
-  'gst-plugin-sodium': 'libgstsodium',
   'gst-plugin-threadshare': 'libgstthreadshare',
   'gst-plugin-togglerecord': 'libgsttogglerecord',
 }
 
 exclude = []
+extra_env = {}
 
 if dependency('dav1d', required : get_option('dav1d')).found()
   plugins_rep += {'gst-plugin-dav1d' : 'libgstrsdav1d'}
 else
   exclude += ['gst-plugin-dav1d']
+endif
+
+sodium = get_option ('sodium')
+if sodium == 'system'
+  dependency('libsodium')
+  plugins_rep += {'gst-plugin-sodium': 'libgstsodium'}
+  extra_env += {'SODIUM_USE_PKG_CONFIG': '1'}
+elif sodium == 'built-in'
+  plugins_rep += {'gst-plugin-sodium': 'libgstsodium'}
+else
+  exclude += ['gst-plugin-sodium']
 endif
 
 output = []
@@ -83,6 +94,13 @@ endforeach
 
 exclude = ','.join(exclude)
 
+# serialize extra_env
+extra_env_list = []
+foreach key, value : extra_env
+  extra_env_list += key + ':' + value
+endforeach
+extra_env_str = ','.join(extra_env_list)
+
 # Always build the target so we don't have to list all source files as input
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
@@ -98,6 +116,7 @@ rs_plugins = custom_target('gst-plugins-rs',
     meson.build_root(),
     target,
     exclude,
+    extra_env_str,
     ext])
 
 # FIXME: raises a warning as the target has multiple outputs and meson will use
@@ -112,5 +131,6 @@ test('tests',
     meson.current_source_dir(),
     meson.build_root(),
     target,
-    exclude],
+    exclude,
+    extra_env_str],
   timeout: 600)

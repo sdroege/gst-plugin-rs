@@ -7,8 +7,8 @@ import shutil
 import subprocess
 import sys
 
-command, meson_build_dir, meson_current_source_dir, meson_build_root, target, exclude = sys.argv[
-    1:7]
+command, meson_build_dir, meson_current_source_dir, meson_build_root, target, exclude, extra_env = sys.argv[
+    1:8]
 
 cargo_target_dir = os.path.join(meson_build_dir, 'target')
 
@@ -26,9 +26,14 @@ pkg_config_path.append(os.path.join(
     meson_build_root, 'subprojects', 'gst-plugins-base', 'pkgconfig'))
 env['PKG_CONFIG_PATH'] = ':'.join(pkg_config_path)
 
+if len(extra_env) > 0:
+    for e in extra_env.split(','):
+        k, v = e.split(':')
+        env[k] = v
+
 if command == 'build':
     # cargo build
-    ext = sys.argv[7]
+    ext = sys.argv[8]
     cargo_cmd = ['cargo', 'build', '--all-targets',
                  '--manifest-path', os.path.join(
                      meson_current_source_dir, 'Cargo.toml'),
