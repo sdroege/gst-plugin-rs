@@ -140,23 +140,13 @@ impl PendingQueue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct QueuePadSinkHandlerInner {
     flush_join_handle: sync::Mutex<Option<JoinHandle<Result<(), ()>>>>,
-    context: Context,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Default)]
 struct QueuePadSinkHandler(Arc<QueuePadSinkHandlerInner>);
-
-impl QueuePadSinkHandler {
-    fn new(context: Context) -> Self {
-        QueuePadSinkHandler(Arc::new(QueuePadSinkHandlerInner {
-            flush_join_handle: sync::Mutex::new(None),
-            context,
-        }))
-    }
-}
 
 impl PadSinkHandler for QueuePadSinkHandler {
     type ElementImpl = Queue;
@@ -253,7 +243,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
                     gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
                     let element = element.clone();
                     *flush_join_handle =
-                        Some(self.0.context.spawn(async move {
+                        Some(queue.src_pad.spawn(async move {
                             Queue::from_instance(&element).stop(&element).await
                         }));
                 } else {
@@ -748,7 +738,7 @@ impl Queue {
             })?;
 
         self.src_pad
-            .prepare(context.clone(), &QueuePadSrcHandler::default())
+            .prepare(context, &QueuePadSrcHandler::default())
             .await
             .map_err(|err| {
                 gst_error_msg!(
@@ -756,9 +746,7 @@ impl Queue {
                     ["Error joining Context: {:?}", err]
                 )
             })?;
-        self.sink_pad
-            .prepare(&QueuePadSinkHandler::new(context))
-            .await;
+        self.sink_pad.prepare(&QueuePadSinkHandler::default()).await;
 
         gst_debug!(CAT, obj: element, "Prepared");
 

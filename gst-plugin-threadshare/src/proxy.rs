@@ -188,7 +188,6 @@ impl PendingQueue {
 /// ProxySrc fields which are necessary for ProxySink
 #[derive(Debug)]
 struct SharedSrc {
-    ts_ctx: Context,
     src_pad: PadSrcWeak,
 }
 
@@ -312,7 +311,6 @@ impl ProxyContext {
 #[derive(Debug)]
 struct ProxySinkPadHandlerInner {
     flush_join_handle: sync::Mutex<Option<JoinHandle<Result<(), ()>>>>,
-    ts_ctx: Context,
     src_pad: PadSrcWeak,
 }
 
@@ -320,10 +318,9 @@ struct ProxySinkPadHandlerInner {
 struct ProxySinkPadHandler(Arc<ProxySinkPadHandlerInner>);
 
 impl ProxySinkPadHandler {
-    fn new(ts_ctx: Context, src_pad: PadSrcWeak) -> Self {
+    fn new(src_pad: PadSrcWeak) -> Self {
         ProxySinkPadHandler(Arc::new(ProxySinkPadHandlerInner {
             flush_join_handle: sync::Mutex::new(None),
-            ts_ctx,
             src_pad,
         }))
     }
@@ -427,12 +424,18 @@ impl PadSinkHandler for ProxySinkPadHandler {
                 .boxed(),
             )
         } else {
+            let src_pad = self
+                .0
+                .src_pad
+                .upgrade()
+                .expect("PadSrc no longer available");
+
             if let EventView::FlushStart(..) = event.view() {
                 let mut flush_join_handle = self.0.flush_join_handle.lock().unwrap();
                 if flush_join_handle.is_none() {
                     gst_log!(SINK_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
                     let element = element.clone();
-                    *flush_join_handle = Some(self.0.ts_ctx.spawn(async move {
+                    *flush_join_handle = Some(src_pad.spawn(async move {
                         ProxySink::from_instance(&element).stop(&element).await
                     }));
                 } else {
@@ -441,15 +444,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
             }
 
             gst_log!(SINK_CAT, obj: pad.gst_pad(), "Fowarding non-serialized {:?}", event);
-
-            Either::Left(
-                self.0
-                    .src_pad
-                    .upgrade()
-                    .expect("PadSrc no longer available")
-                    .gst_pad()
-                    .push_event(event),
-            )
+            Either::Left(src_pad.gst_pad().push_event(event))
         }
     }
 }
@@ -716,7 +711,7 @@ impl ProxySink {
 
         gst_debug!(SINK_CAT, obj: element, "Completing preparation");
 
-        let SharedSrc { ts_ctx, src_pad } = shared_src_rx.unwrap().await.map_err(|err| {
+        let SharedSrc { src_pad } = shared_src_rx.unwrap().await.map_err(|err| {
             gst_error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to receive SharedSrc: {:?}", err]
@@ -724,7 +719,7 @@ impl ProxySink {
         })?;
 
         self.sink_pad
-            .prepare(&ProxySinkPadHandler::new(ts_ctx, src_pad))
+            .prepare(&ProxySinkPadHandler::new(src_pad))
             .await;
 
         gst_debug!(SINK_CAT, obj: element, "Preparation completed");
@@ -1230,7 +1225,6 @@ impl ProxySrc {
                 .take()
                 .unwrap()
                 .send(SharedSrc {
-                    ts_ctx: ts_ctx.clone(),
                     src_pad: self.src_pad.downgrade(),
                 })
                 .map_err(|err| {
