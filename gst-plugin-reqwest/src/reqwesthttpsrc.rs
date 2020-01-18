@@ -353,10 +353,12 @@ impl ReqwestHttpSrc {
         start: u64,
         stop: Option<u64>,
     ) -> Result<State, Option<gst::ErrorMessage>> {
-        use headers::{
-            AcceptRanges, Connection, ContentLength, ContentRange, HeaderMapExt, Range, UserAgent,
+        use hyperx::header::{
+            qitem, AcceptEncoding, AcceptRanges, ByteRangeSpec, Connection, ContentLength,
+            ContentRange, ContentRangeSpec, ContentType, Cookie, Encoding, Range, RangeUnit,
+            TypedHeaders, UserAgent,
         };
-        use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+        use reqwest::header::HeaderMap;
 
         gst_debug!(CAT, obj: src, "Creating new request for {}", uri);
 
@@ -369,38 +371,30 @@ impl ReqwestHttpSrc {
         let mut headers = HeaderMap::new();
 
         if settings.keep_alive {
-            headers.typed_insert(Connection::keep_alive());
+            headers.encode(&Connection::keep_alive());
         } else {
-            headers.typed_insert(Connection::close());
+            headers.encode(&Connection::close());
         }
 
         match (start != 0, stop) {
             (false, None) => (),
             (true, None) => {
-                headers.typed_insert(Range::bytes(start..).unwrap());
+                headers.encode(&Range::Bytes(vec![ByteRangeSpec::AllFrom(start)]));
             }
             (_, Some(stop)) => {
-                headers.typed_insert(Range::bytes(start..stop).unwrap());
+                headers.encode(&Range::Bytes(vec![ByteRangeSpec::FromTo(start, stop - 1)]));
             }
         }
 
-        if let Ok(user_agent) = settings.user_agent.parse::<UserAgent>() {
-            headers.typed_insert(user_agent);
-        } else {
-            gst_warning!(
-                CAT,
-                obj: src,
-                "Failed to transform user-agent '{}' to header value",
-                settings.user_agent
-            );
-        }
+        headers.encode(&UserAgent::new(settings.user_agent));
 
         if !settings.compress {
             // Compression is the default
-            headers.append("accept-encoding", "identity".parse().unwrap());
+            headers.encode(&AcceptEncoding(vec![qitem(Encoding::Identity)]));
         };
 
         if let Some(ref extra_headers) = settings.extra_headers {
+            use reqwest::header::{HeaderName, HeaderValue};
             use std::convert::TryFrom;
 
             for (field, value) in extra_headers.iter() {
@@ -466,25 +460,16 @@ impl ReqwestHttpSrc {
         }
 
         if !settings.cookies.is_empty() {
-            let mut cookies = String::new();
+            let mut cookies = Cookie::new();
             for cookie in settings.cookies {
                 let mut split = cookie.splitn(2, '=');
                 let key = split.next();
                 let value = split.next();
                 if let (Some(key), Some(value)) = (key, value) {
-                    if !cookies.is_empty() {
-                        cookies.push_str("; ");
-                    }
-                    cookies.push_str(key);
-                    cookies.push('=');
-                    cookies.push_str(value);
+                    cookies.append(String::from(key), String::from(value));
                 }
             }
-            if let Ok(cookies) = HeaderValue::from_str(&cookies) {
-                headers.append("cookie", cookies);
-            } else {
-                gst_warning!(CAT, obj: src, "Failed to convert cookies into header value",);
-            }
+            headers.encode(&cookies);
         }
 
         if settings.iradio_mode {
@@ -557,13 +542,19 @@ impl ReqwestHttpSrc {
         }
 
         let headers = res.headers();
-        let size = headers.typed_get().map(|ContentLength(cl)| cl + start);
-        let accept_byte_ranges = headers.typed_get() == Some(AcceptRanges::bytes());
+        let size = headers.decode().map(|ContentLength(cl)| cl + start).ok();
+
+        let accept_byte_ranges = if let Ok(AcceptRanges(ref ranges)) = headers.decode() {
+            ranges.iter().any(|u| *u == RangeUnit::Bytes)
+        } else {
+            false
+        };
         let seekable = size.is_some() && accept_byte_ranges;
 
-        let position = if let Some((range_start, _range_end)) = headers
-            .typed_get()
-            .and_then(|h| ContentRange::bytes_range(&h))
+        let position = if let Ok(ContentRange(ContentRangeSpec::Bytes {
+            range: Some((range_start, _)),
+            ..
+        })) = headers.decode()
         {
             range_start
         } else {
@@ -587,11 +578,7 @@ impl ReqwestHttpSrc {
                     .build()
             });
 
-        if let Some(content_type) = headers
-            .get("content-type")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.parse::<mime::Mime>().ok())
-        {
+        if let Ok(ContentType(ref content_type)) = headers.decode() {
             gst_debug!(CAT, obj: src, "Got content type {}", content_type);
             if let Some(ref mut caps) = caps {
                 let caps = caps.get_mut().unwrap();

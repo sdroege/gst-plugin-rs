@@ -12,7 +12,7 @@ url = "2.1"
 glib = { git = "https://github.com/gtk-rs/glib" }
 reqwest = { version = "0.10", features = ["cookies", "gzip"] }
 futures = "0.3"
-headers = "0.3"
+hyperx = "1.0"
 mime = "0.3"
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_10"] }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
