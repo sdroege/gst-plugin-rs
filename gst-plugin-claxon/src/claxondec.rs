@@ -146,23 +146,21 @@ impl AudioDecoderImpl for ClaxonDec {
 
                     if inmap[0..7] != [0x7f, b'F', b'L', b'A', b'C', 0x01, 0x00] {
                         gst_debug!(self.cat, obj: element, "Unknown streamheader format");
-                    } else {
-                        if let Ok(tstreaminfo) = get_claxon_streaminfo(&inmap[13..]) {
-                            if let Ok(taudio_info) = get_gstaudioinfo(tstreaminfo) {
-                                // To speed up negotiation
-                                if element.set_output_format(&taudio_info).is_err()
-                                    || element.negotiate().is_err()
-                                {
-                                    gst_debug!(
-                                        self.cat,
-                                        obj: element,
-                                        "Error to negotiate output from based on in-caps streaminfo"
-                                    );
-                                }
-
-                                audio_info = Some(taudio_info);
-                                streaminfo = Some(tstreaminfo);
+                    } else if let Ok(tstreaminfo) = get_claxon_streaminfo(&inmap[13..]) {
+                        if let Ok(taudio_info) = get_gstaudioinfo(tstreaminfo) {
+                            // To speed up negotiation
+                            if element.set_output_format(&taudio_info).is_err()
+                                || element.negotiate().is_err()
+                            {
+                                gst_debug!(
+                                    self.cat,
+                                    obj: element,
+                                    "Error to negotiate output from based on in-caps streaminfo"
+                                );
                             }
+
+                            audio_info = Some(taudio_info);
+                            streaminfo = Some(tstreaminfo);
                         }
                     }
                 }
@@ -178,6 +176,7 @@ impl AudioDecoderImpl for ClaxonDec {
         Ok(())
     }
 
+    #[allow(clippy::verbose_bit_mask)]
     fn handle_frame(
         &self,
         element: &gst_audio::AudioDecoder,
@@ -309,8 +308,8 @@ impl ClaxonDec {
             let mut v: Vec<i32> = vec![0; result.len() as usize];
 
             for (o, i) in v.chunks_exact_mut(channels).enumerate() {
-                for c in 0..channels {
-                    i[c] = result.sample(c as u32, o as u32);
+                for (c, s) in i.iter_mut().enumerate() {
+                    *s = result.sample(c as u32, o as u32);
                 }
             }
             v
