@@ -24,6 +24,7 @@ endif
 plugins_rep = {
   'gst-plugin-audiofx': 'libgstrsaudiofx',
   'gst-plugin-cdg': 'libgstcdg',
+  'gst-plugin-claxon': 'libgstclaxon',
   'gst-plugin-closedcaption': 'libgstrsclosedcaption',
   'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
   'gst-plugin-file': 'libgstrsfile',
