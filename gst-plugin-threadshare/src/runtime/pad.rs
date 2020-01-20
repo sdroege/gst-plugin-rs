@@ -73,7 +73,7 @@ use futures::prelude::*;
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_loggable_error};
+use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_loggable_error, gst_warning};
 use gst::{FlowError, FlowSuccess};
 
 use std::fmt;
@@ -1098,12 +1098,30 @@ impl<'a> PadSinkRef<'a> {
         fut: impl Future<Output = Result<FlowSuccess, FlowError>> + Send + 'static,
     ) -> Result<FlowSuccess, FlowError> {
         if Context::is_context_thread() {
-            self.pad_context()
-                .as_ref()
-                .and_then(|pad_ctx_weak| pad_ctx_weak.upgrade())
-                .expect("Operating on a Context without a valid PadContext")
-                .add_pending_task(fut.map(|res| res.map(drop)));
-            Ok(FlowSuccess::Ok)
+            match self.pad_context().as_ref() {
+                Some(pad_ctx_weak) => {
+                    pad_ctx_weak
+                        .upgrade()
+                        .expect("PadContext no longer exists")
+                        .add_pending_task(fut.map(|res| res.map(drop)));
+                    Ok(FlowSuccess::Ok)
+                }
+                None => {
+                    // This can happen when an upstream element forwards the PadContext sticky event
+                    // after the StreamStart event. While the upstream element should be fixed,
+                    // we have no other solution but blocking the `Context`.
+                    // See https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/issues/94
+                    gst_warning!(
+                        RUNTIME_CAT,
+                        obj: self.gst_pad(),
+                        "Operating on a Context without a PadContext. An upstream element should be fixed.",
+                    );
+                    // Note: we don't use `crate::runtime::executor::block_on` here
+                    // because `Context::is_context_thread()` is checked in the `if`
+                    // statement above.
+                    futures::executor::block_on(fut)
+                }
+            }
         } else {
             // Not on a context thread: execute the Future immediately.
             //
