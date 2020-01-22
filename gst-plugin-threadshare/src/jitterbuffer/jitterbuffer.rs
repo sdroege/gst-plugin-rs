@@ -1132,6 +1132,73 @@ impl JitterBuffer {
         state.clock_rate = -1;
         state.jbuf.borrow().reset_skew();
     }
+
+    async fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+        let mut state = self.state.lock().await;
+        gst_info!(CAT, obj: element, "Preparing");
+
+        let (context, latency) = {
+            let settings = self.settings.lock().await;
+            let context = Context::acquire(&settings.context, settings.context_wait).unwrap();
+            let latency = settings.latency_ms as u64 * gst::MSECOND;
+            (context, latency)
+        };
+
+        state.src_pad_handler = JitterBufferPadSrcHandler::new(latency);
+
+        let _ = self
+            .src_pad
+            .prepare(context, &state.src_pad_handler)
+            .await
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Error preparing src_pad: {:?}", err]
+                );
+                gst::StateChangeError
+            });
+
+        self.sink_pad.prepare(&JitterBufferPadSinkHandler).await;
+
+        gst_info!(CAT, obj: element, "Prepared");
+
+        Ok(())
+    }
+
+    async fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut state = self.state.lock().await;
+        gst_debug!(CAT, obj: element, "Unpreparing");
+
+        self.sink_pad.unprepare().await;
+        let _ = self.src_pad.unprepare().await;
+
+        state.jbuf.borrow().flush();
+
+        if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
+            wakeup_abort_handle.abort();
+        }
+
+        gst_debug!(CAT, obj: element, "Unprepared");
+
+        Ok(())
+    }
+
+    async fn stop(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut state = self.state.lock().await;
+        gst_debug!(CAT, obj: element, "Stopping");
+
+        if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
+            wakeup_abort_handle.abort();
+        }
+
+        if let Some(abort_handle) = state.task_queue_abort_handle.take() {
+            abort_handle.abort();
+        }
+
+        gst_debug!(CAT, obj: element, "Stopped");
+
+        Ok(())
+    }
 }
 
 impl ObjectSubclass for JitterBuffer {
@@ -1320,56 +1387,20 @@ impl ElementImpl for JitterBuffer {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
-            gst::StateChange::NullToReady => runtime::executor::block_on(async {
-                let mut state = self.state.lock().await;
-
-                let (context, latency) = {
-                    let settings = self.settings.lock().await;
-                    let context =
-                        Context::acquire(&settings.context, settings.context_wait).unwrap();
-                    let latency = settings.latency_ms as u64 * gst::MSECOND;
-                    (context, latency)
-                };
-
-                state.src_pad_handler = JitterBufferPadSrcHandler::new(latency);
-
-                let _ = self
-                    .src_pad
-                    .prepare(context, &state.src_pad_handler)
-                    .await
-                    .map_err(|err| {
-                        gst_error_msg!(
-                            gst::ResourceError::OpenRead,
-                            ["Error preparing src_pad: {:?}", err]
-                        );
-                        gst::StateChangeError
-                    });
-
-                self.sink_pad.prepare(&JitterBufferPadSinkHandler).await;
-            }),
-            gst::StateChange::PausedToReady => runtime::executor::block_on(async {
-                let mut state = self.state.lock().await;
-
-                if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
-                    wakeup_abort_handle.abort();
-                }
-
-                if let Some(abort_handle) = state.task_queue_abort_handle.take() {
-                    abort_handle.abort();
-                }
-            }),
-            gst::StateChange::ReadyToNull => runtime::executor::block_on(async {
-                let mut state = self.state.lock().await;
-
-                self.sink_pad.unprepare().await;
-                let _ = self.src_pad.unprepare().await;
-
-                state.jbuf.borrow().flush();
-
-                if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
-                    wakeup_abort_handle.abort();
-                }
-            }),
+            gst::StateChange::NullToReady => {
+                runtime::executor::block_on(self.prepare(element)).map_err(|err| {
+                    element.post_error_message(&err);
+                    gst::StateChangeError
+                })?;
+            }
+            gst::StateChange::PausedToReady => {
+                runtime::executor::block_on(self.stop(element))
+                    .map_err(|_| gst::StateChangeError)?;
+            }
+            gst::StateChange::ReadyToNull => {
+                runtime::executor::block_on(self.unprepare(element))
+                    .map_err(|_| gst::StateChangeError)?;
+            }
             _ => (),
         }
 
