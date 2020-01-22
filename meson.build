@@ -19,6 +19,8 @@ elif system == 'darwin'
   ext = 'dylib'
 else
   ext = 'so'
+  # Need openssl to build gst-plugin-version-helper (dep of git2 crate)
+  dependency('openssl')
 endif
 
 plugins_rep = {
