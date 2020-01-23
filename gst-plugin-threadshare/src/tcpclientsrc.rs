@@ -423,7 +423,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                q.set(false, 0.into(), 0.into());
+                q.set(false, 0.into(), gst::CLOCK_TIME_NONE);
                 true
             }
             QueryView::Scheduling(ref mut q) => {

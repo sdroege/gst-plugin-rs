@@ -590,7 +590,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
 
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                q.set(true, 0.into(), 0.into());
+                q.set(true, 0.into(), gst::CLOCK_TIME_NONE);
                 true
             }
             QueryView::Scheduling(ref mut q) => {
