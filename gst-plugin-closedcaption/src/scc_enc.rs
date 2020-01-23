@@ -207,7 +207,7 @@ impl State {
 
             // Copy the metadata of the first buffer
             first_buf
-                .copy_into(buf_mut, *gst::BUFFER_COPY_METADATA, 0, None)
+                .copy_into(buf_mut, gst::BUFFER_COPY_METADATA, 0, None)
                 .expect("Failed to copy buffer metadata");
             buf_mut.set_pts(first_buf.get_pts());
             buffer
