@@ -1373,13 +1373,19 @@ impl ElementImpl for JitterBuffer {
             _ => (),
         }
 
-        let mut ret = self.parent_change_state(element, transition)?;
+        let mut success = self.parent_change_state(element, transition)?;
 
-        if transition == gst::StateChange::ReadyToPaused {
-            ret = gst::StateChangeSuccess::NoPreroll;
+        match transition {
+            gst::StateChange::ReadyToPaused => {
+                success = gst::StateChangeSuccess::NoPreroll;
+            }
+            gst::StateChange::PlayingToPaused => {
+                success = gst::StateChangeSuccess::NoPreroll;
+            }
+            _ => (),
         }
 
-        Ok(ret)
+        Ok(success)
     }
 }
 

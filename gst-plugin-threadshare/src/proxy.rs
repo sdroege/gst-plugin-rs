@@ -1492,6 +1492,9 @@ impl ElementImpl for ProxySrc {
                 runtime::executor::block_on(self.start(element))
                     .map_err(|_| gst::StateChangeError)?;
             }
+            gst::StateChange::PlayingToPaused => {
+                success = gst::StateChangeSuccess::NoPreroll;
+            }
             _ => (),
         }
 

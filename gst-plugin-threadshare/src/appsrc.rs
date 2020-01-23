@@ -718,6 +718,9 @@ impl ElementImpl for AppSrc {
                 runtime::executor::block_on(self.start(element))
                     .map_err(|_| gst::StateChangeError)?;
             }
+            gst::StateChange::PlayingToPaused => {
+                success = gst::StateChangeSuccess::NoPreroll;
+            }
             gst::StateChange::PausedToReady => {
                 self.src_pad_handler
                     .0
