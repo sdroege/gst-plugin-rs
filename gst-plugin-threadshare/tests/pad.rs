@@ -866,7 +866,7 @@ fn nominal_scenario(
     block_on(
         elem_src_test.try_push(Item::Event(
             gst::Event::new_stream_start(scenario_name)
-                .group_id(gst::util_group_id_next())
+                .group_id(gst::GroupId::next())
                 .build(),
         )),
     )
@@ -973,7 +973,7 @@ fn nominal_scenario(
     block_on(
         elem_src_test.try_push(Item::Event(
             gst::Event::new_stream_start(&format!("{}_past_stop", scenario_name))
-                .group_id(gst::util_group_id_next())
+                .group_id(gst::GroupId::next())
                 .build(),
         )),
     )

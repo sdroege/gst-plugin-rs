@@ -111,7 +111,7 @@ impl Default for StreamState {
         Self {
             in_segment: gst::FormattedSegment::new(),
             out_segment: gst::FormattedSegment::new(),
-            segment_seqnum: gst::util_seqnum_next(),
+            segment_seqnum: gst::Seqnum::next(),
             current_running_time: gst::CLOCK_TIME_NONE,
             eos: false,
             flushing: false,

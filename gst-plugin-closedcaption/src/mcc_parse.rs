@@ -88,7 +88,7 @@ struct State {
     // seeking
     seeking: bool,
     discont: bool,
-    seek_seqnum: gst::Seqnum,
+    seek_seqnum: Option<gst::Seqnum>,
     last_raw_line: Vec<u8>,
     replay_last_line: bool,
     need_flush_stop: bool,
@@ -112,7 +112,7 @@ impl Default for State {
             pull: None,
             seeking: false,
             discont: false,
-            seek_seqnum: gst::event::SEQNUM_INVALID,
+            seek_seqnum: None,
             last_raw_line: Vec::new(),
             replay_last_line: false,
             need_flush_stop: false,
@@ -292,8 +292,8 @@ impl State {
         if self.need_flush_stop {
             let mut b = gst::Event::new_flush_stop(true);
 
-            if self.seek_seqnum != gst::event::SEQNUM_INVALID {
-                b = b.seqnum(self.seek_seqnum);
+            if let Some(seek_seqnum) = self.seek_seqnum {
+                b = b.seqnum(seek_seqnum);
             }
 
             events.push(b.build());
@@ -330,8 +330,8 @@ impl State {
         if self.need_segment {
             let mut b = gst::Event::new_segment(&self.segment);
 
-            if self.seek_seqnum != gst::event::SEQNUM_INVALID {
-                b = b.seqnum(self.seek_seqnum);
+            if let Some(seek_seqnum) = self.seek_seqnum {
+                b = b.seqnum(seek_seqnum);
             }
 
             events.push(b.build());
@@ -814,8 +814,8 @@ impl MccParse {
                 let mut events = state.create_events(element, None, framerate);
                 let mut eos_event = gst::Event::new_eos();
 
-                if state.seek_seqnum != gst::event::SEQNUM_INVALID {
-                    eos_event = eos_event.seqnum(state.seek_seqnum);
+                if let Some(seek_seqnum) = state.seek_seqnum {
+                    eos_event = eos_event.seqnum(seek_seqnum);
                 }
 
                 events.push(eos_event.build());
@@ -1057,18 +1057,15 @@ impl MccParse {
         }
 
         state.seeking = true;
-        state.seek_seqnum = event.get_seqnum();
+        let seek_seqnum = event.get_seqnum();
+        state.seek_seqnum = Some(seek_seqnum);
 
-        let event = gst::Event::new_flush_start()
-            .seqnum(state.seek_seqnum)
-            .build();
+        let event = gst::Event::new_flush_start().seqnum(seek_seqnum).build();
 
         gst_debug!(CAT, obj: element, "Sending event {:?} upstream", event);
         self.sinkpad.push_event(event);
 
-        let event = gst::Event::new_flush_start()
-            .seqnum(state.seek_seqnum)
-            .build();
+        let event = gst::Event::new_flush_start().seqnum(seek_seqnum).build();
 
         gst_debug!(CAT, obj: element, "Pushing event {:?}", event);
         self.srcpad.push_event(event);
@@ -1077,9 +1074,7 @@ impl MccParse {
 
         state = self.flush(state);
 
-        let event = gst::Event::new_flush_stop(true)
-            .seqnum(state.seek_seqnum)
-            .build();
+        let event = gst::Event::new_flush_stop(true).seqnum(seek_seqnum).build();
 
         /* Drop our state while we push a serialized event upstream */
         drop(state);

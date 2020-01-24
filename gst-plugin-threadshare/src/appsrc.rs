@@ -217,7 +217,7 @@ impl AppSrcPadHandler {
                         format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
                     events.push(
                         gst::Event::new_stream_start(&stream_id)
-                            .group_id(gst::util_group_id_next())
+                            .group_id(gst::GroupId::next())
                             .build(),
                     );
 
