@@ -45,7 +45,7 @@ glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-lazy_static = "1.0"
+once_cell = "1.0"
 
 [lib]
 name = "gstrstutorial"
@@ -56,7 +56,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper = {  git = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs" }
 ```
 
-We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later, and the `glib` crate to be able to use some GLib API that we’ll need. GStreamer is building upon GLib, and this leaks through in various places. We also have one build dependency on the `gst-plugin-version-helper` crate, which helps to get some information about the plugin for the `gst_plugin_define!` macro automatically, and the `lazy_static` crate, which allows to declare lazily initialized global variables.
+We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later, and the `glib` crate to be able to use some GLib API that we’ll need. GStreamer is building upon GLib, and this leaks through in various places. We also have one build dependency on the `gst-plugin-version-helper` crate, which helps to get some information about the plugin for the `gst_plugin_define!` macro automatically, and the `once_cell` crate, which allows to declare lazily initialized global variables.
 
 With the basic project structure being set-up, we should be able to compile the project with `cargo build` now, which will download and build all dependencies and then creates a file called `target/debug/libgstrstutorial.so` (or .dll on Windows, .dylib on macOS). This is going to be our GStreamer plugin.
 
@@ -79,8 +79,7 @@ extern crate glib;
 extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
 extern crate gstreamer_video as gst_video;
-#[macro_use]
-extern crate lazy_static;
+extern crate once_cell;
 ```
 
 Next we make use of the `gst_plugin_define!` `macro` from the `gstreamer` crate to set-up the static metadata of the plugin (and make the shared library recognizeable by GStreamer to be a valid plugin), and to define the name of our entry point function (`plugin_init`) where we will register all the elements that this plugin provides.
@@ -170,6 +169,8 @@ use gst_video;
 
 use std::i32;
 use std::sync::Mutex;
+
+use once_cell::sync::Lazy;
 ```
 
 GStreamer is based on the GLib object system ([GObject](https://developer.gnome.org/gobject/stable/)). C (just like Rust) does not have built-in support for object orientated programming, inheritance, virtual methods and related concepts, and GObject makes these features available in C as a library. Without language support this is a quite verbose endeavour in C, and the `glib` crate tries to expose all this in a (as much as possible) Rust-style API while hiding all the details that do not really matter.
@@ -307,19 +308,19 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 ## Debug Category
 
 To be able to later have a debug category available for our new element that
-can be used for logging, we make use of the `lazy_static!` macro from the
-crate with the same name. This crate allows to declare lazily initialized
+can be used for logging, we make use of the `once_cell::sync::Lazy` type from the
+`once_cell` crate. This type allows to declare lazily initialized
 global variables, i.e. on the very first use the provided code will be
 executed and the result will be stored for all later uses.
 
 ```rust
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rsrgb2gray",
         gst::DebugColorFlags::empty(),
         Some("Rust RGB-GRAY converter"),
-    );
-}
+    )
+});
 ```
 
 We give the debug category the same name as our element, which generally is

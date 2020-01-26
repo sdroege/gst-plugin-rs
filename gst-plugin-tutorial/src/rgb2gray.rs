@@ -19,6 +19,8 @@ use gst_video;
 use std::i32;
 use std::sync::Mutex;
 
+use once_cell::sync::Lazy;
+
 // Default values of properties
 const DEFAULT_INVERT: bool = false;
 const DEFAULT_SHIFT: u32 = 0;
@@ -75,13 +77,13 @@ struct Rgb2Gray {
     state: Mutex<Option<State>>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rsrgb2gray",
         gst::DebugColorFlags::empty(),
         Some("Rust RGB-GRAY converter"),
-    );
-}
+    )
+});
 
 impl Rgb2Gray {
     // Converts one pixel of BGRx to a grayscale value, shifting and/or

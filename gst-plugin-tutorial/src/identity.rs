@@ -14,19 +14,21 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
+use once_cell::sync::Lazy;
+
 // Struct containing all the element data
 struct Identity {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rsidentity",
         gst::DebugColorFlags::empty(),
         Some("Identity Element"),
-    );
-}
+    )
+});
 
 impl Identity {
     // After creating of our two pads set all the functions on them

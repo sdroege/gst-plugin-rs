@@ -41,6 +41,8 @@ use std::ops::Rem;
 use num_traits::float::Float;
 use num_traits::cast::NumCast;
 
+use once_cell::sync::Lazy;
+
 // Default values of properties
 const DEFAULT_SAMPLES_PER_BUFFER: u32 = 1024;
 const DEFAULT_FREQ: u32 = 440;
@@ -138,13 +140,13 @@ struct SineSrc {
     state: Mutex<State>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rssinesrc",
         gst::DebugColorFlags::empty(),
         Some("Rust Sine Wave Source"),
-    );
-}
+    )
+});
 
 impl SineSrc {
     // Called when a new instance is to be created

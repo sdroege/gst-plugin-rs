@@ -16,6 +16,8 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::sync::Mutex;
 
+use once_cell::sync::Lazy;
+
 // This enum may be used to control what type of output the progressbin should produce.
 // It also serves the secondary purpose of illustrating how to add enum-type properties
 // to a plugin written in rust.
@@ -37,13 +39,13 @@ pub(crate) enum ProgressBinOutput {
 
 const DEFAULT_OUTPUT_TYPE: ProgressBinOutput = ProgressBinOutput::Println;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "progressbin",
         gst::DebugColorFlags::empty(),
         Some("Rust Progress Reporter"),
-    );
-}
+    )
+});
 
 // Struct containing all the element data
 struct ProgressBin {
