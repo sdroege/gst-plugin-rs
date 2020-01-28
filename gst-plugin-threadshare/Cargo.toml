@@ -14,7 +14,7 @@ gobject-sys = { git = "https://github.com/gtk-rs/sys" }
 gio-sys = { git = "https://github.com/gtk-rs/sys" }
 glib = { git = "https://github.com/gtk-rs/glib" }
 gio = { git = "https://github.com/gtk-rs/gio" }
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features=["v1_10"] }
 gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
