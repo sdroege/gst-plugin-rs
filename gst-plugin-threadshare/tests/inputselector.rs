@@ -102,4 +102,6 @@ fn test_active_pad() {
     assert!(event.get_type() == gst::EventType::Caps);
     let event = h1.pull_event().unwrap();
     assert!(event.get_type() == gst::EventType::Segment);
+
+    let _ = is.set_state(gst::State::Null);
 }

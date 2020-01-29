@@ -318,8 +318,6 @@ struct State {
     active_sinkpad: Option<gst::Pad>,
     send_sticky: bool,
     send_stream_start: bool,
-    pad_serial: u32,
-    sink_pads: HashMap<gst::Pad, PadSink>,
 }
 
 impl Default for State {
@@ -328,6 +326,19 @@ impl Default for State {
             active_sinkpad: None,
             send_sticky: false,
             send_stream_start: true,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Pads {
+    pad_serial: u32,
+    sink_pads: HashMap<gst::Pad, PadSink>,
+}
+
+impl Default for Pads {
+    fn default() -> Pads {
+        Pads {
             pad_serial: 0,
             sink_pads: HashMap::new(),
         }
@@ -339,6 +350,7 @@ struct InputSelector {
     src_pad: PadSrc,
     state: Mutex<State>,
     settings: Mutex<Settings>,
+    pads: Mutex<Pads>,
 }
 
 lazy_static! {
@@ -453,6 +465,7 @@ impl ObjectSubclass for InputSelector {
             src_pad,
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
+            pads: Mutex::new(Pads::default()),
         }
     }
 }
@@ -554,18 +567,17 @@ impl ElementImpl for InputSelector {
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         let mut state = block_on(self.state.lock());
-        let sink_pad = gst::Pad::new_from_template(
-            &templ,
-            Some(format!("sink_{}", state.pad_serial).as_str()),
-        );
-        state.pad_serial += 1;
+        let mut pads = block_on(self.pads.lock());
+        let sink_pad =
+            gst::Pad::new_from_template(&templ, Some(format!("sink_{}", pads.pad_serial).as_str()));
+        pads.pad_serial += 1;
         sink_pad.set_active(true).unwrap();
         element.add_pad(&sink_pad).unwrap();
         let sink_pad = PadSink::new(sink_pad);
         let ret = sink_pad.gst_pad().clone();
 
         block_on(sink_pad.prepare(&InputSelectorPadSinkHandler::new()));
-        state.sink_pads.insert(ret.clone(), sink_pad);
+        pads.sink_pads.insert(ret.clone(), sink_pad);
 
         if state.active_sinkpad.is_none() {
             state.active_sinkpad = Some(ret.clone());
@@ -576,8 +588,8 @@ impl ElementImpl for InputSelector {
     }
 
     fn release_pad(&self, element: &gst::Element, pad: &gst::Pad) {
-        let mut state = block_on(self.state.lock());
-        let sink_pad = state.sink_pads.remove(pad).unwrap();
+        let mut pads = block_on(self.pads.lock());
+        let sink_pad = pads.sink_pads.remove(pad).unwrap();
         block_on(sink_pad.unprepare());
         element.remove_pad(pad).unwrap();
     }
