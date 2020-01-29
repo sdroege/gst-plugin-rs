@@ -311,7 +311,7 @@ struct ProxySinkPadHandler(Arc<ProxySinkPadHandlerInner>);
 impl ProxySinkPadHandler {
     fn new(proxy_ctx: ProxyContext) -> Self {
         ProxySinkPadHandler(Arc::new(ProxySinkPadHandlerInner {
-            proxy_ctx: proxy_ctx,
+            proxy_ctx,
             flush_rx: sync::Mutex::new(None),
         }))
     }
@@ -1271,6 +1271,11 @@ impl ProxySrc {
             .unwrap()
             .clone();
         dataqueue.start().await;
+
+        let mut shared_ctx = state.proxy_ctx().unwrap().lock_shared().await;
+        if let Some(ref mut pending_queue) = shared_ctx.pending_queue {
+            pending_queue.notify_more_queue_space();
+        }
 
         ProxySrcPadHandler::start_task(self.src_pad.as_ref(), element, dataqueue).await;
 
