@@ -418,33 +418,32 @@ impl LewtonDec {
             return element.finish_frame(None, 1);
         }
 
-        let mut outbuf = element
-            .allocate_output_buffer(sample_count as usize * audio_info.bpf() as usize)
-            .map_err(|_| {
-                gst_element_error!(
-                    element,
-                    gst::StreamError::Decode,
-                    ["Failed to allocate output buffer"]
-                );
-                gst::FlowError::Error
-            })?;
+        let outbuf = if let Some(ref reorder_map) = state.reorder_map {
+            let mut outbuf = element
+                .allocate_output_buffer(sample_count as usize * audio_info.bpf() as usize)
+                .map_err(|_| {
+                    gst_element_error!(
+                        element,
+                        gst::StreamError::Decode,
+                        ["Failed to allocate output buffer"]
+                    );
+                    gst::FlowError::Error
+                })?;
+            {
+                // And copy the decoded data into our output buffer while reordering the channels to the
+                // GStreamer channel order
+                let outbuf = outbuf.get_mut().unwrap();
+                let mut outmap = outbuf.map_writable().map_err(|_| {
+                    gst_element_error!(
+                        element,
+                        gst::StreamError::Decode,
+                        ["Failed to map output buffer writable"]
+                    );
+                    gst::FlowError::Error
+                })?;
 
-        // And copy the decoded data into our output buffer, if needed
-        // while reordering the channels to the GStreamer channel order
-        {
-            let outbuf = outbuf.get_mut().unwrap();
-            let mut outmap = outbuf.map_writable().map_err(|_| {
-                gst_element_error!(
-                    element,
-                    gst::StreamError::Decode,
-                    ["Failed to map output buffer writable"]
-                );
-                gst::FlowError::Error
-            })?;
-
-            let outdata = outmap.as_mut_slice_of::<f32>().unwrap();
-            let channels = audio_info.channels() as usize;
-            if let Some(ref reorder_map) = state.reorder_map {
+                let outdata = outmap.as_mut_slice_of::<f32>().unwrap();
+                let channels = audio_info.channels() as usize;
                 assert!(reorder_map.len() >= channels);
                 assert!(reorder_map[..channels].iter().all(|c| *c < channels));
 
@@ -456,10 +455,24 @@ impl LewtonDec {
                         output[reorder_map[c]] = *s;
                     }
                 }
-            } else {
-                outdata.copy_from_slice(&decoded.samples);
             }
-        }
+
+            outbuf
+        } else {
+            struct CastVec(Vec<f32>);
+            impl AsRef<[u8]> for CastVec {
+                fn as_ref(&self) -> &[u8] {
+                    self.0.as_byte_slice()
+                }
+            }
+            impl AsMut<[u8]> for CastVec {
+                fn as_mut(&mut self) -> &mut [u8] {
+                    self.0.as_mut_byte_slice()
+                }
+            }
+
+            gst::Buffer::from_mut_slice(CastVec(decoded.samples))
+        };
 
         element.finish_frame(Some(outbuf), 1)
     }
