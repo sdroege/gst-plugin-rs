@@ -94,7 +94,7 @@ struct State {
     need_flush_stop: bool,
 }
 
-type CombineError<'a> = combine::easy::Errors<u8, &'a [u8], combine::stream::PointerOffset>;
+type CombineError<'a> = combine::easy::ParseError<&'a [u8]>;
 
 impl Default for State {
     fn default() -> Self {

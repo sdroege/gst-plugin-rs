@@ -19,6 +19,7 @@
 use combine;
 use combine::parser::byte::hex_digit;
 use combine::parser::range::{range, take_while1};
+use combine::parser::EasyParser;
 use combine::{choice, eof, from_str, many1, one_of, optional, token, unexpected_any, value};
 use combine::{ParseError, Parser, RangeStream};
 
@@ -51,22 +52,20 @@ pub struct SccParser {
 }
 
 /// Parser for parsing a run of ASCII, decimal digits and converting them into a `u32`
-fn digits<'a, I: 'a>() -> impl Parser<Input = I, Output = u32>
+fn digits<'a, I: 'a>() -> impl Parser<I, Output = u32>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     from_str(take_while1(|c: u8| c >= b'0' && c <= b'9').message("while parsing digits"))
 }
 
 /// Parser for a run of decimal digits, that converts them into a `u32` and checks if the result is
 /// in the allowed range.
-fn digits_range<'a, I: 'a, R: std::ops::RangeBounds<u32>>(
-    range: R,
-) -> impl Parser<Input = I, Output = u32>
+fn digits_range<'a, I: 'a, R: std::ops::RangeBounds<u32>>(range: R) -> impl Parser<I, Output = u32>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     digits().then(move |v| {
         if range.contains(&v) {
@@ -78,10 +77,10 @@ where
 }
 
 /// Parser for a timecode in the form `hh:mm:ss:fs`
-fn timecode<'a, I: 'a>() -> impl Parser<Input = I, Output = TimeCode>
+fn timecode<'a, I: 'a>() -> impl Parser<I, Output = TimeCode>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
         digits(),
@@ -103,10 +102,10 @@ where
 }
 
 /// Parser that checks for EOF and optionally `\n` or `\r\n` before EOF
-fn end_of_line<'a, I: 'a>() -> impl Parser<Input = I, Output = ()> + 'a
+fn end_of_line<'a, I: 'a>() -> impl Parser<I, Output = ()> + 'a
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
         optional(choice((range(b"\n".as_ref()), range(b"\r\n".as_ref())))),
@@ -117,10 +116,10 @@ where
 }
 
 /// Parser for the SCC header
-fn header<'a, I: 'a>() -> impl Parser<Input = I, Output = SccLine> + 'a
+fn header<'a, I: 'a>() -> impl Parser<I, Output = SccLine> + 'a
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (range(b"Scenarist_SCC V1.0".as_ref()), end_of_line())
         .map(|_| SccLine::Header)
@@ -128,10 +127,10 @@ where
 }
 
 /// Parser that accepts only an empty line
-fn empty_line<'a, I: 'a>() -> impl Parser<Input = I, Output = SccLine> + 'a
+fn empty_line<'a, I: 'a>() -> impl Parser<I, Output = SccLine> + 'a
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     end_of_line()
         .map(|_| SccLine::Empty)
@@ -140,10 +139,10 @@ where
 
 /// A single SCC payload item. This is ASCII hex encoded bytes.
 /// It returns an tuple of `(u8, u8)` of the hex encoded bytes.
-fn scc_payload_item<'a, I: 'a>() -> impl Parser<Input = I, Output = (u8, u8)>
+fn scc_payload_item<'a, I: 'a>() -> impl Parser<I, Output = (u8, u8)>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     ((hex_digit(), hex_digit(), hex_digit(), hex_digit()).map(|(u, l, m, n)| {
         let hex_to_u8 = |v: u8| match v {
@@ -182,10 +181,10 @@ impl Extend<(u8, u8)> for VecExtend {
 }
 
 /// Parser for the whole SCC payload with conversion to the underlying byte values.
-fn scc_payload<'a, I: 'a>() -> impl Parser<Input = I, Output = Vec<u8>> + 'a
+fn scc_payload<'a, I: 'a>() -> impl Parser<I, Output = Vec<u8>> + 'a
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     many1(
         (
@@ -199,10 +198,10 @@ where
 }
 
 /// Parser for a SCC caption line in the form `timecode\tpayload`.
-fn caption<'a, I: 'a>() -> impl Parser<Input = I, Output = SccLine> + 'a
+fn caption<'a, I: 'a>() -> impl Parser<I, Output = SccLine> + 'a
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (timecode(), token(b'\t'), scc_payload(), end_of_line())
         .map(|(tc, _, value, _)| SccLine::Caption(tc, value))
@@ -224,7 +223,7 @@ impl SccParser {
     pub fn parse_line<'a>(
         &mut self,
         line: &'a [u8],
-    ) -> Result<SccLine, combine::easy::Errors<u8, &'a [u8], combine::stream::PointerOffset>> {
+    ) -> Result<SccLine, combine::easy::ParseError<&'a [u8]>> {
         match self.state {
             State::Header => header()
                 .message("while in Header state")

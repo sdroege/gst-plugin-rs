@@ -21,6 +21,7 @@ use combine;
 use combine::parser::byte::hex_digit;
 use combine::parser::range::{range, take_while1};
 use combine::parser::repeat::skip_many;
+use combine::parser::EasyParser;
 use combine::{any, choice, eof, from_str, many1, one_of, optional, token, unexpected_any, value};
 use combine::{ParseError, Parser, RangeStream};
 
@@ -59,22 +60,20 @@ pub struct MccParser {
 }
 
 /// Parser for parsing a run of ASCII, decimal digits and converting them into a `u32`
-fn digits<'a, I: 'a>() -> impl Parser<Input = I, Output = u32>
+fn digits<'a, I: 'a>() -> impl Parser<I, Output = u32>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     from_str(take_while1(|c: u8| c >= b'0' && c <= b'9').message("while parsing digits"))
 }
 
 /// Parser for a run of decimal digits, that converts them into a `u32` and checks if the result is
 /// in the allowed range.
-fn digits_range<'a, I: 'a, R: std::ops::RangeBounds<u32>>(
-    range: R,
-) -> impl Parser<Input = I, Output = u32>
+fn digits_range<'a, I: 'a, R: std::ops::RangeBounds<u32>>(range: R) -> impl Parser<I, Output = u32>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     digits().then(move |v| {
         if range.contains(&v) {
@@ -86,10 +85,10 @@ where
 }
 
 /// Parser for a timecode in the form `hh:mm:ss:fs`
-fn timecode<'a, I: 'a>() -> impl Parser<Input = I, Output = TimeCode>
+fn timecode<'a, I: 'a>() -> impl Parser<I, Output = TimeCode>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
         digits(),
@@ -111,10 +110,10 @@ where
 }
 
 /// Parser that checks for EOF and optionally `\n` or `\r\n` before EOF
-fn end_of_line<'a, I: 'a>() -> impl Parser<Input = I, Output = ()> + 'a
+fn end_of_line<'a, I: 'a>() -> impl Parser<I, Output = ()> + 'a
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
         optional(choice((range(b"\n".as_ref()), range(b"\r\n".as_ref())))),
@@ -125,10 +124,10 @@ where
 }
 
 /// Parser for the MCC header
-fn header<'a, I: 'a>() -> impl Parser<Input = I, Output = MccLine<'a>>
+fn header<'a, I: 'a>() -> impl Parser<I, Output = MccLine<'a>>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
         range(b"File Format=MacCaption_MCC V".as_ref()),
@@ -140,10 +139,10 @@ where
 }
 
 /// Parser that accepts only an empty line
-fn empty_line<'a, I: 'a>() -> impl Parser<Input = I, Output = MccLine<'a>>
+fn empty_line<'a, I: 'a>() -> impl Parser<I, Output = MccLine<'a>>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     end_of_line()
         .map(|_| MccLine::Empty)
@@ -152,10 +151,10 @@ where
 
 /// Parser for an MCC comment, i.e. a line starting with `//`. We don't return the actual comment
 /// text as it's irrelevant for us.
-fn comment<'a, I: 'a>() -> impl Parser<Input = I, Output = MccLine<'a>>
+fn comment<'a, I: 'a>() -> impl Parser<I, Output = MccLine<'a>>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (token(b'/'), token(b'/'), skip_many(any()))
         .map(|_| MccLine::Comment)
@@ -163,10 +162,10 @@ where
 }
 
 /// Parser for the MCC UUID line.
-fn uuid<'a, I: 'a>() -> impl Parser<Input = I, Output = MccLine<'a>>
+fn uuid<'a, I: 'a>() -> impl Parser<I, Output = MccLine<'a>>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
         range(b"UUID=".as_ref()),
@@ -178,10 +177,10 @@ where
 }
 
 /// Parser for the MCC Time Code Rate line.
-fn time_code_rate<'a, I: 'a>() -> impl Parser<Input = I, Output = MccLine<'a>>
+fn time_code_rate<'a, I: 'a>() -> impl Parser<I, Output = MccLine<'a>>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
         range(b"Time Code Rate=".as_ref()),
@@ -195,10 +194,10 @@ where
 }
 
 /// Parser for generic MCC metadata lines in the form `key=value`.
-fn metadata<'a, I: 'a>() -> impl Parser<Input = I, Output = MccLine<'a>>
+fn metadata<'a, I: 'a>() -> impl Parser<I, Output = MccLine<'a>>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
         take_while1(|b| b != b'='),
@@ -215,55 +214,73 @@ where
 ///
 /// It returns an `Either` of the single hex encoded byte or the short-cut byte sequence as a
 /// static byte slice.
-fn mcc_payload_item<'a, I: 'a>() -> impl Parser<Input = I, Output = Either<u8, &'static [u8]>>
+fn mcc_payload_item<'a, I: 'a>() -> impl Parser<I, Output = Either<u8, &'static [u8]>>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
-    choice!(
+    // FIXME: Switch back to the choice! macro once https://github.com/rust-lang/rust/issues/68666
+    // is fixed and we depend on a new enough Rust version.
+    choice((
         token(b'G').map(|_| Either::Right([0xfau8, 0x00, 0x00].as_ref())),
         token(b'H').map(|_| Either::Right([0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref())),
-        token(b'I').map(|_| Either::Right(
-            [0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref()
-        )),
-        token(b'J').map(|_| Either::Right(
-            [0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref()
-        )),
-        token(b'K').map(|_| Either::Right(
-            [
-                0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
-                0x00, 0x00
-            ]
-            .as_ref()
-        )),
-        token(b'L').map(|_| Either::Right(
-            [
-                0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
-                0x00, 0x00, 0xfa, 0x00, 0x00
-            ]
-            .as_ref()
-        )),
-        token(b'M').map(|_| Either::Right(
-            [
-                0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
-                0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00
-            ]
-            .as_ref()
-        )),
-        token(b'N').map(|_| Either::Right(
-            [
-                0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
-                0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00
-            ]
-            .as_ref()
-        )),
-        token(b'O').map(|_| Either::Right(
-            [
-                0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
-                0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00
-            ]
-            .as_ref()
-        )),
+        token(b'I').map(|_| {
+            Either::Right([0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00].as_ref())
+        }),
+        token(b'J').map(|_| {
+            Either::Right(
+                [
+                    0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        token(b'K').map(|_| {
+            Either::Right(
+                [
+                    0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        token(b'L').map(|_| {
+            Either::Right(
+                [
+                    0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        token(b'M').map(|_| {
+            Either::Right(
+                [
+                    0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        token(b'N').map(|_| {
+            Either::Right(
+                [
+                    0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00,
+                ]
+                .as_ref(),
+            )
+        }),
+        token(b'O').map(|_| {
+            Either::Right(
+                [
+                    0xfau8, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa,
+                    0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00, 0x00, 0xfa, 0x00,
+                    0x00,
+                ]
+                .as_ref(),
+            )
+        }),
         token(b'P').map(|_| Either::Right([0xfbu8, 0x80, 0x80].as_ref())),
         token(b'Q').map(|_| Either::Right([0xfcu8, 0x80, 0x80].as_ref())),
         token(b'R').map(|_| Either::Right([0xfdu8, 0x80, 0x80].as_ref())),
@@ -280,8 +297,8 @@ where
             };
             let val = (hex_to_u8(u) << 4) | hex_to_u8(l);
             Either::Left(val)
-        })
-    )
+        }),
+    ))
     .message("while parsing MCC payload")
 }
 
@@ -311,10 +328,10 @@ impl<'a> Extend<Either<u8, &'a [u8]>> for VecExtend {
 }
 
 /// Parser for the whole MCC payload with conversion to the underlying byte values.
-fn mcc_payload<'a, I: 'a>() -> impl Parser<Input = I, Output = Vec<u8>>
+fn mcc_payload<'a, I: 'a>() -> impl Parser<I, Output = Vec<u8>>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     many1(mcc_payload_item())
         .map(|v: VecExtend| v.0)
@@ -322,10 +339,10 @@ where
 }
 
 /// Parser for a MCC caption line in the form `timecode\tpayload`.
-fn caption<'a, I: 'a>(parse_payload: bool) -> impl Parser<Input = I, Output = MccLine<'a>>
+fn caption<'a, I: 'a>(parse_payload: bool) -> impl Parser<I, Output = MccLine<'a>>
 where
-    I: RangeStream<Item = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Item, I::Range, I::Position>,
+    I: RangeStream<Token = u8, Range = &'a [u8]>,
+    I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
         timecode(),
@@ -368,8 +385,7 @@ impl MccParser {
         &mut self,
         line: &'a [u8],
         parse_payload: bool,
-    ) -> Result<MccLine<'a>, combine::easy::Errors<u8, &'a [u8], combine::stream::PointerOffset>>
-    {
+    ) -> Result<MccLine<'a>, combine::easy::ParseError<&'a [u8]>> {
         match self.state {
             State::Header => header()
                 .message("while in Header state")
