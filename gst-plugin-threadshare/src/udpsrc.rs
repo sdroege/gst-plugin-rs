@@ -921,6 +921,8 @@ impl UdpSrc {
 
         self.src_pad.stop_task().await;
 
+        *self.src_pad_handler.0.socket_stream.lock().await = None;
+
         {
             let socket = state.socket.take().unwrap();
             socket.unprepare().await.unwrap();
