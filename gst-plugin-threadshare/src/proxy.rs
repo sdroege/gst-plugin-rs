@@ -524,6 +524,7 @@ impl ProxySink {
                             while let Some(item) = pending_queue.items.pop_front() {
                                 if let Err(item) = dataqueue.push(item).await {
                                     failed_item = Some(item);
+                                    break;
                                 }
                             }
 
@@ -587,6 +588,7 @@ impl ProxySink {
                             while let Some(item) = pending_queue.items.pop_front() {
                                 if let Err(item) = dataqueue.push(item).await {
                                     failed_item = Some(item);
+                                    break;
                                 }
                             }
 
