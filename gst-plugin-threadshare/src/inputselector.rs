@@ -17,7 +17,6 @@
 
 use either::Either;
 
-use futures::channel::oneshot;
 use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::future::{abortable, AbortHandle};
@@ -43,7 +42,7 @@ use std::time::Duration;
 use std::u32;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc};
+use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc};
 
 fn get_current_running_time(element: &gst::Element) -> gst::ClockTime {
     if let Some(clock) = element.get_clock() {
@@ -139,22 +138,11 @@ impl InputSelectorPadSinkHandler {
 
     /* Wait until specified time */
     async fn sync(&self, element: &gst::Element, running_time: gst::ClockTime) {
-        let inputselector = InputSelector::from_instance(element);
         let now = get_current_running_time(&element);
 
         if now.is_some() && now < running_time {
-            let pad_src_state = inputselector.src_pad.lock_state().await;
-            let context = pad_src_state.pad_context().unwrap();
-            let (sender, receiver) = oneshot::channel();
             let delay = running_time - now;
-            let delay_for_fut =
-                context.delay_for(Duration::from_nanos(delay.nseconds().unwrap()), move || {
-                    async {
-                        let _ = sender.send(());
-                    }
-                });
-            context.spawn(delay_for_fut);
-            let _ = receiver.await;
+            runtime::time::delay_for(Duration::from_nanos(delay.nseconds().unwrap())).await;
         }
     }
 
@@ -222,7 +210,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
 
     fn sink_chain(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         _inputselector: &InputSelector,
         element: &gst::Element,
         buffer: gst::Buffer,
@@ -239,7 +227,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
 
     fn sink_chain_list(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         _inputselector: &InputSelector,
         element: &gst::Element,
         list: gst::BufferList,
@@ -257,7 +245,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
 
     fn sink_event(
         &self,
-        _pad: PadSinkRef,
+        _pad: &PadSinkRef,
         inputselector: &InputSelector,
         _element: &gst::Element,
         event: gst::Event,
@@ -298,7 +286,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
 
     fn sink_query(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         inputselector: &InputSelector,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
