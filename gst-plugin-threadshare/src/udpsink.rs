@@ -120,6 +120,7 @@ impl Default for Settings {
 #[derive(Debug)]
 struct State {
     segment: Option<gst::Segment>,
+    latency: gst::ClockTime,
     context: Option<Context>,
     socket: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
     socket_v6: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
@@ -131,6 +132,7 @@ impl Default for State {
     fn default() -> State {
         State {
             segment: None,
+            latency: gst::CLOCK_TIME_NONE,
             context: None,
             socket: Arc::new(Mutex::new(None)),
             socket_v6: Arc::new(Mutex::new(None)),
@@ -479,6 +481,11 @@ impl UdpSink {
             if let Some(segment) = &state.segment {
                 if let Some(segment) = segment.downcast_ref::<gst::format::Time>() {
                     let rtime = segment.to_running_time(buffer.get_pts());
+                    let rtime = if state.latency.is_some() {
+                        rtime + state.latency
+                    } else {
+                        rtime
+                    };
                     drop(state);
                     self.sync(&element, rtime).await;
                 }
@@ -1311,6 +1318,21 @@ impl ElementImpl for UdpSink {
         }
 
         self.parent_change_state(element, transition)
+    }
+
+    fn send_event(&self, _element: &gst::Element, event: gst::Event) -> bool {
+        match event.view() {
+            EventView::Latency(ev) => {
+                let _ = block_on(async {
+                    let mut state = self.state.lock().await;
+                    state.latency = ev.get_latency();
+                });
+
+                self.sink_pad.gst_pad().push_event(event)
+            }
+            EventView::Step(..) => false,
+            _ => self.sink_pad.gst_pad().push_event(event),
+        }
     }
 }
 
