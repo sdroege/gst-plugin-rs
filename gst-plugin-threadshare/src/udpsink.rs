@@ -17,7 +17,6 @@
 
 use either::Either;
 
-use futures::channel::oneshot;
 use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::future::{abortable, AbortHandle, Aborted};
@@ -42,7 +41,7 @@ use gst::{
 use lazy_static::lazy_static;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSink, PadSinkRef};
+use crate::runtime::{self, Context, JoinHandle, PadSink, PadSinkRef};
 use crate::socket::{wrap_socket, GioSocketWrapper};
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -50,7 +49,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::u16;
 use std::u8;
-use tokio::task::JoinHandle;
 
 const DEFAULT_HOST: Option<&str> = Some("127.0.0.1");
 const DEFAULT_PORT: u32 = 5000;
@@ -362,7 +360,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
 
     fn sink_chain(
         &self,
-        _pad: PadSinkRef,
+        _pad: &PadSinkRef,
         _udpsink: &UdpSink,
         element: &gst::Element,
         buffer: gst::Buffer,
@@ -379,7 +377,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
 
     fn sink_chain_list(
         &self,
-        _pad: PadSinkRef,
+        _pad: &PadSinkRef,
         _udpsink: &UdpSink,
         element: &gst::Element,
         list: gst::BufferList,
@@ -400,7 +398,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
 
     fn sink_event(
         &self,
-        pad: PadSinkRef,
+        pad: &PadSinkRef,
         udpsink: &UdpSink,
         element: &gst::Element,
         event: gst::Event,
@@ -540,19 +538,8 @@ impl UdpSink {
         let now = super::get_current_running_time(&element);
 
         if now < running_time {
-            let state = self.state.lock().await;
-            let context = state.context.as_ref().expect("No context was prepared");
-            let (sender, receiver) = oneshot::channel();
             let delay = running_time - now;
-            let delay_for_fut =
-                context.delay_for(Duration::from_nanos(delay.nseconds().unwrap()), move || {
-                    async {
-                        let _ = sender.send(());
-                    }
-                });
-            context.spawn(delay_for_fut);
-            drop(state);
-            let _ = receiver.await;
+            runtime::time::delay_for(Duration::from_nanos(delay.nseconds().unwrap())).await;
         }
     }
 
