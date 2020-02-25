@@ -106,11 +106,8 @@ fn do_test(data: &'static [u8], packet_sizes: &[usize], decoded_samples: &[usize
         assert_eq!(buffer.get_size(), 4 * samples);
     }
 
-    let caps = h
-        .get_sinkpad()
+    h.get_sinkpad()
         .expect("harness has no sinkpad")
         .get_current_caps()
-        .expect("pad has no caps");
-
-    caps
+        .expect("pad has no caps")
 }

@@ -21,7 +21,7 @@ fn main() {
         build.file(f);
     }
 
-    for p in includes.iter().flat_map(|i| i) {
+    for p in includes.iter().flatten() {
         build.include(p);
     }
 
