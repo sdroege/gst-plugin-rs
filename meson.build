@@ -9,7 +9,7 @@ else
   target = 'release'
 endif
 
-cargo = find_program('cargo', version:'>=1.39')
+cargo = find_program('cargo', version:'>=1.40')
 cargo_wrapper = find_program('cargo_wrapper.py')
 
 system = build_machine.system()
