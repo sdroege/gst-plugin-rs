@@ -20,7 +20,7 @@ use either::Either;
 use futures::executor::block_on;
 use futures::future::BoxFuture;
 use futures::future::{abortable, AbortHandle};
-use futures::lock::{Mutex, MutexGuard};
+use futures::lock::Mutex;
 use futures::prelude::*;
 
 use glib;
@@ -109,6 +109,7 @@ static PROPERTIES: [subclass::Property; 3] = [
 #[derive(Debug)]
 struct InputSelectorPadSinkHandlerInner {
     segment: Option<gst::Segment>,
+    send_sticky: bool,
     abort_handle: Option<AbortHandle>,
 }
 
@@ -116,6 +117,7 @@ impl Default for InputSelectorPadSinkHandlerInner {
     fn default() -> Self {
         InputSelectorPadSinkHandlerInner {
             segment: None,
+            send_sticky: true,
             abort_handle: None,
         }
     }
@@ -129,11 +131,6 @@ impl InputSelectorPadSinkHandler {
         InputSelectorPadSinkHandler(Arc::new(Mutex::new(
             InputSelectorPadSinkHandlerInner::default(),
         )))
-    }
-
-    #[inline]
-    async fn lock(&self) -> MutexGuard<'_, InputSelectorPadSinkHandlerInner> {
-        self.0.lock().await
     }
 
     /* Wait until specified time */
@@ -153,52 +150,52 @@ impl InputSelectorPadSinkHandler {
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let inputselector = InputSelector::from_instance(element);
-        let mut inner = self.lock().await;
 
+        let mut state = inputselector.state.lock().await;
+        let mut inner = self.0.lock().await;
+
+        let mut sync_future = None;
         if let Some(segment) = &inner.segment {
             if let Some(segment) = segment.downcast_ref::<gst::format::Time>() {
                 let rtime = segment.to_running_time(buffer.get_pts());
                 let (sync_fut, abort_handle) = abortable(self.sync(&element, rtime));
                 inner.abort_handle = Some(abort_handle);
-                drop(inner);
-                let _ = sync_fut.await;
+                sync_future = Some(sync_fut.map_err(|_| gst::FlowError::Flushing));
             }
         }
-
-        let mut state = inputselector.state.lock().await;
 
         if state.active_sinkpad.as_ref() == Some(pad.gst_pad()) {
             gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
 
-            if state.send_sticky {
-                let mut stickies: Vec<gst::Event> = vec![];
-
+            let mut stickies: Vec<gst::Event> = vec![];
+            if inner.send_sticky || state.send_sticky {
                 pad.gst_pad().sticky_events_foreach(|event| {
-                    let mut forward = true;
-
-                    if event.get_type() == gst::EventType::StreamStart {
-                        forward = state.send_stream_start;
-                        state.send_stream_start = false;
-                    }
-
-                    if forward {
-                        stickies.push(event.clone());
-                    }
-
+                    stickies.push(event.clone());
                     Ok(Some(event))
                 });
 
-                for event in &stickies {
-                    inputselector.src_pad.push_event(event.clone()).await;
-                }
-
+                inner.send_sticky = false;
                 state.send_sticky = false;
             }
-
+            drop(inner);
             drop(state);
+
+            if let Some(sync_fut) = sync_future {
+                sync_fut.await?;
+            }
+
+            for event in &stickies {
+                inputselector.src_pad.push_event(event.clone()).await;
+            }
 
             inputselector.src_pad.push(buffer).await
         } else {
+            drop(inner);
+            drop(state);
+
+            if let Some(sync_fut) = sync_future {
+                sync_fut.await?;
+            }
             gst_log!(CAT, obj: pad.gst_pad(), "Dropping {:?}", buffer);
             Ok(gst::FlowSuccess::Ok)
         }
@@ -259,14 +256,28 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
             let this = self.clone();
             Either::Right(
                 async move {
+                    let mut inner = this.0.lock().await;
+
+                    // Remember the segment for later use
                     match event.view() {
                         gst::EventView::Segment(e) => {
-                            let mut inner = this.lock().await;
                             inner.segment = Some(e.get_segment().clone());
                         }
                         _ => (),
                     }
-                    true
+
+                    // We sent sticky events together with the next buffer once it becomes
+                    // the active pad.
+                    //
+                    // TODO: Other serialized events for the active pad can also be forwarded
+                    // here, and sticky events could be forwarded directly. Needs forwarding of
+                    // all other sticky events first!
+                    if event.is_sticky() {
+                        inner.send_sticky = true;
+                        true
+                    } else {
+                        true
+                    }
                 }
                 .boxed(),
             )
@@ -277,7 +288,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
                     /* Unblock downstream */
                     inputselector.src_pad.gst_pad().push_event(event.clone());
 
-                    let mut inner = block_on(self.lock());
+                    let mut inner = block_on(self.0.lock());
 
                     if let Some(abort_handle) = inner.abort_handle.take() {
                         abort_handle.abort();
@@ -322,15 +333,13 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
 struct State {
     active_sinkpad: Option<gst::Pad>,
     send_sticky: bool,
-    send_stream_start: bool,
 }
 
 impl Default for State {
     fn default() -> State {
         State {
             active_sinkpad: None,
-            send_sticky: false,
-            send_stream_start: true,
+            send_sticky: true,
         }
     }
 }
@@ -494,9 +503,17 @@ impl ObjectImpl for InputSelector {
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             subclass::Property("active-pad", ..) => {
+                let pad = value.get::<gst::Pad>().expect("type checked upstream");
                 let mut state = block_on(self.state.lock());
-                state.active_sinkpad = value.get::<gst::Pad>().expect("type checked upstream");
-                state.send_sticky = true;
+                let pads = block_on(self.pads.lock());
+                if let Some(pad) = pad {
+                    if pads.sink_pads.get(&pad).is_some() {
+                        state.active_sinkpad = Some(pad);
+                        state.send_sticky = true;
+                    }
+                } else {
+                    state.active_sinkpad = None;
+                }
             }
             _ => unimplemented!(),
         }
@@ -582,12 +599,13 @@ impl ElementImpl for InputSelector {
         let ret = sink_pad.gst_pad().clone();
 
         block_on(sink_pad.prepare(&InputSelectorPadSinkHandler::new()));
-        pads.sink_pads.insert(ret.clone(), sink_pad);
 
         if state.active_sinkpad.is_none() {
             state.active_sinkpad = Some(ret.clone());
             state.send_sticky = true;
         }
+
+        pads.sink_pads.insert(ret.clone(), sink_pad);
 
         Some(ret)
     }

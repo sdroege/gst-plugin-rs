@@ -48,7 +48,7 @@ fn test_active_pad() {
         .unwrap()
         .get::<gst::Pad>()
         .unwrap();
-    assert!(active_pad == h1.get_srcpad().unwrap().get_peer());
+    assert_eq!(active_pad, h1.get_srcpad().unwrap().get_peer());
 
     is.set_property("active-pad", &h2.get_srcpad().unwrap().get_peer())
         .unwrap();
@@ -57,7 +57,7 @@ fn test_active_pad() {
         .unwrap()
         .get::<gst::Pad>()
         .unwrap();
-    assert!(active_pad == h2.get_srcpad().unwrap().get_peer());
+    assert_eq!(active_pad, h2.get_srcpad().unwrap().get_peer());
 
     h1.set_src_caps_str("foo/bar");
     h2.set_src_caps_str("foo/bar");
@@ -66,42 +66,45 @@ fn test_active_pad() {
 
     /* Push buffer on inactive pad, we should not receive anything */
     let buf = gst::Buffer::new();
-    assert!(h1.push(buf) == Ok(gst::FlowSuccess::Ok));
-    assert!(h1.buffers_received() == 0);
+    assert_eq!(h1.push(buf), Ok(gst::FlowSuccess::Ok));
+    assert_eq!(h1.buffers_received(), 0);
 
     /* Buffers pushed on the active pad should be received */
     let buf = gst::Buffer::new();
-    assert!(h2.push(buf) == Ok(gst::FlowSuccess::Ok));
-    assert!(h1.buffers_received() == 1);
+    assert_eq!(h2.push(buf), Ok(gst::FlowSuccess::Ok));
+    assert_eq!(h1.buffers_received(), 1);
 
-    assert!(h1.events_received() == 4);
+    assert_eq!(h1.events_received(), 4);
 
     let event = h1.pull_event().unwrap();
-    assert!(event.get_type() == gst::EventType::CustomDownstreamSticky);
+    assert_eq!(event.get_type(), gst::EventType::CustomDownstreamSticky);
     let event = h1.pull_event().unwrap();
-    assert!(event.get_type() == gst::EventType::StreamStart);
+    assert_eq!(event.get_type(), gst::EventType::StreamStart);
     let event = h1.pull_event().unwrap();
-    assert!(event.get_type() == gst::EventType::Caps);
+    assert_eq!(event.get_type(), gst::EventType::Caps);
     let event = h1.pull_event().unwrap();
-    assert!(event.get_type() == gst::EventType::Segment);
+    assert_eq!(event.get_type(), gst::EventType::Segment);
 
     /* Push another buffer on the active pad, there should be no new events */
     let buf = gst::Buffer::new();
-    assert!(h2.push(buf) == Ok(gst::FlowSuccess::Ok));
-    assert!(h1.buffers_received() == 2);
-    assert!(h1.events_received() == 4);
+    assert_eq!(h2.push(buf), Ok(gst::FlowSuccess::Ok));
+    assert_eq!(h1.buffers_received(), 2);
+    assert_eq!(h1.events_received(), 4);
 
-    /* Switch the active pad and push a buffer, we should receive segment and caps again */
+    /* Switch the active pad and push a buffer, we should receive stream-start, segment and caps
+     * again */
     let buf = gst::Buffer::new();
     is.set_property("active-pad", &h1.get_srcpad().unwrap().get_peer())
         .unwrap();
-    assert!(h1.push(buf) == Ok(gst::FlowSuccess::Ok));
-    assert!(h1.buffers_received() == 3);
-    assert!(h1.events_received() == 6);
+    assert_eq!(h1.push(buf), Ok(gst::FlowSuccess::Ok));
+    assert_eq!(h1.buffers_received(), 3);
+    assert_eq!(h1.events_received(), 7);
     let event = h1.pull_event().unwrap();
-    assert!(event.get_type() == gst::EventType::Caps);
+    assert_eq!(event.get_type(), gst::EventType::StreamStart);
     let event = h1.pull_event().unwrap();
-    assert!(event.get_type() == gst::EventType::Segment);
+    assert_eq!(event.get_type(), gst::EventType::Caps);
+    let event = h1.pull_event().unwrap();
+    assert_eq!(event.get_type(), gst::EventType::Segment);
 
     let _ = is.set_state(gst::State::Null);
 }
