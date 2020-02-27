@@ -147,7 +147,7 @@ impl InputSelectorPadSinkHandler {
         &self,
         pad: &PadSinkRef<'_>,
         element: &gst::Element,
-        buffer: gst::Buffer,
+        mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let inputselector = InputSelector::from_instance(element);
 
@@ -167,15 +167,20 @@ impl InputSelectorPadSinkHandler {
         if state.active_sinkpad.as_ref() == Some(pad.gst_pad()) {
             gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
 
+            if state.switched_pad && !buffer.get_flags().contains(gst::BufferFlags::DISCONT) {
+                let buffer = buffer.make_mut();
+                buffer.set_flags(gst::BufferFlags::DISCONT);
+            }
+
             let mut stickies: Vec<gst::Event> = vec![];
-            if inner.send_sticky || state.send_sticky {
+            if inner.send_sticky || state.switched_pad {
                 pad.gst_pad().sticky_events_foreach(|event| {
                     stickies.push(event.clone());
                     Ok(Some(event))
                 });
 
                 inner.send_sticky = false;
-                state.send_sticky = false;
+                state.switched_pad = false;
             }
             drop(inner);
             drop(state);
@@ -332,14 +337,14 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
 #[derive(Debug)]
 struct State {
     active_sinkpad: Option<gst::Pad>,
-    send_sticky: bool,
+    switched_pad: bool,
 }
 
 impl Default for State {
     fn default() -> State {
         State {
             active_sinkpad: None,
-            send_sticky: true,
+            switched_pad: true,
         }
     }
 }
@@ -509,7 +514,7 @@ impl ObjectImpl for InputSelector {
                 if let Some(pad) = pad {
                     if pads.sink_pads.get(&pad).is_some() {
                         state.active_sinkpad = Some(pad);
-                        state.send_sticky = true;
+                        state.switched_pad = true;
                     }
                 } else {
                     state.active_sinkpad = None;
@@ -602,7 +607,7 @@ impl ElementImpl for InputSelector {
 
         if state.active_sinkpad.is_none() {
             state.active_sinkpad = Some(ret.clone());
-            state.send_sticky = true;
+            state.switched_pad = true;
         }
 
         pads.sink_pads.insert(ret.clone(), sink_pad);
