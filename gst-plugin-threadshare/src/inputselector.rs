@@ -148,7 +148,7 @@ impl InputSelectorPadSinkHandler {
 
     async fn handle_item(
         &self,
-        pad: PadSinkRef<'_>,
+        pad: &PadSinkRef<'_>,
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -220,7 +220,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         let pad_weak = pad.downgrade();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            this.handle_item(pad, &element, buffer).await
+            this.handle_item(&pad, &element, buffer).await
         }
         .boxed()
     }
@@ -232,13 +232,18 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         element: &gst::Element,
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
+        let this = self.clone();
         let element = element.clone();
         let pad_weak = pad.downgrade();
         async move {
-            let inputselector = InputSelector::from_instance(&element);
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst_log!(CAT, obj: pad.gst_pad(), "Handling buffer list {:?}", list);
-            inputselector.src_pad.push_list(list).await
+            // TODO: Ideally we would keep the list intact and forward it in one go
+            for buffer in list.iter_owned() {
+                this.handle_item(&pad, &element, buffer).await?;
+            }
+
+            Ok(gst::FlowSuccess::Ok)
         }
         .boxed()
     }
