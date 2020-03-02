@@ -594,6 +594,7 @@ impl JitterBuffer {
         state.last_in_seqnum = std::u32::MAX;
         state.ips_rtptime = 0;
         state.ips_pts = gst::CLOCK_TIME_NONE;
+        state.earliest_pts = gst::CLOCK_TIME_NONE;
 
         let gap_packets = state.gap_packets.take();
         state.gap_packets = Some(BTreeSet::new());
@@ -1172,7 +1173,7 @@ impl JitterBuffer {
         self.sink_pad.unprepare().await;
         let _ = self.src_pad.unprepare().await;
 
-        state.jbuf.borrow().flush();
+        self.reset(&mut state, element);
 
         if let Some(wakeup_abort_handle) = state.wakeup_abort_handle.take() {
             wakeup_abort_handle.abort();
