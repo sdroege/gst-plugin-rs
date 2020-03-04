@@ -60,7 +60,7 @@ rtp_jitter_buffer_mode_get_type (void)
 
   if (!jitter_buffer_mode_type) {
     jitter_buffer_mode_type =
-        g_enum_register_static ("RTPJitterBufferMode", jitter_buffer_modes);
+        g_enum_register_static ("TsRTPJitterBufferMode", jitter_buffer_modes);
   }
   return jitter_buffer_mode_type;
 }

@@ -16,6 +16,10 @@ fn main() {
     build.file("src/jitterbuffer/rtpjitterbuffer.c");
     build.file("src/jitterbuffer/rtpstats.c");
 
+    build.define("RTPJitterBuffer", "TsRTPJitterBuffer");
+    build.define("RTPJitterBufferClass", "TsRTPJitterBufferClass");
+    build.define("RTPJitterBufferPrivate", "TsRTPJitterBufferClass");
+
     build.compile("libthreadshare-c.a");
 
     println!("cargo:rustc-link-lib=dylib=gstrtp-1.0");
