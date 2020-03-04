@@ -665,7 +665,8 @@ impl JitterBuffer {
             gst_debug!(CAT, obj: pad, "New payload type: {}", pt);
 
             if let Some(caps) = pad.get_current_caps() {
-                self.parse_caps(state, element, &caps, pt)?;
+                /* Ignore errors at this point, as we want to emit request-pt-map */
+                let _ = self.parse_caps(state, element, &caps, pt);
             }
         }
 
