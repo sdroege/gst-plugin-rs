@@ -1,4 +1,5 @@
 // Copyright (C) 2019-2020 François Laignel <fengalin@free.fr>
+// Copyright (C) 2020 Sebastian Dröge <sebastian@centricular.com>
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Library General Public
@@ -59,21 +60,22 @@
 //! `Element A` & `Element B` can also be linked to non-threadshare `Element`s in which case, they
 //! operate in a regular synchronous way.
 //!
+//! Note that only operations on the streaming thread (serialized events, buffers, serialized
+//! queries) are handled from the `PadContext` and asynchronously, everything else operates
+//! blocking.
+//!
 //! [`PadSink`]: struct.PadSink.html
 //! [`PadSrc`]: struct.PadSrc.html
 //! [`Context`]: ../executor/struct.Context.html
 
-use either::Either;
-
 use futures::future;
 use futures::future::BoxFuture;
-use futures::lock::{Mutex, MutexGuard};
 use futures::prelude::*;
 
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_loggable_error, gst_warning};
+use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_loggable_error};
 use gst::{FlowError, FlowSuccess};
 
 use std::fmt;
@@ -81,8 +83,7 @@ use std::marker::PhantomData;
 use std::sync;
 use std::sync::{Arc, Weak};
 
-use super::executor::{self, Context, JoinHandle, TaskOutput};
-use super::pad_context::{PadContext, PadContextWeak};
+use super::executor::Context;
 use super::task::Task;
 use super::RUNTIME_CAT;
 
@@ -109,10 +110,13 @@ impl fmt::Display for PadContextError {
 impl std::error::Error for PadContextError {}
 
 #[inline]
-fn event_ret_to_event_full_res(ret: bool, event: &gst::Event) -> Result<FlowSuccess, FlowError> {
+fn event_ret_to_event_full_res(
+    ret: bool,
+    event_type: gst::EventType,
+) -> Result<FlowSuccess, FlowError> {
     if ret {
         Ok(FlowSuccess::Ok)
-    } else if let gst::EventView::Caps(_) = event.view() {
+    } else if event_type == gst::EventType::Caps {
         Err(FlowError::NotNegotiated)
     } else {
         Err(FlowError::Error)
@@ -120,17 +124,17 @@ fn event_ret_to_event_full_res(ret: bool, event: &gst::Event) -> Result<FlowSucc
 }
 
 #[inline]
-fn event_to_event_full(
-    ret: Either<bool, BoxFuture<'static, bool>>,
-    event: gst::Event,
-) -> Either<Result<FlowSuccess, FlowError>, BoxFuture<'static, Result<FlowSuccess, FlowError>>> {
-    match ret {
-        Either::Left(ret) => Either::Left(event_ret_to_event_full_res(ret, &event)),
-        Either::Right(fut) => Either::Right(
-            fut.map(move |ret| event_ret_to_event_full_res(ret, &event))
-                .boxed(),
-        ),
-    }
+fn event_to_event_full(ret: bool, event_type: gst::EventType) -> Result<FlowSuccess, FlowError> {
+    event_ret_to_event_full_res(ret, event_type)
+}
+
+#[inline]
+fn event_to_event_full_serialized(
+    ret: BoxFuture<'static, bool>,
+    event_type: gst::EventType,
+) -> BoxFuture<'static, Result<FlowSuccess, FlowError>> {
+    ret.map(move |ret| event_ret_to_event_full_res(ret, event_type))
+        .boxed()
 }
 
 /// A trait to define `handler`s for [`PadSrc`] callbacks.
@@ -140,7 +144,7 @@ fn event_to_event_full(
 /// [`PadSrc`]: struct.PadSrc.html
 /// [`pad` module]: index.html
 pub trait PadSrcHandler: Clone + Send + Sync + 'static {
-    type ElementImpl: ElementImpl;
+    type ElementImpl: ElementImpl + ObjectSubclass;
 
     fn src_activate(
         &self,
@@ -189,24 +193,9 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         _imp: &Self::ElementImpl,
         element: &gst::Element,
         event: gst::Event,
-    ) -> Either<bool, BoxFuture<'static, bool>> {
-        if event.is_serialized() {
-            let pad_weak = pad.downgrade();
-            let element = element.clone();
-
-            Either::Right(
-                async move {
-                    let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
-                    gst_log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
-
-                    pad.gst_pad().event_default(Some(&element), event)
-                }
-                .boxed(),
-            )
-        } else {
-            gst_log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
-            Either::Left(pad.gst_pad().event_default(Some(element), event))
-        }
+    ) -> bool {
+        gst_log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+        pad.gst_pad().event_default(Some(element), event)
     }
 
     fn src_event_full(
@@ -215,12 +204,11 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
         imp: &Self::ElementImpl,
         element: &gst::Element,
         event: gst::Event,
-    ) -> Either<Result<FlowSuccess, FlowError>, BoxFuture<'static, Result<FlowSuccess, FlowError>>>
-    {
+    ) -> Result<FlowSuccess, FlowError> {
         // default is to dispatch to `src_event`
         // (as implemented in `gst_pad_send_event_unchecked`)
-        let event_clone = event.clone();
-        event_to_event_full(self.src_event(pad, imp, element, event), event_clone)
+        let event_type = event.get_type();
+        event_to_event_full(self.src_event(pad, imp, element, event), event_type)
     }
 
     fn src_query(
@@ -242,15 +230,12 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
 }
 
 #[derive(Default, Debug)]
-pub struct PadSrcState {
-    is_initialized: bool,
-}
+struct PadSrcState;
 
 #[derive(Debug)]
 struct PadSrcInner {
-    state: Mutex<PadSrcState>,
+    state: sync::Mutex<PadSrcState>,
     gst_pad: gst::Pad,
-    pad_context: sync::RwLock<Option<PadContext>>,
     task: Task,
 }
 
@@ -261,24 +246,9 @@ impl PadSrcInner {
         }
 
         PadSrcInner {
-            state: Mutex::new(PadSrcState::default()),
+            state: sync::Mutex::new(PadSrcState::default()),
             gst_pad,
-            pad_context: sync::RwLock::new(None),
             task: Task::default(),
-        }
-    }
-
-    fn has_pad_context(&self) -> bool {
-        self.pad_context.read().unwrap().as_ref().is_some()
-    }
-}
-
-impl Drop for PadSrcInner {
-    fn drop(&mut self) {
-        // Check invariant which can't be held automatically in `PadSrc`
-        // because `drop` can't be `async`
-        if self.has_pad_context() {
-            panic!("Missing call to `PadSrc::unprepare`");
         }
     }
 }
@@ -330,28 +300,20 @@ impl<'a> PadSrcRef<'a> {
         self.strong.gst_pad()
     }
 
-    pub async fn lock_state(&'a self) -> MutexGuard<'a, PadSrcState> {
-        self.strong.lock_state().await
-    }
-
-    pub fn pad_context(&self) -> PadContextWeak {
-        self.strong.pad_context()
-    }
-
-    /// Spawns `future` using current [`PadContext`].
-    ///
-    /// # Panics
-    ///
-    /// This function panics if the `PadSrc` is not prepared.
-    ///
-    /// [`PadContext`]: ../struct.PadContext.html
-    pub fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
-    where
-        Fut: Future + Send + 'static,
-        Fut::Output: Send + 'static,
-    {
-        self.strong.spawn(future)
-    }
+    ///// Spawns `future` using current [`PadContext`].
+    /////
+    ///// # Panics
+    /////
+    ///// This function panics if the `PadSrc` is not prepared.
+    /////
+    ///// [`PadContext`]: ../struct.PadContext.html
+    //pub fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
+    //where
+    //    Fut: Future + Send + 'static,
+    //    Fut::Output: Send + 'static,
+    //{
+    //    self.strong.spawn(future)
+    //}
 
     pub fn downgrade(&self) -> PadSrcWeak {
         self.strong.downgrade()
@@ -373,21 +335,22 @@ impl<'a> PadSrcRef<'a> {
     ///
     /// The `Task` will loop on the provided `func`.
     /// The execution occurs on the `Task`'s context.
-    pub async fn start_task<F, Fut>(&self, func: F)
+    pub fn start_task<F, Fut>(&self, func: F)
     where
         F: (FnMut() -> Fut) + Send + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
+        Fut: Future<Output = glib::Continue> + Send + 'static,
     {
-        self.strong.start_task(func).await;
+        self.strong.start_task(func);
     }
 
-    /// Pauses the `Started` `Pad` `Task`.
-    pub async fn pause_task(&self) {
-        let _ = self.strong.pause_task().await;
+    /// Cancels the `Started` `Pad` `Task`.
+    pub fn cancel_task(&self) {
+        self.strong.cancel_task();
     }
 
-    pub async fn stop_task(&self) {
-        self.strong.stop_task().await;
+    /// Stops the `Started` `Pad` `Task`.
+    pub fn stop_task(&self) {
+        self.strong.stop_task();
     }
 
     fn activate_mode_hook(
@@ -407,12 +370,6 @@ impl<'a> PadSrcRef<'a> {
             ));
         }
 
-        if !active {
-            executor::block_on(async {
-                self.strong.lock_state().await.is_initialized = false;
-            });
-        }
-
         Ok(())
     }
 }
@@ -430,96 +387,27 @@ impl PadSrcStrong {
         &self.0.gst_pad
     }
 
-    #[inline]
-    async fn lock_state(&self) -> MutexGuard<'_, PadSrcState> {
-        self.0.state.lock().await
-    }
-
-    #[inline]
-    fn pad_context_priv(&self) -> sync::RwLockReadGuard<'_, Option<PadContext>> {
-        self.0.pad_context.read().unwrap()
-    }
-
-    #[inline]
-    fn pad_context(&self) -> PadContextWeak {
-        self.pad_context_priv()
-            .as_ref()
-            .expect("PadContext not initialized")
-            .downgrade()
-    }
-
-    #[inline]
-    pub fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
-    where
-        Fut: Future + Send + 'static,
-        Fut::Output: Send + 'static,
-    {
-        let pad_ctx = self.pad_context_priv();
-        pad_ctx
-            .as_ref()
-            .expect("PadContext not initialized")
-            .spawn(future)
-    }
+    //#[inline]
+    //fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
+    //where
+    //    Fut: Future + Send + 'static,
+    //    Fut::Output: Send + 'static,
+    //{
+    //    let pad_ctx = self.pad_context_priv();
+    //    pad_ctx
+    //        .as_ref()
+    //        .expect("PadContext not initialized")
+    //        .spawn(future)
+    //}
 
     #[inline]
     fn downgrade(&self) -> PadSrcWeak {
         PadSrcWeak(Arc::downgrade(&self.0))
     }
 
-    fn push_prelude(
-        &self,
-        state: &mut MutexGuard<'_, PadSrcState>,
-    ) -> Result<FlowSuccess, FlowError> {
-        if !state.is_initialized || self.gst_pad().check_reconfigure() {
-            if !self.push_pad_context_event() {
-                return Err(FlowError::Error);
-            }
-
-            if !state.is_initialized {
-                // Get rid of reconfigure flag
-                self.gst_pad().check_reconfigure();
-                state.is_initialized = true;
-            }
-        }
-
-        Ok(FlowSuccess::Ok)
-    }
-
-    #[inline]
-    fn push_pad_context_event(&self) -> bool {
-        let pad_ctx = self.pad_context_priv();
-        let pad_ctx = pad_ctx.as_ref().unwrap();
-        gst_log!(
-            RUNTIME_CAT,
-            obj: self.gst_pad(),
-            "Pushing PadContext Event {}",
-            pad_ctx,
-        );
-
-        let ret = self.gst_pad().push_event(pad_ctx.new_sticky_event());
-        if !ret {
-            gst_error!(RUNTIME_CAT,
-                obj: self.gst_pad(),
-                "Failed to push PadContext sticky event to PadSrc",
-            );
-        }
-
-        ret
-    }
-
-    fn drain_pending_tasks(&self) -> Option<impl Future<Output = TaskOutput>> {
-        self.pad_context_priv()
-            .as_ref()
-            .unwrap()
-            .drain_pending_tasks()
-    }
-
     #[inline]
     async fn push(&self, buffer: gst::Buffer) -> Result<FlowSuccess, FlowError> {
-        let mut state = self.lock_state().await;
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Pushing {:?}", buffer);
-
-        self.push_prelude(&mut state)?;
 
         let success = self.gst_pad().push(buffer).map_err(|err| {
             gst_error!(RUNTIME_CAT,
@@ -530,91 +418,63 @@ impl PadSrcStrong {
             err
         })?;
 
-        if let Some(pending_tasks) = self.drain_pending_tasks() {
-            gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Processing pending tasks (push)");
-            pending_tasks.await?;
-        }
+        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Processing any pending sub tasks");
+        Context::drain_sub_tasks().await?;
 
         Ok(success)
     }
 
     #[inline]
     async fn push_list(&self, list: gst::BufferList) -> Result<FlowSuccess, FlowError> {
-        let mut state = self.lock_state().await;
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Pushing {:?}", list);
-
-        self.push_prelude(&mut state)?;
 
         let success = self.gst_pad().push_list(list).map_err(|err| {
             gst_error!(
                 RUNTIME_CAT,
                 obj: self.gst_pad(),
-                "Failed to push BufferList to PadSrc: {:?} ({})",
+                "Failed to push BufferList to PadSrc: {:?}",
                 err,
-                self.pad_context_priv().as_ref().unwrap(),
             );
             err
         })?;
 
-        if let Some(pending_tasks) = self.drain_pending_tasks() {
-            gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Processing pending tasks (push_list)");
-            pending_tasks.await?;
-        }
+        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Processing any pending sub tasks");
+        Context::drain_sub_tasks().await?;
 
         Ok(success)
     }
 
     #[inline]
     async fn push_event(&self, event: gst::Event) -> bool {
-        let mut state = self.lock_state().await;
+        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Pushing {:?}", event);
 
-        let was_handled = if PadContext::is_pad_context_event(&event) {
-            // Push our own PadContext
-            if !self.push_pad_context_event() {
-                return false;
-            }
+        let was_handled = self.gst_pad().push_event(event);
 
-            // Get rid of reconfigure flag
-            self.gst_pad().check_reconfigure();
-            state.is_initialized = true;
-
-            true
-        } else {
-            gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Pushing {:?}", event);
-
-            if self.push_prelude(&mut state).is_err() {
-                return false;
-            }
-            self.gst_pad().push_event(event)
-        };
-
-        if let Some(pending_tasks) = self.drain_pending_tasks() {
-            gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Processing pending tasks (push_event)");
-            if pending_tasks.await.is_err() {
-                return false;
-            }
+        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Processing any pending sub tasks");
+        if Context::drain_sub_tasks().await.is_err() {
+            return false;
         }
 
         was_handled
     }
 
     #[inline]
-    async fn start_task<F, Fut>(&self, func: F)
+    fn start_task<F, Fut>(&self, func: F)
     where
         F: (FnMut() -> Fut) + Send + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
+        Fut: Future<Output = glib::Continue> + Send + 'static,
     {
-        self.0.task.start(func).await;
+        self.0.task.start(func);
     }
 
     #[inline]
-    pub async fn pause_task(&self) -> BoxFuture<'static, ()> {
-        self.0.task.pause().await
+    fn cancel_task(&self) {
+        self.0.task.cancel();
     }
 
     #[inline]
-    async fn stop_task(&self) {
-        self.0.task.stop().await;
+    fn stop_task(&self) {
+        self.0.task.stop();
     }
 }
 
@@ -670,28 +530,20 @@ impl PadSrc {
         self.gst_pad().check_reconfigure()
     }
 
-    pub async fn lock_state(&self) -> MutexGuard<'_, PadSrcState> {
-        self.0.lock_state().await
-    }
-
-    pub fn pad_context(&self) -> PadContextWeak {
-        self.0.pad_context()
-    }
-
-    /// Spawns `future` using current [`PadContext`].
-    ///
-    /// # Panics
-    ///
-    /// This function panics if the `PadSrc` is not prepared.
-    ///
-    /// [`PadContext`]: ../struct.PadContext.html
-    pub fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
-    where
-        Fut: Future + Send + 'static,
-        Fut::Output: Send + 'static,
-    {
-        self.0.spawn(future)
-    }
+    ///// Spawns `future` using current [`PadContext`].
+    /////
+    ///// # Panics
+    /////
+    ///// This function panics if the `PadSrc` is not prepared.
+    /////
+    ///// [`PadContext`]: ../struct.PadContext.html
+    //pub fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
+    //where
+    //    Fut: Future + Send + 'static,
+    //    Fut::Output: Send + 'static,
+    //{
+    //    self.0.spawn(future)
+    //}
 
     fn init_pad_functions<H: PadSrcHandler>(&self, handler: &H) {
         let handler_clone = handler.clone();
@@ -749,15 +601,7 @@ impl PadSrc {
                     || Err(FlowError::Error),
                     move |imp, element| {
                         let this_ref = this_weak.upgrade().expect("PadSrc no longer exists");
-                        match handler.src_event_full(&this_ref, imp, &element, event) {
-                            Either::Left(res) => res,
-                            Either::Right(_fut) => {
-                                // See these threads:
-                                // https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/merge_requests/240#note_378446
-                                // https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/merge_requests/240#note_378454
-                                unimplemented!("Future handling in src_event*");
-                            }
-                        }
+                        handler.src_event_full(&this_ref, imp, &element, event)
                     },
                 )
             });
@@ -784,26 +628,35 @@ impl PadSrc {
             });
     }
 
-    pub async fn prepare<H: PadSrcHandler>(
+    pub fn prepare<H: PadSrcHandler>(
         &self,
         context: Context,
         handler: &H,
-    ) -> Result<(), PadContextError> {
-        let _state = self.lock_state().await;
+    ) -> Result<(), super::task::TaskError> {
+        let _state = (self.0).0.state.lock().unwrap();
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Preparing");
 
-        if (self.0).0.has_pad_context() {
-            return Err(PadContextError::ActiveContext);
-        }
+        (self.0).0.task.prepare(context)?;
 
-        (self.0)
-            .0
-            .task
-            .prepare(context.clone())
-            .await
-            .map_err(|_| PadContextError::ActiveTask)?;
+        self.init_pad_functions(handler);
 
-        *(self.0).0.pad_context.write().unwrap() = Some(PadContext::new(context.clone()));
+        Ok(())
+    }
+
+    pub fn prepare_with_func<H: PadSrcHandler, F, Fut>(
+        &self,
+        context: Context,
+        handler: &H,
+        prepare_func: F,
+    ) -> Result<(), super::task::TaskError>
+    where
+        F: (FnOnce() -> Fut) + Send + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        let _state = (self.0).0.state.lock().unwrap();
+        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Preparing");
+
+        (self.0).0.task.prepare_with_func(context, prepare_func)?;
 
         self.init_pad_functions(handler);
 
@@ -811,15 +664,14 @@ impl PadSrc {
     }
 
     /// Releases the resources held by this `PadSrc`.
-    pub async fn unprepare(&self) -> Result<(), PadContextError> {
-        let _state = self.lock_state().await;
+    pub fn unprepare(&self) -> Result<(), PadContextError> {
+        let _state = (self.0).0.state.lock().unwrap();
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Unpreparing");
 
         (self.0)
             .0
             .task
             .unprepare()
-            .await
             .map_err(|_| PadContextError::ActiveTask)?;
 
         self.gst_pad()
@@ -829,11 +681,9 @@ impl PadSrc {
         self.gst_pad()
             .set_event_function(move |_gst_pad, _parent, _event| false);
         self.gst_pad()
-            .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Error));
+            .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
         self.gst_pad()
             .set_query_function(move |_gst_pad, _parent, _query| false);
-
-        *(self.0).0.pad_context.write().unwrap() = None;
 
         Ok(())
     }
@@ -854,21 +704,20 @@ impl PadSrc {
     ///
     /// The `Task` will loop on the provided `func`.
     /// The execution occurs on the `Task`'s context.
-    pub async fn start_task<F, Fut>(&self, func: F)
+    pub fn start_task<F, Fut>(&self, func: F)
     where
         F: (FnMut() -> Fut) + Send + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
+        Fut: Future<Output = glib::Continue> + Send + 'static,
     {
-        self.0.start_task(func).await;
+        self.0.start_task(func);
     }
 
-    /// Pauses the `Started` `Pad` `task`.
-    pub async fn pause_task(&self) -> BoxFuture<'static, ()> {
-        self.0.pause_task().await
+    pub fn cancel_task(&self) {
+        self.0.cancel_task();
     }
 
-    pub async fn stop_task(&self) {
-        self.0.stop_task().await;
+    pub fn stop_task(&self) {
+        self.0.stop_task();
     }
 }
 
@@ -879,7 +728,7 @@ impl PadSrc {
 /// [`PadSink`]: struct.PadSink.html
 /// [`pad` module]: index.html
 pub trait PadSinkHandler: Clone + Send + Sync + 'static {
-    type ElementImpl: ElementImpl;
+    type ElementImpl: ElementImpl + ObjectSubclass;
 
     fn sink_activate(
         &self,
@@ -948,24 +797,30 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         _imp: &Self::ElementImpl,
         element: &gst::Element,
         event: gst::Event,
-    ) -> Either<bool, BoxFuture<'static, bool>> {
-        if event.is_serialized() {
-            let pad_weak = pad.downgrade();
-            let element = element.clone();
+    ) -> bool {
+        assert!(!event.is_serialized());
+        gst_log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+        pad.gst_pad().event_default(Some(element), event)
+    }
 
-            Either::Right(
-                async move {
-                    let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-                    gst_log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+    fn sink_event_serialized(
+        &self,
+        pad: &PadSinkRef,
+        _imp: &Self::ElementImpl,
+        element: &gst::Element,
+        event: gst::Event,
+    ) -> BoxFuture<'static, bool> {
+        assert!(event.is_serialized());
+        let pad_weak = pad.downgrade();
+        let element = element.clone();
 
-                    pad.gst_pad().event_default(Some(&element), event)
-                }
-                .boxed(),
-            )
-        } else {
+        async move {
+            let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst_log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
-            Either::Left(pad.gst_pad().event_default(Some(element), event))
+
+            pad.gst_pad().event_default(Some(&element), event)
         }
+        .boxed()
     }
 
     fn sink_event_full(
@@ -974,12 +829,29 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         imp: &Self::ElementImpl,
         element: &gst::Element,
         event: gst::Event,
-    ) -> Either<Result<FlowSuccess, FlowError>, BoxFuture<'static, Result<FlowSuccess, FlowError>>>
-    {
+    ) -> Result<FlowSuccess, FlowError> {
+        assert!(!event.is_serialized());
         // default is to dispatch to `sink_event`
         // (as implemented in `gst_pad_send_event_unchecked`)
-        let event_clone = event.clone();
-        event_to_event_full(self.sink_event(pad, imp, element, event), event_clone)
+        let event_type = event.get_type();
+        event_to_event_full(self.sink_event(pad, imp, element, event), event_type)
+    }
+
+    fn sink_event_full_serialized(
+        &self,
+        pad: &PadSinkRef,
+        imp: &Self::ElementImpl,
+        element: &gst::Element,
+        event: gst::Event,
+    ) -> BoxFuture<'static, Result<FlowSuccess, FlowError>> {
+        assert!(event.is_serialized());
+        // default is to dispatch to `sink_event`
+        // (as implemented in `gst_pad_send_event_unchecked`)
+        let event_type = event.get_type();
+        event_to_event_full_serialized(
+            self.sink_event_serialized(pad, imp, element, event),
+            event_type,
+        )
     }
 
     fn sink_query(
@@ -989,12 +861,13 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
         if query.is_serialized() {
+            gst_log!(RUNTIME_CAT, obj: pad.gst_pad(), "Dropping {:?}", query);
             // FIXME serialized queries should be handled with the dataflow
             // but we can't return a `Future` because we couldn't honor QueryRef's lifetime
             false
         } else {
+            gst_log!(RUNTIME_CAT, obj: pad.gst_pad(), "Handling {:?}", query);
             pad.gst_pad().query_default(Some(element), query)
         }
     }
@@ -1003,7 +876,6 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
 #[derive(Debug)]
 struct PadSinkInner {
     gst_pad: gst::Pad,
-    pad_context: sync::RwLock<Option<PadContextWeak>>,
 }
 
 impl PadSinkInner {
@@ -1012,10 +884,7 @@ impl PadSinkInner {
             panic!("Wrong pad direction for PadSink");
         }
 
-        PadSinkInner {
-            gst_pad,
-            pad_context: sync::RwLock::new(None),
-        }
+        PadSinkInner { gst_pad }
     }
 }
 
@@ -1065,10 +934,6 @@ impl<'a> PadSinkRef<'a> {
         self.strong.gst_pad()
     }
 
-    pub fn pad_context(&self) -> Option<PadContextWeak> {
-        self.strong.pad_context()
-    }
-
     pub fn downgrade(&self) -> PadSinkWeak {
         self.strong.downgrade()
     }
@@ -1097,32 +962,9 @@ impl<'a> PadSinkRef<'a> {
         &self,
         fut: impl Future<Output = Result<FlowSuccess, FlowError>> + Send + 'static,
     ) -> Result<FlowSuccess, FlowError> {
-        if Context::is_context_thread() {
-            match self.pad_context().as_ref() {
-                Some(pad_ctx_weak) => {
-                    pad_ctx_weak
-                        .upgrade()
-                        .expect("PadContext no longer exists")
-                        .add_pending_task(fut.map(|res| res.map(drop)));
-                    Ok(FlowSuccess::Ok)
-                }
-                None => {
-                    // This can happen when an upstream element forwards the PadContext sticky event
-                    // after the StreamStart event. While the upstream element should be fixed,
-                    // we have no other solution but blocking the `Context`.
-                    // See https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/issues/94
-                    gst_warning!(
-                        RUNTIME_CAT,
-                        obj: self.gst_pad(),
-                        "Operating on a Context without a PadContext. An upstream element should be fixed.",
-                    );
-                    // Note: we don't use `crate::runtime::executor::block_on` here
-                    // because `Context::is_context_thread()` is checked in the `if`
-                    // statement above.
-                    futures::executor::block_on(fut)
-                }
-            }
-        } else {
+        // First try to add it as a sub task to the current task, if any
+        if let Err(fut) = Context::add_sub_task(fut.map(|res| res.map(drop))) {
+            // FIXME: update comments below
             // Not on a context thread: execute the Future immediately.
             //
             // - If there is no PadContext, we don't have any other options.
@@ -1134,7 +976,9 @@ impl<'a> PadSinkRef<'a> {
             // Note: we don't use `crate::runtime::executor::block_on` here
             // because `Context::is_context_thread()` is checked in the `if`
             // statement above.
-            futures::executor::block_on(fut)
+            futures::executor::block_on(fut.map(|res| res.map(|_| gst::FlowSuccess::Ok)))
+        } else {
+            Ok(gst::FlowSuccess::Ok)
         }
     }
 }
@@ -1149,10 +993,6 @@ impl PadSinkStrong {
 
     fn gst_pad(&self) -> &gst::Pad {
         &self.0.gst_pad
-    }
-
-    fn pad_context(&self) -> Option<PadContextWeak> {
-        self.0.pad_context.read().unwrap().clone()
     }
 
     fn downgrade(&self) -> PadSinkWeak {
@@ -1198,10 +1038,6 @@ impl PadSink {
 
     pub fn gst_pad(&self) -> &gst::Pad {
         self.0.gst_pad()
-    }
-
-    pub fn pad_context(&self) -> Option<PadContextWeak> {
-        self.0.pad_context()
     }
 
     pub fn downgrade(&self) -> PadSinkWeak {
@@ -1265,9 +1101,25 @@ impl PadSink {
                     parent,
                     || Err(FlowError::Error),
                     move |imp, element| {
-                        let this_ref = this_weak.upgrade().expect("PadSink no longer exists");
-                        let chain_fut = handler.sink_chain(&this_ref, imp, &element, buffer);
-                        this_ref.handle_future(chain_fut)
+                        if Context::current_has_sub_tasks() {
+                            let this_weak = this_weak.clone();
+                            let handler = handler.clone();
+                            let element = element.clone();
+                            let delayed_fut = async move {
+                                let imp =
+                                    <H::ElementImpl as ObjectSubclass>::from_instance(&element);
+                                let this_ref =
+                                    this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
+                                handler.sink_chain(&this_ref, imp, &element, buffer).await
+                            };
+                            let _ = Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
+
+                            Ok(gst::FlowSuccess::Ok)
+                        } else {
+                            let this_ref = this_weak.upgrade().expect("PadSink no longer exists");
+                            let chain_fut = handler.sink_chain(&this_ref, imp, &element, buffer);
+                            this_ref.handle_future(chain_fut)
+                        }
                     },
                 )
             });
@@ -1282,10 +1134,28 @@ impl PadSink {
                     parent,
                     || Err(FlowError::Error),
                     move |imp, element| {
-                        let this_ref = this_weak.upgrade().expect("PadSink no longer exists");
-                        let chain_list_fut =
-                            handler.sink_chain_list(&this_ref, imp, &element, list);
-                        this_ref.handle_future(chain_list_fut)
+                        if Context::current_has_sub_tasks() {
+                            let this_weak = this_weak.clone();
+                            let handler = handler.clone();
+                            let element = element.clone();
+                            let delayed_fut = async move {
+                                let imp =
+                                    <H::ElementImpl as ObjectSubclass>::from_instance(&element);
+                                let this_ref =
+                                    this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
+                                handler
+                                    .sink_chain_list(&this_ref, imp, &element, list)
+                                    .await
+                            };
+                            let _ = Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
+
+                            Ok(gst::FlowSuccess::Ok)
+                        } else {
+                            let this_ref = this_weak.upgrade().expect("PadSink no longer exists");
+                            let chain_list_fut =
+                                handler.sink_chain_list(&this_ref, imp, &element, list);
+                            this_ref.handle_future(chain_list_fut)
+                        }
                     },
                 )
             });
@@ -1295,7 +1165,7 @@ impl PadSink {
         let handler_clone = handler.clone();
         let this_weak = self.downgrade();
         self.gst_pad()
-            .set_event_full_function(move |gst_pad, parent, event| {
+            .set_event_full_function(move |_gst_pad, parent, event| {
                 let handler = handler_clone.clone();
                 let this_weak = this_weak.clone();
                 H::ElementImpl::catch_panic_pad_function(
@@ -1303,14 +1173,31 @@ impl PadSink {
                     || Err(FlowError::Error),
                     move |imp, element| {
                         let this_ref = this_weak.upgrade().expect("PadSink no longer exists");
-                        if let Some(received_pc) = PadContext::check_pad_context_event(&event) {
-                            gst_log!(RUNTIME_CAT, obj: gst_pad, "Received {:?}", received_pc);
-                            *this_ref.strong.0.pad_context.write().unwrap() = Some(received_pc);
-                        }
+                        if event.is_serialized() {
+                            if Context::current_has_sub_tasks() {
+                                let this_weak = this_weak.clone();
+                                let handler = handler.clone();
+                                let element = element.clone();
+                                let delayed_fut = async move {
+                                    let imp =
+                                        <H::ElementImpl as ObjectSubclass>::from_instance(&element);
+                                    let this_ref =
+                                        this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
 
-                        match handler.sink_event_full(&this_ref, imp, &element, event) {
-                            Either::Left(ret) => ret,
-                            Either::Right(fut) => this_ref.handle_future(fut),
+                                    handler
+                                        .sink_event_full_serialized(&this_ref, imp, &element, event)
+                                        .await
+                                };
+                                let _ = Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
+
+                                Ok(gst::FlowSuccess::Ok)
+                            } else {
+                                let event_fut = handler
+                                    .sink_event_full_serialized(&this_ref, imp, &element, event);
+                                this_ref.handle_future(event_fut)
+                            }
+                        } else {
+                            handler.sink_event_full(&this_ref, imp, &element, event)
                         }
                     },
                 )
@@ -1338,23 +1225,23 @@ impl PadSink {
             });
     }
 
-    pub async fn prepare<H: PadSinkHandler>(&self, handler: &H) {
+    pub fn prepare<H: PadSinkHandler>(&self, handler: &H) {
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Preparing");
         self.init_pad_functions(handler);
     }
 
     /// Releases the resources held by this `PadSink`.
-    pub async fn unprepare(&self) {
+    pub fn unprepare(&self) {
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Unpreparing");
 
         self.gst_pad()
-            .set_chain_function(move |_gst_pad, _parent, _buffer| Err(FlowError::Error));
+            .set_chain_function(move |_gst_pad, _parent, _buffer| Err(FlowError::Flushing));
         self.gst_pad()
-            .set_chain_list_function(move |_gst_pad, _parent, _list| Err(FlowError::Error));
+            .set_chain_list_function(move |_gst_pad, _parent, _list| Err(FlowError::Flushing));
         self.gst_pad()
             .set_event_function(move |_gst_pad, _parent, _event| false);
         self.gst_pad()
-            .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Error));
+            .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
         self.gst_pad()
             .set_query_function(move |_gst_pad, _parent, _query| false);
     }

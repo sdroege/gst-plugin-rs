@@ -44,19 +44,16 @@
 //! [`PadSink`]: pad/struct.PadSink.html
 
 pub mod executor;
-pub use executor::{Context, JoinHandle, TaskOutput};
+pub use executor::{Context, JoinHandle, SubTaskOutput};
 
 pub mod pad;
 pub use pad::{PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, PadSrcWeak};
 
-pub mod pad_context;
-pub use pad_context::{PadContext, PadContextRef, PadContextWeak};
+pub mod task;
 
 pub mod prelude {
     pub use super::pad::{PadSinkHandler, PadSrcHandler};
 }
-
-pub mod task;
 
 pub mod time;
 
