@@ -29,16 +29,16 @@ pub use tokio;
 #[macro_use]
 pub mod runtime;
 
-pub mod socket;
-mod tcpclientsrc;
-mod udpsink;
-mod udpsrc;
-
-mod appsrc;
-pub mod dataqueue;
-mod jitterbuffer;
-mod proxy;
-mod queue;
+//pub mod socket;
+//mod tcpclientsrc;
+//mod udpsink;
+//mod udpsrc;
+//
+//mod appsrc;
+//pub mod dataqueue;
+//mod jitterbuffer;
+//mod proxy;
+//mod queue;
 
 use glib::translate::*;
 use glib_sys as glib_ffi;
@@ -49,13 +49,13 @@ use gst::prelude::*;
 use gstreamer_sys as gst_ffi;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    udpsrc::register(plugin)?;
-    udpsink::register(plugin)?;
-    tcpclientsrc::register(plugin)?;
-    queue::register(plugin)?;
-    proxy::register(plugin)?;
-    appsrc::register(plugin)?;
-    jitterbuffer::jitterbuffer::register(plugin)?;
+    //udpsrc::register(plugin)?;
+    //udpsink::register(plugin)?;
+    //tcpclientsrc::register(plugin)?;
+    //queue::register(plugin)?;
+    //proxy::register(plugin)?;
+    //appsrc::register(plugin)?;
+    //jitterbuffer::jitterbuffer::register(plugin)?;
 
     Ok(())
 }
