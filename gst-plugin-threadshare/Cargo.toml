@@ -27,8 +27,6 @@ lazy_static = "1.0"
 either = "1.0"
 rand = "0.7"
 net2 = "0.2"
-# Pin quote to 1.0.2 until https://github.com/rust-lang-nursery/failure/issues/342 is fixed.
-quote = "=1.0.2"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winsock2", "processthreadsapi"] }
