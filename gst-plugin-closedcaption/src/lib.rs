@@ -34,6 +34,9 @@ extern crate lazy_static;
 #[macro_use]
 extern crate pretty_assertions;
 
+mod cea608tott;
+#[allow(non_camel_case_types, non_upper_case_globals)]
+pub mod cea608tott_ffi;
 mod line_reader;
 mod mcc_enc;
 mod mcc_parse;
@@ -47,6 +50,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     mcc_enc::register(plugin)?;
     scc_parse::register(plugin)?;
     scc_enc::register(plugin)?;
+    cea608tott::register(plugin)?;
     Ok(())
 }
 
