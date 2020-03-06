@@ -82,18 +82,17 @@ fn test_push() {
         use gst::EventView;
 
         let event = h.pull_event().unwrap();
-        // The StickyEvent for the TaskContext is pushed first
         match event.view() {
             EventView::StreamStart(..) => {
-                assert_eq!(n_events, 1);
+                assert_eq!(n_events, 0);
             }
             EventView::Caps(ev) => {
-                assert_eq!(n_events, 2);
+                assert_eq!(n_events, 1);
                 let event_caps = ev.get_caps();
                 assert_eq!(caps.as_ref(), event_caps);
             }
             EventView::Segment(..) => {
-                assert_eq!(n_events, 3);
+                assert_eq!(n_events, 2);
                 break;
             }
             _ => (),

@@ -15,10 +15,8 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use either::Either;
-
 use futures::future::BoxFuture;
-use futures::lock::Mutex;
+use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
 use gio;
@@ -41,13 +39,16 @@ use rand;
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::sync::Mutex as StdMutex;
 use std::sync::{self, Arc};
 use std::u16;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Context, JoinHandle, PadSrc, PadSrcRef};
+use crate::runtime::{Context, PadSrc, PadSrcRef};
 
-use super::socket::{wrap_socket, GioSocketWrapper, Socket, SocketRead, SocketStream};
+use super::socket::{
+    wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead, SocketState, SocketStream,
+};
 
 const DEFAULT_ADDRESS: Option<&str> = Some("127.0.0.1");
 const DEFAULT_PORT: u32 = 5000;
@@ -196,11 +197,11 @@ struct UdpReaderInner {
 }
 
 #[derive(Debug)]
-pub struct UdpReader(Arc<Mutex<UdpReaderInner>>);
+pub struct UdpReader(Arc<FutMutex<UdpReaderInner>>);
 
 impl UdpReader {
     fn new(socket: tokio::net::UdpSocket) -> Self {
-        UdpReader(Arc::new(Mutex::new(UdpReaderInner { socket })))
+        UdpReader(Arc::new(FutMutex::new(UdpReaderInner { socket })))
     }
 }
 
@@ -247,41 +248,39 @@ impl Default for UdpSrcPadHandlerState {
 #[derive(Debug, Default)]
 struct UdpSrcPadHandlerInner {
     state: sync::RwLock<UdpSrcPadHandlerState>,
-    socket_stream: Mutex<Option<SocketStream<UdpReader>>>,
-    flush_join_handle: sync::Mutex<Option<JoinHandle<Result<(), ()>>>>,
 }
 
 #[derive(Clone, Debug, Default)]
 struct UdpSrcPadHandler(Arc<UdpSrcPadHandlerInner>);
 
 impl UdpSrcPadHandler {
-    async fn start_task(&self, pad: PadSrcRef<'_>, element: &gst::Element) {
+    fn start_task(
+        &self,
+        pad: PadSrcRef<'_>,
+        element: &gst::Element,
+        socket_stream: SocketStream<UdpReader>,
+    ) {
         let this = self.clone();
         let pad_weak = pad.downgrade();
         let element = element.clone();
+        let socket_stream = Arc::new(FutMutex::new(socket_stream));
+
         pad.start_task(move || {
             let this = this.clone();
             let pad_weak = pad_weak.clone();
             let element = element.clone();
+            let socket_stream = socket_stream.clone();
+
             async move {
-                let item = this
-                    .0
-                    .socket_stream
-                    .lock()
-                    .await
-                    .as_mut()
-                    .expect("Missing SocketStream")
-                    .next()
-                    .await;
+                let item = socket_stream.lock().await.next().await;
 
                 let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
                 let (mut buffer, saddr) = match item {
                     Some(Ok((buffer, saddr))) => (buffer, saddr),
                     Some(Err(err)) => {
-                        gst_error!(CAT, obj: &element, "Got error {}", err);
+                        gst_error!(CAT, obj: &element, "Got error {:?}", err);
                         match err {
-                            Either::Left(gst::FlowError::CustomError) => (),
-                            Either::Left(err) => {
+                            SocketError::Gst(err) => {
                                 gst_element_error!(
                                     element,
                                     gst::StreamError::Failed,
@@ -289,7 +288,7 @@ impl UdpSrcPadHandler {
                                     ["streaming stopped, reason {}", err]
                                 );
                             }
-                            Either::Right(err) => {
+                            SocketError::Io(err) => {
                                 gst_element_error!(
                                     element,
                                     gst::StreamError::Failed,
@@ -298,12 +297,11 @@ impl UdpSrcPadHandler {
                                 );
                             }
                         }
-                        return;
+                        return glib::Continue(false);
                     }
                     None => {
                         gst_log!(CAT, obj: pad.gst_pad(), "SocketStream Stopped");
-                        pad.pause_task().await;
-                        return;
+                        return glib::Continue(false);
                     }
                 };
 
@@ -323,73 +321,82 @@ impl UdpSrcPadHandler {
                     }
                 }
 
-                this.push_buffer(pad, &element, buffer).await;
-            }
-        })
-        .await;
-    }
+                let res = this.push_buffer(&pad, &element, buffer).await;
 
-    async fn push_buffer(&self, pad: PadSrcRef<'_>, element: &gst::Element, buffer: gst::Buffer) {
-        {
-            let mut events = Vec::new();
-            {
-                // Only `read` the state in the hot path
-                if self.0.state.read().unwrap().need_initial_events {
-                    // We will need to `write` and we also want to prevent
-                    // any changes on the state while we are handling initial events
-                    let mut state = self.0.state.write().unwrap();
-                    assert!(state.need_initial_events);
-
-                    gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
-
-                    let stream_id =
-                        format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-                    events.push(
-                        gst::Event::new_stream_start(&stream_id)
-                            .group_id(gst::GroupId::next())
-                            .build(),
-                    );
-
-                    if let Some(ref caps) = state.caps {
-                        events.push(gst::Event::new_caps(&caps).build());
-                        state.configured_caps = Some(caps.clone());
+                match res {
+                    Ok(_) => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed buffer");
+                        glib::Continue(true)
                     }
-                    events.push(
-                        gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
-                            .build(),
-                    );
-
-                    state.need_initial_events = false;
+                    Err(gst::FlowError::Flushing) => {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
+                        glib::Continue(false)
+                    }
+                    Err(gst::FlowError::Eos) => {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
+                        let eos = gst::Event::new_eos().build();
+                        pad.push_event(eos).await;
+                        glib::Continue(false)
+                    }
+                    Err(err) => {
+                        gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
+                        gst_element_error!(
+                            element,
+                            gst::StreamError::Failed,
+                            ("Internal data stream error"),
+                            ["streaming stopped, reason {}", err]
+                        );
+                        glib::Continue(false)
+                    }
                 }
             }
+        });
+    }
 
-            for event in events {
-                pad.push_event(event).await;
+    async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &gst::Element) {
+        let mut events = Vec::new();
+
+        // Only `read` the state in the hot path
+        if self.0.state.read().unwrap().need_initial_events {
+            // We will need to `write` and we also want to prevent
+            // any changes on the state while we are handling initial events
+            let mut state = self.0.state.write().unwrap();
+            assert!(state.need_initial_events);
+
+            gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
+
+            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+            events.push(
+                gst::Event::new_stream_start(&stream_id)
+                    .group_id(gst::GroupId::next())
+                    .build(),
+            );
+
+            if let Some(ref caps) = state.caps {
+                events.push(gst::Event::new_caps(&caps).build());
+                state.configured_caps = Some(caps.clone());
             }
+            events.push(
+                gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
+            );
+
+            state.need_initial_events = false;
         }
 
-        match pad.push(buffer).await {
-            Ok(_) => {
-                gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed buffer");
-            }
-            Err(gst::FlowError::Flushing) => {
-                gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
-                pad.pause_task().await;
-            }
-            Err(gst::FlowError::Eos) => {
-                gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
-                pad.pause_task().await;
-            }
-            Err(err) => {
-                gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
-                gst_element_error!(
-                    element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason {}", err]
-                );
-            }
+        for event in events {
+            pad.push_event(event).await;
         }
+    }
+
+    async fn push_buffer(
+        &self,
+        pad: &PadSrcRef<'_>,
+        element: &gst::Element,
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.push_prelude(pad, element).await;
+
+        pad.push(buffer).await
     }
 }
 
@@ -399,68 +406,24 @@ impl PadSrcHandler for UdpSrcPadHandler {
     fn src_event(
         &self,
         pad: &PadSrcRef,
-        _udpsrc: &UdpSrc,
+        udpsrc: &UdpSrc,
         element: &gst::Element,
         event: gst::Event,
-    ) -> Either<bool, BoxFuture<'static, bool>> {
+    ) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let mut flush_join_handle = self.0.flush_join_handle.lock().unwrap();
-                if flush_join_handle.is_none() {
-                    let element = element.clone();
-                    let pad_weak = pad.downgrade();
-
-                    *flush_join_handle = Some(pad.spawn(async move {
-                        let res = UdpSrc::from_instance(&element).pause(&element).await;
-                        let pad = pad_weak.upgrade().unwrap();
-                        if res.is_ok() {
-                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart complete");
-                        } else {
-                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart failed");
-                        }
-
-                        res
-                    }));
-                } else {
-                    gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart ignored: previous Flush in progress");
-                }
+                udpsrc.pause(element).unwrap();
 
                 true
             }
             EventView::FlushStop(..) => {
-                let element = element.clone();
-                let inner_weak = Arc::downgrade(&self.0);
-                let pad_weak = pad.downgrade();
+                udpsrc.flush_stop(element);
 
-                let fut = async move {
-                    let mut ret = false;
-
-                    let pad = pad_weak.upgrade().unwrap();
-                    let inner_weak = inner_weak.upgrade().unwrap();
-                    let flush_join_handle = inner_weak.flush_join_handle.lock().unwrap().take();
-                    if let Some(flush_join_handle) = flush_join_handle {
-                        if let Ok(Ok(())) = flush_join_handle.await {
-                            ret = UdpSrc::from_instance(&element)
-                                .start(&element)
-                                .await
-                                .is_ok();
-                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop complete");
-                        } else {
-                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop aborted: FlushStart failed");
-                        }
-                    } else {
-                        gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop ignored: no Flush in progress");
-                    }
-
-                    ret
-                }
-                .boxed();
-
-                return Either::Right(fut);
+                true
             }
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
@@ -473,7 +436,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
             gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", event);
         }
 
-        Either::Left(ret)
+        ret
     }
 
     fn src_query(
@@ -526,23 +489,11 @@ impl PadSrcHandler for UdpSrcPadHandler {
     }
 }
 
-#[derive(Debug)]
-struct State {
-    socket: Option<Socket<UdpReader>>,
-}
-
-impl Default for State {
-    fn default() -> State {
-        State { socket: None }
-    }
-}
-
-#[derive(Debug)]
 struct UdpSrc {
     src_pad: PadSrc,
     src_pad_handler: UdpSrcPadHandler,
-    state: Mutex<State>,
-    settings: Mutex<Settings>,
+    socket: StdMutex<Option<Socket<UdpReader>>>,
+    settings: StdMutex<Settings>,
 }
 
 lazy_static! {
@@ -554,9 +505,9 @@ lazy_static! {
 }
 
 impl UdpSrc {
-    async fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
-        let mut state = self.state.lock().await;
-        let mut settings = self.settings.lock().await.clone();
+    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+        let mut socket_storage = self.socket.lock().unwrap();
+        let mut settings = self.settings.lock().unwrap().clone();
 
         gst_debug!(CAT, obj: element, "Preparing");
 
@@ -725,8 +676,10 @@ impl UdpSrc {
             )
         })?;
 
-        let socket = Socket::new(element.upcast_ref(), UdpReader::new(socket), buffer_pool);
-        let socket_stream = socket.prepare().await.map_err(|err| {
+        let socket = Socket::new(element.upcast_ref(), buffer_pool, async move {
+            Ok(UdpReader::new(socket))
+        })
+        .map_err(|err| {
             gst_error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to prepare socket {:?}", err]
@@ -736,20 +689,16 @@ impl UdpSrc {
         {
             let mut src_pad_handler_state = self.src_pad_handler.0.state.write().unwrap();
             src_pad_handler_state.retrieve_sender_address = settings.retrieve_sender_address;
-            src_pad_handler_state.caps = settings.caps.clone();
+            src_pad_handler_state.caps = settings.caps;
         }
 
-        drop(settings);
-
-        *self.src_pad_handler.0.socket_stream.lock().await = Some(socket_stream);
-
-        state.socket = Some(socket);
+        *socket_storage = Some(socket);
+        drop(socket_storage);
 
         element.notify("used-socket");
 
         self.src_pad
             .prepare(context, &self.src_pad_handler)
-            .await
             .map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
@@ -762,65 +711,102 @@ impl UdpSrc {
         Ok(())
     }
 
-    async fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
-        let mut state = self.state.lock().await;
+    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        self.settings.lock().await.used_socket = None;
+        self.settings.lock().unwrap().used_socket = None;
+        element.notify("used-socket");
 
-        self.src_pad.stop_task().await;
-
-        *self.src_pad_handler.0.socket_stream.lock().await = None;
-
-        {
-            let socket = state.socket.take().unwrap();
-            socket.unprepare().await.unwrap();
+        if let Some(socket) = self.socket.lock().unwrap().take() {
+            drop(socket);
         }
 
-        let _ = self.src_pad.unprepare().await;
+        let _ = self.src_pad.unprepare();
+
+        *self.src_pad_handler.0.state.write().unwrap() = Default::default();
+
+        gst_debug!(CAT, obj: element, "Unprepared");
+
+        Ok(())
+    }
+
+    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
+        gst_debug!(CAT, obj: element, "Stopping");
+
+        // Now stop the task if it was still running, blocking
+        // until this has actually happened
+        self.src_pad.stop_task();
+
         self.src_pad_handler
             .0
             .state
             .write()
             .unwrap()
-            .configured_caps = None;
+            .need_initial_events = true;
 
-        gst_debug!(CAT, obj: element, "Unprepared");
+        gst_debug!(CAT, obj: element, "Stopped");
+
         Ok(())
     }
 
-    async fn start(&self, element: &gst::Element) -> Result<(), ()> {
-        let state = self.state.lock().await;
-        gst_debug!(CAT, obj: element, "Starting");
+    fn start(&self, element: &gst::Element) -> Result<(), ()> {
+        let socket = self.socket.lock().unwrap();
+        if let Some(socket) = socket.as_ref() {
+            if socket.state() == SocketState::Started {
+                gst_debug!(CAT, obj: element, "Already started");
+                return Err(());
+            }
 
-        if let Some(ref socket) = state.socket {
-            socket
-                .start(element.get_clock(), Some(element.get_base_time()))
-                .await;
+            gst_debug!(CAT, obj: element, "Starting");
+
+            self.start_unchecked(element, socket);
+
+            gst_debug!(CAT, obj: element, "Started");
+
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn flush_stop(&self, element: &gst::Element) {
+        // Keep the lock on the `socket` until `flush_stop` is complete
+        // so as to prevent race conditions due to concurrent state transitions.
+        // Note that this won't deadlock as it doesn't lock the `SocketStream`
+        // in use within the `src_pad`'s `Task`.
+        let socket = self.socket.lock().unwrap();
+        let socket = socket.as_ref().unwrap();
+        if socket.state() == SocketState::Started {
+            gst_debug!(CAT, obj: element, "Already started");
+            return;
         }
 
-        self.src_pad_handler
-            .start_task(self.src_pad.as_ref(), element)
-            .await;
+        gst_debug!(CAT, obj: element, "Stopping Flush");
 
-        gst_debug!(CAT, obj: element, "Started");
+        self.src_pad.stop_task();
+        self.start_unchecked(element, socket);
 
-        Ok(())
+        gst_debug!(CAT, obj: element, "Stopped Flush");
     }
 
-    async fn pause(&self, element: &gst::Element) -> Result<(), ()> {
-        let pause_completion = {
-            let state = self.state.lock().await;
-            gst_debug!(CAT, obj: element, "Pausing");
+    fn start_unchecked(&self, element: &gst::Element, socket: &Socket<UdpReader>) {
+        let socket_stream = socket
+            .start(element.get_clock(), Some(element.get_base_time()))
+            .unwrap();
 
-            let pause_completion = self.src_pad.pause_task().await;
-            state.socket.as_ref().unwrap().pause().await;
+        self.src_pad_handler
+            .start_task(self.src_pad.as_ref(), element, socket_stream);
+    }
 
-            pause_completion
-        };
+    fn pause(&self, element: &gst::Element) -> Result<(), ()> {
+        let socket = self.socket.lock().unwrap();
+        gst_debug!(CAT, obj: element, "Pausing");
 
-        gst_debug!(CAT, obj: element, "Waiting for Task Pause to complete");
-        pause_completion.await;
+        if let Some(socket) = socket.as_ref() {
+            socket.pause();
+        }
+
+        self.src_pad.cancel_task();
 
         gst_debug!(CAT, obj: element, "Paused");
 
@@ -880,8 +866,8 @@ impl ObjectSubclass for UdpSrc {
         Self {
             src_pad,
             src_pad_handler: UdpSrcPadHandler::default(),
-            state: Mutex::new(State::default()),
-            settings: Mutex::new(Settings::default()),
+            socket: StdMutex::new(None),
+            settings: StdMutex::new(Settings::default()),
         }
     }
 }
@@ -892,7 +878,7 @@ impl ObjectImpl for UdpSrc {
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
-        let mut settings = runtime::executor::block_on(self.settings.lock());
+        let mut settings = self.settings.lock().unwrap();
         match *prop {
             subclass::Property("address", ..) => {
                 settings.address = value.get().expect("type checked upstream");
@@ -937,7 +923,7 @@ impl ObjectImpl for UdpSrc {
     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
-        let settings = runtime::executor::block_on(self.settings.lock());
+        let settings = self.settings.lock().unwrap();
         match *prop {
             subclass::Property("address", ..) => Ok(settings.address.to_value()),
             subclass::Property("port", ..) => Ok(settings.port.to_value()),
@@ -982,18 +968,16 @@ impl ElementImpl for UdpSrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                runtime::executor::block_on(self.prepare(element)).map_err(|err| {
+                self.prepare(element).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                runtime::executor::block_on(self.pause(element))
-                    .map_err(|_| gst::StateChangeError)?;
+                self.pause(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                runtime::executor::block_on(self.unprepare(element))
-                    .map_err(|_| gst::StateChangeError)?;
+                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -1005,19 +989,13 @@ impl ElementImpl for UdpSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                runtime::executor::block_on(self.start(element))
-                    .map_err(|_| gst::StateChangeError)?;
+                self.start(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.src_pad_handler
-                    .0
-                    .state
-                    .write()
-                    .unwrap()
-                    .need_initial_events = true;
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
