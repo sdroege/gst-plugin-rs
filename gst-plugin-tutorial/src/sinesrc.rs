@@ -698,7 +698,7 @@ impl BaseSrcImpl for SineSrc {
         Ok(buffer)
     }
 
-    fn fixate(&self, element: &gst_base::BaseSrc, caps: gst::Caps) -> gst::Caps {
+    fn fixate(&self, element: &gst_base::BaseSrc, mut caps: gst::Caps) -> gst::Caps {
         // Fixate the caps. BaseSrc will do some fixation for us, but
         // as we allow any rate between 1 and MAX it would fixate to 1. 1Hz
         // is generally not a useful sample rate.
@@ -706,7 +706,7 @@ impl BaseSrcImpl for SineSrc {
         // We fixate to the closest integer value to 48kHz that is possible
         // here, and for good measure also decide that the closest value to 1
         // channel is good.
-        let mut caps = gst::Caps::truncate(caps);
+        caps.truncate();
         {
             let caps = caps.make_mut();
             let s = caps.get_mut_structure(0).unwrap();
@@ -715,7 +715,7 @@ impl BaseSrcImpl for SineSrc {
         }
 
         // Let BaseSrc fixate anything else for us. We could've alternatively have
-        // called Caps::fixate() here
+        // called caps.fixate() here
         self.parent_fixate(element, caps)
     }
 
