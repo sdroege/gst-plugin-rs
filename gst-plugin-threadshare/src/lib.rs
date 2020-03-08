@@ -33,8 +33,8 @@ pub mod socket;
 //mod tcpclientsrc;
 //mod udpsink;
 mod udpsrc;
-//
-//mod appsrc;
+
+mod appsrc;
 //pub mod dataqueue;
 //mod jitterbuffer;
 //mod proxy;
@@ -54,7 +54,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     //tcpclientsrc::register(plugin)?;
     //queue::register(plugin)?;
     //proxy::register(plugin)?;
-    //appsrc::register(plugin)?;
+    appsrc::register(plugin)?;
     //jitterbuffer::jitterbuffer::register(plugin)?;
 
     Ok(())

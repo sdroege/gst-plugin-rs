@@ -15,11 +15,8 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use either::Either;
-
 use futures::channel::mpsc;
-use futures::future::BoxFuture;
-use futures::lock::Mutex;
+use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
 use glib;
@@ -38,11 +35,12 @@ use lazy_static::lazy_static;
 use rand;
 
 use std::convert::TryInto;
+use std::sync::Mutex as StdMutex;
 use std::sync::{self, Arc};
 use std::u32;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Context, JoinHandle, PadSrc, PadSrcRef};
+use crate::runtime::{self, Context, PadSrc, PadSrcRef};
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
@@ -157,14 +155,13 @@ impl Default for AppSrcPadHandlerState {
 #[derive(Debug, Default)]
 struct AppSrcPadHandlerInner {
     state: sync::RwLock<AppSrcPadHandlerState>,
-    flush_join_handle: sync::Mutex<Option<JoinHandle<Result<(), ()>>>>,
 }
 
 #[derive(Clone, Debug, Default)]
 struct AppSrcPadHandler(Arc<AppSrcPadHandlerInner>);
 
 impl AppSrcPadHandler {
-    async fn start_task(
+    fn start_task(
         &self,
         pad: PadSrcRef<'_>,
         element: &gst::Element,
@@ -173,7 +170,7 @@ impl AppSrcPadHandler {
         let this = self.clone();
         let pad_weak = pad.downgrade();
         let element = element.clone();
-        let receiver = Arc::new(Mutex::new(receiver));
+        let receiver = Arc::new(FutMutex::new(receiver));
         pad.start_task(move || {
             let this = this.clone();
             let pad_weak = pad_weak.clone();
@@ -187,59 +184,84 @@ impl AppSrcPadHandler {
                     Some(item) => item,
                     None => {
                         gst_log!(CAT, obj: pad.gst_pad(), "SrcPad channel aborted");
-                        pad.pause_task().await;
-                        return;
+                        return glib::Continue(false);
                     }
                 };
 
-                this.push_item(pad, &element, item).await;
-            }
-        })
-        .await;
-    }
-
-    async fn push_item(self, pad: PadSrcRef<'_>, element: &gst::Element, item: StreamItem) {
-        // Don't keep the `events` in scope so as to reduce the `Future`'s size
-        {
-            let mut events = Vec::new();
-
-            {
-                // Only `read` the state in the hot path
-                if self.0.state.read().unwrap().need_initial_events {
-                    // We will need to `write` and we also want to prevent
-                    // any changes on the state while we are handling initial events
-                    let mut state = self.0.state.write().unwrap();
-                    assert!(state.need_initial_events);
-
-                    gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
-
-                    let stream_id =
-                        format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-                    events.push(
-                        gst::Event::new_stream_start(&stream_id)
-                            .group_id(gst::GroupId::next())
-                            .build(),
-                    );
-
-                    if let Some(ref caps) = state.caps {
-                        events.push(gst::Event::new_caps(&caps).build());
-                        state.configured_caps = Some(caps.clone());
+                match this.push_item(&pad, &element, item).await {
+                    Ok(_) => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed item");
+                        glib::Continue(true)
                     }
-                    events.push(
-                        gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new())
-                            .build(),
-                    );
-
-                    state.need_initial_events = false;
+                    Err(gst::FlowError::Eos) => {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
+                        let eos = gst::Event::new_eos().build();
+                        pad.push_event(eos).await;
+                        glib::Continue(false)
+                    }
+                    Err(gst::FlowError::Flushing) => {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
+                        glib::Continue(false)
+                    }
+                    Err(err) => {
+                        gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
+                        gst_element_error!(
+                            &element,
+                            gst::StreamError::Failed,
+                            ("Internal data stream error"),
+                            ["streaming stopped, reason {}", err]
+                        );
+                        glib::Continue(false)
+                    }
                 }
             }
+        });
+    }
 
-            for event in events {
-                pad.push_event(event).await;
+    async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &gst::Element) {
+        let mut events = Vec::new();
+
+        // Only `read` the state in the hot path
+        if self.0.state.read().unwrap().need_initial_events {
+            // We will need to `write` and we also want to prevent
+            // any changes on the state while we are handling initial events
+            let mut state = self.0.state.write().unwrap();
+            assert!(state.need_initial_events);
+
+            gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
+
+            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+            events.push(
+                gst::Event::new_stream_start(&stream_id)
+                    .group_id(gst::GroupId::next())
+                    .build(),
+            );
+
+            if let Some(ref caps) = state.caps {
+                events.push(gst::Event::new_caps(&caps).build());
+                state.configured_caps = Some(caps.clone());
             }
+            events.push(
+                gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
+            );
+
+            state.need_initial_events = false;
         }
 
-        let res = match item {
+        for event in events {
+            pad.push_event(event).await;
+        }
+    }
+
+    async fn push_item(
+        self,
+        pad: &PadSrcRef<'_>,
+        element: &gst::Element,
+        item: StreamItem,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.push_prelude(pad, element).await;
+
+        match item {
             StreamItem::Buffer(buffer) => {
                 gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
                 pad.push(buffer).await
@@ -248,21 +270,6 @@ impl AppSrcPadHandler {
                 gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
                 pad.push_event(event).await;
                 Ok(gst::FlowSuccess::Ok)
-            }
-        };
-
-        match res {
-            Ok(_) => gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed item"),
-            Err(gst::FlowError::Eos) => gst_debug!(CAT, obj: pad.gst_pad(), "EOS"),
-            Err(gst::FlowError::Flushing) => gst_debug!(CAT, obj: pad.gst_pad(), "Flushing"),
-            Err(err) => {
-                gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
-                gst_element_error!(
-                    &element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason {}", err]
-                );
             }
         }
     }
@@ -274,68 +281,24 @@ impl PadSrcHandler for AppSrcPadHandler {
     fn src_event(
         &self,
         pad: &PadSrcRef,
-        _app_src: &AppSrc,
+        appsrc: &AppSrc,
         element: &gst::Element,
         event: gst::Event,
-    ) -> Either<bool, BoxFuture<'static, bool>> {
+    ) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                let mut flush_join_handle = self.0.flush_join_handle.lock().unwrap();
-                if flush_join_handle.is_none() {
-                    let element = element.clone();
-                    let pad_weak = pad.downgrade();
-
-                    *flush_join_handle = Some(pad.spawn(async move {
-                        let res = AppSrc::from_instance(&element).pause(&element).await;
-                        let pad = pad_weak.upgrade().unwrap();
-                        if res.is_ok() {
-                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart complete");
-                        } else {
-                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart failed");
-                        }
-
-                        res
-                    }));
-                } else {
-                    gst_debug!(CAT, obj: pad.gst_pad(), "FlushStart ignored: previous Flush in progress");
-                }
+                let _ = appsrc.pause(element);
 
                 true
             }
             EventView::FlushStop(..) => {
-                let element = element.clone();
-                let inner_weak = Arc::downgrade(&self.0);
-                let pad_weak = pad.downgrade();
+                appsrc.flush_stop(element);
 
-                let fut = async move {
-                    let mut ret = false;
-
-                    let pad = pad_weak.upgrade().unwrap();
-                    let inner_weak = inner_weak.upgrade().unwrap();
-                    let flush_join_handle = inner_weak.flush_join_handle.lock().unwrap().take();
-                    if let Some(flush_join_handle) = flush_join_handle {
-                        if let Ok(Ok(())) = flush_join_handle.await {
-                            ret = AppSrc::from_instance(&element)
-                                .start(&element)
-                                .await
-                                .is_ok();
-                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop complete");
-                        } else {
-                            gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop aborted: FlushStart failed");
-                        }
-                    } else {
-                        gst_debug!(CAT, obj: pad.gst_pad(), "FlushStop ignored: no Flush in progress");
-                    }
-
-                    ret
-                }
-                .boxed();
-
-                return Either::Right(fut);
+                true
             }
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
@@ -348,13 +311,13 @@ impl PadSrcHandler for AppSrcPadHandler {
             gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", event);
         }
 
-        Either::Left(ret)
+        ret
     }
 
     fn src_query(
         &self,
         pad: &PadSrcRef,
-        _app_src: &AppSrc,
+        _appsrc: &AppSrc,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
@@ -399,26 +362,23 @@ impl PadSrcHandler for AppSrcPadHandler {
     }
 }
 
-struct State {
-    sender: Option<mpsc::Sender<StreamItem>>,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        State { sender: None }
-    }
-}
-
 struct AppSrc {
     src_pad: PadSrc,
     src_pad_handler: AppSrcPadHandler,
-    state: Mutex<State>,
-    settings: Mutex<Settings>,
+    sender: StdMutex<Option<mpsc::Sender<StreamItem>>>,
+    settings: StdMutex<Settings>,
 }
 
 impl AppSrc {
     async fn push_buffer(&self, element: &gst::Element, mut buffer: gst::Buffer) -> bool {
-        if self.settings.lock().await.do_timestamp {
+        let mut sender = self.sender.lock().unwrap();
+        let sender = match sender.as_mut() {
+            Some(sender) => sender,
+            None => return false,
+        };
+
+        let do_timestamp = self.settings.lock().unwrap().do_timestamp;
+        if do_timestamp {
             if let Some(clock) = element.get_clock() {
                 let base_time = element.get_base_time();
                 let now = clock.get_time();
@@ -432,11 +392,6 @@ impl AppSrc {
             }
         }
 
-        let mut state = self.state.lock().await;
-        let sender = match state.sender.as_mut() {
-            Some(sender) => sender,
-            None => return false,
-        };
         match sender.send(StreamItem::Buffer(buffer)).await {
             Ok(_) => true,
             Err(err) => {
@@ -447,8 +402,8 @@ impl AppSrc {
     }
 
     async fn end_of_stream(&self, element: &gst::Element) -> bool {
-        let mut state = self.state.lock().await;
-        let sender = match state.sender.as_mut() {
+        let mut sender = self.sender.lock().unwrap();
+        let sender = match sender.as_mut() {
             Some(sender) => sender,
             None => return false,
         };
@@ -462,26 +417,22 @@ impl AppSrc {
         }
     }
 
-    async fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
-        let _state = self.state.lock().await;
+    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+        let settings = self.settings.lock().unwrap();
         gst_debug!(CAT, obj: element, "Preparing");
 
-        let context = {
-            let settings = self.settings.lock().await;
+        self.src_pad_handler.0.state.write().unwrap().caps = settings.caps.clone();
 
-            self.src_pad_handler.0.state.write().unwrap().caps = settings.caps.clone();
-
+        let context =
             Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to acquire Context: {}", err]
                 )
-            })?
-        };
+            })?;
 
         self.src_pad
             .prepare(context, &self.src_pad_handler)
-            .await
             .map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
@@ -494,55 +445,99 @@ impl AppSrc {
         Ok(())
     }
 
-    async fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
-        let _state = self.state.lock().await;
+    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        self.src_pad.stop_task().await;
-        let _ = self.src_pad.unprepare().await;
-        self.src_pad_handler
-            .0
-            .state
-            .write()
-            .unwrap()
-            .configured_caps = None;
+        let _ = self.src_pad.unprepare();
+
+        *self.src_pad_handler.0.state.write().unwrap() = Default::default();
 
         gst_debug!(CAT, obj: element, "Unprepared");
 
         Ok(())
     }
 
-    async fn start(&self, element: &gst::Element) -> Result<(), ()> {
-        let mut state = self.state.lock().await;
-        gst_debug!(CAT, obj: element, "Starting");
+    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
+        gst_debug!(CAT, obj: element, "Stopping");
 
-        let max_buffers = self.settings.lock().await.max_buffers.try_into().unwrap();
-        let (sender, receiver) = mpsc::channel(max_buffers);
-        state.sender = Some(sender);
+        // Now stop the task if it was still running, blocking
+        // until this has actually happened
+        self.src_pad.stop_task();
 
         self.src_pad_handler
-            .start_task(self.src_pad.as_ref(), element, receiver)
-            .await;
+            .0
+            .state
+            .write()
+            .unwrap()
+            .need_initial_events = true;
+
+        gst_debug!(CAT, obj: element, "Stopped");
+
+        Ok(())
+    }
+
+    fn start(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut sender = self.sender.lock().unwrap();
+        if sender.is_some() {
+            gst_debug!(CAT, obj: element, "Already started");
+            return Ok(());
+        }
+
+        gst_debug!(CAT, obj: element, "Starting");
+
+        self.start_unchecked(element, &mut sender);
 
         gst_debug!(CAT, obj: element, "Started");
 
         Ok(())
     }
 
-    async fn pause(&self, element: &gst::Element) -> Result<(), ()> {
-        let pause_completion = {
-            let mut state = self.state.lock().await;
-            gst_debug!(CAT, obj: element, "Pausing");
+    fn flush_stop(&self, element: &gst::Element) {
+        // Keep the lock on the `sender` until `flush_stop` is complete
+        // so as to prevent race conditions due to concurrent state transitions.
+        // Note that this won't deadlock as `sender` is not used
+        // within the `src_pad`'s `Task`.
+        let mut sender = self.sender.lock().unwrap();
+        if sender.is_some() {
+            gst_debug!(CAT, obj: element, "Already started");
+            return;
+        }
 
-            let pause_completion = self.src_pad.pause_task().await;
-            // Prevent subsequent items from being enqueued
-            state.sender = None;
+        gst_debug!(CAT, obj: element, "Stopping Flush");
 
-            pause_completion
-        };
+        self.src_pad.stop_task();
+        self.start_unchecked(element, &mut sender);
 
-        gst_debug!(CAT, obj: element, "Waiting for Task Pause to complete");
-        pause_completion.await;
+        gst_debug!(CAT, obj: element, "Stopped Flush");
+    }
+
+    fn start_unchecked(
+        &self,
+        element: &gst::Element,
+        sender: &mut Option<mpsc::Sender<StreamItem>>,
+    ) {
+        let max_buffers = self
+            .settings
+            .lock()
+            .unwrap()
+            .max_buffers
+            .try_into()
+            .unwrap();
+        let (new_sender, receiver) = mpsc::channel(max_buffers);
+        *sender = Some(new_sender);
+
+        self.src_pad_handler
+            .start_task(self.src_pad.as_ref(), element, receiver);
+    }
+
+    fn pause(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut sender = self.sender.lock().unwrap();
+        gst_debug!(CAT, obj: element, "Pausing");
+
+        self.src_pad.cancel_task();
+
+        // Prevent subsequent items from being enqueued
+        *sender = None;
 
         gst_debug!(CAT, obj: element, "Paused");
 
@@ -622,8 +617,8 @@ impl ObjectSubclass for AppSrc {
         Self {
             src_pad,
             src_pad_handler: AppSrcPadHandler::default(),
-            state: Mutex::new(State::default()),
-            settings: Mutex::new(Settings::default()),
+            sender: StdMutex::new(None),
+            settings: StdMutex::new(Settings::default()),
         }
     }
 }
@@ -634,7 +629,7 @@ impl ObjectImpl for AppSrc {
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
-        let mut settings = runtime::executor::block_on(self.settings.lock());
+        let mut settings = self.settings.lock().unwrap();
         match *prop {
             subclass::Property("context", ..) => {
                 settings.context = value
@@ -661,7 +656,7 @@ impl ObjectImpl for AppSrc {
     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
-        let settings = runtime::executor::block_on(self.settings.lock());
+        let settings = self.settings.lock().unwrap();
         match *prop {
             subclass::Property("context", ..) => Ok(settings.context.to_value()),
             subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
@@ -692,18 +687,16 @@ impl ElementImpl for AppSrc {
 
         match transition {
             gst::StateChange::NullToReady => {
-                runtime::executor::block_on(self.prepare(element)).map_err(|err| {
+                self.prepare(element).map_err(|err| {
                     element.post_error_message(&err);
                     gst::StateChangeError
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                runtime::executor::block_on(self.pause(element))
-                    .map_err(|_| gst::StateChangeError)?;
+                self.pause(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
-                runtime::executor::block_on(self.unprepare(element))
-                    .map_err(|_| gst::StateChangeError)?;
+                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
@@ -715,19 +708,13 @@ impl ElementImpl for AppSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                runtime::executor::block_on(self.start(element))
-                    .map_err(|_| gst::StateChangeError)?;
+                self.start(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.src_pad_handler
-                    .0
-                    .state
-                    .write()
-                    .unwrap()
-                    .need_initial_events = true;
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }
