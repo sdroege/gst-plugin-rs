@@ -46,6 +46,7 @@ mod mcc_parser;
 mod scc_enc;
 mod scc_parse;
 mod scc_parser;
+mod tttocea608;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     mcc_parse::register(plugin)?;
@@ -53,6 +54,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     scc_parse::register(plugin)?;
     scc_enc::register(plugin)?;
     cea608tott::register(plugin)?;
+    tttocea608::register(plugin)?;
     Ok(())
 }
 
