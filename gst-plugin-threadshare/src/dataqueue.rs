@@ -16,7 +16,6 @@
 // Boston, MA 02110-1335, USA.
 
 use futures::future::{self, abortable, AbortHandle};
-use futures::lock::Mutex;
 
 use gst;
 use gst::gst_debug;
@@ -26,6 +25,7 @@ use lazy_static::lazy_static;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
 use std::{u32, u64};
 
 lazy_static! {
@@ -66,15 +66,15 @@ impl DataQueueItem {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
-enum DataQueueState {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DataQueueState {
     Paused,
     Started,
     Stopped,
 }
 
 #[derive(Clone, Debug)]
-pub struct DataQueue(Arc<Mutex<DataQueueInner>>);
+pub struct DataQueue(Arc<StdMutex<DataQueueInner>>);
 
 #[derive(Debug)]
 struct DataQueueInner {
@@ -109,7 +109,7 @@ impl DataQueue {
         max_size_bytes: Option<u32>,
         max_size_time: Option<u64>,
     ) -> DataQueue {
-        DataQueue(Arc::new(Mutex::new(DataQueueInner {
+        DataQueue(Arc::new(StdMutex::new(DataQueueInner {
             element: element.clone(),
             src_pad: src_pad.clone(),
             state: DataQueueState::Stopped,
@@ -123,8 +123,12 @@ impl DataQueue {
         })))
     }
 
-    pub async fn start(&self) {
-        let mut inner = self.0.lock().await;
+    pub fn state(&self) -> DataQueueState {
+        self.0.lock().unwrap().state
+    }
+
+    pub fn start(&self) {
+        let mut inner = self.0.lock().unwrap();
         if inner.state == DataQueueState::Started {
             gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Started");
             return;
@@ -134,8 +138,8 @@ impl DataQueue {
         inner.wake();
     }
 
-    pub async fn pause(&self) {
-        let mut inner = self.0.lock().await;
+    pub fn pause(&self) {
+        let mut inner = self.0.lock().unwrap();
         if inner.state == DataQueueState::Paused {
             gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Paused");
             return;
@@ -146,8 +150,8 @@ impl DataQueue {
         inner.wake();
     }
 
-    pub async fn stop(&self) {
-        let mut inner = self.0.lock().await;
+    pub fn stop(&self) {
+        let mut inner = self.0.lock().unwrap();
         if inner.state == DataQueueState::Stopped {
             gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Stopped");
             return;
@@ -157,8 +161,8 @@ impl DataQueue {
         inner.wake();
     }
 
-    pub async fn clear(&self) {
-        let mut inner = self.0.lock().await;
+    pub fn clear(&self) {
+        let mut inner = self.0.lock().unwrap();
 
         assert_eq!(inner.state, DataQueueState::Paused);
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Clearing data queue");
@@ -178,8 +182,8 @@ impl DataQueue {
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue cleared");
     }
 
-    pub async fn push(&self, item: DataQueueItem) -> Result<(), DataQueueItem> {
-        let mut inner = self.0.lock().await;
+    pub fn push(&self, item: DataQueueItem) -> Result<(), DataQueueItem> {
+        let mut inner = self.0.lock().unwrap();
 
         if inner.state != DataQueueState::Started {
             gst_debug!(
@@ -235,13 +239,12 @@ impl DataQueue {
         Ok(())
     }
 
-    // Implementing `next` as an `async fn` instead of a `Stream` because of the `async` `Mutex`
-    // See https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/merge_requests/204#note_322774
+    // TODO: implement as a Stream now that we use a StdMutex
     #[allow(clippy::should_implement_trait)]
     pub async fn next(&mut self) -> Option<DataQueueItem> {
         loop {
             let pending_fut = {
-                let mut inner = self.0.lock().await;
+                let mut inner = self.0.lock().unwrap();
                 match inner.state {
                     DataQueueState::Started => match inner.queue.pop_front() {
                         None => {
