@@ -37,7 +37,7 @@ mod udpsrc;
 mod appsrc;
 pub mod dataqueue;
 mod jitterbuffer;
-//mod proxy;
+mod proxy;
 mod queue;
 
 use glib::translate::*;
@@ -53,7 +53,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     udpsink::register(plugin)?;
     tcpclientsrc::register(plugin)?;
     queue::register(plugin)?;
-    //proxy::register(plugin)?;
+    proxy::register(plugin)?;
     appsrc::register(plugin)?;
     jitterbuffer::jitterbuffer::register(plugin)?;
 
