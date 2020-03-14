@@ -36,7 +36,7 @@ mod udpsrc;
 
 mod appsrc;
 pub mod dataqueue;
-//mod jitterbuffer;
+mod jitterbuffer;
 //mod proxy;
 mod queue;
 
@@ -55,7 +55,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     queue::register(plugin)?;
     //proxy::register(plugin)?;
     appsrc::register(plugin)?;
-    //jitterbuffer::jitterbuffer::register(plugin)?;
+    jitterbuffer::jitterbuffer::register(plugin)?;
 
     Ok(())
 }

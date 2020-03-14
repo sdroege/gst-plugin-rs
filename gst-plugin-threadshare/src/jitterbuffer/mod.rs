@@ -18,6 +18,8 @@
 use glib_sys as glib_ffi;
 use gstreamer_sys as gst_ffi;
 
+use std::u32;
+
 #[allow(clippy::module_inception)]
 pub mod jitterbuffer;
 
@@ -178,7 +180,7 @@ impl RTPJitterBufferItem {
         buffer: gst::Buffer,
         dts: gst::ClockTime,
         pts: gst::ClockTime,
-        seqnum: u32,
+        seqnum: Option<u16>,
         rtptime: u32,
     ) -> RTPJitterBufferItem {
         unsafe {
@@ -189,7 +191,7 @@ impl RTPJitterBufferItem {
                 r#type: 0,
                 dts: dts.to_glib(),
                 pts: pts.to_glib(),
-                seqnum,
+                seqnum: seqnum.map(|s| s as u32).unwrap_or(u32::MAX),
                 count: 1,
                 rtptime,
             })))
@@ -222,9 +224,13 @@ impl RTPJitterBufferItem {
         }
     }
 
-    pub fn get_seqnum(&self) -> u32 {
+    pub fn get_seqnum(&self) -> Option<u16> {
         let item = self.0.as_ref().expect("Invalid wrapper");
-        item.seqnum
+        if item.seqnum == u32::MAX {
+            None
+        } else {
+            Some(item.seqnum as u16)
+        }
     }
 
     #[allow(dead_code)]
@@ -370,7 +376,7 @@ impl RTPJitterBuffer {
         }
     }
 
-    pub fn find_earliest(&self) -> (gst::ClockTime, u32) {
+    pub fn find_earliest(&self) -> (gst::ClockTime, Option<u16>) {
         unsafe {
             let mut pts = mem::MaybeUninit::uninit();
             let mut seqnum = mem::MaybeUninit::uninit();
@@ -383,6 +389,12 @@ impl RTPJitterBuffer {
             let pts = pts.assume_init();
             let seqnum = seqnum.assume_init();
 
+            let seqnum = if seqnum == u32::MAX {
+                None
+            } else {
+                Some(seqnum as u16)
+            };
+
             if pts == gst_ffi::GST_CLOCK_TIME_NONE {
                 (gst::CLOCK_TIME_NONE, seqnum)
             } else {
@@ -391,25 +403,35 @@ impl RTPJitterBuffer {
         }
     }
 
-    pub fn pop(&self) -> (RTPJitterBufferItem, i32) {
+    pub fn pop(&self) -> (Option<RTPJitterBufferItem>, i32) {
         unsafe {
             let mut percent = mem::MaybeUninit::uninit();
             let item = ffi::rtp_jitter_buffer_pop(self.to_glib_none().0, percent.as_mut_ptr());
 
             (
-                RTPJitterBufferItem(Some(Box::from_raw(item))),
+                if item.is_null() {
+                    None
+                } else {
+                    Some(RTPJitterBufferItem(Some(Box::from_raw(item))))
+                },
                 percent.assume_init(),
             )
         }
     }
 
-    pub fn peek(&self) -> (gst::ClockTime, u32) {
+    pub fn peek(&self) -> (gst::ClockTime, Option<u16>) {
         unsafe {
             let item = ffi::rtp_jitter_buffer_peek(self.to_glib_none().0);
             if item.is_null() {
-                (gst::CLOCK_TIME_NONE, std::u32::MAX)
+                (gst::CLOCK_TIME_NONE, None)
             } else {
-                ((*item).pts.into(), (*item).seqnum)
+                let seqnum = (*item).seqnum;
+                let seqnum = if seqnum == u32::MAX {
+                    None
+                } else {
+                    Some(seqnum as u16)
+                };
+                ((*item).pts.into(), seqnum)
             }
         }
     }
