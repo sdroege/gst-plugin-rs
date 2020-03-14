@@ -491,21 +491,8 @@ pub struct PadSrc(PadSrcStrong);
 
 impl PadSrc {
     pub fn new(gst_pad: gst::Pad) -> Self {
-        let pad = gst_pad.clone();
         let this = PadSrc(PadSrcStrong::new(gst_pad));
-
-        let this_weak = this.downgrade();
-        pad.set_activatemode_function(move |gst_pad, _parent, mode, active| {
-            // Important: don't panic here as we operate without `catch_panic_pad_function`
-            // because we may not know which element the PadSrc is associated to yet
-            this_weak
-                .upgrade()
-                .ok_or_else(|| {
-                    gst_error!(RUNTIME_CAT, obj: gst_pad, "PadSrc no longer exists");
-                    gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists")
-                })?
-                .activate_mode_hook(mode, active)
-        });
+        this.set_default_activatemode_function();
 
         this
     }
@@ -528,6 +515,22 @@ impl PadSrc {
 
     pub fn check_reconfigure(&self) -> bool {
         self.gst_pad().check_reconfigure()
+    }
+
+    fn set_default_activatemode_function(&self) {
+        let this_weak = self.downgrade();
+        self.gst_pad()
+            .set_activatemode_function(move |gst_pad, _parent, mode, active| {
+                // Important: don't panic here as we operate without `catch_panic_pad_function`
+                // because we may not know which element the PadSrc is associated to yet
+                this_weak
+                    .upgrade()
+                    .ok_or_else(|| {
+                        gst_error!(RUNTIME_CAT, obj: gst_pad, "PadSrc no longer exists");
+                        gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists")
+                    })?
+                    .activate_mode_hook(mode, active)
+            });
     }
 
     ///// Spawns `future` using current [`PadContext`].
@@ -675,9 +678,10 @@ impl PadSrc {
             .map_err(|_| PadContextError::ActiveTask)?;
 
         self.gst_pad()
-            .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
+            .set_activate_function(move |_gst_pad, _parent| {
                 Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc unprepared"))
             });
+        self.set_default_activatemode_function();
         self.gst_pad()
             .set_event_function(move |_gst_pad, _parent, _event| false);
         self.gst_pad()
@@ -1013,21 +1017,8 @@ pub struct PadSink(PadSinkStrong);
 
 impl PadSink {
     pub fn new(gst_pad: gst::Pad) -> Self {
-        let pad = gst_pad.clone();
         let this = PadSink(PadSinkStrong::new(gst_pad));
-
-        let this_weak = this.downgrade();
-        pad.set_activatemode_function(move |gst_pad, _parent, mode, active| {
-            // Important: don't panic here as we operate without `catch_panic_pad_function`
-            // because we may not know which element the PadSrc is associated to yet
-            this_weak
-                .upgrade()
-                .ok_or_else(|| {
-                    gst_error!(RUNTIME_CAT, obj: gst_pad, "PadSink no longer exists");
-                    gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists")
-                })?
-                .activate_mode_hook(mode, active)
-        });
+        this.set_default_activatemode_function();
 
         this
     }
@@ -1042,6 +1033,22 @@ impl PadSink {
 
     pub fn downgrade(&self) -> PadSinkWeak {
         self.0.downgrade()
+    }
+
+    fn set_default_activatemode_function(&self) {
+        let this_weak = self.downgrade();
+        self.gst_pad()
+            .set_activatemode_function(move |gst_pad, _parent, mode, active| {
+                // Important: don't panic here as we operate without `catch_panic_pad_function`
+                // because we may not know which element the PadSrc is associated to yet
+                this_weak
+                    .upgrade()
+                    .ok_or_else(|| {
+                        gst_error!(RUNTIME_CAT, obj: gst_pad, "PadSink no longer exists");
+                        gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists")
+                    })?
+                    .activate_mode_hook(mode, active)
+            });
     }
 
     fn init_pad_functions<H: PadSinkHandler>(&self, handler: &H) {
@@ -1234,6 +1241,11 @@ impl PadSink {
     pub fn unprepare(&self) {
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Unpreparing");
 
+        self.gst_pad()
+            .set_activate_function(move |_gst_pad, _parent| {
+                Err(gst_loggable_error!(RUNTIME_CAT, "PadSink unprepared"))
+            });
+        self.set_default_activatemode_function();
         self.gst_pad()
             .set_chain_function(move |_gst_pad, _parent, _buffer| Err(FlowError::Flushing));
         self.gst_pad()
