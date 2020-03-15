@@ -31,7 +31,7 @@ pub mod runtime;
 
 pub mod socket;
 //mod tcpclientsrc;
-//mod udpsink;
+mod udpsink;
 mod udpsrc;
 
 mod appsrc;
@@ -50,7 +50,7 @@ use gstreamer_sys as gst_ffi;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     udpsrc::register(plugin)?;
-    //udpsink::register(plugin)?;
+    udpsink::register(plugin)?;
     //tcpclientsrc::register(plugin)?;
     //queue::register(plugin)?;
     //proxy::register(plugin)?;
