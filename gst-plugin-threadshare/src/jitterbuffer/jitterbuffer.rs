@@ -1281,8 +1281,7 @@ impl JitterBuffer {
 
         let context = {
             let settings = self.settings.lock().unwrap();
-            let context = Context::acquire(&settings.context, settings.context_wait).unwrap();
-            context
+            Context::acquire(&settings.context, settings.context_wait).unwrap()
         };
 
         self.src_pad

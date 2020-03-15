@@ -516,16 +516,13 @@ impl PadSinkHandler for PadSinkHandlerTest {
     ) -> bool {
         gst_debug!(SINK_CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
 
-        let ret = match event.view() {
+        match event.view() {
             EventView::FlushStart(..) => {
                 elem_sink_test.stop(&element);
                 true
             }
             _ => false,
-        };
-
-        // Should forward item here
-        ret
+        }
     }
 
     fn sink_event_serialized(

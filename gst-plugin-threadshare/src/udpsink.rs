@@ -360,7 +360,7 @@ impl UdpSinkPadHandler {
             )]),
             clients_to_configure: vec![],
             sender: Arc::new(Mutex::new(None)),
-            settings: settings,
+            settings,
         })))
     }
 
@@ -680,10 +680,8 @@ impl PadSinkHandler for UdpSinkPadHandler {
         async move {
             if let EventView::FlushStop(_) = event.view() {
                 this.start_task(&element);
-            } else {
-                if let Some(sender) = sender.lock().await.as_mut() {
-                    sender.send(TaskItem::Event(event)).await.unwrap();
-                }
+            } else if let Some(sender) = sender.lock().await.as_mut() {
+                sender.send(TaskItem::Event(event)).await.unwrap();
             }
             true
         }
@@ -1097,7 +1095,7 @@ impl ObjectSubclass for UdpSink {
         Self {
             sink_pad,
             sink_pad_handler,
-            settings: settings,
+            settings,
         }
     }
 }
