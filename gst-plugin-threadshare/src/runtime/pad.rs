@@ -419,7 +419,9 @@ impl PadSrcStrong {
         })?;
 
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Processing any pending sub tasks");
-        Context::drain_sub_tasks().await?;
+        while Context::current_has_sub_tasks() {
+            Context::drain_sub_tasks().await?;
+        }
 
         Ok(success)
     }
@@ -439,7 +441,9 @@ impl PadSrcStrong {
         })?;
 
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Processing any pending sub tasks");
-        Context::drain_sub_tasks().await?;
+        while Context::current_has_sub_tasks() {
+            Context::drain_sub_tasks().await?;
+        }
 
         Ok(success)
     }
@@ -451,8 +455,10 @@ impl PadSrcStrong {
         let was_handled = self.gst_pad().push_event(event);
 
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Processing any pending sub tasks");
-        if Context::drain_sub_tasks().await.is_err() {
-            return false;
+        while Context::current_has_sub_tasks() {
+            if Context::drain_sub_tasks().await.is_err() {
+                return false;
+            }
         }
 
         was_handled

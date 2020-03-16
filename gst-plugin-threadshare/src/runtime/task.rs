@@ -115,7 +115,9 @@ impl Task {
 
             gst_trace!(RUNTIME_CAT, "Task prepare function finished");
 
-            Context::drain_sub_tasks().await?;
+            while Context::current_has_sub_tasks() {
+                Context::drain_sub_tasks().await?;
+            }
 
             // Once the prepare function is finished we can forget the corresponding
             // handles so that unprepare and friends don't have to block on it anymore
