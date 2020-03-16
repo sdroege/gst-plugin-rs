@@ -27,6 +27,7 @@ use gst::{gst_debug, gst_log, gst_trace, gst_warning};
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
+use super::executor::block_on;
 use super::{Context, JoinHandle, RUNTIME_CAT};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -209,7 +210,7 @@ impl Task {
                         cur_task_id,
                         cur_context.name()
                     );
-                    let _ = futures::executor::block_on(prepare_handle);
+                    let _ = block_on(prepare_handle);
                 }
             } else {
                 gst_debug!(
@@ -217,7 +218,7 @@ impl Task {
                     "Synchronously waiting for task {:?}",
                     prepare_handle
                 );
-                let _ = futures::executor::block_on(prepare_handle);
+                let _ = block_on(prepare_handle);
             }
         }
 
@@ -422,7 +423,7 @@ impl Task {
                         cur_task_id,
                         cur_context.name()
                     );
-                    let _ = futures::executor::block_on(loop_handle);
+                    let _ = block_on(loop_handle);
                 }
             } else {
                 gst_debug!(
@@ -430,7 +431,7 @@ impl Task {
                     "Synchronously waiting for task {:?}",
                     loop_handle
                 );
-                let _ = futures::executor::block_on(loop_handle);
+                let _ = block_on(loop_handle);
             }
         }
 

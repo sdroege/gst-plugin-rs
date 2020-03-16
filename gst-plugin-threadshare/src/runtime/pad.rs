@@ -83,7 +83,7 @@ use std::marker::PhantomData;
 use std::sync;
 use std::sync::{Arc, Weak};
 
-use super::executor::Context;
+use super::executor::{block_on_or_add_sub_task, Context};
 use super::task::Task;
 use super::RUNTIME_CAT;
 
@@ -986,7 +986,8 @@ impl<'a> PadSinkRef<'a> {
             // Note: we don't use `crate::runtime::executor::block_on` here
             // because `Context::is_context_thread()` is checked in the `if`
             // statement above.
-            futures::executor::block_on(fut.map(|res| res.map(|_| gst::FlowSuccess::Ok)))
+            block_on_or_add_sub_task(fut.map(|res| res.map(|_| gst::FlowSuccess::Ok)))
+                .unwrap_or(Ok(gst::FlowSuccess::Ok))
         } else {
             Ok(gst::FlowSuccess::Ok)
         }
