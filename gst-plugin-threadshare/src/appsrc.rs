@@ -40,7 +40,7 @@ use std::sync::{self, Arc};
 use std::u32;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Context, PadSrc, PadSrcRef};
+use crate::runtime::{Context, PadSrc, PadSrcRef};
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
@@ -370,7 +370,7 @@ struct AppSrc {
 }
 
 impl AppSrc {
-    async fn push_buffer(&self, element: &gst::Element, mut buffer: gst::Buffer) -> bool {
+    fn push_buffer(&self, element: &gst::Element, mut buffer: gst::Buffer) -> bool {
         let mut sender = self.sender.lock().unwrap();
         let sender = match sender.as_mut() {
             Some(sender) => sender,
@@ -392,7 +392,7 @@ impl AppSrc {
             }
         }
 
-        match sender.send(StreamItem::Buffer(buffer)).await {
+        match sender.try_send(StreamItem::Buffer(buffer)) {
             Ok(_) => true,
             Err(err) => {
                 gst_error!(CAT, obj: element, "Failed to queue buffer: {}", err);
@@ -401,14 +401,14 @@ impl AppSrc {
         }
     }
 
-    async fn end_of_stream(&self, element: &gst::Element) -> bool {
+    fn end_of_stream(&self, element: &gst::Element) -> bool {
         let mut sender = self.sender.lock().unwrap();
         let sender = match sender.as_mut() {
             Some(sender) => sender,
             None => return false,
         };
         let eos = StreamItem::Event(gst::Event::new_eos().build());
-        match sender.send(eos).await {
+        match sender.try_send(eos) {
             Ok(_) => true,
             Err(err) => {
                 gst_error!(CAT, obj: element, "Failed to queue EOS: {}", err);
@@ -590,7 +590,7 @@ impl ObjectSubclass for AppSrc {
                     .expect("missing signal arg");
                 let appsrc = Self::from_instance(&element);
 
-                Some(runtime::executor::block_on(appsrc.push_buffer(&element, buffer)).to_value())
+                Some(appsrc.push_buffer(&element, buffer).to_value())
             },
         );
 
@@ -605,7 +605,7 @@ impl ObjectSubclass for AppSrc {
                     .expect("signal arg")
                     .expect("missing signal arg");
                 let appsrc = Self::from_instance(&element);
-                Some(runtime::executor::block_on(appsrc.end_of_stream(&element)).to_value())
+                Some(appsrc.end_of_stream(&element).to_value())
             },
         );
     }
