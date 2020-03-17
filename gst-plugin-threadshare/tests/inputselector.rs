@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2020 Mathieu Duponchelle <mathieu@centricular.com>
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Library General Public
@@ -74,10 +74,8 @@ fn test_active_pad() {
     assert_eq!(h2.push(buf), Ok(gst::FlowSuccess::Ok));
     assert_eq!(h1.buffers_received(), 1);
 
-    assert_eq!(h1.events_received(), 4);
+    assert_eq!(h1.events_received(), 3);
 
-    let event = h1.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::CustomDownstreamSticky);
     let event = h1.pull_event().unwrap();
     assert_eq!(event.get_type(), gst::EventType::StreamStart);
     let event = h1.pull_event().unwrap();
@@ -89,7 +87,7 @@ fn test_active_pad() {
     let buf = gst::Buffer::new();
     assert_eq!(h2.push(buf), Ok(gst::FlowSuccess::Ok));
     assert_eq!(h1.buffers_received(), 2);
-    assert_eq!(h1.events_received(), 4);
+    assert_eq!(h1.events_received(), 3);
 
     /* Switch the active pad and push a buffer, we should receive stream-start, segment and caps
      * again */
@@ -98,7 +96,7 @@ fn test_active_pad() {
         .unwrap();
     assert_eq!(h1.push(buf), Ok(gst::FlowSuccess::Ok));
     assert_eq!(h1.buffers_received(), 3);
-    assert_eq!(h1.events_received(), 7);
+    assert_eq!(h1.events_received(), 6);
     let event = h1.pull_event().unwrap();
     assert_eq!(event.get_type(), gst::EventType::StreamStart);
     let event = h1.pull_event().unwrap();
