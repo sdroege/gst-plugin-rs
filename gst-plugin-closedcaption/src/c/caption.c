@@ -238,7 +238,7 @@ caption_frame_decode_control (caption_frame_t * frame, uint16_t cc_data)
 
     case eia608_control_erase_display_memory:
       caption_frame_buffer_clear (&frame->front);
-      return LIBCAPTION_READY;
+      return LIBCAPTION_CLEAR;
 
       // ROLL-UP
     case eia608_control_roll_up_2:
@@ -333,16 +333,18 @@ caption_frame_decode (caption_frame_t * frame, uint16_t cc_data,
     return frame->status;
   }
 
-  if (0 > frame->timestamp || frame->timestamp == timestamp
-      || LIBCAPTION_READY == frame->status) {
-    frame->timestamp = timestamp;
-    frame->status = LIBCAPTION_OK;
-  }
   // skip duplicate controll commands. We also skip duplicate specialna to match the behaviour of iOS/vlc
-  if ((eia608_is_specialna (cc_data) || eia608_is_control (cc_data))
-      && cc_data == frame->state.cc_data) {
-    frame->status = LIBCAPTION_OK;
-    return frame->status;
+  if ((eia608_is_specialna(cc_data) || eia608_is_control(cc_data)) && cc_data == frame->state.cc_data) {
+    if (timestamp < 0 && caption_frame_popon (frame))
+      frame->timestamp += (1 / 29.97);
+    return LIBCAPTION_OK;
+  }
+
+  if (timestamp >= 0) {
+      frame->timestamp = timestamp;
+      frame->status = LIBCAPTION_OK;
+  } else if (caption_frame_popon (frame)) {
+    frame->timestamp += (1 / 29.97);
   }
 
   frame->state.cc_data = cc_data;

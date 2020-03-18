@@ -812,6 +812,7 @@ extern "C" {
 pub const libcaption_stauts_t_LIBCAPTION_ERROR: libcaption_stauts_t = 0;
 pub const libcaption_stauts_t_LIBCAPTION_OK: libcaption_stauts_t = 1;
 pub const libcaption_stauts_t_LIBCAPTION_READY: libcaption_stauts_t = 2;
+pub const libcaption_stauts_t_LIBCAPTION_CLEAR: libcaption_stauts_t = 3;
 pub type libcaption_stauts_t = u32;
 #[repr(C)]
 #[repr(align(4))]
