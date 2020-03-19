@@ -504,7 +504,7 @@ fn premature_shutdown() {
     appsink.set_property("sync", &false).unwrap();
     appsink.set_property("async", &false).unwrap();
 
-    let (sender, receiver) = mpsc::channel();
+    let (appsink_sender, appsink_receiver) = mpsc::channel();
 
     let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
     appsink.connect_new_sample(move |appsink| {
@@ -517,13 +517,18 @@ fn premature_shutdown() {
             .unwrap()
             .unwrap();
 
-        sender.send(()).unwrap();
+        appsink_sender.send(()).unwrap();
 
         Ok(gst::FlowSuccess::Ok)
     });
 
-    fn push_buffer(src: &gst::Element) -> bool {
-        gst_debug!(CAT, obj: src, "premature_shutdown: pushing buffer");
+    fn push_buffer(src: &gst::Element, intent: &str) -> bool {
+        gst_debug!(
+            CAT,
+            obj: src,
+            "premature_shutdown: pushing buffer {}",
+            intent
+        );
         src.emit("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
             .unwrap()
             .unwrap()
@@ -536,38 +541,41 @@ fn premature_shutdown() {
     let mut scenario = Some(move || {
         gst_debug!(CAT, "premature_shutdown: STEP 1: Playing");
         // Initialize the dataflow
-        assert!(push_buffer(&src));
+        assert!(push_buffer(&src, "(initial)"));
 
         // Wait for the buffer to reach AppSink
-        receiver.recv().unwrap();
-        assert_eq!(receiver.try_recv().unwrap_err(), mpsc::TryRecvError::Empty);
+        appsink_receiver.recv().unwrap();
+        assert_eq!(
+            appsink_receiver.try_recv().unwrap_err(),
+            mpsc::TryRecvError::Empty
+        );
 
-        assert!(push_buffer(&src));
+        assert!(push_buffer(&src, "before Playing -> Paused"));
 
+        gst_debug!(CAT, "premature_shutdown: STEP 2: Playing -> Paused");
         pipeline_clone.set_state(gst::State::Paused).unwrap();
 
-        // Paused -> can't push_buffer
-        assert!(!push_buffer(&src));
-
-        gst_debug!(CAT, "premature_shutdown: STEP 2: Paused -> Playing");
+        gst_debug!(CAT, "premature_shutdown: STEP 3: Paused -> Playing");
         pipeline_clone.set_state(gst::State::Playing).unwrap();
 
-        gst_debug!(CAT, "premature_shutdown: STEP 3: Playing");
+        gst_debug!(CAT, "premature_shutdown: Playing again");
 
-        receiver.recv().unwrap();
+        gst_debug!(CAT, "Waiting for buffer sent before Playing -> Paused");
+        appsink_receiver.recv().unwrap();
 
-        assert!(push_buffer(&src));
-        receiver.recv().unwrap();
+        assert!(push_buffer(&src, "after Paused -> Playing"));
+        gst_debug!(CAT, "Waiting for buffer sent after Paused -> Playing");
+        appsink_receiver.recv().unwrap();
 
         // Fill up the (dataqueue) and abruptly shutdown
-        assert!(push_buffer(&src));
-        assert!(push_buffer(&src));
+        assert!(push_buffer(&src, "filling 1"));
+        assert!(push_buffer(&src, "filling 2"));
 
-        gst_debug!(CAT, "premature_shutdown: STEP 4: Shutdown");
+        gst_debug!(CAT, "premature_shutdown: STEP 4: Playing -> Null");
 
         pipeline_clone.set_state(gst::State::Null).unwrap();
 
-        assert!(!push_buffer(&src));
+        assert!(!push_buffer(&src, "after Null"));
 
         l_clone.quit();
     });

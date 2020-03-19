@@ -157,6 +157,12 @@ pub fn block_on<Fut: Future>(future: Fut) -> Fut::Output {
     })
 }
 
+/// Yields execution back to the runtime
+#[inline]
+pub async fn yield_now() {
+    tokio::task::yield_now().await;
+}
+
 struct ContextThread {
     name: String,
 }

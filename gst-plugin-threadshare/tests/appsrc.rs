@@ -18,6 +18,8 @@
 use glib::prelude::*;
 
 use gst;
+use gst::prelude::*;
+
 use gst_check;
 
 use gstthreadshare;
@@ -33,7 +35,7 @@ fn init() {
 }
 
 #[test]
-fn test_push() {
+fn push() {
     init();
 
     let mut h = gst_check::Harness::new("ts-appsrc");
@@ -43,7 +45,7 @@ fn test_push() {
         let appsrc = h.get_element().unwrap();
         appsrc.set_property("caps", &caps).unwrap();
         appsrc.set_property("do-timestamp", &true).unwrap();
-        appsrc.set_property("context", &"test-push").unwrap();
+        appsrc.set_property("context", &"appsrc-push").unwrap();
     }
 
     h.play();
@@ -96,4 +98,206 @@ fn test_push() {
         n_events += 1;
     }
     assert!(n_events >= 2);
+}
+
+#[test]
+fn pause() {
+    init();
+
+    let mut h = gst_check::Harness::new("ts-appsrc");
+
+    let caps = gst::Caps::new_simple("foo/bar", &[]);
+    {
+        let appsrc = h.get_element().unwrap();
+        appsrc.set_property("caps", &caps).unwrap();
+        appsrc.set_property("do-timestamp", &true).unwrap();
+        appsrc.set_property("context", &"appsrc-pause").unwrap();
+    }
+
+    h.play();
+
+    let appsrc = h.get_element().unwrap();
+
+    // Initial buffer
+    assert!(appsrc
+        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    let _ = h.pull().unwrap();
+
+    appsrc
+        .change_state(gst::StateChange::PlayingToPaused)
+        .unwrap();
+
+    // Pre-pause buffer
+    assert!(appsrc
+        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![5, 6, 7])])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    appsrc
+        .change_state(gst::StateChange::PlayingToPaused)
+        .unwrap();
+
+    // Buffer is queued during Paused
+    assert!(appsrc
+        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![8, 9])])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    appsrc
+        .change_state(gst::StateChange::PausedToPlaying)
+        .unwrap();
+
+    // Pull Pre-pause buffer
+    let _ = h.pull().unwrap();
+
+    // Pull buffer queued while Paused
+    let _ = h.pull().unwrap();
+
+    // Can push again
+    assert!(appsrc
+        .emit("push-buffer", &[&gst::Buffer::new()])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    let _ = h.pull().unwrap();
+    assert!(h.try_pull().is_none());
+}
+
+#[test]
+fn flush() {
+    init();
+
+    let mut h = gst_check::Harness::new("ts-appsrc");
+
+    let caps = gst::Caps::new_simple("foo/bar", &[]);
+    {
+        let appsrc = h.get_element().unwrap();
+        appsrc.set_property("caps", &caps).unwrap();
+        appsrc.set_property("do-timestamp", &true).unwrap();
+        appsrc.set_property("context", &"appsrc-flush").unwrap();
+    }
+
+    h.play();
+
+    let appsrc = h.get_element().unwrap();
+
+    // Initial buffer
+    assert!(appsrc
+        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    let _ = h.pull().unwrap();
+
+    // FlushStart
+    assert!(h.push_upstream_event(gst::Event::new_flush_start().build()));
+
+    // Can't push buffer while flushing
+    assert!(!appsrc
+        .emit("push-buffer", &[&gst::Buffer::new()])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    assert!(h.try_pull().is_none());
+
+    // FlushStop
+    assert!(h.push_upstream_event(gst::Event::new_flush_stop(true).build()));
+
+    // No buffer available due to flush
+    assert!(h.try_pull().is_none());
+
+    // Can push again
+    assert!(appsrc
+        .emit("push-buffer", &[&gst::Buffer::new()])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    let _ = h.pull().unwrap();
+    assert!(h.try_pull().is_none());
+}
+
+#[test]
+fn pause_flush() {
+    init();
+
+    let mut h = gst_check::Harness::new("ts-appsrc");
+
+    let caps = gst::Caps::new_simple("foo/bar", &[]);
+    {
+        let appsrc = h.get_element().unwrap();
+        appsrc.set_property("caps", &caps).unwrap();
+        appsrc.set_property("do-timestamp", &true).unwrap();
+        appsrc
+            .set_property("context", &"appsrc-pause_flush")
+            .unwrap();
+    }
+
+    h.play();
+
+    let appsrc = h.get_element().unwrap();
+
+    // Initial buffer
+    assert!(appsrc
+        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    let _ = h.pull().unwrap();
+
+    appsrc
+        .change_state(gst::StateChange::PlayingToPaused)
+        .unwrap();
+
+    // FlushStart
+    assert!(h.push_upstream_event(gst::Event::new_flush_start().build()));
+
+    // Can't push buffer while flushing
+    assert!(!appsrc
+        .emit("push-buffer", &[&gst::Buffer::new()])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    assert!(h.try_pull().is_none());
+
+    // FlushStop
+    assert!(h.push_upstream_event(gst::Event::new_flush_stop(true).build()));
+
+    appsrc
+        .change_state(gst::StateChange::PausedToPlaying)
+        .unwrap();
+
+    // No buffer available due to flush
+    assert!(h.try_pull().is_none());
+
+    // Can push again
+    assert!(appsrc
+        .emit("push-buffer", &[&gst::Buffer::new()])
+        .unwrap()
+        .unwrap()
+        .get_some::<bool>()
+        .unwrap());
+
+    let _ = h.pull().unwrap();
+    assert!(h.try_pull().is_none());
 }

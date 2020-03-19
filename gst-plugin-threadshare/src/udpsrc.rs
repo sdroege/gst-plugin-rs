@@ -39,8 +39,8 @@ use rand;
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use std::sync::{self, Arc};
 use std::u16;
 
 use crate::runtime::prelude::*;
@@ -230,8 +230,8 @@ impl SocketRead for UdpReader {
 struct UdpSrcPadHandlerState {
     retrieve_sender_address: bool,
     need_initial_events: bool,
+    need_segment: bool,
     caps: Option<gst::Caps>,
-    configured_caps: Option<gst::Caps>,
 }
 
 impl Default for UdpSrcPadHandlerState {
@@ -239,21 +239,69 @@ impl Default for UdpSrcPadHandlerState {
         UdpSrcPadHandlerState {
             retrieve_sender_address: true,
             need_initial_events: true,
+            need_segment: true,
             caps: None,
-            configured_caps: None,
         }
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct UdpSrcPadHandlerInner {
-    state: sync::RwLock<UdpSrcPadHandlerState>,
+    state: FutMutex<UdpSrcPadHandlerState>,
+    configured_caps: StdMutex<Option<gst::Caps>>,
 }
 
-#[derive(Clone, Debug, Default)]
+impl UdpSrcPadHandlerInner {
+    fn new(caps: Option<gst::Caps>, retrieve_sender_address: bool) -> Self {
+        UdpSrcPadHandlerInner {
+            state: FutMutex::new(UdpSrcPadHandlerState {
+                retrieve_sender_address,
+                caps,
+                ..Default::default()
+            }),
+            configured_caps: StdMutex::new(None),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 struct UdpSrcPadHandler(Arc<UdpSrcPadHandlerInner>);
 
 impl UdpSrcPadHandler {
+    fn new(caps: Option<gst::Caps>, retrieve_sender_address: bool) -> UdpSrcPadHandler {
+        UdpSrcPadHandler(Arc::new(UdpSrcPadHandlerInner::new(
+            caps,
+            retrieve_sender_address,
+        )))
+    }
+
+    fn reset(&self, pad: &PadSrcRef<'_>) {
+        // Precondition: task must be stopped
+        // TODO: assert the task state when Task & PadSrc are separated
+
+        gst_debug!(CAT, obj: pad.gst_pad(), "Resetting handler");
+
+        *self.0.state.try_lock().expect("State locked elsewhere") = Default::default();
+        *self.0.configured_caps.lock().unwrap() = None;
+
+        gst_debug!(CAT, obj: pad.gst_pad(), "Handler reset");
+    }
+
+    fn flush(&self, pad: &PadSrcRef<'_>) {
+        // Precondition: task must be stopped
+        // TODO: assert the task state when Task & PadSrc are separated
+
+        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
+
+        self.0
+            .state
+            .try_lock()
+            .expect("state is locked elsewhere")
+            .need_segment = true;
+
+        gst_debug!(CAT, obj: pad.gst_pad(), "Flushed");
+    }
+
     fn start_task(
         &self,
         pad: PadSrcRef<'_>,
@@ -306,7 +354,7 @@ impl UdpSrcPadHandler {
                 };
 
                 if let Some(saddr) = saddr {
-                    if this.0.state.read().unwrap().retrieve_sender_address {
+                    if this.0.state.lock().await.retrieve_sender_address {
                         let inet_addr = match saddr.ip() {
                             IpAddr::V4(ip) => gio::InetAddress::new_from_bytes(
                                 gio::InetAddressBytes::V4(&ip.octets()),
@@ -354,37 +402,31 @@ impl UdpSrcPadHandler {
     }
 
     async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &gst::Element) {
-        let mut events = Vec::new();
-
-        // Only `read` the state in the hot path
-        if self.0.state.read().unwrap().need_initial_events {
-            // We will need to `write` and we also want to prevent
-            // any changes on the state while we are handling initial events
-            let mut state = self.0.state.write().unwrap();
-            assert!(state.need_initial_events);
-
+        let mut state = self.0.state.lock().await;
+        if state.need_initial_events {
             gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
 
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-            events.push(
-                gst::Event::new_stream_start(&stream_id)
-                    .group_id(gst::GroupId::next())
-                    .build(),
-            );
+            let stream_start_evt = gst::Event::new_stream_start(&stream_id)
+                .group_id(gst::GroupId::next())
+                .build();
+            pad.push_event(stream_start_evt).await;
 
             if let Some(ref caps) = state.caps {
-                events.push(gst::Event::new_caps(&caps).build());
-                state.configured_caps = Some(caps.clone());
+                let caps_evt = gst::Event::new_caps(&caps).build();
+                pad.push_event(caps_evt).await;
+                *self.0.configured_caps.lock().unwrap() = Some(caps.clone());
             }
-            events.push(
-                gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-            );
 
             state.need_initial_events = false;
         }
 
-        for event in events {
-            pad.push_event(event).await;
+        if state.need_segment {
+            let segment_evt =
+                gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build();
+            pad.push_event(segment_evt).await;
+
+            state.need_segment = false;
         }
     }
 
@@ -394,6 +436,8 @@ impl UdpSrcPadHandler {
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
+
         self.push_prelude(pad, element).await;
 
         pad.push(buffer).await
@@ -416,7 +460,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                udpsrc.pause(element).unwrap();
+                udpsrc.flush_start(element);
 
                 true
             }
@@ -461,8 +505,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let state = self.0.state.read().unwrap();
-                let caps = if let Some(ref caps) = state.configured_caps {
+                let caps = if let Some(caps) = self.0.configured_caps.lock().unwrap().as_ref() {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
@@ -491,7 +534,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
 
 struct UdpSrc {
     src_pad: PadSrc,
-    src_pad_handler: UdpSrcPadHandler,
+    src_pad_handler: StdMutex<Option<UdpSrcPadHandler>>,
     socket: StdMutex<Option<Socket<UdpReader>>>,
     settings: StdMutex<Settings>,
 }
@@ -686,25 +729,24 @@ impl UdpSrc {
             )
         })?;
 
-        {
-            let mut src_pad_handler_state = self.src_pad_handler.0.state.write().unwrap();
-            src_pad_handler_state.retrieve_sender_address = settings.retrieve_sender_address;
-            src_pad_handler_state.caps = settings.caps;
-        }
-
         *socket_storage = Some(socket);
         drop(socket_storage);
 
         element.notify("used-socket");
 
+        let src_pad_handler =
+            UdpSrcPadHandler::new(settings.caps, settings.retrieve_sender_address);
+
         self.src_pad
-            .prepare(context, &self.src_pad_handler)
+            .prepare(context, &src_pad_handler)
             .map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error preparing src_pads: {:?}", err]
                 )
             })?;
+
+        *self.src_pad_handler.lock().unwrap() = Some(src_pad_handler);
 
         gst_debug!(CAT, obj: element, "Prepared");
 
@@ -722,8 +764,7 @@ impl UdpSrc {
         }
 
         let _ = self.src_pad.unprepare();
-
-        *self.src_pad_handler.0.state.write().unwrap() = Default::default();
+        *self.src_pad_handler.lock().unwrap() = None;
 
         gst_debug!(CAT, obj: element, "Unprepared");
 
@@ -738,11 +779,11 @@ impl UdpSrc {
         self.src_pad.stop_task();
 
         self.src_pad_handler
-            .0
-            .state
-            .write()
+            .lock()
             .unwrap()
-            .need_initial_events = true;
+            .as_ref()
+            .unwrap()
+            .reset(&self.src_pad.as_ref());
 
         gst_debug!(CAT, obj: element, "Stopped");
 
@@ -784,6 +825,14 @@ impl UdpSrc {
         gst_debug!(CAT, obj: element, "Stopping Flush");
 
         self.src_pad.stop_task();
+
+        self.src_pad_handler
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .flush(&self.src_pad.as_ref());
+
         self.start_unchecked(element, socket);
 
         gst_debug!(CAT, obj: element, "Stopped Flush");
@@ -795,7 +844,24 @@ impl UdpSrc {
             .unwrap();
 
         self.src_pad_handler
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
             .start_task(self.src_pad.as_ref(), element, socket_stream);
+    }
+
+    fn flush_start(&self, element: &gst::Element) {
+        let socket = self.socket.lock().unwrap();
+        gst_debug!(CAT, obj: element, "Starting Flush");
+
+        if let Some(socket) = socket.as_ref() {
+            socket.pause();
+        }
+
+        self.src_pad.cancel_task();
+
+        gst_debug!(CAT, obj: element, "Flush Started");
     }
 
     fn pause(&self, element: &gst::Element) -> Result<(), ()> {
@@ -806,7 +872,7 @@ impl UdpSrc {
             socket.pause();
         }
 
-        self.src_pad.cancel_task();
+        self.src_pad.pause_task();
 
         gst_debug!(CAT, obj: element, "Paused");
 
@@ -865,7 +931,7 @@ impl ObjectSubclass for UdpSrc {
 
         Self {
             src_pad,
-            src_pad_handler: UdpSrcPadHandler::default(),
+            src_pad_handler: StdMutex::new(None),
             socket: StdMutex::new(None),
             settings: StdMutex::new(Settings::default()),
         }

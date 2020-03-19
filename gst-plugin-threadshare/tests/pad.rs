@@ -29,13 +29,14 @@ use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::EventView;
-use gst::{gst_debug, gst_error_msg, gst_log};
+use gst::{gst_debug, gst_error_msg, gst_info, gst_log};
 
 use lazy_static::lazy_static;
 
 use std::boxed::Box;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
 
 use gstthreadshare::runtime::prelude::*;
 use gstthreadshare::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
@@ -79,36 +80,93 @@ lazy_static! {
     );
 }
 
-#[derive(Clone, Debug, Default)]
-struct PadSrcHandlerTest;
+#[derive(Debug)]
+struct PadSrcHandlerTestInner {
+    receiver: FutMutex<mpsc::Receiver<Item>>,
+}
+
+impl PadSrcHandlerTestInner {
+    fn new(receiver: mpsc::Receiver<Item>) -> PadSrcHandlerTestInner {
+        PadSrcHandlerTestInner {
+            receiver: FutMutex::new(receiver),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct PadSrcHandlerTest(Arc<PadSrcHandlerTestInner>);
 
 impl PadSrcHandlerTest {
-    fn start_task(&self, pad: PadSrcRef<'_>, receiver: mpsc::Receiver<Item>) {
+    fn new(receiver: mpsc::Receiver<Item>) -> PadSrcHandlerTest {
+        PadSrcHandlerTest(Arc::new(PadSrcHandlerTestInner::new(receiver)))
+    }
+
+    fn stop(&self, pad: &PadSrcRef<'_>) {
+        gst_debug!(SRC_CAT, obj: pad.gst_pad(), "Stopping handler");
+
+        pad.stop_task();
+        // From here on, the task is stopped so it can't hold resources anymore
+
+        self.flush(pad);
+
+        gst_debug!(SRC_CAT, obj: pad.gst_pad(), "Handler stopped");
+    }
+
+    fn flush(&self, pad: &PadSrcRef<'_>) {
+        // Precondition: task must be stopped
+        // TODO: assert the task state when Task & PadSrc are separated
+
+        gst_debug!(SRC_CAT, obj: pad.gst_pad(), "Flushing");
+
+        // Purge the channel
+        let mut receiver = self
+            .0
+            .receiver
+            .try_lock()
+            .expect("Channel receiver is locked elsewhere");
+        loop {
+            match receiver.try_next() {
+                Ok(Some(_item)) => {
+                    gst_log!(SRC_CAT, obj: pad.gst_pad(), "Dropping pending item");
+                }
+                Err(_) => {
+                    gst_log!(SRC_CAT, obj: pad.gst_pad(), "No more pending item");
+                    break;
+                }
+                Ok(None) => {
+                    panic!("Channel sender dropped");
+                }
+            }
+        }
+
+        gst_debug!(SRC_CAT, obj: pad.gst_pad(), "Flushed");
+    }
+
+    fn start_task(&self, pad: PadSrcRef<'_>) {
         gst_debug!(SRC_CAT, obj: pad.gst_pad(), "SrcPad task starting");
+
+        let this = self.clone();
         let pad_weak = pad.downgrade();
-        let receiver = Arc::new(FutMutex::new(receiver));
+
         pad.start_task(move || {
             let pad_weak = pad_weak.clone();
-            let receiver = Arc::clone(&receiver);
+            let this = this.clone();
+
             async move {
+                let item = this.0.receiver.lock().await.next().await;
+
                 let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
 
-                let item = {
-                    let mut receiver = receiver.lock().await;
-
-                    match receiver.next().await {
-                        Some(item) => item,
-                        None => {
-                            gst_debug!(SRC_CAT, obj: pad.gst_pad(), "SrcPad channel aborted");
-                            return glib::Continue(false);
-                        }
+                let item = match item {
+                    Some(item) => item,
+                    None => {
+                        gst_log!(SRC_CAT, obj: pad.gst_pad(), "SrcPad channel aborted");
+                        return glib::Continue(false);
                     }
                 };
 
-                // We could also check here first if we're flushing but as we're not doing anything
-                // complicated below we can just defer that to the pushing function
-
-                match Self::push_item(pad, item).await {
+                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
+                match this.push_item(pad, item).await {
                     Ok(_) => glib::Continue(true),
                     Err(gst::FlowError::Flushing) => glib::Continue(false),
                     Err(err) => panic!("Got error {:?}", err),
@@ -117,7 +175,13 @@ impl PadSrcHandlerTest {
         });
     }
 
-    async fn push_item(pad: PadSrcRef<'_>, item: Item) -> Result<gst::FlowSuccess, gst::FlowError> {
+    async fn push_item(
+        self,
+        pad: PadSrcRef<'_>,
+        item: Item,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst_debug!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", item);
+
         match item {
             Item::Event(event) => {
                 pad.push_event(event).await;
@@ -144,9 +208,7 @@ impl PadSrcHandler for PadSrcHandlerTest {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                // Cancel the task so that it finishes ASAP
-                // and clear the sender
-                elem_src_test.pause(element).unwrap();
+                elem_src_test.flush_start(element);
                 true
             }
             EventView::Qos(..) | EventView::Reconfigure(..) | EventView::Latency(..) => true,
@@ -167,16 +229,34 @@ impl PadSrcHandler for PadSrcHandlerTest {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum ElementSrcTestState {
+    Paused,
+    RejectItems,
+    Started,
+}
+
 #[derive(Debug)]
 struct ElementSrcTest {
     src_pad: PadSrc,
-    src_pad_handler: PadSrcHandlerTest,
-    sender: Mutex<Option<mpsc::Sender<Item>>>,
-    settings: Mutex<Settings>,
+    src_pad_handler: StdMutex<Option<PadSrcHandlerTest>>,
+    state: StdMutex<ElementSrcTestState>,
+    sender: StdMutex<Option<mpsc::Sender<Item>>>,
+    settings: StdMutex<Settings>,
 }
 
 impl ElementSrcTest {
     fn try_push(&self, item: Item) -> Result<(), Item> {
+        let state = self.state.lock().unwrap();
+        if *state == ElementSrcTestState::RejectItems {
+            gst_debug!(
+                SRC_CAT,
+                "ElementSrcTest rejecting item due to element state"
+            );
+
+            return Err(item);
+        }
+
         match self.sender.lock().unwrap().as_mut() {
             Some(sender) => sender
                 .try_send(item)
@@ -196,14 +276,21 @@ impl ElementSrcTest {
             )
         })?;
 
+        let (sender, receiver) = mpsc::channel(1);
+        *self.sender.lock().unwrap() = Some(sender);
+
+        let src_pad_handler = PadSrcHandlerTest::new(receiver);
+
         self.src_pad
-            .prepare(context, &self.src_pad_handler)
+            .prepare(context, &src_pad_handler)
             .map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error joining Context: {:?}", err]
                 )
             })?;
+
+        *self.src_pad_handler.lock().unwrap() = Some(src_pad_handler);
 
         gst_debug!(SRC_CAT, obj: element, "Prepared");
 
@@ -214,6 +301,7 @@ impl ElementSrcTest {
         gst_debug!(SRC_CAT, obj: element, "Unpreparing");
 
         self.src_pad.unprepare().unwrap();
+        *self.src_pad_handler.lock().unwrap() = None;
 
         gst_debug!(SRC_CAT, obj: element, "Unprepared");
 
@@ -221,15 +309,15 @@ impl ElementSrcTest {
     }
 
     fn start(&self, element: &gst::Element) -> Result<(), ()> {
-        let mut sender = self.sender.lock().unwrap();
-        if sender.is_some() {
+        let mut state = self.state.lock().unwrap();
+        if *state == ElementSrcTestState::Started {
             gst_debug!(SRC_CAT, obj: element, "Already started");
             return Err(());
         }
 
         gst_debug!(SRC_CAT, obj: element, "Starting");
 
-        self.start_unchecked(&mut sender);
+        self.start_unchecked(&mut state);
 
         gst_debug!(SRC_CAT, obj: element, "Started");
 
@@ -237,12 +325,8 @@ impl ElementSrcTest {
     }
 
     fn flush_stop(&self, element: &gst::Element) {
-        // Keep the lock on the `sender` until `flush_stop` is complete
-        // so as to prevent race conditions due to concurrent state transitions.
-        // Note that this won't deadlock as `sender` is not used
-        // within the `src_pad`'s `Task`.
-        let mut sender = self.sender.lock().unwrap();
-        if sender.is_some() {
+        let mut state = self.state.lock().unwrap();
+        if *state == ElementSrcTestState::Started {
             gst_debug!(SRC_CAT, obj: element, "Already started");
             return;
         }
@@ -252,30 +336,52 @@ impl ElementSrcTest {
         // Stop it so we wait for it to actually finish
         self.src_pad.stop_task();
 
+        self.src_pad_handler
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .flush(&self.src_pad.as_ref());
+
         // And then start it again
-        self.start_unchecked(&mut sender);
+        self.start_unchecked(&mut state);
 
         gst_debug!(SRC_CAT, obj: element, "Stopped Flush");
     }
 
-    fn start_unchecked(&self, sender: &mut Option<mpsc::Sender<Item>>) {
-        // Start the task and set up the sender. We only accept
-        // data in Playing
-        let (sender_new, receiver) = mpsc::channel(1);
-        *sender = Some(sender_new);
+    fn start_unchecked(&self, state: &mut ElementSrcTestState) {
         self.src_pad_handler
-            .start_task(self.src_pad.as_ref(), receiver);
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .start_task(self.src_pad.as_ref());
+
+        *state = ElementSrcTestState::Started;
+    }
+
+    fn flush_start(&self, element: &gst::Element) {
+        // Keep the lock on the `state` until `flush_start` is complete
+        // so as to prevent race conditions due to concurrent state transitions.
+        let mut state = self.state.lock().unwrap();
+
+        gst_debug!(SRC_CAT, obj: element, "Starting Flush");
+
+        *state = ElementSrcTestState::RejectItems;
+        self.src_pad.cancel_task();
+
+        gst_debug!(SRC_CAT, obj: element, "Flush Started");
     }
 
     fn pause(&self, element: &gst::Element) -> Result<(), ()> {
-        let mut sender = self.sender.lock().unwrap();
+        // Lock the state to prevent race condition due to concurrent FlushStop
+        let mut state = self.state.lock().unwrap();
+
         gst_debug!(SRC_CAT, obj: element, "Pausing");
 
-        // Cancel task, we only accept data in Playing
-        self.src_pad.cancel_task();
+        self.src_pad.pause_task();
 
-        // Prevent subsequent items from being enqueued
-        *sender = None;
+        *state = ElementSrcTestState::Paused;
 
         gst_debug!(SRC_CAT, obj: element, "Paused");
 
@@ -285,9 +391,14 @@ impl ElementSrcTest {
     fn stop(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(SRC_CAT, obj: element, "Stopping");
 
-        // Now stop the task if it was still running, blocking
-        // until this has actually happened
-        self.src_pad.stop_task();
+        *self.state.lock().unwrap() = ElementSrcTestState::RejectItems;
+
+        self.src_pad_handler
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .stop(&self.src_pad.as_ref());
 
         gst_debug!(SRC_CAT, obj: element, "Stopped");
 
@@ -334,9 +445,10 @@ impl ObjectSubclass for ElementSrcTest {
 
         ElementSrcTest {
             src_pad,
-            src_pad_handler: PadSrcHandlerTest::default(),
-            sender: Mutex::new(None),
-            settings: Mutex::new(settings),
+            src_pad_handler: StdMutex::new(None),
+            state: StdMutex::new(ElementSrcTestState::RejectItems),
+            sender: StdMutex::new(None),
+            settings: StdMutex::new(settings),
         }
     }
 }
@@ -595,6 +707,24 @@ impl ElementSinkTest {
     }
 }
 
+impl ElementSinkTest {
+    fn push_flush_start(&self, element: &gst::Element) {
+        gst_debug!(SINK_CAT, obj: element, "Pushing FlushStart");
+        self.sink_pad
+            .gst_pad()
+            .push_event(gst::Event::new_flush_start().build());
+        gst_debug!(SINK_CAT, obj: element, "FlushStart pushed");
+    }
+
+    fn push_flush_stop(&self, element: &gst::Element) {
+        gst_debug!(SINK_CAT, obj: element, "Pushing FlushStop");
+        self.sink_pad
+            .gst_pad()
+            .push_event(gst::Event::new_flush_stop(true).build());
+        gst_debug!(SINK_CAT, obj: element, "FlushStop pushed");
+    }
+}
+
 lazy_static! {
     static ref SINK_CAT: gst::DebugCategory = gst::DebugCategory::new(
         "ts-element-sink-test",
@@ -823,10 +953,10 @@ fn nominal_scenario(
     // Pause the Pad task
     pipeline.set_state(gst::State::Paused).unwrap();
 
-    // Items not longer accepted
+    // Item accepted, but not processed before switching to Playing again
     elem_src_test
-        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4])))
-        .unwrap_err();
+        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![5, 6, 7])))
+        .unwrap();
 
     // Nothing forwarded
     receiver.try_next().unwrap_err();
@@ -834,8 +964,13 @@ fn nominal_scenario(
     // Switch back the Pad task to Started
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    // Still nothing forwarded
-    receiver.try_next().unwrap_err();
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Buffer(buffer) => {
+            let data = buffer.map_readable().unwrap();
+            assert_eq!(data.as_slice(), vec![5, 6, 7].as_slice());
+        }
+        other => panic!("Unexpected item {:?}", other),
+    }
 
     // Flush
     src_element.send_event(gst::Event::new_flush_start().build());
@@ -846,6 +981,33 @@ fn nominal_scenario(
             EventView::FlushStop(_) => (),
             other => panic!("Unexpected event {:?}", other),
         },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::Segment(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    // Buffer
+    elem_src_test
+        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![8, 9])))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Buffer(buffer) => {
+            let data = buffer.map_readable().unwrap();
+            assert_eq!(data.as_slice(), vec![8, 9].as_slice());
+        }
         other => panic!("Unexpected item {:?}", other),
     }
 
@@ -885,24 +1047,24 @@ fn src_sink_nominal() {
     nominal_scenario(&name, pipeline, src_element, receiver);
 }
 
-// #[test]
-// fn src_tsqueue_sink_nominal() {
-//     init();
-//
-//     let name = "src_tsqueue_sink";
-//
-//     let ts_queue = gst::ElementFactory::make("ts-queue", Some("ts-queue")).unwrap();
-//     ts_queue
-//         .set_property("context", &format!("{}_queue", name))
-//         .unwrap();
-//     ts_queue
-//         .set_property("context-wait", &THROTTLING_DURATION)
-//         .unwrap();
-//
-//     let (pipeline, src_element, _sink_element, receiver) = setup(name, Some(ts_queue), None);
-//
-//     nominal_scenario(&name, pipeline, src_element, receiver);
-// }
+#[test]
+fn src_tsqueue_sink_nominal() {
+    init();
+
+    let name = "src_tsqueue_sink";
+
+    let ts_queue = gst::ElementFactory::make("ts-queue", Some("ts-queue")).unwrap();
+    ts_queue
+        .set_property("context", &format!("{}_queue", name))
+        .unwrap();
+    ts_queue
+        .set_property("context-wait", &THROTTLING_DURATION)
+        .unwrap();
+
+    let (pipeline, src_element, _sink_element, receiver) = setup(name, Some(ts_queue), None);
+
+    nominal_scenario(&name, pipeline, src_element, receiver);
+}
 
 #[test]
 fn src_queue_sink_nominal() {
@@ -916,30 +1078,309 @@ fn src_queue_sink_nominal() {
     nominal_scenario(&name, pipeline, src_element, receiver);
 }
 
-// #[test]
-// fn src_tsproxy_sink_nominal() {
-//     init();
-//
-//     let name = "src_tsproxy_sink";
-//
-//     let ts_proxy_sink = gst::ElementFactory::make("ts-proxysink", Some("ts-proxysink")).unwrap();
-//     ts_proxy_sink
-//         .set_property("proxy-context", &format!("{}_proxy_context", name))
-//         .unwrap();
-//
-//     let ts_proxy_src = gst::ElementFactory::make("ts-proxysrc", Some("ts-proxysrc")).unwrap();
-//     ts_proxy_src
-//         .set_property("proxy-context", &format!("{}_proxy_context", name))
-//         .unwrap();
-//     ts_proxy_src
-//         .set_property("context", &format!("{}_context", name))
-//         .unwrap();
-//     ts_proxy_src
-//         .set_property("context-wait", &THROTTLING_DURATION)
-//         .unwrap();
-//
-//     let (pipeline, src_element, _sink_element, receiver) =
-//         setup(name, Some(ts_proxy_sink), Some(ts_proxy_src));
-//
-//     nominal_scenario(&name, pipeline, src_element, receiver);
-// }
+#[test]
+fn src_tsproxy_sink_nominal() {
+    init();
+
+    let name = "src_tsproxy_sink";
+
+    let ts_proxy_sink = gst::ElementFactory::make("ts-proxysink", Some("ts-proxysink")).unwrap();
+    ts_proxy_sink
+        .set_property("proxy-context", &format!("{}_proxy_context", name))
+        .unwrap();
+
+    let ts_proxy_src = gst::ElementFactory::make("ts-proxysrc", Some("ts-proxysrc")).unwrap();
+    ts_proxy_src
+        .set_property("proxy-context", &format!("{}_proxy_context", name))
+        .unwrap();
+    ts_proxy_src
+        .set_property("context", &format!("{}_context", name))
+        .unwrap();
+    ts_proxy_src
+        .set_property("context-wait", &THROTTLING_DURATION)
+        .unwrap();
+
+    let (pipeline, src_element, _sink_element, receiver) =
+        setup(name, Some(ts_proxy_sink), Some(ts_proxy_src));
+
+    nominal_scenario(&name, pipeline, src_element, receiver);
+}
+
+#[test]
+fn start_pause_start() {
+    init();
+
+    let scenario_name = "start_pause_start";
+
+    let (pipeline, src_element, _sink_element, mut receiver) = setup(&scenario_name, None, None);
+
+    let elem_src_test = ElementSrcTest::from_instance(&src_element);
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    // Initial events
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_stream_start(scenario_name)
+                .group_id(gst::GroupId::next())
+                .build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::StreamStart(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::Segment(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    // Buffer
+    elem_src_test
+        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4])))
+        .unwrap();
+
+    pipeline.set_state(gst::State::Paused).unwrap();
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    elem_src_test
+        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![5, 6, 7])))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Buffer(buffer) => {
+            let data = buffer.map_readable().unwrap();
+            assert_eq!(data.as_slice(), vec![1, 2, 3, 4].as_slice());
+        }
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Buffer(buffer) => {
+            let data = buffer.map_readable().unwrap();
+            assert_eq!(data.as_slice(), vec![5, 6, 7].as_slice());
+        }
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    // Nothing else forwarded
+    receiver.try_next().unwrap_err();
+
+    pipeline.set_state(gst::State::Null).unwrap();
+}
+
+#[test]
+fn start_stop_start() {
+    init();
+
+    let scenario_name = "start_stop_start";
+
+    let (pipeline, src_element, _sink_element, mut receiver) = setup(&scenario_name, None, None);
+
+    let elem_src_test = ElementSrcTest::from_instance(&src_element);
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    // Initial events
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_stream_start(&format!("{}-after_stop", scenario_name))
+                .group_id(gst::GroupId::next())
+                .build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::StreamStart(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::Segment(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    // Buffer
+    elem_src_test
+        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4])))
+        .unwrap();
+
+    pipeline.set_state(gst::State::Ready).unwrap();
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    // Initial events again
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_stream_start(scenario_name)
+                .group_id(gst::GroupId::next())
+                .build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Buffer(_buffer) => {
+            gst_info!(
+                SRC_CAT,
+                "{}: initial buffer went through, don't expect any pending item to be dropped",
+                scenario_name
+            );
+
+            match futures::executor::block_on(receiver.next()).unwrap() {
+                Item::Event(event) => match event.view() {
+                    EventView::StreamStart(_) => (),
+                    other => panic!("Unexpected event {:?}", other),
+                },
+                other => panic!("Unexpected item {:?}", other),
+            }
+        }
+        Item::Event(event) => match event.view() {
+            EventView::StreamStart(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::Segment(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    elem_src_test
+        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![5, 6, 7])))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Buffer(buffer) => {
+            let data = buffer.map_readable().unwrap();
+            assert_eq!(data.as_slice(), vec![5, 6, 7].as_slice());
+        }
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    pipeline.set_state(gst::State::Null).unwrap();
+}
+
+#[test]
+fn start_flush() {
+    init();
+
+    let scenario_name = "start_flush";
+
+    let (pipeline, src_element, sink_element, mut receiver) = setup(&scenario_name, None, None);
+
+    let elem_src_test = ElementSrcTest::from_instance(&src_element);
+
+    pipeline.set_state(gst::State::Playing).unwrap();
+
+    // Initial events
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_stream_start(&format!("{}-after_stop", scenario_name))
+                .group_id(gst::GroupId::next())
+                .build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::StreamStart(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::Segment(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    // Buffer
+    elem_src_test
+        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4])))
+        .unwrap();
+
+    let elem_sink_test = ElementSinkTest::from_instance(&sink_element);
+
+    elem_sink_test.push_flush_start(&sink_element);
+
+    elem_src_test
+        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![5, 6, 7])))
+        .unwrap_err();
+
+    elem_sink_test.push_flush_stop(&sink_element);
+
+    elem_src_test
+        .try_push(Item::Event(
+            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
+        ))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Event(event) => match event.view() {
+            EventView::Segment(_) => (),
+            other => panic!("Unexpected event {:?}", other),
+        },
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    // Post flush buffer
+    elem_src_test
+        .try_push(Item::Buffer(gst::Buffer::from_slice(vec![8, 9])))
+        .unwrap();
+
+    match futures::executor::block_on(receiver.next()).unwrap() {
+        Item::Buffer(buffer) => {
+            let data = buffer.map_readable().unwrap();
+            assert_eq!(data.as_slice(), vec![8, 9].as_slice());
+        }
+        other => panic!("Unexpected item {:?}", other),
+    }
+
+    pipeline.set_state(gst::State::Null).unwrap();
+}

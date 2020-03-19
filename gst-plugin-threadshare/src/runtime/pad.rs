@@ -343,6 +343,11 @@ impl<'a> PadSrcRef<'a> {
         self.strong.start_task(func);
     }
 
+    /// Pauses the `Started` `Pad` `Task`.
+    pub fn pause_task(&self) {
+        self.strong.pause_task();
+    }
+
     /// Cancels the `Started` `Pad` `Task`.
     pub fn cancel_task(&self) {
         self.strong.cancel_task();
@@ -471,6 +476,11 @@ impl PadSrcStrong {
         Fut: Future<Output = glib::Continue> + Send + 'static,
     {
         self.0.task.start(func);
+    }
+
+    #[inline]
+    fn pause_task(&self) {
+        self.0.task.pause();
     }
 
     #[inline]
@@ -720,6 +730,10 @@ impl PadSrc {
         Fut: Future<Output = glib::Continue> + Send + 'static,
     {
         self.0.start_task(func);
+    }
+
+    pub fn pause_task(&self) {
+        self.0.pause_task();
     }
 
     pub fn cancel_task(&self) {

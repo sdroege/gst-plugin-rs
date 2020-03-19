@@ -185,7 +185,7 @@ impl DataQueue {
     pub fn push(&self, item: DataQueueItem) -> Result<(), DataQueueItem> {
         let mut inner = self.0.lock().unwrap();
 
-        if inner.state != DataQueueState::Started {
+        if inner.state == DataQueueState::Stopped {
             gst_debug!(
                 DATA_QUEUE_CAT,
                 obj: &inner.element,

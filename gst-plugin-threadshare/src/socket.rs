@@ -246,7 +246,7 @@ impl<T: SocketRead + 'static> SocketStream<T> {
         let (read_fut, clock, base_time) = {
             let mut inner = self.socket.0.lock().unwrap();
             if inner.state != SocketState::Started {
-                gst_debug!(SOCKET_CAT, obj: &inner.element, "DataQueue is not Started");
+                gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket is not Started");
                 return None;
             }
 

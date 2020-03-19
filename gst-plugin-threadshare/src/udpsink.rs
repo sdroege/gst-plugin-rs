@@ -649,6 +649,12 @@ impl UdpSinkPadHandler {
         }
     }
 
+    fn unprepare(&self) {
+        if let Some(task) = &self.0.read().unwrap().task {
+            task.unprepare().unwrap();
+        }
+    }
+
     fn stop_task(&self) {
         if let Some(task) = &self.0.read().unwrap().task {
             task.stop();
@@ -959,6 +965,7 @@ impl UdpSink {
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
+        self.sink_pad_handler.unprepare();
         self.sink_pad.unprepare();
 
         gst_debug!(CAT, obj: element, "Unprepared");

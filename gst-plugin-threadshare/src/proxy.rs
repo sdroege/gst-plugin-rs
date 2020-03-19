@@ -838,7 +838,7 @@ impl ProxySrcPadHandler {
                 let item = match item {
                     Some(item) => item,
                     None => {
-                        gst_log!(SRC_CAT, obj: pad.gst_pad(), "DataQueue Stopped");
+                        gst_log!(SRC_CAT, obj: pad.gst_pad(), "DataQueue Stopped or Paused");
                         return glib::Continue(false);
                     }
                 };
@@ -1109,6 +1109,7 @@ impl ProxySrc {
         self.src_pad.stop_task();
 
         let dataqueue = dataqueue.as_ref().unwrap();
+        dataqueue.clear();
         dataqueue.stop();
 
         gst_debug!(SRC_CAT, obj: element, "Stopped");
@@ -1171,11 +1172,9 @@ impl ProxySrc {
         let dataqueue = self.dataqueue.lock().unwrap();
         gst_debug!(SRC_CAT, obj: element, "Pausing");
 
-        self.src_pad.cancel_task();
+        dataqueue.as_ref().unwrap().pause();
 
-        let dataqueue = dataqueue.as_ref().unwrap();
-        dataqueue.pause();
-        dataqueue.clear();
+        self.src_pad.pause_task();
 
         gst_debug!(SRC_CAT, obj: element, "Paused");
 

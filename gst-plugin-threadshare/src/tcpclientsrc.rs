@@ -37,8 +37,8 @@ use rand;
 
 use std::io;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use std::sync::{self, Arc};
 use std::u16;
 
 use tokio::io::AsyncReadExt;
@@ -177,29 +177,73 @@ impl SocketRead for TcpClientReader {
 #[derive(Debug)]
 struct TcpClientSrcPadHandlerState {
     need_initial_events: bool,
+    need_segment: bool,
     caps: Option<gst::Caps>,
-    configured_caps: Option<gst::Caps>,
 }
 
 impl Default for TcpClientSrcPadHandlerState {
     fn default() -> Self {
         TcpClientSrcPadHandlerState {
             need_initial_events: true,
+            need_segment: true,
             caps: None,
-            configured_caps: None,
         }
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct TcpClientSrcPadHandlerInner {
-    state: sync::RwLock<TcpClientSrcPadHandlerState>,
+    state: FutMutex<TcpClientSrcPadHandlerState>,
+    configured_caps: StdMutex<Option<gst::Caps>>,
 }
 
-#[derive(Clone, Debug, Default)]
+impl TcpClientSrcPadHandlerInner {
+    fn new(caps: Option<gst::Caps>) -> Self {
+        TcpClientSrcPadHandlerInner {
+            state: FutMutex::new(TcpClientSrcPadHandlerState {
+                caps,
+                ..Default::default()
+            }),
+            configured_caps: StdMutex::new(None),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 struct TcpClientSrcPadHandler(Arc<TcpClientSrcPadHandlerInner>);
 
 impl TcpClientSrcPadHandler {
+    fn new(caps: Option<gst::Caps>) -> Self {
+        TcpClientSrcPadHandler(Arc::new(TcpClientSrcPadHandlerInner::new(caps)))
+    }
+
+    fn reset(&self, pad: &PadSrcRef<'_>) {
+        // Precondition: task must be stopped
+        // TODO: assert the task state when Task & PadSrc are separated
+
+        gst_debug!(CAT, obj: pad.gst_pad(), "Resetting handler");
+
+        *self.0.state.try_lock().expect("State locked elsewhere") = Default::default();
+        *self.0.configured_caps.lock().unwrap() = None;
+
+        gst_debug!(CAT, obj: pad.gst_pad(), "Handler reset");
+    }
+
+    fn flush(&self, pad: &PadSrcRef<'_>) {
+        // Precondition: task must be stopped
+        // TODO: assert the task state when Task & PadSrc are separated
+
+        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
+
+        self.0
+            .state
+            .try_lock()
+            .expect("state is locked elsewhere")
+            .need_segment = true;
+
+        gst_debug!(CAT, obj: pad.gst_pad(), "Flushed");
+    }
+
     fn start_task(
         &self,
         pad: PadSrcRef<'_>,
@@ -284,37 +328,31 @@ impl TcpClientSrcPadHandler {
     }
 
     async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &gst::Element) {
-        let mut events = Vec::new();
-
-        // Only `read` the state in the hot path
-        if self.0.state.read().unwrap().need_initial_events {
-            // We will need to `write` and we also want to prevent
-            // any changes on the state while we are handling initial events
-            let mut state = self.0.state.write().unwrap();
-            assert!(state.need_initial_events);
-
+        let mut state = self.0.state.lock().await;
+        if state.need_initial_events {
             gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
 
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-            events.push(
-                gst::Event::new_stream_start(&stream_id)
-                    .group_id(gst::GroupId::next())
-                    .build(),
-            );
+            let stream_start_evt = gst::Event::new_stream_start(&stream_id)
+                .group_id(gst::GroupId::next())
+                .build();
+            pad.push_event(stream_start_evt).await;
 
             if let Some(ref caps) = state.caps {
-                events.push(gst::Event::new_caps(&caps).build());
-                state.configured_caps = Some(caps.clone());
+                let caps_evt = gst::Event::new_caps(&caps).build();
+                pad.push_event(caps_evt).await;
+                *self.0.configured_caps.lock().unwrap() = Some(caps.clone());
             }
-            events.push(
-                gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-            );
 
             state.need_initial_events = false;
         }
 
-        for event in events {
-            pad.push_event(event).await;
+        if state.need_segment {
+            let segment_evt =
+                gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build();
+            pad.push_event(segment_evt).await;
+
+            state.need_segment = false;
         }
     }
 
@@ -324,6 +362,8 @@ impl TcpClientSrcPadHandler {
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
+
         self.push_prelude(pad, element).await;
 
         if buffer.get_size() == 0 {
@@ -352,7 +392,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                tcpclientsrc.pause(element).unwrap();
+                tcpclientsrc.flush_start(element);
 
                 true
             }
@@ -396,8 +436,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let state = self.0.state.read().unwrap();
-                let caps = if let Some(ref caps) = state.configured_caps {
+                let caps = if let Some(caps) = self.0.configured_caps.lock().unwrap().as_ref() {
                     q.get_filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
@@ -426,7 +465,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
 
 struct TcpClientSrc {
     src_pad: PadSrc,
-    src_pad_handler: TcpClientSrcPadHandler,
+    src_pad_handler: StdMutex<Option<TcpClientSrcPadHandler>>,
     socket: StdMutex<Option<Socket<TcpClientReader>>>,
     settings: StdMutex<Settings>,
 }
@@ -499,22 +538,21 @@ impl TcpClientSrc {
             )
         })?;
 
-        {
-            let mut src_pad_handler_state = self.src_pad_handler.0.state.write().unwrap();
-            src_pad_handler_state.caps = settings.caps;
-        }
-
         *socket_storage = Some(socket);
         drop(socket_storage);
 
+        let src_pad_handler = TcpClientSrcPadHandler::new(settings.caps);
+
         self.src_pad
-            .prepare(context, &self.src_pad_handler)
+            .prepare(context, &src_pad_handler)
             .map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error preparing src_pads: {:?}", err]
                 )
             })?;
+
+        *self.src_pad_handler.lock().unwrap() = Some(src_pad_handler);
 
         gst_debug!(CAT, obj: element, "Prepared");
 
@@ -529,8 +567,7 @@ impl TcpClientSrc {
         }
 
         let _ = self.src_pad.unprepare();
-
-        *self.src_pad_handler.0.state.write().unwrap() = Default::default();
+        *self.src_pad_handler.lock().unwrap() = None;
 
         gst_debug!(CAT, obj: element, "Unprepared");
 
@@ -545,11 +582,11 @@ impl TcpClientSrc {
         self.src_pad.stop_task();
 
         self.src_pad_handler
-            .0
-            .state
-            .write()
+            .lock()
             .unwrap()
-            .need_initial_events = true;
+            .as_ref()
+            .unwrap()
+            .reset(&self.src_pad.as_ref());
 
         gst_debug!(CAT, obj: element, "Stopped");
 
@@ -591,6 +628,14 @@ impl TcpClientSrc {
         gst_debug!(CAT, obj: element, "Stopping Flush");
 
         self.src_pad.stop_task();
+
+        self.src_pad_handler
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .flush(&self.src_pad.as_ref());
+
         self.start_unchecked(element, socket);
 
         gst_debug!(CAT, obj: element, "Stopped Flush");
@@ -602,7 +647,24 @@ impl TcpClientSrc {
             .unwrap();
 
         self.src_pad_handler
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
             .start_task(self.src_pad.as_ref(), element, socket_stream);
+    }
+
+    fn flush_start(&self, element: &gst::Element) {
+        let socket = self.socket.lock().unwrap();
+        gst_debug!(CAT, obj: element, "Starting Flush");
+
+        if let Some(socket) = socket.as_ref() {
+            socket.pause();
+        }
+
+        self.src_pad.cancel_task();
+
+        gst_debug!(CAT, obj: element, "Flush Started");
     }
 
     fn pause(&self, element: &gst::Element) -> Result<(), ()> {
@@ -613,7 +675,7 @@ impl TcpClientSrc {
             socket.pause();
         }
 
-        self.src_pad.cancel_task();
+        self.src_pad.pause_task();
 
         gst_debug!(CAT, obj: element, "Paused");
 
@@ -656,7 +718,7 @@ impl ObjectSubclass for TcpClientSrc {
 
         Self {
             src_pad,
-            src_pad_handler: TcpClientSrcPadHandler::default(),
+            src_pad_handler: StdMutex::new(None),
             socket: StdMutex::new(None),
             settings: StdMutex::new(Settings::default()),
         }

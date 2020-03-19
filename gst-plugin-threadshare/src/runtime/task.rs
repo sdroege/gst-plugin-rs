@@ -1,4 +1,4 @@
-// Copyright (C) 2019 François Laignel <fengalin@free.fr>
+// Copyright (C) 2019-2020 François Laignel <fengalin@free.fr>
 // Copyright (C) 2020 Sebastian Dröge <sebastian@centricular.com>
 //
 // This library is free software; you can redistribute it and/or
@@ -18,17 +18,28 @@
 
 //! An execution loop to run asynchronous processing.
 
+use futures::channel::oneshot;
 use futures::future::{abortable, AbortHandle, Aborted};
 use futures::prelude::*;
 
-use gst::TaskState;
-use gst::{gst_debug, gst_log, gst_trace, gst_warning};
+use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};
 
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
-use super::executor::block_on;
+use super::executor::{block_on, yield_now};
 use super::{Context, JoinHandle, RUNTIME_CAT};
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy)]
+pub enum TaskState {
+    Cancelled,
+    Started,
+    Stopped,
+    Paused,
+    Pausing,
+    Preparing,
+    Unprepared,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TaskError {
@@ -53,27 +64,27 @@ struct TaskInner {
     prepare_abort_handle: Option<AbortHandle>,
     abort_handle: Option<AbortHandle>,
     loop_handle: Option<JoinHandle<Result<(), Aborted>>>,
+    resume_sender: Option<oneshot::Sender<()>>,
 }
 
 impl Default for TaskInner {
     fn default() -> Self {
         TaskInner {
             context: None,
-            state: TaskState::Stopped,
+            state: TaskState::Unprepared,
             prepare_handle: None,
             prepare_abort_handle: None,
             abort_handle: None,
             loop_handle: None,
+            resume_sender: None,
         }
     }
 }
 
 impl Drop for TaskInner {
     fn drop(&mut self) {
-        // Check invariant which can't be held automatically in `Task`
-        // because `drop` can't be `async`
-        if self.state != TaskState::Stopped {
-            panic!("Missing call to `Task::stop`");
+        if self.state != TaskState::Unprepared {
+            panic!("Missing call to `Task::unprepared`");
         }
     }
 }
@@ -103,7 +114,7 @@ impl Task {
         gst_debug!(RUNTIME_CAT, "Preparing task");
 
         let mut inner = self.0.lock().unwrap();
-        if inner.state != TaskState::Stopped {
+        if inner.state != TaskState::Unprepared {
             return Err(TaskError::ActiveTask);
         }
 
@@ -138,6 +149,7 @@ impl Task {
 
         inner.context = Some(context);
 
+        inner.state = TaskState::Preparing;
         gst_debug!(RUNTIME_CAT, "Task prepared");
 
         Ok(())
@@ -147,7 +159,7 @@ impl Task {
         gst_debug!(RUNTIME_CAT, "Preparing task");
 
         let mut inner = self.0.lock().unwrap();
-        if inner.state != TaskState::Stopped {
+        if inner.state != TaskState::Unprepared {
             return Err(TaskError::ActiveTask);
         }
 
@@ -156,18 +168,24 @@ impl Task {
 
         inner.context = Some(context);
 
+        inner.state = TaskState::Stopped;
         gst_debug!(RUNTIME_CAT, "Task prepared");
 
         Ok(())
     }
 
     pub fn unprepare(&self) -> Result<(), TaskError> {
-        gst_debug!(RUNTIME_CAT, "Unpreparing task");
-
         let mut inner = self.0.lock().unwrap();
         if inner.state != TaskState::Stopped {
+            gst_error!(
+                RUNTIME_CAT,
+                "Attempt to Unprepare a task in state {:?}",
+                inner.state
+            );
             return Err(TaskError::ActiveTask);
         }
+
+        gst_debug!(RUNTIME_CAT, "Unpreparing task");
 
         // Abort any pending preparation
         if let Some(abort_handle) = inner.prepare_abort_handle.take() {
@@ -176,6 +194,9 @@ impl Task {
         let prepare_handle = inner.prepare_handle.take();
 
         let context = inner.context.take().unwrap();
+
+        inner.state = TaskState::Unprepared;
+
         drop(inner);
 
         if let Some(prepare_handle) = prepare_handle {
@@ -251,8 +272,27 @@ impl Task {
                 gst_log!(RUNTIME_CAT, "Task already Started");
                 return;
             }
-            TaskState::Paused | TaskState::Stopped => (),
-            other => unreachable!("Unexpected Task state {:?}", other),
+            TaskState::Pausing => {
+                gst_debug!(RUNTIME_CAT, "Re-starting a Pausing task");
+
+                assert!(inner.resume_sender.is_none());
+
+                inner.state = TaskState::Started;
+                return;
+            }
+            TaskState::Paused => {
+                inner
+                    .resume_sender
+                    .take()
+                    .expect("Task Paused but the resume_sender is already taken")
+                    .send(())
+                    .expect("Task Paused but the resume_receiver was dropped");
+
+                gst_log!(RUNTIME_CAT, "Resume requested");
+                return;
+            }
+            TaskState::Stopped | TaskState::Cancelled | TaskState::Preparing => (),
+            TaskState::Unprepared => panic!("Attempt to start an unprepared Task"),
         }
 
         gst_debug!(RUNTIME_CAT, "Starting Task");
@@ -280,21 +320,50 @@ impl Task {
                 let res = prepare_handle.await;
                 if res.is_err() {
                     gst_warning!(RUNTIME_CAT, "Preparing failed");
+                    inner_clone.lock().unwrap().state = TaskState::Unprepared;
+
                     return;
                 }
+
+                inner_clone.lock().unwrap().state = TaskState::Stopped;
             }
 
             gst_trace!(RUNTIME_CAT, "Starting task loop");
 
             // Then loop as long as we're actually running
             loop {
-                match inner_clone.lock().unwrap().state {
-                    TaskState::Started => (),
-                    TaskState::Paused | TaskState::Stopped => {
-                        gst_trace!(RUNTIME_CAT, "Stopping task loop");
-                        break;
+                let mut resume_receiver = {
+                    let mut inner = inner_clone.lock().unwrap();
+                    match inner.state {
+                        TaskState::Started => None,
+                        TaskState::Pausing => {
+                            let (sender, receiver) = oneshot::channel();
+                            inner.resume_sender = Some(sender);
+
+                            inner.state = TaskState::Paused;
+
+                            Some(receiver)
+                        }
+                        TaskState::Stopped | TaskState::Cancelled => {
+                            gst_trace!(RUNTIME_CAT, "Stopping task loop");
+                            break;
+                        }
+                        TaskState::Paused => {
+                            unreachable!("The Paused state is controlled by the loop");
+                        }
+                        other => {
+                            unreachable!("Task loop iteration in state {:?}", other);
+                        }
                     }
-                    other => unreachable!("Unexpected Task state {:?}", other),
+                };
+
+                if let Some(resume_receiver) = resume_receiver.take() {
+                    gst_trace!(RUNTIME_CAT, "Task loop paused");
+
+                    let _ = resume_receiver.await;
+
+                    gst_trace!(RUNTIME_CAT, "Resuming task loop");
+                    inner_clone.lock().unwrap().state = TaskState::Started;
                 }
 
                 if func().await == glib::Continue(false) {
@@ -309,12 +378,15 @@ impl Task {
                             .map(|h| h.task_id() == task_id)
                             .unwrap_or(false)
                     {
-                        gst_trace!(RUNTIME_CAT, "Pausing task loop");
-                        inner.state = TaskState::Paused;
+                        gst_trace!(RUNTIME_CAT, "Exiting task loop");
+                        inner.state = TaskState::Cancelled;
                     }
 
                     break;
                 }
+
+                // Make sure the loop can be aborted even if `func` never goes `Pending`.
+                yield_now().await;
             }
 
             // Once the loop function is finished we can forget the corresponding
@@ -332,6 +404,7 @@ impl Task {
                 {
                     inner.abort_handle = None;
                     inner.loop_handle = None;
+                    inner.state = TaskState::Stopped;
                 }
             }
 
@@ -351,11 +424,29 @@ impl Task {
         gst_debug!(RUNTIME_CAT, "Task Started");
     }
 
+    /// Requests the `Task` loop to pause.
+    ///
+    /// If an iteration is in progress, it will run to completion,
+    /// then no more iteration will be executed before `start` is called again.
+    pub fn pause(&self) {
+        let mut inner = self.0.lock().unwrap();
+        if inner.state != TaskState::Started {
+            gst_log!(RUNTIME_CAT, "Task not started");
+            return;
+        }
+
+        inner.state = TaskState::Pausing;
+        gst_debug!(RUNTIME_CAT, "Pause requested");
+    }
+
     /// Cancels the `Task` so that it stops running as soon as possible.
     pub fn cancel(&self) {
         let mut inner = self.0.lock().unwrap();
-        if inner.state != TaskState::Started {
-            gst_log!(RUNTIME_CAT, "Task already paused or stopped");
+        if inner.state != TaskState::Started
+            && inner.state != TaskState::Paused
+            && inner.state != TaskState::Pausing
+        {
+            gst_log!(RUNTIME_CAT, "Task not Started nor Paused");
             return;
         }
 
@@ -366,14 +457,16 @@ impl Task {
             abort_handle.abort();
         }
 
-        inner.state = TaskState::Paused;
+        inner.resume_sender = None;
+
+        inner.state = TaskState::Cancelled;
     }
 
     /// Stops the `Started` `Task` and wait for it to finish.
     pub fn stop(&self) {
         let mut inner = self.0.lock().unwrap();
-        if inner.state == TaskState::Stopped {
-            gst_log!(RUNTIME_CAT, "Task already stopped");
+        if inner.state == TaskState::Stopped || inner.state == TaskState::Preparing {
+            gst_log!(RUNTIME_CAT, "Task loop already stopped");
             return;
         }
 
@@ -388,6 +481,9 @@ impl Task {
 
         // And now wait for it to actually stop
         let loop_handle = inner.loop_handle.take();
+
+        inner.resume_sender = None;
+
         let context = inner.context.as_ref().unwrap().clone();
         drop(inner);
 
@@ -549,5 +645,75 @@ mod tests {
 
         task.unprepare().unwrap();
         gst_debug!(RUNTIME_CAT, "task test: unprepared");
+    }
+
+    #[tokio::test]
+    async fn pause_start() {
+        use gst::gst_error;
+
+        gst::init().unwrap();
+
+        let context = Context::acquire("task_pause_start", 2).unwrap();
+
+        let task = Task::default();
+        task.prepare(context).unwrap();
+
+        let (iter_sender, mut iter_receiver) = mpsc::channel(0);
+        let iter_sender = Arc::new(Mutex::new(iter_sender));
+
+        let (mut complete_sender, complete_receiver) = mpsc::channel(0);
+        let complete_receiver = Arc::new(Mutex::new(complete_receiver));
+
+        gst_debug!(RUNTIME_CAT, "task_pause_start: starting");
+        task.start(move || {
+            let iter_sender = Arc::clone(&iter_sender);
+            let complete_receiver = Arc::clone(&complete_receiver);
+            async move {
+                gst_debug!(RUNTIME_CAT, "task_pause_start: entering iteration");
+                iter_sender.lock().await.send(()).await.unwrap();
+
+                gst_debug!(
+                    RUNTIME_CAT,
+                    "task_pause_start: iteration awaiting completion"
+                );
+                complete_receiver.lock().await.next().await.unwrap();
+                gst_debug!(RUNTIME_CAT, "task_pause_start: iteration complete");
+                glib::Continue(true)
+            }
+        });
+
+        gst_debug!(RUNTIME_CAT, "task_pause_start: awaiting 1st iteration");
+        iter_receiver.next().await.unwrap();
+
+        task.pause();
+
+        gst_debug!(
+            RUNTIME_CAT,
+            "task_pause_start: sending 1st iteration completion"
+        );
+        complete_sender.send(()).await.unwrap();
+
+        // Loop held on
+        iter_receiver.try_next().unwrap_err();
+
+        task.start(|| {
+            gst_error!(
+                RUNTIME_CAT,
+                "task_pause_start: reached start to resume closure"
+            );
+            future::pending()
+        });
+
+        gst_debug!(RUNTIME_CAT, "task_pause_start: awaiting 2d iteration");
+        iter_receiver.next().await.unwrap();
+
+        gst_debug!(
+            RUNTIME_CAT,
+            "task_pause_start: sending 2d iteration completion"
+        );
+        complete_sender.send(()).await.unwrap();
+
+        task.stop();
+        task.unprepare().unwrap();
     }
 }
