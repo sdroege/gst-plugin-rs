@@ -550,13 +550,28 @@ impl ObjectImpl for InputSelector {
                 let pad = value.get::<gst::Pad>().expect("type checked upstream");
                 let mut state = self.state.lock().unwrap();
                 let pads = self.pads.lock().unwrap();
-                if let Some(pad) = pad {
+                let mut old_pad = None;
+                if let Some(ref pad) = pad {
                     if pads.sink_pads.get(&pad).is_some() {
-                        state.active_sinkpad = Some(pad);
+                        old_pad = state.active_sinkpad.clone();
+                        state.active_sinkpad = Some(pad.clone());
                         state.switched_pad = true;
                     }
                 } else {
                     state.active_sinkpad = None;
+                }
+
+                drop(pads);
+                drop(state);
+
+                if let Some(old_pad) = old_pad {
+                    if Some(&old_pad) != pad.as_ref() {
+                        let _ = old_pad.push_event(gst::Event::new_reconfigure().build());
+                    }
+                }
+
+                if let Some(pad) = pad {
+                    let _ = pad.push_event(gst::Event::new_reconfigure().build());
                 }
             }
             _ => unimplemented!(),
