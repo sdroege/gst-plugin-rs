@@ -175,21 +175,14 @@ static PROPERTIES: [subclass::Property; 11] = [
 
 const REQWEST_CLIENT_CONTEXT: &str = "gst.reqwest.client";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, GBoxed)]
+#[gboxed(type_name = "ReqwestClientContext")]
 struct ClientContext(Arc<ClientContextInner>);
 
 #[derive(Debug)]
 struct ClientContextInner {
     client: Client,
 }
-
-impl glib::subclass::boxed::BoxedType for ClientContext {
-    const NAME: &'static str = "ReqwestClientContext";
-
-    glib_boxed_type!();
-}
-
-glib_boxed_derive_traits!(ClientContext);
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]

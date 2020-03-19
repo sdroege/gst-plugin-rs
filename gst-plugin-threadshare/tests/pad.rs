@@ -22,7 +22,8 @@ use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
 use glib;
-use glib::{glib_boxed_derive_traits, glib_boxed_type, glib_object_impl, glib_object_subclass};
+use glib::GBoxed;
+use glib::{glib_object_impl, glib_object_subclass};
 
 use gst;
 use gst::prelude::*;
@@ -439,16 +440,11 @@ enum Item {
     Event(gst::Event),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, GBoxed)]
+#[gboxed(type_name = "TsTestItemSender")]
 struct ItemSender {
     sender: mpsc::Sender<Item>,
 }
-impl glib::subclass::boxed::BoxedType for ItemSender {
-    const NAME: &'static str = "TsTestItemSender";
-
-    glib_boxed_type!();
-}
-glib_boxed_derive_traits!(ItemSender);
 
 static SINK_PROPERTIES: [glib::subclass::Property; 1] =
     [glib::subclass::Property("sender", |name| {
