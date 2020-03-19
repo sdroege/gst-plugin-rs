@@ -80,8 +80,8 @@ fn test_parse() {
         );
 
         let data = buf.map_readable().unwrap();
-        let s =
-            std::str::from_utf8(&*data).expect(&format!("Non-UTF8 data for {}th buffer", i + 1));
+        let s = std::str::from_utf8(&*data)
+            .unwrap_or_else(|_| panic!("Non-UTF8 data for {}th buffer", i + 1));
         assert_eq!(e.2, s, "Unexpected data for {}th buffer", i + 1);
     }
 

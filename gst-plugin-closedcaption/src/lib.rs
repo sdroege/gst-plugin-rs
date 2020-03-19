@@ -36,6 +36,8 @@ extern crate pretty_assertions;
 
 mod cea608tott;
 #[allow(non_camel_case_types, non_upper_case_globals)]
+#[allow(clippy::redundant_static_lifetimes, clippy::unreadable_literal)]
+#[allow(clippy::useless_transmute, clippy::trivially_copy_pass_by_ref)]
 pub mod cea608tott_ffi;
 mod line_reader;
 mod mcc_enc;

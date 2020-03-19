@@ -484,6 +484,8 @@ impl VideoEncoderImpl for Rav1Enc {
         Ok(())
     }
 
+    // For the colorimetry mapping below
+    #[allow(clippy::wildcard_in_or_patterns)]
     fn set_format(
         &self,
         element: &gst_video::VideoEncoder,

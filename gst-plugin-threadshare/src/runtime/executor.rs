@@ -133,7 +133,7 @@ pub fn block_on<Fut: Future>(future: Fut) -> Fut::Output {
         *cur_ctx.borrow_mut() = Some(context.downgrade());
 
         let res = futures::executor::block_on(async move {
-            let res = CURRENT_TASK_ID
+            CURRENT_TASK_ID
                 .scope(TaskId(0), async move {
                     let task_id = CURRENT_TASK_ID.try_with(|task_id| *task_id).ok();
                     assert_eq!(task_id, Some(TaskId(0)));
@@ -148,9 +148,7 @@ pub fn block_on<Fut: Future>(future: Fut) -> Fut::Output {
 
                     res
                 })
-                .await;
-
-            res
+                .await
         });
 
         *cur_ctx.borrow_mut() = None;

@@ -484,7 +484,7 @@ impl ElementImpl for FallbackSwitch {
         let agg = element.downcast_ref::<gst_base::Aggregator>().unwrap();
         let fallback_sink_templ = agg.get_pad_template("fallback_sink").unwrap();
         if templ != &fallback_sink_templ
-            || (name.is_some() && name.as_ref().map(String::as_str) != Some("fallback_sink"))
+            || (name.is_some() && name.as_deref() != Some("fallback_sink"))
         {
             gst_error!(CAT, obj: agg, "Wrong pad template or name");
             return None;
