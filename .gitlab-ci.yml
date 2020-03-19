@@ -1,4 +1,7 @@
-include: "https://gitlab.freedesktop.org/gstreamer/gst-ci/raw/master/gitlab/ci_template.yml"
+stages:
+  - "lint"
+  - "test"
+  - "extras"
 
 .tarball_setup:
   variables:
@@ -58,9 +61,7 @@ include: "https://gitlab.freedesktop.org/gstreamer/gst-ci/raw/master/gitlab/ci_t
 
 .cargo test:
   extends: '.tarball_setup'
-  stage: "build"
-  variables:
-    GIT_STRATEGY: 'fetch'
+  stage: "test"
   script:
     - rustc --version
     - cargo build --color=always --all
@@ -89,9 +90,7 @@ test nightly:
 
 rustfmt:
   image: "rust:slim-buster"
-  stage: "preparation"
-  variables:
-    GIT_STRATEGY: 'fetch'
+  stage: "lint"
   script:
     - rustup component add rustfmt
     - cargo fmt --version
@@ -100,9 +99,7 @@ rustfmt:
 clippy:
   extends: '.tarball_setup'
   image: "rust:slim-buster"
-  stage: 'test'
-  variables:
-    GIT_STRATEGY: 'fetch'
+  stage: 'extras'
   script:
     - rustup component add clippy-preview
     - cargo clippy --color=always --all --all-features --all-targets -- -A clippy::redundant_pattern_matching -A clippy::single_match -A clippy::cast_lossless
@@ -110,9 +107,7 @@ clippy:
 audit:
   extends: '.tarball_setup'
   image: "rust:slim-buster"
-  stage: 'test'
-  variables:
-    GIT_STRATEGY: 'fetch'
+  stage: 'extras'
   only:
     - schedules
   script:
