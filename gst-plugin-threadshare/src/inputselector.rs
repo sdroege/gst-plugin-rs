@@ -37,9 +37,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::u32;
 
+use crate::get_current_running_time;
 use crate::runtime::prelude::*;
 use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
-use crate::get_current_running_time;
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
@@ -340,22 +340,31 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
         match query.view_mut() {
             QueryView::Latency(ref mut q) => {
                 let mut ret = true;
-                let mut min_latency: gst::ClockTime = 0.into();
-                let mut max_latency: gst::ClockTime = 0.into();
-                let sinkpad = {
-                    let state = inputselector.state.lock().unwrap();
-                    state.active_sinkpad.clone()
+                let mut min_latency = 0.into();
+                let mut max_latency = gst::CLOCK_TIME_NONE;
+                let pads = {
+                    let pads = inputselector.pads.lock().unwrap();
+                    pads.sink_pads
+                        .iter()
+                        .map(|p| p.0.clone())
+                        .collect::<Vec<_>>()
                 };
 
-                if let Some(sinkpad) = sinkpad {
+                for pad in pads {
                     let mut peer_query = gst::query::Query::new_latency();
 
-                    ret = sinkpad.peer_query(&mut peer_query);
+                    ret = pad.peer_query(&mut peer_query);
 
                     if ret {
-                        let (_, min, max) = peer_query.get_result();
-                        min_latency = min;
-                        max_latency = max;
+                        let (live, min, max) = peer_query.get_result();
+                        if live {
+                            min_latency = std::cmp::max(min, min_latency);
+                            if max_latency.is_none() && max.is_some() {
+                                max_latency = max;
+                            } else if max_latency.is_some() && max.is_some() {
+                                max_latency = std::cmp::min(max, max_latency);
+                            }
+                        }
                     }
                 }
 
@@ -644,6 +653,10 @@ impl ElementImpl for InputSelector {
         }
 
         pads.sink_pads.insert(ret.clone(), sink_pad);
+        drop(pads);
+        drop(state);
+
+        let _ = element.post_message(&gst::Message::new_latency().src(Some(element)).build());
 
         Some(ret)
     }
@@ -653,6 +666,9 @@ impl ElementImpl for InputSelector {
         let sink_pad = pads.sink_pads.remove(pad).unwrap();
         sink_pad.unprepare();
         element.remove_pad(pad).unwrap();
+        drop(pads);
+
+        let _ = element.post_message(&gst::Message::new_latency().src(Some(element)).build());
     }
 }
 
