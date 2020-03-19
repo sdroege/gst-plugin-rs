@@ -206,10 +206,9 @@ impl Harness {
                             return state.get_current();
                         }
                         MessageView::Error(err) => {
-                            use std::error::Error;
                             panic!(
                                 "Got error: {} ({})",
-                                err.get_error().description(),
+                                err.get_error(),
                                 err.get_debug().unwrap_or_else(|| String::from("None"))
                             );
                         }
@@ -251,10 +250,9 @@ impl Harness {
 
                     match msg.view() {
                         MessageView::Error(err) => {
-                            use std::error::Error;
                             panic!(
                                 "Got error: {} ({})",
-                                err.get_error().description(),
+                                err.get_error(),
                                 err.get_debug().unwrap_or_else(|| String::from("None"))
                             );
                         }
@@ -292,11 +290,9 @@ impl Harness {
 
                     match msg.view() {
                         MessageView::Error(err) => {
-                            use std::error::Error;
-
                             panic!(
                                 "Got error: {} ({})",
-                                err.get_error().description(),
+                                err.get_error(),
                                 err.get_debug().unwrap_or_else(|| String::from("None"))
                             );
                         }
