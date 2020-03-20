@@ -77,12 +77,12 @@ impl Cea608ToTt {
             }
         };
 
-        let pts = buffer.get_pts();
-        if pts.is_none() {
+        let buffer_pts = buffer.get_pts();
+        if buffer_pts.is_none() {
             gst_error!(CAT, obj: pad, "Require timestamped buffers");
             return Err(gst::FlowError::Error);
         }
-        let pts = (pts.unwrap() as f64) / 1_000_000_000.0;
+        let pts = (buffer_pts.unwrap() as f64) / 1_000_000_000.0;
 
         let data = buffer.map_readable().map_err(|_| {
             gst_error!(CAT, obj: pad, "Can't map buffer readable");
@@ -96,7 +96,7 @@ impl Cea608ToTt {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        match state
+        let previous_text = match state
             .caption_frame
             .decode((data[0] as u16) << 8 | data[1] as u16, pts)
         {
@@ -105,32 +105,34 @@ impl Cea608ToTt {
                 gst_error!(CAT, obj: pad, "Failed to decode closed caption packet");
                 return Ok(gst::FlowSuccess::Ok);
             }
-            Ok(Status::Ready) => {
-                gst_debug!(CAT, obj: pad, "Have ready closed caption packet");
+            Ok(Status::Clear) => {
+                gst_debug!(CAT, obj: pad, "Clearing previous closed caption packet");
+                state.previous_text.take()
             }
-        }
+            Ok(Status::Ready) => {
+                gst_debug!(CAT, obj: pad, "Have new closed caption packet");
+                let text = match state.caption_frame.to_text() {
+                    Ok(text) => text,
+                    Err(_) => {
+                        gst_error!(CAT, obj: pad, "Failed to convert caption frame to text");
+                        return Ok(gst::FlowSuccess::Ok);
+                    }
+                };
 
-        let text = match state.caption_frame.to_text() {
-            Ok(text) => text,
-            Err(_) => {
-                gst_error!(CAT, obj: pad, "Failed to convert caption frame to text");
-                return Ok(gst::FlowSuccess::Ok);
+                state.previous_text.replace((buffer_pts, text))
             }
         };
 
-        let timestamp =
-            gst::ClockTime::from((state.caption_frame.timestamp() * 1_000_000_000.0) as u64);
-
-        let previous_text = match state.previous_text.replace((timestamp, text)) {
+        let previous_text = match previous_text {
             Some(previous_text) => previous_text,
             None => {
-                gst_debug!(CAT, obj: pad, "Have no previous text yet");
+                gst_debug!(CAT, obj: pad, "Have no previous text");
                 return Ok(gst::FlowSuccess::Ok);
             }
         };
 
-        let duration = if timestamp > previous_text.0 {
-            timestamp - previous_text.0
+        let duration = if buffer_pts > previous_text.0 {
+            buffer_pts - previous_text.0
         } else {
             0.into()
         };
@@ -516,6 +518,7 @@ use std::mem;
 enum Status {
     Ok,
     Ready,
+    Clear,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -541,6 +544,7 @@ impl CaptionFrame {
             match res {
                 ffi::libcaption_stauts_t_LIBCAPTION_OK => Ok(Status::Ok),
                 ffi::libcaption_stauts_t_LIBCAPTION_READY => Ok(Status::Ready),
+                ffi::libcaption_stauts_t_LIBCAPTION_CLEAR => Ok(Status::Clear),
                 _ => Err(Error),
             }
         }
@@ -556,10 +560,6 @@ impl CaptionFrame {
 
             String::from_utf8(data).map_err(|_| Error)
         }
-    }
-
-    fn timestamp(&self) -> f64 {
-        self.0.timestamp
     }
 }
 

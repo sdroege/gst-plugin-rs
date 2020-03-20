@@ -42,28 +42,26 @@ fn test_parse() {
     let buf = gst::Buffer::from_mut_slice(Vec::from(data));
     assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
 
-    // Check the first 6 output buffers
-    let expected: [(gst::ClockTime, gst::ClockTime, &'static str); 6] = [
-        (0.into(), 33_366_666.into(), ""),
+    // Check the first 4 output buffers
+    let expected: [(gst::ClockTime, gst::ClockTime, &'static str); 4] = [
         (
-            33_366_666.into(),
-            15_048_366_667.into(),
+            15_048_366_666.into(),
+            3_236_566_667.into(),
             "From New York,\r\nthis is Democracy Now!",
         ),
-        (15_081_733_333.into(), 3_236_566_667.into(), ""),
         (
-            18_318_300_000.into(),
-            700_700_000.into(),
+            18_985_633_333.into(),
+            1_234_566_667.into(),
             "Yes, I’m supporting\r\nDonald Trump.",
         ),
         (
-            19_019_000_000.into(),
-            1_234_566_666.into(),
+            20_220_200_000.into(),
+            2_168_833_333.into(),
             "I’m doing so as enthusiastically\r\nas I can,",
         ),
         (
-            20_253_566_666.into(),
-            2_168_833_334.into(),
+            22_389_033_333.into(),
+            2_235_566_667.into(),
             "even the fact I think\r\nhe’s a terrible human being.",
         ),
     ];
