@@ -47,7 +47,6 @@ struct State {
     need_segment: bool,
     pending_events: Vec<gst::Event>,
     framerate: Option<gst::Fraction>,
-    start_position: gst::ClockTime,
     last_position: gst::ClockTime,
     last_timecode: Option<gst_video::ValidVideoTimeCode>,
 }
@@ -62,7 +61,6 @@ impl Default for State {
             need_segment: true,
             pending_events: Vec::new(),
             framerate: None,
-            start_position: gst::CLOCK_TIME_NONE,
             last_position: gst::CLOCK_TIME_NONE,
             last_timecode: None,
         }
@@ -145,22 +143,6 @@ impl State {
         element: &gst::Element,
     ) {
         let nsecs = gst::ClockTime::from(timecode.nsec_since_daily_jam());
-        if self.start_position.is_none() {
-            self.start_position = nsecs;
-        }
-
-        let nsecs = if nsecs < self.start_position {
-            gst_fixme!(
-                CAT,
-                obj: element,
-                "New position {} < start position {}",
-                nsecs,
-                self.start_position
-            );
-            self.start_position
-        } else {
-            nsecs - self.start_position
-        };
 
         if nsecs >= self.last_position {
             self.last_position = nsecs;
@@ -392,7 +374,6 @@ impl SccParse {
                 state.parser.reset();
                 state.need_segment = true;
                 state.pending_events.clear();
-                state.start_position = gst::ClockTime::from_seconds(0);
                 state.last_position = gst::ClockTime::from_seconds(0);
                 state.last_timecode = None;
 
