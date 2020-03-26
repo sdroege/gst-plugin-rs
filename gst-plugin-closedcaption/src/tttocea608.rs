@@ -38,6 +38,7 @@ fn is_specialna(cc_data: u16) -> bool {
     0x1130 == (0x7770 & cc_data)
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn eia608_from_utf8_1(c: &[u8; 5]) -> u16 {
     assert!(c[4] == 0);
     unsafe { ffi::eia608_from_utf8_1(c.as_ptr() as *const _, 0) }

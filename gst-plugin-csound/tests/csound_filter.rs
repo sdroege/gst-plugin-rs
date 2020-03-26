@@ -322,7 +322,7 @@ fn csound_filter_caps_negotiation() {
     // also passing the csd score to the filter element
     let mut h = build_harness(
         src_caps,
-        sink_caps.clone(),
+        sink_caps,
         // creates a csd score that defines the input and output formats on the csound side
         // the output fomart would be 1 channel audio samples at 44100
         &CSD!(ksmps, ichannels, ochannels, "ain, ain2 ins", "out ain"),
