@@ -42,7 +42,7 @@ use std::time::Duration;
 
 use crate::get_current_running_time;
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
+use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc, PadSrcRef, Task};
 
 use super::{RTPJitterBuffer, RTPJitterBufferItem, RTPPacketRateCtx};
 
@@ -662,7 +662,7 @@ impl PadSinkHandler for SinkHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         if let EventView::FlushStart(..) = event.view() {
-            jb.src_pad.cancel_task();
+            jb.task.cancel();
         }
 
         gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
@@ -961,145 +961,6 @@ impl SrcHandler {
 
         (now, Some((next_wakeup, Duration::from_nanos(delay))))
     }
-
-    fn start_task(&self, pad: PadSrcRef<'_>, element: &gst::Element) {
-        let this = self.clone();
-        let element = element.clone();
-
-        pad.start_task(move || {
-            let this = this.clone();
-            let element = element.clone();
-
-            async move {
-                let jb = JitterBuffer::from_instance(&element);
-                let (latency, context_wait) = {
-                    let settings = jb.settings.lock().unwrap();
-                    (
-                        settings.latency_ms as u64 * gst::MSECOND,
-                        settings.context_wait as u64 * gst::MSECOND,
-                    )
-                };
-
-                loop {
-                    let delay_fut = {
-                        let mut state = jb.state.lock().unwrap();
-                        let (_, next_wakeup) =
-                            this.get_next_wakeup(&element, &state, latency, context_wait);
-
-                        let (delay_fut, abort_handle) = match next_wakeup {
-                            Some((_, delay)) if delay == Duration::from_nanos(0) => (None, None),
-                            _ => {
-                                let (delay_fut, abort_handle) = abortable(async move {
-                                    match next_wakeup {
-                                        Some((_, delay)) => {
-                                            runtime::time::delay_for(delay).await;
-                                        }
-                                        None => {
-                                            future::pending::<()>().await;
-                                        }
-                                    };
-                                });
-
-                                let next_wakeup =
-                                    next_wakeup.map(|w| w.0).unwrap_or(gst::CLOCK_TIME_NONE);
-                                (Some(delay_fut), Some((next_wakeup, abort_handle)))
-                            }
-                        };
-
-                        state.wait_handle = abort_handle;
-
-                        delay_fut
-                    };
-
-                    // Got aborted, reschedule if needed
-                    if let Some(delay_fut) = delay_fut {
-                        gst_debug!(CAT, obj: &element, "Waiting");
-                        if let Err(Aborted) = delay_fut.await {
-                            gst_debug!(CAT, obj: &element, "Waiting aborted");
-                            return glib::Continue(true);
-                        }
-                    }
-
-                    let (head_pts, head_seq) = {
-                        let state = jb.state.lock().unwrap();
-                        //
-                        // Check earliest PTS as we have just taken the lock
-                        let (now, next_wakeup) =
-                            this.get_next_wakeup(&element, &state, latency, context_wait);
-
-                        gst_debug!(
-                            CAT,
-                            obj: &element,
-                            "Woke up at {}, earliest_pts {}",
-                            now,
-                            state.earliest_pts
-                        );
-
-                        if let Some((next_wakeup, _)) = next_wakeup {
-                            if next_wakeup > now {
-                                // Reschedule and wait a bit longer in the next iteration
-                                return glib::Continue(true);
-                            }
-                        } else {
-                            return glib::Continue(true);
-                        }
-
-                        let (head_pts, head_seq) = state.jbuf.borrow().peek();
-
-                        (head_pts, head_seq)
-                    };
-
-                    let res = this.pop_and_push(&element).await;
-
-                    {
-                        let mut state = jb.state.lock().unwrap();
-
-                        state.last_res = res;
-
-                        if head_pts == state.earliest_pts && head_seq == state.earliest_seqnum {
-                            let (earliest_pts, earliest_seqnum) =
-                                state.jbuf.borrow().find_earliest();
-                            state.earliest_pts = earliest_pts;
-                            state.earliest_seqnum = earliest_seqnum;
-                        }
-
-                        if res.is_ok() {
-                            // Return and reschedule if the next packet would be in the future
-                            // Check earliest PTS as we have just taken the lock
-                            let (now, next_wakeup) =
-                                this.get_next_wakeup(&element, &state, latency, context_wait);
-                            if let Some((next_wakeup, _)) = next_wakeup {
-                                if next_wakeup > now {
-                                    // Reschedule and wait a bit longer in the next iteration
-                                    return glib::Continue(true);
-                                }
-                            } else {
-                                return glib::Continue(true);
-                            }
-                        }
-                    }
-
-                    match res {
-                        Ok(_) => (),
-                        Err(gst::FlowError::Eos) => {
-                            gst_debug!(CAT, obj: &element, "Pushing EOS event",);
-                            let event = gst::Event::new_eos().build();
-                            let _ = jb.src_pad.push_event(event).await;
-                            return glib::Continue(false);
-                        }
-                        Err(gst::FlowError::Flushing) => {
-                            gst_debug!(CAT, obj: &element, "Flushing",);
-                            return glib::Continue(false);
-                        }
-                        Err(err) => {
-                            gst_error!(CAT, obj: &element, "Error {}", err,);
-                            return glib::Continue(false);
-                        }
-                    }
-                }
-            }
-        });
-    }
 }
 
 impl PadSrcHandler for SrcHandler {
@@ -1118,7 +979,7 @@ impl PadSrcHandler for SrcHandler {
 
         match event.view() {
             EventView::FlushStart(..) => {
-                jb.src_pad.cancel_task();
+                jb.task.cancel();
             }
             EventView::FlushStop(..) => {
                 jb.flush_stop(element);
@@ -1252,6 +1113,7 @@ struct JitterBuffer {
     src_pad: PadSrc,
     sink_pad_handler: SinkHandler,
     src_pad_handler: SrcHandler,
+    task: Task,
     state: StdMutex<State>,
     settings: StdMutex<Settings>,
 }
@@ -1281,15 +1143,14 @@ impl JitterBuffer {
             Context::acquire(&settings.context, settings.context_wait).unwrap()
         };
 
-        self.src_pad
-            .prepare(context, &self.src_pad_handler)
-            .map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Error preparing src_pad: {:?}", err]
-                )
-            })?;
+        self.task.prepare(context).map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Error preparing Task: {:?}", err]
+            )
+        })?;
 
+        self.src_pad.prepare(&self.src_pad_handler);
         self.sink_pad.prepare(&self.sink_pad_handler);
 
         gst_info!(CAT, obj: element, "Prepared");
@@ -1300,8 +1161,9 @@ impl JitterBuffer {
     fn unprepare(&self, element: &gst::Element) {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
+        self.task.unprepare().unwrap();
         self.sink_pad.unprepare();
-        let _ = self.src_pad.unprepare();
+        self.src_pad.unprepare();
 
         gst_debug!(CAT, obj: element, "Unprepared");
     }
@@ -1313,10 +1175,160 @@ impl JitterBuffer {
         self.sink_pad_handler.clear();
         self.src_pad_handler.clear();
 
-        self.src_pad_handler
-            .start_task(self.src_pad.as_ref(), element);
+        self.start_task(element);
 
         gst_debug!(CAT, obj: element, "Started");
+    }
+
+    fn start_task(&self, element: &gst::Element) {
+        let src_pad_handler = self.src_pad_handler.clone();
+        let element = element.clone();
+
+        self.task.start(move || {
+            let src_pad_handler = src_pad_handler.clone();
+            let element = element.clone();
+
+            async move {
+                let jb = JitterBuffer::from_instance(&element);
+                let (latency, context_wait) = {
+                    let settings = jb.settings.lock().unwrap();
+                    (
+                        settings.latency_ms as u64 * gst::MSECOND,
+                        settings.context_wait as u64 * gst::MSECOND,
+                    )
+                };
+
+                loop {
+                    let delay_fut = {
+                        let mut state = jb.state.lock().unwrap();
+                        let (_, next_wakeup) = src_pad_handler.get_next_wakeup(
+                            &element,
+                            &state,
+                            latency,
+                            context_wait,
+                        );
+
+                        let (delay_fut, abort_handle) = match next_wakeup {
+                            Some((_, delay)) if delay == Duration::from_nanos(0) => (None, None),
+                            _ => {
+                                let (delay_fut, abort_handle) = abortable(async move {
+                                    match next_wakeup {
+                                        Some((_, delay)) => {
+                                            runtime::time::delay_for(delay).await;
+                                        }
+                                        None => {
+                                            future::pending::<()>().await;
+                                        }
+                                    };
+                                });
+
+                                let next_wakeup =
+                                    next_wakeup.map(|w| w.0).unwrap_or(gst::CLOCK_TIME_NONE);
+                                (Some(delay_fut), Some((next_wakeup, abort_handle)))
+                            }
+                        };
+
+                        state.wait_handle = abort_handle;
+
+                        delay_fut
+                    };
+
+                    // Got aborted, reschedule if needed
+                    if let Some(delay_fut) = delay_fut {
+                        gst_debug!(CAT, obj: &element, "Waiting");
+                        if let Err(Aborted) = delay_fut.await {
+                            gst_debug!(CAT, obj: &element, "Waiting aborted");
+                            return glib::Continue(true);
+                        }
+                    }
+
+                    let (head_pts, head_seq) = {
+                        let state = jb.state.lock().unwrap();
+                        //
+                        // Check earliest PTS as we have just taken the lock
+                        let (now, next_wakeup) = src_pad_handler.get_next_wakeup(
+                            &element,
+                            &state,
+                            latency,
+                            context_wait,
+                        );
+
+                        gst_debug!(
+                            CAT,
+                            obj: &element,
+                            "Woke up at {}, earliest_pts {}",
+                            now,
+                            state.earliest_pts
+                        );
+
+                        if let Some((next_wakeup, _)) = next_wakeup {
+                            if next_wakeup > now {
+                                // Reschedule and wait a bit longer in the next iteration
+                                return glib::Continue(true);
+                            }
+                        } else {
+                            return glib::Continue(true);
+                        }
+
+                        let (head_pts, head_seq) = state.jbuf.borrow().peek();
+
+                        (head_pts, head_seq)
+                    };
+
+                    let res = src_pad_handler.pop_and_push(&element).await;
+
+                    {
+                        let mut state = jb.state.lock().unwrap();
+
+                        state.last_res = res;
+
+                        if head_pts == state.earliest_pts && head_seq == state.earliest_seqnum {
+                            let (earliest_pts, earliest_seqnum) =
+                                state.jbuf.borrow().find_earliest();
+                            state.earliest_pts = earliest_pts;
+                            state.earliest_seqnum = earliest_seqnum;
+                        }
+
+                        if res.is_ok() {
+                            // Return and reschedule if the next packet would be in the future
+                            // Check earliest PTS as we have just taken the lock
+                            let (now, next_wakeup) = src_pad_handler.get_next_wakeup(
+                                &element,
+                                &state,
+                                latency,
+                                context_wait,
+                            );
+                            if let Some((next_wakeup, _)) = next_wakeup {
+                                if next_wakeup > now {
+                                    // Reschedule and wait a bit longer in the next iteration
+                                    return glib::Continue(true);
+                                }
+                            } else {
+                                return glib::Continue(true);
+                            }
+                        }
+                    }
+
+                    match res {
+                        Ok(_) => (),
+                        Err(gst::FlowError::Eos) => {
+                            gst_debug!(CAT, obj: &element, "Pushing EOS event",);
+                            let event = gst::Event::new_eos().build();
+                            let _ = jb.src_pad.push_event(event).await;
+                            return glib::Continue(false);
+                        }
+                        Err(gst::FlowError::Flushing) => {
+                            gst_debug!(CAT, obj: &element, "Flushing",);
+                            return glib::Continue(false);
+                        }
+                        Err(err) => {
+                            gst_error!(CAT, obj: &element, "Error {}", err,);
+                            return glib::Continue(false);
+                        }
+                    }
+                }
+            }
+        });
     }
 
     fn stop(&self, element: &gst::Element) {
@@ -1326,7 +1338,7 @@ impl JitterBuffer {
             abort_handle.abort();
         }
 
-        self.src_pad.stop_task();
+        self.task.stop();
 
         self.src_pad_handler.clear();
         self.sink_pad_handler.clear();
@@ -1336,7 +1348,7 @@ impl JitterBuffer {
     }
 
     fn flush_stop(&self, element: &gst::Element) {
-        self.src_pad.stop_task();
+        self.task.stop();
         self.start(element);
     }
 }
@@ -1402,17 +1414,18 @@ impl ObjectSubclass for JitterBuffer {
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
-        let sink_pad = PadSink::new_from_template(&templ, Some("sink"));
-
-        let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = PadSrc::new_from_template(&templ, Some("src"));
-
         Self {
-            sink_pad,
-            src_pad,
+            sink_pad: PadSink::new(gst::Pad::new_from_template(
+                &klass.get_pad_template("sink").unwrap(),
+                Some("sink"),
+            )),
+            src_pad: PadSrc::new(gst::Pad::new_from_template(
+                &klass.get_pad_template("src").unwrap(),
+                Some("src"),
+            )),
             sink_pad_handler: SinkHandler::new(),
             src_pad_handler: SrcHandler::new(),
+            task: Task::default(),
             state: StdMutex::new(State::default()),
             settings: StdMutex::new(Settings::default()),
         }

@@ -38,16 +38,15 @@ use gst::{
 use lazy_static::lazy_static;
 
 use crate::runtime::prelude::*;
-use crate::runtime::task::Task;
-use crate::runtime::{self, Context, PadSink, PadSinkRef};
+use crate::runtime::{self, Context, PadSink, PadSinkRef, Task};
 use crate::socket::{wrap_socket, GioSocketWrapper};
 
+use std::convert::TryInto;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
+use std::string::ToString;
 use std::sync::Mutex as StdMutex;
-use std::sync::MutexGuard as StdMutexGuard;
-use std::sync::{RwLock, RwLockWriteGuard};
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use std::u16;
 use std::u8;
@@ -117,19 +116,6 @@ impl Default for Settings {
             context_wait: DEFAULT_CONTEXT_WAIT,
         }
     }
-}
-
-#[derive(Debug)]
-enum TaskItem {
-    Buffer(gst::Buffer),
-    Event(gst::Event),
-}
-
-#[derive(Debug)]
-struct UdpSink {
-    sink_pad: PadSink,
-    sink_pad_handler: UdpSinkPadHandler,
-    settings: Arc<StdMutex<Settings>>,
 }
 
 lazy_static! {
@@ -329,11 +315,16 @@ static PROPERTIES: [subclass::Property; 19] = [
 ];
 
 #[derive(Debug)]
-struct UdpSinkPadHandlerState {
+enum TaskItem {
+    Buffer(gst::Buffer),
+    Event(gst::Event),
+}
+
+#[derive(Debug)]
+struct UdpSinkPadHandlerInner {
     sync: bool,
     segment: Option<gst::Segment>,
     latency: gst::ClockTime,
-    task: Option<Task>,
     socket: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
     socket_v6: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
     clients: Arc<Vec<SocketAddr>>,
@@ -343,16 +334,12 @@ struct UdpSinkPadHandlerState {
     settings: Arc<StdMutex<Settings>>,
 }
 
-#[derive(Clone, Debug)]
-struct UdpSinkPadHandler(Arc<RwLock<UdpSinkPadHandlerState>>);
-
-impl UdpSinkPadHandler {
-    fn new(settings: Arc<StdMutex<Settings>>) -> UdpSinkPadHandler {
-        Self(Arc::new(RwLock::new(UdpSinkPadHandlerState {
+impl UdpSinkPadHandlerInner {
+    fn new(settings: Arc<StdMutex<Settings>>) -> Self {
+        UdpSinkPadHandlerInner {
             sync: DEFAULT_SYNC,
             segment: None,
             latency: gst::CLOCK_TIME_NONE,
-            task: None,
             socket: Arc::new(Mutex::new(None)),
             socket_v6: Arc::new(Mutex::new(None)),
             clients: Arc::new(vec![SocketAddr::new(
@@ -363,7 +350,134 @@ impl UdpSinkPadHandler {
             clients_to_unconfigure: vec![],
             sender: Arc::new(Mutex::new(None)),
             settings,
-        })))
+        }
+    }
+
+    fn clear_clients(
+        &mut self,
+        gst_pad: &gst::Pad,
+        clients_to_add: impl Iterator<Item = SocketAddr>,
+    ) {
+        Arc::make_mut(&mut self.clients).clear();
+
+        self.clients_to_configure = vec![];
+        self.clients_to_unconfigure = vec![];
+
+        for addr in clients_to_add {
+            self.add_client(gst_pad, addr);
+        }
+    }
+
+    fn remove_client(&mut self, gst_pad: &gst::Pad, addr: SocketAddr) {
+        if !self.clients.contains(&addr) {
+            gst_warning!(CAT, obj: gst_pad, "Not removing unknown client {:?}", &addr);
+            return;
+        }
+
+        gst_info!(CAT, obj: gst_pad, "Removing client {:?}", addr);
+
+        Arc::make_mut(&mut self.clients).retain(|addr2| addr != *addr2);
+
+        self.clients_to_unconfigure.push(addr);
+        self.clients_to_configure.retain(|addr2| addr != *addr2);
+    }
+
+    fn replace_client(
+        &mut self,
+        gst_pad: &gst::Pad,
+        addr: Option<SocketAddr>,
+        new_addr: Option<SocketAddr>,
+    ) {
+        if let Some(addr) = addr {
+            self.remove_client(gst_pad, addr);
+        }
+
+        if let Some(new_addr) = new_addr {
+            self.add_client(gst_pad, new_addr);
+        }
+    }
+
+    fn add_client(&mut self, gst_pad: &gst::Pad, addr: SocketAddr) {
+        if self.clients.contains(&addr) {
+            gst_warning!(CAT, obj: gst_pad, "Not adding client {:?} again", &addr);
+            return;
+        }
+
+        gst_info!(CAT, obj: gst_pad, "Adding client {:?}", addr);
+
+        Arc::make_mut(&mut self.clients).push(addr);
+
+        self.clients_to_configure.push(addr);
+        self.clients_to_unconfigure.retain(|addr2| addr != *addr2);
+    }
+}
+
+#[derive(Debug)]
+enum SocketQualified {
+    Ipv4(tokio::net::UdpSocket),
+    Ipv6(tokio::net::UdpSocket),
+}
+
+#[derive(Clone, Debug)]
+struct UdpSinkPadHandler(Arc<RwLock<UdpSinkPadHandlerInner>>);
+
+impl UdpSinkPadHandler {
+    fn new(settings: Arc<StdMutex<Settings>>) -> UdpSinkPadHandler {
+        Self(Arc::new(RwLock::new(UdpSinkPadHandlerInner::new(settings))))
+    }
+
+    fn set_latency(&self, latency: gst::ClockTime) {
+        self.0.write().unwrap().latency = latency;
+    }
+
+    fn prepare(&self) {
+        let mut inner = self.0.write().unwrap();
+        inner.clients_to_configure = inner.clients.to_vec();
+    }
+
+    fn prepare_socket(&self, socket: SocketQualified) {
+        let mut inner = self.0.write().unwrap();
+
+        match socket {
+            SocketQualified::Ipv4(socket) => inner.socket = Arc::new(Mutex::new(Some(socket))),
+            SocketQualified::Ipv6(socket) => inner.socket_v6 = Arc::new(Mutex::new(Some(socket))),
+        }
+    }
+
+    fn unprepare(&self) {
+        let mut inner = self.0.write().unwrap();
+        *inner = UdpSinkPadHandlerInner::new(Arc::clone(&inner.settings))
+    }
+
+    fn clear_clients(&self, gst_pad: &gst::Pad, clients_to_add: impl Iterator<Item = SocketAddr>) {
+        self.0
+            .write()
+            .unwrap()
+            .clear_clients(gst_pad, clients_to_add);
+    }
+
+    fn remove_client(&self, gst_pad: &gst::Pad, addr: SocketAddr) {
+        self.0.write().unwrap().remove_client(gst_pad, addr);
+    }
+
+    fn replace_client(
+        &self,
+        gst_pad: &gst::Pad,
+        addr: Option<SocketAddr>,
+        new_addr: Option<SocketAddr>,
+    ) {
+        self.0
+            .write()
+            .unwrap()
+            .replace_client(gst_pad, addr, new_addr);
+    }
+
+    fn add_client(&self, gst_pad: &gst::Pad, addr: SocketAddr) {
+        self.0.write().unwrap().add_client(gst_pad, addr);
+    }
+
+    fn get_clients(&self) -> Vec<SocketAddr> {
+        (*self.0.read().unwrap().clients).clone()
     }
 
     fn configure_client(
@@ -511,32 +625,32 @@ impl UdpSinkPadHandler {
             socket_v6,
             settings,
         ) = {
-            let mut state = self.0.write().unwrap();
-            let do_sync = state.sync;
+            let mut inner = self.0.write().unwrap();
+            let do_sync = inner.sync;
             let mut rtime: gst::ClockTime = 0.into();
 
-            if let Some(segment) = &state.segment {
+            if let Some(segment) = &inner.segment {
                 if let Some(segment) = segment.downcast_ref::<gst::format::Time>() {
                     rtime = segment.to_running_time(buffer.get_pts());
-                    if state.latency.is_some() {
-                        rtime += state.latency;
+                    if inner.latency.is_some() {
+                        rtime += inner.latency;
                     }
                 }
             }
 
-            let clients_to_configure = mem::replace(&mut state.clients_to_configure, vec![]);
-            let clients_to_unconfigure = mem::replace(&mut state.clients_to_unconfigure, vec![]);
+            let clients_to_configure = mem::replace(&mut inner.clients_to_configure, vec![]);
+            let clients_to_unconfigure = mem::replace(&mut inner.clients_to_unconfigure, vec![]);
 
-            let settings = state.settings.lock().unwrap().clone();
+            let settings = inner.settings.lock().unwrap().clone();
 
             (
                 do_sync,
                 rtime,
-                Arc::clone(&state.clients),
+                Arc::clone(&inner.clients),
                 clients_to_configure,
                 clients_to_unconfigure,
-                Arc::clone(&state.socket),
-                Arc::clone(&state.socket_v6),
+                Arc::clone(&inner.socket),
+                Arc::clone(&inner.socket_v6),
                 settings,
             )
         };
@@ -642,62 +756,9 @@ impl UdpSinkPadHandler {
                 let _ = element.post_message(&gst::Message::new_eos().src(Some(element)).build());
             }
             EventView::Segment(e) => {
-                let mut state = self.0.write().unwrap();
-                state.segment = Some(e.get_segment().clone());
+                self.0.write().unwrap().segment = Some(e.get_segment().clone());
             }
             _ => (),
-        }
-    }
-
-    fn unprepare(&self) {
-        if let Some(task) = &self.0.read().unwrap().task {
-            task.unprepare().unwrap();
-        }
-    }
-
-    fn stop_task(&self) {
-        if let Some(task) = &self.0.read().unwrap().task {
-            task.stop();
-        }
-    }
-
-    fn start_task(&self, element: &gst::Element) {
-        let (sender, receiver) = mpsc::channel(0);
-        self.0.write().unwrap().sender = Arc::new(Mutex::new(Some(sender)));
-
-        if let Some(task) = &self.0.read().unwrap().task {
-            let receiver = Arc::new(Mutex::new(receiver));
-            let this = self.clone();
-            let element_clone = element.clone();
-
-            task.start(move || {
-                let receiver = Arc::clone(&receiver);
-                let element = element_clone.clone();
-                let this = this.clone();
-                async move {
-                    match receiver.lock().await.next().await {
-                        Some(TaskItem::Buffer(buffer)) => {
-                            match this.render(&element, buffer).await {
-                                Err(err) => {
-                                    gst_element_error!(
-                                        element,
-                                        gst::StreamError::Failed,
-                                        ["Failed to render item, stopping task: {}", err]
-                                    );
-
-                                    glib::Continue(false)
-                                }
-                                _ => glib::Continue(true),
-                            }
-                        }
-                        Some(TaskItem::Event(event)) => {
-                            this.handle_event(&element, event).await;
-                            glib::Continue(true)
-                        }
-                        None => glib::Continue(false),
-                    }
-                }
-            });
         }
     }
 }
@@ -752,15 +813,16 @@ impl PadSinkHandler for UdpSinkPadHandler {
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
         let sender = Arc::clone(&self.0.read().unwrap().sender);
-        let this = self.clone();
         let element = element.clone();
 
         async move {
             if let EventView::FlushStop(_) = event.view() {
-                this.start_task(&element);
+                let udpsink = UdpSink::from_instance(&element);
+                let _ = udpsink.start(&element);
             } else if let Some(sender) = sender.lock().await.as_mut() {
                 sender.send(TaskItem::Event(event)).await.unwrap();
             }
+
             true
         }
         .boxed()
@@ -769,35 +831,49 @@ impl PadSinkHandler for UdpSinkPadHandler {
     fn sink_event(
         &self,
         _pad: &PadSinkRef,
-        _udpsink: &UdpSink,
-        _element: &gst::Element,
+        udpsink: &UdpSink,
+        element: &gst::Element,
         event: gst::Event,
     ) -> bool {
-        match event.view() {
-            EventView::FlushStart(..) => {
-                self.stop_task();
-            }
-            _ => (),
+        if let EventView::FlushStart(..) = event.view() {
+            let _ = udpsink.stop(&element);
         }
 
         true
     }
 }
 
+#[derive(Debug)]
+enum SocketFamily {
+    Ipv4,
+    Ipv6,
+}
+
+#[derive(Debug)]
+struct UdpSink {
+    sink_pad: PadSink,
+    sink_pad_handler: UdpSinkPadHandler,
+    task: Task,
+    settings: Arc<StdMutex<Settings>>,
+}
+
 impl UdpSink {
-    fn prepare_socket_family(
+    fn prepare_socket(
         &self,
+        family: SocketFamily,
         context: &Context,
         element: &gst::Element,
-        ipv6: bool,
     ) -> Result<(), gst::ErrorMessage> {
         let mut settings = self.settings.lock().unwrap();
 
-        let socket = if let Some(ref wrapped_socket) = if ipv6 {
-            &settings.socket_v6
-        } else {
-            &settings.socket
-        } {
+        let wrapped_socket = match family {
+            SocketFamily::Ipv4 => &settings.socket,
+            SocketFamily::Ipv6 => &settings.socket_v6,
+        };
+
+        let socket_qualified: SocketQualified;
+
+        if let Some(ref wrapped_socket) = wrapped_socket {
             use std::net::UdpSocket;
 
             let socket: UdpSocket;
@@ -820,18 +896,20 @@ impl UdpSink {
                 })
             })?;
 
-            if ipv6 {
-                settings.used_socket_v6 = Some(wrapped_socket.clone());
-            } else {
-                settings.used_socket = Some(wrapped_socket.clone());
+            match family {
+                SocketFamily::Ipv4 => {
+                    settings.used_socket = Some(wrapped_socket.clone());
+                    socket_qualified = SocketQualified::Ipv4(socket);
+                }
+                SocketFamily::Ipv6 => {
+                    settings.used_socket_v6 = Some(wrapped_socket.clone());
+                    socket_qualified = SocketQualified::Ipv6(socket);
+                }
             }
-
-            socket
         } else {
-            let bind_addr = if ipv6 {
-                &settings.bind_address_v6
-            } else {
-                &settings.bind_address
+            let bind_addr = match family {
+                SocketFamily::Ipv4 => &settings.bind_address,
+                SocketFamily::Ipv6 => &settings.bind_address_v6,
             };
 
             let bind_addr: IpAddr = bind_addr.parse().map_err(|err| {
@@ -841,19 +919,17 @@ impl UdpSink {
                 )
             })?;
 
-            let bind_port = if ipv6 {
-                settings.bind_port_v6
-            } else {
-                settings.bind_port
+            let bind_port = match family {
+                SocketFamily::Ipv4 => settings.bind_port,
+                SocketFamily::Ipv6 => settings.bind_port_v6,
             };
 
             let saddr = SocketAddr::new(bind_addr, bind_port as u16);
             gst_debug!(CAT, obj: element, "Binding to {:?}", saddr);
 
-            let builder = if ipv6 {
-                net2::UdpBuilder::new_v6()
-            } else {
-                net2::UdpBuilder::new_v4()
+            let builder = match family {
+                SocketFamily::Ipv4 => net2::UdpBuilder::new_v4(),
+                SocketFamily::Ipv6 => net2::UdpBuilder::new_v6(),
             };
 
             let builder = match builder {
@@ -863,7 +939,10 @@ impl UdpSink {
                         CAT,
                         obj: element,
                         "Failed to create {} socket builder: {}",
-                        if ipv6 { "IPv6" } else { "IPv4" },
+                        match family {
+                            SocketFamily::Ipv4 => "IPv4",
+                            SocketFamily::Ipv6 => "IPv6",
+                        },
                         err
                     );
                     return Ok(());
@@ -897,33 +976,19 @@ impl UdpSink {
                 })?;
             }
 
-            if ipv6 {
-                settings.used_socket_v6 = Some(wrapper);
-            } else {
-                settings.used_socket = Some(wrapper);
+            match family {
+                SocketFamily::Ipv4 => {
+                    settings.used_socket = Some(wrapper);
+                    socket_qualified = SocketQualified::Ipv4(socket)
+                }
+                SocketFamily::Ipv6 => {
+                    settings.used_socket_v6 = Some(wrapper);
+                    socket_qualified = SocketQualified::Ipv6(socket)
+                }
             }
-
-            socket
-        };
-
-        let mut state = self.sink_pad_handler.0.write().unwrap();
-
-        if ipv6 {
-            state.socket_v6 = Arc::new(Mutex::new(Some(socket)));
-        } else {
-            state.socket = Arc::new(Mutex::new(Some(socket)));
         }
 
-        Ok(())
-    }
-
-    fn prepare_sockets(
-        &self,
-        context: &Context,
-        element: &gst::Element,
-    ) -> Result<(), gst::ErrorMessage> {
-        self.prepare_socket_family(context, element, false)?;
-        self.prepare_socket_family(context, element, true)?;
+        self.sink_pad_handler.prepare_socket(socket_qualified);
 
         Ok(())
     }
@@ -942,20 +1007,18 @@ impl UdpSink {
             })?
         };
 
-        self.sink_pad.prepare(&self.sink_pad_handler);
-        self.prepare_sockets(&context, element).unwrap();
+        self.sink_pad_handler.prepare();
+        self.prepare_socket(SocketFamily::Ipv4, &context, element)?;
+        self.prepare_socket(SocketFamily::Ipv6, &context, element)?;
 
-        let task = Task::default();
-        task.prepare(context).map_err(|err| {
+        self.task.prepare(context).map_err(|err| {
             gst_error_msg!(
-                gst::ResourceError::OpenWrite,
-                ["Failed to start task: {}", err]
+                gst::ResourceError::OpenRead,
+                ["Error preparing Task: {:?}", err]
             )
         })?;
 
-        let mut state = self.sink_pad_handler.0.write().unwrap();
-        state.task = Some(task);
-        state.clients_to_configure = state.clients.to_vec();
+        self.sink_pad.prepare(&self.sink_pad_handler);
 
         gst_debug!(CAT, obj: element, "Started preparing");
 
@@ -965,105 +1028,108 @@ impl UdpSink {
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
+        self.task.unprepare().unwrap();
         self.sink_pad_handler.unprepare();
         self.sink_pad.unprepare();
 
         gst_debug!(CAT, obj: element, "Unprepared");
-        Ok(())
-    }
-
-    fn start(&self, element: &gst::Element) -> Result<(), ()> {
-        gst_debug!(CAT, obj: element, "Starting");
-
-        self.sink_pad_handler.start_task(&element);
 
         Ok(())
     }
 
     fn stop(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(CAT, obj: element, "Stopping");
-
-        self.sink_pad_handler.stop_task();
-
+        self.task.stop();
         gst_debug!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
 
-    fn clear_clients(
-        &self,
-        element: &gst::Element,
-        state: &mut RwLockWriteGuard<'_, UdpSinkPadHandlerState>,
-        settings: &StdMutexGuard<'_, Settings>,
-    ) {
-        let clients = Arc::make_mut(&mut state.clients);
-        clients.clear();
+    fn start(&self, element: &gst::Element) -> Result<(), ()> {
+        gst_debug!(CAT, obj: element, "Starting");
 
-        state.clients_to_configure = vec![];
-        state.clients_to_unconfigure = vec![];
+        let sink_pad_handler = self.sink_pad_handler.clone();
+        let element_clone = element.clone();
 
-        if let Some(host) = &settings.host {
-            self.add_client(&element, state, &host, settings.port as u16);
-        }
-    }
+        let (sender, receiver) = mpsc::channel(0);
+        let receiver = Arc::new(Mutex::new(receiver));
 
-    fn remove_client(
-        &self,
-        element: &gst::Element,
-        state: &mut RwLockWriteGuard<'_, UdpSinkPadHandlerState>,
-        host: &str,
-        port: u16,
-    ) {
-        let addr: IpAddr = match host.parse() {
-            Err(err) => {
-                gst_error!(CAT, obj: element, "Failed to parse host {}: {}", host, err);
-                return;
+        sink_pad_handler.0.write().unwrap().sender = Arc::new(Mutex::new(Some(sender)));
+
+        self.task.start(move || {
+            let receiver = Arc::clone(&receiver);
+            let element = element_clone.clone();
+            let sink_pad_handler = sink_pad_handler.clone();
+
+            async move {
+                match receiver.lock().await.next().await {
+                    Some(TaskItem::Buffer(buffer)) => {
+                        match sink_pad_handler.render(&element, buffer).await {
+                            Err(err) => {
+                                gst_element_error!(
+                                    element,
+                                    gst::StreamError::Failed,
+                                    ["Failed to render item, stopping task: {}", err]
+                                );
+
+                                glib::Continue(false)
+                            }
+                            _ => glib::Continue(true),
+                        }
+                    }
+                    Some(TaskItem::Event(event)) => {
+                        sink_pad_handler.handle_event(&element, event).await;
+                        glib::Continue(true)
+                    }
+                    None => glib::Continue(false),
+                }
             }
-            Ok(addr) => addr,
-        };
-        let addr = SocketAddr::new(addr, port);
+        });
 
-        if !state.clients.contains(&addr) {
-            gst_warning!(CAT, obj: element, "Not removing unknown client {:?}", &addr);
-            return;
-        }
+        Ok(())
+    }
+}
 
-        gst_info!(CAT, obj: element, "Removing client {:?}", addr);
-
-        let clients = Arc::make_mut(&mut state.clients);
-        clients.retain(|addr2| addr != *addr2);
-        state.clients_to_unconfigure.push(addr);
-        state.clients_to_configure.retain(|addr2| addr != *addr2);
+impl UdpSink {
+    fn clear_clients(&self, clients_to_add: impl Iterator<Item = SocketAddr>) {
+        self.sink_pad_handler
+            .clear_clients(&self.sink_pad.gst_pad(), clients_to_add);
     }
 
-    fn add_client(
-        &self,
-        element: &gst::Element,
-        state: &mut RwLockWriteGuard<'_, UdpSinkPadHandlerState>,
-        host: &str,
-        port: u16,
-    ) {
-        let addr: IpAddr = match host.parse() {
-            Err(err) => {
-                gst_error!(CAT, obj: element, "Failed to parse host {}: {}", host, err);
-                return;
-            }
-            Ok(addr) => addr,
-        };
-        let addr = SocketAddr::new(addr, port);
-
-        if state.clients.contains(&addr) {
-            gst_warning!(CAT, obj: element, "Not adding client {:?} again", &addr);
-            return;
-        }
-
-        gst_info!(CAT, obj: element, "Adding client {:?}", addr);
-
-        let clients = Arc::make_mut(&mut state.clients);
-        clients.push(addr);
-        state.clients_to_configure.push(addr);
-        state.clients_to_unconfigure.retain(|addr2| addr != *addr2);
+    fn remove_client(&self, addr: SocketAddr) {
+        self.sink_pad_handler
+            .remove_client(&self.sink_pad.gst_pad(), addr);
     }
+
+    fn replace_client(&self, addr: Option<SocketAddr>, new_addr: Option<SocketAddr>) {
+        self.sink_pad_handler
+            .replace_client(&self.sink_pad.gst_pad(), addr, new_addr);
+    }
+
+    fn add_client(&self, addr: SocketAddr) {
+        self.sink_pad_handler
+            .add_client(&self.sink_pad.gst_pad(), addr);
+    }
+}
+
+fn try_into_socket_addr(element: &gst::Element, host: &str, port: u32) -> Result<SocketAddr, ()> {
+    let addr: IpAddr = match host.parse() {
+        Err(err) => {
+            gst_error!(CAT, obj: element, "Failed to parse host {}: {}", host, err);
+            return Err(());
+        }
+        Ok(addr) => addr,
+    };
+
+    let port: u16 = match port.try_into() {
+        Err(err) => {
+            gst_error!(CAT, obj: element, "Invalid port {}: {}", port, err);
+            return Err(());
+        }
+        Ok(port) => port,
+    };
+
+    Ok(SocketAddr::new(addr, port))
 }
 
 impl ObjectSubclass for UdpSink {
@@ -1109,12 +1175,12 @@ impl ObjectSubclass for UdpSink {
                 let port = args[2]
                     .get::<i32>()
                     .expect("signal arg")
-                    .expect("missing signal arg");
+                    .expect("missing signal arg") as u32;
 
-                let udpsink = Self::from_instance(&element);
-                let mut state = udpsink.sink_pad_handler.0.write().unwrap();
-
-                udpsink.add_client(&element, &mut state, &host, port as u16);
+                if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
+                    let udpsink = Self::from_instance(&element);
+                    udpsink.add_client(addr);
+                }
 
                 None
             },
@@ -1137,15 +1203,15 @@ impl ObjectSubclass for UdpSink {
                 let port = args[2]
                     .get::<i32>()
                     .expect("signal arg")
-                    .expect("missing signal arg");
+                    .expect("missing signal arg") as u32;
 
                 let udpsink = Self::from_instance(&element);
-
-                let mut state = udpsink.sink_pad_handler.0.write().unwrap();
                 let settings = udpsink.settings.lock().unwrap();
 
-                if Some(&host) != settings.host.as_ref() || port != settings.port as i32 {
-                    udpsink.remove_client(&element, &mut state, &host, port as u16);
+                if Some(&host) != settings.host.as_ref() || port != settings.port {
+                    if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
+                        udpsink.remove_client(addr);
+                    }
                 }
 
                 None
@@ -1164,10 +1230,13 @@ impl ObjectSubclass for UdpSink {
                     .expect("missing signal arg");
 
                 let udpsink = Self::from_instance(&element);
-                let mut state = udpsink.sink_pad_handler.0.write().unwrap();
                 let settings = udpsink.settings.lock().unwrap();
+                let current_client = settings
+                    .host
+                    .iter()
+                    .filter_map(|host| try_into_socket_addr(&element, host, settings.port).ok());
 
-                udpsink.clear_clients(&element, &mut state, &settings);
+                udpsink.clear_clients(current_client);
 
                 None
             },
@@ -1177,14 +1246,15 @@ impl ObjectSubclass for UdpSink {
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
-        let sink_pad = PadSink::new_from_template(&templ, Some("sink"));
         let settings = Arc::new(StdMutex::new(Settings::default()));
-        let sink_pad_handler = UdpSinkPadHandler::new(Arc::clone(&settings));
 
         Self {
-            sink_pad,
-            sink_pad_handler,
+            sink_pad: PadSink::new(gst::Pad::new_from_template(
+                &klass.get_pad_template("sink").unwrap(),
+                Some("sink"),
+            )),
+            sink_pad_handler: UdpSinkPadHandler::new(Arc::clone(&settings)),
+            task: Task::default(),
             settings,
         }
     }
@@ -1200,33 +1270,39 @@ impl ObjectImpl for UdpSink {
         let mut settings = self.settings.lock().unwrap();
         match *prop {
             subclass::Property("host", ..) => {
-                let mut state = self.sink_pad_handler.0.write().unwrap();
-                if let Some(host) = &settings.host {
-                    self.remove_client(&element, &mut state, &host, settings.port as u16);
-                }
+                let current_client = settings
+                    .host
+                    .as_ref()
+                    .and_then(|host| try_into_socket_addr(&element, host, settings.port).ok());
 
-                settings.host = value.get().expect("type checked upstream");
+                let new_host = value.get().expect("type checked upstream");
 
-                if let Some(host) = &settings.host {
-                    self.add_client(&element, &mut state, &host, settings.port as u16);
-                }
+                let new_client = new_host
+                    .and_then(|host| try_into_socket_addr(&element, host, settings.port).ok());
+
+                self.replace_client(current_client, new_client);
+
+                settings.host = new_host.map(ToString::to_string);
             }
             subclass::Property("port", ..) => {
-                let mut state = self.sink_pad_handler.0.write().unwrap();
-                if let Some(host) = &settings.host {
-                    self.remove_client(&element, &mut state, &host, settings.port as u16);
-                }
+                let current_client = settings
+                    .host
+                    .as_ref()
+                    .and_then(|host| try_into_socket_addr(&element, host, settings.port).ok());
 
-                settings.port = value.get_some().expect("type checked upstream");
+                let new_port = value.get_some().expect("type checked upstream");
 
-                if let Some(host) = &settings.host {
-                    self.add_client(&element, &mut state, &host, settings.port as u16);
-                }
+                let new_client = settings
+                    .host
+                    .as_ref()
+                    .and_then(|host| try_into_socket_addr(&element, host, new_port).ok());
+
+                self.replace_client(current_client, new_client);
+
+                settings.port = new_port;
             }
             subclass::Property("sync", ..) => {
                 settings.sync = value.get_some().expect("type checked upstream");
-                let mut state = self.sink_pad_handler.0.write().unwrap();
-                state.sync = settings.sync;
             }
             subclass::Property("bind-address", ..) => {
                 settings.bind_address = value
@@ -1284,21 +1360,35 @@ impl ObjectImpl for UdpSink {
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
-                let mut state = self.sink_pad_handler.0.write().unwrap();
-                let clients = clients.split(',');
-                self.clear_clients(element, &mut state, &settings);
-                drop(settings);
 
-                for client in clients {
-                    let split: Vec<&str> = client.rsplitn(2, ':').collect();
+                let current_client = settings
+                    .host
+                    .iter()
+                    .filter_map(|host| try_into_socket_addr(&element, host, settings.port).ok());
 
-                    if split.len() == 2 {
-                        match split[0].parse::<u16>() {
-                            Ok(port) => self.add_client(element, &mut state, split[1], port),
-                            Err(_) => (),
-                        }
+                let clients_iter = current_client.chain(clients.split(',').filter_map(|client| {
+                    let rsplit: Vec<&str> = client.rsplitn(2, ':').collect();
+
+                    if rsplit.len() == 2 {
+                        rsplit[0]
+                            .parse::<u32>()
+                            .map_err(|err| {
+                                gst_error!(
+                                    CAT,
+                                    obj: element,
+                                    "Invalid port {}: {}",
+                                    rsplit[0],
+                                    err
+                                );
+                            })
+                            .and_then(|port| try_into_socket_addr(&element, rsplit[1], port))
+                            .ok()
+                    } else {
+                        None
                     }
-                }
+                }));
+
+                self.clear_clients(clients_iter);
             }
             subclass::Property("context", ..) => {
                 settings.context = value
@@ -1351,10 +1441,13 @@ impl ObjectImpl for UdpSink {
             subclass::Property("ttl-mc", ..) => Ok(settings.ttl_mc.to_value()),
             subclass::Property("qos-dscp", ..) => Ok(settings.qos_dscp.to_value()),
             subclass::Property("clients", ..) => {
-                let state = self.sink_pad_handler.0.read().unwrap();
+                let clients: Vec<String> = self
+                    .sink_pad_handler
+                    .get_clients()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect();
 
-                let clients: Vec<String> =
-                    state.clients.iter().map(|addr| addr.to_string()).collect();
                 Ok(clients.join(",").to_value())
             }
             subclass::Property("context", ..) => Ok(settings.context.to_value()),
@@ -1406,9 +1499,7 @@ impl ElementImpl for UdpSink {
     fn send_event(&self, _element: &gst::Element, event: gst::Event) -> bool {
         match event.view() {
             EventView::Latency(ev) => {
-                let mut state = self.sink_pad_handler.0.write().unwrap();
-                state.latency = ev.get_latency();
-
+                self.sink_pad_handler.set_latency(ev.get_latency());
                 self.sink_pad.gst_pad().push_event(event)
             }
             EventView::Step(..) => false,

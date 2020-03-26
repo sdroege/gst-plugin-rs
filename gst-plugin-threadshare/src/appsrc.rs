@@ -1,4 +1,5 @@
 // Copyright (C) 2018 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2019-2020 François Laignel <fengalin@free.fr>
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Library General Public
@@ -40,7 +41,7 @@ use std::sync::Mutex as StdMutex;
 use std::u32;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSrc, PadSrcRef};
+use crate::runtime::{Context, PadSrc, PadSrcRef, Task};
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
@@ -152,134 +153,35 @@ impl Default for AppSrcPadHandlerState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct AppSrcPadHandlerInner {
     state: FutMutex<AppSrcPadHandlerState>,
     configured_caps: StdMutex<Option<gst::Caps>>,
-    receiver: FutMutex<mpsc::Receiver<StreamItem>>,
 }
 
-impl AppSrcPadHandlerInner {
-    fn new(receiver: mpsc::Receiver<StreamItem>, caps: Option<gst::Caps>) -> Self {
-        AppSrcPadHandlerInner {
-            state: FutMutex::new(AppSrcPadHandlerState {
-                caps,
-                ..Default::default()
-            }),
-            configured_caps: StdMutex::new(None),
-            receiver: FutMutex::new(receiver),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct AppSrcPadHandler(Arc<AppSrcPadHandlerInner>);
 
 impl AppSrcPadHandler {
-    fn new(receiver: mpsc::Receiver<StreamItem>, caps: Option<gst::Caps>) -> AppSrcPadHandler {
-        AppSrcPadHandler(Arc::new(AppSrcPadHandlerInner::new(receiver, caps)))
-    }
-
-    fn reset(&self, pad: &PadSrcRef<'_>) {
-        // Precondition: task must be stopped
-        // TODO: assert the task state when Task & PadSrc are separated
-
-        gst_debug!(CAT, obj: pad.gst_pad(), "Resetting handler");
-
-        *self.0.state.try_lock().expect("State locked elsewhere") = Default::default();
-        *self.0.configured_caps.lock().unwrap() = None;
-
-        self.flush(pad);
-
-        gst_debug!(CAT, obj: pad.gst_pad(), "Handler reset");
-    }
-
-    fn flush(&self, pad: &PadSrcRef<'_>) {
-        // Precondition: task must be stopped
-        // TODO: assert the task state when Task & PadSrc are separated
-
-        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
-
-        // Purge the channel
-        let mut receiver = self
-            .0
-            .receiver
-            .try_lock()
-            .expect("Channel receiver is locked elsewhere");
-        loop {
-            match receiver.try_next() {
-                Ok(Some(_item)) => {
-                    gst_log!(CAT, obj: pad.gst_pad(), "Dropping pending item");
-                }
-                Err(_) => {
-                    gst_log!(CAT, obj: pad.gst_pad(), "No more pending item");
-                    break;
-                }
-                Ok(None) => {
-                    panic!("Channel sender dropped");
-                }
-            }
-        }
-
+    fn prepare(&self, caps: Option<gst::Caps>) {
         self.0
             .state
             .try_lock()
-            .expect("state is locked elsewhere")
-            .need_segment = true;
-
-        gst_debug!(CAT, obj: pad.gst_pad(), "Flushed");
+            .expect("State locked elsewhere")
+            .caps = caps;
     }
 
-    fn start_task(&self, pad: PadSrcRef<'_>, element: &gst::Element) {
-        let this = self.clone();
-        let pad_weak = pad.downgrade();
-        let element = element.clone();
+    fn reset(&self) {
+        *self.0.state.try_lock().expect("State locked elsewhere") = Default::default();
+        *self.0.configured_caps.lock().unwrap() = None;
+    }
 
-        pad.start_task(move || {
-            let this = this.clone();
-            let pad_weak = pad_weak.clone();
-            let element = element.clone();
-            async move {
-                let item = this.0.receiver.lock().await.next().await;
-
-                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
-
-                let item = match item {
-                    Some(item) => item,
-                    None => {
-                        gst_log!(CAT, obj: pad.gst_pad(), "SrcPad channel aborted");
-                        return glib::Continue(false);
-                    }
-                };
-
-                match this.push_item(&pad, &element, item).await {
-                    Ok(_) => {
-                        gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed item");
-                        glib::Continue(true)
-                    }
-                    Err(gst::FlowError::Eos) => {
-                        gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
-                        let eos = gst::Event::new_eos().build();
-                        pad.push_event(eos).await;
-                        glib::Continue(false)
-                    }
-                    Err(gst::FlowError::Flushing) => {
-                        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
-                        glib::Continue(false)
-                    }
-                    Err(err) => {
-                        gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
-                        gst_element_error!(
-                            &element,
-                            gst::StreamError::Failed,
-                            ("Internal data stream error"),
-                            ["streaming stopped, reason {}", err]
-                        );
-                        glib::Continue(false)
-                    }
-                }
-            }
-        });
+    fn set_need_segment(&self) {
+        self.0
+            .state
+            .try_lock()
+            .expect("State locked elsewhere")
+            .need_segment = true;
     }
 
     async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &gst::Element) {
@@ -429,9 +331,11 @@ enum AppSrcState {
 #[derive(Debug)]
 struct AppSrc {
     src_pad: PadSrc,
-    src_pad_handler: StdMutex<Option<AppSrcPadHandler>>,
+    src_pad_handler: AppSrcPadHandler,
+    task: Task,
     state: StdMutex<AppSrcState>,
     sender: StdMutex<Option<mpsc::Sender<StreamItem>>>,
+    receiver: StdMutex<Option<Arc<FutMutex<mpsc::Receiver<StreamItem>>>>>,
     settings: StdMutex<Settings>,
 }
 
@@ -439,7 +343,7 @@ impl AppSrc {
     fn push_buffer(&self, element: &gst::Element, mut buffer: gst::Buffer) -> bool {
         let state = self.state.lock().unwrap();
         if *state == AppSrcState::RejectBuffers {
-            gst_debug!(CAT, obj: element, "Rejecting buffer due to element state");
+            gst_debug!(CAT, obj: element, "Rejecting buffer due to pad state");
             return false;
         }
 
@@ -503,22 +407,25 @@ impl AppSrc {
                 )
             })?;
 
-        let max_buffers = settings.max_buffers.try_into().unwrap();
+        let max_buffers = settings.max_buffers.try_into().map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::Settings,
+                ["Invalid max-buffers: {}, {}", settings.max_buffers, err]
+            )
+        })?;
+
         let (sender, receiver) = mpsc::channel(max_buffers);
         *self.sender.lock().unwrap() = Some(sender);
+        *self.receiver.lock().unwrap() = Some(Arc::new(FutMutex::new(receiver)));
 
-        let src_pad_handler = AppSrcPadHandler::new(receiver, settings.caps.clone());
-
-        self.src_pad
-            .prepare(context, &src_pad_handler)
-            .map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Error preparing src_pads: {:?}", err]
-                )
-            })?;
-
-        *self.src_pad_handler.lock().unwrap() = Some(src_pad_handler);
+        self.task.prepare(context).map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Error preparing Task: {:?}", err]
+            )
+        })?;
+        self.src_pad_handler.prepare(settings.caps.clone());
+        self.src_pad.prepare(&self.src_pad_handler);
 
         gst_debug!(CAT, obj: element, "Prepared");
 
@@ -528,10 +435,11 @@ impl AppSrc {
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        let _ = self.src_pad.unprepare();
-        *self.src_pad_handler.lock().unwrap() = None;
-
         *self.sender.lock().unwrap() = None;
+        *self.receiver.lock().unwrap() = None;
+
+        self.task.unprepare().unwrap();
+        self.src_pad.unprepare();
 
         gst_debug!(CAT, obj: element, "Unprepared");
 
@@ -539,24 +447,49 @@ impl AppSrc {
     }
 
     fn stop(&self, element: &gst::Element) -> Result<(), ()> {
+        let mut state = self.state.lock().unwrap();
         gst_debug!(CAT, obj: element, "Stopping");
 
-        *self.state.lock().unwrap() = AppSrcState::RejectBuffers;
-
-        // Now stop the task if it was still running, blocking
-        // until this has actually happened
-        self.src_pad.stop_task();
-
-        self.src_pad_handler
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .reset(&self.src_pad.as_ref());
+        self.flush(element);
+        self.src_pad_handler.reset();
+        *state = AppSrcState::RejectBuffers;
 
         gst_debug!(CAT, obj: element, "Stopped");
 
         Ok(())
+    }
+
+    fn flush(&self, element: &gst::Element) {
+        gst_log!(CAT, obj: element, "Flushing");
+
+        self.task.stop();
+
+        let receiver = self.receiver.lock().unwrap();
+        let mut receiver = receiver
+            .as_ref()
+            .unwrap()
+            .try_lock()
+            .expect("receiver locked elsewhere");
+
+        // Purge the channel
+        loop {
+            match receiver.try_next() {
+                Ok(Some(_item)) => {
+                    gst_log!(CAT, obj: element, "Dropping pending item");
+                }
+                Err(_) => {
+                    gst_log!(CAT, obj: element, "No more pending item");
+                    break;
+                }
+                Ok(None) => {
+                    panic!("Channel sender dropped");
+                }
+            }
+        }
+
+        self.src_pad_handler.set_need_segment();
+
+        gst_log!(CAT, obj: element, "Flushed");
     }
 
     fn start(&self, element: &gst::Element) -> Result<(), ()> {
@@ -568,16 +501,70 @@ impl AppSrc {
 
         gst_debug!(CAT, obj: element, "Starting");
 
-        self.start_unchecked(element, &mut state);
+        self.start_task(element);
+        *state = AppSrcState::Started;
 
         gst_debug!(CAT, obj: element, "Started");
 
         Ok(())
     }
 
+    fn start_task(&self, element: &gst::Element) {
+        let src_pad_handler = self.src_pad_handler.clone();
+        let pad_weak = self.src_pad.downgrade();
+        let element = element.clone();
+        let receiver = Arc::clone(self.receiver.lock().unwrap().as_ref().expect("No receiver"));
+
+        self.task.start(move || {
+            let src_pad_handler = src_pad_handler.clone();
+            let pad_weak = pad_weak.clone();
+            let element = element.clone();
+            let receiver = Arc::clone(&receiver);
+
+            async move {
+                let item = receiver.lock().await.next().await;
+
+                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
+
+                let item = match item {
+                    Some(item) => item,
+                    None => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "SrcPad channel aborted");
+                        return glib::Continue(false);
+                    }
+                };
+
+                match src_pad_handler.push_item(&pad, &element, item).await {
+                    Ok(_) => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed item");
+                        glib::Continue(true)
+                    }
+                    Err(gst::FlowError::Eos) => {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
+                        let eos = gst::Event::new_eos().build();
+                        pad.push_event(eos).await;
+                        glib::Continue(false)
+                    }
+                    Err(gst::FlowError::Flushing) => {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
+                        glib::Continue(false)
+                    }
+                    Err(err) => {
+                        gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
+                        gst_element_error!(
+                            &element,
+                            gst::StreamError::Failed,
+                            ("Internal data stream error"),
+                            ["streaming stopped, reason {}", err]
+                        );
+                        glib::Continue(false)
+                    }
+                }
+            }
+        });
+    }
+
     fn flush_stop(&self, element: &gst::Element) {
-        // Keep the lock on the `state` until `flush_stop` is complete
-        // so as to prevent race conditions due to concurrent state transitions.
         let mut state = self.state.lock().unwrap();
         if *state == AppSrcState::Started {
             gst_debug!(CAT, obj: element, "Already started");
@@ -586,52 +573,28 @@ impl AppSrc {
 
         gst_debug!(CAT, obj: element, "Stopping Flush");
 
-        self.src_pad.stop_task();
-
-        self.src_pad_handler
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .flush(&self.src_pad.as_ref());
-
-        self.start_unchecked(element, &mut state);
+        self.flush(element);
+        self.start_task(element);
+        *state = AppSrcState::Started;
 
         gst_debug!(CAT, obj: element, "Flush Stopped");
     }
 
-    fn start_unchecked(&self, element: &gst::Element, state: &mut AppSrcState) {
-        self.src_pad_handler
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .start_task(self.src_pad.as_ref(), element);
-
-        *state = AppSrcState::Started;
-    }
-
     fn flush_start(&self, element: &gst::Element) {
-        // Keep the lock on the `state` until `flush_start` is complete
-        // so as to prevent race conditions due to concurrent state transitions.
         let mut state = self.state.lock().unwrap();
-
         gst_debug!(CAT, obj: element, "Starting Flush");
 
+        self.task.cancel();
         *state = AppSrcState::RejectBuffers;
-        self.src_pad.cancel_task();
 
         gst_debug!(CAT, obj: element, "Flush Started");
     }
 
     fn pause(&self, element: &gst::Element) -> Result<(), ()> {
-        // Lock the state to prevent race condition due to concurrent FlushStop
         let mut state = self.state.lock().unwrap();
-
         gst_debug!(CAT, obj: element, "Pausing");
 
-        self.src_pad.pause_task();
-
+        self.task.pause();
         *state = AppSrcState::Paused;
 
         gst_debug!(CAT, obj: element, "Paused");
@@ -706,14 +669,16 @@ impl ObjectSubclass for AppSrc {
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
-        let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = PadSrc::new_from_template(&templ, Some("src"));
-
         Self {
-            src_pad,
-            src_pad_handler: StdMutex::new(None),
+            src_pad: PadSrc::new(gst::Pad::new_from_template(
+                &klass.get_pad_template("src").unwrap(),
+                Some("src"),
+            )),
+            src_pad_handler: AppSrcPadHandler::default(),
+            task: Task::default(),
             state: StdMutex::new(AppSrcState::RejectBuffers),
             sender: StdMutex::new(None),
+            receiver: StdMutex::new(None),
             settings: StdMutex::new(Settings::default()),
         }
     }

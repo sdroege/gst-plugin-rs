@@ -50,6 +50,7 @@ pub mod pad;
 pub use pad::{PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, PadSrcWeak};
 
 pub mod task;
+pub use task::{Task, TaskState};
 
 pub mod prelude {
     pub use super::pad::{PadSinkHandler, PadSrcHandler};

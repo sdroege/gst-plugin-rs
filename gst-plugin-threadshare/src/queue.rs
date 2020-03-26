@@ -33,12 +33,11 @@ use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_t
 use lazy_static::lazy_static;
 
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::{u32, u64};
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
+use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef, Task};
 
 use super::dataqueue::{DataQueue, DataQueueItem, DataQueueState};
 
@@ -253,79 +252,10 @@ impl PadSinkHandler for QueuePadSinkHandler {
     }
 }
 
-#[derive(Debug)]
-struct QueuePadSrcHandlerInner {
-    last_res: Result<gst::FlowSuccess, gst::FlowError>,
-}
-
-impl Default for QueuePadSrcHandlerInner {
-    fn default() -> QueuePadSrcHandlerInner {
-        QueuePadSrcHandlerInner {
-            last_res: Ok(gst::FlowSuccess::Ok),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-struct QueuePadSrcHandler(Arc<StdMutex<QueuePadSrcHandlerInner>>);
+#[derive(Clone, Debug)]
+struct QueuePadSrcHandler;
 
 impl QueuePadSrcHandler {
-    fn start_task(&self, pad: PadSrcRef<'_>, element: &gst::Element, dataqueue: DataQueue) {
-        let this = self.clone();
-        let pad_weak = pad.downgrade();
-        let element = element.clone();
-        pad.start_task(move || {
-            let this = this.clone();
-            let pad_weak = pad_weak.clone();
-            let element = element.clone();
-            let mut dataqueue = dataqueue.clone();
-
-            async move {
-                let item = dataqueue.next().await;
-
-                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
-                let item = match item {
-                    Some(item) => item,
-                    None => {
-                        gst_log!(CAT, obj: pad.gst_pad(), "DataQueue Stopped");
-                        return glib::Continue(false);
-                    }
-                };
-
-                match Self::push_item(&pad, &element, item).await {
-                    Ok(()) => {
-                        gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed item");
-                        this.0.lock().unwrap().last_res = Ok(gst::FlowSuccess::Ok);
-                        glib::Continue(true)
-                    }
-                    Err(gst::FlowError::Flushing) => {
-                        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
-                        this.0.lock().unwrap().last_res = Err(gst::FlowError::Flushing);
-                        glib::Continue(false)
-                    }
-                    Err(gst::FlowError::Eos) => {
-                        gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
-                        this.0.lock().unwrap().last_res = Err(gst::FlowError::Eos);
-                        let eos = gst::Event::new_eos().build();
-                        pad.push_event(eos).await;
-                        glib::Continue(false)
-                    }
-                    Err(err) => {
-                        gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
-                        gst_element_error!(
-                            element,
-                            gst::StreamError::Failed,
-                            ("Internal data stream error"),
-                            ["streaming stopped, reason {}", err]
-                        );
-                        this.0.lock().unwrap().last_res = Err(err);
-                        glib::Continue(false)
-                    }
-                }
-            }
-        });
-    }
-
     async fn push_item(
         pad: &PadSrcRef<'_>,
         element: &gst::Element,
@@ -352,10 +282,6 @@ impl QueuePadSrcHandler {
                 Ok(())
             }
         }
-    }
-
-    fn unprepare(&self) {
-        *self.0.lock().unwrap() = QueuePadSrcHandlerInner::default();
     }
 }
 
@@ -426,9 +352,10 @@ impl PadSrcHandler for QueuePadSrcHandler {
 struct Queue {
     sink_pad: PadSink,
     src_pad: PadSrc,
-    src_pad_handler: QueuePadSrcHandler,
+    task: Task,
     dataqueue: StdMutex<Option<DataQueue>>,
     pending_queue: StdMutex<Option<PendingQueue>>,
+    last_res: StdMutex<Result<gst::FlowSuccess, gst::FlowError>>,
     settings: StdMutex<Settings>,
 }
 
@@ -598,7 +525,7 @@ impl Queue {
             wait_fut.await;
         }
 
-        self.src_pad_handler.0.lock().unwrap().last_res
+        *self.last_res.lock().unwrap()
     }
 
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
@@ -636,14 +563,14 @@ impl Queue {
                 )
             })?;
 
-        self.src_pad
-            .prepare(context, &self.src_pad_handler)
-            .map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Error joining Context: {:?}", err]
-                )
-            })?;
+        self.task.prepare(context).map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Error preparing Task: {:?}", err]
+            )
+        })?;
+
+        self.src_pad.prepare(&QueuePadSrcHandler);
         self.sink_pad.prepare(&QueuePadSinkHandler);
 
         gst_debug!(CAT, obj: element, "Prepared");
@@ -654,16 +581,39 @@ impl Queue {
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        self.src_pad.stop_task();
-
         self.sink_pad.unprepare();
-        let _ = self.src_pad.unprepare();
+        self.task.unprepare().unwrap();
+        self.src_pad.unprepare();
 
-        self.src_pad_handler.unprepare();
         *self.dataqueue.lock().unwrap() = None;
         *self.pending_queue.lock().unwrap() = None;
 
+        *self.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
+
         gst_debug!(CAT, obj: element, "Unprepared");
+
+        Ok(())
+    }
+
+    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
+        let dataqueue = self.dataqueue.lock().unwrap();
+        gst_debug!(CAT, obj: element, "Stopping");
+
+        *self.last_res.lock().unwrap() = Err(gst::FlowError::Flushing);
+
+        self.task.stop();
+
+        if let Some(dataqueue) = dataqueue.as_ref() {
+            dataqueue.pause();
+            dataqueue.clear();
+            dataqueue.stop();
+        }
+
+        if let Some(mut pending_queue) = self.pending_queue.lock().unwrap().take() {
+            pending_queue.notify_more_queue_space();
+        }
+
+        gst_debug!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -678,11 +628,72 @@ impl Queue {
 
         gst_debug!(CAT, obj: element, "Starting");
 
-        self.start_unchecked(element, dataqueue);
+        dataqueue.start();
+        *self.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
+
+        self.start_task(element, dataqueue);
 
         gst_debug!(CAT, obj: element, "Started");
 
         Ok(())
+    }
+
+    fn start_task(&self, element: &gst::Element, dataqueue: &DataQueue) {
+        let pad_weak = self.src_pad.downgrade();
+        let dataqueue = dataqueue.clone();
+        let element = element.clone();
+
+        self.task.start(move || {
+            let pad_weak = pad_weak.clone();
+            let mut dataqueue = dataqueue.clone();
+            let element = element.clone();
+
+            async move {
+                let item = dataqueue.next().await;
+
+                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
+                let item = match item {
+                    Some(item) => item,
+                    None => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "DataQueue Stopped");
+                        return glib::Continue(false);
+                    }
+                };
+
+                let queue = Queue::from_instance(&element);
+
+                match QueuePadSrcHandler::push_item(&pad, &element, item).await {
+                    Ok(()) => {
+                        gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed item");
+                        *queue.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
+                        glib::Continue(true)
+                    }
+                    Err(gst::FlowError::Flushing) => {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
+                        *queue.last_res.lock().unwrap() = Err(gst::FlowError::Flushing);
+                        glib::Continue(false)
+                    }
+                    Err(gst::FlowError::Eos) => {
+                        gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
+                        *queue.last_res.lock().unwrap() = Err(gst::FlowError::Eos);
+                        let eos = gst::Event::new_eos().build();
+                        pad.push_event(eos).await;
+                        glib::Continue(false)
+                    }
+                    Err(err) => {
+                        gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
+                        gst_element_error!(
+                            element,
+                            gst::StreamError::Failed,
+                            ("Internal data stream error"),
+                            ["streaming stopped, reason {}", err]
+                        );
+                        *queue.last_res.lock().unwrap() = Err(err);
+                        glib::Continue(false)
+                    }
+                }
+            }
+        });
     }
 
     fn flush_stop(&self, element: &gst::Element) {
@@ -699,41 +710,10 @@ impl Queue {
 
         gst_debug!(CAT, obj: element, "Stopping Flush");
 
-        self.src_pad.stop_task();
-        self.start_unchecked(element, dataqueue);
+        dataqueue.start();
+        self.start_task(element, dataqueue);
 
         gst_debug!(CAT, obj: element, "Stopped Flush");
-    }
-
-    fn start_unchecked(&self, element: &gst::Element, dataqueue: &DataQueue) {
-        dataqueue.start();
-
-        self.src_pad_handler.0.lock().unwrap().last_res = Ok(gst::FlowSuccess::Ok);
-        self.src_pad_handler
-            .start_task(self.src_pad.as_ref(), element, dataqueue.clone());
-    }
-
-    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
-        let dataqueue = self.dataqueue.lock().unwrap();
-        gst_debug!(CAT, obj: element, "Stopping");
-
-        self.src_pad.stop_task();
-
-        if let Some(dataqueue) = dataqueue.as_ref() {
-            dataqueue.pause();
-            dataqueue.clear();
-            dataqueue.stop();
-        }
-
-        if let Some(pending_queue) = self.pending_queue.lock().unwrap().as_mut() {
-            pending_queue.notify_more_queue_space();
-        }
-
-        self.src_pad_handler.0.lock().unwrap().last_res = Err(gst::FlowError::Flushing);
-
-        gst_debug!(CAT, obj: element, "Stopped");
-
-        Ok(())
     }
 }
 
@@ -777,18 +757,19 @@ impl ObjectSubclass for Queue {
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
-        let sink_pad = PadSink::new_from_template(&templ, Some("sink"));
-
-        let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = PadSrc::new_from_template(&templ, Some("src"));
-
         Self {
-            sink_pad,
-            src_pad,
-            src_pad_handler: QueuePadSrcHandler::default(),
+            sink_pad: PadSink::new(gst::Pad::new_from_template(
+                &klass.get_pad_template("sink").unwrap(),
+                Some("sink"),
+            )),
+            src_pad: PadSrc::new(gst::Pad::new_from_template(
+                &klass.get_pad_template("src").unwrap(),
+                Some("src"),
+            )),
+            task: Task::default(),
             dataqueue: StdMutex::new(None),
             pending_queue: StdMutex::new(None),
+            last_res: StdMutex::new(Ok(gst::FlowSuccess::Ok)),
             settings: StdMutex::new(Settings::default()),
         }
     }

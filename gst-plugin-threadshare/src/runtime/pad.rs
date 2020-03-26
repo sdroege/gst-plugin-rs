@@ -78,36 +78,11 @@ use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_loggable_error};
 use gst::{FlowError, FlowSuccess};
 
-use std::fmt;
 use std::marker::PhantomData;
-use std::sync;
 use std::sync::{Arc, Weak};
 
 use super::executor::{block_on_or_add_sub_task, Context};
-use super::task::Task;
 use super::RUNTIME_CAT;
-
-/// Errors related to [`PadSrc`] `Context` handling.
-///
-/// [`PadSrc`]: struct.PadSrc.html
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum PadContextError {
-    ActiveContext,
-    ActiveTask,
-}
-
-impl fmt::Display for PadContextError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            PadContextError::ActiveContext => {
-                write!(f, "The PadSrc is already operating on a Context")
-            }
-            PadContextError::ActiveTask => write!(f, "A task is still active"),
-        }
-    }
-}
-
-impl std::error::Error for PadContextError {}
 
 #[inline]
 fn event_ret_to_event_full_res(
@@ -169,10 +144,10 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
                 gst_error!(
                     RUNTIME_CAT,
                     obj: gst_pad,
-                    "Error in PadSink activate: {:?}",
+                    "Error in PadSrc activate: {:?}",
                     err
                 );
-                gst_loggable_error!(RUNTIME_CAT, "Error in PadSink activate: {:?}", err)
+                gst_loggable_error!(RUNTIME_CAT, "Error in PadSrc activate: {:?}", err)
             })
     }
 
@@ -229,14 +204,9 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
     }
 }
 
-#[derive(Default, Debug)]
-struct PadSrcState;
-
 #[derive(Debug)]
 struct PadSrcInner {
-    state: sync::Mutex<PadSrcState>,
     gst_pad: gst::Pad,
-    task: Task,
 }
 
 impl PadSrcInner {
@@ -245,11 +215,7 @@ impl PadSrcInner {
             panic!("Wrong pad direction for PadSrc");
         }
 
-        PadSrcInner {
-            state: sync::Mutex::new(PadSrcState::default()),
-            gst_pad,
-            task: Task::default(),
-        }
+        PadSrcInner { gst_pad }
     }
 }
 
@@ -329,33 +295,6 @@ impl<'a> PadSrcRef<'a> {
 
     pub async fn push_event(&self, event: gst::Event) -> bool {
         self.strong.push_event(event).await
-    }
-
-    /// `Start` the `Pad` `task`.
-    ///
-    /// The `Task` will loop on the provided `func`.
-    /// The execution occurs on the `Task`'s context.
-    pub fn start_task<F, Fut>(&self, func: F)
-    where
-        F: (FnMut() -> Fut) + Send + 'static,
-        Fut: Future<Output = glib::Continue> + Send + 'static,
-    {
-        self.strong.start_task(func);
-    }
-
-    /// Pauses the `Started` `Pad` `Task`.
-    pub fn pause_task(&self) {
-        self.strong.pause_task();
-    }
-
-    /// Cancels the `Started` `Pad` `Task`.
-    pub fn cancel_task(&self) {
-        self.strong.cancel_task();
-    }
-
-    /// Stops the `Started` `Pad` `Task`.
-    pub fn stop_task(&self) {
-        self.strong.stop_task();
     }
 
     fn activate_mode_hook(
@@ -468,30 +407,6 @@ impl PadSrcStrong {
 
         was_handled
     }
-
-    #[inline]
-    fn start_task<F, Fut>(&self, func: F)
-    where
-        F: (FnMut() -> Fut) + Send + 'static,
-        Fut: Future<Output = glib::Continue> + Send + 'static,
-    {
-        self.0.task.start(func);
-    }
-
-    #[inline]
-    fn pause_task(&self) {
-        self.0.task.pause();
-    }
-
-    #[inline]
-    fn cancel_task(&self) {
-        self.0.task.cancel();
-    }
-
-    #[inline]
-    fn stop_task(&self) {
-        self.0.task.stop();
-    }
 }
 
 /// The `PadSrc` which `Element`s must own.
@@ -511,10 +426,6 @@ impl PadSrc {
         this.set_default_activatemode_function();
 
         this
-    }
-
-    pub fn new_from_template(templ: &gst::PadTemplate, name: Option<&str>) -> Self {
-        Self::new(gst::Pad::new_from_template(templ, name))
     }
 
     pub fn as_ref(&self) -> PadSrcRef<'_> {
@@ -647,51 +558,15 @@ impl PadSrc {
             });
     }
 
-    pub fn prepare<H: PadSrcHandler>(
-        &self,
-        context: Context,
-        handler: &H,
-    ) -> Result<(), super::task::TaskError> {
-        let _state = (self.0).0.state.lock().unwrap();
+    pub fn prepare<H: PadSrcHandler>(&self, handler: &H) {
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Preparing");
 
-        (self.0).0.task.prepare(context)?;
-
         self.init_pad_functions(handler);
-
-        Ok(())
-    }
-
-    pub fn prepare_with_func<H: PadSrcHandler, F, Fut>(
-        &self,
-        context: Context,
-        handler: &H,
-        prepare_func: F,
-    ) -> Result<(), super::task::TaskError>
-    where
-        F: (FnOnce() -> Fut) + Send + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
-    {
-        let _state = (self.0).0.state.lock().unwrap();
-        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Preparing");
-
-        (self.0).0.task.prepare_with_func(context, prepare_func)?;
-
-        self.init_pad_functions(handler);
-
-        Ok(())
     }
 
     /// Releases the resources held by this `PadSrc`.
-    pub fn unprepare(&self) -> Result<(), PadContextError> {
-        let _state = (self.0).0.state.lock().unwrap();
+    pub fn unprepare(&self) {
         gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Unpreparing");
-
-        (self.0)
-            .0
-            .task
-            .unprepare()
-            .map_err(|_| PadContextError::ActiveTask)?;
 
         self.gst_pad()
             .set_activate_function(move |_gst_pad, _parent| {
@@ -704,8 +579,6 @@ impl PadSrc {
             .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
         self.gst_pad()
             .set_query_function(move |_gst_pad, _parent, _query| false);
-
-        Ok(())
     }
 
     pub async fn push(&self, buffer: gst::Buffer) -> Result<FlowSuccess, FlowError> {
@@ -718,30 +591,6 @@ impl PadSrc {
 
     pub async fn push_event(&self, event: gst::Event) -> bool {
         self.0.push_event(event).await
-    }
-
-    /// `Start` the `Pad` `task`.
-    ///
-    /// The `Task` will loop on the provided `func`.
-    /// The execution occurs on the `Task`'s context.
-    pub fn start_task<F, Fut>(&self, func: F)
-    where
-        F: (FnMut() -> Fut) + Send + 'static,
-        Fut: Future<Output = glib::Continue> + Send + 'static,
-    {
-        self.0.start_task(func);
-    }
-
-    pub fn pause_task(&self) {
-        self.0.pause_task();
-    }
-
-    pub fn cancel_task(&self) {
-        self.0.cancel_task();
-    }
-
-    pub fn stop_task(&self) {
-        self.0.stop_task();
     }
 }
 
@@ -1044,8 +893,8 @@ impl PadSink {
         this
     }
 
-    pub fn new_from_template(templ: &gst::PadTemplate, name: Option<&str>) -> Self {
-        Self::new(gst::Pad::new_from_template(templ, name))
+    pub fn as_ref(&self) -> PadSinkRef<'_> {
+        PadSinkRef::new(Arc::clone(&(self.0).0))
     }
 
     pub fn gst_pad(&self) -> &gst::Pad {

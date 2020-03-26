@@ -28,7 +28,7 @@ use glib::{glib_object_impl, glib_object_subclass};
 use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error_msg, gst_log, gst_trace};
+use gst::{gst_debug, gst_log, gst_trace};
 
 use lazy_static::lazy_static;
 
@@ -39,7 +39,7 @@ use std::u32;
 
 use crate::get_current_running_time;
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc, PadSrcRef};
+use crate::runtime::{self, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
@@ -251,11 +251,8 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
             let mut inner = this.0.lock().unwrap();
 
             // Remember the segment for later use
-            match event.view() {
-                gst::EventView::Segment(e) => {
-                    inner.segment = Some(e.get_segment().clone());
-                }
-                _ => (),
+            if let gst::EventView::Segment(e) = event.view() {
+                inner.segment = Some(e.get_segment().clone());
             }
 
             // We sent sticky events together with the next buffer once it becomes
@@ -282,18 +279,15 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         event: gst::Event,
     ) -> bool {
         /* Drop all events for now */
-        match event.view() {
-            gst::EventView::FlushStart(..) => {
-                /* Unblock downstream */
-                inputselector.src_pad.gst_pad().push_event(event.clone());
+        if let gst::EventView::FlushStart(..) = event.view() {
+            /* Unblock downstream */
+            inputselector.src_pad.gst_pad().push_event(event.clone());
 
-                let mut inner = self.0.lock().unwrap();
+            let mut inner = self.0.lock().unwrap();
 
-                if let Some(abort_handle) = inner.abort_handle.take() {
-                    abort_handle.abort();
-                }
+            if let Some(abort_handle) = inner.abort_handle.take() {
+                abort_handle.abort();
             }
-            _ => (),
         }
         true
     }
@@ -438,24 +432,7 @@ impl InputSelector {
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Preparing");
 
-        let settings = self.settings.lock().unwrap();
-
-        let context =
-            Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to acquire Context: {}", err]
-                )
-            })?;
-
-        self.src_pad
-            .prepare(context, &InputSelectorPadSrcHandler {})
-            .map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Error joining Context: {:?}", err]
-                )
-            })?;
+        self.src_pad.prepare(&InputSelectorPadSrcHandler);
 
         gst_debug!(CAT, obj: element, "Prepared");
 
@@ -466,7 +443,7 @@ impl InputSelector {
         let mut state = self.state.lock().unwrap();
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        let _ = self.src_pad.unprepare();
+        self.src_pad.unprepare();
 
         *state = State::default();
 
@@ -516,11 +493,11 @@ impl ObjectSubclass for InputSelector {
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
-        let templ = klass.get_pad_template("src").unwrap();
-        let src_pad = PadSrc::new_from_template(&templ, Some("src"));
-
         Self {
-            src_pad,
+            src_pad: PadSrc::new(gst::Pad::new_from_template(
+                &klass.get_pad_template("src").unwrap(),
+                Some("src"),
+            )),
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
             pads: Mutex::new(Pads::default()),
