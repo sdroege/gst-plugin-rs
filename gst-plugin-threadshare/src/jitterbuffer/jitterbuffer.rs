@@ -661,11 +661,8 @@ impl PadSinkHandler for SinkHandler {
 
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
-        match event.view() {
-            EventView::FlushStart(..) => {
-                jb.src_pad.cancel_task();
-            }
-            _ => (),
+        if let EventView::FlushStart(..) = event.view() {
+            jb.src_pad.cancel_task();
         }
 
         gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
@@ -1310,11 +1307,9 @@ impl JitterBuffer {
     }
 
     fn start(&self, element: &gst::Element) {
-        let mut state = self.state.lock().unwrap();
-
         gst_debug!(CAT, obj: element, "Starting");
 
-        *state = State::default();
+        *self.state.lock().unwrap() = State::default();
         self.sink_pad_handler.clear();
         self.src_pad_handler.clear();
 
@@ -1325,10 +1320,9 @@ impl JitterBuffer {
     }
 
     fn stop(&self, element: &gst::Element) {
-        let mut state = self.state.lock().unwrap();
         gst_debug!(CAT, obj: element, "Stopping");
 
-        if let Some((_, abort_handle)) = state.wait_handle.take() {
+        if let Some((_, abort_handle)) = self.state.lock().unwrap().wait_handle.take() {
             abort_handle.abort();
         }
 
@@ -1336,7 +1330,7 @@ impl JitterBuffer {
 
         self.src_pad_handler.clear();
         self.sink_pad_handler.clear();
-        *state = State::default();
+        *self.state.lock().unwrap() = State::default();
 
         gst_debug!(CAT, obj: element, "Stopped");
     }
