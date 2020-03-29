@@ -27,4 +27,4 @@ name = "csound-effect"
 path = "examples/effect_example.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { git = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs" }
+gst-plugin-version-helper = { path = "../gst-plugin-version-helper" }
