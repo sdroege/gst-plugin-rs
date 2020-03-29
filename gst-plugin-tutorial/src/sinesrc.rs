@@ -202,7 +202,7 @@ impl SineSrc {
 // up the class data
 impl ObjectSubclass for SineSrc {
     const NAME: &'static str = "RsSineSrc";
-    type ParentType = gst_base::BaseSrc;
+    type ParentType = gst_base::PushSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -518,13 +518,6 @@ impl BaseSrcImpl for SineSrc {
         use gst::QueryView;
 
         match query.view_mut() {
-            // We only work in Push mode. In Pull mode, create() could be called with
-            // arbitrary offsets and we would have to produce for that specific offset
-            QueryView::Scheduling(ref mut q) => {
-                q.set(gst::SchedulingFlags::SEQUENTIAL, 1, -1, 0);
-                q.add_scheduling_modes(&[gst::PadMode::Push]);
-                true
-            }
             // In Live mode we will have a latency equal to the number of samples in each buffer.
             // We can't output samples before they were produced, and the last sample of a buffer
             // is produced that much after the beginning, leading to this latency calculation
@@ -545,157 +538,6 @@ impl BaseSrcImpl for SineSrc {
             }
             _ => BaseSrcImplExt::parent_query(self, element, query),
         }
-    }
-
-    // Creates the audio buffers
-    fn create(
-        &self,
-        element: &gst_base::BaseSrc,
-        _offset: u64,
-        _length: u32,
-    ) -> Result<gst::Buffer, gst::FlowError> {
-        // Keep a local copy of the values of all our properties at this very moment. This
-        // ensures that the mutex is never locked for long and the application wouldn't
-        // have to block until this function returns when getting/setting property values
-        let settings = *self.settings.lock().unwrap();
-
-        // Get a locked reference to our state, i.e. the input and output AudioInfo
-        let mut state = self.state.lock().unwrap();
-        let info = match state.info {
-            None => {
-                gst_element_error!(element, gst::CoreError::Negotiation, ["Have no caps yet"]);
-                return Err(gst::FlowError::NotNegotiated);
-            }
-            Some(ref info) => info.clone(),
-        };
-
-        // If a stop position is set (from a seek), only produce samples up to that
-        // point but at most samples_per_buffer samples per buffer
-        let n_samples = if let Some(sample_stop) = state.sample_stop {
-            if sample_stop <= state.sample_offset {
-                gst_log!(CAT, obj: element, "At EOS");
-                return Err(gst::FlowError::Eos);
-            }
-
-            sample_stop - state.sample_offset
-        } else {
-            settings.samples_per_buffer as u64
-        };
-
-        // Allocate a new buffer of the required size, update the metadata with the
-        // current timestamp and duration and then fill it according to the current
-        // caps
-        let mut buffer =
-            gst::Buffer::with_size((n_samples as usize) * (info.bpf() as usize)).unwrap();
-        {
-            let buffer = buffer.get_mut().unwrap();
-
-            // Calculate the current timestamp (PTS) and the next one,
-            // and calculate the duration from the difference instead of
-            // simply the number of samples to prevent rounding errors
-            let pts = state
-                .sample_offset
-                .mul_div_floor(gst::SECOND_VAL, info.rate() as u64)
-                .unwrap()
-                .into();
-            let next_pts: gst::ClockTime = (state.sample_offset + n_samples)
-                .mul_div_floor(gst::SECOND_VAL, info.rate() as u64)
-                .unwrap()
-                .into();
-            buffer.set_pts(pts);
-            buffer.set_duration(next_pts - pts);
-
-            // Map the buffer writable and create the actual samples
-            let mut map = buffer.map_writable().unwrap();
-            let data = map.as_mut_slice();
-
-            if info.format() == gst_audio::AUDIO_FORMAT_F32 {
-                Self::process::<f32>(
-                    data,
-                    &mut state.accumulator,
-                    settings.freq,
-                    info.rate(),
-                    info.channels(),
-                    settings.volume,
-                );
-            } else {
-                Self::process::<f64>(
-                    data,
-                    &mut state.accumulator,
-                    settings.freq,
-                    info.rate(),
-                    info.channels(),
-                    settings.volume,
-                );
-            }
-        }
-        state.sample_offset += n_samples;
-        drop(state);
-
-        // If we're live, we are waiting until the time of the last sample in our buffer has
-        // arrived. This is the very reason why we have to report that much latency.
-        // A real live-source would of course only allow us to have the data available after
-        // that latency, e.g. when capturing from a microphone, and no waiting from our side
-        // would be necessary..
-        //
-        // Waiting happens based on the pipeline clock, which means that a real live source
-        // with its own clock would require various translations between the two clocks.
-        // This is out of scope for the tutorial though.
-        if element.is_live() {
-            let clock = match element.get_clock() {
-                None => return Ok(buffer),
-                Some(clock) => clock,
-            };
-
-            let segment = element
-                .get_segment()
-                .downcast::<gst::format::Time>()
-                .unwrap();
-            let base_time = element.get_base_time();
-            let running_time = segment.to_running_time(buffer.get_pts() + buffer.get_duration());
-
-            // The last sample's clock time is the base time of the element plus the
-            // running time of the last sample
-            let wait_until = running_time + base_time;
-            if wait_until.is_none() {
-                return Ok(buffer);
-            }
-
-            // Store the clock ID in our struct unless we're flushing anyway.
-            // This allows to asynchronously cancel the waiting from unlock()
-            // so that we immediately stop waiting on e.g. shutdown.
-            let mut clock_wait = self.clock_wait.lock().unwrap();
-            if clock_wait.flushing {
-                gst_debug!(CAT, obj: element, "Flushing");
-                return Err(gst::FlowError::Flushing);
-            }
-
-            let id = clock.new_single_shot_id(wait_until).unwrap();
-            clock_wait.clock_id = Some(id.clone());
-            drop(clock_wait);
-
-            gst_log!(
-                CAT,
-                obj: element,
-                "Waiting until {}, now {}",
-                wait_until,
-                clock.get_time()
-            );
-            let (res, jitter) = id.wait();
-            gst_log!(CAT, obj: element, "Waited res {:?} jitter {}", res, jitter);
-            self.clock_wait.lock().unwrap().clock_id.take();
-
-            // If the clock ID was unscheduled, unlock() was called
-            // and we should return Flushing immediately.
-            if res == Err(gst::ClockError::Unscheduled) {
-                gst_debug!(CAT, obj: element, "Flushing");
-                return Err(gst::FlowError::Flushing);
-            }
-        }
-
-        gst_debug!(CAT, obj: element, "Produced buffer {:?}", buffer);
-
-        Ok(buffer)
     }
 
     fn fixate(&self, element: &gst_base::BaseSrc, mut caps: gst::Caps) -> gst::Caps {
@@ -850,6 +692,154 @@ impl BaseSrcImpl for SineSrc {
         clock_wait.flushing = false;
 
         Ok(())
+    }
+}
+
+impl PushSrcImpl for SineSrc {
+    // Creates the audio buffers
+    fn create(&self, element: &gst_base::PushSrc) -> Result<gst::Buffer, gst::FlowError> {
+        // Keep a local copy of the values of all our properties at this very moment. This
+        // ensures that the mutex is never locked for long and the application wouldn't
+        // have to block until this function returns when getting/setting property values
+        let settings = *self.settings.lock().unwrap();
+
+        // Get a locked reference to our state, i.e. the input and output AudioInfo
+        let mut state = self.state.lock().unwrap();
+        let info = match state.info {
+            None => {
+                gst_element_error!(element, gst::CoreError::Negotiation, ["Have no caps yet"]);
+                return Err(gst::FlowError::NotNegotiated);
+            }
+            Some(ref info) => info.clone(),
+        };
+
+        // If a stop position is set (from a seek), only produce samples up to that
+        // point but at most samples_per_buffer samples per buffer
+        let n_samples = if let Some(sample_stop) = state.sample_stop {
+            if sample_stop <= state.sample_offset {
+                gst_log!(CAT, obj: element, "At EOS");
+                return Err(gst::FlowError::Eos);
+            }
+
+            sample_stop - state.sample_offset
+        } else {
+            settings.samples_per_buffer as u64
+        };
+
+        // Allocate a new buffer of the required size, update the metadata with the
+        // current timestamp and duration and then fill it according to the current
+        // caps
+        let mut buffer =
+            gst::Buffer::with_size((n_samples as usize) * (info.bpf() as usize)).unwrap();
+        {
+            let buffer = buffer.get_mut().unwrap();
+
+            // Calculate the current timestamp (PTS) and the next one,
+            // and calculate the duration from the difference instead of
+            // simply the number of samples to prevent rounding errors
+            let pts = state
+                .sample_offset
+                .mul_div_floor(gst::SECOND_VAL, info.rate() as u64)
+                .unwrap()
+                .into();
+            let next_pts: gst::ClockTime = (state.sample_offset + n_samples)
+                .mul_div_floor(gst::SECOND_VAL, info.rate() as u64)
+                .unwrap()
+                .into();
+            buffer.set_pts(pts);
+            buffer.set_duration(next_pts - pts);
+
+            // Map the buffer writable and create the actual samples
+            let mut map = buffer.map_writable().unwrap();
+            let data = map.as_mut_slice();
+
+            if info.format() == gst_audio::AUDIO_FORMAT_F32 {
+                Self::process::<f32>(
+                    data,
+                    &mut state.accumulator,
+                    settings.freq,
+                    info.rate(),
+                    info.channels(),
+                    settings.volume,
+                );
+            } else {
+                Self::process::<f64>(
+                    data,
+                    &mut state.accumulator,
+                    settings.freq,
+                    info.rate(),
+                    info.channels(),
+                    settings.volume,
+                );
+            }
+        }
+        state.sample_offset += n_samples;
+        drop(state);
+
+        // If we're live, we are waiting until the time of the last sample in our buffer has
+        // arrived. This is the very reason why we have to report that much latency.
+        // A real live-source would of course only allow us to have the data available after
+        // that latency, e.g. when capturing from a microphone, and no waiting from our side
+        // would be necessary..
+        //
+        // Waiting happens based on the pipeline clock, which means that a real live source
+        // with its own clock would require various translations between the two clocks.
+        // This is out of scope for the tutorial though.
+        if element.is_live() {
+            let clock = match element.get_clock() {
+                None => return Ok(buffer),
+                Some(clock) => clock,
+            };
+
+            let segment = element
+                .get_segment()
+                .downcast::<gst::format::Time>()
+                .unwrap();
+            let base_time = element.get_base_time();
+            let running_time = segment.to_running_time(buffer.get_pts() + buffer.get_duration());
+
+            // The last sample's clock time is the base time of the element plus the
+            // running time of the last sample
+            let wait_until = running_time + base_time;
+            if wait_until.is_none() {
+                return Ok(buffer);
+            }
+
+            // Store the clock ID in our struct unless we're flushing anyway.
+            // This allows to asynchronously cancel the waiting from unlock()
+            // so that we immediately stop waiting on e.g. shutdown.
+            let mut clock_wait = self.clock_wait.lock().unwrap();
+            if clock_wait.flushing {
+                gst_debug!(CAT, obj: element, "Flushing");
+                return Err(gst::FlowError::Flushing);
+            }
+
+            let id = clock.new_single_shot_id(wait_until).unwrap();
+            clock_wait.clock_id = Some(id.clone());
+            drop(clock_wait);
+
+            gst_log!(
+                CAT,
+                obj: element,
+                "Waiting until {}, now {}",
+                wait_until,
+                clock.get_time()
+            );
+            let (res, jitter) = id.wait();
+            gst_log!(CAT, obj: element, "Waited res {:?} jitter {}", res, jitter);
+            self.clock_wait.lock().unwrap().clock_id.take();
+
+            // If the clock ID was unscheduled, unlock() was called
+            // and we should return Flushing immediately.
+            if res == Err(gst::ClockError::Unscheduled) {
+                gst_debug!(CAT, obj: element, "Flushing");
+                return Err(gst::FlowError::Flushing);
+            }
+        }
+
+        gst_debug!(CAT, obj: element, "Produced buffer {:?}", buffer);
+
+        Ok(buffer)
     }
 }
 

@@ -6,11 +6,10 @@ In this part, a raw audio sine wave source element is going to be written. The f
 
 1.  [Boilerplate](#boilerplate)
 2.  [Caps Negotiation](#caps-negotiation)
-3.  [Query Handling](#query-handling)
-4.  [Buffer Creation](#buffer-creation)
-5.  [(Pseudo) Live Mode](#pseudo-live-mode)
-6.  [Unlocking](#unlocking)
-7.  [Seeking](#seeking)
+3.  [Buffer Creation](#buffer-creation)
+4.  [(Pseudo) Live Mode](#pseudo-live-mode)
+5.  [Unlocking](#unlocking)
+6.  [Seeking](#seeking)
 
 ### Boilerplate
 
@@ -18,7 +17,7 @@ The first part here will be all the boilerplate required to set up the element. 
 
 Our sine wave element is going to produce raw audio, with a number of channels and any possible sample rate with both 32 bit and 64 bit floating point samples. It will produce a simple sine wave with a configurable frequency, volume/mute and number of samples per audio buffer. In addition it will be possible to configure the element in (pseudo) live mode, meaning that it will only produce data in real-time according to the pipeline clock. And it will be possible to seek to any time/sample position on our source element. It will basically be a more simply version of the [`audiotestsrc`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gst-plugins-base-plugins/html/gst-plugins-base-plugins-audiotestsrc.html) element from gst-plugins-base.
 
-So let's get started with all the boilerplate. This time our element will be based on the [`BaseSrc`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseSrc.html) base class instead of [`BaseTransform`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseTransform.html).
+So let's get started with all the boilerplate. This time our element will be based on the [`PushSrc`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstPushSrc.html) base class instead of [`BaseTransform`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseTransform.html). `PushSrc` is a subclass of the [`BaseSrc`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseSrc.html) base class that only works in push mode, i.e. creates buffers as they arrive instead of allowing downstream elements to explicitly pull them.
 
 ```rust
 use glib;
@@ -148,18 +147,26 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-impl SineSrc {
-    // Called when a new instance is to be created
-    fn new(element: &BaseSrc) -> Box<BaseSrcImpl<BaseSrc>> {
-        // Initialize live-ness and notify the base class that
-        // we'd like to operate in Time format
-        element.set_live(DEFAULT_IS_LIVE);
-        element.set_format(gst::Format::Time);
+impl ObjectSubclass for SineSrc {
+    const NAME: &'static str = "RsSineSrc";
+    type ParentType = gst_base::PushSrc;
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+    type Class = subclass::simple::ClassStruct<Self>;
 
-        Box::new(Self {
+    // This macro provides some boilerplate.
+    glib_object_subclass!();
+
+    // Called when a new instance is to be created. We need to return an instance
+    // of our struct here.
+    fn new() -> Self {
+        Self {
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
-        })
+            clock_wait: Mutex::new(ClockWait {
+                clock_id: None,
+                flushing: true,
+            }),
+        }
     }
 
     // Called exactly once when registering the type. Used for
@@ -172,13 +179,22 @@ impl SineSrc {
     // will automatically instantiate pads for them.
     //
     // Our element here can output f32 and f64
-    fn class_init(klass: &mut BaseSrcClass) {
+    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+        // Set the element specific metadata. This information is what
+        // is visible from gst-inspect-1.0 and can also be programatically
+        // retrieved from the gst::Registry after initial registration
+        // without having to load the plugin in memory.
         klass.set_metadata(
             "Sine Wave Source",
             "Source/Audio",
             "Creates a sine wave",
             "Sebastian Dröge <sebastian@centricular.com>",
         );
+
+        // Create and add pad templates for our sink and source pad. These
+        // are later used for actually creating the pads and beforehand
+        // already provide information to GStreamer about all possible
+        // pads that could exist for this type.
 
         // On the src pad, we can produce F32/F64 with any sample rate
         // and any number of channels
@@ -204,7 +220,8 @@ impl SineSrc {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        );
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         // Install all our properties
@@ -212,7 +229,22 @@ impl SineSrc {
     }
 }
 
-impl ObjectImpl<BaseSrc> for SineSrc {
+impl ObjectImpl for SineSrc {
+    // This macro provides some boilerplate.
+    glib_object_impl!();
+
+    // Called right after construction of a new instance
+    fn constructed(&self, obj: &glib::Object) {
+        // Call the parent class' ::constructed() implementation first
+        self.parent_constructed(obj);
+
+        // Initialize live-ness and notify the base class that
+        // we'd like to operate in Time format
+        let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
+        basesrc.set_live(DEFAULT_IS_LIVE);
+        basesrc.set_format(gst::Format::Time);
+    }
+
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
     fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
@@ -320,9 +352,9 @@ impl ObjectImpl<BaseSrc> for SineSrc {
 }
 
 // Virtual methods of gst::Element. We override none
-impl ElementImpl<BaseSrc> for SineSrc { }
+impl ElementImpl for SineSrc { }
 
-impl BaseSrcImpl<BaseSrc> for SineSrc {
+impl BaseSrcImpl for SineSrc {
     // Called when starting, so we can initialize all stream-related state to its defaults
     fn start(&self, element: &BaseSrc) -> bool {
         // Reset state
@@ -467,35 +499,6 @@ Here we take the caps that are passed in, truncate them (i.e. remove all but the
 
 For good measure, we also fixate the number of channels to the closest value to 1, but this would already be the default behaviour anyway. And then chain up to the parent class' implementation of `fixate`, which for now basically does the same as `caps.fixate()`. After this, the caps are fixated, i.e. there is only a single `Structure` left and all fields have concrete values (no ranges or sets).
 
-### Query Handling
-
-As our source element will work by generating a new audio buffer from a specific offset, and especially works in `Time` format, we want to notify downstream elements that we don't want to run in `Pull` mode, only in `Push` mode. In addition would prefer sequential reading. However we still allow seeking later. For a source that does not know about `Time`, e.g. a file source, the format would be configured as `Bytes`. Other values than `Time` and `Bytes` generally don't make any sense.
-
-The main difference here is that otherwise the base class would ask us to produce data for arbitrary `Byte` offsets, and we would have to produce data for that. While possible in our case, it's a bit annoying and for other audio sources it's not easily possible at all.
-
-Downstream elements will try to query this very information from us, so we now have to override the default query handling of `BaseSrc` and handle the `SCHEDULING` query differently. Later we will also handle other queries differently.
-
-```rust
-    fn query(&self, element: &BaseSrc, query: &mut gst::QueryRef) -> bool {
-        use gst::QueryView;
-
-        match query.view_mut() {
-            // We only work in Push mode. In Pull mode, create() could be called with
-            // arbitrary offsets and we would have to produce for that specific offset
-            QueryView::Scheduling(ref mut q) => {
-                q.set(gst::SchedulingFlags::SEQUENTIAL, 1, -1, 0);
-                q.add_scheduling_modes(&[gst::PadMode::Push]);
-                true
-            }
-            _ => BaseSrcImplExt::parent_query(self, element, query),
-        }
-    }
-```
-
-To handle the `SCHEDULING` query specifically, we first have to match on a view (mutable because we want to modify the view) of the query check the type of the query. If it indeed is a scheduling query, we can set the `SEQUENTIAL` flag and specify that we handle only `Push` mode, then return `true` directly as we handled the query already.
-
-In all other cases we fall back to the parent class' implementation of the `query` virtual method.
-
 ### Buffer Creation
 
 Now we have everything in place for a working element, apart from the virtual method to actually generate the raw audio buffers with the sine wave. From a high-level `BaseSrc` works by calling the `create` virtual method over and over again to let the subclass produce a buffer until it returns an error or signals the end of the stream.
@@ -557,14 +560,12 @@ Now we convert all the parameters to the types we will use later, and store them
 
 The sine wave itself is calculated by `val = volume * sin(2 * PI * frequency * (i + accumulator) / rate)`, but we actually calculate it by simply increasing the accumulator by `2 * PI * frequency / rate` for every sample instead of doing the multiplication for each sample. We also make sure that the accumulator always stays between `0` and `2 * PI` to prevent any inaccuracies from floating point numbers to affect our produced samples.
 
-Now that this is done, we need to implement the `BaseSrc::create` virtual method for actually allocating the buffer, setting timestamps and other metadata and it and calling our above function.
+Now that this is done, we need to implement the `PushSrc::create` virtual method for actually allocating the buffer, setting timestamps and other metadata and it and calling our above function.
 
 ```rust
     fn create(
         &self,
-        element: &BaseSrc,
-        _offset: u64,
-        _length: u32,
+        element: &PushSrc,
     ) -> Result<gst::Buffer, gst::FlowReturn> {
         // Keep a local copy of the values of all our properties at this very moment. This
         // ensures that the mutex is never locked for long and the application wouldn't
@@ -742,7 +743,7 @@ Next we wait and then return the buffer as before.
 Now we also have to tell the base class that we're running in live mode now. This is done by calling `set_live(true)` on the base class before changing the element state from `Ready` to `Paused`. For this we override the `Element::change_state` virtual method.
 
 ```rust
-impl ElementImpl<BaseSrc> for SineSrc {
+impl ElementImpl for SineSrc {
     fn change_state(
         &self,
         element: &BaseSrc,
@@ -763,18 +764,13 @@ impl ElementImpl<BaseSrc> for SineSrc {
 
 And as a last step, we also need to notify downstream elements about our [latency](https://gstreamer.freedesktop.org/documentation/application-development/advanced/clocks.html#latency). Live elements always have to report their latency so that synchronization can work correctly. As the clock time of each buffer is equal to the time when it was created, all buffers would otherwise arrive late in the sinks (they would appear as if they should've been played already at the time when they were created). So all the sinks will have to compensate for the latency that it took from capturing to the sink, and they have to do that in a coordinated way (otherwise audio and video would be out of sync if both have different latencies). For this the pipeline is querying each sink for the latency on its own branch, and then configures a global latency on all sinks according to that.
 
-This querying is done with the `LATENCY` query, which we will now also have to handle.
+This querying is done with the `LATENCY` query, which we will have to handle in the `BaseSrc::query()` function.
 
 ```rust
     fn query(&self, element: &BaseSrc, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
         match query.view_mut() {
-            // We only work in Push mode. In Pull mode, create() could be called with
-            // arbitrary offsets and we would have to produce for that specific offset
-            QueryView::Scheduling(ref mut q) => {
-                [...]
-            }
             // In Live mode we will have a latency equal to the number of samples in each buffer.
             // We can't output samples before they were produced, and the last sample of a buffer
             // is produced that much after the beginning, leading to this latency calculation

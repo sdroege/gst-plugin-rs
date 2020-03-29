@@ -23,6 +23,7 @@ use gst::subclass::prelude::*;
 
 use gst_base;
 use gst_base::prelude::*;
+use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use crate::s3url::*;
@@ -412,14 +413,24 @@ impl BaseSrcImpl for S3Src {
         &self,
         src: &gst_base::BaseSrc,
         offset: u64,
+        buffer: Option<&mut gst::BufferRef>,
         length: u32,
-    ) -> Result<gst::Buffer, gst::FlowError> {
+    ) -> Result<CreateSuccess, gst::FlowError> {
         // FIXME: sanity check on offset and length
         let data = self.get(src, offset, u64::from(length));
 
         match data {
             /* Got data */
-            Ok(bytes) => Ok(gst::Buffer::from_slice(bytes)),
+            Ok(bytes) => {
+                if let Some(buffer) = buffer {
+                    if let Err(copied_bytes) = buffer.copy_from_slice(0, bytes.as_ref()) {
+                        buffer.set_size(copied_bytes);
+                    }
+                    Ok(CreateSuccess::FilledBuffer)
+                } else {
+                    Ok(CreateSuccess::NewBuffer(gst::Buffer::from_slice(bytes)))
+                }
+            }
             /* Interrupted */
             Err(None) => Err(gst::FlowError::Flushing),
             /* Actual Error */

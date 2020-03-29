@@ -28,8 +28,7 @@ use gst::{
 };
 use gst_audio;
 use gst_base;
-use gst_base::subclass::base_transform::BaseTransformImplExt;
-use gst_base::subclass::base_transform::GeneratedOutput;
+use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -300,7 +299,7 @@ impl CsoundFilter {
         &self,
         element: &gst_base::BaseTransform,
         state: &mut State,
-    ) -> Result<GeneratedOutput, gst::FlowError> {
+    ) -> Result<GenerateOutputSuccess, gst::FlowError> {
         let output_size = state.max_output_size(state.adapter.available());
 
         let mut output = gst::Buffer::with_size(output_size).map_err(|_| gst::FlowError::Error)?;
@@ -360,7 +359,7 @@ impl CsoundFilter {
             }
         }
 
-        Ok(GeneratedOutput::Buffer(output))
+        Ok(GenerateOutputSuccess::Buffer(output))
     }
 }
 
@@ -658,7 +657,7 @@ impl BaseTransformImpl for CsoundFilter {
     fn generate_output(
         &self,
         element: &gst_base::BaseTransform,
-    ) -> Result<GeneratedOutput, gst::FlowError> {
+    ) -> Result<GenerateOutputSuccess, gst::FlowError> {
         // Check if there are enough data in the queued buffer and adapter,
         // if it is not the case, just notify the parent class to not generate
         // an output
@@ -683,7 +682,7 @@ impl BaseTransformImpl for CsoundFilter {
             }
         }
         gst_log!(CAT, "No enough data to generate output");
-        Ok(GeneratedOutput::NoOutput)
+        Ok(GenerateOutputSuccess::NoOutput)
     }
 }
 

@@ -166,9 +166,10 @@ impl State {
     fn get_requested_buffer(
         &mut self,
         pad: &gst::Pad,
+        buffer: Option<&mut gst::BufferRef>,
         requested_size: u32,
         adapter_offset: usize,
-    ) -> Result<gst::Buffer, gst::FlowError> {
+    ) -> Result<gst::PadGetRangeSuccess, gst::FlowError> {
         let avail = self.adapter.available();
         gst_debug!(CAT, obj: pad, "Avail: {}", avail);
         gst_debug!(CAT, obj: pad, "Adapter offset: {}", adapter_offset);
@@ -179,7 +180,7 @@ impl State {
             .checked_sub(adapter_offset)
             .ok_or(gst::FlowError::Eos)?;
 
-        // if the available buffer size is smaller than the requested, its a short
+        // if the available buffer size is smaller than the requested, it's a short
         // read and return that. Else return the requested size
         let available_size = if available_buffer <= requested_size as usize {
             available_buffer
@@ -190,10 +191,15 @@ impl State {
         if available_size == 0 {
             self.adapter.clear();
 
-            // if the requested buffer was 0 sized, retunr an
+            // if the requested buffer was 0 sized, return an
             // empty buffer
             if requested_size == 0 {
-                return Ok(gst::Buffer::new());
+                if let Some(buffer) = buffer {
+                    buffer.set_size(0);
+                    return Ok(gst::PadGetRangeSuccess::FilledBuffer);
+                } else {
+                    return Ok(gst::PadGetRangeSuccess::NewBuffer(gst::Buffer::new()));
+                }
             }
 
             return Err(gst::FlowError::Eos);
@@ -204,15 +210,32 @@ impl State {
         self.adapter.flush(adapter_offset);
 
         assert!(self.adapter.available() >= available_size);
-        let buffer = self
-            .adapter
-            .take_buffer(available_size)
-            .expect("Failed to get buffer from adapter");
+        let res = if let Some(buffer) = buffer {
+            let mut map = match buffer.map_writable() {
+                Ok(map) => map,
+                Err(_) => {
+                    gst_error!(CAT, obj: pad, "Failed to map provided buffer writable");
+                    return Err(gst::FlowError::Error);
+                }
+            };
+            self.adapter.copy(0, &mut map[..available_size]);
+            if map.len() != available_size {
+                drop(map);
+                buffer.set_size(available_size);
+            }
+            gst::PadGetRangeSuccess::FilledBuffer
+        } else {
+            let buffer = self
+                .adapter
+                .take_buffer(available_size)
+                .expect("Failed to get buffer from adapter");
+            gst::PadGetRangeSuccess::NewBuffer(buffer)
+        };
 
         // Cleanup the adapter
         self.adapter.clear();
 
-        Ok(buffer)
+        Ok(res)
     }
 }
 
@@ -247,11 +270,11 @@ struct Decrypter {
 
 impl Decrypter {
     fn set_pad_functions(_sinkpad: &gst::Pad, srcpad: &gst::Pad) {
-        srcpad.set_getrange_function(|pad, parent, offset, size| {
+        srcpad.set_getrange_function(|pad, parent, offset, buffer, size| {
             Decrypter::catch_panic_pad_function(
                 parent,
                 || Err(gst::FlowError::Error),
-                |decrypter, element| decrypter.get_range(pad, element, offset, size),
+                |decrypter, element| decrypter.get_range(pad, element, offset, buffer, size),
             )
         });
 
@@ -520,8 +543,9 @@ impl Decrypter {
         pad: &gst::Pad,
         element: &gst::Element,
         offset: u64,
+        buffer: Option<&mut gst::BufferRef>,
         requested_size: u32,
-    ) -> Result<gst::Buffer, gst::FlowError> {
+    ) -> Result<gst::PadGetRangeSuccess, gst::FlowError> {
         let block_size = {
             let mut mutex_state = self.state.lock().unwrap();
             // This will only be run after READY state,
@@ -542,7 +566,7 @@ impl Decrypter {
         assert!(pull_offset <= std::u32::MAX as u64);
         let pull_offset = pull_offset as u32;
 
-        let buffer = self.pull_requested_buffer(
+        let pulled_buffer = self.pull_requested_buffer(
             pad,
             element,
             requested_size + pull_offset,
@@ -555,10 +579,10 @@ impl Decrypter {
         // and will be guaranted to be initialized
         let state = state.as_mut().unwrap();
 
-        state.decrypt_into_adapter(element, &self.srcpad, &buffer, chunk_index)?;
+        state.decrypt_into_adapter(element, &self.srcpad, &pulled_buffer, chunk_index)?;
 
         let adapter_offset = pull_offset as usize;
-        state.get_requested_buffer(&self.srcpad, requested_size, adapter_offset)
+        state.get_requested_buffer(&self.srcpad, buffer, requested_size, adapter_offset)
     }
 }
 

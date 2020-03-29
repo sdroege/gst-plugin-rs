@@ -957,13 +957,10 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             Err(None) => false,
         }
     }
+}
 
-    fn create(
-        &self,
-        src: &gst_base::BaseSrc,
-        offset: u64,
-        _length: u32,
-    ) -> Result<gst::Buffer, gst::FlowError> {
+impl PushSrcImpl for ReqwestHttpSrc {
+    fn create(&self, src: &gst_base::PushSrc) -> Result<gst::Buffer, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
         let (response, position, caps, tags) = match *state {
@@ -981,15 +978,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             }
         };
 
-        if *position != offset {
-            gst_element_error!(
-                src,
-                gst::ResourceError::Seek,
-                ["Got unexpected offset {}, expected {}", offset, position]
-            );
-
-            return Err(gst::FlowError::Error);
-        }
+        let offset = *position;
 
         let mut current_response = match response.take() {
             Some(response) => response,
@@ -1116,7 +1105,7 @@ impl URIHandlerImpl for ReqwestHttpSrc {
 
 impl ObjectSubclass for ReqwestHttpSrc {
     const NAME: &'static str = "ReqwestHttpSrc";
-    type ParentType = gst_base::BaseSrc;
+    type ParentType = gst_base::PushSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
