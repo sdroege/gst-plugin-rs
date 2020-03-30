@@ -93,18 +93,20 @@ pub fn get_info() {
     // Otherwise use a 'release.txt' file as fallback, or report the current
     // date and an unknown revision.
     if let Ok(repo) = repo {
-        let commit = find_last_commit(&repo).expect("Couldn't find last commit");
-        commit_id = oid_to_short_sha(commit.id());
-        let timestamp = commit.time().seconds();
-        let dt = chrono::Utc.timestamp(timestamp, 0);
-        commit_date = dt.format("%Y-%m-%d").to_string()
+        if let Ok(commit) = find_last_commit(&repo) {
+            commit_id = oid_to_short_sha(commit.id());
+            let timestamp = commit.time().seconds();
+            let dt = chrono::Utc.timestamp(timestamp, 0);
+            commit_date = dt.format("%Y-%m-%d").to_string()
+        }
     } else if let Ok(release_file) = fs::File::open(release_file) {
         let mut cargo_toml = crate_dir;
         cargo_toml.push("Cargo.toml");
 
-        let cargo_toml = fs::File::open(cargo_toml).expect("Can't open Cargo.toml");
-        commit_date = read_release_date(cargo_toml, release_file);
-        commit_id = "RELEASE".into();
+        if let Ok(cargo_toml) = fs::File::open(cargo_toml) {
+            commit_date = read_release_date(cargo_toml, release_file);
+            commit_id = "RELEASE".into();
+        }
     }
 
     println!("cargo:rustc-env=COMMIT_ID={}", commit_id);
