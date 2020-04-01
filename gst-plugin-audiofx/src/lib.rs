@@ -21,9 +21,11 @@ extern crate num_traits;
 extern crate lazy_static;
 
 mod audioecho;
+mod audioloudnorm;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    audioecho::register(plugin)
+    audioecho::register(plugin)?;
+    audioloudnorm::register(plugin)
 }
 
 gst_plugin_define!(

@@ -5,6 +5,7 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 description = "Rust AudioFx Plugin"
+edition = "2018"
 
 [dependencies]
 glib = { git = "https://github.com/gtk-rs/glib" }
@@ -14,11 +15,16 @@ gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs
 byte-slice-cast = "0.3"
 num-traits = "0.2"
 lazy_static = "1.0"
+ebur128 = "0.1"
 
 [lib]
 name = "gstrsaudiofx"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
+
+[dev-dependencies]
+gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../gst-plugin-version-helper" }
