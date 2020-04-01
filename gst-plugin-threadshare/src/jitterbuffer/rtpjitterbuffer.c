@@ -166,7 +166,7 @@ rtp_jitter_buffer_set_mode (RTPJitterBuffer * jbuf, RTPJitterBufferMode mode)
 GstClockTime
 rtp_jitter_buffer_get_delay (RTPJitterBuffer * jbuf)
 {
-  g_print ("%p getting delay (%lu)\n", jbuf, jbuf->delay);
+  g_print ("%p getting delay (%" G_GUINT64_FORMAT ")\n", jbuf, jbuf->delay);
   return jbuf->delay;
 }
 
