@@ -1793,7 +1793,7 @@ impl ObjectSubclass for AudioLoudNorm {
             &[
                 ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
                 ("rate", &192_000i32),
-                ("channels", &gst::IntRange::<i32>::new(1, 2)),
+                ("channels", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
                 ("layout", &"interleaved"),
             ],
         );
