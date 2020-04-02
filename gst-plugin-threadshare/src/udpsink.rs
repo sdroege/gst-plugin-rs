@@ -358,12 +358,15 @@ impl UdpSinkPadHandlerInner {
         gst_pad: &gst::Pad,
         clients_to_add: impl Iterator<Item = SocketAddr>,
     ) {
-        Arc::make_mut(&mut self.clients).clear();
+        let old_clients = mem::replace(&mut *Arc::make_mut(&mut self.clients), vec![]);
 
         self.clients_to_configure = vec![];
         self.clients_to_unconfigure = vec![];
 
         for addr in clients_to_add {
+            if !old_clients.contains(&addr) {
+                self.clients_to_unconfigure.push(addr);
+            }
             self.add_client(gst_pad, addr);
         }
     }
