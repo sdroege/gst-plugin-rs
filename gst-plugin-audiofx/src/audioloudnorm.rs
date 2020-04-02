@@ -157,7 +157,6 @@ impl State {
         )
         .unwrap();
 
-        // TODO: everything depending on rate is actually a constant
         let buf_size = GAIN_LOOKAHEAD * info.channels() as usize;
         let buf = vec![0.0; buf_size].into_boxed_slice();
 
@@ -451,8 +450,9 @@ impl State {
 
         // Fill the whole limiter_buf with the gain corrected first part of the buffered
         // input, i.e. 210ms. 100ms for the current frame plus 100ms lookahead for the
-        // limiter with the next frame.
-        // FIXME: 10ms extra?
+        // limiter with the next frame plus 10ms in addition because the limiter would
+        // look a few samples further when detecting a peak to make sure no higher values
+        // are following.
         for (limiter_buf, sample) in self.limiter_buf.iter_mut().zip(self.buf.iter()) {
             *limiter_buf = sample * self.prev_delta * self.offset;
         }
