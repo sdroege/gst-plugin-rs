@@ -40,13 +40,41 @@ fn init() {
     });
 }
 
-fn run_test(wave: &str, num_buffers: u32, samples_per_buffer: u32, channels: u32) {
+fn run_test(
+    first_input: &str,
+    second_input: Option<&str>,
+    num_buffers: u32,
+    samples_per_buffer: u32,
+    channels: u32,
+    expected_loudness: f64,
+) {
     init();
 
-    let pipeline = gst::parse_launch(&format!(
-        "audiotestsrc wave={} num-buffers={} samplesperbuffer={} ! rsaudioloudnorm ! appsink name=sink",
-        wave, num_buffers, samples_per_buffer
-    ))
+    let format = if cfg!(target_endian = "little") {
+        format!("audio/x-raw,format=F64LE,rate=192000,channels={}", channels)
+    } else {
+        format!("audio/x-raw,format=F64BE,rate=192000,channels={}", channels)
+    };
+
+    let pipeline = if let Some(second_input) = second_input {
+        gst::parse_launch(&format!(
+        "audiotestsrc {first_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! audiomixer name=mixer output-buffer-duration={output_buffer_duration} ! {format} ! rsaudioloudnorm ! appsink name=sink  audiotestsrc {second_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! mixer.",
+        first_input = first_input,
+        second_input = second_input,
+        num_buffers = num_buffers,
+        samples_per_buffer = samples_per_buffer,
+        output_buffer_duration = samples_per_buffer as u64 * gst::SECOND_VAL / 192_000,
+        format = format,
+        ))
+    } else {
+        gst::parse_launch(&format!(
+        "audiotestsrc {first_input} num-buffers={num_buffers} samplesperbuffer={samples_per_buffer} ! {format} ! rsaudioloudnorm ! appsink name=sink",
+        first_input = first_input,
+        num_buffers = num_buffers,
+        samples_per_buffer = samples_per_buffer,
+        format = format,
+        ))
+    }
     .unwrap()
     .downcast::<gst::Pipeline>()
     .unwrap();
@@ -145,39 +173,115 @@ fn run_test(wave: &str, num_buffers: u32, samples_per_buffer: u32, channels: u32
     );
 
     let loudness = r128.loudness_global().unwrap();
-    assert!(
-        f64::abs(loudness + 24.0) < 1.0,
-        "Loudness is {} instead of -24.0",
-        loudness
-    );
+
+    if expected_loudness.classify() == std::num::FpCategory::Infinite && expected_loudness < 0.0 {
+        assert!(
+            loudness.classify() == std::num::FpCategory::Infinite && loudness < 0.0,
+            "Loudness is {} instead of {}",
+            loudness,
+            expected_loudness,
+        );
+    } else {
+        assert!(
+            f64::abs(loudness - expected_loudness) < 1.0,
+            "Loudness is {} instead of {}",
+            loudness,
+            expected_loudness,
+        );
+    }
 
     for c in 0..channels {
         let peak = 20.0 * f64::log10(r128.sample_peak(c).unwrap());
-        assert!(peak < -2.0, "Peak {} for channel {} is above -2.0", c, peak,);
+        assert!(
+            peak <= -2.0,
+            "Peak {} for channel {} is above -2.0",
+            c,
+            peak,
+        );
     }
 }
 
 #[test]
 fn basic() {
-    run_test("sine", 1000, 1920, 1);
+    run_test("wave=sine", None, 1000, 1920, 1, -24.0);
 }
 
 #[test]
 fn basic_white_noise() {
-    run_test("white-noise", 1000, 1920, 1);
+    run_test("wave=white-noise", None, 1000, 1920, 1, -24.0);
 }
 
 #[test]
 fn remaining_at_eos() {
-    run_test("sine", 1000, 1024, 1);
+    run_test("wave=sine", None, 1000, 1024, 1, -24.0);
 }
 
 #[test]
 fn short_input() {
-    run_test("sine", 100, 1024, 1);
+    run_test("wave=sine", None, 100, 1024, 1, -24.0);
 }
 
 #[test]
 fn basic_two_channels() {
-    run_test("sine", 1000, 1920, 2);
+    run_test("wave=sine", None, 1000, 1920, 2, -24.0);
+}
+
+#[test]
+fn silence() {
+    run_test("wave=silence", None, 1000, 1024, 1, std::f64::NEG_INFINITY);
+}
+
+#[test]
+fn quiet() {
+    // -6dB
+    run_test("wave=sine volume=0.5", None, 1000, 1024, 1, -24.0);
+}
+
+#[test]
+fn very_quiet() {
+    // -20dB
+    run_test("wave=sine volume=0.1", None, 1000, 1024, 1, -24.0);
+}
+
+#[test]
+fn very_very_quiet() {
+    // -40dB
+    run_test("wave=sine volume=0.01", None, 1000, 1024, 1, -24.0);
+}
+
+#[test]
+fn below_threshold() {
+    // -70dB
+    run_test(
+        "wave=sine volume=0.00045",
+        None,
+        1000,
+        1024,
+        1,
+        std::f64::NEG_INFINITY,
+    );
+}
+
+#[test]
+fn limiter() {
+    run_test(
+        "wave=sine volume=0.05",
+        Some("wave=ticks sine-periods-per-tick=1 tick-interval=4000000000"),
+        1000,
+        1024,
+        1,
+        -24.0,
+    );
+}
+
+#[test]
+fn limiter_on_first_frame() {
+    run_test(
+        "wave=sine volume=0.05",
+        Some("wave=ticks sine-periods-per-tick=10 tick-interval=4000000000"),
+        1000,
+        1024,
+        1,
+        -24.0,
+    );
 }
