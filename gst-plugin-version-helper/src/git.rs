@@ -1,25 +1,30 @@
 use std::path::Path;
 use std::process::Command;
 
-pub fn repo_hash<P: AsRef<Path>>(path: P) -> Option<String> {
+pub fn repo_hash<P: AsRef<Path>>(path: P) -> Option<(String, String)> {
     let git_path = path.as_ref().to_str();
     let mut args = match git_path {
         Some(path) => vec!["-C", path],
         None => vec![],
     };
-    args.extend(&["rev-parse", "--short", "HEAD"]);
+    args.extend(&["log", "-1", "--format=%h_%cd", "--date=short"]);
     let output = Command::new("git").args(&args).output().ok()?;
     if !output.status.success() {
         return None;
     }
-    let hash = String::from_utf8(output.stdout).ok()?;
-    let hash = hash.trim_end_matches('\n');
+    let output = String::from_utf8(output.stdout).ok()?;
+    let output = output.trim_end_matches('\n');
+    let mut s = output.split('_');
+    let hash = s.next()?;
+    let date = s.next()?;
 
-    if dirty(path) {
-        Some(format!("{}+", hash))
+    let hash = if dirty(path) {
+        format!("{}+", hash)
     } else {
-        Some(hash.into())
-    }
+        hash.into()
+    };
+
+    Some((hash, date.into()))
 }
 
 fn dirty<P: AsRef<Path>>(path: P) -> bool {
