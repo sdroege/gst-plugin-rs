@@ -32,8 +32,8 @@
 //! );
 //! ```
 
-use chrono::TimeZone;
-use git2::{Commit, ObjectType, Repository};
+mod git;
+
 use std::{env, fs, path};
 
 /// Extracts release for GStreamer plugin metadata
@@ -81,9 +81,9 @@ pub fn get_info() {
 
     // First check for a git repository in the manifest directory and if there
     // is none try one directory up in case we're in a Cargo workspace
-    let repo = Repository::open(&repo_dir).or_else(move |_| {
+    let git_info = git::repo_hash(&repo_dir).or_else(move || {
         repo_dir.pop();
-        Repository::open(&repo_dir)
+        git::repo_hash(&repo_dir)
     });
 
     let mut release_file = crate_dir.clone();
@@ -92,13 +92,9 @@ pub fn get_info() {
     // If there is a git repository, extract the version information from there.
     // Otherwise use a 'release.txt' file as fallback, or report the current
     // date and an unknown revision.
-    if let Ok(repo) = repo {
-        if let Ok(commit) = find_last_commit(&repo) {
-            commit_id = oid_to_short_sha(commit.id());
-            let timestamp = commit.time().seconds();
-            let dt = chrono::Utc.timestamp(timestamp, 0);
-            commit_date = dt.format("%Y-%m-%d").to_string()
-        }
+    if let Some((id, date)) = git_info {
+        commit_id = id;
+        commit_date = date;
     } else if let Ok(release_file) = fs::File::open(release_file) {
         let mut cargo_toml = crate_dir;
         cargo_toml.push("Cargo.toml");
@@ -111,16 +107,6 @@ pub fn get_info() {
 
     println!("cargo:rustc-env=COMMIT_ID={}", commit_id);
     println!("cargo:rustc-env=BUILD_REL_DATE={}", commit_date);
-}
-
-fn find_last_commit(repo: &Repository) -> Result<Commit, git2::Error> {
-    let obj = repo.head()?.resolve()?.peel(ObjectType::Commit)?;
-    obj.into_commit()
-        .map_err(|_| git2::Error::from_str("Couldn't find commit"))
-}
-
-fn oid_to_short_sha(oid: git2::Oid) -> String {
-    oid.to_string()[..8].to_string()
 }
 
 fn read_release_date(mut cargo_toml: fs::File, mut release_file: fs::File) -> String {
