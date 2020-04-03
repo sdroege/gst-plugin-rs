@@ -434,6 +434,11 @@ impl InputSelector {
 
         self.src_pad.prepare(&InputSelectorPadSrcHandler);
 
+        let pads = self.pads.lock().unwrap();
+        for pad in pads.sink_pads.values() {
+            pad.prepare(&InputSelectorPadSinkHandler::new());
+        }
+
         gst_debug!(CAT, obj: element, "Prepared");
 
         Ok(())
@@ -444,6 +449,11 @@ impl InputSelector {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
         self.src_pad.unprepare();
+
+        let pads = self.pads.lock().unwrap();
+        for pad in pads.sink_pads.values() {
+            pad.unprepare();
+        }
 
         *state = State::default();
 
