@@ -360,10 +360,16 @@ impl Task {
                 if let Some(resume_receiver) = resume_receiver.take() {
                     gst_trace!(RUNTIME_CAT, "Task loop paused");
 
-                    let _ = resume_receiver.await;
-
-                    gst_trace!(RUNTIME_CAT, "Resuming task loop");
-                    inner_clone.lock().unwrap().state = TaskState::Started;
+                    match resume_receiver.await {
+                        Ok(_) => {
+                            gst_trace!(RUNTIME_CAT, "Resuming task loop");
+                            inner_clone.lock().unwrap().state = TaskState::Started;
+                        }
+                        Err(_) => {
+                            gst_trace!(RUNTIME_CAT, "Resume cancelled");
+                            break;
+                        }
+                    }
                 }
 
                 if func().await == glib::Continue(false) {
