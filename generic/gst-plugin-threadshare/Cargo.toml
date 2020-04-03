@@ -1,0 +1,53 @@
+[package]
+name = "gst-plugin-threadshare"
+version = "0.6.0"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+license = "LGPL-2.1+"
+description = "Threadshare Plugin"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+edition = "2018"
+
+[dependencies]
+libc = "0.2"
+glib-sys = { git = "https://github.com/gtk-rs/sys" }
+gobject-sys = { git = "https://github.com/gtk-rs/sys" }
+gio-sys = { git = "https://github.com/gtk-rs/sys" }
+glib = { git = "https://github.com/gtk-rs/glib" }
+gio = { git = "https://github.com/gtk-rs/gio" }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features=["v1_10"] }
+gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
+pin-project = "0.4"
+tokio = { git = "https://github.com/fengalin/tokio", tag = "tokio-0.2.12-throttling", features = ["io-util", "macros", "rt-core", "sync", "stream", "time", "tcp", "udp", "rt-util"] }
+futures = "0.3"
+lazy_static = "1.0"
+rand = "0.7"
+net2 = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winsock2", "processthreadsapi"] }
+
+[lib]
+name = "gstthreadshare"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[example]]
+name = "benchmark"
+path = "examples/benchmark.rs"
+
+[[example]]
+name = "udpsrc-benchmark-sender"
+path = "examples/udpsrc_benchmark_sender.rs"
+
+[[example]]
+name = "tcpclientsrc-benchmark-sender"
+path = "examples/tcpclientsrc_benchmark_sender.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../gst-plugin-version-helper" }
+cc = "1.0.38"
+pkg-config = "0.3.15"

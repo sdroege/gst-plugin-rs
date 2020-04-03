@@ -1,0 +1,46 @@
+[package]
+name = "gst-plugin-fallbackswitch"
+version = "0.6.0"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+license = "LGPL-2.1+"
+edition = "2018"
+description = "Fallback Switcher Plugin"
+
+[dependencies]
+libc = "0.2"
+glib = { git = "https://github.com/gtk-rs/glib" }
+glib-sys = { git = "https://github.com/gtk-rs/sys" }
+gobject-sys = { git = "https://github.com/gtk-rs/sys" }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"], optional = true }
+gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
+gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+gtk = { git = "https://github.com/gtk-rs/gtk", optional = true }
+gio = { git = "https://github.com/gtk-rs/gio", optional = true }
+lazy_static = "1.0"
+
+[dev-dependencies]
+gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}
+gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}
+lazy_static = "1.2"
+
+[lib]
+name = "gstfallbackswitch"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[example]]
+name = "gtk-fallbackswitch"
+path = "examples/gtk_fallbackswitch.rs"
+required-features = ["gtk", "gio"]
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../gst-plugin-version-helper" }
+cc = "1.0"
+pkg-config = "0.3"
+
+[features]
+default = []
+#v1_18 = ["gstreamer/v1_18", "gstreamer-base"]

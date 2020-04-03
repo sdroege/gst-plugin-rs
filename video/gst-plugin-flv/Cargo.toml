@@ -1,0 +1,29 @@
+[package]
+name = "gst-plugin-flv"
+version = "0.6.0"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+license = "MIT/Apache-2.0"
+edition = "2018"
+description = "Rust FLV Plugin"
+
+[dependencies]
+url = "2"
+glib = { git = "https://github.com/gtk-rs/glib" }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+num-rational = { version = "0.2", default-features = false, features = [] }
+nom = "5"
+flavors = {git = "https://github.com/rust-av/flavors.git"}
+muldiv = "0.2"
+byteorder = "1.0"
+lazy_static = "1.0"
+smallvec = "1.0"
+
+[lib]
+name = "gstrsflv"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../gst-plugin-version-helper" }
