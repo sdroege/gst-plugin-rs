@@ -2,7 +2,7 @@
 name = "gst-plugin-gif"
 version = "0.1.0"
 authors = ["Markus Ebner <info@ebner-markus.de>"]
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 edition = "2018"
 

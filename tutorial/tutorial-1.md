@@ -35,7 +35,7 @@ The empty `Cargo.toml` has to be updated to list all the dependencies that we ne
 name = "gst-plugin-tutorial"
 version = "0.1.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 edition = "2018"
 description = "Rust Tutorial Plugin"

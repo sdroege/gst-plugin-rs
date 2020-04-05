@@ -2,7 +2,7 @@
 name = "gst-plugin-claxon"
 version = "0.1.0"
 authors = ["Ruben Gonzalez <rgonzalez@fluendo.com>"]
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 description = "Claxon FLAC Decoder Plugin"
 edition = "2018"

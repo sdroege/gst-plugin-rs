@@ -2,7 +2,7 @@
 name = "gst-plugin-sodium"
 version = "0.1.0"
 authors = ["Jordan Petridis <jordan@centricular.com>"]
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 description = "libsodium-based file encryption and decryption"
 license = "MIT"
 edition = "2018"

@@ -2,7 +2,7 @@
 name = "gst-plugin-rusoto"
 version = "0.6.0"
 authors = ["Arun Raghavan <arun@arunraghavan.net>"]
-repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugin-rs"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 description = "Amazon S3 Plugin"
 edition = "2018"
