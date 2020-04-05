@@ -8,6 +8,66 @@ The plugins build upon the [GStreamer Rust bindings](https://gitlab.freedesktop.
 Check the README.md of that repository also for details about how to set-up
 your development environment.
 
+## Plugins
+
+You will find the following plugins in this repository:
+
+  * `generic`
+    - `file`: A Rust implementation of the standard `filesrc` and `filesink`
+      elements
+
+    - `sodium`: Elements to perform encryption and decryption using
+      [libsodium](https://libsodium.org).
+
+    - `threadshare`: Some popular threaded elements reimplemented using common
+      thread-sharing infrastructure.
+
+  * `net`
+    - `reqwest`: An HTTP source element based on the
+      [reqwest](https://github.com/seanmonstar/reqwest) library.
+
+    - `rusoto`: A source and sink plugin to talk to the Amazon S3 object
+      storage system using the [Rusoto](https://rusoto.org) library.
+
+  * `audio`
+    - `audiofx`: Plugins to apply audio effects to a stream (such as adding
+      echo/reverb, or normalization).
+
+    - `claxon`: A FLAC decoder based on the
+      [Claxon](https://github.com/ruuda/claxon) library.
+
+    - `csound`: A plugin to implement audio effects using the
+      [Csound](https://csound.com/) library.
+
+    - `lewton`: A Vorbis decoder based on the
+      [lewton](https://github.com/RustAudio/lewton) library.
+
+  * `video`
+    - `cdg`: A parser and renderer for
+      [CD+G karaoke data](https://docs.rs/cdg/0.1.0/cdg/).
+
+    - `closedcaption`: Plugins to deal with several closed caption formats
+      (MCC, SCC, EIA-608/CEA-608 and timed text).
+
+    - `dav1d`: AV1 decoder based on the
+      [dav1d](https://code.videolan.org/videolan/dav1d) library.
+
+    - `flavors`: FLV demuxer based on the
+      [flavors](https://github.com/rust-av/flavors) library.
+
+    - `gif`: A GIF encoder based on the
+      [gif](https://github.com/image-rs/image-gif) library.
+
+    - `rav1e`: AV1 encoder based on the [rav1e](https://github.com/xiph/rav1e)
+      library.
+
+  * `utils`
+    - `fallbackswitch`: Aggregator element that allows falling back to a
+      different sink pad after a timeout.
+
+    - `togglerecord`: Element to enable starting and stopping multiple
+      streams together.
+
 ## LICENSE
 
 gst-plugins-rs and all crates contained in here that are not listed below are
