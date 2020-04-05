@@ -1,0 +1,27 @@
+[package]
+name = "gst-plugin-dav1d"
+version = "0.6.0"
+authors = ["Philippe Normand <philn@igalia.com>"]
+edition = "2018"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+license = "MIT/Apache-2.0"
+description = "Dav1d Plugin"
+
+[dependencies]
+dav1d = "0.5"
+glib = { git = "https://github.com/gtk-rs/glib" }
+gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+lazy_static = "1.0"
+
+[lib]
+name = "gstrsdav1d"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path = "../../version-helper" }
+
+[features]
+build = ["dav1d/build"]
