@@ -17,7 +17,7 @@ members = [
     "video/cdg",
     "video/closedcaption",
     "video/dav1d",
-    "video/flv",
+    "video/flavors",
     "video/gif",
     "video/rav1e",
 ]
