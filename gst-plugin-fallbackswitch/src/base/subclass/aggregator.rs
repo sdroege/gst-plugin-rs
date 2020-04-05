@@ -635,7 +635,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), gst::FlowReturn::Error, {
         imp.flush(&wrap).into()
@@ -654,7 +654,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     let ret = gst_panic_to_error!(&wrap, &instance.panicked(), None, {
         imp.clip(
@@ -677,7 +677,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), gst::FlowReturn::Error, {
         imp.finish_buffer(&wrap, from_glib_full(buffer)).into()
@@ -696,7 +696,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         imp.sink_event(
@@ -719,7 +719,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         imp.sink_event_pre_queue(
@@ -742,7 +742,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         imp.sink_query(
@@ -765,7 +765,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         imp.sink_query_pre_queue(
@@ -787,7 +787,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         imp.src_event(&wrap, from_glib_full(event))
@@ -805,7 +805,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         imp.src_query(&wrap, gst::QueryRef::from_mut_ptr(query))
@@ -824,13 +824,13 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         match imp.src_activate(&wrap, from_glib(mode), from_glib(active)) {
             Ok(()) => true,
             Err(err) => {
-                err.log_with_object(&wrap);
+                err.log_with_object(&*wrap);
                 false
             }
         }
@@ -848,7 +848,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), gst::FlowReturn::Error, {
         imp.aggregate(&wrap, from_glib(timeout)).into()
@@ -865,7 +865,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         match imp.start(&wrap) {
@@ -888,7 +888,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         match imp.stop(&wrap) {
@@ -911,7 +911,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), gst::CLOCK_TIME_NONE, {
         imp.get_next_time(&wrap)
@@ -931,7 +931,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), None, {
         let req_name: Option<String> = from_glib_none(req_name);
@@ -950,7 +950,9 @@ where
             &wrap,
             &from_glib_borrow(templ),
             req_name,
-            Option::<gst::Caps>::from_glib_borrow(caps).as_ref(),
+            Option::<gst::Caps>::from_glib_borrow(caps)
+                .as_ref()
+                .as_ref(),
         )
     })
     .to_glib_full()
@@ -967,7 +969,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     *res = ptr::null_mut();
 
@@ -993,7 +995,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), gst::Caps::new_empty(), {
         imp.fixate_src_caps(&wrap, from_glib_full(caps))
@@ -1011,13 +1013,13 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, {
         match imp.negotiated_src_caps(&wrap, &from_glib_borrow(caps)) {
             Ok(()) => true,
             Err(err) => {
-                err.log_with_object(&wrap);
+                err.log_with_object(&*wrap);
                 false
             }
         }
@@ -1034,7 +1036,7 @@ where
 {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
-    let wrap: Aggregator = from_glib_borrow(ptr);
+    let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), false, { imp.negotiate(&wrap) }).to_glib()
 }
