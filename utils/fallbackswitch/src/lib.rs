@@ -39,8 +39,7 @@ mod gst_base {
     pub use super::base::*;
 }
 
-#[macro_use]
-extern crate lazy_static;
+extern crate once_cell;
 
 mod fallbackswitch;
 

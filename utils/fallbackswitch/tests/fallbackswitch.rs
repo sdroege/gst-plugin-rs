@@ -26,16 +26,15 @@ extern crate gstreamer_check as gst_check;
 
 extern crate gstfallbackswitch;
 
-#[macro_use]
-extern crate lazy_static;
+use once_cell::sync::Lazy;
 
-lazy_static! {
-    static ref TEST_CAT: gst::DebugCategory = gst::DebugCategory::new(
+static TEST_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "fallbackswitch-test",
         gst::DebugColorFlags::empty(),
         Some("fallbackswitch test"),
-    );
-}
+    )
+});
 
 fn init() {
     use std::sync::Once;

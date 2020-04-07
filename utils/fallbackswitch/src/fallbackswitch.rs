@@ -31,6 +31,8 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 use gst_video;
 
+use once_cell::sync::Lazy;
+
 use std::sync::{Mutex, RwLock};
 
 struct FallbackSwitch {
@@ -42,13 +44,13 @@ struct FallbackSwitch {
     settings: Mutex<Settings>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "fallbackswitch",
         gst::DebugColorFlags::empty(),
         Some("Fallback switch Element"),
-    );
-}
+    )
+});
 
 #[derive(Debug)]
 struct OutputState {
