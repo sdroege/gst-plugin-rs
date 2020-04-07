@@ -166,7 +166,7 @@ impl ObjectImpl for ProgressBin {
     // at any time from any thread.
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
-        let element = obj.downcast_ref::<gst_base::BaseTransform>().unwrap();
+        let element = obj.downcast_ref::<gst::Bin>().unwrap();
 
         match *prop {
             subclass::Property("output", ..) => {
