@@ -159,24 +159,23 @@ impl<T: SocketRead + 'static> Socket<T> {
     }
 }
 
-impl<T: SocketRead> Drop for Socket<T> {
+impl<T: SocketRead> Drop for SocketInner<T> {
     fn drop(&mut self) {
         // Ready->Null
-        let mut inner = self.0.lock().unwrap();
-        assert_ne!(SocketState::Started, inner.state);
-        if inner.state == SocketState::Unprepared {
-            gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket already unprepared");
+        assert_ne!(SocketState::Started, self.state);
+        if self.state == SocketState::Unprepared {
+            gst_debug!(SOCKET_CAT, obj: &self.element, "Socket already unprepared");
             return;
         }
 
-        if let Some(create_read_handle_handle) = inner.create_read_handle.take() {
+        if let Some(create_read_handle_handle) = self.create_read_handle.take() {
             create_read_handle_handle.abort();
         }
 
-        if let Err(err) = inner.buffer_pool.set_active(false) {
-            gst_error!(SOCKET_CAT, obj: &inner.element, "Failed to unprepare socket: {}", err);
+        if let Err(err) = self.buffer_pool.set_active(false) {
+            gst_error!(SOCKET_CAT, obj: &self.element, "Failed to unprepare socket: {}", err);
         }
-        inner.state = SocketState::Unprepared;
+        self.state = SocketState::Unprepared;
     }
 }
 
