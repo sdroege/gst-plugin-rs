@@ -85,6 +85,7 @@ pub fn set_element_flags<T: glib::IsA<gst::Object> + glib::IsA<gst::Element>>(
     }
 }
 
+#[must_use = "if unused the Mutex will immediately unlock"]
 struct MutexGuard<'a>(&'a glib_ffi::GMutex);
 
 impl<'a> MutexGuard<'a> {
