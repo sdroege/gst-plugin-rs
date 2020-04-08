@@ -547,13 +547,13 @@ impl AggregatorImpl for FallbackSwitch {
         agg: &gst_base::Aggregator,
         agg_pad: &gst_base::AggregatorPad,
         event: gst::Event,
-    ) -> bool {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         use gst::EventView;
 
         match event.view() {
             EventView::Gap(_) => {
                 gst_debug!(CAT, obj: agg_pad, "Dropping gap event");
-                true
+                Ok(gst::FlowSuccess::Ok)
             }
             _ => self.parent_sink_event_pre_queue(agg, agg_pad, event),
         }

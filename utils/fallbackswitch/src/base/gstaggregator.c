@@ -404,7 +404,7 @@ gst_aggregator_pad_queue_is_empty (GstAggregatorPad * pad)
  * if at least one of the pads has an event or query at the top of its queue.
  *
  * Only returns TRUE if all non-EOS pads have a buffer available at the top of
- * their queue
+ * their queue or a clipped buffer already.
  */
 static gboolean
 gst_aggregator_check_pads_ready (GstAggregator * self,
@@ -521,6 +521,9 @@ gst_aggregator_reset_flow_values (GstAggregator * self)
   self->priv->send_segment = TRUE;
   gst_segment_init (&GST_AGGREGATOR_PAD (self->srcpad)->segment,
       GST_FORMAT_TIME);
+  /* Initialize to -1 so we set it to the start position once the first buffer
+   * is handled in gst_aggregator_pad_chain_internal() */
+  GST_AGGREGATOR_PAD (self->srcpad)->segment.position = -1;
   self->priv->first_buffer = TRUE;
   GST_OBJECT_UNLOCK (self);
 }
@@ -774,7 +777,7 @@ gst_aggregator_wait_and_check (GstAggregator * self, gboolean * timeout)
     }
   }
 
-  res = gst_aggregator_check_pads_ready (self, &have_event_or_query);
+  res = gst_aggregator_check_pads_ready (self, NULL);
   SRC_UNLOCK (self);
 
   return res;
@@ -1631,7 +1634,7 @@ eat:
  * The queued events with be handled from the src-pad task in
  * gst_aggregator_do_events_and_queries().
  */
-static gboolean
+static GstFlowReturn
 gst_aggregator_default_sink_event_pre_queue (GstAggregator * self,
     GstAggregatorPad * aggpad, GstEvent * event)
 {
@@ -3077,8 +3080,7 @@ gst_aggregator_pad_class_init (GstAggregatorPadClass * klass)
    */
   gst_aggregator_pad_signals[PAD_SIGNAL_BUFFER_CONSUMED] =
       g_signal_new ("buffer-consumed", G_TYPE_FROM_CLASS (klass),
-      G_SIGNAL_RUN_FIRST, 0, NULL, NULL, g_cclosure_marshal_generic,
-      G_TYPE_NONE, 1, GST_TYPE_BUFFER);
+      G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1, GST_TYPE_BUFFER);
 
   /**
    * GstAggregatorPad:emit-signals:
@@ -3462,4 +3464,28 @@ gst_aggregator_simple_get_next_time (GstAggregator * self)
   GST_OBJECT_UNLOCK (self);
 
   return next_time;
+}
+
+/**
+ * gst_aggregator_update_segment:
+ *
+ * Subclasses should use this to update the segment on their
+ * source pad, instead of directly pushing new segment events
+ * downstream.
+ *
+ * Since: 1.18
+ */
+void
+gst_aggregator_update_segment (GstAggregator * self, GstSegment * segment)
+{
+  g_return_if_fail (GST_IS_AGGREGATOR (self));
+  g_return_if_fail (segment != NULL);
+
+  GST_INFO_OBJECT (self, "Updating srcpad segment: %" GST_SEGMENT_FORMAT,
+      segment);
+
+  GST_OBJECT_LOCK (self);
+  GST_AGGREGATOR_PAD (self->srcpad)->segment = *segment;
+  self->priv->send_segment = TRUE;
+  GST_OBJECT_UNLOCK (self);
 }

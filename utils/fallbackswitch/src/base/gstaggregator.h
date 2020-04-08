@@ -321,7 +321,7 @@ struct _GstAggregatorClass {
 
   gboolean          (*negotiate) (GstAggregator * self);
 
-  gboolean          (*sink_event_pre_queue)     (GstAggregator    *  aggregator,
+  GstFlowReturn     (*sink_event_pre_queue)     (GstAggregator    *  aggregator,
                                                  GstAggregatorPad *  aggregator_pad,
                                                  GstEvent         *  event);
 
@@ -384,6 +384,9 @@ void            gst_aggregator_get_allocator       (GstAggregator               
 GST_BASE_API
 GstClockTime    gst_aggregator_simple_get_next_time (GstAggregator                * self);
 
+GST_BASE_API
+void            gst_aggregator_update_segment       (GstAggregator                * self,
+                                                     GstSegment                   * segment);
 
 G_END_DECLS
 

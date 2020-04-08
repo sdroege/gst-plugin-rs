@@ -15,9 +15,12 @@ use glib::IsA;
 use glib::Value;
 use gst;
 use std::boxed::Box as Box_;
-use std::mem::transmute;
+use std::mem;
+use std::ptr;
 
 pub trait AggregatorExtManual: 'static {
+    fn get_allocator(&self) -> (Option<gst::Allocator>, gst::AllocationParams);
+
     fn finish_buffer(&self, buffer: gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError>;
     fn get_property_min_upstream_latency(&self) -> gst::ClockTime;
 
@@ -30,6 +33,19 @@ pub trait AggregatorExtManual: 'static {
 }
 
 impl<O: IsA<Aggregator>> AggregatorExtManual for O {
+    fn get_allocator(&self) -> (Option<gst::Allocator>, gst::AllocationParams) {
+        unsafe {
+            let mut allocator = ptr::null_mut();
+            let mut params = mem::zeroed();
+            gst_base_sys::gst_aggregator_get_allocator(
+                self.as_ref().to_glib_none().0,
+                &mut allocator,
+                &mut params,
+            );
+            (from_glib_full(allocator), params.into())
+        }
+    }
+
     fn finish_buffer(&self, buffer: gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
         let ret: gst::FlowReturn = unsafe {
             from_glib(gst_base_sys::gst_aggregator_finish_buffer(
@@ -74,7 +90,7 @@ impl<O: IsA<Aggregator>> AggregatorExtManual for O {
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::min-upstream-latency\0".as_ptr() as *const _,
-                Some(transmute(
+                Some(mem::transmute(
                     notify_min_upstream_latency_trampoline::<Self, F> as usize,
                 )),
                 Box_::into_raw(f),

@@ -61,7 +61,7 @@ pub trait AggregatorImpl: AggregatorImplExt + ElementImpl + Send + Sync + 'stati
         aggregator: &Aggregator,
         aggregator_pad: &AggregatorPad,
         event: gst::Event,
-    ) -> bool {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.parent_sink_event_pre_queue(aggregator, aggregator_pad, event)
     }
 
@@ -181,7 +181,7 @@ pub trait AggregatorImplExt {
         aggregator: &Aggregator,
         aggregator_pad: &AggregatorPad,
         event: gst::Event,
-    ) -> bool;
+    ) -> Result<gst::FlowSuccess, gst::FlowError>;
 
     fn parent_sink_query(
         &self,
@@ -323,7 +323,7 @@ impl<T: AggregatorImpl + ObjectImpl> AggregatorImplExt for T {
         aggregator: &Aggregator,
         aggregator_pad: &AggregatorPad,
         event: gst::Event,
-    ) -> bool {
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         unsafe {
             let data = self.get_type_data();
             let parent_class =
@@ -331,11 +331,12 @@ impl<T: AggregatorImpl + ObjectImpl> AggregatorImplExt for T {
             let f = (*parent_class)
                 .sink_event_pre_queue
                 .expect("Missing parent function `sink_event_pre_queue`");
-            from_glib(f(
+            gst::FlowReturn::from_glib(f(
                 aggregator.to_glib_none().0,
                 aggregator_pad.to_glib_none().0,
                 event.into_ptr(),
             ))
+            .into_result()
         }
     }
 
@@ -712,7 +713,7 @@ unsafe extern "C" fn aggregator_sink_event_pre_queue<T: ObjectSubclass>(
     ptr: *mut gst_base_sys::GstAggregator,
     aggregator_pad: *mut gst_base_sys::GstAggregatorPad,
     event: *mut gst_sys::GstEvent,
-) -> glib_sys::gboolean
+) -> gst_sys::GstFlowReturn
 where
     T: AggregatorImpl,
     T::Instance: PanicPoison,
@@ -721,12 +722,13 @@ where
     let imp = instance.get_impl();
     let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
-    gst_panic_to_error!(&wrap, &instance.panicked(), false, {
+    gst_panic_to_error!(&wrap, &instance.panicked(), gst::FlowReturn::Error, {
         imp.sink_event_pre_queue(
             &wrap,
             &from_glib_borrow(aggregator_pad),
             from_glib_full(event),
         )
+        .into()
     })
     .to_glib()
 }
@@ -934,22 +936,12 @@ where
     let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst_panic_to_error!(&wrap, &instance.panicked(), None, {
-        let req_name: Option<String> = from_glib_none(req_name);
-
-        // FIXME: Easier way to convert Option<String> to Option<&str>?
-        let mut _tmp = String::new();
-        let req_name = match req_name {
-            Some(n) => {
-                _tmp = n;
-                Some(_tmp.as_str())
-            }
-            None => None,
-        };
+        let req_name: Borrowed<Option<glib::GString>> = from_glib_borrow(req_name);
 
         imp.create_new_pad(
             &wrap,
             &from_glib_borrow(templ),
-            req_name,
+            req_name.as_ref().as_ref().map(|s| s.as_str()),
             Option::<gst::Caps>::from_glib_borrow(caps)
                 .as_ref()
                 .as_ref(),

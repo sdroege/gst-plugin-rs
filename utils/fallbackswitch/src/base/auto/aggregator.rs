@@ -30,6 +30,8 @@ unsafe impl Sync for Aggregator {}
 pub const NONE_AGGREGATOR: Option<&Aggregator> = None;
 
 pub trait AggregatorExt: 'static {
+    //fn get_allocator(&self, allocator: /*Ignored*/gst::Allocator, params: /*Ignored*/gst::AllocationParams);
+
     fn get_buffer_pool(&self) -> Option<gst::BufferPool>;
 
     fn get_latency(&self) -> gst::ClockTime;
