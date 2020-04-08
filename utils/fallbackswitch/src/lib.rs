@@ -41,10 +41,12 @@ mod gst_base {
 
 extern crate once_cell;
 
+mod fallbacksrc;
 mod fallbackswitch;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     fallbackswitch::register(plugin)?;
+    fallbacksrc::register(plugin)?;
     Ok(())
 }
 
@@ -53,7 +55,7 @@ gst_plugin_define!(
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
-    "MIT/X11",
+    "LGPL",
     env!("CARGO_PKG_NAME"),
     env!("CARGO_PKG_NAME"),
     env!("CARGO_PKG_REPOSITORY"),
