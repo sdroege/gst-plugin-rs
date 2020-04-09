@@ -32,7 +32,7 @@ fn main() {
 
         let mut path = Path::new("target/debug");
         if !path.exists() {
-            path = Path::new("../target/debug");
+            path = Path::new("../../target/debug");
         }
 
         gst::Registry::get().scan_path(path);
@@ -43,7 +43,7 @@ fn main() {
 
         let mut path = Path::new("target/release");
         if !path.exists() {
-            path = Path::new("../target/release");
+            path = Path::new("../../target/release");
         }
 
         gst::Registry::get().scan_path(path);
