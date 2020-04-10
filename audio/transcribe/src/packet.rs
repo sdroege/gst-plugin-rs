@@ -126,12 +126,22 @@ fn parse_header(input: &[u8]) -> IResult<&[u8], Header> {
     let (input, value) = map_res(take(value_length), std::str::from_utf8)(input)?;
 
     let header = Header {
-        name: Cow::Owned(name.to_string()),
+        name: name.to_string().into(),
         value_type,
-        value: Cow::Owned(value.to_string()),
+        value: value.to_string().into(),
     };
 
     Ok((input, header))
+}
+
+pub fn packet_is_exception(packet: &Packet) -> bool {
+    for header in &packet.headers {
+        if header.name == ":message-type" && header.value_type == 7 {
+            return true;
+        }
+    }
+
+    false
 }
 
 pub fn parse_packet(input: &[u8]) -> IResult<&[u8], Packet> {
