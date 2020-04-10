@@ -1,30 +1,47 @@
+// Copyright (C) 2020 Jordan Petridis <jordan@centricular.com>
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Library General Public
+// License as published by the Free Software Foundation; either
+// version 2 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Library General Public License for more details.
+//
+// You should have received a copy of the GNU Library General Public
+// License along with this library; if not, write to the
+// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
+// Boston, MA 02110-1335, USA.
+
 use byteorder::{BigEndian, WriteBytesExt};
 use crc::crc32;
 use nom::{
     self, bytes::complete::take, combinator::map_res, multi::many0, number::complete::be_u16,
     number::complete::be_u32, number::complete::be_u8, sequence::tuple, IResult,
 };
+use std::borrow::Cow;
 use std::io::{self, Write};
 
 #[derive(Debug)]
-pub struct Prelude {
+struct Prelude {
     total_bytes: u32,
     header_bytes: u32,
     prelude_crc: u32,
 }
 
 #[derive(Debug)]
-// FIXME: make private
 pub struct Header {
-    pub name: String,
+    pub name: Cow<'static, str>,
     pub value_type: u8,
-    pub value: String,
+    pub value: Cow<'static, str>,
 }
 
 #[derive(Debug)]
 pub struct Packet<'a> {
     prelude: Prelude,
-    pub headers: Vec<Header>,
+    headers: Vec<Header>,
     pub payload: &'a [u8],
     msg_crc: u32,
 }
@@ -109,9 +126,9 @@ fn parse_header(input: &[u8]) -> IResult<&[u8], Header> {
     let (input, value) = map_res(take(value_length), std::str::from_utf8)(input)?;
 
     let header = Header {
-        name: name.to_string(),
+        name: Cow::Owned(name.to_string()),
         value_type,
-        value: value.to_string(),
+        value: Cow::Owned(value.to_string()),
     };
 
     Ok((input, header))
@@ -125,7 +142,6 @@ pub fn parse_packet(input: &[u8]) -> IResult<&[u8], Packet> {
     let (_, msg_crc) = be_u32(&input[input.len() - 4..])?;
 
     if msg_crc != sum {
-        // FIXME: a better errortype than mapres
         return Err(nom::Err::Error((
             b"Prelude CRC doesn't match",
             nom::error::ErrorKind::MapRes,
@@ -134,7 +150,6 @@ pub fn parse_packet(input: &[u8]) -> IResult<&[u8], Packet> {
 
     let (remainder, header_input) = take(prelude.header_bytes)(remainder)?;
     let (_, headers) = many0(parse_header)(header_input)?;
-    //dbg!(&headers);
 
     let payload_length = prelude.total_bytes - prelude.header_bytes - 4 - 12;
     let (remainder, payload) = take(payload_length)(remainder)?;
