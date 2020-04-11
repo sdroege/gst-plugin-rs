@@ -226,21 +226,15 @@ impl ClaxonDec {
         state: &mut State,
         indata: &[u8],
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let streaminfo = match get_claxon_streaminfo(indata) {
-            Ok(v) => v,
-            Err(error) => {
-                gst_element_error!(element, gst::StreamError::Decode, [error]);
-                return Err(gst::FlowError::Error);
-            }
-        };
+        let streaminfo = get_claxon_streaminfo(indata).map_err(|e| {
+            gst_element_error!(element, gst::StreamError::Decode, [e]);
+            gst::FlowError::Error
+        })?;
 
-        let audio_info = match get_gstaudioinfo(streaminfo) {
-            Ok(v) => v,
-            Err(error) => {
-                gst_element_error!(element, gst::StreamError::Decode, [error]);
-                return Err(gst::FlowError::Error);
-            }
-        };
+        let audio_info = get_gstaudioinfo(streaminfo).map_err(|e| {
+            gst_element_error!(element, gst::StreamError::Decode, [&e]);
+            gst::FlowError::Error
+        })?;
 
         gst_debug!(
             self.cat,
@@ -355,26 +349,30 @@ fn get_claxon_streaminfo(indata: &[u8]) -> Result<claxon::metadata::StreamInfo, 
 
 fn get_gstaudioinfo(
     streaminfo: claxon::metadata::StreamInfo,
-) -> Result<gst_audio::AudioInfo, &'static str> {
+) -> Result<gst_audio::AudioInfo, String> {
     let format = match streaminfo.bits_per_sample {
         8 => gst_audio::AudioFormat::S8,
         16 => gst_audio::AUDIO_FORMAT_S16,
         24 => gst_audio::AUDIO_FORMAT_S2432,
         32 => gst_audio::AUDIO_FORMAT_S32,
-        _ => return Err("format not supported"),
+        _ => return Err("format not supported".to_string()),
     };
 
-    if streaminfo.channels > 8 {
-        return Err("more than 8 channels not supported yet");
-    }
-    let mut audio_info =
-        gst_audio::AudioInfo::new(format, streaminfo.sample_rate, streaminfo.channels);
-
-    let index = streaminfo.channels as usize;
+    let index = match streaminfo.channels as usize {
+        0 => return Err("no channels".to_string()),
+        n if n > 8 => return Err("more than 8 channels, not supported yet".to_string()),
+        n => n,
+    };
     let to = &FLAC_CHANNEL_POSITIONS[index - 1][..index];
-    audio_info = audio_info.positions(to);
+    let info_builder =
+        gst_audio::AudioInfo::new(format, streaminfo.sample_rate, streaminfo.channels)
+            .positions(to);
 
-    Ok(audio_info.build().unwrap())
+    let audio_info = info_builder
+        .build()
+        .map_err(|e| format!("failed to build audio info: {}", e))?;
+
+    Ok(audio_info)
 }
 
 // http://www.xiph.org/vorbis/doc/Vorbis_I_spec.html#x1-800004.3.9
