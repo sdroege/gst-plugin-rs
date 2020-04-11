@@ -264,19 +264,13 @@ impl ClaxonDec {
             .audio_info
             .as_ref()
             .ok_or(gst::FlowError::NotNegotiated)?;
-        let channels = audio_info.channels() as usize;
+        let depth = AudioDepth::validate(audio_info.depth())?;
 
+        let channels = audio_info.channels() as usize;
         if channels > 8 {
             unreachable!(
                 "FLAC only supports from 1 to 8 channels (audio contains {} channels)",
                 channels
-            );
-        }
-
-        if ![8, 16, 24, 32].contains(&audio_info.depth()) {
-            unreachable!(
-                "claxondec doesn't supports {}bits audio",
-                audio_info.depth()
             );
         }
 
@@ -311,17 +305,55 @@ impl ClaxonDec {
             result.into_buffer()
         };
 
-        let outbuf = if audio_info.depth() == 8 {
-            let v = v.iter().map(|e| *e as i8).collect::<Vec<_>>();
-            gst::Buffer::from_slice(v.into_byte_vec())
-        } else if audio_info.depth() == 16 {
-            let v = v.iter().map(|e| *e as i16).collect::<Vec<_>>();
-            gst::Buffer::from_slice(v.into_byte_vec())
-        } else {
-            gst::Buffer::from_slice(v.into_byte_vec())
-        };
-
+        let depth_adjusted = depth.adjust_samples(v);
+        let outbuf = gst::Buffer::from_slice(depth_adjusted);
         element.finish_frame(Some(outbuf), 1)
+    }
+}
+
+/// Depth of audio samples
+enum AudioDepth {
+    /// 8bits.
+    I8,
+    /// 16bits.
+    I16,
+    /// 24bits.
+    I24,
+    /// 32bits.
+    I32,
+}
+
+impl AudioDepth {
+    /// Validate input audio depth.
+    fn validate(input: u32) -> Result<Self, gst::FlowError> {
+        let depth = match input {
+            8 => AudioDepth::I8,
+            16 => AudioDepth::I16,
+            24 => AudioDepth::I24,
+            32 => AudioDepth::I32,
+            _ => return Err(gst::FlowError::NotSupported),
+        };
+        Ok(depth)
+    }
+
+    /// Adjust samples depth.
+    ///
+    /// This takes a vector of 32bits samples, adjusts the depth of each,
+    /// and returns the adjusted bytes stream.
+    fn adjust_samples(&self, input: Vec<i32>) -> Vec<u8> {
+        match *self {
+            AudioDepth::I8 => input
+                .into_iter()
+                .map(|x| x as i8)
+                .collect::<Vec<_>>()
+                .into_byte_vec(),
+            AudioDepth::I16 => input
+                .into_iter()
+                .map(|x| x as i16)
+                .collect::<Vec<_>>()
+                .into_byte_vec(),
+            AudioDepth::I24 | AudioDepth::I32 => input.into_byte_vec(),
+        }
     }
 }
 
