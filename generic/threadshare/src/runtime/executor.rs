@@ -735,6 +735,8 @@ mod tests {
 
     #[tokio::test]
     async fn block_on_within_tokio() {
+        gst::init().unwrap();
+
         let context = Context::acquire("block_on_within_tokio", SLEEP_DURATION_MS).unwrap();
 
         let bytes_sent = crate::runtime::executor::block_on(context.spawn(async {
@@ -759,6 +761,8 @@ mod tests {
 
     #[test]
     fn block_on_from_sync() {
+        gst::init().unwrap();
+
         let context = Context::acquire("block_on_from_sync", SLEEP_DURATION_MS).unwrap();
 
         let bytes_sent = crate::runtime::executor::block_on(context.spawn(async {
