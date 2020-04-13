@@ -40,7 +40,6 @@ use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
-use crate::get_current_running_time;
 use crate::runtime::prelude::*;
 use crate::runtime::{self, Context, PadSink, PadSinkRef, PadSrc, PadSrcRef, Task};
 
@@ -426,7 +425,7 @@ impl SinkHandler {
         }
 
         if dts == gst::CLOCK_TIME_NONE {
-            dts = get_current_running_time(element);
+            dts = element.get_current_running_time();
             pts = dts;
 
             estimated_dts = state.clock_rate.is_some();
@@ -919,7 +918,7 @@ impl SrcHandler {
         latency: gst::ClockTime,
         context_wait: gst::ClockTime,
     ) -> (gst::ClockTime, Option<(gst::ClockTime, Duration)>) {
-        let now = get_current_running_time(element);
+        let now = element.get_current_running_time();
 
         gst_debug!(
             CAT,

@@ -46,7 +46,6 @@ use glib_sys as glib_ffi;
 
 use gst;
 use gst::gst_plugin_define;
-use gst::prelude::*;
 use gstreamer_sys as gst_ffi;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -102,17 +101,5 @@ impl<'a> Drop for MutexGuard<'a> {
         unsafe {
             glib_ffi::g_mutex_unlock(mut_override(self.0));
         }
-    }
-}
-
-pub fn get_current_running_time(element: &gst::Element) -> gst::ClockTime {
-    if let Some(clock) = element.get_clock() {
-        if clock.get_time() > element.get_base_time() {
-            clock.get_time() - element.get_base_time()
-        } else {
-            0.into()
-        }
-    } else {
-        gst::CLOCK_TIME_NONE
     }
 }

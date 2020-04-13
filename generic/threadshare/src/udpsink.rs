@@ -745,7 +745,7 @@ impl UdpSinkPadHandler {
 
     /* Wait until specified time */
     async fn sync(&self, element: &gst::Element, running_time: gst::ClockTime) {
-        let now = super::get_current_running_time(&element);
+        let now = element.get_current_running_time();
 
         if now < running_time {
             let delay = running_time - now;

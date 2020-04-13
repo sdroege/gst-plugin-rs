@@ -37,7 +37,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::u32;
 
-use crate::get_current_running_time;
 use crate::runtime::prelude::*;
 use crate::runtime::{self, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
@@ -120,7 +119,7 @@ impl InputSelectorPadSinkHandler {
 
     /* Wait until specified time */
     async fn sync(&self, element: &gst::Element, running_time: gst::ClockTime) {
-        let now = get_current_running_time(&element);
+        let now = element.get_current_running_time();
 
         if now.is_some() && now < running_time {
             let delay = running_time - now;
