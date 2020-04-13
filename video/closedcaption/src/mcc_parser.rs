@@ -46,8 +46,8 @@ pub enum MccLine<'a> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {
-    Init,
     Header,
+    EmptyAfterHeader,
     Comments,
     Metadata,
     Captions,
@@ -349,7 +349,9 @@ where
 /// MCC parser the parses line-by-line and keeps track of the current state in the file.
 impl MccParser {
     pub fn new() -> Self {
-        Self { state: State::Init }
+        Self {
+            state: State::Header,
+        }
     }
 
     pub fn new_scan_captions() -> Self {
@@ -359,7 +361,7 @@ impl MccParser {
     }
 
     pub fn reset(&mut self) {
-        self.state = State::Init;
+        self.state = State::Header;
     }
 
     pub fn parse_line<'a>(
@@ -369,15 +371,15 @@ impl MccParser {
     ) -> Result<MccLine<'a>, combine::easy::Errors<u8, &'a [u8], combine::stream::PointerOffset>>
     {
         match self.state {
-            State::Init => header()
-                .message("while in Init state")
+            State::Header => header()
+                .message("while in Header state")
                 .easy_parse(line)
                 .map(|v| {
-                    self.state = State::Header;
+                    self.state = State::EmptyAfterHeader;
                     v.0
                 }),
-            State::Header => empty_line()
-                .message("while in Header state")
+            State::EmptyAfterHeader => empty_line()
+                .message("while in EmptyAfterHeader state")
                 .easy_parse(line)
                 .map(|v| {
                     self.state = State::Comments;
