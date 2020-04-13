@@ -40,10 +40,9 @@ pub enum SccLine {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {
-    Init,
     Header,
     Empty,
-    Captions,
+    CaptionOrEmpty,
 }
 
 #[derive(Debug)]
@@ -213,11 +212,13 @@ where
 /// SCC parser the parses line-by-line and keeps track of the current state in the file.
 impl SccParser {
     pub fn new() -> Self {
-        Self { state: State::Init }
+        Self {
+            state: State::Header,
+        }
     }
 
     pub fn reset(&mut self) {
-        self.state = State::Init;
+        self.state = State::Header;
     }
 
     pub fn parse_line<'a>(
@@ -225,34 +226,24 @@ impl SccParser {
         line: &'a [u8],
     ) -> Result<SccLine, combine::easy::Errors<u8, &'a [u8], combine::stream::PointerOffset>> {
         match self.state {
-            State::Init => header()
-                .message("while in Init state")
-                .easy_parse(line)
-                .map(|v| {
-                    self.state = State::Header;
-                    v.0
-                }),
-            State::Header => empty_line()
+            State::Header => header()
                 .message("while in Header state")
                 .easy_parse(line)
                 .map(|v| {
                     self.state = State::Empty;
                     v.0
                 }),
-            State::Empty => caption()
+            State::Empty => empty_line()
                 .message("while in Empty state")
                 .easy_parse(line)
                 .map(|v| {
-                    self.state = State::Captions;
+                    self.state = State::CaptionOrEmpty;
                     v.0
                 }),
-            State::Captions => empty_line()
-                .message("while in Captions state")
+            State::CaptionOrEmpty => choice!(caption(), empty_line())
+                .message("while in CaptionOrEmpty state")
                 .easy_parse(line)
-                .map(|v| {
-                    self.state = State::Empty;
-                    v.0
-                }),
+                .map(|v| v.0),
         }
     }
 }
