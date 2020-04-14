@@ -288,7 +288,7 @@ pub const __STDC_IEC_559_COMPLEX__: u32 = 1;
 pub const __STDC_ISO_10646__: u32 = 201706;
 pub const __GNU_LIBRARY__: u32 = 6;
 pub const __GLIBC__: u32 = 2;
-pub const __GLIBC_MINOR__: u32 = 29;
+pub const __GLIBC_MINOR__: u32 = 30;
 pub const _SYS_CDEFS_H: u32 = 1;
 pub const __glibc_c99_flexarr_available: u32 = 1;
 pub const __WORDSIZE: u32 = 64;
@@ -692,7 +692,7 @@ extern "C" {
     ) -> *mut ::std::os::raw::c_char;
 }
 extern "C" {
-    pub static mut eia608_parity_table: [u8; 128usize];
+    pub static eia608_parity_table: [u8; 128usize];
 }
 extern "C" {
     pub static mut eia608_style_map: [*const ::std::os::raw::c_char; 0usize];
@@ -948,7 +948,7 @@ extern "C" {
     pub fn caption_frame_init(frame: *mut caption_frame_t);
 }
 extern "C" {
-    pub static mut _caption_frame_rollup: [::std::os::raw::c_int; 4usize];
+    pub static _caption_frame_rollup: [::std::os::raw::c_int; 4usize];
 }
 extern "C" {
     pub fn caption_frame_write_char(
