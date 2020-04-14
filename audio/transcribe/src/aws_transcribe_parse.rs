@@ -403,10 +403,11 @@ impl Transcriber {
                             "AWS raised an error: {}",
                             message.message
                         );
-                        Err(gst_error_msg!(
+
+                        return Err(gst_error_msg!(
                             gst::StreamError::Failed,
                             ["AWS raised an error: {}", message.message]
-                        ))?;
+                        ));
                     }
 
                     let mut transcript: Transcript =

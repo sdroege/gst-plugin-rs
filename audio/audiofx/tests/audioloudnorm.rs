@@ -138,23 +138,29 @@ fn run_test(
     let mut num_samples = 0;
     let mut expected_ts = gst::ClockTime::from(0);
     for sample in samples.iter() {
+        use std::cmp::Ordering;
+
         let buf = sample.get_buffer().unwrap();
 
         let ts = buf.get_pts();
-        if ts > expected_ts {
-            assert!(
-                ts - expected_ts <= gst::ClockTime::from(1),
-                "TS is {} instead of {}",
-                ts,
-                expected_ts
-            );
-        } else if ts < expected_ts {
-            assert!(
-                expected_ts - ts <= gst::ClockTime::from(1),
-                "TS is {} instead of {}",
-                ts,
-                expected_ts
-            );
+        match ts.cmp(&expected_ts) {
+            Ordering::Greater => {
+                assert!(
+                    ts - expected_ts <= gst::ClockTime::from(1),
+                    "TS is {} instead of {}",
+                    ts,
+                    expected_ts
+                );
+            }
+            Ordering::Less => {
+                assert!(
+                    expected_ts - ts <= gst::ClockTime::from(1),
+                    "TS is {} instead of {}",
+                    ts,
+                    expected_ts
+                );
+            }
+            Ordering::Equal => (),
         }
 
         let map = buf.map_readable().unwrap();

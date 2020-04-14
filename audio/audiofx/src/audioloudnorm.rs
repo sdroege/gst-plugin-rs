@@ -1072,7 +1072,14 @@ impl State {
 
                     // Gain reduction at the new start. Note the plus as the slope is
                     // negative already here.
-                    self.gain_reduction[0] = self.gain_reduction[0] + new_start * old_slope;
+                    //
+                    // Clippy warning ignored here because this is just incidentally the same as
+                    // AssignAdd: we calculate a new adjusted gain reduction here, and override the
+                    // previous one.
+                    #[allow(clippy::assign_op_pattern)]
+                    {
+                        self.gain_reduction[0] = self.gain_reduction[0] + new_start * old_slope;
+                    }
 
                     // At env_cnt == ATTACK_WINDOW we need the new gain reduction
                     self.gain_reduction[1] = gain_reduction;
