@@ -136,7 +136,7 @@ fn parse_header(input: &[u8]) -> IResult<&[u8], Header> {
 
 pub fn packet_is_exception(packet: &Packet) -> bool {
     for header in &packet.headers {
-        if header.name == ":message-type" && header.value_type == 7 {
+        if header.name == ":message-type" && header.value == "exception" {
             return true;
         }
     }
