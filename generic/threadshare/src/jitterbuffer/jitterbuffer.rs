@@ -450,16 +450,23 @@ impl SinkHandler {
             }
         }
 
-        if state.clock_rate.is_none() {
-            let caps = element
-                .emit("request-pt-map", &[&(pt as u32)])
-                .map_err(|_| gst::FlowError::Error)?
-                .ok_or(gst::FlowError::Error)?
-                .get::<gst::Caps>()
-                .map_err(|_| gst::FlowError::Error)?
-                .ok_or(gst::FlowError::Error)?;
-            self.parse_caps(inner, &mut state, element, &caps, pt)?;
-        }
+        let mut state = {
+            if state.clock_rate.is_none() {
+                drop(state);
+                let caps = element
+                    .emit("request-pt-map", &[&(pt as u32)])
+                    .map_err(|_| gst::FlowError::Error)?
+                    .ok_or(gst::FlowError::Error)?
+                    .get::<gst::Caps>()
+                    .map_err(|_| gst::FlowError::Error)?
+                    .ok_or(gst::FlowError::Error)?;
+                let mut state = jb.state.lock().unwrap();
+                self.parse_caps(inner, &mut state, element, &caps, pt)?;
+                state
+            } else {
+                state
+            }
+        };
 
         inner.packet_rate_ctx.update(seq, rtptime);
 
