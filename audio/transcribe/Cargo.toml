@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-transcribe"
-version = "0.1.0"
+version = "0.6.0"
 authors = ["Jordan Petridis <jordan@centricular.com>", "Mathieu Duponchelle <mathieu@centricular.com>"]
 edition = "2018"
 description = "AWS Transcribe plugin"
