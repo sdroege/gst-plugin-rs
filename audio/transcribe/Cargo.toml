@@ -5,7 +5,7 @@ authors = ["Jordan Petridis <jordan@centricular.com>", "Mathieu Duponchelle <mat
 edition = "2018"
 description = "AWS Transcribe plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-license = "LGPL-2.1+"
+license = "LGPL-2.1-or-later"
 
 [dependencies]
 glib = { git = "https://github.com/gtk-rs/glib" }

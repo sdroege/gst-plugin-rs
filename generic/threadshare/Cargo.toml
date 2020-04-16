@@ -2,7 +2,7 @@
 name = "gst-plugin-threadshare"
 version = "0.6.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
-license = "LGPL-2.1+"
+license = "LGPL-2.1-or-later"
 description = "Threadshare Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 edition = "2018"

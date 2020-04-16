@@ -2,7 +2,7 @@
 name = "gst-plugin-closedcaption"
 version = "0.6.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>", "Jordan Petridis <jordan@centricular.com>"]
-license = "LGPL-2.1+"
+license = "LGPL-2.1-or-later"
 edition = "2018"
 description = "Rust Closed Caption Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
