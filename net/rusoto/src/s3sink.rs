@@ -15,13 +15,8 @@ use gst::subclass::prelude::*;
 
 use gst_base::subclass::prelude::*;
 
-use futures::prelude::*;
-use futures::sync::oneshot;
-
+use futures::future;
 use rusoto_core::region::Region;
-
-use tokio::runtime;
-
 use rusoto_s3::{
     CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart,
     CreateMultipartUploadRequest, S3Client, UploadPartRequest, S3,
@@ -31,9 +26,10 @@ use std::convert::From;
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use crate::s3utils;
+use crate::s3utils::{self, WaitError};
 
 struct Started {
+    client: S3Client,
     buffer: Vec<u8>,
     upload_id: String,
     part_number: i64,
@@ -41,8 +37,9 @@ struct Started {
 }
 
 impl Started {
-    pub fn new(buffer: Vec<u8>, upload_id: String) -> Started {
+    pub fn new(client: S3Client, buffer: Vec<u8>, upload_id: String) -> Started {
         Started {
+            client,
             buffer,
             upload_id,
             part_number: 0,
@@ -93,9 +90,7 @@ struct Settings {
 pub struct S3Sink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
-    runtime: runtime::Runtime,
-    canceller: Mutex<Option<oneshot::Sender<()>>>,
-    client: Mutex<S3Client>,
+    canceller: Mutex<Option<future::AbortHandle>>,
 }
 
 lazy_static! {
@@ -167,20 +162,6 @@ impl S3Sink {
         let upload_part_req = self.create_upload_part_request()?;
         let part_number = upload_part_req.part_number;
 
-        let upload_part_req_future = self
-            .client
-            .lock()
-            .unwrap()
-            .upload_part(upload_part_req)
-            .map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenWrite,
-                    ["Failed to upload part: {}", err]
-                )
-            });
-
-        let output = s3utils::wait(&self.canceller, &self.runtime, upload_part_req_future)?;
-
         let mut state = self.state.lock().unwrap();
         let state = match *state {
             State::Started(ref mut started_state) => started_state,
@@ -188,6 +169,18 @@ impl S3Sink {
                 unreachable!("Element should be started");
             }
         };
+
+        let upload_part_req_future = state.client.upload_part(upload_part_req);
+
+        let output =
+            s3utils::wait(&self.canceller, upload_part_req_future).map_err(|err| match err {
+                WaitError::FutureError(err) => Some(gst_error_msg!(
+                    gst::ResourceError::OpenWrite,
+                    ["Failed to upload part: {}", err]
+                )),
+                WaitError::Cancelled => None,
+            })?;
+
         state.completed_parts.push(CompletedPart {
             e_tag: output.e_tag,
             part_number: Some(part_number),
@@ -221,14 +214,11 @@ impl S3Sink {
         })
     }
 
-    fn create_complete_multipart_upload_request(&self) -> CompleteMultipartUploadRequest {
-        let mut state = self.state.lock().unwrap();
-
-        let started_state = match *state {
-            State::Started(ref mut started_state) => started_state,
-            State::Stopped => unreachable!("Cannot stop before start"),
-        };
-
+    fn create_complete_multipart_upload_request(
+        &self,
+        started_state: &mut Started,
+        settings: &Settings,
+    ) -> CompleteMultipartUploadRequest {
         started_state
             .completed_parts
             .sort_by(|a, b| a.part_number.cmp(&b.part_number));
@@ -240,7 +230,6 @@ impl S3Sink {
             )),
         };
 
-        let settings = self.settings.lock().unwrap();
         CompleteMultipartUploadRequest {
             bucket: settings.bucket.as_ref().unwrap().to_owned(),
             key: settings.key.as_ref().unwrap().to_owned(),
@@ -252,8 +241,8 @@ impl S3Sink {
 
     fn create_create_multipart_upload_request(
         &self,
+        settings: &Settings,
     ) -> Result<CreateMultipartUploadRequest, gst::ErrorMessage> {
-        let settings = self.settings.lock().unwrap();
         if settings.bucket.is_none() || settings.key.is_none() {
             return Err(gst_error_msg!(
                 gst::ResourceError::Settings,
@@ -280,47 +269,56 @@ impl S3Sink {
             ));
         }
 
-        let complete_req = self.create_complete_multipart_upload_request();
-        let complete_req_future = self
-            .client
-            .lock()
-            .unwrap()
-            .complete_multipart_upload(complete_req)
-            .map_err(|err| {
-                gst_error_msg!(
+        let mut state = self.state.lock().unwrap();
+        let started_state = match *state {
+            State::Started(ref mut started_state) => started_state,
+            State::Stopped => {
+                unreachable!("Element should be started");
+            }
+        };
+
+        let settings = self.settings.lock().unwrap();
+
+        let complete_req = self.create_complete_multipart_upload_request(started_state, &settings);
+        let complete_req_future = started_state.client.complete_multipart_upload(complete_req);
+
+        s3utils::wait(&self.canceller, complete_req_future)
+            .map(|_| ())
+            .map_err(|err| match err {
+                WaitError::FutureError(err) => gst_error_msg!(
                     gst::ResourceError::Write,
                     ["Failed to complete multipart upload: {}.", err.to_string()]
-                )
-            });
-
-        s3utils::wait(&self.canceller, &self.runtime, complete_req_future)
-            .map_err(|err| {
-                err.unwrap_or_else(|| {
+                ),
+                WaitError::Cancelled => {
                     gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during stop"])
-                })
+                }
             })
-            .map(|_| ())
     }
 
-    fn start(&self) -> Result<Started, gst::ErrorMessage> {
-        let create_multipart_req = self.create_create_multipart_upload_request()?;
-        let create_multipart_req_future = self
-            .client
-            .lock()
-            .unwrap()
-            .create_multipart_upload(create_multipart_req)
-            .map_err(|err| {
-                gst_error_msg!(
+    fn start(&self) -> Result<(), gst::ErrorMessage> {
+        let mut state = self.state.lock().unwrap();
+        let settings = self.settings.lock().unwrap();
+
+        if let State::Started { .. } = *state {
+            unreachable!("Element should be started");
+        }
+
+        let client = S3Client::new(settings.region.clone());
+
+        let create_multipart_req = self.create_create_multipart_upload_request(&settings)?;
+        let create_multipart_req_future = client.create_multipart_upload(create_multipart_req);
+
+        let response = s3utils::wait(&self.canceller, create_multipart_req_future).map_err(
+            |err| match err {
+                WaitError::FutureError(err) => gst_error_msg!(
                     gst::ResourceError::OpenWrite,
                     ["Failed to create multipart upload: {}", err]
-                )
-            });
-        let response = s3utils::wait(&self.canceller, &self.runtime, create_multipart_req_future)
-            .map_err(|err| {
-            err.unwrap_or_else(|| {
-                gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
-            })
-        })?;
+                ),
+                WaitError::Cancelled => {
+                    gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
+                }
+            },
+        )?;
 
         let upload_id = response.upload_id.ok_or_else(|| {
             gst_error_msg!(
@@ -329,10 +327,13 @@ impl S3Sink {
             )
         })?;
 
-        Ok(Started::new(
-            Vec::with_capacity(self.settings.lock().unwrap().buffer_size as usize),
+        *state = State::Started(Started::new(
+            client,
+            Vec::with_capacity(settings.buffer_size as usize),
             upload_id,
-        ))
+        ));
+
+        Ok(())
     }
 
     fn update_buffer(
@@ -372,10 +373,9 @@ impl S3Sink {
     fn cancel(&self) {
         let mut canceller = self.canceller.lock().unwrap();
 
-        if canceller.take().is_some() {
-            /* We don't do anything, the Sender will be dropped, and that will cause the
-             * Receiver to be cancelled */
-        }
+        if let Some(c) = canceller.take() {
+            c.abort()
+        };
     }
 }
 
@@ -392,12 +392,6 @@ impl ObjectSubclass for S3Sink {
             settings: Mutex::new(Default::default()),
             state: Mutex::new(Default::default()),
             canceller: Mutex::new(None),
-            runtime: runtime::Builder::new()
-                .core_threads(1)
-                .name_prefix("rusotos3sink-runtime")
-                .build()
-                .unwrap(),
-            client: Mutex::new(S3Client::new(Region::default())),
         }
     }
 
@@ -438,18 +432,13 @@ impl ObjectImpl for S3Sink {
                 settings.key = value.get::<String>().expect("type checked upstream");
             }
             subclass::Property("region", ..) => {
-                let region = Region::from_str(
+                settings.region = Region::from_str(
                     &value
                         .get::<String>()
                         .expect("type checked upstream")
                         .expect("set_property(\"region\"): no value provided"),
                 )
                 .unwrap();
-                if settings.region != region {
-                    let mut client = self.client.lock().unwrap();
-                    *client = S3Client::new(region.clone());
-                    settings.region = region;
-                }
             }
             subclass::Property("part-size", ..) => {
                 settings.buffer_size = value.get_some::<u64>().expect("type checked upstream");
@@ -476,14 +465,7 @@ impl ElementImpl for S3Sink {}
 
 impl BaseSinkImpl for S3Sink {
     fn start(&self, _element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
-        let mut state = self.state.lock().unwrap();
-        if let State::Started(_) = *state {
-            unreachable!("RusotoS3Sink already started");
-        }
-
-        *state = State::Started(self.start()?);
-
-        Ok(())
+        self.start()
     }
 
     fn stop(&self, element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {

@@ -9,10 +9,8 @@
 use std::sync::Mutex;
 
 use bytes::Bytes;
-use futures::sync::oneshot;
-use futures::{Future, Stream};
+use futures::future;
 use rusoto_s3::*;
-use tokio::runtime;
 
 use glib::prelude::*;
 use glib::subclass;
@@ -25,7 +23,7 @@ use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use crate::s3url::*;
-use crate::s3utils;
+use crate::s3utils::{self, WaitError};
 
 #[allow(clippy::large_enum_variant)]
 enum StreamingState {
@@ -40,8 +38,7 @@ enum StreamingState {
 pub struct S3Src {
     url: Mutex<Option<GstS3Url>>,
     state: Mutex<StreamingState>,
-    runtime: runtime::Runtime,
-    canceller: Mutex<Option<oneshot::Sender<Bytes>>>,
+    canceller: Mutex<Option<future::AbortHandle>>,
 }
 
 lazy_static! {
@@ -66,10 +63,9 @@ impl S3Src {
     fn cancel(&self) {
         let mut canceller = self.canceller.lock().unwrap();
 
-        if canceller.take().is_some() {
-            /* We don't do anything, the Sender will be dropped, and that will cause the
-             * Receiver to be cancelled */
-        }
+        if let Some(c) = canceller.take() {
+            c.abort()
+        };
     }
 
     fn connect(self: &S3Src, url: &GstS3Url) -> Result<S3Client, gst::ErrorMessage> {
@@ -125,20 +121,14 @@ impl S3Src {
 
         let response = client.head_object(request);
 
-        let output = s3utils::wait(
-            &self.canceller,
-            &self.runtime,
-            response.map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::NotFound,
-                    ["Failed to HEAD object: {}", err]
-                )
-            }),
-        )
-        .map_err(|err| {
-            err.unwrap_or_else(|| {
+        let output = s3utils::wait(&self.canceller, response).map_err(|err| match err {
+            WaitError::FutureError(err) => gst_error_msg!(
+                gst::ResourceError::NotFound,
+                ["Failed to HEAD object: {}", err]
+            ),
+            WaitError::Cancelled => {
                 gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
-            })
+            }
         })?;
 
         if let Some(size) = output.content_length {
@@ -193,17 +183,13 @@ impl S3Src {
 
         let response = client.get_object(request);
 
-        /* Drop the state lock now that we're done with it and need the next part to be
-         * interruptible */
-        drop(state);
-
-        let output = s3utils::wait(
-            &self.canceller,
-            &self.runtime,
-            response.map_err(|err| {
-                gst_error_msg!(gst::ResourceError::Read, ["Could not read: {}", err])
-            }),
-        )?;
+        let output = s3utils::wait(&self.canceller, response).map_err(|err| match err {
+            WaitError::FutureError(err) => Some(gst_error_msg!(
+                gst::ResourceError::Read,
+                ["Could not read: {}", err]
+            )),
+            WaitError::Cancelled => None,
+        })?;
 
         gst_debug!(
             CAT,
@@ -212,13 +198,13 @@ impl S3Src {
             output.content_length.unwrap()
         );
 
-        s3utils::wait(
-            &self.canceller,
-            &self.runtime,
-            output.body.unwrap().concat2().map_err(|err| {
-                gst_error_msg!(gst::ResourceError::Read, ["Could not read: {}", err])
-            }),
-        )
+        s3utils::wait_stream(&self.canceller, &mut output.body.unwrap()).map_err(|err| match err {
+            WaitError::FutureError(err) => Some(gst_error_msg!(
+                gst::ResourceError::Read,
+                ["Could not read: {}", err]
+            )),
+            WaitError::Cancelled => None,
+        })
     }
 }
 
@@ -234,11 +220,6 @@ impl ObjectSubclass for S3Src {
         Self {
             url: Mutex::new(None),
             state: Mutex::new(StreamingState::Stopped),
-            runtime: runtime::Builder::new()
-                .core_threads(1)
-                .name_prefix("rusotos3src-runtime")
-                .build()
-                .unwrap(),
             canceller: Mutex::new(None),
         }
     }
@@ -346,14 +327,11 @@ impl BaseSrcImpl for S3Src {
     }
 
     fn start(&self, src: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
-        let state = self.state.lock().unwrap();
+        let mut state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
             unreachable!("RusotoS3Src is already started");
         }
-
-        /* Drop the lock as self.head() needs it */
-        drop(state);
 
         let s3url = match *self.url.lock().unwrap() {
             Some(ref url) => url.clone(),
@@ -366,10 +344,7 @@ impl BaseSrcImpl for S3Src {
         };
 
         let s3client = self.connect(&s3url)?;
-
         let size = self.head(src, &s3client, &s3url)?;
-
-        let mut state = self.state.lock().unwrap();
 
         *state = StreamingState::Started {
             url: s3url,
@@ -381,6 +356,9 @@ impl BaseSrcImpl for S3Src {
     }
 
     fn stop(&self, _: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
+        // First, stop any asynchronous tasks if we're running, as they will have the state lock
+        self.cancel();
+
         let mut state = self.state.lock().unwrap();
 
         if let StreamingState::Stopped = *state {
