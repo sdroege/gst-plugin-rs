@@ -95,7 +95,7 @@ fn push() {
 }
 
 #[test]
-fn pause() {
+fn pause_regular() {
     init();
 
     let mut h = gst_check::Harness::new("ts-appsrc");
@@ -121,10 +121,6 @@ fn pause() {
         .unwrap());
 
     let _ = h.pull().unwrap();
-
-    appsrc
-        .change_state(gst::StateChange::PlayingToPaused)
-        .unwrap();
 
     // Pre-pause buffer
     assert!(appsrc
@@ -169,7 +165,7 @@ fn pause() {
 }
 
 #[test]
-fn flush() {
+fn flush_regular() {
     init();
 
     let mut h = gst_check::Harness::new("ts-appsrc");
@@ -264,7 +260,7 @@ fn pause_flush() {
     // FlushStart
     assert!(h.push_upstream_event(gst::Event::new_flush_start().build()));
 
-    // Can't push buffer while flushing
+    // Can't push buffers while flushing
     assert!(!appsrc
         .emit("push-buffer", &[&gst::Buffer::new()])
         .unwrap()

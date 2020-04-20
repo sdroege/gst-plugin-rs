@@ -406,12 +406,15 @@ fn eos() {
 
         eos_notif_rcv.recv().unwrap();
 
-        assert!(push_buffer(&src));
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        assert_eq!(
-            sample_notif_rcv.try_recv().unwrap_err(),
-            mpsc::TryRecvError::Empty
-        );
+        // FIXME not ideal, but better than previous approach.
+        // I think the "end-of-stream" signal should block
+        // until the **src** element has actually reached EOS
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            if !push_buffer(&src) {
+                break;
+            }
+        }
 
         pipeline_clone.set_state(gst::State::Null).unwrap();
         l_clone.quit();

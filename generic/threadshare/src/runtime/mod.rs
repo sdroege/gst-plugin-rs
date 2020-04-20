@@ -54,6 +54,7 @@ pub use task::{Task, TaskState};
 
 pub mod prelude {
     pub use super::pad::{PadSinkHandler, PadSrcHandler};
+    pub use super::task::TaskImpl;
 }
 
 pub mod time;

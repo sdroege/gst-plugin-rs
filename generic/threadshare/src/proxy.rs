@@ -41,7 +41,7 @@ use crate::runtime::{
     Context, PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, PadSrcWeak, Task,
 };
 
-use super::dataqueue::{DataQueue, DataQueueItem, DataQueueState};
+use super::dataqueue::{DataQueue, DataQueueItem};
 
 lazy_static! {
     static ref PROXY_CONTEXTS: StdMutex<HashMap<String, Weak<StdMutex<ProxyContextInner>>>> =
@@ -357,7 +357,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         };
 
         if let EventView::FlushStart(..) = event.view() {
-            proxysink.stop(&element).unwrap();
+            proxysink.stop(&element);
         }
 
         if let Some(src_pad) = src_pad {
@@ -391,7 +391,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
                     let _ =
                         element.post_message(&gst::Message::new_eos().src(Some(&element)).build());
                 }
-                EventView::FlushStop(..) => proxysink.start(&element).unwrap(),
+                EventView::FlushStop(..) => proxysink.start(&element),
                 _ => (),
             }
 
@@ -421,69 +421,56 @@ lazy_static! {
 }
 
 impl ProxySink {
-    fn schedule_pending_queue(
-        &self,
-        element: &gst::Element,
-        pending_queue: &mut PendingQueue,
-    ) -> impl Future<Output = ()> {
-        gst_log!(SINK_CAT, obj: element, "Scheduling pending queue now");
+    async fn schedule_pending_queue(&self, element: &gst::Element) {
+        loop {
+            let more_queue_space_receiver = {
+                let proxy_ctx = self.proxy_ctx.lock().unwrap();
+                let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
-        pending_queue.scheduled = true;
+                gst_log!(SINK_CAT, obj: element, "Trying to empty pending queue");
 
-        let element = element.clone();
-        async move {
-            let sink = Self::from_instance(&element);
+                let ProxyContextInner {
+                    pending_queue: ref mut pq,
+                    ref dataqueue,
+                    ..
+                } = *shared_ctx;
 
-            loop {
-                let more_queue_space_receiver = {
-                    let proxy_ctx = sink.proxy_ctx.lock().unwrap();
-                    let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
-
-                    gst_log!(SINK_CAT, obj: &element, "Trying to empty pending queue");
-
-                    let ProxyContextInner {
-                        pending_queue: ref mut pq,
-                        ref dataqueue,
-                        ..
-                    } = *shared_ctx;
-
-                    if let Some(ref mut pending_queue) = *pq {
-                        if let Some(ref dataqueue) = dataqueue {
-                            let mut failed_item = None;
-                            while let Some(item) = pending_queue.items.pop_front() {
-                                if let Err(item) = dataqueue.push(item) {
-                                    failed_item = Some(item);
-                                    break;
-                                }
+                if let Some(ref mut pending_queue) = *pq {
+                    if let Some(ref dataqueue) = dataqueue {
+                        let mut failed_item = None;
+                        while let Some(item) = pending_queue.items.pop_front() {
+                            if let Err(item) = dataqueue.push(item) {
+                                failed_item = Some(item);
+                                break;
                             }
+                        }
 
-                            if let Some(failed_item) = failed_item {
-                                pending_queue.items.push_front(failed_item);
-                                let (sender, receiver) = oneshot::channel();
-                                pending_queue.more_queue_space_sender = Some(sender);
-
-                                receiver
-                            } else {
-                                gst_log!(SINK_CAT, obj: &element, "Pending queue is empty now");
-                                *pq = None;
-                                return;
-                            }
-                        } else {
+                        if let Some(failed_item) = failed_item {
+                            pending_queue.items.push_front(failed_item);
                             let (sender, receiver) = oneshot::channel();
                             pending_queue.more_queue_space_sender = Some(sender);
 
                             receiver
+                        } else {
+                            gst_log!(SINK_CAT, obj: element, "Pending queue is empty now");
+                            *pq = None;
+                            return;
                         }
                     } else {
-                        gst_log!(SINK_CAT, obj: &element, "Flushing, dropping pending queue");
-                        *pq = None;
-                        return;
-                    }
-                };
+                        let (sender, receiver) = oneshot::channel();
+                        pending_queue.more_queue_space_sender = Some(sender);
 
-                gst_log!(SINK_CAT, obj: &element, "Waiting for more queue space");
-                let _ = more_queue_space_receiver.await;
-            }
+                        receiver
+                    }
+                } else {
+                    gst_log!(SINK_CAT, obj: element, "Flushing, dropping pending queue");
+                    *pq = None;
+                    return;
+                }
+            };
+
+            gst_log!(SINK_CAT, obj: element, "Waiting for more queue space");
+            let _ = more_queue_space_receiver.await;
         }
     }
 
@@ -563,7 +550,10 @@ impl ProxySink {
                     );
 
                     if schedule_now {
-                        let wait_fut = self.schedule_pending_queue(element, pending_queue);
+                        gst_log!(SINK_CAT, obj: element, "Scheduling pending queue now");
+                        pending_queue.scheduled = true;
+
+                        let wait_fut = self.schedule_pending_queue(element);
                         Some(wait_fut)
                     } else {
                         gst_log!(SINK_CAT, obj: element, "Scheduling pending queue later");
@@ -624,15 +614,13 @@ impl ProxySink {
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) {
         gst_debug!(SINK_CAT, obj: element, "Unpreparing");
         *self.proxy_ctx.lock().unwrap() = None;
         gst_debug!(SINK_CAT, obj: element, "Unprepared");
-
-        Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), ()> {
+    fn start(&self, element: &gst::Element) {
         let proxy_ctx = self.proxy_ctx.lock().unwrap();
         let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
@@ -647,11 +635,9 @@ impl ProxySink {
         shared_ctx.last_res = Ok(gst::FlowSuccess::Ok);
 
         gst_debug!(SINK_CAT, obj: element, "Started");
-
-        Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
+    fn stop(&self, element: &gst::Element) {
         let proxy_ctx = self.proxy_ctx.lock().unwrap();
         let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
@@ -661,8 +647,6 @@ impl ProxySink {
         shared_ctx.last_res = Err(gst::FlowError::Flushing);
 
         gst_debug!(SINK_CAT, obj: element, "Stopped");
-
-        Ok(())
     }
 }
 
@@ -762,10 +746,10 @@ impl ElementImpl for ProxySink {
                 })?;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop(element);
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+                self.unprepare(element);
             }
             _ => (),
         }
@@ -773,7 +757,7 @@ impl ElementImpl for ProxySink {
         let success = self.parent_change_state(element, transition)?;
 
         if transition == gst::StateChange::ReadyToPaused {
-            self.start(element).map_err(|_| gst::StateChangeError)?;
+            self.start(element);
         }
 
         Ok(success)
@@ -792,7 +776,7 @@ impl ProxySrcPadHandler {
         {
             let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
             let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
-            if let Some(ref mut pending_queue) = shared_ctx.pending_queue {
+            if let Some(pending_queue) = shared_ctx.pending_queue.as_mut() {
                 pending_queue.notify_more_queue_space();
             }
         }
@@ -822,7 +806,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
         &self,
         pad: &PadSrcRef,
         proxysrc: &ProxySrc,
-        element: &gst::Element,
+        _element: &gst::Element,
         event: gst::Event,
     ) -> bool {
         use gst::EventView;
@@ -841,8 +825,8 @@ impl PadSrcHandler for ProxySrcPadHandler {
         };
 
         match event.view() {
-            EventView::FlushStart(..) => proxysrc.stop(element).unwrap(),
-            EventView::FlushStop(..) => proxysrc.flush_stop(element),
+            EventView::FlushStart(..) => proxysrc.task.flush_start(),
+            EventView::FlushStop(..) => proxysrc.task.flush_stop(),
             _ => (),
         }
 
@@ -900,6 +884,138 @@ impl PadSrcHandler for ProxySrcPadHandler {
         }
 
         ret
+    }
+}
+
+#[derive(Debug)]
+struct ProxySrcTask {
+    element: gst::Element,
+    src_pad: PadSrcWeak,
+    dataqueue: DataQueue,
+}
+
+impl ProxySrcTask {
+    fn new(element: &gst::Element, src_pad: &PadSrc, dataqueue: DataQueue) -> Self {
+        ProxySrcTask {
+            element: element.clone(),
+            src_pad: src_pad.downgrade(),
+            dataqueue,
+        }
+    }
+}
+
+impl TaskImpl for ProxySrcTask {
+    fn start(&mut self) -> BoxFuture<'_, ()> {
+        async move {
+            gst_log!(SRC_CAT, obj: &self.element, "Starting task");
+
+            let proxysrc = ProxySrc::from_instance(&self.element);
+            let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+            let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+
+            shared_ctx.last_res = Ok(gst::FlowSuccess::Ok);
+
+            if let Some(pending_queue) = shared_ctx.pending_queue.as_mut() {
+                pending_queue.notify_more_queue_space();
+            }
+
+            self.dataqueue.start();
+
+            gst_log!(SRC_CAT, obj: &self.element, "Task started");
+        }
+        .boxed()
+    }
+
+    fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        async move {
+            let item = self.dataqueue.next().await;
+
+            let item = match item {
+                Some(item) => item,
+                None => {
+                    gst_log!(SRC_CAT, obj: &self.element, "DataQueue Stopped");
+                    return Err(gst::FlowError::Flushing);
+                }
+            };
+
+            let pad = self.src_pad.upgrade().expect("PadSrc no longer exists");
+            let proxysrc = ProxySrc::from_instance(&self.element);
+            let res = ProxySrcPadHandler::push_item(&pad, &proxysrc, item).await;
+            match res {
+                Ok(()) => {
+                    gst_log!(SRC_CAT, obj: &self.element, "Successfully pushed item");
+                    let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+                    let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+                    shared_ctx.last_res = Ok(gst::FlowSuccess::Ok);
+                }
+                Err(gst::FlowError::Flushing) => {
+                    gst_debug!(SRC_CAT, obj: &self.element, "Flushing");
+                    let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+                    let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+                    shared_ctx.last_res = Err(gst::FlowError::Flushing);
+                }
+                Err(gst::FlowError::Eos) => {
+                    gst_debug!(SRC_CAT, obj: &self.element, "EOS");
+                    let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+                    let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+                    shared_ctx.last_res = Err(gst::FlowError::Eos);
+                }
+                Err(err) => {
+                    gst_error!(SRC_CAT, obj: &self.element, "Got error {}", err);
+                    gst_element_error!(
+                        &self.element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["streaming stopped, reason {}", err]
+                    );
+                    let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+                    let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+                    shared_ctx.last_res = Err(err);
+                }
+            }
+
+            res
+        }
+        .boxed()
+    }
+
+    fn stop(&mut self) -> BoxFuture<'_, ()> {
+        async move {
+            gst_log!(SRC_CAT, obj: &self.element, "Stopping task");
+
+            let proxysrc = ProxySrc::from_instance(&self.element);
+            let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+            let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+
+            self.dataqueue.clear();
+            self.dataqueue.stop();
+
+            shared_ctx.last_res = Err(gst::FlowError::Flushing);
+
+            if let Some(mut pending_queue) = shared_ctx.pending_queue.take() {
+                pending_queue.notify_more_queue_space();
+            }
+
+            gst_log!(SRC_CAT, obj: &self.element, "Task stopped");
+        }
+        .boxed()
+    }
+
+    fn flush_start(&mut self) -> BoxFuture<'_, ()> {
+        async move {
+            gst_log!(SRC_CAT, obj: &self.element, "Starting task flush");
+
+            let proxysrc = ProxySrc::from_instance(&self.element);
+            let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+            let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+
+            self.dataqueue.clear();
+
+            shared_ctx.last_res = Err(gst::FlowError::Flushing);
+
+            gst_log!(SRC_CAT, obj: &self.element, "Task flush started");
+        }
+        .boxed()
     }
 }
 
@@ -971,21 +1087,23 @@ impl ProxySrc {
 
         *self.proxy_ctx.lock().unwrap() = Some(proxy_ctx);
 
-        *self.dataqueue.lock().unwrap() = Some(dataqueue);
+        *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
 
-        self.task.prepare(ts_ctx).map_err(|err| {
-            gst_error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Error preparing Task: {:?}", err]
-            )
-        })?;
+        self.task
+            .prepare(ProxySrcTask::new(element, &self.src_pad, dataqueue), ts_ctx)
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Error preparing Task: {:?}", err]
+                )
+            })?;
 
         gst_debug!(SRC_CAT, obj: element, "Prepared");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) {
         gst_debug!(SRC_CAT, obj: element, "Unpreparing");
 
         {
@@ -1000,154 +1118,24 @@ impl ProxySrc {
         *self.proxy_ctx.lock().unwrap() = None;
 
         gst_debug!(SRC_CAT, obj: element, "Unprepared");
-
-        Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
-        // Keep the lock on the `dataqueue` until `stop` is complete
-        // so as to prevent race conditions due to concurrent FlushStart/Stop.
-        // Note that this won't deadlock as `ProxySrc::dataqueue` guards a pointer to
-        // the `dataqueue` used within the `src_pad`'s `Task`.
-        let dataqueue = self.dataqueue.lock().unwrap();
+    fn stop(&self, element: &gst::Element) {
         gst_debug!(SRC_CAT, obj: element, "Stopping");
-
         self.task.stop();
-
-        let dataqueue = dataqueue.as_ref().unwrap();
-        dataqueue.clear();
-        dataqueue.stop();
-
         gst_debug!(SRC_CAT, obj: element, "Stopped");
-
-        Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), ()> {
-        let dataqueue = self.dataqueue.lock().unwrap();
-        let dataqueue = dataqueue.as_ref().unwrap();
-        if dataqueue.state() == DataQueueState::Started {
-            gst_debug!(SRC_CAT, obj: element, "Already started");
-            return Ok(());
-        }
-
+    fn start(&self, element: &gst::Element) {
         gst_debug!(SRC_CAT, obj: element, "Starting");
-
-        self.start_unchecked(element, dataqueue);
-
+        self.task.start();
         gst_debug!(SRC_CAT, obj: element, "Started");
-
-        Ok(())
     }
 
-    fn start_unchecked(&self, element: &gst::Element, dataqueue: &DataQueue) {
-        dataqueue.start();
-
-        {
-            let proxy_ctx = self.proxy_ctx.lock().unwrap();
-            let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
-            if let Some(pending_queue) = shared_ctx.pending_queue.as_mut() {
-                pending_queue.notify_more_queue_space();
-            }
-        }
-
-        self.start_task(element, dataqueue);
-    }
-
-    fn start_task(&self, element: &gst::Element, dataqueue: &DataQueue) {
-        let pad_weak = self.src_pad.downgrade();
-        let dataqueue = dataqueue.clone();
-        let element = element.clone();
-
-        self.task.start(move || {
-            let pad_weak = pad_weak.clone();
-            let mut dataqueue = dataqueue.clone();
-            let element = element.clone();
-
-            async move {
-                let item = dataqueue.next().await;
-
-                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
-                let item = match item {
-                    Some(item) => item,
-                    None => {
-                        gst_log!(SRC_CAT, obj: pad.gst_pad(), "DataQueue Stopped or Paused");
-                        return glib::Continue(false);
-                    }
-                };
-
-                let proxysrc = ProxySrc::from_instance(&element);
-
-                match ProxySrcPadHandler::push_item(&pad, &proxysrc, item).await {
-                    Ok(_) => {
-                        gst_log!(SRC_CAT, obj: pad.gst_pad(), "Successfully pushed item");
-                        let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
-                        let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
-                        shared_ctx.last_res = Ok(gst::FlowSuccess::Ok);
-                        glib::Continue(true)
-                    }
-                    Err(gst::FlowError::Flushing) => {
-                        gst_debug!(SRC_CAT, obj: pad.gst_pad(), "Flushing");
-                        let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
-                        let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
-                        shared_ctx.last_res = Err(gst::FlowError::Flushing);
-                        glib::Continue(false)
-                    }
-                    Err(gst::FlowError::Eos) => {
-                        gst_debug!(SRC_CAT, obj: pad.gst_pad(), "EOS");
-                        let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
-                        let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
-                        shared_ctx.last_res = Err(gst::FlowError::Eos);
-                        glib::Continue(false)
-                    }
-                    Err(err) => {
-                        gst_error!(SRC_CAT, obj: pad.gst_pad(), "Got error {}", err);
-                        gst_element_error!(
-                            element,
-                            gst::StreamError::Failed,
-                            ("Internal data stream error"),
-                            ["streaming stopped, reason {}", err]
-                        );
-                        let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
-                        let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
-                        shared_ctx.last_res = Err(err);
-                        glib::Continue(false)
-                    }
-                }
-            }
-        });
-    }
-
-    fn flush_stop(&self, element: &gst::Element) {
-        // Keep the lock on the `dataqueue` until `flush_stop` is complete
-        // so as to prevent race conditions due to concurrent state transitions.
-        // Note that this won't deadlock as `ProxySrc::dataqueue` guards a pointer to
-        // the `dataqueue` used within the `src_pad`'s `Task`.
-        let dataqueue = self.dataqueue.lock().unwrap();
-        let dataqueue = dataqueue.as_ref().unwrap();
-        if dataqueue.state() == DataQueueState::Started {
-            gst_debug!(SRC_CAT, obj: element, "Already started");
-            return;
-        }
-
-        gst_debug!(SRC_CAT, obj: element, "Stopping Flush");
-
-        self.task.stop();
-        self.start_unchecked(element, dataqueue);
-
-        gst_debug!(SRC_CAT, obj: element, "Stopped Flush");
-    }
-
-    fn pause(&self, element: &gst::Element) -> Result<(), ()> {
-        let dataqueue = self.dataqueue.lock().unwrap();
+    fn pause(&self, element: &gst::Element) {
         gst_debug!(SRC_CAT, obj: element, "Pausing");
-
-        dataqueue.as_ref().unwrap().pause();
         self.task.pause();
-
         gst_debug!(SRC_CAT, obj: element, "Paused");
-
-        Ok(())
     }
 }
 
@@ -1276,10 +1264,10 @@ impl ElementImpl for ProxySrc {
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.pause(element).map_err(|_| gst::StateChangeError)?;
+                self.pause(element);
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+                self.unprepare(element);
             }
             _ => (),
         }
@@ -1291,13 +1279,13 @@ impl ElementImpl for ProxySrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                self.start(element);
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop(element);
             }
             _ => (),
         }

@@ -39,9 +39,9 @@ use std::sync::Mutex as StdMutex;
 use std::u16;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSrc, PadSrcRef, Task};
+use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task};
 
-use super::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead, SocketState};
+use super::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead};
 
 const DEFAULT_ADDRESS: Option<&str> = Some("0.0.0.0");
 const DEFAULT_PORT: i32 = 5000;
@@ -185,16 +185,11 @@ static PROPERTIES: [subclass::Property; 10] = [
 ];
 
 #[derive(Debug)]
-struct UdpReaderInner {
-    socket: tokio::net::UdpSocket,
-}
-
-#[derive(Debug)]
-pub struct UdpReader(Arc<FutMutex<UdpReaderInner>>);
+pub struct UdpReader(tokio::net::UdpSocket);
 
 impl UdpReader {
     fn new(socket: tokio::net::UdpSocket) -> Self {
-        UdpReader(Arc::new(FutMutex::new(UdpReaderInner { socket })))
+        UdpReader(socket)
     }
 }
 
@@ -202,15 +197,11 @@ impl SocketRead for UdpReader {
     const DO_TIMESTAMP: bool = true;
 
     fn read<'buf>(
-        &self,
+        &'buf mut self,
         buffer: &'buf mut [u8],
     ) -> BoxFuture<'buf, io::Result<(usize, Option<std::net::SocketAddr>)>> {
-        let this = Arc::clone(&self.0);
-
         async move {
-            this.lock()
-                .await
-                .socket
+            self.0
                 .recv_from(buffer)
                 .await
                 .map(|(read_size, saddr)| (read_size, Some(saddr)))
@@ -255,16 +246,12 @@ impl UdpSrcPadHandler {
         state.retrieve_sender_address = retrieve_sender_address;
     }
 
-    fn reset_state(&self) {
-        *self.0.state.try_lock().expect("State locked elsewhere") = Default::default();
+    async fn reset_state(&self) {
+        *self.0.state.lock().await = Default::default();
     }
 
-    fn set_need_segment(&self) {
-        self.0
-            .state
-            .try_lock()
-            .expect("State locked elsewhere")
-            .need_segment = true;
+    async fn set_need_segment(&self) {
+        self.0.state.lock().await.need_segment = true;
     }
 
     async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &gst::Element) {
@@ -317,7 +304,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
         &self,
         pad: &PadSrcRef,
         udpsrc: &UdpSrc,
-        element: &gst::Element,
+        _element: &gst::Element,
         event: gst::Event,
     ) -> bool {
         use gst::EventView;
@@ -326,12 +313,12 @@ impl PadSrcHandler for UdpSrcPadHandler {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                udpsrc.flush_start(element);
+                udpsrc.task.flush_start();
 
                 true
             }
             EventView::FlushStop(..) => {
-                udpsrc.flush_stop(element);
+                udpsrc.task.flush_stop();
 
                 true
             }
@@ -398,11 +385,148 @@ impl PadSrcHandler for UdpSrcPadHandler {
     }
 }
 
+struct UdpSrcTask {
+    element: gst::Element,
+    src_pad: PadSrcWeak,
+    src_pad_handler: UdpSrcPadHandler,
+    socket: Socket<UdpReader>,
+}
+
+impl UdpSrcTask {
+    fn new(
+        element: &gst::Element,
+        src_pad: &PadSrc,
+        src_pad_handler: &UdpSrcPadHandler,
+        socket: Socket<UdpReader>,
+    ) -> Self {
+        UdpSrcTask {
+            element: element.clone(),
+            src_pad: src_pad.downgrade(),
+            src_pad_handler: src_pad_handler.clone(),
+            socket,
+        }
+    }
+}
+
+impl TaskImpl for UdpSrcTask {
+    fn start(&mut self) -> BoxFuture<'_, ()> {
+        async move {
+            gst_log!(CAT, obj: &self.element, "Starting task");
+            self.socket
+                .set_clock(self.element.get_clock(), Some(self.element.get_base_time()));
+            gst_log!(CAT, obj: &self.element, "Task started");
+        }
+        .boxed()
+    }
+
+    fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        async move {
+            let item = self.socket.next().await;
+
+            let (mut buffer, saddr) = match item {
+                Some(Ok((buffer, saddr))) => (buffer, saddr),
+                Some(Err(err)) => {
+                    gst_error!(CAT, obj: &self.element, "Got error {:?}", err);
+                    match err {
+                        SocketError::Gst(err) => {
+                            gst_element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("Internal data stream error"),
+                                ["streaming stopped, reason {}", err]
+                            );
+                        }
+                        SocketError::Io(err) => {
+                            gst_element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("I/O error"),
+                                ["streaming stopped, I/O error {}", err]
+                            );
+                        }
+                    }
+                    return Err(gst::FlowError::Error);
+                }
+                None => {
+                    gst_log!(CAT, obj: &self.element, "SocketStream Stopped");
+                    return Err(gst::FlowError::Flushing);
+                }
+            };
+
+            if let Some(saddr) = saddr {
+                if self
+                    .src_pad_handler
+                    .0
+                    .state
+                    .lock()
+                    .await
+                    .retrieve_sender_address
+                {
+                    let inet_addr = match saddr.ip() {
+                        IpAddr::V4(ip) => gio::InetAddress::new_from_bytes(
+                            gio::InetAddressBytes::V4(&ip.octets()),
+                        ),
+                        IpAddr::V6(ip) => gio::InetAddress::new_from_bytes(
+                            gio::InetAddressBytes::V6(&ip.octets()),
+                        ),
+                    };
+                    let inet_socket_addr = &gio::InetSocketAddress::new(&inet_addr, saddr.port());
+                    NetAddressMeta::add(buffer.get_mut().unwrap(), inet_socket_addr);
+                }
+            }
+
+            let pad = self.src_pad.upgrade().expect("PadSrc no longer exists");
+            let res = self
+                .src_pad_handler
+                .push_buffer(&pad, &self.element, buffer)
+                .await;
+            match res {
+                Ok(_) => gst_log!(CAT, obj: &self.element, "Successfully pushed buffer"),
+                Err(gst::FlowError::Flushing) => gst_debug!(CAT, obj: &self.element, "Flushing"),
+                Err(gst::FlowError::Eos) => {
+                    gst_debug!(CAT, obj: &self.element, "EOS");
+                    let eos = gst::Event::new_eos().build();
+                    pad.push_event(eos).await;
+                }
+                Err(err) => {
+                    gst_error!(CAT, obj: &self.element, "Got error {}", err);
+                    gst_element_error!(
+                        self.element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["streaming stopped, reason {}", err]
+                    );
+                }
+            }
+
+            res.map(drop)
+        }
+        .boxed()
+    }
+
+    fn stop(&mut self) -> BoxFuture<'_, ()> {
+        async move {
+            gst_log!(CAT, obj: &self.element, "Stopping task");
+            self.src_pad_handler.reset_state().await;
+            gst_log!(CAT, obj: &self.element, "Task stopped");
+        }
+        .boxed()
+    }
+
+    fn flush_stop(&mut self) -> BoxFuture<'_, ()> {
+        async move {
+            gst_log!(CAT, obj: &self.element, "Stopping task flush");
+            self.src_pad_handler.set_need_segment().await;
+            gst_log!(CAT, obj: &self.element, "Stopped task flush");
+        }
+        .boxed()
+    }
+}
+
 struct UdpSrc {
     src_pad: PadSrc,
     src_pad_handler: UdpSrcPadHandler,
     task: Task,
-    socket: StdMutex<Option<Socket<UdpReader>>>,
     settings: StdMutex<Settings>,
 }
 
@@ -585,210 +709,63 @@ impl UdpSrc {
             )
         })?;
 
-        let socket = Socket::new(element.upcast_ref(), buffer_pool, async move {
-            Ok(UdpReader::new(socket))
-        })
-        .map_err(|err| {
-            gst_error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Failed to prepare socket {:?}", err]
-            )
-        })?;
+        let socket = Socket::try_new(element.clone(), buffer_pool, UdpReader::new(socket))
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Failed to prepare socket {:?}", err]
+                )
+            })?;
 
-        *self.socket.lock().unwrap() = Some(socket);
         element.notify("used-socket");
 
-        self.task.prepare(context).map_err(|err| {
-            gst_error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Error preparing Task: {:?}", err]
-            )
-        })?;
         self.src_pad_handler
             .prepare(settings.caps, settings.retrieve_sender_address);
+
+        self.task
+            .prepare(
+                UdpSrcTask::new(element, &self.src_pad, &self.src_pad_handler, socket),
+                context,
+            )
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Error preparing Task: {:?}", err]
+                )
+            })?;
 
         gst_debug!(CAT, obj: element, "Prepared");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        *self.socket.lock().unwrap() = None;
         self.settings.lock().unwrap().used_socket = None;
         element.notify("used-socket");
 
         self.task.unprepare().unwrap();
 
         gst_debug!(CAT, obj: element, "Unprepared");
-
-        Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
+    fn stop(&self, element: &gst::Element) {
         gst_debug!(CAT, obj: element, "Stopping");
-
         self.task.stop();
-        self.src_pad_handler.reset_state();
-
         gst_debug!(CAT, obj: element, "Stopped");
-
-        Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), ()> {
-        let socket = self.socket.lock().unwrap();
-        let socket = socket.as_ref().unwrap();
-        if socket.state() == SocketState::Started {
-            gst_debug!(CAT, obj: element, "Already started");
-            return Ok(());
-        }
-
+    fn start(&self, element: &gst::Element) {
         gst_debug!(CAT, obj: element, "Starting");
-        self.start_task(element, socket);
+        self.task.start();
         gst_debug!(CAT, obj: element, "Started");
-
-        Ok(())
     }
 
-    fn start_task(&self, element: &gst::Element, socket: &Socket<UdpReader>) {
-        let socket_stream = socket
-            .start(element.get_clock(), Some(element.get_base_time()))
-            .unwrap();
-        let socket_stream = Arc::new(FutMutex::new(socket_stream));
-
-        let src_pad_handler = self.src_pad_handler.clone();
-        let pad_weak = self.src_pad.downgrade();
-        let element = element.clone();
-
-        self.task.start(move || {
-            let src_pad_handler = src_pad_handler.clone();
-            let pad_weak = pad_weak.clone();
-            let element = element.clone();
-            let socket_stream = socket_stream.clone();
-
-            async move {
-                let item = socket_stream.lock().await.next().await;
-
-                let pad = pad_weak.upgrade().expect("PadSrc no longer exists");
-                let (mut buffer, saddr) = match item {
-                    Some(Ok((buffer, saddr))) => (buffer, saddr),
-                    Some(Err(err)) => {
-                        gst_error!(CAT, obj: &element, "Got error {:?}", err);
-                        match err {
-                            SocketError::Gst(err) => {
-                                gst_element_error!(
-                                    element,
-                                    gst::StreamError::Failed,
-                                    ("Internal data stream error"),
-                                    ["streaming stopped, reason {}", err]
-                                );
-                            }
-                            SocketError::Io(err) => {
-                                gst_element_error!(
-                                    element,
-                                    gst::StreamError::Failed,
-                                    ("I/O error"),
-                                    ["streaming stopped, I/O error {}", err]
-                                );
-                            }
-                        }
-                        return glib::Continue(false);
-                    }
-                    None => {
-                        gst_log!(CAT, obj: pad.gst_pad(), "SocketStream Stopped");
-                        return glib::Continue(false);
-                    }
-                };
-
-                if let Some(saddr) = saddr {
-                    if src_pad_handler.0.state.lock().await.retrieve_sender_address {
-                        let inet_addr = match saddr.ip() {
-                            IpAddr::V4(ip) => gio::InetAddress::new_from_bytes(
-                                gio::InetAddressBytes::V4(&ip.octets()),
-                            ),
-                            IpAddr::V6(ip) => gio::InetAddress::new_from_bytes(
-                                gio::InetAddressBytes::V6(&ip.octets()),
-                            ),
-                        };
-                        let inet_socket_addr =
-                            &gio::InetSocketAddress::new(&inet_addr, saddr.port());
-                        NetAddressMeta::add(buffer.get_mut().unwrap(), inet_socket_addr);
-                    }
-                }
-
-                match src_pad_handler.push_buffer(&pad, &element, buffer).await {
-                    Ok(_) => {
-                        gst_log!(CAT, obj: pad.gst_pad(), "Successfully pushed buffer");
-                        glib::Continue(true)
-                    }
-                    Err(gst::FlowError::Flushing) => {
-                        gst_debug!(CAT, obj: pad.gst_pad(), "Flushing");
-                        glib::Continue(false)
-                    }
-                    Err(gst::FlowError::Eos) => {
-                        gst_debug!(CAT, obj: pad.gst_pad(), "EOS");
-                        let eos = gst::Event::new_eos().build();
-                        pad.push_event(eos).await;
-                        glib::Continue(false)
-                    }
-                    Err(err) => {
-                        gst_error!(CAT, obj: pad.gst_pad(), "Got error {}", err);
-                        gst_element_error!(
-                            element,
-                            gst::StreamError::Failed,
-                            ("Internal data stream error"),
-                            ["streaming stopped, reason {}", err]
-                        );
-                        glib::Continue(false)
-                    }
-                }
-            }
-        });
-    }
-
-    fn flush_stop(&self, element: &gst::Element) {
-        let socket = self.socket.lock().unwrap();
-        if let Some(socket) = socket.as_ref() {
-            if socket.state() == SocketState::Started {
-                gst_debug!(CAT, obj: element, "Already started");
-                return;
-            }
-
-            gst_debug!(CAT, obj: element, "Stopping Flush");
-
-            self.src_pad_handler.set_need_segment();
-            self.start_task(element, socket);
-
-            gst_debug!(CAT, obj: element, "Stopped Flush");
-        } else {
-            gst_debug!(CAT, obj: element, "Socket not available");
-        }
-    }
-
-    fn flush_start(&self, element: &gst::Element) {
-        let socket = self.socket.lock().unwrap();
-        gst_debug!(CAT, obj: element, "Starting Flush");
-
-        if let Some(socket) = socket.as_ref() {
-            socket.pause();
-        }
-
-        self.task.cancel();
-
-        gst_debug!(CAT, obj: element, "Flush Started");
-    }
-
-    fn pause(&self, element: &gst::Element) -> Result<(), ()> {
+    fn pause(&self, element: &gst::Element) {
         gst_debug!(CAT, obj: element, "Pausing");
-
-        self.socket.lock().unwrap().as_ref().unwrap().pause();
         self.task.pause();
-
         gst_debug!(CAT, obj: element, "Paused");
-
-        Ok(())
     }
 }
 
@@ -847,7 +824,6 @@ impl ObjectSubclass for UdpSrc {
             ),
             src_pad_handler,
             task: Task::default(),
-            socket: StdMutex::new(None),
             settings: StdMutex::new(Settings::default()),
         }
     }
@@ -956,10 +932,10 @@ impl ElementImpl for UdpSrc {
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.pause(element).map_err(|_| gst::StateChangeError)?;
+                self.pause(element);
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+                self.unprepare(element);
             }
             _ => (),
         }
@@ -971,13 +947,13 @@ impl ElementImpl for UdpSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                self.start(element);
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop(element);
             }
             _ => (),
         }

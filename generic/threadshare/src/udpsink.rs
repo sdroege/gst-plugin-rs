@@ -827,7 +827,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         async move {
             if let EventView::FlushStop(_) = event.view() {
                 let udpsink = UdpSink::from_instance(&element);
-                let _ = udpsink.start(&element);
+                udpsink.task.flush_stop();
             } else if let Some(sender) = sender.lock().await.as_mut() {
                 if sender.send(TaskItem::Event(event)).await.is_err() {
                     gst_debug!(CAT, obj: &element, "Flushing");
@@ -843,14 +843,78 @@ impl PadSinkHandler for UdpSinkPadHandler {
         &self,
         _pad: &PadSinkRef,
         udpsink: &UdpSink,
-        element: &gst::Element,
+        _element: &gst::Element,
         event: gst::Event,
     ) -> bool {
         if let EventView::FlushStart(..) = event.view() {
-            let _ = udpsink.stop(&element);
+            udpsink.task.flush_start();
         }
 
         true
+    }
+}
+
+#[derive(Debug)]
+struct UdpSinkTask {
+    element: gst::Element,
+    sink_pad_handler: UdpSinkPadHandler,
+    receiver: Option<mpsc::Receiver<TaskItem>>,
+}
+
+impl UdpSinkTask {
+    fn new(element: &gst::Element, sink_pad_handler: &UdpSinkPadHandler) -> Self {
+        UdpSinkTask {
+            element: element.clone(),
+            sink_pad_handler: sink_pad_handler.clone(),
+            receiver: None,
+        }
+    }
+}
+
+impl TaskImpl for UdpSinkTask {
+    fn start(&mut self) -> BoxFuture<'_, ()> {
+        async move {
+            gst_log!(CAT, obj: &self.element, "Starting task");
+
+            let (sender, receiver) = mpsc::channel(0);
+
+            let mut sink_pad_handler = self.sink_pad_handler.0.write().unwrap();
+            sink_pad_handler.sender = Arc::new(Mutex::new(Some(sender)));
+
+            self.receiver = Some(receiver);
+
+            gst_log!(CAT, obj: &self.element, "Task started");
+        }
+        .boxed()
+    }
+
+    fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        async move {
+            match self.receiver.as_mut().unwrap().next().await {
+                Some(TaskItem::Buffer(buffer)) => {
+                    match self.sink_pad_handler.render(&self.element, buffer).await {
+                        Err(err) => {
+                            gst_element_error!(
+                                &self.element,
+                                gst::StreamError::Failed,
+                                ["Failed to render item, stopping task: {}", err]
+                            );
+
+                            Err(gst::FlowError::Error)
+                        }
+                        _ => Ok(()),
+                    }
+                }
+                Some(TaskItem::Event(event)) => {
+                    self.sink_pad_handler
+                        .handle_event(&self.element, event)
+                        .await;
+                    Ok(())
+                }
+                None => Err(gst::FlowError::Flushing),
+            }
+        }
+        .boxed()
     }
 }
 
@@ -1022,79 +1086,39 @@ impl UdpSink {
         self.prepare_socket(SocketFamily::Ipv4, &context, element)?;
         self.prepare_socket(SocketFamily::Ipv6, &context, element)?;
 
-        self.task.prepare(context).map_err(|err| {
-            gst_error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Error preparing Task: {:?}", err]
-            )
-        })?;
+        self.task
+            .prepare(UdpSinkTask::new(&element, &self.sink_pad_handler), context)
+            .map_err(|err| {
+                gst_error_msg!(
+                    gst::ResourceError::OpenRead,
+                    ["Error preparing Task: {:?}", err]
+                )
+            })?;
 
         gst_debug!(CAT, obj: element, "Started preparing");
 
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &gst::Element) {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
         self.task.unprepare().unwrap();
         self.sink_pad_handler.unprepare();
 
         gst_debug!(CAT, obj: element, "Unprepared");
-
-        Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), ()> {
+    fn stop(&self, element: &gst::Element) {
         gst_debug!(CAT, obj: element, "Stopping");
         self.task.stop();
         gst_debug!(CAT, obj: element, "Stopped");
-
-        Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), ()> {
+    fn start(&self, element: &gst::Element) {
         gst_debug!(CAT, obj: element, "Starting");
-
-        let sink_pad_handler = self.sink_pad_handler.clone();
-        let element_clone = element.clone();
-
-        let (sender, receiver) = mpsc::channel(0);
-        let receiver = Arc::new(Mutex::new(receiver));
-
-        sink_pad_handler.0.write().unwrap().sender = Arc::new(Mutex::new(Some(sender)));
-
-        self.task.start(move || {
-            let receiver = Arc::clone(&receiver);
-            let element = element_clone.clone();
-            let sink_pad_handler = sink_pad_handler.clone();
-
-            async move {
-                match receiver.lock().await.next().await {
-                    Some(TaskItem::Buffer(buffer)) => {
-                        match sink_pad_handler.render(&element, buffer).await {
-                            Err(err) => {
-                                gst_element_error!(
-                                    element,
-                                    gst::StreamError::Failed,
-                                    ["Failed to render item, stopping task: {}", err]
-                                );
-
-                                glib::Continue(false)
-                            }
-                            _ => glib::Continue(true),
-                        }
-                    }
-                    Some(TaskItem::Event(event)) => {
-                        sink_pad_handler.handle_event(&element, event).await;
-                        glib::Continue(true)
-                    }
-                    None => glib::Continue(false),
-                }
-            }
-        });
-
-        Ok(())
+        self.task.start();
+        gst_debug!(CAT, obj: element, "Started");
     }
 }
 
@@ -1491,13 +1515,13 @@ impl ElementImpl for UdpSink {
                 })?;
             }
             gst::StateChange::ReadyToPaused => {
-                self.start(element).map_err(|_| gst::StateChangeError)?;
+                self.start(element);
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element).map_err(|_| gst::StateChangeError)?;
+                self.stop(element);
             }
             gst::StateChange::ReadyToNull => {
-                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+                self.unprepare(element);
             }
             _ => (),
         }

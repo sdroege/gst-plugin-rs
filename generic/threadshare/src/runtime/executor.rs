@@ -492,6 +492,23 @@ impl Context {
         Fut: Future + Send + 'static,
         Fut::Output: Send + 'static,
     {
+        self.spawn_internal(future, false)
+    }
+
+    pub fn awake_and_spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
+    where
+        Fut: Future + Send + 'static,
+        Fut::Output: Send + 'static,
+    {
+        self.spawn_internal(future, true)
+    }
+
+    #[inline]
+    fn spawn_internal<Fut>(&self, future: Fut, must_awake: bool) -> JoinHandle<Fut::Output>
+    where
+        Fut: Future + Send + 'static,
+        Fut::Output: Send + 'static,
+    {
         let real = match self.0.real {
             Some(ref real) => real,
             None => panic!("Can't spawn new tasks on dummy context"),
@@ -510,7 +527,7 @@ impl Context {
             real.name
         );
 
-        let join_handle = real.handle.lock().unwrap().spawn(async move {
+        let spawn_fut = async move {
             let ctx = Context::current().unwrap();
             let real = ctx.0.real.as_ref().unwrap();
 
@@ -542,7 +559,15 @@ impl Context {
             gst_trace!(RUNTIME_CAT, "Task {:?} on context {} done", id, real.name);
 
             res
-        });
+        };
+
+        let join_handle = {
+            if must_awake {
+                real.handle.lock().unwrap().awake_and_spawn(spawn_fut)
+            } else {
+                real.handle.lock().unwrap().spawn(spawn_fut)
+            }
+        };
 
         JoinHandle {
             join_handle,

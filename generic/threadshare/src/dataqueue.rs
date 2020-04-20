@@ -67,7 +67,6 @@ impl DataQueueItem {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DataQueueState {
-    Paused,
     Started,
     Stopped,
 }
@@ -137,18 +136,6 @@ impl DataQueue {
         inner.wake();
     }
 
-    pub fn pause(&self) {
-        let mut inner = self.0.lock().unwrap();
-        if inner.state == DataQueueState::Paused {
-            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Paused");
-            return;
-        }
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Pausing data queue");
-        assert_eq!(DataQueueState::Started, inner.state);
-        inner.state = DataQueueState::Paused;
-        inner.wake();
-    }
-
     pub fn stop(&self) {
         let mut inner = self.0.lock().unwrap();
         if inner.state == DataQueueState::Stopped {
@@ -163,7 +150,6 @@ impl DataQueue {
     pub fn clear(&self) {
         let mut inner = self.0.lock().unwrap();
 
-        assert_eq!(inner.state, DataQueueState::Paused);
         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Clearing data queue");
 
         let src_pad = inner.src_pad.clone();
@@ -259,10 +245,6 @@ impl DataQueue {
                             return Some(item);
                         }
                     },
-                    DataQueueState::Paused => {
-                        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue Paused");
-                        return None;
-                    }
                     DataQueueState::Stopped => {
                         gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue Stopped");
                         return None;

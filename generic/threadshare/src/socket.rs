@@ -16,20 +16,21 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use futures::future::{abortable, AbortHandle, Aborted, BoxFuture};
-use futures::prelude::*;
+use futures::future::BoxFuture;
 
 use gst::prelude::*;
-use gst::{gst_debug, gst_error, gst_error_msg};
+use gst::{gst_debug, gst_error, gst_error_msg, gst_log};
 
 use lazy_static::lazy_static;
 
 use std::io;
-use std::sync::{Arc, Mutex};
 
 use gio::prelude::*;
 use gio_sys as gio_ffi;
 use gobject_sys as gobject_ffi;
+
+use std::error;
+use std::fmt;
 
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
@@ -45,145 +46,55 @@ lazy_static! {
     );
 }
 
-pub struct Socket<T: SocketRead + 'static>(Arc<Mutex<SocketInner<T>>>);
-
 pub trait SocketRead: Send + Unpin {
     const DO_TIMESTAMP: bool;
 
     fn read<'buf>(
-        &self,
+        &'buf mut self,
         buffer: &'buf mut [u8],
     ) -> BoxFuture<'buf, io::Result<(usize, Option<std::net::SocketAddr>)>>;
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum SocketState {
-    Paused,
-    Prepared,
-    Started,
-    Unprepared,
-}
-
-struct SocketInner<T: SocketRead + 'static> {
-    state: SocketState,
+pub struct Socket<T: SocketRead> {
     element: gst::Element,
     buffer_pool: gst::BufferPool,
+    reader: T,
+    mapped_buffer: Option<gst::MappedBuffer<gst::buffer::Writable>>,
     clock: Option<gst::Clock>,
     base_time: Option<gst::ClockTime>,
-    create_read_handle: Option<AbortHandle>,
-    create_reader_fut: Option<BoxFuture<'static, Result<T, SocketError>>>,
-    read_handle: Option<AbortHandle>,
-    reader: Option<T>,
 }
 
-impl<T: SocketRead + 'static> Socket<T> {
-    pub fn new<F>(
-        element: &gst::Element,
+impl<T: SocketRead> Socket<T> {
+    pub fn try_new(
+        element: gst::Element,
         buffer_pool: gst::BufferPool,
-        create_reader_fut: F,
-    ) -> Result<Self, ()>
-    where
-        F: Future<Output = Result<T, SocketError>> + Send + 'static,
-    {
-        let socket = Socket(Arc::new(Mutex::new(SocketInner::<T> {
-            state: SocketState::Unprepared,
-            element: element.clone(),
+        reader: T,
+    ) -> Result<Self, ()> {
+        // FIXME couldn't we just delegate this to caller?
+        buffer_pool.set_active(true).map_err(|err| {
+            gst_error!(
+                SOCKET_CAT,
+                obj: &element,
+                "Failed to prepare socket: {}",
+                err
+            );
+        })?;
+
+        Ok(Socket::<T> {
             buffer_pool,
+            element,
+            reader,
+            mapped_buffer: None,
             clock: None,
             base_time: None,
-            create_read_handle: None,
-            create_reader_fut: Some(create_reader_fut.boxed()),
-            read_handle: None,
-            reader: None,
-        })));
-
-        let mut inner = socket.0.lock().unwrap();
-        if inner.state != SocketState::Unprepared {
-            gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket already prepared");
-            return Err(());
-        }
-        gst_debug!(SOCKET_CAT, obj: &inner.element, "Preparing socket");
-
-        inner.buffer_pool.set_active(true).map_err(|err| {
-            gst_error!(SOCKET_CAT, obj: &inner.element, "Failed to prepare socket: {}", err);
-        })?;
-        inner.state = SocketState::Prepared;
-        drop(inner);
-
-        Ok(socket)
+        })
     }
 
-    pub fn state(&self) -> SocketState {
-        self.0.lock().unwrap().state
-    }
-
-    pub fn start(
-        &self,
-        clock: Option<gst::Clock>,
-        base_time: Option<gst::ClockTime>,
-    ) -> Result<SocketStream<T>, ()> {
-        // Paused->Playing
-        let mut inner = self.0.lock().unwrap();
-        assert_ne!(SocketState::Unprepared, inner.state);
-        if inner.state == SocketState::Started {
-            gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket already started");
-            return Err(());
-        }
-
-        gst_debug!(SOCKET_CAT, obj: &inner.element, "Starting socket");
-        inner.clock = clock;
-        inner.base_time = base_time;
-        inner.state = SocketState::Started;
-
-        Ok(SocketStream::<T>::new(self))
-    }
-
-    pub fn pause(&self) {
-        // Playing->Paused
-        let mut inner = self.0.lock().unwrap();
-        assert_ne!(SocketState::Unprepared, inner.state);
-        if inner.state != SocketState::Started {
-            gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket not started");
-            return;
-        }
-
-        gst_debug!(SOCKET_CAT, obj: &inner.element, "Pausing socket");
-        inner.clock = None;
-        inner.base_time = None;
-        inner.state = SocketState::Paused;
-        if let Some(read_handle) = inner.read_handle.take() {
-            read_handle.abort();
-        }
+    pub fn set_clock(&mut self, clock: Option<gst::Clock>, base_time: Option<gst::ClockTime>) {
+        self.clock = clock;
+        self.base_time = base_time;
     }
 }
-
-impl<T: SocketRead> Drop for SocketInner<T> {
-    fn drop(&mut self) {
-        // Ready->Null
-        assert_ne!(SocketState::Started, self.state);
-        if self.state == SocketState::Unprepared {
-            gst_debug!(SOCKET_CAT, obj: &self.element, "Socket already unprepared");
-            return;
-        }
-
-        if let Some(create_read_handle_handle) = self.create_read_handle.take() {
-            create_read_handle_handle.abort();
-        }
-
-        if let Err(err) = self.buffer_pool.set_active(false) {
-            gst_error!(SOCKET_CAT, obj: &self.element, "Failed to unprepare socket: {}", err);
-        }
-        self.state = SocketState::Unprepared;
-    }
-}
-
-impl<T: SocketRead + Unpin + 'static> Clone for Socket<T> {
-    fn clone(&self) -> Self {
-        Socket::<T>(self.0.clone())
-    }
-}
-
-pub type SocketStreamItem = Result<(gst::Buffer, Option<std::net::SocketAddr>), SocketError>;
 
 #[derive(Debug)]
 pub enum SocketError {
@@ -191,98 +102,50 @@ pub enum SocketError {
     Io(io::Error),
 }
 
-pub struct SocketStream<T: SocketRead + 'static> {
-    socket: Socket<T>,
-    mapped_buffer: Option<gst::MappedBuffer<gst::buffer::Writable>>,
-}
+impl error::Error for SocketError {}
 
-impl<T: SocketRead + 'static> SocketStream<T> {
-    fn new(socket: &Socket<T>) -> Self {
-        SocketStream {
-            socket: socket.clone(),
-            mapped_buffer: None,
+impl fmt::Display for SocketError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SocketError::Gst(err) => write!(f, "flow error: {}", err),
+            SocketError::Io(err) => write!(f, "IO error: {}", err),
         }
     }
+}
 
+pub type SocketStreamItem = Result<(gst::Buffer, Option<std::net::SocketAddr>), SocketError>;
+
+impl<T: SocketRead> Socket<T> {
+    // Can't implement this as a Stream trait because we end up using things like
+    // tokio::net::UdpSocket which don't implement pollable functions.
     #[allow(clippy::should_implement_trait)]
     pub async fn next(&mut self) -> Option<SocketStreamItem> {
-        // First create if needed
-        let (create_reader_fut, element) = {
-            let mut inner = self.socket.0.lock().unwrap();
+        gst_log!(SOCKET_CAT, obj: &self.element, "Trying to read data");
 
-            if let Some(create_reader_fut) = inner.create_reader_fut.take() {
-                let (create_reader_fut, abort_handle) = abortable(create_reader_fut);
-                inner.create_read_handle = Some(abort_handle);
-                (Some(create_reader_fut), inner.element.clone())
-            } else {
-                (None, inner.element.clone())
-            }
-        };
-
-        if let Some(create_reader_fut) = create_reader_fut {
-            match create_reader_fut.await {
-                Ok(Ok(read)) => {
-                    let mut inner = self.socket.0.lock().unwrap();
-                    inner.create_read_handle = None;
-                    inner.reader = Some(read);
+        if self.mapped_buffer.is_none() {
+            match self.buffer_pool.acquire_buffer(None) {
+                Ok(buffer) => {
+                    self.mapped_buffer = Some(buffer.into_mapped_buffer_writable().unwrap());
                 }
-                Ok(Err(err)) => {
-                    gst_debug!(SOCKET_CAT, obj: &element, "Create reader error {:?}", err);
-
-                    return Some(Err(err));
-                }
-                Err(Aborted) => {
-                    gst_debug!(SOCKET_CAT, obj: &element, "Create reader Aborted");
-
-                    return None;
+                Err(err) => {
+                    gst_debug!(SOCKET_CAT, obj: &self.element, "Failed to acquire buffer {:?}", err);
+                    return Some(Err(SocketError::Gst(err)));
                 }
             }
         }
 
-        // take the mapped_buffer before locking the socket so as to please the mighty borrow checker
-        let (read_fut, clock, base_time) = {
-            let mut inner = self.socket.0.lock().unwrap();
-            if inner.state != SocketState::Started {
-                gst_debug!(SOCKET_CAT, obj: &inner.element, "Socket is not Started");
-                return None;
-            }
-
-            let reader = match inner.reader {
-                None => {
-                    gst_debug!(SOCKET_CAT, obj: &inner.element, "Have no reader");
-                    return None;
-                }
-                Some(ref reader) => reader,
-            };
-
-            gst_debug!(SOCKET_CAT, obj: &inner.element, "Trying to read data");
-            if self.mapped_buffer.is_none() {
-                match inner.buffer_pool.acquire_buffer(None) {
-                    Ok(buffer) => {
-                        self.mapped_buffer = Some(buffer.into_mapped_buffer_writable().unwrap());
-                    }
-                    Err(err) => {
-                        gst_debug!(SOCKET_CAT, obj: &inner.element, "Failed to acquire buffer {:?}", err);
-                        return Some(Err(SocketError::Gst(err)));
-                    }
-                }
-            }
-
-            let (read_fut, abort_handle) =
-                abortable(reader.read(self.mapped_buffer.as_mut().unwrap().as_mut_slice()));
-            inner.read_handle = Some(abort_handle);
-
-            (read_fut, inner.clock.clone(), inner.base_time)
-        };
-
-        match read_fut.await {
-            Ok(Ok((len, saddr))) => {
+        match self
+            .reader
+            .read(self.mapped_buffer.as_mut().unwrap().as_mut_slice())
+            .await
+        {
+            Ok((len, saddr)) => {
                 let dts = if T::DO_TIMESTAMP {
-                    let time = clock.as_ref().unwrap().get_time();
-                    let running_time = time - base_time.unwrap();
+                    let time = self.clock.as_ref().unwrap().get_time();
+                    let running_time = time - self.base_time.unwrap();
                     gst_debug!(
                         SOCKET_CAT,
-                        obj: &element,
+                        obj: &self.element,
                         "Read {} bytes at {} (clock {})",
                         len,
                         running_time,
@@ -290,7 +153,7 @@ impl<T: SocketRead + 'static> SocketStream<T> {
                     );
                     running_time
                 } else {
-                    gst_debug!(SOCKET_CAT, obj: &element, "Read {} bytes", len);
+                    gst_debug!(SOCKET_CAT, obj: &self.element, "Read {} bytes", len);
                     gst::CLOCK_TIME_NONE
                 };
 
@@ -305,16 +168,19 @@ impl<T: SocketRead + 'static> SocketStream<T> {
 
                 Some(Ok((buffer, saddr)))
             }
-            Ok(Err(err)) => {
-                gst_debug!(SOCKET_CAT, obj: &element, "Read error {:?}", err);
+            Err(err) => {
+                gst_debug!(SOCKET_CAT, obj: &self.element, "Read error {:?}", err);
 
                 Some(Err(SocketError::Io(err)))
             }
-            Err(Aborted) => {
-                gst_debug!(SOCKET_CAT, obj: &element, "Read Aborted");
+        }
+    }
+}
 
-                None
-            }
+impl<T: SocketRead> Drop for Socket<T> {
+    fn drop(&mut self) {
+        if let Err(err) = self.buffer_pool.set_active(false) {
+            gst_error!(SOCKET_CAT, obj: &self.element, "Failed to unprepare socket: {}", err);
         }
     }
 }
