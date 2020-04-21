@@ -26,6 +26,31 @@ use gst::subclass::prelude::*;
 use super::cea608tott_ffi as ffi;
 use atomic_refcell::AtomicRefCell;
 
+fn scale_round(val: u64, num: u64, denom: u64) -> u64 {
+    unsafe { gst_sys::gst_util_uint64_scale_round(val, num, denom) }
+}
+
+fn decrement_pts(min_frame_no: u64, frame_no: &mut u64, fps_n: u64, fps_d: u64) -> (u64, u64) {
+    let old_pts = scale_round(
+        (*frame_no * gst::SECOND).nseconds().unwrap() as u64,
+        fps_d,
+        fps_n,
+    );
+
+    if *frame_no > min_frame_no {
+        *frame_no -= 1;
+    }
+
+    let new_pts = scale_round(
+        (*frame_no * gst::SECOND).nseconds().unwrap() as u64,
+        fps_d,
+        fps_n,
+    );
+    let duration = old_pts - new_pts;
+
+    (new_pts, duration)
+}
+
 fn is_basicna(cc_data: u16) -> bool {
     0x0000 != (0x6000 & cc_data)
 }
@@ -101,14 +126,6 @@ fn erase_display_memory(
         buf_mut.set_duration(duration);
     }
     bufferlist.insert(0, buffer);
-
-    let mut buffer = buffer_from_cc_data(cc_data);
-    {
-        let buf_mut = buffer.get_mut().unwrap();
-        buf_mut.set_pts(pts + duration);
-        buf_mut.set_duration(duration);
-    }
-    bufferlist.insert(1, buffer);
 }
 
 fn resume_caption_loading(buffers: &mut Vec<gst::Buffer>) {
@@ -137,16 +154,27 @@ fn bna_buffer(buffers: &mut Vec<gst::Buffer>, bna1: u16, bna2: u16) {
 const DEFAULT_FPS_N: i32 = 30;
 const DEFAULT_FPS_D: i32 = 1;
 
+/* 74 is quite the magic number:
+ * 2 byte pairs for resume_caption_loading
+ * 2 byte pairs for erase_non_displayed_memory
+ * At most 4 byte pairs for the preambles (one per line, at most 2 lines)
+ * At most 64 byte pairs for the text if it's made up of 64 westeu characters
+ * At most 2 byte pairs if we need to splice in an erase_display_memory
+ */
+const LATENCY_BUFFERS: u64 = 74;
+
 struct State {
     framerate: gst::Fraction,
-    last_ts: gst::ClockTime,
+    erase_display_frame_no: Option<u64>,
+    last_frame_no: u64,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
             framerate: gst::Fraction::new(DEFAULT_FPS_N, DEFAULT_FPS_D),
-            last_ts: gst::CLOCK_TIME_NONE,
+            erase_display_frame_no: None,
+            last_frame_no: 0,
         }
     }
 }
@@ -168,17 +196,78 @@ lazy_static! {
 }
 
 impl TtToCea608 {
+    fn push_list(
+        &self,
+        bufferlist: gst::BufferList,
+        last_frame_no: u64,
+        new_frame_no: u64,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        if last_frame_no != new_frame_no {
+            let state = self.state.borrow_mut();
+            let (fps_n, fps_d) = (
+                *state.framerate.numer() as u64,
+                *state.framerate.denom() as u64,
+            );
+            let start: gst::ClockTime = scale_round(
+                (last_frame_no * gst::SECOND).nseconds().unwrap() as u64,
+                fps_d,
+                fps_n,
+            )
+            .into();
+            let end: gst::ClockTime = scale_round(
+                (new_frame_no * gst::SECOND).nseconds().unwrap() as u64,
+                fps_d,
+                fps_n,
+            )
+            .into();
+
+            let event = gst::Event::new_gap(start, end - start).build();
+
+            drop(state);
+
+            let _ = self.srcpad.push_event(event);
+        }
+        self.srcpad.push_list(bufferlist)
+    }
+
+    fn do_erase_display(
+        &self,
+        min_frame_no: u64,
+        mut erase_display_frame_no: u64,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut state = self.state.borrow_mut();
+
+        let (fps_n, fps_d) = (
+            *state.framerate.numer() as u64,
+            *state.framerate.denom() as u64,
+        );
+
+        let mut bufferlist = gst::BufferList::new();
+
+        state.last_frame_no = erase_display_frame_no;
+
+        let (pts, duration) =
+            decrement_pts(min_frame_no, &mut erase_display_frame_no, fps_n, fps_d);
+        erase_display_memory(bufferlist.get_mut().unwrap(), pts.into(), duration.into());
+        let (pts, duration) =
+            decrement_pts(min_frame_no, &mut erase_display_frame_no, fps_n, fps_d);
+        erase_display_memory(bufferlist.get_mut().unwrap(), pts.into(), duration.into());
+
+        drop(state);
+
+        self.push_list(bufferlist, min_frame_no, erase_display_frame_no)
+    }
+
     fn sink_chain(
         &self,
         pad: &gst::Pad,
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(CAT, obj: pad, "Handling buffer {:?}", buffer);
         let mut row = 13;
         let mut col = 0;
 
-        let mut pts = match buffer.get_pts() {
+        let pts = match buffer.get_pts() {
             gst::CLOCK_TIME_NONE => {
                 gst_element_error!(
                     element,
@@ -204,13 +293,6 @@ impl TtToCea608 {
 
         let mut state = self.state.borrow_mut();
         let mut buffers = vec![];
-
-        let frame_duration = gst::SECOND
-            .mul_div_floor(
-                *state.framerate.denom() as u64,
-                *state.framerate.numer() as u64,
-            )
-            .unwrap();
 
         {
             resume_caption_loading(&mut buffers);
@@ -310,50 +392,111 @@ impl TtToCea608 {
 
         let mut bufferlist = gst::BufferList::new();
 
-        let erase_display_pts = {
-            if state.last_ts.is_some() && state.last_ts < pts {
-                state.last_ts
+        let (fps_n, fps_d) = (
+            *state.framerate.numer() as u64,
+            *state.framerate.denom() as u64,
+        );
+
+        /* Calculate the frame for which we want the first of our
+         * (doubled) end_of_caption control codes to be output
+         */
+        let mut frame_no =
+            scale_round(pts.nseconds().unwrap(), fps_n, fps_d) / gst::SECOND.nseconds().unwrap();
+
+        let mut erase_display_frame_no = {
+            if state.erase_display_frame_no < Some(frame_no) {
+                state.erase_display_frame_no
             } else {
-                gst::CLOCK_TIME_NONE
+                None
             }
         };
 
-        state.last_ts = pts + duration;
+        /* Add 2: One for our second end_of_caption control
+         * code, another to calculate its duration */
+        frame_no += 2;
 
-        // FIXME: the following code may result in overlapping timestamps
-        // when too many characters need encoding for a given interval
+        /* Store that frame number, so we can make sure not to output
+         * overlapped timestamps, outputting multiple buffers with
+         * a 0 duration will break strict line-21 encoding, but
+         * we should be fine with 608 over 708, as we can encode
+         * multiple byte pairs into a single frame */
+        let mut min_frame_no = state.last_frame_no;
+        state.last_frame_no = frame_no;
 
-        /* Account for doubled end_of_caption control */
-        pts += frame_duration;
+        state.erase_display_frame_no = Some(
+            scale_round((pts + duration).nseconds().unwrap(), fps_n, fps_d)
+                / gst::SECOND.nseconds().unwrap()
+                + 2,
+        );
 
         for mut buffer in buffers.drain(..).rev() {
-            let buf_mut = buffer.get_mut().unwrap();
-            let prev_pts = pts;
+            /* Insert display erasure at the correct moment */
+            if erase_display_frame_no == Some(frame_no) {
+                let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
+                erase_display_memory(bufferlist.get_mut().unwrap(), pts.into(), duration.into());
+                let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
+                erase_display_memory(bufferlist.get_mut().unwrap(), pts.into(), duration.into());
 
-            buf_mut.set_pts(pts);
-
-            if pts > frame_duration {
-                pts -= frame_duration;
-            } else {
-                pts = 0.into();
+                erase_display_frame_no = None;
             }
 
-            buf_mut.set_duration(prev_pts - pts);
+            let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
+
+            let buf_mut = buffer.get_mut().unwrap();
+            buf_mut.set_pts(pts.into());
+            buf_mut.set_duration(duration.into());
             bufferlist.get_mut().unwrap().insert(0, buffer);
         }
 
-        if erase_display_pts.is_some() {
-            erase_display_memory(
-                bufferlist.get_mut().unwrap(),
-                erase_display_pts,
-                frame_duration,
-            );
+        drop(state);
+
+        if let Some(erase_display_frame_no) = erase_display_frame_no {
+            self.do_erase_display(min_frame_no, erase_display_frame_no)?;
+            min_frame_no = erase_display_frame_no;
         }
 
-        self.srcpad.push_list(bufferlist).map_err(|err| {
-            gst_error!(CAT, obj: &self.srcpad, "Pushing buffer returned {:?}", err);
-            err
-        })
+        self.push_list(bufferlist, min_frame_no, frame_no)
+            .map_err(|err| {
+                gst_error!(CAT, obj: &self.srcpad, "Pushing buffer returned {:?}", err);
+                err
+            })
+    }
+
+    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+        use gst::QueryView;
+
+        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+
+        match query.view_mut() {
+            QueryView::Latency(ref mut q) => {
+                let mut peer_query = gst::query::Query::new_latency();
+
+                let ret = self.sinkpad.peer_query(&mut peer_query);
+
+                if ret {
+                    let state = self.state.borrow();
+                    let (live, mut min, mut max) = peer_query.get_result();
+                    let (fps_n, fps_d) = (
+                        *state.framerate.numer() as u64,
+                        *state.framerate.denom() as u64,
+                    );
+
+                    let our_latency: gst::ClockTime = scale_round(
+                        (LATENCY_BUFFERS * gst::SECOND).nseconds().unwrap(),
+                        fps_d,
+                        fps_n,
+                    )
+                    .into();
+
+                    min += our_latency;
+                    max += our_latency;
+
+                    q.set(live, min, max);
+                }
+                ret
+            }
+            _ => pad.query_default(Some(element), query),
+        }
     }
 
     fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
@@ -389,7 +532,57 @@ impl TtToCea608 {
 
                 let new_event = gst::Event::new_caps(&downstream_caps).build();
 
+                drop(state);
+
                 return self.srcpad.push_event(new_event);
+            }
+            EventView::Gap(e) => {
+                let mut state = self.state.borrow_mut();
+                let (fps_n, fps_d) = (
+                    *state.framerate.numer() as u64,
+                    *state.framerate.denom() as u64,
+                );
+
+                let (timestamp, duration) = e.get();
+                let mut frame_no =
+                    scale_round((timestamp + duration).nseconds().unwrap(), fps_n, fps_d)
+                        / gst::SECOND.nseconds().unwrap();
+
+                if frame_no < LATENCY_BUFFERS {
+                    return true;
+                }
+
+                frame_no -= LATENCY_BUFFERS;
+
+                if let Some(erase_display_frame_no) = state.erase_display_frame_no {
+                    if erase_display_frame_no <= frame_no {
+                        let min_frame_no = state.last_frame_no;
+                        state.erase_display_frame_no = None;
+
+                        drop(state);
+
+                        /* Ignore return value, we may be flushing here and can't
+                         * communicate that through a boolean
+                         */
+                        let _ = self.do_erase_display(min_frame_no, erase_display_frame_no);
+                    }
+                }
+
+                return true;
+            }
+            EventView::Eos(_) => {
+                let mut state = self.state.borrow_mut();
+                if let Some(erase_display_frame_no) = state.erase_display_frame_no {
+                    let min_frame_no = state.last_frame_no;
+                    state.erase_display_frame_no = None;
+
+                    drop(state);
+
+                    /* Ignore return value, we may be flushing here and can't
+                     * communicate that through a boolean
+                     */
+                    let _ = self.do_erase_display(min_frame_no, erase_display_frame_no);
+                }
             }
             _ => (),
         }
@@ -424,6 +617,13 @@ impl ObjectSubclass for TtToCea608 {
                 parent,
                 || false,
                 |this, element| this.sink_event(pad, element, event),
+            )
+        });
+        srcpad.set_query_function(|pad, parent, query| {
+            TtToCea608::catch_panic_pad_function(
+                parent,
+                || false,
+                |this, element| this.src_query(pad, element, query),
             )
         });
 
