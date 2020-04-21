@@ -24,7 +24,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use super::cea608tott_ffi as ffi;
-use atomic_refcell::AtomicRefCell;
+use std::sync::Mutex;
 
 fn scale_round(val: u64, num: u64, denom: u64) -> u64 {
     unsafe { gst_sys::gst_util_uint64_scale_round(val, num, denom) }
@@ -183,7 +183,7 @@ struct TtToCea608 {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
 
-    state: AtomicRefCell<State>,
+    state: Mutex<State>,
 }
 
 lazy_static! {
@@ -203,7 +203,7 @@ impl TtToCea608 {
         new_frame_no: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         if last_frame_no != new_frame_no {
-            let state = self.state.borrow_mut();
+            let state = self.state.lock().unwrap();
             let (fps_n, fps_d) = (
                 *state.framerate.numer() as u64,
                 *state.framerate.denom() as u64,
@@ -235,7 +235,7 @@ impl TtToCea608 {
         min_frame_no: u64,
         mut erase_display_frame_no: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state = self.state.borrow_mut();
+        let mut state = self.state.lock().unwrap();
 
         let (fps_n, fps_d) = (
             *state.framerate.numer() as u64,
@@ -291,7 +291,7 @@ impl TtToCea608 {
             duration => Ok(duration),
         }?;
 
-        let mut state = self.state.borrow_mut();
+        let mut state = self.state.lock().unwrap();
         let mut buffers = vec![];
 
         {
@@ -474,7 +474,7 @@ impl TtToCea608 {
                 let ret = self.sinkpad.peer_query(&mut peer_query);
 
                 if ret {
-                    let state = self.state.borrow();
+                    let state = self.state.lock().unwrap();
                     let (live, mut min, mut max) = peer_query.get_result();
                     let (fps_n, fps_d) = (
                         *state.framerate.numer() as u64,
@@ -525,7 +525,7 @@ impl TtToCea608 {
                 );
                 s.fixate();
 
-                let mut state = self.state.borrow_mut();
+                let mut state = self.state.lock().unwrap();
                 state.framerate = s.get_some::<gst::Fraction>("framerate").unwrap();
 
                 gst_debug!(CAT, obj: pad, "Pushing caps {}", caps);
@@ -537,7 +537,7 @@ impl TtToCea608 {
                 return self.srcpad.push_event(new_event);
             }
             EventView::Gap(e) => {
-                let mut state = self.state.borrow_mut();
+                let mut state = self.state.lock().unwrap();
                 let (fps_n, fps_d) = (
                     *state.framerate.numer() as u64,
                     *state.framerate.denom() as u64,
@@ -571,7 +571,7 @@ impl TtToCea608 {
                 return true;
             }
             EventView::Eos(_) => {
-                let mut state = self.state.borrow_mut();
+                let mut state = self.state.lock().unwrap();
                 if let Some(erase_display_frame_no) = state.erase_display_frame_no {
                     let min_frame_no = state.last_frame_no;
                     state.erase_display_frame_no = None;
@@ -633,7 +633,7 @@ impl ObjectSubclass for TtToCea608 {
         Self {
             srcpad,
             sinkpad,
-            state: AtomicRefCell::new(State::default()),
+            state: Mutex::new(State::default()),
         }
     }
 
@@ -699,7 +699,7 @@ impl ElementImpl for TtToCea608 {
 
         match transition {
             gst::StateChange::ReadyToPaused => {
-                let mut state = self.state.borrow_mut();
+                let mut state = self.state.lock().unwrap();
                 *state = State::default();
             }
             _ => (),
@@ -709,7 +709,7 @@ impl ElementImpl for TtToCea608 {
 
         match transition {
             gst::StateChange::PausedToReady => {
-                let mut state = self.state.borrow_mut();
+                let mut state = self.state.lock().unwrap();
                 *state = State::default();
             }
             _ => (),
