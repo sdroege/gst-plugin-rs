@@ -54,6 +54,7 @@ stages:
     # Cargo currently doesn't support passthrough for that scenario.
     - export RUSTFLAGS='--cfg feature="build"'
     - cd "${CI_PROJECT_DIR}"
+    - mkdir .cargo && echo -e "[net]\ngit-fetch-with-cli = true" > .cargo/config
   cache:
     key: "gst"
     paths:
