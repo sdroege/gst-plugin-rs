@@ -97,6 +97,7 @@ static void
 rtp_jitter_buffer_finalize (GObject * object)
 {
   RTPJitterBuffer *jbuf;
+  RTPJitterBufferItem *item;
 
   jbuf = RTP_JITTER_BUFFER_CAST (object);
 
@@ -112,6 +113,16 @@ rtp_jitter_buffer_finalize (GObject * object)
   if (jbuf->pipeline_clock)
     gst_object_unref (jbuf->pipeline_clock);
 
+  /* Free any remaining items manually here. We can't let g_queue_free() take
+   * care of this because the items are not actually GList but
+   * RTPJitterBufferItem, and g_slice_free() explodes if the allocation is not
+   * from the expected block size.
+   */
+  while ((item = (RTPJitterBufferItem *) g_queue_pop_head_link (jbuf->packets))) {
+    if (item->data)
+      gst_mini_object_unref (item->data);
+    g_slice_free (RTPJitterBufferItem, item);
+  }
   g_queue_free (jbuf->packets);
 
   g_mutex_clear (&jbuf->clock_lock);
