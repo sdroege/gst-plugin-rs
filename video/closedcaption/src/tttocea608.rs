@@ -196,12 +196,7 @@ lazy_static! {
 }
 
 impl TtToCea608 {
-    fn push_list(
-        &self,
-        bufferlist: gst::BufferList,
-        last_frame_no: u64,
-        new_frame_no: u64,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn push_gap(&self, last_frame_no: u64, new_frame_no: u64) {
         if last_frame_no != new_frame_no {
             let state = self.state.lock().unwrap();
             let (fps_n, fps_d) = (
@@ -227,6 +222,15 @@ impl TtToCea608 {
 
             let _ = self.srcpad.push_event(event);
         }
+    }
+
+    fn push_list(
+        &self,
+        bufferlist: gst::BufferList,
+        last_frame_no: u64,
+        new_frame_no: u64,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.push_gap(last_frame_no, new_frame_no);
         self.srcpad.push_list(bufferlist)
     }
 
@@ -566,6 +570,11 @@ impl TtToCea608 {
                          */
                         let _ = self.do_erase_display(min_frame_no, erase_display_frame_no);
                     }
+                } else {
+                    let last_frame_no = state.last_frame_no;
+                    state.last_frame_no = frame_no;
+                    drop(state);
+                    self.push_gap(last_frame_no, frame_no);
                 }
 
                 return true;
