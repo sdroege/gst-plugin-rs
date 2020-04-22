@@ -49,6 +49,8 @@ stages:
   stage: prep
   variables:
     FDO_DISTRIBUTION_PACKAGES: "libcsound64-dev llvm clang nasm libsodium-dev"
+  rules:
+    - if: '$UPDATE_IMG == null'
 
 build-stable:
   extends:
@@ -64,6 +66,28 @@ build-nightly:
   extends:
     - .build-debian-container
     - .debian:10-nightly
+
+# Those jobs are triggered by gstreamer-rs when updating its images
+update-stable:
+  extends: build-stable
+  rules:
+    - if: '$UPDATE_IMG == "stable"'
+  variables:
+      FDO_FORCE_REBUILD: 1
+
+update-1-40:
+  extends: build-1-40
+  rules:
+    - if: '$UPDATE_IMG == "1-40"'
+  variables:
+      FDO_FORCE_REBUILD: 1
+
+update-nightly:
+  extends: build-nightly
+  rules:
+    - if: '$UPDATE_IMG == "nightly"'
+  variables:
+      FDO_FORCE_REBUILD: 1
 
 .dist-debian-container:
   extends:
@@ -110,17 +134,23 @@ test 1.40:
   extends:
     - '.cargo test'
     - .img-1-40
+  rules:
+    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "1-40"'
 
 test stable:
   extends:
     - '.cargo test'
     - .img-stable
+  rules:
+    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
 
 test nightly:
   allow_failure: true
   extends:
     - '.cargo test'
     - .img-nightly
+  rules:
+    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "nightly"'
 
 rustfmt:
   extends: .img-stable
