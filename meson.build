@@ -74,7 +74,7 @@ if not csound_option.disabled()
   endif
 endif
 
-if csound_dep.found() and false
+if csound_dep.found()
   plugins_rep += {'gst-plugin-csound' : 'libgstcsound'}
 else
   exclude += ['gst-plugin-csound']
