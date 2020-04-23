@@ -9,7 +9,6 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
 glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
 combine = "4.0"
 either = "1"
 uuid = { version = "0.8", features = ["v4"] }

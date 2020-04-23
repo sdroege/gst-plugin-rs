@@ -30,8 +30,6 @@ extern crate gst;
 #[macro_use]
 extern crate lazy_static;
 
-extern crate gstreamer_sys as gst_sys;
-
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;

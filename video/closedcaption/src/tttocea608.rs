@@ -26,26 +26,24 @@ use gst::subclass::prelude::*;
 use super::cea608tott_ffi as ffi;
 use std::sync::Mutex;
 
-fn scale_round(val: u64, num: u64, denom: u64) -> u64 {
-    unsafe { gst_sys::gst_util_uint64_scale_round(val, num, denom) }
-}
-
-fn decrement_pts(min_frame_no: u64, frame_no: &mut u64, fps_n: u64, fps_d: u64) -> (u64, u64) {
-    let old_pts = scale_round(
-        (*frame_no * gst::SECOND).nseconds().unwrap() as u64,
-        fps_d,
-        fps_n,
-    );
+fn decrement_pts(
+    min_frame_no: u64,
+    frame_no: &mut u64,
+    fps_n: u64,
+    fps_d: u64,
+) -> (gst::ClockTime, gst::ClockTime) {
+    let old_pts = (*frame_no * gst::SECOND)
+        .mul_div_round(fps_d, fps_n)
+        .unwrap();
 
     if *frame_no > min_frame_no {
         *frame_no -= 1;
     }
 
-    let new_pts = scale_round(
-        (*frame_no * gst::SECOND).nseconds().unwrap() as u64,
-        fps_d,
-        fps_n,
-    );
+    let new_pts = (*frame_no * gst::SECOND)
+        .mul_div_round(fps_d, fps_n)
+        .unwrap();
+
     let duration = old_pts - new_pts;
 
     (new_pts, duration)
@@ -203,18 +201,12 @@ impl TtToCea608 {
                 *state.framerate.numer() as u64,
                 *state.framerate.denom() as u64,
             );
-            let start: gst::ClockTime = scale_round(
-                (last_frame_no * gst::SECOND).nseconds().unwrap() as u64,
-                fps_d,
-                fps_n,
-            )
-            .into();
-            let end: gst::ClockTime = scale_round(
-                (new_frame_no * gst::SECOND).nseconds().unwrap() as u64,
-                fps_d,
-                fps_n,
-            )
-            .into();
+            let start = (last_frame_no * gst::SECOND)
+                .mul_div_round(fps_d, fps_n)
+                .unwrap();
+            let end = (new_frame_no * gst::SECOND)
+                .mul_div_round(fps_d, fps_n)
+                .unwrap();
 
             let event = gst::Event::new_gap(start, end - start).build();
 
@@ -252,10 +244,10 @@ impl TtToCea608 {
 
         let (pts, duration) =
             decrement_pts(min_frame_no, &mut erase_display_frame_no, fps_n, fps_d);
-        erase_display_memory(bufferlist.get_mut().unwrap(), pts.into(), duration.into());
+        erase_display_memory(bufferlist.get_mut().unwrap(), pts, duration);
         let (pts, duration) =
             decrement_pts(min_frame_no, &mut erase_display_frame_no, fps_n, fps_d);
-        erase_display_memory(bufferlist.get_mut().unwrap(), pts.into(), duration.into());
+        erase_display_memory(bufferlist.get_mut().unwrap(), pts, duration);
 
         drop(state);
 
@@ -404,8 +396,7 @@ impl TtToCea608 {
         /* Calculate the frame for which we want the first of our
          * (doubled) end_of_caption control codes to be output
          */
-        let mut frame_no =
-            scale_round(pts.nseconds().unwrap(), fps_n, fps_d) / gst::SECOND.nseconds().unwrap();
+        let mut frame_no = (pts.mul_div_round(fps_n, fps_d).unwrap() / gst::SECOND).unwrap();
 
         let mut erase_display_frame_no = {
             if state.erase_display_frame_no < Some(frame_no) {
@@ -428,18 +419,16 @@ impl TtToCea608 {
         state.last_frame_no = frame_no;
 
         state.erase_display_frame_no = Some(
-            scale_round((pts + duration).nseconds().unwrap(), fps_n, fps_d)
-                / gst::SECOND.nseconds().unwrap()
-                + 2,
+            ((pts + duration).mul_div_round(fps_n, fps_d).unwrap() / gst::SECOND).unwrap() + 2,
         );
 
         for mut buffer in buffers.drain(..).rev() {
             /* Insert display erasure at the correct moment */
             if erase_display_frame_no == Some(frame_no) {
                 let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
-                erase_display_memory(bufferlist.get_mut().unwrap(), pts.into(), duration.into());
+                erase_display_memory(bufferlist.get_mut().unwrap(), pts, duration);
                 let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
-                erase_display_memory(bufferlist.get_mut().unwrap(), pts.into(), duration.into());
+                erase_display_memory(bufferlist.get_mut().unwrap(), pts, duration);
 
                 erase_display_frame_no = None;
             }
@@ -447,8 +436,8 @@ impl TtToCea608 {
             let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
 
             let buf_mut = buffer.get_mut().unwrap();
-            buf_mut.set_pts(pts.into());
-            buf_mut.set_duration(duration.into());
+            buf_mut.set_pts(pts);
+            buf_mut.set_duration(duration);
             bufferlist.get_mut().unwrap().insert(0, buffer);
         }
 
@@ -485,12 +474,9 @@ impl TtToCea608 {
                         *state.framerate.denom() as u64,
                     );
 
-                    let our_latency: gst::ClockTime = scale_round(
-                        (LATENCY_BUFFERS * gst::SECOND).nseconds().unwrap(),
-                        fps_d,
-                        fps_n,
-                    )
-                    .into();
+                    let our_latency: gst::ClockTime = (LATENCY_BUFFERS * gst::SECOND)
+                        .mul_div_round(fps_d, fps_n)
+                        .unwrap();
 
                     min += our_latency;
                     max += our_latency;
@@ -548,9 +534,9 @@ impl TtToCea608 {
                 );
 
                 let (timestamp, duration) = e.get();
-                let mut frame_no =
-                    scale_round((timestamp + duration).nseconds().unwrap(), fps_n, fps_d)
-                        / gst::SECOND.nseconds().unwrap();
+                let mut frame_no = ((timestamp + duration).mul_div_round(fps_n, fps_d).unwrap()
+                    / gst::SECOND)
+                    .unwrap();
 
                 if frame_no < LATENCY_BUFFERS {
                     return true;
