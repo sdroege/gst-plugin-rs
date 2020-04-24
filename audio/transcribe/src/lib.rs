@@ -15,8 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-#![crate_type = "cdylib"]
-
 #[macro_use]
 extern crate glib;
 #[macro_use]

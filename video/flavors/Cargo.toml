@@ -22,7 +22,7 @@ smallvec = "1.0"
 
 [lib]
 name = "gstrsflv"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]

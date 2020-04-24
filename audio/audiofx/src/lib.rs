@@ -6,8 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![crate_type = "cdylib"]
-
 extern crate byte_slice_cast;
 #[macro_use]
 extern crate glib;

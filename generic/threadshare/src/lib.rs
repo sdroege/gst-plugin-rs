@@ -22,7 +22,6 @@
 // Needed for `select!` in `Socket::next`
 // see https://docs.rs/futures/0.3.1/futures/macro.select.html
 #![recursion_limit = "1024"]
-#![crate_type = "cdylib"]
 
 pub use tokio;
 

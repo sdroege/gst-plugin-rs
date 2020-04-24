@@ -20,8 +20,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-#![crate_type = "cdylib"]
-
 #[macro_use]
 extern crate glib;
 #[macro_use]
