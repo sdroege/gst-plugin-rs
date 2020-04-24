@@ -13,7 +13,6 @@ use glib::signal::{connect_raw, SignalHandlerId};
 use glib::translate::*;
 use glib::IsA;
 use glib::Value;
-use gst;
 use std::boxed::Box as Box_;
 use std::mem;
 use std::ptr;

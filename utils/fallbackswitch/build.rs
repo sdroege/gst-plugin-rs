@@ -1,7 +1,3 @@
-extern crate cc;
-extern crate gst_plugin_version_helper;
-extern crate pkg_config;
-
 fn main() {
     gst_plugin_version_helper::get_info();
 

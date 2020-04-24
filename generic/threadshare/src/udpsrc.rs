@@ -19,23 +19,17 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
-use gio;
-
-use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use glib::{glib_object_impl, glib_object_subclass};
 
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
 use gst_net::*;
 
 use lazy_static::lazy_static;
-
-use rand;
 
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};

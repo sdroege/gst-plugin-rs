@@ -1,7 +1,3 @@
-extern crate cc;
-extern crate gst_plugin_version_helper;
-extern crate pkg_config;
-
 fn main() {
     let gstreamer = pkg_config::probe_library("gstreamer-1.0").unwrap();
     let gstrtp = pkg_config::probe_library("gstreamer-rtp-1.0").unwrap();

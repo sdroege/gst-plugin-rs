@@ -58,7 +58,6 @@ pub mod prelude {
 
 pub mod time;
 
-use gst;
 use lazy_static::lazy_static;
 
 lazy_static! {

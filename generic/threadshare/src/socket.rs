@@ -19,7 +19,6 @@
 use futures::future::{abortable, AbortHandle, Aborted, BoxFuture};
 use futures::prelude::*;
 
-use gst;
 use gst::prelude::*;
 use gst::{gst_debug, gst_error, gst_error_msg};
 
@@ -28,7 +27,6 @@ use lazy_static::lazy_static;
 use std::io;
 use std::sync::{Arc, Mutex};
 
-use gio;
 use gio::prelude::*;
 use gio_sys as gio_ffi;
 use gobject_sys as gobject_ffi;

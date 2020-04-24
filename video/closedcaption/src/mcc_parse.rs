@@ -15,14 +15,12 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_video::{self, ValidVideoTimeCode};
+use gst_video::ValidVideoTimeCode;
 
 use std::cmp;
 use std::convert::TryInto;
@@ -982,8 +980,8 @@ impl MccParse {
             }
             EventView::FlushStop(_) => {
                 let state = self.state.lock().unwrap();
-
-                let _ = self.flush(state);
+                let state = self.flush(state);
+                drop(state);
 
                 pad.event_default(Some(element), event)
             }

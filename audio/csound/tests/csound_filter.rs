@@ -14,13 +14,6 @@
 // License along with this library; if not, write to the
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
-use gstcsound;
-
-use glib;
-
-use gst;
-use gst_check;
-
 use glib::prelude::*;
 use gst::prelude::*;
 

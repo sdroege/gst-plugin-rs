@@ -15,17 +15,9 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib;
 use glib::prelude::*;
 
-use gio;
-
-use gst;
-use gst_check;
-
 use std::thread;
-
-use gstthreadshare;
 
 fn init() {
     use std::sync::Once;

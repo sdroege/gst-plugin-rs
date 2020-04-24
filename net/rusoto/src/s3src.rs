@@ -18,10 +18,8 @@ use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 
-use gst;
 use gst::subclass::prelude::*;
 
-use gst_base;
 use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;

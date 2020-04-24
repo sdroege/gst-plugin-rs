@@ -16,15 +16,9 @@
 // Boston, MA 02110-1335, USA.
 
 use glib::prelude::*;
-
-use gst;
 use gst::prelude::*;
 
-use gst_app;
-
 use std::sync::{Arc, Mutex};
-
-use gstthreadshare;
 
 fn init() {
     use std::sync::Once;

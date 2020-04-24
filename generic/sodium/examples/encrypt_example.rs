@@ -32,7 +32,6 @@ use std::path::PathBuf;
 
 use clap::{App, Arg};
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Keys {

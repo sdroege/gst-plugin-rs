@@ -15,18 +15,15 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use std::default::Default;
 
 use rusoto_core::Region;
-use rusoto_credential;
 use rusoto_credential::{EnvironmentProvider, ProvideAwsCredentials};
 
 use rusoto_signature::signature::SignedRequest;

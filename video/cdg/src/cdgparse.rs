@@ -6,16 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::subclass::prelude::*;
 use gst::SECOND_VAL;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 use gstreamer::format::Bytes;
-use gstreamer_base as gst_base;
 use std::convert::TryInto;
 
 use crate::constants::{

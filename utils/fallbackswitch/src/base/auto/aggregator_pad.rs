@@ -10,10 +10,6 @@ use glib::signal::SignalHandlerId;
 use glib::translate::*;
 use glib::StaticType;
 use glib::Value;
-use glib_sys;
-use gobject_sys;
-use gst;
-use gst_sys;
 use std::boxed::Box as Box_;
 use std::mem::transmute;
 

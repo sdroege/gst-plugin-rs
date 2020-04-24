@@ -17,7 +17,6 @@
 
 use either::Either;
 
-use combine;
 use combine::parser::byte::hex_digit;
 use combine::parser::range::{range, take_while1};
 use combine::parser::repeat::skip_many;

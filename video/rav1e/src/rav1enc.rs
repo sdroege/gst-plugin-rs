@@ -7,14 +7,11 @@
 // except according to those terms.
 
 use atomic_refcell::AtomicRefCell;
-use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
-use gstreamer_video as gst_video;
 use rav1e::color;
 use rav1e::config;
 use rav1e::data;

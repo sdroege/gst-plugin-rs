@@ -15,15 +15,12 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use gst;
 use gst::prelude::*;
 use gst::{gst_debug, gst_error};
 
 use lazy_static::lazy_static;
 
 use std::sync::mpsc;
-
-use gstthreadshare;
 
 lazy_static! {
     static ref CAT: gst::DebugCategory = gst::DebugCategory::new(

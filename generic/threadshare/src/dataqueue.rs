@@ -17,7 +17,6 @@
 
 use futures::future::{self, abortable, AbortHandle};
 
-use gst;
 use gst::gst_debug;
 use gst::prelude::*;
 

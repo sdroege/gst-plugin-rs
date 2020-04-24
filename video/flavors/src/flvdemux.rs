@@ -9,18 +9,13 @@
 use std::cmp;
 use std::sync::Mutex;
 
-use nom;
-
 // FIXME: rustfmt removes the :: but they're required here
 #[rustfmt::skip]
 use ::flavors::parser as flavors;
 
-use crate::gst;
-use crate::gst::prelude::*;
-use crate::gst::subclass::prelude::*;
-use crate::gst_base;
-use glib;
 use glib::subclass;
+use gst::prelude::*;
+use gst::subclass::prelude::*;
 
 use num_rational::Rational32;
 

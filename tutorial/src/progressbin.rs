@@ -6,12 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib;
 use glib::gobject_sys;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::sync::Mutex;

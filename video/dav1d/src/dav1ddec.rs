@@ -6,14 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use dav1d;
-use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_video;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 

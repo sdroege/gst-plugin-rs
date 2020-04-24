@@ -7,11 +7,8 @@
 // except according to those terms.
 
 use super::super::gst_base_sys;
-use glib_sys;
-use gst_sys;
 
 use glib::translate::*;
-use gst;
 
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;

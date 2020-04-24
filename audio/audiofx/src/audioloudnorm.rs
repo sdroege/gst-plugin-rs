@@ -18,14 +18,10 @@
 // License along with FFmpeg; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_audio;
-use gst_base;
 
 use std::mem;
 use std::sync::Mutex;

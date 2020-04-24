@@ -15,19 +15,15 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use glib::{glib_object_impl, glib_object_subclass};
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{
     gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info, gst_log, gst_loggable_error,
     gst_warning,
 };
-use gst_audio;
-use gst_base;
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
 

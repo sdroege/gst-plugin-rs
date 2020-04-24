@@ -17,8 +17,6 @@
 
 #![crate_type = "cdylib"]
 
-use glib;
-use gst;
 use gst::gst_plugin_define;
 
 mod filter;

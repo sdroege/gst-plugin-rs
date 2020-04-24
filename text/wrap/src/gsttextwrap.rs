@@ -15,11 +15,9 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
@@ -31,7 +29,6 @@ use std::sync::Mutex;
 use once_cell::sync::Lazy;
 
 use hyphenation::{Load, Standard};
-use textwrap;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(

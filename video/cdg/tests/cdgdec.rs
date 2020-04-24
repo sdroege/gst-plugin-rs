@@ -6,12 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use gst_app::prelude::*;
-use gstreamer as gst;
-use gstreamer_app as gst_app;
-use std::path::PathBuf;
+extern crate gstreamer as gst;
+extern crate gstreamer_app as gst_app;
 
-use gstcdg;
+use gst::prelude::*;
+use std::path::PathBuf;
 
 fn init() {
     use std::sync::Once;

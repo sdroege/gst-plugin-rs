@@ -44,7 +44,6 @@ mod queue;
 use glib::translate::*;
 use glib_sys as glib_ffi;
 
-use gst;
 use gst::gst_plugin_define;
 use gstreamer_sys as gst_ffi;
 

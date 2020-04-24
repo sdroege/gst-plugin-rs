@@ -24,7 +24,6 @@
 
 use clap::{App, Arg};
 use serde::{Deserialize, Serialize};
-use serde_json;
 use sodiumoxide::crypto::box_;
 use std::fs::File;
 

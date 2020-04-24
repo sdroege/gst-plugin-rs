@@ -72,7 +72,6 @@ use futures::future;
 use futures::future::BoxFuture;
 use futures::prelude::*;
 
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_loggable_error};

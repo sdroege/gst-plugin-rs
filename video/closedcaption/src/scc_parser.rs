@@ -16,7 +16,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use combine;
 use combine::parser::byte::hex_digit;
 use combine::parser::range::{range, take_while1};
 use combine::parser::EasyParser;

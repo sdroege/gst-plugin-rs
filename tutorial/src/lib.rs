@@ -14,10 +14,6 @@ extern crate gstreamer_audio as gst_audio;
 extern crate gstreamer_base as gst_base;
 extern crate gstreamer_video as gst_video;
 
-extern crate byte_slice_cast;
-extern crate num_traits;
-extern crate once_cell;
-
 mod identity;
 mod progressbin;
 mod rgb2gray;

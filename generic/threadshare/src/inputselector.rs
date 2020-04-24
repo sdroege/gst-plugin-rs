@@ -19,13 +19,11 @@ use futures::future::BoxFuture;
 use futures::future::{abortable, AbortHandle};
 use futures::prelude::*;
 
-use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use glib::{glib_object_impl, glib_object_subclass};
 
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_log, gst_trace};

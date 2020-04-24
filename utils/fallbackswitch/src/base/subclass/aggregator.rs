@@ -6,16 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use libc;
-
 use super::super::gst_base_sys;
-use glib_sys;
-use gst_sys;
 
 use glib::translate::*;
 
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 

@@ -21,11 +21,9 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
-use glib;
 use glib::GBoxed;
 use glib::{glib_object_impl, glib_object_subclass};
 
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::EventView;

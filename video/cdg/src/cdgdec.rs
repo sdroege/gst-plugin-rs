@@ -6,17 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use cdg;
-use cdg_renderer;
-use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::subclass::prelude::*;
 use gst_video::prelude::VideoDecoderExtManual;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
-use gstreamer_video as gst_video;
 use image::GenericImageView;
 use std::sync::Mutex;
 

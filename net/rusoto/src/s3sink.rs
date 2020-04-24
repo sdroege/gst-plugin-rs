@@ -10,11 +10,9 @@ use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use gst_base;
 use gst_base::subclass::prelude::*;
 
 use futures::prelude::*;

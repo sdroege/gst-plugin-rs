@@ -38,7 +38,6 @@ use futures::channel::oneshot;
 use futures::future::BoxFuture;
 use futures::prelude::*;
 
-use gst;
 use gst::{gst_debug, gst_log, gst_trace, gst_warning};
 
 use lazy_static::lazy_static;
@@ -660,12 +659,9 @@ impl Context {
 
 #[cfg(test)]
 mod tests {
-    use futures;
     use futures::channel::mpsc;
     use futures::lock::Mutex;
     use futures::prelude::*;
-
-    use gst;
 
     use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
     use std::sync::Arc;

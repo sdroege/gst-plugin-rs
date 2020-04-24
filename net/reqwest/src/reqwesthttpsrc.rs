@@ -15,13 +15,10 @@ use reqwest::{Client, Response, StatusCode};
 use tokio::runtime;
 use url::Url;
 
-use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_base;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 

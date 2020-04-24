@@ -17,19 +17,13 @@
 
 #[cfg(not(feature = "v1_18"))]
 use super::base as gst_base;
-use glib;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_audio;
-#[cfg(feature = "v1_18")]
-use gst_base;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
-use gst_video;
 
 use once_cell::sync::Lazy;
 

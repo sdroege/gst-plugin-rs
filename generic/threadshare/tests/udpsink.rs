@@ -17,13 +17,7 @@
 
 use std::thread;
 
-use glib;
 use glib::prelude::*;
-
-use gst;
-use gst_check;
-
-use gstthreadshare;
 
 fn init() {
     use std::sync::Once;

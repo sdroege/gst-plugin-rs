@@ -6,14 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_audio;
-use gst_base;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
