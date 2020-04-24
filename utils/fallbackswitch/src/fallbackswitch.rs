@@ -16,14 +16,20 @@
 // Boston, MA 02110-1335, USA.
 
 #[cfg(not(feature = "v1_18"))]
-use super::base as gst_base;
-use glib::prelude::*;
+use self::gst_base::prelude::*;
+#[cfg(not(feature = "v1_18"))]
+use self::gst_base::subclass::prelude::*;
+#[cfg(not(feature = "v1_18"))]
+use super::gst_base_compat as gst_base;
+
+#[cfg(feature = "v1_18")]
+use gst_base::prelude::*;
+#[cfg(feature = "v1_18")]
+use gst_base::subclass::prelude::*;
+
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_base::prelude::*;
-use gst_base::subclass::prelude::*;
 
 use once_cell::sync::Lazy;
 

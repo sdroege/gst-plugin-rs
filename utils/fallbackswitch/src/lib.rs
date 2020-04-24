@@ -18,35 +18,18 @@
 #[macro_use]
 extern crate glib;
 #[macro_use]
-extern crate gstreamer as gst;
-
-extern crate gstreamer_audio as gst_audio;
-extern crate gstreamer_video as gst_video;
+extern crate gst;
 
 #[cfg(not(feature = "v1_18"))]
-extern crate glib_sys;
-#[cfg(not(feature = "v1_18"))]
-extern crate gobject_sys;
-#[cfg(feature = "v1_18")]
-extern crate gstreamer_base as gst_base;
-#[cfg(not(feature = "v1_18"))]
-extern crate gstreamer_sys as gst_sys;
-#[cfg(not(feature = "v1_18"))]
-#[allow(dead_code)]
-mod base;
-#[cfg(not(feature = "v1_18"))]
-mod gst_base {
-    pub use super::base::*;
-}
-
-extern crate once_cell;
+#[path = "base/mod.rs"]
+pub mod gst_base_compat;
 
 mod fallbacksrc;
 mod fallbackswitch;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    fallbackswitch::register(plugin)?;
     fallbacksrc::register(plugin)?;
+    fallbackswitch::register(plugin)?;
     Ok(())
 }
 

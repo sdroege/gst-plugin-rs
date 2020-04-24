@@ -5,7 +5,7 @@
     clippy::unreadable_literal
 )]
 
-extern crate gstreamer_sys as gst;
+use gst_sys as gst;
 
 #[allow(unused_imports)]
 use libc::{

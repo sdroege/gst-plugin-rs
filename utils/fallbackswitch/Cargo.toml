@@ -8,22 +8,22 @@ edition = "2018"
 description = "Fallback Switcher Plugin"
 
 [dependencies]
-libc = "0.2"
+libc = { version = "0.2", optional = true }
 glib = { git = "https://github.com/gtk-rs/glib" }
-glib-sys = { git = "https://github.com/gtk-rs/sys" }
-gobject-sys = { git = "https://github.com/gtk-rs/sys" }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
-gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
-gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys" }
-gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
-gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+glib-sys = { git = "https://github.com/gtk-rs/sys", optional = true }
+gobject-sys = { git = "https://github.com/gtk-rs/sys", optional = true }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
+gst-sys = { package = "gstreamer-sys", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs-sys", optional = true }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
 gtk = { git = "https://github.com/gtk-rs/gtk", optional = true }
 gio = { git = "https://github.com/gtk-rs/gio", optional = true }
 once_cell = "1.0"
 
 [dev-dependencies]
-gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}
-gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}
+gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}
 
 [lib]
 name = "gstfallbackswitch"
@@ -41,5 +41,5 @@ cc = "1.0"
 pkg-config = "0.3"
 
 [features]
-default = []
-#v1_18 = ["gstreamer/v1_18", "gstreamer-base"]
+default = ["glib-sys", "gobject-sys", "gst-sys", "libc"]
+#v1_18 = ["gstreamer-base/v1_18"]

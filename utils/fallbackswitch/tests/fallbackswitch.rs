@@ -15,16 +15,11 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-extern crate glib;
 use glib::prelude::*;
 
 #[macro_use]
-extern crate gstreamer as gst;
+extern crate gst;
 use gst::prelude::*;
-extern crate gstreamer_app as gst_app;
-extern crate gstreamer_check as gst_check;
-
-extern crate gstfallbackswitch;
 
 use once_cell::sync::Lazy;
 
