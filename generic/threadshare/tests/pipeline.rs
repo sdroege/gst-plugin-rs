@@ -65,7 +65,7 @@ fn multiple_contexts_queue() {
         src.set_property("context", &format!("context-{}", (i as u32) % CONTEXT_NB))
             .unwrap();
         src.set_property("context-wait", &CONTEXT_WAIT).unwrap();
-        src.set_property("port", &((FIRST_PORT + i) as u32))
+        src.set_property("port", &((FIRST_PORT + i) as i32))
             .unwrap();
 
         let queue =
@@ -204,7 +204,7 @@ fn multiple_contexts_proxy() {
         src.set_property("context", &format!("context-{}", (i as u32) % CONTEXT_NB))
             .unwrap();
         src.set_property("context-wait", &CONTEXT_WAIT).unwrap();
-        src.set_property("port", &((FIRST_PORT + i) as u32))
+        src.set_property("port", &((FIRST_PORT + i) as i32))
             .unwrap();
 
         let proxysink = gst::ElementFactory::make(

@@ -62,7 +62,7 @@ fn test_push() {
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
     tcpclientsrc.set_property("caps", &caps).unwrap();
-    tcpclientsrc.set_property("port", &(5000u32)).unwrap();
+    tcpclientsrc.set_property("port", &5000i32).unwrap();
 
     appsink.set_property("emit-signals", &true).unwrap();
 

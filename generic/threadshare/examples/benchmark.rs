@@ -97,7 +97,7 @@ fn main() {
                     gst::ElementFactory::make("ts-udpsrc", Some(format!("source-{}", i).as_str()))
                         .unwrap();
                 source
-                    .set_property("port", &(40000u32 + (i as u32)))
+                    .set_property("port", &(40000i32 + (i as i32)))
                     .unwrap();
                 source
                     .set_property("context", &format!("context-{}", (i as u32) % n_groups))
@@ -113,7 +113,7 @@ fn main() {
                 )
                 .unwrap();
                 source.set_property("host", &"127.0.0.1").unwrap();
-                source.set_property("port", &(40000i32)).unwrap();
+                source.set_property("port", &40000i32).unwrap();
 
                 source
             }
@@ -123,8 +123,8 @@ fn main() {
                     Some(format!("source-{}", i).as_str()),
                 )
                 .unwrap();
-                source.set_property("address", &"127.0.0.1").unwrap();
-                source.set_property("port", &(40000u32)).unwrap();
+                source.set_property("host", &"127.0.0.1").unwrap();
+                source.set_property("port", &40000i32).unwrap();
                 source
                     .set_property("context", &format!("context-{}", (i as u32) % n_groups))
                     .unwrap();

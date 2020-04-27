@@ -36,6 +36,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::u16;
+use std::u32;
 
 use tokio::io::AsyncReadExt;
 
@@ -44,19 +45,19 @@ use crate::runtime::{Context, PadSrc, PadSrcRef, Task};
 
 use super::socket::{Socket, SocketError, SocketRead, SocketState};
 
-const DEFAULT_ADDRESS: Option<&str> = Some("127.0.0.1");
-const DEFAULT_PORT: u32 = 5000;
+const DEFAULT_HOST: Option<&str> = Some("127.0.0.1");
+const DEFAULT_PORT: i32 = 4953;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
-const DEFAULT_CHUNK_SIZE: u32 = 4096;
+const DEFAULT_BLOCKSIZE: u32 = 4096;
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 #[derive(Debug, Clone)]
 struct Settings {
-    address: Option<String>,
-    port: u32,
+    host: Option<String>,
+    port: i32,
     caps: Option<gst::Caps>,
-    chunk_size: u32,
+    blocksize: u32,
     context: String,
     context_wait: u32,
 }
@@ -64,10 +65,10 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            address: DEFAULT_ADDRESS.map(Into::into),
+            host: DEFAULT_HOST.map(Into::into),
             port: DEFAULT_PORT,
             caps: DEFAULT_CAPS,
-            chunk_size: DEFAULT_CHUNK_SIZE,
+            blocksize: DEFAULT_BLOCKSIZE,
             context: DEFAULT_CONTEXT.into(),
             context_wait: DEFAULT_CONTEXT_WAIT,
         }
@@ -75,22 +76,22 @@ impl Default for Settings {
 }
 
 static PROPERTIES: [subclass::Property; 6] = [
-    subclass::Property("address", |name| {
+    subclass::Property("host", |name| {
         glib::ParamSpec::string(
             name,
-            "Address",
-            "Address to receive packets from",
-            DEFAULT_ADDRESS,
+            "Host",
+            "The host IP address to receive packets from",
+            DEFAULT_HOST,
             glib::ParamFlags::READWRITE,
         )
     }),
     subclass::Property("port", |name| {
-        glib::ParamSpec::uint(
+        glib::ParamSpec::int(
             name,
             "Port",
             "Port to receive packets from",
             0,
-            u16::MAX as u32,
+            u16::MAX as i32,
             DEFAULT_PORT,
             glib::ParamFlags::READWRITE,
         )
@@ -104,14 +105,14 @@ static PROPERTIES: [subclass::Property; 6] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("chunk-size", |name| {
+    subclass::Property("blocksize", |name| {
         glib::ParamSpec::uint(
             name,
-            "Chunk Size",
-            "Chunk Size",
+            "Blocksize",
+            "Size in bytes to read per buffer (-1 = default)",
             0,
-            u16::MAX as u32,
-            DEFAULT_CHUNK_SIZE,
+            u32::MAX,
+            DEFAULT_BLOCKSIZE,
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -384,28 +385,28 @@ impl TcpClientSrc {
                 )
             })?;
 
-        let addr: IpAddr = match settings.address {
+        let host: IpAddr = match settings.host {
             None => {
                 return Err(gst_error_msg!(
                     gst::ResourceError::Settings,
-                    ["No address set"]
+                    ["No host set"]
                 ));
             }
-            Some(ref addr) => match addr.parse() {
+            Some(ref host) => match host.parse() {
                 Err(err) => {
                     return Err(gst_error_msg!(
                         gst::ResourceError::Settings,
-                        ["Invalid address '{}' set: {}", addr, err]
+                        ["Invalid host '{}' set: {}", host, err]
                     ));
                 }
-                Ok(addr) => addr,
+                Ok(host) => host,
             },
         };
         let port = settings.port;
 
         let buffer_pool = gst::BufferPool::new();
         let mut config = buffer_pool.get_config();
-        config.set_params(None, settings.chunk_size, 0, 0);
+        config.set_params(None, settings.blocksize, 0, 0);
         buffer_pool.set_config(config).map_err(|_| {
             gst_error_msg!(
                 gst::ResourceError::Settings,
@@ -413,7 +414,7 @@ impl TcpClientSrc {
             )
         })?;
 
-        let saddr = SocketAddr::new(addr, port as u16);
+        let saddr = SocketAddr::new(host, port as u16);
         let element_clone = element.clone();
         let socket = Socket::new(element.upcast_ref(), buffer_pool, async move {
             gst_debug!(CAT, obj: &element_clone, "Connecting to {:?}", saddr);
@@ -658,8 +659,8 @@ impl ObjectImpl for TcpClientSrc {
 
         let mut settings = self.settings.lock().unwrap();
         match *prop {
-            subclass::Property("address", ..) => {
-                settings.address = value.get().expect("type checked upstream");
+            subclass::Property("host", ..) => {
+                settings.host = value.get().expect("type checked upstream");
             }
             subclass::Property("port", ..) => {
                 settings.port = value.get_some().expect("type checked upstream");
@@ -667,8 +668,8 @@ impl ObjectImpl for TcpClientSrc {
             subclass::Property("caps", ..) => {
                 settings.caps = value.get().expect("type checked upstream");
             }
-            subclass::Property("chunk-size", ..) => {
-                settings.chunk_size = value.get_some().expect("type checked upstream");
+            subclass::Property("blocksize", ..) => {
+                settings.blocksize = value.get_some().expect("type checked upstream");
             }
             subclass::Property("context", ..) => {
                 settings.context = value
@@ -688,10 +689,10 @@ impl ObjectImpl for TcpClientSrc {
 
         let settings = self.settings.lock().unwrap();
         match *prop {
-            subclass::Property("address", ..) => Ok(settings.address.to_value()),
+            subclass::Property("host", ..) => Ok(settings.host.to_value()),
             subclass::Property("port", ..) => Ok(settings.port.to_value()),
             subclass::Property("caps", ..) => Ok(settings.caps.to_value()),
-            subclass::Property("chunk-size", ..) => Ok(settings.chunk_size.to_value()),
+            subclass::Property("blocksize", ..) => Ok(settings.blocksize.to_value()),
             subclass::Property("context", ..) => Ok(settings.context.to_value()),
             subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
             _ => unimplemented!(),

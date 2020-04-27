@@ -43,56 +43,56 @@ fn test_client_management() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(clients, "127.0.0.1:5000");
+    assert_eq!(clients, "127.0.0.1:5004");
 
-    udpsink.emit("add", &[&"192.168.1.1", &57]).unwrap();
+    udpsink.emit("add", &[&"192.168.1.1", &57i32]).unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
         .unwrap();
-    assert_eq!(clients, "127.0.0.1:5000,192.168.1.1:57");
+    assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
     /* Adding a client twice is not supported */
-    udpsink.emit("add", &[&"192.168.1.1", &57]).unwrap();
+    udpsink.emit("add", &[&"192.168.1.1", &57i32]).unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
         .unwrap();
-    assert_eq!(clients, "127.0.0.1:5000,192.168.1.1:57");
+    assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
-    udpsink.emit("remove", &[&"192.168.1.1", &57]).unwrap();
+    udpsink.emit("remove", &[&"192.168.1.1", &57i32]).unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
         .unwrap();
-    assert_eq!(clients, "127.0.0.1:5000");
+    assert_eq!(clients, "127.0.0.1:5004");
 
     /* Removing a non-existing client should not be a problem */
-    udpsink.emit("remove", &[&"192.168.1.1", &57]).unwrap();
+    udpsink.emit("remove", &[&"192.168.1.1", &57i32]).unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
         .unwrap();
-    assert_eq!(clients, "127.0.0.1:5000");
+    assert_eq!(clients, "127.0.0.1:5004");
 
     /* While the default host:address client is listed in clients,
      * it can't be removed with the remove signal */
-    udpsink.emit("remove", &[&"127.0.0.1", &5000]).unwrap();
+    udpsink.emit("remove", &[&"127.0.0.1", &5004i32]).unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
         .unwrap();
-    assert_eq!(clients, "127.0.0.1:5000");
+    assert_eq!(clients, "127.0.0.1:5004");
 
     /* It is however possible to remove the default client by setting
      * host to None */
@@ -108,7 +108,7 @@ fn test_client_management() {
 
     /* The client properties is writable too */
     udpsink
-        .set_property("clients", &"127.0.0.1:5000,192.168.1.1:57")
+        .set_property("clients", &"127.0.0.1:5004,192.168.1.1:57")
         .unwrap();
     let clients = udpsink
         .get_property("clients")
@@ -116,7 +116,7 @@ fn test_client_management() {
         .get::<String>()
         .unwrap()
         .unwrap();
-    assert_eq!(clients, "127.0.0.1:5000,192.168.1.1:57");
+    assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
     udpsink.emit("clear", &[]).unwrap();
     let clients = udpsink
@@ -134,6 +134,10 @@ fn test_chain() {
 
     let mut h = gst_check::Harness::new("ts-udpsink");
     h.set_src_caps_str(&"foo/bar");
+    {
+        let udpsink = h.get_element().unwrap();
+        udpsink.set_property("port", &5005i32).unwrap();
+    }
 
     thread::spawn(move || {
         use std::net;
@@ -141,7 +145,7 @@ fn test_chain() {
 
         thread::sleep(time::Duration::from_millis(50));
 
-        let socket = net::UdpSocket::bind("127.0.0.1:5000").unwrap();
+        let socket = net::UdpSocket::bind("127.0.0.1:5005").unwrap();
         let mut buf = [0; 5];
         let (amt, _) = socket.recv_from(&mut buf).unwrap();
 

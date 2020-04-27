@@ -39,7 +39,7 @@ fn test_push() {
     {
         let udpsrc = h.get_element().unwrap();
         udpsrc.set_property("caps", &caps).unwrap();
-        udpsrc.set_property("port", &(5000 as u32)).unwrap();
+        udpsrc.set_property("port", &5000i32).unwrap();
         udpsrc.set_property("context", &"test-push").unwrap();
     }
 
@@ -105,7 +105,7 @@ fn test_socket_reuse() {
 
     {
         let udpsrc = ts_src_h.get_element().unwrap();
-        udpsrc.set_property("port", &(6000 as u32)).unwrap();
+        udpsrc.set_property("port", &6000i32).unwrap();
         udpsrc
             .set_property("context", &"test-socket-reuse")
             .unwrap();
@@ -130,7 +130,7 @@ fn test_socket_reuse() {
 
     {
         let udpsrc = ts_src_h2.get_element().unwrap();
-        udpsrc.set_property("port", &(6001 as u32)).unwrap();
+        udpsrc.set_property("port", &6001i32).unwrap();
         udpsrc
             .set_property("context", &"test-socket-reuse")
             .unwrap();

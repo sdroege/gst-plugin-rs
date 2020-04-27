@@ -50,12 +50,12 @@ use std::u16;
 use std::u8;
 
 const DEFAULT_HOST: Option<&str> = Some("127.0.0.1");
-const DEFAULT_PORT: u32 = 5000;
+const DEFAULT_PORT: i32 = 5004;
 const DEFAULT_SYNC: bool = true;
 const DEFAULT_BIND_ADDRESS: &str = "0.0.0.0";
-const DEFAULT_BIND_PORT: u32 = 0;
+const DEFAULT_BIND_PORT: i32 = 0;
 const DEFAULT_BIND_ADDRESS_V6: &str = "::";
-const DEFAULT_BIND_PORT_V6: u32 = 0;
+const DEFAULT_BIND_PORT_V6: i32 = 0;
 const DEFAULT_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_USED_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_SOCKET_V6: Option<GioSocketWrapper> = None;
@@ -72,12 +72,12 @@ const DEFAULT_CONTEXT_WAIT: u32 = 0;
 #[derive(Debug, Clone)]
 struct Settings {
     host: Option<String>,
-    port: u32,
+    port: i32,
     sync: bool,
     bind_address: String,
-    bind_port: u32,
+    bind_port: i32,
     bind_address_v6: String,
-    bind_port_v6: u32,
+    bind_port_v6: i32,
     socket: Option<GioSocketWrapper>,
     used_socket: Option<GioSocketWrapper>,
     socket_v6: Option<GioSocketWrapper>,
@@ -135,12 +135,12 @@ static PROPERTIES: [subclass::Property; 19] = [
         )
     }),
     subclass::Property("port", |name| {
-        glib::ParamSpec::uint(
+        glib::ParamSpec::int(
             name,
             "Port",
             "The port to send the packets to",
             0,
-            u16::MAX as u32,
+            u16::MAX as i32,
             DEFAULT_PORT,
             glib::ParamFlags::READWRITE,
         )
@@ -164,12 +164,12 @@ static PROPERTIES: [subclass::Property; 19] = [
         )
     }),
     subclass::Property("bind-port", |name| {
-        glib::ParamSpec::uint(
+        glib::ParamSpec::int(
             name,
             "Bind Port",
             "Port to bind the socket to",
             0,
-            u16::MAX as u32,
+            u16::MAX as i32,
             DEFAULT_BIND_PORT,
             glib::ParamFlags::READWRITE,
         )
@@ -184,12 +184,12 @@ static PROPERTIES: [subclass::Property; 19] = [
         )
     }),
     subclass::Property("bind-port-v6", |name| {
-        glib::ParamSpec::uint(
+        glib::ParamSpec::int(
             name,
             "Bind Port",
             "Port to bind the V6 socket to",
             0,
-            u16::MAX as u32,
+            u16::MAX as i32,
             DEFAULT_BIND_PORT_V6,
             glib::ParamFlags::READWRITE,
         )
@@ -779,7 +779,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
 
         async move {
             if let Some(sender) = sender.lock().await.as_mut() {
-                if let Err(_) = sender.send(TaskItem::Buffer(buffer)).await {
+                if sender.send(TaskItem::Buffer(buffer)).await.is_err() {
                     gst_debug!(CAT, obj: &element, "Flushing");
                     return Err(gst::FlowError::Flushing);
                 }
@@ -802,7 +802,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         async move {
             if let Some(sender) = sender.lock().await.as_mut() {
                 for buffer in list.iter_owned() {
-                    if let Err(_) = sender.send(TaskItem::Buffer(buffer)).await {
+                    if sender.send(TaskItem::Buffer(buffer)).await.is_err() {
                         gst_debug!(CAT, obj: &element, "Flushing");
                         return Err(gst::FlowError::Flushing);
                     }
@@ -829,7 +829,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
                 let udpsink = UdpSink::from_instance(&element);
                 let _ = udpsink.start(&element);
             } else if let Some(sender) = sender.lock().await.as_mut() {
-                if let Err(_) = sender.send(TaskItem::Event(event)).await {
+                if sender.send(TaskItem::Event(event)).await.is_err() {
                     gst_debug!(CAT, obj: &element, "Flushing");
                 }
             }
@@ -1123,7 +1123,7 @@ impl UdpSink {
     }
 }
 
-fn try_into_socket_addr(element: &gst::Element, host: &str, port: u32) -> Result<SocketAddr, ()> {
+fn try_into_socket_addr(element: &gst::Element, host: &str, port: i32) -> Result<SocketAddr, ()> {
     let addr: IpAddr = match host.parse() {
         Err(err) => {
             gst_error!(CAT, obj: element, "Failed to parse host {}: {}", host, err);
@@ -1186,7 +1186,7 @@ impl ObjectSubclass for UdpSink {
                 let port = args[2]
                     .get::<i32>()
                     .expect("signal arg")
-                    .expect("missing signal arg") as u32;
+                    .expect("missing signal arg");
 
                 if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
                     let udpsink = Self::from_instance(&element);
@@ -1214,7 +1214,7 @@ impl ObjectSubclass for UdpSink {
                 let port = args[2]
                     .get::<i32>()
                     .expect("signal arg")
-                    .expect("missing signal arg") as u32;
+                    .expect("missing signal arg");
 
                 let udpsink = Self::from_instance(&element);
                 let settings = udpsink.settings.lock().unwrap();
@@ -1382,7 +1382,7 @@ impl ObjectImpl for UdpSink {
 
                     if rsplit.len() == 2 {
                         rsplit[0]
-                            .parse::<u32>()
+                            .parse::<i32>()
                             .map_err(|err| {
                                 gst_error!(
                                     CAT,

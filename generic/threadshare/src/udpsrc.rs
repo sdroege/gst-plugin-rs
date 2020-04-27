@@ -31,6 +31,7 @@ use gst_net::*;
 
 use lazy_static::lazy_static;
 
+use std::i32;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
@@ -42,11 +43,11 @@ use crate::runtime::{Context, PadSrc, PadSrcRef, Task};
 
 use super::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead, SocketState};
 
-const DEFAULT_ADDRESS: Option<&str> = Some("127.0.0.1");
-const DEFAULT_PORT: u32 = 5000;
+const DEFAULT_ADDRESS: Option<&str> = Some("0.0.0.0");
+const DEFAULT_PORT: i32 = 5000;
 const DEFAULT_REUSE: bool = true;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
-const DEFAULT_MTU: u32 = 1500;
+const DEFAULT_MTU: u32 = 1492;
 const DEFAULT_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_USED_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_CONTEXT: &str = "";
@@ -56,7 +57,7 @@ const DEFAULT_RETRIEVE_SENDER_ADDRESS: bool = true;
 #[derive(Debug, Clone)]
 struct Settings {
     address: Option<String>,
-    port: u32,
+    port: i32, // for conformity with C based udpsrc
     reuse: bool,
     caps: Option<gst::Caps>,
     mtu: u32,
@@ -95,12 +96,12 @@ static PROPERTIES: [subclass::Property; 10] = [
         )
     }),
     subclass::Property("port", |name| {
-        glib::ParamSpec::uint(
+        glib::ParamSpec::int(
             name,
             "Port",
             "Port to listen on",
             0,
-            u16::MAX as u32,
+            u16::MAX as i32,
             DEFAULT_PORT,
             glib::ParamFlags::READWRITE,
         )
@@ -127,9 +128,9 @@ static PROPERTIES: [subclass::Property; 10] = [
         glib::ParamSpec::uint(
             name,
             "MTU",
-            "MTU",
+            "Maximum expected packet size. This directly defines the allocation size of the receive buffer pool",
             0,
-            u16::MAX as u32,
+            i32::MAX as u32,
             DEFAULT_MTU,
             glib::ParamFlags::READWRITE,
         )
@@ -907,7 +908,7 @@ impl ObjectImpl for UdpSrc {
         let settings = self.settings.lock().unwrap();
         match *prop {
             subclass::Property("address", ..) => Ok(settings.address.to_value()),
-            subclass::Property("port", ..) => Ok(settings.port.to_value()),
+            subclass::Property("port", ..) => Ok((settings.port).to_value()),
             subclass::Property("reuse", ..) => Ok(settings.reuse.to_value()),
             subclass::Property("caps", ..) => Ok(settings.caps.to_value()),
             subclass::Property("mtu", ..) => Ok(settings.mtu.to_value()),
