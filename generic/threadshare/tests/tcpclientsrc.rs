@@ -20,6 +20,7 @@ use glib::prelude::*;
 use gst::prelude::*;
 
 use std::io::Write;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::{thread, time};
 
@@ -37,10 +38,12 @@ fn init() {
 fn test_push() {
     init();
 
+    let (listening_tx, listening_rx) = mpsc::channel();
     let handler = thread::spawn(move || {
         use std::net;
 
         let listener = net::TcpListener::bind("0.0.0.0:5000").unwrap();
+        listening_tx.send(()).unwrap();
         let stream = listener.incoming().next().unwrap();
         let buffer = [0; 160];
         let mut socket = stream.unwrap();
@@ -84,6 +87,8 @@ fn test_push() {
         Ok(gst::FlowSuccess::Ok)
     });
 
+    // Wait for the server to listen
+    listening_rx.recv().unwrap();
     pipeline.set_state(gst::State::Playing).unwrap();
 
     let mut eos = false;
@@ -95,7 +100,7 @@ fn test_push() {
                 eos = true;
                 break;
             }
-            MessageView::Error(..) => unreachable!(),
+            MessageView::Error(err) => panic!("{:?}", err),
             _ => (),
         }
     }
