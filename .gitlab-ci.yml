@@ -19,7 +19,7 @@ stages:
 .debian:10:
   variables:
     FDO_DISTRIBUTION_VERSION: 10
-    FDO_DISTRIBUTION_TAG: '$RUST_VERSION-${GST_RS_IMG_TAG}_2020-04-27.0'
+    FDO_DISTRIBUTION_TAG: '$RUST_VERSION-${GST_RS_IMG_TAG}_2020-04-28.0'
     # Only stuff inside the repo directory can be cached
     # Override the CARGO_HOME variable to force its location
     CARGO_HOME: "${CI_PROJECT_DIR}/.cargo_home"
@@ -49,6 +49,7 @@ stages:
   stage: prep
   variables:
     FDO_DISTRIBUTION_PACKAGES: "libcsound64-dev llvm clang nasm libsodium-dev"
+    FDO_DISTRIBUTION_EXEC: 'bash ci/install-dav1d.sh'
   rules:
     - if: '$UPDATE_IMG == null'
 
@@ -98,11 +99,6 @@ update-nightly:
       - "${CARGO_HOME}"
   variables:
     SODIUM_USE_PKG_CONFIG: "true"
-    # The build feature is required for the dav1d plugin for building and
-    # statically linking the C dav1d library into the dav1d-rs bindings.
-    # FIXME: The feature name should explicitly mention the dav1d plugin but
-    # Cargo currently doesn't support passthrough for that scenario.
-    RUSTFLAGS: "--cfg feature=\"build\""
   after_script:
     - rm -rf target
 
