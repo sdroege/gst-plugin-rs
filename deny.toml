@@ -32,8 +32,6 @@ skip-tree = [
   { name = "rusoto_core" },
   # Metadeps needs to update error-chain: https://github.com/joshtriplett/metadeps/pull/12
   { name = "metadeps", depth = 2 },
-  # Need a dav1d release: https://github.com/rust-av/dav1d-rs/issues/30
-  { name = "dav1d-sys" }
 ]
 
 [sources]
