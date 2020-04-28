@@ -1,4 +1,4 @@
-.templates_sha: &templates_sha 8becba49be7e5886311972356345532ed9dd84c1
+.templates_sha: &templates_sha 322bf2b8f29b6491caeb13861201e96969ddc169
 
 include:
   - project: 'freedesktop/ci-templates'
@@ -19,7 +19,7 @@ stages:
 .debian:10:
   variables:
     FDO_DISTRIBUTION_VERSION: 10
-    FDO_DISTRIBUTION_TAG: '$RUST_VERSION-${GST_RS_IMG_TAG}_2020-04-28.0'
+    FDO_DISTRIBUTION_TAG: '$RUST_VERSION-${GST_RS_IMG_TAG}_2020-04-28.1'
     # Only stuff inside the repo directory can be cached
     # Override the CARGO_HOME variable to force its location
     CARGO_HOME: "${CI_PROJECT_DIR}/.cargo_home"
