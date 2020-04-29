@@ -167,9 +167,8 @@ impl AppSrcPadHandler {
             .caps = caps;
     }
 
-    fn reset(&self) {
+    fn reset_state(&self) {
         *self.0.state.try_lock().expect("State locked elsewhere") = Default::default();
-        *self.0.configured_caps.lock().unwrap() = None;
     }
 
     fn set_need_segment(&self) {
@@ -445,7 +444,7 @@ impl AppSrc {
         gst_debug!(CAT, obj: element, "Stopping");
 
         self.flush(element);
-        self.src_pad_handler.reset();
+        self.src_pad_handler.reset_state();
         *state = AppSrcState::RejectBuffers;
 
         gst_debug!(CAT, obj: element, "Stopped");
