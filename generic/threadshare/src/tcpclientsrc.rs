@@ -439,7 +439,6 @@ impl TcpClientSrc {
             )
         })?;
         self.src_pad_handler.prepare(settings.caps);
-        self.src_pad.prepare(&self.src_pad_handler);
 
         gst_debug!(CAT, obj: element, "Prepared");
 
@@ -450,9 +449,7 @@ impl TcpClientSrc {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
         *self.socket.lock().unwrap() = None;
-
         self.task.unprepare().unwrap();
-        self.src_pad.unprepare();
 
         gst_debug!(CAT, obj: element, "Unprepared");
 
@@ -639,11 +636,14 @@ impl ObjectSubclass for TcpClientSrc {
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
-        let templ = klass.get_pad_template("src").unwrap();
+        let src_pad_handler = TcpClientSrcPadHandler::default();
 
         Self {
-            src_pad: PadSrc::new(gst::Pad::new_from_template(&templ, Some("src"))),
-            src_pad_handler: TcpClientSrcPadHandler::default(),
+            src_pad: PadSrc::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                src_pad_handler.clone(),
+            ),
+            src_pad_handler,
             task: Task::default(),
             socket: StdMutex::new(None),
             settings: StdMutex::new(Settings::default()),

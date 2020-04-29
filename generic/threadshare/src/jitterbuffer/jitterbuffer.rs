@@ -210,14 +210,10 @@ impl Default for SinkHandlerInner {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct SinkHandler(Arc<StdMutex<SinkHandlerInner>>);
 
 impl SinkHandler {
-    fn new() -> Self {
-        SinkHandler(Arc::new(StdMutex::new(SinkHandlerInner::default())))
-    }
-
     fn clear(&self) {
         let mut inner = self.0.lock().unwrap();
         *inner = SinkHandlerInner::default();
@@ -728,14 +724,10 @@ impl PadSinkHandler for SinkHandler {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct SrcHandler;
 
 impl SrcHandler {
-    fn new() -> Self {
-        SrcHandler
-    }
-
     fn clear(&self) {}
 
     fn generate_lost_events(
@@ -1154,9 +1146,6 @@ impl JitterBuffer {
             )
         })?;
 
-        self.src_pad.prepare(&self.src_pad_handler);
-        self.sink_pad.prepare(&self.sink_pad_handler);
-
         gst_info!(CAT, obj: element, "Prepared");
 
         Ok(())
@@ -1164,11 +1153,7 @@ impl JitterBuffer {
 
     fn unprepare(&self, element: &gst::Element) {
         gst_debug!(CAT, obj: element, "Unpreparing");
-
         self.task.unprepare().unwrap();
-        self.sink_pad.unprepare();
-        self.src_pad.unprepare();
-
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
@@ -1418,17 +1403,20 @@ impl ObjectSubclass for JitterBuffer {
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let sink_pad_handler = SinkHandler::default();
+        let src_pad_handler = SrcHandler::default();
+
         Self {
-            sink_pad: PadSink::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("sink").unwrap(),
-                Some("sink"),
-            )),
-            src_pad: PadSrc::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("src").unwrap(),
-                Some("src"),
-            )),
-            sink_pad_handler: SinkHandler::new(),
-            src_pad_handler: SrcHandler::new(),
+            sink_pad: PadSink::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                sink_pad_handler.clone(),
+            ),
+            src_pad: PadSrc::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                src_pad_handler.clone(),
+            ),
+            sink_pad_handler,
+            src_pad_handler,
             task: Task::default(),
             state: StdMutex::new(State::default()),
             settings: StdMutex::new(Settings::default()),

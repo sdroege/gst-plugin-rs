@@ -420,9 +420,9 @@ impl PadSrcStrong {
 pub struct PadSrc(PadSrcStrong);
 
 impl PadSrc {
-    pub fn new(gst_pad: gst::Pad) -> Self {
+    pub fn new(gst_pad: gst::Pad, handler: impl PadSrcHandler) -> Self {
         let this = PadSrc(PadSrcStrong::new(gst_pad));
-        this.set_default_activatemode_function();
+        this.init_pad_functions(handler);
 
         this
     }
@@ -443,38 +443,7 @@ impl PadSrc {
         self.gst_pad().check_reconfigure()
     }
 
-    fn set_default_activatemode_function(&self) {
-        let this_weak = self.downgrade();
-        self.gst_pad()
-            .set_activatemode_function(move |gst_pad, _parent, mode, active| {
-                // Important: don't panic here as we operate without `catch_panic_pad_function`
-                // because we may not know which element the PadSrc is associated to yet
-                this_weak
-                    .upgrade()
-                    .ok_or_else(|| {
-                        gst_error!(RUNTIME_CAT, obj: gst_pad, "PadSrc no longer exists");
-                        gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists")
-                    })?
-                    .activate_mode_hook(mode, active)
-            });
-    }
-
-    ///// Spawns `future` using current [`PadContext`].
-    /////
-    ///// # Panics
-    /////
-    ///// This function panics if the `PadSrc` is not prepared.
-    /////
-    ///// [`PadContext`]: ../struct.PadContext.html
-    //pub fn spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
-    //where
-    //    Fut: Future + Send + 'static,
-    //    Fut::Output: Send + 'static,
-    //{
-    //    self.0.spawn(future)
-    //}
-
-    fn init_pad_functions<H: PadSrcHandler>(&self, handler: &H) {
+    fn init_pad_functions<H: PadSrcHandler>(&self, handler: H) {
         let handler_clone = handler.clone();
         let this_weak = self.downgrade();
         self.gst_pad()
@@ -535,11 +504,10 @@ impl PadSrc {
                 )
             });
 
-        let handler_clone = handler.clone();
         let this_weak = self.downgrade();
         self.gst_pad()
             .set_query_function(move |_gst_pad, parent, query| {
-                let handler = handler_clone.clone();
+                let handler = handler.clone();
                 let this_weak = this_weak.clone();
                 H::ElementImpl::catch_panic_pad_function(
                     parent,
@@ -557,29 +525,6 @@ impl PadSrc {
             });
     }
 
-    pub fn prepare<H: PadSrcHandler>(&self, handler: &H) {
-        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Preparing");
-
-        self.init_pad_functions(handler);
-    }
-
-    /// Releases the resources held by this `PadSrc`.
-    pub fn unprepare(&self) {
-        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Unpreparing");
-
-        self.gst_pad()
-            .set_activate_function(move |_gst_pad, _parent| {
-                Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc unprepared"))
-            });
-        self.set_default_activatemode_function();
-        self.gst_pad()
-            .set_event_function(move |_gst_pad, _parent, _event| false);
-        self.gst_pad()
-            .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
-        self.gst_pad()
-            .set_query_function(move |_gst_pad, _parent, _query| false);
-    }
-
     pub async fn push(&self, buffer: gst::Buffer) -> Result<FlowSuccess, FlowError> {
         self.0.push(buffer).await
     }
@@ -590,6 +535,25 @@ impl PadSrc {
 
     pub async fn push_event(&self, event: gst::Event) -> bool {
         self.0.push_event(event).await
+    }
+}
+
+impl Drop for PadSrc {
+    fn drop(&mut self) {
+        self.gst_pad()
+            .set_activate_function(move |_gst_pad, _parent| {
+                Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
+            });
+        self.gst_pad()
+            .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
+                Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
+            });
+        self.gst_pad()
+            .set_event_function(move |_gst_pad, _parent, _event| false);
+        self.gst_pad()
+            .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
+        self.gst_pad()
+            .set_query_function(move |_gst_pad, _parent, _query| false);
     }
 }
 
@@ -885,9 +849,9 @@ impl PadSinkStrong {
 pub struct PadSink(PadSinkStrong);
 
 impl PadSink {
-    pub fn new(gst_pad: gst::Pad) -> Self {
+    pub fn new(gst_pad: gst::Pad, handler: impl PadSinkHandler) -> Self {
         let this = PadSink(PadSinkStrong::new(gst_pad));
-        this.set_default_activatemode_function();
+        this.init_pad_functions(handler);
 
         this
     }
@@ -904,23 +868,7 @@ impl PadSink {
         self.0.downgrade()
     }
 
-    fn set_default_activatemode_function(&self) {
-        let this_weak = self.downgrade();
-        self.gst_pad()
-            .set_activatemode_function(move |gst_pad, _parent, mode, active| {
-                // Important: don't panic here as we operate without `catch_panic_pad_function`
-                // because we may not know which element the PadSrc is associated to yet
-                this_weak
-                    .upgrade()
-                    .ok_or_else(|| {
-                        gst_error!(RUNTIME_CAT, obj: gst_pad, "PadSink no longer exists");
-                        gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists")
-                    })?
-                    .activate_mode_hook(mode, active)
-            });
-    }
-
-    fn init_pad_functions<H: PadSinkHandler>(&self, handler: &H) {
+    fn init_pad_functions<H: PadSinkHandler>(&self, handler: H) {
         let handler_clone = handler.clone();
         let this_weak = self.downgrade();
         self.gst_pad()
@@ -1079,11 +1027,10 @@ impl PadSink {
                 )
             });
 
-        let handler_clone = handler.clone();
         let this_weak = self.downgrade();
         self.gst_pad()
             .set_query_function(move |_gst_pad, parent, query| {
-                let handler = handler_clone.clone();
+                let handler = handler.clone();
                 let this_weak = this_weak.clone();
                 H::ElementImpl::catch_panic_pad_function(
                     parent,
@@ -1100,21 +1047,18 @@ impl PadSink {
                 )
             });
     }
+}
 
-    pub fn prepare<H: PadSinkHandler>(&self, handler: &H) {
-        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Preparing");
-        self.init_pad_functions(handler);
-    }
-
-    /// Releases the resources held by this `PadSink`.
-    pub fn unprepare(&self) {
-        gst_log!(RUNTIME_CAT, obj: self.gst_pad(), "Unpreparing");
-
+impl Drop for PadSink {
+    fn drop(&mut self) {
         self.gst_pad()
             .set_activate_function(move |_gst_pad, _parent| {
-                Err(gst_loggable_error!(RUNTIME_CAT, "PadSink unprepared"))
+                Err(gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists"))
             });
-        self.set_default_activatemode_function();
+        self.gst_pad()
+            .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
+                Err(gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists"))
+            });
         self.gst_pad()
             .set_chain_function(move |_gst_pad, _parent, _buffer| Err(FlowError::Flushing));
         self.gst_pad()

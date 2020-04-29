@@ -607,7 +607,6 @@ impl UdpSrc {
         })?;
         self.src_pad_handler
             .prepare(settings.caps, settings.retrieve_sender_address);
-        self.src_pad.prepare(&self.src_pad_handler);
 
         gst_debug!(CAT, obj: element, "Prepared");
 
@@ -622,7 +621,6 @@ impl UdpSrc {
         element.notify("used-socket");
 
         self.task.unprepare().unwrap();
-        self.src_pad.unprepare();
 
         gst_debug!(CAT, obj: element, "Unprepared");
 
@@ -841,12 +839,14 @@ impl ObjectSubclass for UdpSrc {
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let src_pad_handler = UdpSrcPadHandler::default();
+
         Self {
-            src_pad: PadSrc::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("src").unwrap(),
-                Some("src"),
-            )),
-            src_pad_handler: UdpSrcPadHandler::default(),
+            src_pad: PadSrc::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                src_pad_handler.clone(),
+            ),
+            src_pad_handler,
             task: Task::default(),
             socket: StdMutex::new(None),
             settings: StdMutex::new(Settings::default()),

@@ -1029,8 +1029,6 @@ impl UdpSink {
             )
         })?;
 
-        self.sink_pad.prepare(&self.sink_pad_handler);
-
         gst_debug!(CAT, obj: element, "Started preparing");
 
         Ok(())
@@ -1041,7 +1039,6 @@ impl UdpSink {
 
         self.task.unprepare().unwrap();
         self.sink_pad_handler.unprepare();
-        self.sink_pad.unprepare();
 
         gst_debug!(CAT, obj: element, "Unprepared");
 
@@ -1258,13 +1255,14 @@ impl ObjectSubclass for UdpSink {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let settings = Arc::new(StdMutex::new(Settings::default()));
+        let sink_pad_handler = UdpSinkPadHandler::new(Arc::clone(&settings));
 
         Self {
-            sink_pad: PadSink::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("sink").unwrap(),
-                Some("sink"),
-            )),
-            sink_pad_handler: UdpSinkPadHandler::new(Arc::clone(&settings)),
+            sink_pad: PadSink::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                sink_pad_handler.clone(),
+            ),
+            sink_pad_handler,
             task: Task::default(),
             settings,
         }

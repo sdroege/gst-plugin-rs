@@ -619,8 +619,6 @@ impl ProxySink {
 
         *self.proxy_ctx.lock().unwrap() = Some(proxy_ctx);
 
-        self.sink_pad.prepare(&ProxySinkPadHandler);
-
         gst_debug!(SINK_CAT, obj: element, "Prepared");
 
         Ok(())
@@ -628,10 +626,7 @@ impl ProxySink {
 
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(SINK_CAT, obj: element, "Unpreparing");
-
-        self.sink_pad.unprepare();
         *self.proxy_ctx.lock().unwrap() = None;
-
         gst_debug!(SINK_CAT, obj: element, "Unprepared");
 
         Ok(())
@@ -703,10 +698,10 @@ impl ObjectSubclass for ProxySink {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         Self {
-            sink_pad: PadSink::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("sink").unwrap(),
-                Some("sink"),
-            )),
+            sink_pad: PadSink::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                ProxySinkPadHandler,
+            ),
             proxy_ctx: StdMutex::new(None),
             settings: StdMutex::new(SettingsSink::default()),
         }
@@ -978,8 +973,6 @@ impl ProxySrc {
 
         *self.dataqueue.lock().unwrap() = Some(dataqueue);
 
-        self.src_pad.prepare(&ProxySrcPadHandler);
-
         self.task.prepare(ts_ctx).map_err(|err| {
             gst_error_msg!(
                 gst::ResourceError::OpenRead,
@@ -1002,7 +995,6 @@ impl ProxySrc {
         }
 
         self.task.unprepare().unwrap();
-        self.src_pad.unprepare();
 
         *self.dataqueue.lock().unwrap() = None;
         *self.proxy_ctx.lock().unwrap() = None;
@@ -1195,10 +1187,10 @@ impl ObjectSubclass for ProxySrc {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         Self {
-            src_pad: PadSrc::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("src").unwrap(),
-                Some("src"),
-            )),
+            src_pad: PadSrc::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                ProxySrcPadHandler,
+            ),
             task: Task::default(),
             proxy_ctx: StdMutex::new(None),
             dataqueue: StdMutex::new(None),

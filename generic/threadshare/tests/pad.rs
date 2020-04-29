@@ -183,7 +183,6 @@ impl ElementSrcTest {
                 ["Error preparing Task: {:?}", err]
             )
         })?;
-        self.src_pad.prepare(&PadSrcTestHandler);
 
         let (sender, receiver) = mpsc::channel(1);
         *self.sender.lock().unwrap() = Some(sender);
@@ -198,7 +197,6 @@ impl ElementSrcTest {
         gst_debug!(SRC_CAT, obj: element, "Unpreparing");
 
         self.task.unprepare().unwrap();
-        self.src_pad.unprepare();
 
         *self.sender.lock().unwrap() = None;
         *self.receiver.lock().unwrap() = None;
@@ -369,10 +367,10 @@ impl ObjectSubclass for ElementSrcTest {
 
     fn new_with_class(klass: &glib::subclass::simple::ClassStruct<Self>) -> Self {
         ElementSrcTest {
-            src_pad: PadSrc::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("src").unwrap(),
-                Some("src"),
-            )),
+            src_pad: PadSrc::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                PadSrcTestHandler,
+            ),
             task: Task::default(),
             state: StdMutex::new(ElementSrcTestState::RejectItems),
             sender: StdMutex::new(None),
@@ -684,11 +682,11 @@ impl ObjectSubclass for ElementSinkTest {
     }
 
     fn new_with_class(klass: &glib::subclass::simple::ClassStruct<Self>) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
-        let gst_pad = gst::Pad::new_from_template(&templ, Some("sink"));
-
         ElementSinkTest {
-            sink_pad: PadSink::new(gst_pad),
+            sink_pad: PadSink::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                PadSinkTestHandler,
+            ),
             flushing: AtomicBool::new(true),
             sender: FutMutex::new(None),
         }
@@ -730,22 +728,13 @@ impl ElementImpl for ElementSinkTest {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_log!(SINK_CAT, obj: element, "Changing state {:?}", transition);
 
-        match transition {
-            gst::StateChange::NullToReady => {
-                self.sink_pad.prepare(&PadSinkTestHandler::default());
-            }
-            gst::StateChange::PausedToReady => {
-                self.stop(element);
-            }
-            gst::StateChange::ReadyToNull => {
-                self.sink_pad.unprepare();
-            }
-            _ => (),
+        if let gst::StateChange::PausedToReady = transition {
+            self.stop(element);
         }
 
         let success = self.parent_change_state(element, transition)?;
 
-        if transition == gst::StateChange::ReadyToPaused {
+        if let gst::StateChange::ReadyToPaused = transition {
             self.start(element);
         }
 

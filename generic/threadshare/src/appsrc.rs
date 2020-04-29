@@ -421,7 +421,6 @@ impl AppSrc {
             )
         })?;
         self.src_pad_handler.prepare(settings.caps.clone());
-        self.src_pad.prepare(&self.src_pad_handler);
 
         gst_debug!(CAT, obj: element, "Prepared");
 
@@ -435,7 +434,6 @@ impl AppSrc {
         *self.receiver.lock().unwrap() = None;
 
         self.task.unprepare().unwrap();
-        self.src_pad.unprepare();
 
         gst_debug!(CAT, obj: element, "Unprepared");
 
@@ -665,12 +663,14 @@ impl ObjectSubclass for AppSrc {
     }
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+        let src_pad_handler = AppSrcPadHandler::default();
+
         Self {
-            src_pad: PadSrc::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("src").unwrap(),
-                Some("src"),
-            )),
-            src_pad_handler: AppSrcPadHandler::default(),
+            src_pad: PadSrc::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                src_pad_handler.clone(),
+            ),
+            src_pad_handler,
             task: Task::default(),
             state: StdMutex::new(AppSrcState::RejectBuffers),
             sender: StdMutex::new(None),

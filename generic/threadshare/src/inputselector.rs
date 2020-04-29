@@ -105,16 +105,10 @@ impl Default for InputSelectorPadSinkHandlerInner {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct InputSelectorPadSinkHandler(Arc<Mutex<InputSelectorPadSinkHandlerInner>>);
 
 impl InputSelectorPadSinkHandler {
-    fn new() -> Self {
-        InputSelectorPadSinkHandler(Arc::new(Mutex::new(
-            InputSelectorPadSinkHandlerInner::default(),
-        )))
-    }
-
     /* Wait until specified time */
     async fn sync(&self, element: &gst::Element, running_time: gst::ClockTime) {
         let now = element.get_current_running_time();
@@ -312,8 +306,6 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
 #[derive(Clone, Debug)]
 struct InputSelectorPadSrcHandler;
 
-impl InputSelectorPadSrcHandler {}
-
 impl PadSrcHandler for InputSelectorPadSrcHandler {
     type ElementImpl = InputSelector;
 
@@ -426,34 +418,10 @@ lazy_static! {
 }
 
 impl InputSelector {
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Preparing");
-
-        self.src_pad.prepare(&InputSelectorPadSrcHandler);
-
-        let pads = self.pads.lock().unwrap();
-        for pad in pads.sink_pads.values() {
-            pad.prepare(&InputSelectorPadSinkHandler::new());
-        }
-
-        gst_debug!(CAT, obj: element, "Prepared");
-
-        Ok(())
-    }
-
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         let mut state = self.state.lock().unwrap();
         gst_debug!(CAT, obj: element, "Unpreparing");
-
-        self.src_pad.unprepare();
-
-        let pads = self.pads.lock().unwrap();
-        for pad in pads.sink_pads.values() {
-            pad.unprepare();
-        }
-
         *state = State::default();
-
         gst_debug!(CAT, obj: element, "Unprepared");
 
         Ok(())
@@ -501,10 +469,10 @@ impl ObjectSubclass for InputSelector {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         Self {
-            src_pad: PadSrc::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("src").unwrap(),
-                Some("src"),
-            )),
+            src_pad: PadSrc::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                InputSelectorPadSrcHandler,
+            ),
             state: Mutex::new(State::default()),
             settings: Mutex::new(Settings::default()),
             pads: Mutex::new(Pads::default()),
@@ -599,17 +567,8 @@ impl ElementImpl for InputSelector {
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
-        match transition {
-            gst::StateChange::NullToReady => {
-                self.prepare(element).map_err(|err| {
-                    element.post_error_message(&err);
-                    gst::StateChangeError
-                })?;
-            }
-            gst::StateChange::ReadyToNull => {
-                self.unprepare(element).map_err(|_| gst::StateChangeError)?;
-            }
-            _ => (),
+        if let gst::StateChange::ReadyToNull = transition {
+            self.unprepare(element).map_err(|_| gst::StateChangeError)?;
         }
 
         let mut success = self.parent_change_state(element, transition)?;
@@ -641,10 +600,8 @@ impl ElementImpl for InputSelector {
         pads.pad_serial += 1;
         sink_pad.set_active(true).unwrap();
         element.add_pad(&sink_pad).unwrap();
-        let sink_pad = PadSink::new(sink_pad);
+        let sink_pad = PadSink::new(sink_pad, InputSelectorPadSinkHandler::default());
         let ret = sink_pad.gst_pad().clone();
-
-        sink_pad.prepare(&InputSelectorPadSinkHandler::new());
 
         if state.active_sinkpad.is_none() {
             state.active_sinkpad = Some(ret.clone());
@@ -663,7 +620,7 @@ impl ElementImpl for InputSelector {
     fn release_pad(&self, element: &gst::Element, pad: &gst::Pad) {
         let mut pads = self.pads.lock().unwrap();
         let sink_pad = pads.sink_pads.remove(pad).unwrap();
-        sink_pad.unprepare();
+        drop(sink_pad);
         element.remove_pad(pad).unwrap();
         drop(pads);
 

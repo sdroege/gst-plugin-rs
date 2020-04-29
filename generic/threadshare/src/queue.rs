@@ -568,9 +568,6 @@ impl Queue {
             )
         })?;
 
-        self.src_pad.prepare(&QueuePadSrcHandler);
-        self.sink_pad.prepare(&QueuePadSinkHandler);
-
         gst_debug!(CAT, obj: element, "Prepared");
 
         Ok(())
@@ -579,9 +576,7 @@ impl Queue {
     fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
-        self.sink_pad.unprepare();
         self.task.unprepare().unwrap();
-        self.src_pad.unprepare();
 
         *self.dataqueue.lock().unwrap() = None;
         *self.pending_queue.lock().unwrap() = None;
@@ -756,14 +751,14 @@ impl ObjectSubclass for Queue {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         Self {
-            sink_pad: PadSink::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("sink").unwrap(),
-                Some("sink"),
-            )),
-            src_pad: PadSrc::new(gst::Pad::new_from_template(
-                &klass.get_pad_template("src").unwrap(),
-                Some("src"),
-            )),
+            sink_pad: PadSink::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                QueuePadSinkHandler,
+            ),
+            src_pad: PadSrc::new(
+                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                QueuePadSrcHandler,
+            ),
             task: Task::default(),
             dataqueue: StdMutex::new(None),
             pending_queue: StdMutex::new(None),
