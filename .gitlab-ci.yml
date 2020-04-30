@@ -164,8 +164,8 @@ clippy:
 deny:
   extends: .img-stable
   stage: 'extras'
-  only:
-    - schedules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
     - cargo deny check
 
@@ -173,7 +173,7 @@ outdated:
   extends: .img-stable
   allow_failure: true
   stage: 'extras'
-  only:
-    - schedules
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
     - cargo outdated --root-deps-only --exit-code 1 -v
