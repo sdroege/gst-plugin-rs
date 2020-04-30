@@ -311,7 +311,7 @@ impl Task {
         // FIXME allow configuration of the channel buffer size,
         // this determines the contention on the Task.
         let (transition_tx, transition_rx) = async_mpsc::channel(4);
-        let state_machine = StateMachine::new(task_impl, transition_rx);
+        let state_machine = StateMachine::new(Box::new(task_impl), transition_rx);
         let (transition, _) = Transition::new(TransitionKind::Prepare);
         inner.state_machine_handle = Some(inner.state_machine_context.spawn(state_machine.run(
             Arc::clone(&self.0),
@@ -515,9 +515,8 @@ impl Task {
     }
 }
 
-#[derive(Debug)]
-struct StateMachine<Impl> {
-    task_impl: Impl,
+struct StateMachine {
+    task_impl: Box<dyn TaskImpl>,
     transition_rx: async_mpsc::Receiver<Transition>,
     pending_transition: Option<Transition>,
 }
@@ -546,8 +545,10 @@ macro_rules! spawn_hook {
     }};
 }
 
-impl<Impl: TaskImpl> StateMachine<Impl> {
-    fn new(task_impl: Impl, transition_rx: async_mpsc::Receiver<Transition>) -> Self {
+impl StateMachine {
+    // Use dynamic dispatch for TaskImpl as it reduces memory usage compared to monomorphization
+    // without inducing any significant performance penalties.
+    fn new(task_impl: Box<dyn TaskImpl>, transition_rx: async_mpsc::Receiver<Transition>) -> Self {
         StateMachine {
             task_impl,
             transition_rx,
