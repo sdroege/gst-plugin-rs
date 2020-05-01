@@ -37,17 +37,21 @@ fn test_cdgdec() {
         r
     };
 
-    let filesrc = gst::ElementFactory::make("filesrc", None).unwrap();
+    // Ensure we are in push mode so 'blocksize' prop is used
+    let filesrc = gst::ElementFactory::make("pushfilesrc", None).unwrap();
     filesrc
         .set_property("location", &input_path.to_str().unwrap())
         .expect("failed to set 'location' property");
-    filesrc
-        .set_property("num-buffers", &1)
-        .expect("failed to set 'num-buffers' property");
-    let blocksize: u32 = 24; // One CDG instruction
-    filesrc
-        .set_property("blocksize", &blocksize)
-        .expect("failed to set 'blocksize' property");
+    {
+        let child_proxy = filesrc.dynamic_cast_ref::<gst::ChildProxy>().unwrap();
+        child_proxy
+            .set_child_property("real-filesrc::num-buffers", &1)
+            .expect("failed to set 'num-buffers' property");
+        let blocksize: u32 = 24; // One CDG instruction
+        child_proxy
+            .set_child_property("real-filesrc::blocksize", &blocksize)
+            .expect("failed to set 'blocksize' property");
+    }
 
     let parse = gst::ElementFactory::make("cdgparse", None).unwrap();
     let dec = gst::ElementFactory::make("cdgdec", None).unwrap();
