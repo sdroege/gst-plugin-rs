@@ -521,7 +521,15 @@ impl ToggleRecord {
 
                 // Remember the time when we stopped: now, i.e. right before the current buffer!
                 rec_state.last_recording_stop = current_running_time;
-                gst_debug!(CAT, obj: pad, "Stopping at {}", current_running_time);
+                gst_debug!(
+                    CAT,
+                    obj: pad,
+                    "Stopping at {}, started at {}, current duration {}, previous accumulated recording duration {}",
+                    rec_state.last_recording_stop,
+                    rec_state.last_recording_start,
+                    rec_state.last_recording_stop - rec_state.last_recording_start,
+                    rec_state.recording_duration
+                );
 
                 // Then unlock and wait for all other streams to reach it or go EOS instead.
                 drop(rec_state);
@@ -590,7 +598,13 @@ impl ToggleRecord {
                 // Remember the time when we started: now!
                 rec_state.last_recording_start = current_running_time;
                 rec_state.running_time_offset = current_running_time - rec_state.recording_duration;
-                gst_debug!(CAT, obj: pad, "Starting at {}", current_running_time);
+                gst_debug!(
+                    CAT,
+                    obj: pad,
+                    "Starting at {}, previous accumulated recording duration {}",
+                    current_running_time,
+                    rec_state.recording_duration,
+                );
 
                 state.segment_pending = true;
                 for other_stream in &self.other_streams.lock().0 {
@@ -1417,8 +1431,20 @@ impl ToggleRecord {
                     if rec_state.recording_state == RecordingState::Recording
                         || rec_state.recording_state == RecordingState::Stopping
                     {
+                        gst_debug!(
+                            CAT,
+                            obj: pad,
+                            "Returning position {} = {} - ({} + {})",
+                            recording_duration
+                                + (state.current_running_time - rec_state.last_recording_start),
+                            recording_duration,
+                            state.current_running_time,
+                            rec_state.last_recording_start
+                        );
                         recording_duration +=
                             state.current_running_time - rec_state.last_recording_start;
+                    } else {
+                        gst_debug!(CAT, obj: pad, "Returning position {}", recording_duration,);
                     }
                     q.set(recording_duration);
                     true
@@ -1434,8 +1460,20 @@ impl ToggleRecord {
                     if rec_state.recording_state == RecordingState::Recording
                         || rec_state.recording_state == RecordingState::Stopping
                     {
+                        gst_debug!(
+                            CAT,
+                            obj: pad,
+                            "Returning duration {} = {} - ({} + {})",
+                            recording_duration
+                                + (state.current_running_time - rec_state.last_recording_start),
+                            recording_duration,
+                            state.current_running_time,
+                            rec_state.last_recording_start
+                        );
                         recording_duration +=
                             state.current_running_time - rec_state.last_recording_start;
+                    } else {
+                        gst_debug!(CAT, obj: pad, "Returning duration {}", recording_duration,);
                     }
                     q.set(recording_duration);
                     true
@@ -1574,6 +1612,7 @@ impl ObjectImpl for ToggleRecord {
                     settings.record,
                     record
                 );
+
                 settings.record = record;
             }
             _ => unimplemented!(),
