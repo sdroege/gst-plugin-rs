@@ -909,7 +909,7 @@ impl FallbackSrc {
                 gst_error!(CAT, obj: element, "Source failed to change state");
                 // Try again later if we're not shutting down
                 if transition != gst::StateChange::ReadyToNull {
-                    source.set_state(gst::State::Null).unwrap();
+                    let _ = source.set_state(gst::State::Null);
                     let mut state_guard = self.state.lock().unwrap();
                     let state = state_guard.as_mut().expect("no state");
                     self.handle_source_error(element, state);
@@ -1550,7 +1550,7 @@ impl FallbackSrc {
             };
 
             gst_debug!(CAT, obj: element, "Shutting down source");
-            source.set_state(gst::State::Null).unwrap();
+            let _ = source.set_state(gst::State::Null);
 
             // Sleep for 1s before retrying
 
@@ -1631,7 +1631,7 @@ impl FallbackSrc {
 
                         if source.sync_state_with_parent().is_err() {
                             gst_error!(CAT, obj: element, "Source failed to change state");
-                            source.set_state(gst::State::Null).unwrap();
+                            let _ = source.set_state(gst::State::Null);
                             let mut state_guard = src.state.lock().unwrap();
                             let state = state_guard.as_mut().expect("no state");
                             src.handle_source_error(element, state);
