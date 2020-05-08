@@ -447,7 +447,7 @@ impl ObjectImpl for S3Sink {
                 .unwrap();
                 if settings.region != region {
                     let mut client = self.client.lock().unwrap();
-                    std::mem::replace(&mut *client, S3Client::new(region.clone()));
+                    *client = S3Client::new(region.clone());
                     settings.region = region;
                 }
             }
