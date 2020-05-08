@@ -97,6 +97,7 @@ struct StreamState {
     eos: bool,
     flushing: bool,
     segment_pending: bool,
+    discont_pending: bool,
     pending_events: Vec<gst::Event>,
     audio_info: Option<gst_audio::AudioInfo>,
     video_info: Option<gst_video::VideoInfo>,
@@ -112,6 +113,7 @@ impl Default for StreamState {
             eos: false,
             flushing: false,
             segment_pending: false,
+            discont_pending: true,
             pending_events: Vec::new(),
             audio_info: None,
             video_info: None,
@@ -607,8 +609,11 @@ impl ToggleRecord {
                 );
 
                 state.segment_pending = true;
+                state.discont_pending = true;
                 for other_stream in &self.other_streams.lock().0 {
-                    other_stream.state.lock().segment_pending = true;
+                    let mut other_state = other_stream.state.lock();
+                    other_state.segment_pending = true;
+                    other_state.discont_pending = true;
                 }
 
                 // Then unlock and wait for all other streams to reach
@@ -1052,7 +1057,7 @@ impl ToggleRecord {
             self.handle_main_stream(element, pad, &stream, buffer)
         }?;
 
-        let buffer = match handle_result {
+        let mut buffer = match handle_result {
             HandleResult::Drop => {
                 return Ok(gst::FlowSuccess::Ok);
             }
@@ -1075,6 +1080,14 @@ impl ToggleRecord {
 
         let out_running_time = {
             let mut state = stream.state.lock();
+
+            if state.discont_pending {
+                gst_debug!(CAT, obj: pad, "Pending discont");
+                let buffer = buffer.make_mut();
+                buffer.set_flags(gst::BufferFlags::DISCONT);
+                state.discont_pending = false;
+            }
+
             let mut events = Vec::with_capacity(state.pending_events.len() + 1);
 
             if state.segment_pending {
@@ -1163,7 +1176,8 @@ impl ToggleRecord {
 
                 state.eos = false;
                 state.flushing = false;
-                state.segment_pending = false;
+                state.segment_pending = true;
+                state.discont_pending = true;
                 state.current_running_time = gst::CLOCK_TIME_NONE;
             }
             EventView::Caps(c) => {
