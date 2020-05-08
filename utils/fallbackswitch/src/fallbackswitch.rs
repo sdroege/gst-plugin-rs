@@ -170,7 +170,7 @@ impl FallbackSwitch {
         }
         drop(active_sinkpad);
 
-        state.last_sinkpad_time = segment.to_running_time(buffer.get_dts_or_pts());
+        state.last_sinkpad_time = buffer.get_dts_or_pts();
 
         // Drop all older buffers from the fallback sinkpad
         if let Some(fallback_sinkpad) = fallback_sinkpad {
