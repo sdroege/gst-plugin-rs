@@ -21,6 +21,7 @@ members = [
     "video/flavors",
     "video/gif",
     "video/rav1e",
+    "video/rspng",
     "text/wrap",
 ]
 
