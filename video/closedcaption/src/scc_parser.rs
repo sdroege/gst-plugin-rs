@@ -120,7 +120,11 @@ where
     I: RangeStream<Token = u8, Range = &'a [u8]>,
     I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
-    (range(b"Scenarist_SCC V1.0".as_ref()), end_of_line())
+    (
+        optional(range(&[0xEFu8, 0xBBu8, 0xBFu8][..])),
+        range(b"Scenarist_SCC V1.0".as_ref()),
+        end_of_line(),
+    )
         .map(|_| SccLine::Header)
         .message("while parsing header")
 }

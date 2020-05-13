@@ -129,6 +129,7 @@ where
     I::Error: ParseError<I::Token, I::Range, I::Position>,
 {
     (
+        optional(range(&[0xEFu8, 0xBBu8, 0xBFu8][..])),
         range(b"File Format=MacCaption_MCC V".as_ref()),
         choice!(range(b"1.0".as_ref()), range(b"2.0".as_ref())),
         end_of_line(),
