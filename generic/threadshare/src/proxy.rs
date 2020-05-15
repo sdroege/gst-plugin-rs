@@ -825,8 +825,17 @@ impl PadSrcHandler for ProxySrcPadHandler {
         };
 
         match event.view() {
-            EventView::FlushStart(..) => proxysrc.task.flush_start(),
-            EventView::FlushStop(..) => proxysrc.task.flush_stop(),
+            EventView::FlushStart(..) => {
+                if let Err(err) = proxysrc.task.flush_start() {
+                    gst_error!(SRC_CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                }
+            }
+            EventView::FlushStop(..) => {
+                if let Err(err) = proxysrc.task.flush_stop() {
+                    // FIXME we should probably return false if that one fails
+                    gst_error!(SRC_CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                }
+            }
             _ => (),
         }
 
@@ -905,7 +914,7 @@ impl ProxySrcTask {
 }
 
 impl TaskImpl for ProxySrcTask {
-    fn start(&mut self) -> BoxFuture<'_, ()> {
+    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(SRC_CAT, obj: &self.element, "Starting task");
 
@@ -922,6 +931,7 @@ impl TaskImpl for ProxySrcTask {
             self.dataqueue.start();
 
             gst_log!(SRC_CAT, obj: &self.element, "Task started");
+            Ok(())
         }
         .boxed()
     }
@@ -979,7 +989,7 @@ impl TaskImpl for ProxySrcTask {
         .boxed()
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, ()> {
+    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(SRC_CAT, obj: &self.element, "Stopping task");
 
@@ -997,11 +1007,12 @@ impl TaskImpl for ProxySrcTask {
             }
 
             gst_log!(SRC_CAT, obj: &self.element, "Task stopped");
+            Ok(())
         }
         .boxed()
     }
 
-    fn flush_start(&mut self) -> BoxFuture<'_, ()> {
+    fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(SRC_CAT, obj: &self.element, "Starting task flush");
 
@@ -1014,6 +1025,7 @@ impl TaskImpl for ProxySrcTask {
             shared_ctx.last_res = Err(gst::FlowError::Flushing);
 
             gst_log!(SRC_CAT, obj: &self.element, "Task flush started");
+            Ok(())
         }
         .boxed()
     }
@@ -1120,22 +1132,25 @@ impl ProxySrc {
         gst_debug!(SRC_CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) {
+    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(SRC_CAT, obj: element, "Stopping");
-        self.task.stop();
+        self.task.stop()?;
         gst_debug!(SRC_CAT, obj: element, "Stopped");
+        Ok(())
     }
 
-    fn start(&self, element: &gst::Element) {
+    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(SRC_CAT, obj: element, "Starting");
-        self.task.start();
+        self.task.start()?;
         gst_debug!(SRC_CAT, obj: element, "Started");
+        Ok(())
     }
 
-    fn pause(&self, element: &gst::Element) {
+    fn pause(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(SRC_CAT, obj: element, "Pausing");
-        self.task.pause();
+        self.task.pause()?;
         gst_debug!(SRC_CAT, obj: element, "Paused");
+        Ok(())
     }
 }
 
@@ -1264,7 +1279,7 @@ impl ElementImpl for ProxySrc {
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.pause(element);
+                self.pause(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
                 self.unprepare(element);
@@ -1279,13 +1294,13 @@ impl ElementImpl for ProxySrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element);
+                self.start(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element);
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

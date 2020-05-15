@@ -312,16 +312,8 @@ impl PadSrcHandler for UdpSrcPadHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
-            EventView::FlushStart(..) => {
-                udpsrc.task.flush_start();
-
-                true
-            }
-            EventView::FlushStop(..) => {
-                udpsrc.task.flush_stop();
-
-                true
-            }
+            EventView::FlushStart(..) => udpsrc.task.flush_start().is_ok(),
+            EventView::FlushStop(..) => udpsrc.task.flush_stop().is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -409,12 +401,13 @@ impl UdpSrcTask {
 }
 
 impl TaskImpl for UdpSrcTask {
-    fn start(&mut self) -> BoxFuture<'_, ()> {
+    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Starting task");
             self.socket
                 .set_clock(self.element.get_clock(), Some(self.element.get_base_time()));
             gst_log!(CAT, obj: &self.element, "Task started");
+            Ok(())
         }
         .boxed()
     }
@@ -504,20 +497,22 @@ impl TaskImpl for UdpSrcTask {
         .boxed()
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, ()> {
+    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Stopping task");
             self.src_pad_handler.reset_state().await;
             gst_log!(CAT, obj: &self.element, "Task stopped");
+            Ok(())
         }
         .boxed()
     }
 
-    fn flush_stop(&mut self) -> BoxFuture<'_, ()> {
+    fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Stopping task flush");
             self.src_pad_handler.set_need_segment().await;
             gst_log!(CAT, obj: &self.element, "Stopped task flush");
+            Ok(())
         }
         .boxed()
     }
@@ -750,22 +745,25 @@ impl UdpSrc {
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) {
+    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Stopping");
-        self.task.stop();
+        self.task.stop()?;
         gst_debug!(CAT, obj: element, "Stopped");
+        Ok(())
     }
 
-    fn start(&self, element: &gst::Element) {
+    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Starting");
-        self.task.start();
+        self.task.start()?;
         gst_debug!(CAT, obj: element, "Started");
+        Ok(())
     }
 
-    fn pause(&self, element: &gst::Element) {
+    fn pause(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Pausing");
-        self.task.pause();
+        self.task.pause()?;
         gst_debug!(CAT, obj: element, "Paused");
+        Ok(())
     }
 }
 
@@ -932,7 +930,7 @@ impl ElementImpl for UdpSrc {
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.pause(element);
+                self.pause(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
                 self.unprepare(element);
@@ -947,13 +945,13 @@ impl ElementImpl for UdpSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element);
+                self.start(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element);
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

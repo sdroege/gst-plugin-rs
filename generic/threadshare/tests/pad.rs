@@ -115,12 +115,12 @@ impl PadSrcHandler for PadSrcTestHandler {
 
         let ret = match event.view() {
             EventView::FlushStart(..) => {
-                elem_src_test.task.flush_start();
+                elem_src_test.task.flush_start().unwrap();
                 true
             }
             EventView::Qos(..) | EventView::Reconfigure(..) | EventView::Latency(..) => true,
             EventView::FlushStop(..) => {
-                elem_src_test.task.flush_stop();
+                elem_src_test.task.flush_stop().unwrap();
                 true
             }
             _ => false,
@@ -188,20 +188,22 @@ impl TaskImpl for ElementSrcTestTask {
         .boxed()
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, ()> {
+    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(SRC_CAT, obj: &self.element, "Stopping task");
             self.flush();
             gst_log!(SRC_CAT, obj: &self.element, "Task stopped");
+            Ok(())
         }
         .boxed()
     }
 
-    fn flush_start(&mut self) -> BoxFuture<'_, ()> {
+    fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(SRC_CAT, obj: &self.element, "Starting task flush");
             self.flush();
             gst_log!(SRC_CAT, obj: &self.element, "Task flush started");
+            Ok(())
         }
         .boxed()
     }
@@ -253,7 +255,7 @@ impl ElementSrcTest {
             )
             .map_err(|err| {
                 gst_error_msg!(
-                    gst::ResourceError::OpenRead,
+                    gst::ResourceError::Failed,
                     ["Error preparing Task: {:?}", err]
                 )
             })?;
@@ -274,19 +276,19 @@ impl ElementSrcTest {
 
     fn stop(&self, element: &gst::Element) {
         gst_debug!(SRC_CAT, obj: element, "Stopping");
-        self.task.stop();
+        self.task.stop().unwrap();
         gst_debug!(SRC_CAT, obj: element, "Stopped");
     }
 
     fn start(&self, element: &gst::Element) {
         gst_debug!(SRC_CAT, obj: element, "Starting");
-        self.task.start();
+        self.task.start().unwrap();
         gst_debug!(SRC_CAT, obj: element, "Started");
     }
 
     fn pause(&self, element: &gst::Element) {
         gst_debug!(SRC_CAT, obj: element, "Pausing");
-        self.task.pause();
+        self.task.pause().unwrap();
         gst_debug!(SRC_CAT, obj: element, "Paused");
     }
 }
@@ -405,10 +407,10 @@ impl ElementImpl for ElementSrcTest {
     fn send_event(&self, _element: &gst::Element, event: gst::Event) -> bool {
         match event.view() {
             EventView::FlushStart(..) => {
-                self.task.flush_start();
+                self.task.flush_start().unwrap();
             }
             EventView::FlushStop(..) => {
-                self.task.flush_stop();
+                self.task.flush_stop().unwrap();
             }
             _ => (),
         }

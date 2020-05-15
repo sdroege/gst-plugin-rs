@@ -41,7 +41,8 @@ use std::u32;
 use tokio::io::AsyncReadExt;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task};
+use crate::runtime::task::Transition;
+use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task, TaskState};
 
 use super::socket::{Socket, SocketError, SocketRead};
 
@@ -264,16 +265,8 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
-            EventView::FlushStart(..) => {
-                tcpclientsrc.task.flush_start();
-
-                true
-            }
-            EventView::FlushStop(..) => {
-                tcpclientsrc.task.flush_stop();
-
-                true
-            }
+            EventView::FlushStart(..) => tcpclientsrc.task.flush_start().is_ok(),
+            EventView::FlushStop(..) => tcpclientsrc.task.flush_stop().is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -393,16 +386,27 @@ impl TaskImpl for TcpClientSrcTask {
             );
 
             gst_log!(CAT, obj: &self.element, "Task prepared");
-
             Ok(())
         }
         .boxed()
     }
 
-    fn handle_prepare_error(&mut self, err: gst::ErrorMessage) -> BoxFuture<'_, ()> {
+    fn handle_hook_error(
+        &mut self,
+        transition: Transition,
+        state: TaskState,
+        err: gst::ErrorMessage,
+    ) -> BoxFuture<'_, Transition> {
         async move {
-            gst_error!(CAT, "Task preparation failed: {:?}", err);
-            self.element.post_error_message(&err);
+            match transition {
+                Transition::Prepare => {
+                    gst_error!(CAT, "Task preparation failed: {:?}", err);
+                    self.element.post_error_message(&err);
+
+                    Transition::Error
+                }
+                other => unreachable!("Hook error {:?} in state {:?}", other, state),
+            }
         }
         .boxed()
     }
@@ -474,20 +478,22 @@ impl TaskImpl for TcpClientSrcTask {
         .boxed()
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, ()> {
+    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Stopping task");
             self.src_pad_handler.reset_state().await;
             gst_log!(CAT, obj: &self.element, "Task stopped");
+            Ok(())
         }
         .boxed()
     }
 
-    fn flush_stop(&mut self) -> BoxFuture<'_, ()> {
+    fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Stopping task flush");
             self.src_pad_handler.set_need_segment().await;
             gst_log!(CAT, obj: &self.element, "Task flush stopped");
+            Ok(())
         }
         .boxed()
     }
@@ -584,22 +590,25 @@ impl TcpClientSrc {
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) {
+    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Stopping");
-        self.task.stop();
+        self.task.stop()?;
         gst_debug!(CAT, obj: element, "Stopped");
+        Ok(())
     }
 
-    fn start(&self, element: &gst::Element) {
+    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Starting");
-        self.task.start();
+        self.task.start()?;
         gst_debug!(CAT, obj: element, "Started");
+        Ok(())
     }
 
-    fn pause(&self, element: &gst::Element) {
+    fn pause(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Pausing");
-        self.task.pause();
+        self.task.pause()?;
         gst_debug!(CAT, obj: element, "Paused");
+        Ok(())
     }
 }
 
@@ -721,7 +730,7 @@ impl ElementImpl for TcpClientSrc {
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.pause(element);
+                self.pause(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
                 self.unprepare(element);
@@ -736,13 +745,13 @@ impl ElementImpl for TcpClientSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element);
+                self.start(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element);
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

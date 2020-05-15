@@ -252,14 +252,8 @@ impl PadSrcHandler for AppSrcPadHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
-            EventView::FlushStart(..) => {
-                appsrc.task.flush_start();
-                true
-            }
-            EventView::FlushStop(..) => {
-                appsrc.task.flush_stop();
-                true
-            }
+            EventView::FlushStart(..) => appsrc.task.flush_start().is_ok(),
+            EventView::FlushStop(..) => appsrc.task.flush_stop().is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -355,9 +349,7 @@ impl AppSrcTask {
 impl TaskImpl for AppSrcTask {
     fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async move {
-            let item = self.receiver.next().await;
-
-            let item = match item {
+            let item = match self.receiver.next().await {
                 Some(item) => item,
                 None => {
                     gst_error!(CAT, obj: &self.element, "SrcPad channel aborted");
@@ -404,7 +396,7 @@ impl TaskImpl for AppSrcTask {
         .boxed()
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, ()> {
+    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Stopping task");
 
@@ -412,11 +404,12 @@ impl TaskImpl for AppSrcTask {
             self.src_pad_handler.reset_state().await;
 
             gst_log!(CAT, obj: &self.element, "Task stopped");
+            Ok(())
         }
         .boxed()
     }
 
-    fn flush_start(&mut self) -> BoxFuture<'_, ()> {
+    fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Starting task flush");
 
@@ -424,6 +417,7 @@ impl TaskImpl for AppSrcTask {
             self.src_pad_handler.set_need_segment().await;
 
             gst_log!(CAT, obj: &self.element, "Task flush started");
+            Ok(())
         }
         .boxed()
     }
@@ -544,22 +538,25 @@ impl AppSrc {
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) {
+    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Stopping");
-        self.task.stop();
+        self.task.stop()?;
         gst_debug!(CAT, obj: element, "Stopped");
+        Ok(())
     }
 
-    fn start(&self, element: &gst::Element) {
+    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Starting");
-        self.task.start();
+        self.task.start()?;
         gst_debug!(CAT, obj: element, "Started");
+        Ok(())
     }
 
-    fn pause(&self, element: &gst::Element) {
+    fn pause(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Pausing");
-        self.task.pause();
+        self.task.pause()?;
         gst_debug!(CAT, obj: element, "Paused");
+        Ok(())
     }
 }
 
@@ -714,7 +711,7 @@ impl ElementImpl for AppSrc {
                 })?;
             }
             gst::StateChange::PlayingToPaused => {
-                self.pause(element);
+                self.pause(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
                 self.unprepare(element);
@@ -729,13 +726,13 @@ impl ElementImpl for AppSrc {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToPlaying => {
-                self.start(element);
+                self.start(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PlayingToPaused => {
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element);
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
             }
             _ => (),
         }

@@ -827,7 +827,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         async move {
             if let EventView::FlushStop(_) = event.view() {
                 let udpsink = UdpSink::from_instance(&element);
-                udpsink.task.flush_stop();
+                return udpsink.task.flush_stop().is_ok();
             } else if let Some(sender) = sender.lock().await.as_mut() {
                 if sender.send(TaskItem::Event(event)).await.is_err() {
                     gst_debug!(CAT, obj: &element, "Flushing");
@@ -847,7 +847,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         event: gst::Event,
     ) -> bool {
         if let EventView::FlushStart(..) = event.view() {
-            udpsink.task.flush_start();
+            return udpsink.task.flush_start().is_ok();
         }
 
         true
@@ -872,7 +872,7 @@ impl UdpSinkTask {
 }
 
 impl TaskImpl for UdpSinkTask {
-    fn start(&mut self) -> BoxFuture<'_, ()> {
+    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Starting task");
 
@@ -884,6 +884,7 @@ impl TaskImpl for UdpSinkTask {
             self.receiver = Some(receiver);
 
             gst_log!(CAT, obj: &self.element, "Task started");
+            Ok(())
         }
         .boxed()
     }
@@ -1109,16 +1110,18 @@ impl UdpSink {
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) {
+    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Stopping");
-        self.task.stop();
+        self.task.stop()?;
         gst_debug!(CAT, obj: element, "Stopped");
+        Ok(())
     }
 
-    fn start(&self, element: &gst::Element) {
+    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Starting");
-        self.task.start();
+        self.task.start()?;
         gst_debug!(CAT, obj: element, "Started");
+        Ok(())
     }
 }
 
@@ -1515,10 +1518,10 @@ impl ElementImpl for UdpSink {
                 })?;
             }
             gst::StateChange::ReadyToPaused => {
-                self.start(element);
+                self.start(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element);
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
                 self.unprepare(element);

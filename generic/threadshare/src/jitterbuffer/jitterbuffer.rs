@@ -662,7 +662,9 @@ impl PadSinkHandler for SinkHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         if let EventView::FlushStart(..) = event.view() {
-            jb.task.flush_start();
+            if let Err(err) = jb.task.flush_start() {
+                gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+            }
         }
 
         gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
@@ -699,7 +701,10 @@ impl PadSinkHandler for SinkHandler {
                         .unwrap();
                 }
                 EventView::FlushStop(..) => {
-                    jb.task.flush_stop();
+                    if let Err(err) = jb.task.flush_stop() {
+                        // FIXME we should probably return false if that one fails
+                        gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    }
                 }
                 EventView::Eos(..) => {
                     let mut state = jb.state.lock().unwrap();
@@ -975,10 +980,15 @@ impl PadSrcHandler for SrcHandler {
 
         match event.view() {
             EventView::FlushStart(..) => {
-                jb.task.flush_start();
+                if let Err(err) = jb.task.flush_start() {
+                    gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                }
             }
             EventView::FlushStop(..) => {
-                jb.task.flush_stop();
+                if let Err(err) = jb.task.flush_stop() {
+                    // FIXME we should probably return false if that one fails
+                    gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                }
             }
             _ => (),
         }
@@ -1125,7 +1135,7 @@ impl JitterBufferTask {
 }
 
 impl TaskImpl for JitterBufferTask {
-    fn start(&mut self) -> BoxFuture<'_, ()> {
+    fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Starting task");
 
@@ -1136,6 +1146,7 @@ impl TaskImpl for JitterBufferTask {
             *jb.state.lock().unwrap() = State::default();
 
             gst_log!(CAT, obj: &self.element, "Task started");
+            Ok(())
         }
         .boxed()
     }
@@ -1279,7 +1290,7 @@ impl TaskImpl for JitterBufferTask {
         .boxed()
     }
 
-    fn stop(&mut self) -> BoxFuture<'_, ()> {
+    fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Stopping task");
 
@@ -1296,6 +1307,7 @@ impl TaskImpl for JitterBufferTask {
             *jb_state = State::default();
 
             gst_log!(CAT, obj: &self.element, "Task stopped");
+            Ok(())
         }
         .boxed()
     }
@@ -1359,16 +1371,18 @@ impl JitterBuffer {
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
-    fn start(&self, element: &gst::Element) {
+    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Starting");
-        self.task.start();
+        self.task.start()?;
         gst_debug!(CAT, obj: element, "Started");
+        Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) {
+    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Stopping");
-        self.task.stop();
+        self.task.stop()?;
         gst_debug!(CAT, obj: element, "Stopped");
+        Ok(())
     }
 }
 
@@ -1571,7 +1585,7 @@ impl ElementImpl for JitterBuffer {
                 })?;
             }
             gst::StateChange::PausedToReady => {
-                self.stop(element);
+                self.stop(element).map_err(|_| gst::StateChangeError)?;
             }
             gst::StateChange::ReadyToNull => {
                 self.unprepare(element);
@@ -1583,7 +1597,7 @@ impl ElementImpl for JitterBuffer {
 
         match transition {
             gst::StateChange::ReadyToPaused => {
-                self.start(element);
+                self.start(element).map_err(|_| gst::StateChangeError)?;
                 success = gst::StateChangeSuccess::NoPreroll;
             }
             gst::StateChange::PlayingToPaused => {
