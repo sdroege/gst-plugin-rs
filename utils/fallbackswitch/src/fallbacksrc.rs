@@ -498,12 +498,12 @@ impl BinImpl for FallbackSrc {
                 // Don't forward upwards, we handle this internally
                 self.handle_buffering(bin, m);
             }
-            MessageView::StreamCollection(ref m) => {
+            MessageView::StreamsSelected(ref m) => {
                 // Don't forward upwards, we are exposing streams based on properties
                 // TODO: Do stream configuration via our own stream collection and handling
                 // of stream select events
                 // TODO: Also needs updating of StreamCollection handling in CustomSource
-                self.handle_stream_collection(bin, m);
+                self.handle_streams_selected(bin, m);
             }
             MessageView::Error(ref m) => {
                 if !self.handle_error(bin, m) {
@@ -1487,7 +1487,7 @@ impl FallbackSrc {
         }
     }
 
-    fn handle_stream_collection(&self, element: &gst::Bin, m: &gst::message::StreamCollection) {
+    fn handle_streams_selected(&self, element: &gst::Bin, m: &gst::message::StreamsSelected) {
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
             None => {
@@ -2199,7 +2199,7 @@ mod custom_source {
             element.no_more_pads();
 
             let _ = element.post_message(
-                &gst::Message::new_stream_collection(&collection)
+                &gst::Message::new_streams_selected(&collection)
                     .src(Some(element))
                     .build(),
             );
