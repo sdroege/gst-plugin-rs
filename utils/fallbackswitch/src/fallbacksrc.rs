@@ -1486,7 +1486,6 @@ impl FallbackSrc {
             drop(state_guard);
             element.notify("status");
         } else {
-            state.last_buffering_update = None;
             // Check if we can unblock now
             self.unblock_pads(element, state);
 
@@ -1781,11 +1780,10 @@ impl FallbackSrc {
             gst_warning!(CAT, obj: element, "Switched to fallback stream");
 
             // If we're not actively buffering right now let's restart the source
-            if state.buffering_percent == 100
-                || state
-                    .last_buffering_update
-                    .map(|i| i.elapsed() >= Duration::from_nanos(state.settings.timeout))
-                    .unwrap_or(true)
+            if state
+                .last_buffering_update
+                .map(|i| i.elapsed() >= Duration::from_nanos(state.settings.timeout))
+                .unwrap_or(state.buffering_percent == 100)
             {
                 gst_debug!(CAT, obj: element, "Not buffering, restarting source");
                 self.handle_source_error(element, state);
