@@ -1444,6 +1444,8 @@ impl FallbackSrc {
 
         stream.source_srcpad = None;
 
+        self.unblock_pads(element, state);
+
         drop(state_guard);
         element.notify("status");
 
