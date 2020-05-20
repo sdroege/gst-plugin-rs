@@ -1081,20 +1081,26 @@ impl FallbackSrc {
         let element_weak = element.downgrade();
         let probe_id = pad
             .add_probe(
-                gst::PadProbeType::BLOCK | gst::PadProbeType::BUFFER,
+                gst::PadProbeType::BLOCK
+                    | gst::PadProbeType::BUFFER
+                    | gst::PadProbeType::EVENT_DOWNSTREAM,
                 move |pad, info| {
                     let element = match element_weak.upgrade() {
                         None => return gst::PadProbeReturn::Pass,
                         Some(element) => element,
                     };
-                    let buffer = match info.data {
-                        Some(gst::PadProbeData::Buffer(ref buffer)) => buffer,
+                    let pts = match info.data {
+                        Some(gst::PadProbeData::Buffer(ref buffer)) => buffer.get_pts(),
+                        Some(gst::PadProbeData::Event(ref ev)) => match ev.view() {
+                            gst::EventView::Gap(ref ev) => ev.get().0,
+                            _ => return gst::PadProbeReturn::Pass,
+                        },
                         _ => unreachable!(),
                     };
 
                     let src = FallbackSrc::from_instance(&element);
 
-                    if let Err(msg) = src.handle_pad_blocked(&element, pad, buffer) {
+                    if let Err(msg) = src.handle_pad_blocked(&element, pad, pts) {
                         element.post_error_message(&msg);
                     }
 
@@ -1114,7 +1120,7 @@ impl FallbackSrc {
         &self,
         element: &gst::Bin,
         pad: &gst::Pad,
-        buffer: &gst::BufferRef,
+        pts: gst::ClockTime,
     ) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Called probe on pad {}", pad.get_name());
 
@@ -1181,7 +1187,6 @@ impl FallbackSrc {
             gst_error_msg!(gst::CoreError::Clock, ["Have no time segment"])
         })?;
 
-        let pts = buffer.get_pts();
         let running_time = if pts < segment.get_start() {
             segment.get_start()
         } else if segment.get_stop().is_some() && pts >= segment.get_stop() {
