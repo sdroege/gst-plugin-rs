@@ -527,6 +527,7 @@ impl FallbackSrc {
                     .expect("No uridecodebin3 found");
 
                 source.set_property("uri", &uri).unwrap();
+                source.set_property("use-buffering", &true).unwrap();
 
                 source
             }
