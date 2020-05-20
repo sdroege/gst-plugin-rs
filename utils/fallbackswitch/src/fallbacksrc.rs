@@ -1537,6 +1537,19 @@ impl FallbackSrc {
 
         state.streams = Some(streams);
 
+        // This might not be the first stream collection and we might have some unblocked pads from
+        // before already, which would need to be blocked again now for keeping things in sync
+        for stream in [&mut state.video_stream, &mut state.audio_stream]
+            .iter_mut()
+            .filter_map(|v| v.as_mut())
+        {
+            if let Some(ref srcpad) = stream.source_srcpad {
+                if stream.source_srcpad_block.is_none() {
+                    stream.source_srcpad_block = Some(self.add_pad_probe(element, srcpad));
+                }
+            }
+        }
+
         self.unblock_pads(element, state);
 
         drop(state_guard);
