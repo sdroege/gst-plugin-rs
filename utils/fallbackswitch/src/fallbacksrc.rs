@@ -103,6 +103,10 @@ struct State {
     source: gst::Element,
     source_is_live: bool,
     source_pending_restart: bool,
+
+    // For timing out the source if we have to wait some additional time
+    // after fallbackswitch switched due to recent buffering activity
+    source_pending_timeout: Option<gst::ClockId>,
     // For restarting the source after shutting it down
     source_pending_restart_timeout: Option<gst::ClockId>,
     // For failing completely if we didn't recover after the retry timeout
@@ -420,6 +424,7 @@ impl ObjectImpl for FallbackSrc {
                 }
 
                 if state.buffering_percent < 100
+                    || state.source_pending_timeout.is_some()
                     || state.streams.is_none()
                     || (have_audio
                         && state
@@ -853,6 +858,7 @@ impl FallbackSrc {
             source,
             source_is_live: false,
             source_pending_restart: false,
+            source_pending_timeout: None,
             source_pending_restart_timeout: None,
             source_retry_timeout: None,
             video_stream,
@@ -909,6 +915,10 @@ impl FallbackSrc {
         }
 
         if let Some(timeout) = state.source_retry_timeout.take() {
+            timeout.unschedule();
+        }
+
+        if let Some(timeout) = state.source_pending_timeout.take() {
             timeout.unschedule();
         }
 
@@ -1594,6 +1604,11 @@ impl FallbackSrc {
             return;
         }
 
+        // Unschedule pending timeout, we're restarting now
+        if let Some(timeout) = state.source_pending_timeout.take() {
+            timeout.unschedule();
+        }
+
         // Prevent state changes from changing the state in an uncoordinated way
         state.source_pending_restart = true;
 
@@ -1746,6 +1761,12 @@ impl FallbackSrc {
             }
         }
 
+        // We will schedule a new one if needed below
+        if let Some(timeout) = state.source_pending_timeout.take() {
+            gst_debug!(CAT, obj: element, "Unscheduling pending timeout");
+            timeout.unschedule();
+        }
+
         // If we have neither audio nor video (no streams yet), or active pad for the ones we have
         // is the fallback pad then start the retry timeout unless it was started already.
         // Otherwise cancel the retry timeout.
@@ -1787,6 +1808,39 @@ impl FallbackSrc {
             {
                 gst_debug!(CAT, obj: element, "Not buffering, restarting source");
                 self.handle_source_error(element, state);
+            } else {
+                // Schedule another timeout after the last buffering activity
+                let clock = gst::SystemClock::obtain();
+                let diff = gst::ClockTime::from(
+                    state.settings.timeout.saturating_sub(
+                        state
+                            .last_buffering_update
+                            .map(|i| i.elapsed().as_nanos() as u64)
+                            .unwrap_or(state.settings.timeout),
+                    ),
+                );
+                let wait_time = clock.get_time() + diff;
+                assert!(wait_time.is_some());
+
+                gst_debug!(CAT, obj: element, "Starting pending timeout for {}", diff);
+                let timeout = clock
+                    .new_single_shot_id(wait_time)
+                    .expect("can't create clock id");
+
+                let element_weak = element.downgrade();
+                timeout
+                    .wait_async(move |_clock, _time, _id| {
+                        let element = match element_weak.upgrade() {
+                            None => return,
+                            Some(element) => element,
+                        };
+
+                        element.call_async(|element| {
+                            let src = FallbackSrc::from_instance(element);
+                            src.handle_switch_active_pad_change(element);
+                        });
+                    })
+                    .expect("failed to wait async");
             }
 
             if state.source_retry_timeout.is_none() {
@@ -1819,6 +1873,9 @@ impl FallbackSrc {
                                 return;
                             }
                             if let Some(timeout) = state.source_pending_restart_timeout.take() {
+                                timeout.unschedule();
+                            }
+                            if let Some(timeout) = state.source_pending_timeout.take() {
                                 timeout.unschedule();
                             }
                             state.source_pending_restart = false;
