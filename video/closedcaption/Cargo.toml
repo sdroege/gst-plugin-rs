@@ -15,20 +15,24 @@ uuid = { version = "0.8", features = ["v4"] }
 chrono = "0.4"
 lazy_static = "1.2"
 atomic_refcell = "0.1"
+cairo-rs = { git = "https://github.com/gtk-rs/cairo", features=["use_glib"] }
+cairo-sys-rs = { git = "https://github.com/gtk-rs/cairo" }
+pango = { git = "https://github.com/gtk-rs/pango" }
+pangocairo = { git = "https://github.com/gtk-rs/pangocairo" }
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
-features = ["v1_12"]
+features = ["v1_16"]
 package="gstreamer"
 
 [dependencies.gst-base]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
-features = ["v1_12"]
+features = ["v1_16"]
 package="gstreamer-base"
 
 [dependencies.gst-video]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
-features = ["v1_12"]
+features = ["v1_16"]
 package="gstreamer-video"
 
 [dev-dependencies]

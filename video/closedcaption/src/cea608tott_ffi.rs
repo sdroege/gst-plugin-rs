@@ -805,7 +805,11 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn caption_frame_to_text(frame: *mut caption_frame_t, data: *mut utf8_char_t) -> usize;
+    pub fn caption_frame_to_text(
+        frame: *mut caption_frame_t,
+        data: *mut utf8_char_t,
+        full: ::std::os::raw::c_int,
+    ) -> usize;
 }
 extern "C" {
     pub fn caption_frame_dump_buffer(frame: *mut caption_frame_t, buf: *mut utf8_char_t) -> usize;

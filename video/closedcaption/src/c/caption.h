@@ -131,7 +131,7 @@ int caption_frame_from_text(caption_frame_t* frame, const utf8_char_t* data);
     \param
 */
 #define CAPTION_FRAME_TEXT_BYTES (4 * ((SCREEN_COLS + 2) * SCREEN_ROWS) + 1)
-size_t caption_frame_to_text(caption_frame_t* frame, utf8_char_t* data);
+size_t caption_frame_to_text(caption_frame_t* frame, utf8_char_t* data, int full);
 /*! \brief
     \param
 */

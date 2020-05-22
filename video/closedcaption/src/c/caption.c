@@ -412,7 +412,7 @@ caption_frame_from_text (caption_frame_t * frame, const utf8_char_t * data)
 
 ////////////////////////////////////////////////////////////////////////////////
 size_t
-caption_frame_to_text (caption_frame_t * frame, utf8_char_t * data)
+caption_frame_to_text (caption_frame_t * frame, utf8_char_t * data, int full)
 {
   int r, c, uln, crlf = 0, count = 0;
   size_t s, size = 0;
@@ -425,8 +425,9 @@ caption_frame_to_text (caption_frame_t * frame, utf8_char_t * data)
       const utf8_char_t *chr =
           caption_frame_read_char (frame, r, c, &sty, &uln);
       // dont start a new line until we encounter at least one printable character
-      if (0 < utf8_char_length (chr) && (0 < count
-              || !utf8_char_whitespace (chr))) {
+      if (full ||
+          (0 < utf8_char_length (chr) && (0 < count
+              || !utf8_char_whitespace (chr)))) {
         if (0 < crlf) {
           memcpy (data, "\r\n\0", 3);
           data += 2, size += 2, crlf = 0;

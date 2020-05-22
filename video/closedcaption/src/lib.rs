@@ -33,6 +33,8 @@ extern crate lazy_static;
 #[macro_use]
 extern crate pretty_assertions;
 
+mod caption_frame;
+mod cea608overlay;
 mod cea608tott;
 #[allow(non_camel_case_types, non_upper_case_globals)]
 #[allow(clippy::redundant_static_lifetimes, clippy::unreadable_literal)]
@@ -54,6 +56,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     scc_enc::register(plugin)?;
     cea608tott::register(plugin)?;
     tttocea608::register(plugin)?;
+    cea608overlay::register(plugin)?;
     Ok(())
 }
 
