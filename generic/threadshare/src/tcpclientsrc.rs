@@ -41,7 +41,7 @@ use std::u32;
 use tokio::io::AsyncReadExt;
 
 use crate::runtime::prelude::*;
-use crate::runtime::task::Transition;
+use crate::runtime::task;
 use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task, TaskState};
 
 use super::socket::{Socket, SocketError, SocketRead};
@@ -391,21 +391,21 @@ impl TaskImpl for TcpClientSrcTask {
         .boxed()
     }
 
-    fn handle_hook_error(
+    fn handle_action_error(
         &mut self,
-        transition: Transition,
+        trigger: task::Trigger,
         state: TaskState,
         err: gst::ErrorMessage,
-    ) -> BoxFuture<'_, Transition> {
+    ) -> BoxFuture<'_, task::Trigger> {
         async move {
-            match transition {
-                Transition::Prepare => {
+            match trigger {
+                task::Trigger::Prepare => {
                     gst_error!(CAT, "Task preparation failed: {:?}", err);
                     self.element.post_error_message(&err);
 
-                    Transition::Error
+                    task::Trigger::Error
                 }
-                other => unreachable!("Hook error {:?} in state {:?}", other, state),
+                other => unreachable!("Action error for {:?} in state {:?}", other, state),
             }
         }
         .boxed()
