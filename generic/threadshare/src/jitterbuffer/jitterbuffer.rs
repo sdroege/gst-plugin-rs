@@ -26,7 +26,7 @@ use glib::{glib_object_impl, glib_object_subclass};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_error_msg, gst_info, gst_log, gst_trace};
+use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info, gst_log, gst_trace};
 use gst_rtp::RTPBuffer;
 
 use lazy_static::lazy_static;
@@ -654,7 +654,7 @@ impl PadSinkHandler for SinkHandler {
         &self,
         pad: &PadSinkRef,
         jb: &JitterBuffer,
-        _element: &gst::Element,
+        element: &gst::Element,
         event: gst::Event,
     ) -> bool {
         use gst::EventView;
@@ -664,6 +664,13 @@ impl PadSinkHandler for SinkHandler {
         if let EventView::FlushStart(..) = event.view() {
             if let Err(err) = jb.task.flush_start() {
                 gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                gst_element_error!(
+                    element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["FlushStart failed {:?}", err]
+                );
+                return false;
             }
         }
 
@@ -702,8 +709,14 @@ impl PadSinkHandler for SinkHandler {
                 }
                 EventView::FlushStop(..) => {
                     if let Err(err) = jb.task.flush_stop() {
-                        // FIXME we should probably return false if that one fails
                         gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                        gst_element_error!(
+                            element,
+                            gst::StreamError::Failed,
+                            ("Internal data stream error"),
+                            ["FlushStop failed {:?}", err]
+                        );
+                        return false;
                     }
                 }
                 EventView::Eos(..) => {
@@ -971,7 +984,7 @@ impl PadSrcHandler for SrcHandler {
         &self,
         pad: &PadSrcRef,
         jb: &JitterBuffer,
-        _element: &gst::Element,
+        element: &gst::Element,
         event: gst::Event,
     ) -> bool {
         use gst::EventView;
@@ -982,12 +995,25 @@ impl PadSrcHandler for SrcHandler {
             EventView::FlushStart(..) => {
                 if let Err(err) = jb.task.flush_start() {
                     gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                    gst_element_error!(
+                        element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["FlushStart failed {:?}", err]
+                    );
+                    return false;
                 }
             }
             EventView::FlushStop(..) => {
                 if let Err(err) = jb.task.flush_stop() {
-                    // FIXME we should probably return false if that one fails
                     gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst_element_error!(
+                        element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["FlushStop failed {:?}", err]
+                    );
+                    return false;
                 }
             }
             _ => (),

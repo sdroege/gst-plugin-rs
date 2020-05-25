@@ -185,7 +185,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         &self,
         pad: &PadSinkRef,
         queue: &Queue,
-        _element: &gst::Element,
+        element: &gst::Element,
         event: gst::Event,
     ) -> bool {
         use gst::EventView;
@@ -195,6 +195,13 @@ impl PadSinkHandler for QueuePadSinkHandler {
         if let EventView::FlushStart(..) = event.view() {
             if let Err(err) = queue.task.flush_start() {
                 gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                gst_element_error!(
+                    element,
+                    gst::StreamError::Failed,
+                    ("Internal data stream error"),
+                    ["FlushStart failed {:?}", err]
+                );
+                return false;
             }
         }
 
@@ -221,8 +228,14 @@ impl PadSinkHandler for QueuePadSinkHandler {
 
             if let EventView::FlushStop(..) = event.view() {
                 if let Err(err) = queue.task.flush_stop() {
-                    // FIXME we should probably return false if that one fails
                     gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst_element_error!(
+                        element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["FlushStop failed {:?}", err]
+                    );
+                    return false;
                 }
             }
 
@@ -293,7 +306,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
         &self,
         pad: &PadSrcRef,
         queue: &Queue,
-        _element: &gst::Element,
+        element: &gst::Element,
         event: gst::Event,
     ) -> bool {
         use gst::EventView;
@@ -308,8 +321,14 @@ impl PadSrcHandler for QueuePadSrcHandler {
             }
             EventView::FlushStop(..) => {
                 if let Err(err) = queue.task.flush_stop() {
-                    // FIXME we should probably return false if that one fails
                     gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst_element_error!(
+                        element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["FlushStop failed {:?}", err]
+                    );
+                    return false;
                 }
             }
             _ => (),

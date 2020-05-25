@@ -806,7 +806,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
         &self,
         pad: &PadSrcRef,
         proxysrc: &ProxySrc,
-        _element: &gst::Element,
+        element: &gst::Element,
         event: gst::Event,
     ) -> bool {
         use gst::EventView;
@@ -828,12 +828,25 @@ impl PadSrcHandler for ProxySrcPadHandler {
             EventView::FlushStart(..) => {
                 if let Err(err) = proxysrc.task.flush_start() {
                     gst_error!(SRC_CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                    gst_element_error!(
+                        element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["FlushStart failed {:?}", err]
+                    );
+                    return false;
                 }
             }
             EventView::FlushStop(..) => {
                 if let Err(err) = proxysrc.task.flush_stop() {
-                    // FIXME we should probably return false if that one fails
                     gst_error!(SRC_CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst_element_error!(
+                        element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["FlushStop failed {:?}", err]
+                    );
+                    return false;
                 }
             }
             _ => (),
