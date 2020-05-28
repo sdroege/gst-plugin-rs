@@ -45,7 +45,7 @@ fn new_timed_buffer<T: AsRef<[u8]> + Send + 'static>(
 fn test_non_timed_buffer() {
     init();
 
-    let mut h = gst_check::Harness::new("tttocea608");
+    let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
     h.set_src_caps_str("text/x-raw");
 
     let inbuf = gst::Buffer::from_slice(&"Hello");
@@ -58,7 +58,7 @@ fn test_non_timed_buffer() {
 fn test_one_timed_buffer_and_eos() {
     init();
 
-    let mut h = gst_check::Harness::new("tttocea608");
+    let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
     h.set_src_caps_str("text/x-raw");
 
     while h.events_in_queue() != 0 {
@@ -134,7 +134,7 @@ fn test_one_timed_buffer_and_eos() {
 fn test_erase_display_memory_non_spliced() {
     init();
 
-    let mut h = gst_check::Harness::new("tttocea608");
+    let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
     h.set_src_caps_str("text/x-raw");
 
     while h.events_in_queue() != 0 {
@@ -170,7 +170,7 @@ fn test_erase_display_memory_non_spliced() {
 fn test_erase_display_memory_spliced() {
     init();
 
-    let mut h = gst_check::Harness::new("tttocea608");
+    let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
     h.set_src_caps_str("text/x-raw");
 
     while h.events_in_queue() != 0 {
@@ -211,7 +211,7 @@ fn test_erase_display_memory_spliced() {
 fn test_erase_display_memory_gaps() {
     init();
 
-    let mut h = gst_check::Harness::new("tttocea608");
+    let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
     h.set_src_caps_str("text/x-raw");
 
     while h.events_in_queue() != 0 {
@@ -259,7 +259,7 @@ fn test_erase_display_memory_gaps() {
 fn test_output_gaps() {
     init();
 
-    let mut h = gst_check::Harness::new("tttocea608");
+    let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
     h.set_src_caps_str("text/x-raw");
 
     while h.events_in_queue() != 0 {
@@ -297,4 +297,81 @@ fn test_output_gaps() {
             assert_eq!(e.1, duration);
         }
     }
+}
+
+#[test]
+fn test_one_timed_buffer_and_eos_roll_up2() {
+    init();
+
+    let mut h = gst_check::Harness::new_parse("tttocea608 mode=roll-up2");
+    h.set_src_caps_str("text/x-raw");
+
+    while h.events_in_queue() != 0 {
+        let _event = h.pull_event().unwrap();
+    }
+
+    let inbuf = new_timed_buffer(&"Hello", gst::SECOND, gst::SECOND);
+    assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
+
+    let inbuf = new_timed_buffer(&"World", gst::SECOND, 1.into());
+    assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
+
+    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 10] = [
+        (1_000_000_000.into(), 33_333_333.into(), [0x94, 0x2c]), /* erase_display_memory */
+        (1_033_333_333.into(), 33_333_334.into(), [0x94, 0x2c]), /* control doubled */
+        (1_066_666_667.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
+        (1_100_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* control doubled */
+        (1_133_333_333.into(), 33_333_334.into(), [0xc8, 0xe5]), /* H e */
+        (1_166_666_667.into(), 33_333_333.into(), [0xec, 0xec]), /* l l */
+        (1_200_000_000.into(), 33_333_333.into(), [0xef, 0x80]), /* o, nil */
+        (2_000_000_000.into(), 0.into(), [0x20, 0x57]),          /* SPACE, W */
+        (2_000_000_000.into(), 0.into(), [0xef, 0xf2]),          /* o, r */
+        (2_000_000_000.into(), 0.into(), [0xec, 0x64]),          /* l, d */
+    ];
+
+    for (i, e) in expected.iter().enumerate() {
+        let outbuf = h.try_pull().unwrap();
+
+        assert_eq!(
+            e.0,
+            outbuf.get_pts(),
+            "Unexpected PTS for {}th buffer",
+            i + 1
+        );
+        assert_eq!(
+            e.1,
+            outbuf.get_duration(),
+            "Unexpected duration for {}th buffer",
+            i + 1
+        );
+
+        let data = outbuf.map_readable().unwrap();
+        assert_eq!(e.2, &*data);
+    }
+
+    assert_eq!(h.buffers_in_queue(), 0);
+
+    h.push_event(gst::Event::new_eos().build());
+
+    let expected_gaps: [(gst::ClockTime, gst::ClockTime); 2] = [
+        (0.into(), 1_000_000_000.into()),
+        (1_233_333_333.into(), 766_666_667.into()),
+    ];
+
+    for e in &expected_gaps {
+        let event = h.pull_event().unwrap();
+
+        assert_eq!(event.get_type(), gst::EventType::Gap);
+
+        if let EventView::Gap(ev) = event.view() {
+            let (timestamp, duration) = ev.get();
+            assert_eq!(e.0, timestamp);
+            assert_eq!(e.1, duration);
+        }
+    }
+
+    assert_eq!(h.events_in_queue(), 1);
+
+    let event = h.pull_event().unwrap();
+    assert_eq!(event.get_type(), gst::EventType::Eos);
 }

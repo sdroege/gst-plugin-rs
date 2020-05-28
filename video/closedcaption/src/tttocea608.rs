@@ -18,6 +18,7 @@
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
+use glib::GEnum;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
@@ -45,6 +46,28 @@ fn decrement_pts(
     let duration = old_pts - new_pts;
 
     (new_pts, duration)
+}
+
+fn increment_pts(
+    frame_no: &mut u64,
+    max_frame_no: u64,
+    fps_n: u64,
+    fps_d: u64,
+) -> (gst::ClockTime, gst::ClockTime) {
+    let pts = (*frame_no * gst::SECOND)
+        .mul_div_round(fps_d, fps_n)
+        .unwrap();
+
+    if *frame_no <= max_frame_no {
+        *frame_no += 1;
+    }
+
+    let next_pts = (*frame_no * gst::SECOND)
+        .mul_div_round(fps_d, fps_n)
+        .unwrap();
+
+    let duration = next_pts - pts;
+    (pts, duration)
 }
 
 fn is_basicna(cc_data: u16) -> bool {
@@ -108,7 +131,14 @@ fn erase_non_displayed_memory(buffers: &mut Vec<gst::Buffer>) {
     );
 }
 
-fn erase_display_memory(
+fn erase_display_memory(buffers: &mut Vec<gst::Buffer>) {
+    control_command_buffer(
+        buffers,
+        ffi::eia608_control_t_eia608_control_erase_display_memory,
+    );
+}
+
+fn erase_display_memory_with_pts(
     bufferlist: &mut gst::BufferListRef,
     pts: gst::ClockTime,
     duration: gst::ClockTime,
@@ -128,6 +158,25 @@ fn resume_caption_loading(buffers: &mut Vec<gst::Buffer>) {
     control_command_buffer(
         buffers,
         ffi::eia608_control_t_eia608_control_resume_caption_loading,
+    );
+}
+
+fn roll_up_2(buffers: &mut Vec<gst::Buffer>) {
+    control_command_buffer(buffers, ffi::eia608_control_t_eia608_control_roll_up_2);
+}
+
+fn roll_up_3(buffers: &mut Vec<gst::Buffer>) {
+    control_command_buffer(buffers, ffi::eia608_control_t_eia608_control_roll_up_3);
+}
+
+fn roll_up_4(buffers: &mut Vec<gst::Buffer>) {
+    control_command_buffer(buffers, ffi::eia608_control_t_eia608_control_roll_up_4);
+}
+
+fn carriage_return(buffers: &mut Vec<gst::Buffer>) {
+    control_command_buffer(
+        buffers,
+        ffi::eia608_control_t_eia608_control_carriage_return,
     );
 }
 
@@ -159,18 +208,58 @@ const DEFAULT_FPS_D: i32 = 1;
  */
 const LATENCY_BUFFERS: u64 = 74;
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
+#[repr(u32)]
+#[genum(type_name = "GstTtToCea608Mode")]
+enum Mode {
+    PopOn,
+    RollUp2,
+    RollUp3,
+    RollUp4,
+}
+
+const DEFAULT_MODE: Mode = Mode::RollUp2;
+
+static PROPERTIES: [subclass::Property; 1] = [subclass::Property("mode", |name| {
+    glib::ParamSpec::enum_(
+        name,
+        "Mode",
+        "Which mode to operate in, roll-up modes introduce no latency",
+        Mode::static_type(),
+        DEFAULT_MODE as i32,
+        glib::ParamFlags::READWRITE,
+    )
+})];
+
+#[derive(Debug, Clone)]
+struct Settings {
+    mode: Mode,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings { mode: DEFAULT_MODE }
+    }
+}
+
 struct State {
+    settings: Settings,
     framerate: gst::Fraction,
     erase_display_frame_no: Option<u64>,
     last_frame_no: u64,
+    roll_up_column: u32,
+    send_roll_up: bool,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
+            settings: Settings::default(),
             framerate: gst::Fraction::new(DEFAULT_FPS_N, DEFAULT_FPS_D),
             erase_display_frame_no: None,
             last_frame_no: 0,
+            roll_up_column: 0,
+            send_roll_up: false,
         }
     }
 }
@@ -180,6 +269,7 @@ struct TtToCea608 {
     sinkpad: gst::Pad,
 
     state: Mutex<State>,
+    settings: Mutex<Settings>,
 }
 
 lazy_static! {
@@ -193,7 +283,7 @@ lazy_static! {
 
 impl TtToCea608 {
     fn push_gap(&self, last_frame_no: u64, new_frame_no: u64) {
-        if last_frame_no != new_frame_no {
+        if last_frame_no < new_frame_no {
             let state = self.state.lock().unwrap();
             let (fps_n, fps_d) = (
                 *state.framerate.numer() as u64,
@@ -242,25 +332,23 @@ impl TtToCea608 {
 
         let (pts, duration) =
             decrement_pts(min_frame_no, &mut erase_display_frame_no, fps_n, fps_d);
-        erase_display_memory(bufferlist.get_mut().unwrap(), pts, duration);
+        erase_display_memory_with_pts(bufferlist.get_mut().unwrap(), pts, duration);
         let (pts, duration) =
             decrement_pts(min_frame_no, &mut erase_display_frame_no, fps_n, fps_d);
-        erase_display_memory(bufferlist.get_mut().unwrap(), pts, duration);
+        erase_display_memory_with_pts(bufferlist.get_mut().unwrap(), pts, duration);
 
         drop(state);
 
         self.push_list(bufferlist, min_frame_no, erase_display_frame_no)
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn sink_chain(
         &self,
         pad: &gst::Pad,
         element: &gst::Element,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut row = 13;
-        let mut col = 0;
-
         let pts = match buffer.get_pts() {
             gst::CLOCK_TIME_NONE => {
                 gst_element_error!(
@@ -288,100 +376,151 @@ impl TtToCea608 {
         let mut state = self.state.lock().unwrap();
         let mut buffers = vec![];
 
-        {
+        if state.send_roll_up {
+            erase_display_memory(&mut buffers);
+            match state.settings.mode {
+                Mode::RollUp2 => roll_up_2(&mut buffers),
+                Mode::RollUp3 => roll_up_3(&mut buffers),
+                Mode::RollUp4 => roll_up_4(&mut buffers),
+                _ => (),
+            }
+            state.send_roll_up = false;
+            state.roll_up_column = 0;
+        }
+
+        let mut row = 13;
+        let mut col = if state.settings.mode == Mode::PopOn {
+            0
+        } else {
+            state.roll_up_column
+        };
+
+        if state.settings.mode == Mode::PopOn {
             resume_caption_loading(&mut buffers);
             erase_non_displayed_memory(&mut buffers);
             preamble_buffer(&mut buffers, row, 0);
+        }
 
-            let data = buffer.map_readable().map_err(|_| {
-                gst_error!(CAT, obj: pad, "Can't map buffer readable");
+        let data = buffer.map_readable().map_err(|_| {
+            gst_error!(CAT, obj: pad, "Can't map buffer readable");
 
-                gst::FlowError::Error
-            })?;
+            gst::FlowError::Error
+        })?;
 
-            let data = std::str::from_utf8(&data).map_err(|err| {
-                gst_error!(CAT, obj: pad, "Can't decode utf8: {}", err);
+        let data = std::str::from_utf8(&data).map_err(|err| {
+            gst_error!(CAT, obj: pad, "Can't decode utf8: {}", err);
 
-                gst::FlowError::Error
-            })?;
+            gst::FlowError::Error
+        })?;
 
-            let mut prev_char: u16 = 0;
-            for c in data.chars() {
-                if c == '\n' {
-                    if prev_char != 0 {
-                        buffers.push(buffer_from_cc_data(prev_char));
-                        prev_char = 0;
-                    }
+        let mut prev_char: u16 = if state.settings.mode == Mode::PopOn || col == 0 {
+            0
+        } else if col >= 31 {
+            carriage_return(&mut buffers);
+            col = 0;
+            0
+        } else {
+            // In roll-up mode, the typical input will not have surrounding
+            // whitespaces. This could be improved by detecting whether the
+            // last character that was output was some sort of whitespace,
+            // and we could avoid the white space before punctuation, but
+            // this is complicated by the fact that in some languages,
+            // some punctuation must be preceded by a white space, eg in
+            // French that is the case for '?' and '!', but not for '.' or
+            // ';'. Let's not go down that rabbit hole.
+            col += 1;
+            *SPACE
+        };
 
-                    row += 1;
-
-                    if row > 14 {
-                        break;
-                    }
-
-                    preamble_buffer(&mut buffers, row, 0);
-
-                    col = 0;
-                    continue;
-                } else if c == '\r' {
-                    continue;
-                }
-
-                let mut encoded = [0; 5];
-                c.encode_utf8(&mut encoded);
-                let mut cc_data = eia608_from_utf8_1(&encoded);
-
-                if cc_data == 0 {
-                    gst_warning!(CAT, obj: element, "Not translating UTF8: {}", c);
-                    cc_data = *SPACE;
-                }
-
-                if is_basicna(prev_char) {
-                    if is_basicna(cc_data) {
-                        bna_buffer(&mut buffers, prev_char, cc_data);
-                    } else if is_westeu(cc_data) {
-                        // extended characters overwrite the previous character,
-                        // so insert a dummy char then write the extended char
-                        bna_buffer(&mut buffers, prev_char, *SPACE);
-                        buffers.push(buffer_from_cc_data(cc_data));
-                    } else {
-                        buffers.push(buffer_from_cc_data(prev_char));
-                        buffers.push(buffer_from_cc_data(cc_data));
-                    }
+        for mut c in data.chars() {
+            if c == '\n' && state.settings.mode == Mode::PopOn {
+                if prev_char != 0 {
+                    buffers.push(buffer_from_cc_data(prev_char));
                     prev_char = 0;
+                }
+
+                row += 1;
+
+                if row > 14 {
+                    break;
+                }
+
+                preamble_buffer(&mut buffers, row, 0);
+
+                col = 0;
+                continue;
+            } else if c == '\n' {
+                c = ' ';
+            } else if c == '\r' {
+                continue;
+            }
+
+            let mut encoded = [0; 5];
+            c.encode_utf8(&mut encoded);
+            let mut cc_data = eia608_from_utf8_1(&encoded);
+
+            if cc_data == 0 {
+                gst_warning!(CAT, obj: element, "Not translating UTF8: {}", c);
+                cc_data = *SPACE;
+            }
+
+            if is_basicna(prev_char) {
+                if is_basicna(cc_data) {
+                    bna_buffer(&mut buffers, prev_char, cc_data);
                 } else if is_westeu(cc_data) {
                     // extended characters overwrite the previous character,
                     // so insert a dummy char then write the extended char
-                    buffers.push(buffer_from_cc_data(*SPACE));
+                    bna_buffer(&mut buffers, prev_char, *SPACE);
                     buffers.push(buffer_from_cc_data(cc_data));
-                } else if is_basicna(cc_data) {
-                    prev_char = cc_data;
                 } else {
+                    buffers.push(buffer_from_cc_data(prev_char));
                     buffers.push(buffer_from_cc_data(cc_data));
                 }
-
-                if is_specialna(cc_data) {
-                    resume_caption_loading(&mut buffers);
-                }
-
-                col += 1;
-
-                if col > 32 {
-                    gst_warning!(
-                        CAT,
-                        obj: element,
-                        "Dropping character after 32nd column: {}",
-                        c
-                    );
-                    continue;
-                }
+                prev_char = 0;
+            } else if is_westeu(cc_data) {
+                // extended characters overwrite the previous character,
+                // so insert a dummy char then write the extended char
+                buffers.push(buffer_from_cc_data(*SPACE));
+                buffers.push(buffer_from_cc_data(cc_data));
+            } else if is_basicna(cc_data) {
+                prev_char = cc_data;
+            } else {
+                buffers.push(buffer_from_cc_data(cc_data));
             }
 
-            if prev_char != 0 {
-                buffers.push(buffer_from_cc_data(prev_char));
+            if is_specialna(cc_data) {
+                resume_caption_loading(&mut buffers);
             }
 
+            col += 1;
+
+            if col > 32 && state.settings.mode == Mode::PopOn {
+                gst_warning!(
+                    CAT,
+                    obj: element,
+                    "Dropping character after 32nd column: {}",
+                    c
+                );
+                continue;
+            } else if col == 32 && state.settings.mode != Mode::PopOn {
+                if prev_char != 0 {
+                    buffers.push(buffer_from_cc_data(prev_char));
+                    prev_char = 0;
+                }
+
+                carriage_return(&mut buffers);
+                col = 0;
+            }
+        }
+
+        if prev_char != 0 {
+            buffers.push(buffer_from_cc_data(prev_char));
+        }
+
+        if state.settings.mode == Mode::PopOn {
             end_of_caption(&mut buffers);
+        } else {
+            state.roll_up_column = col;
         }
 
         let mut bufferlist = gst::BufferList::new();
@@ -396,61 +535,81 @@ impl TtToCea608 {
          */
         let mut frame_no = (pts.mul_div_round(fps_n, fps_d).unwrap() / gst::SECOND).unwrap();
 
-        let mut erase_display_frame_no = {
-            if state.erase_display_frame_no < Some(frame_no) {
-                state.erase_display_frame_no
-            } else {
-                None
-            }
-        };
+        if state.settings.mode == Mode::PopOn {
+            /* Add 2: One for our second end_of_caption control
+             * code, another to calculate its duration */
+            frame_no += 2;
 
-        /* Add 2: One for our second end_of_caption control
-         * code, another to calculate its duration */
-        frame_no += 2;
+            /* Store that frame number, so we can make sure not to output
+             * overlapped timestamps, outputting multiple buffers with
+             * a 0 duration will break strict line-21 encoding, but
+             * we should be fine with 608 over 708, as we can encode
+             * multiple byte pairs into a single frame */
+            let mut min_frame_no = state.last_frame_no;
+            state.last_frame_no = frame_no;
 
-        /* Store that frame number, so we can make sure not to output
-         * overlapped timestamps, outputting multiple buffers with
-         * a 0 duration will break strict line-21 encoding, but
-         * we should be fine with 608 over 708, as we can encode
-         * multiple byte pairs into a single frame */
-        let mut min_frame_no = state.last_frame_no;
-        state.last_frame_no = frame_no;
+            let mut erase_display_frame_no = {
+                if state.erase_display_frame_no < Some(frame_no) {
+                    state.erase_display_frame_no
+                } else {
+                    None
+                }
+            };
 
-        state.erase_display_frame_no = Some(
-            ((pts + duration).mul_div_round(fps_n, fps_d).unwrap() / gst::SECOND).unwrap() + 2,
-        );
+            state.erase_display_frame_no = Some(
+                ((pts + duration).mul_div_round(fps_n, fps_d).unwrap() / gst::SECOND).unwrap() + 2,
+            );
 
-        for mut buffer in buffers.drain(..).rev() {
-            /* Insert display erasure at the correct moment */
-            if erase_display_frame_no == Some(frame_no) {
+            for mut buffer in buffers.drain(..).rev() {
+                /* Insert display erasure at the correct moment */
+                if erase_display_frame_no == Some(frame_no) {
+                    let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
+                    erase_display_memory_with_pts(bufferlist.get_mut().unwrap(), pts, duration);
+                    let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
+                    erase_display_memory_with_pts(bufferlist.get_mut().unwrap(), pts, duration);
+
+                    erase_display_frame_no = None;
+                }
+
                 let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
-                erase_display_memory(bufferlist.get_mut().unwrap(), pts, duration);
-                let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
-                erase_display_memory(bufferlist.get_mut().unwrap(), pts, duration);
 
-                erase_display_frame_no = None;
+                let buf_mut = buffer.get_mut().unwrap();
+                buf_mut.set_pts(pts);
+                buf_mut.set_duration(duration);
+                bufferlist.get_mut().unwrap().insert(0, buffer);
             }
+            drop(state);
 
-            let (pts, duration) = decrement_pts(min_frame_no, &mut frame_no, fps_n, fps_d);
-
-            let buf_mut = buffer.get_mut().unwrap();
-            buf_mut.set_pts(pts);
-            buf_mut.set_duration(duration);
-            bufferlist.get_mut().unwrap().insert(0, buffer);
+            if let Some(erase_display_frame_no) = erase_display_frame_no {
+                self.do_erase_display(min_frame_no, erase_display_frame_no)?;
+                min_frame_no = erase_display_frame_no;
+            }
+            self.push_list(bufferlist, min_frame_no, frame_no)
+                .map_err(|err| {
+                    gst_error!(CAT, obj: &self.srcpad, "Pushing buffer returned {:?}", err);
+                    err
+                })
+        } else {
+            // Make sure our first buffer doesn't overlap with the last
+            // gap / buffer we pushed
+            frame_no = std::cmp::max(frame_no, state.last_frame_no);
+            let start_frame_no = frame_no;
+            let max_frame_no =
+                ((pts + duration).mul_div_round(fps_n, fps_d).unwrap() / gst::SECOND).unwrap();
+            for mut buffer in buffers.drain(..) {
+                let (pts, duration) = increment_pts(&mut frame_no, max_frame_no, fps_n, fps_d);
+                let buf_mut = buffer.get_mut().unwrap();
+                buf_mut.set_pts(pts);
+                buf_mut.set_duration(duration);
+                bufferlist.get_mut().unwrap().insert(-1, buffer);
+            }
+            let last_frame_no = state.last_frame_no;
+            state.last_frame_no = max_frame_no;
+            drop(state);
+            let ret = self.push_list(bufferlist, last_frame_no, start_frame_no);
+            self.push_gap(frame_no, max_frame_no);
+            ret
         }
-
-        drop(state);
-
-        if let Some(erase_display_frame_no) = erase_display_frame_no {
-            self.do_erase_display(min_frame_no, erase_display_frame_no)?;
-            min_frame_no = erase_display_frame_no;
-        }
-
-        self.push_list(bufferlist, min_frame_no, frame_no)
-            .map_err(|err| {
-                gst_error!(CAT, obj: &self.srcpad, "Pushing buffer returned {:?}", err);
-                err
-            })
     }
 
     fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
@@ -472,12 +631,21 @@ impl TtToCea608 {
                         *state.framerate.denom() as u64,
                     );
 
-                    let our_latency: gst::ClockTime = (LATENCY_BUFFERS * gst::SECOND)
-                        .mul_div_round(fps_d, fps_n)
-                        .unwrap();
+                    if state.settings.mode == Mode::PopOn {
+                        let our_latency: gst::ClockTime = (LATENCY_BUFFERS * gst::SECOND)
+                            .mul_div_round(fps_d, fps_n)
+                            .unwrap();
 
-                    min += our_latency;
-                    max += our_latency;
+                        min += our_latency;
+                        max += our_latency;
+                    } else {
+                        /* We introduce at most a one-frame latency due to rounding */
+                        let our_latency: gst::ClockTime =
+                            gst::SECOND.mul_div_round(fps_d, fps_n).unwrap();
+
+                        min += our_latency;
+                        max += our_latency;
+                    }
 
                     q.set(live, min, max);
                 }
@@ -522,7 +690,7 @@ impl TtToCea608 {
 
                 drop(state);
 
-                return self.srcpad.push_event(new_event);
+                self.srcpad.push_event(new_event)
             }
             EventView::Gap(e) => {
                 let mut state = self.state.lock().unwrap();
@@ -536,23 +704,30 @@ impl TtToCea608 {
                     / gst::SECOND)
                     .unwrap();
 
-                if frame_no < LATENCY_BUFFERS {
-                    return true;
-                }
+                if state.settings.mode == Mode::PopOn {
+                    if frame_no < LATENCY_BUFFERS {
+                        return true;
+                    }
 
-                frame_no -= LATENCY_BUFFERS;
+                    frame_no -= LATENCY_BUFFERS;
 
-                if let Some(erase_display_frame_no) = state.erase_display_frame_no {
-                    if erase_display_frame_no <= frame_no {
-                        let min_frame_no = state.last_frame_no;
-                        state.erase_display_frame_no = None;
+                    if let Some(erase_display_frame_no) = state.erase_display_frame_no {
+                        if erase_display_frame_no <= frame_no {
+                            let min_frame_no = state.last_frame_no;
+                            state.erase_display_frame_no = None;
 
+                            drop(state);
+
+                            /* Ignore return value, we may be flushing here and can't
+                             * communicate that through a boolean
+                             */
+                            let _ = self.do_erase_display(min_frame_no, erase_display_frame_no);
+                        }
+                    } else {
+                        let last_frame_no = state.last_frame_no;
+                        state.last_frame_no = frame_no;
                         drop(state);
-
-                        /* Ignore return value, we may be flushing here and can't
-                         * communicate that through a boolean
-                         */
-                        let _ = self.do_erase_display(min_frame_no, erase_display_frame_no);
+                        self.push_gap(last_frame_no, frame_no);
                     }
                 } else {
                     let last_frame_no = state.last_frame_no;
@@ -561,7 +736,7 @@ impl TtToCea608 {
                     self.push_gap(last_frame_no, frame_no);
                 }
 
-                return true;
+                true
             }
             EventView::Eos(_) => {
                 let mut state = self.state.lock().unwrap();
@@ -576,11 +751,19 @@ impl TtToCea608 {
                      */
                     let _ = self.do_erase_display(min_frame_no, erase_display_frame_no);
                 }
+                pad.event_default(Some(element), event)
             }
-            _ => (),
-        }
+            EventView::FlushStop(_) => {
+                let mut state = self.state.lock().unwrap();
 
-        pad.event_default(Some(element), event)
+                if state.settings.mode != Mode::PopOn {
+                    state.send_roll_up = true;
+                }
+
+                pad.event_default(Some(element), event)
+            }
+            _ => pad.event_default(Some(element), event),
+        }
     }
 }
 
@@ -627,6 +810,7 @@ impl ObjectSubclass for TtToCea608 {
             srcpad,
             sinkpad,
             state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
         }
     }
 
@@ -667,6 +851,8 @@ impl ObjectSubclass for TtToCea608 {
         )
         .unwrap();
         klass.add_pad_template(src_pad_template);
+
+        klass.install_properties(&PROPERTIES);
     }
 }
 
@@ -679,6 +865,30 @@ impl ObjectImpl for TtToCea608 {
         let element = obj.downcast_ref::<gst::Element>().unwrap();
         element.add_pad(&self.sinkpad).unwrap();
         element.add_pad(&self.srcpad).unwrap();
+    }
+
+    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+        let prop = &PROPERTIES[id];
+
+        match *prop {
+            subclass::Property("mode", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.mode = value.get_some::<Mode>().expect("type checked upstream");
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id];
+
+        match *prop {
+            subclass::Property("mode", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.mode.to_value())
+            }
+            _ => unimplemented!(),
+        }
     }
 }
 
@@ -693,7 +903,12 @@ impl ElementImpl for TtToCea608 {
         match transition {
             gst::StateChange::ReadyToPaused => {
                 let mut state = self.state.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 *state = State::default();
+                state.settings = settings.clone();
+                if state.settings.mode != Mode::PopOn {
+                    state.send_roll_up = true;
+                }
             }
             _ => (),
         }
