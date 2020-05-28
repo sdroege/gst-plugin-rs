@@ -26,14 +26,6 @@ confidence-threshold = 0.8
 multiple-versions = "deny"
 highlight = "all"
 
-skip-tree = [
-  # Need to upgrade rusoto dep: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/312
-  { name = "gst-plugin-rusoto" },
-  { name = "rusoto_core" },
-  # Metadeps needs to update error-chain: https://github.com/joshtriplett/metadeps/pull/12
-  { name = "metadeps", depth = 2 },
-]
-
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
