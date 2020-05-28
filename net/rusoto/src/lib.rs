@@ -14,6 +14,8 @@ extern crate gstreamer_base as gst_base;
 #[macro_use]
 extern crate lazy_static;
 
+mod aws_transcribe_parse;
+mod packet;
 mod s3sink;
 mod s3src;
 mod s3url;
@@ -22,6 +24,7 @@ mod s3utils;
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     s3sink::register(plugin)?;
     s3src::register(plugin)?;
+    aws_transcribe_parse::register(plugin)?;
 
     Ok(())
 }
