@@ -26,6 +26,81 @@ confidence-threshold = 0.8
 multiple-versions = "deny"
 highlight = "all"
 
+# ignore duplicated deps because of nom 5.0 depending on old lexical-core
+# https://github.com/Geal/nom/issues/1157
+[[bans.skip]]
+name = "arrayvec"
+version = "0.4"
+
+# ignore duplicated deps because of hyperx and rust-argon2 via redox_users
+# depending on old base64
+# https://github.com/dekellum/hyperx/pull/20
+# https://gitlab.redox-os.org/redox-os/users/-/merge_requests/34
+[[bans.skip]]
+name = "base64"
+version = "0.11"
+
+# ignore duplicated deps because of dav1d-sys via metadeps depending on old
+# error-chain and toml
+# https://github.com/rust-av/dav1d-rs/issues/26
+# https://github.com/joshtriplett/metadeps/pull/12
+# https://github.com/joshtriplett/metadeps/pull/4
+[[bans.skip]]
+name = "error-chain"
+version = "0.10"
+[[bans.skip]]
+name = "toml"
+version = "0.2"
+
+# ignore duplicated deps because of url via cookie-store via request depending
+# on old url, idna and percent-encoding
+# https://github.com/pfernie/cookie_store/issues/11
+[[bans.skip]]
+name = "url"
+version = "1.0"
+[[bans.skip]]
+name = "idna"
+version = "0.1"
+[[bans.skip]]
+name = "percent-encoding"
+version = "1.0"
+
+# ignore duplicated deps because of rav1e depending on old itertools
+# https://github.com/xiph/rav1e/pull/2261
+[[bans.skip]]
+name = "itertools"
+version = "0.8"
+
+# ignore duplicated deps because of mio-named-pipes via mio depending on old
+# miow
+# https://github.com/alexcrichton/mio-named-pipes/issues/7
+[[bans.skip]]
+name = "miow"
+version = "0.2"
+[[bans.skip]]
+name = "winapi"
+version = "0.2"
+
+# ignore duplicated deps because of chrono, cookie, cookie_store, hyper,
+# hyperx, reqwest depending on old time
+# https://github.com/chronotope/chrono/issues/400
+# https://github.com/pfernie/cookie_store/issues/11
+# https://github.com/hyperium/hyper/pull/2139
+# https://github.com/dekellum/hyperx/issues/21
+# https://github.com/seanmonstar/reqwest/issues/934
+[[bans.skip]]
+name = "time"
+version = "0.1"
+
+# ignore duplicated tokio dep because of gst-plugin-threadshare having its own
+# fork
+# https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/118
+[[bans.skip]]
+name = "tokio"
+version = "0.2.13"
+[[bans.skip]]
+name = "tokio-macros"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
