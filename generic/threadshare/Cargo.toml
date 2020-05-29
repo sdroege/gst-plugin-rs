@@ -26,10 +26,13 @@ tokio = { git = "https://github.com/fengalin/tokio", branch = "fengalin/throttli
 futures = { version = "0.3", features = ["thread-pool"] }
 lazy_static = "1.0"
 rand = "0.7"
-net2 = "0.2"
+socket2 = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winsock2", "processthreadsapi"] }
+
+[target.'cfg(unix)'.dependencies]
+socket2 = { version = "0.3", features = ["reuseport"] }
 
 [lib]
 name = "gstthreadshare"

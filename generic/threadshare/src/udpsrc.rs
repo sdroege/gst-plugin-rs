@@ -618,10 +618,18 @@ impl UdpSrc {
                 saddr
             };
 
-            let builder = if addr.is_ipv4() {
-                net2::UdpBuilder::new_v4()
+            let socket = if addr.is_ipv4() {
+                socket2::Socket::new(
+                    socket2::Domain::ipv4(),
+                    socket2::Type::dgram(),
+                    Some(socket2::Protocol::udp()),
+                )
             } else {
-                net2::UdpBuilder::new_v6()
+                socket2::Socket::new(
+                    socket2::Domain::ipv6(),
+                    socket2::Type::dgram(),
+                    Some(socket2::Protocol::udp()),
+                )
             }
             .map_err(|err| {
                 gst_error_msg!(
@@ -630,7 +638,7 @@ impl UdpSrc {
                 )
             })?;
 
-            builder.reuse_address(settings.reuse).map_err(|err| {
+            socket.set_reuse_address(settings.reuse).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to set reuse_address: {}", err]
@@ -639,9 +647,7 @@ impl UdpSrc {
 
             #[cfg(unix)]
             {
-                use net2::unix::UnixUdpBuilderExt;
-
-                builder.reuse_port(settings.reuse).map_err(|err| {
+                socket.set_reuse_port(settings.reuse).map_err(|err| {
                     gst_error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to set reuse_port: {}", err]
@@ -649,7 +655,7 @@ impl UdpSrc {
                 })?;
             }
 
-            let socket = builder.bind(&saddr).map_err(|err| {
+            socket.bind(&saddr.into()).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to bind socket: {}", err]
@@ -657,7 +663,7 @@ impl UdpSrc {
             })?;
 
             let socket = context.enter(|| {
-                tokio::net::UdpSocket::from_std(socket).map_err(|err| {
+                tokio::net::UdpSocket::from_std(socket.into()).map_err(|err| {
                     gst_error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to setup socket for tokio: {}", err]

@@ -1003,18 +1003,26 @@ impl UdpSink {
             let saddr = SocketAddr::new(bind_addr, bind_port as u16);
             gst_debug!(CAT, obj: element, "Binding to {:?}", saddr);
 
-            let builder = match family {
-                SocketFamily::Ipv4 => net2::UdpBuilder::new_v4(),
-                SocketFamily::Ipv6 => net2::UdpBuilder::new_v6(),
+            let socket = match family {
+                SocketFamily::Ipv4 => socket2::Socket::new(
+                    socket2::Domain::ipv4(),
+                    socket2::Type::dgram(),
+                    Some(socket2::Protocol::udp()),
+                ),
+                SocketFamily::Ipv6 => socket2::Socket::new(
+                    socket2::Domain::ipv6(),
+                    socket2::Type::dgram(),
+                    Some(socket2::Protocol::udp()),
+                ),
             };
 
-            let builder = match builder {
-                Ok(builder) => builder,
+            let socket = match socket {
+                Ok(socket) => socket,
                 Err(err) => {
                     gst_warning!(
                         CAT,
                         obj: element,
-                        "Failed to create {} socket builder: {}",
+                        "Failed to create {} socket: {}",
                         match family {
                             SocketFamily::Ipv4 => "IPv4",
                             SocketFamily::Ipv6 => "IPv6",
@@ -1025,7 +1033,7 @@ impl UdpSink {
                 }
             };
 
-            let socket = builder.bind(&saddr).map_err(|err| {
+            socket.bind(&saddr.into()).map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenWrite,
                     ["Failed to bind socket: {}", err]
@@ -1033,7 +1041,7 @@ impl UdpSink {
             })?;
 
             let socket = context.enter(|| {
-                tokio::net::UdpSocket::from_std(socket).map_err(|err| {
+                tokio::net::UdpSocket::from_std(socket.into()).map_err(|err| {
                     gst_error_msg!(
                         gst::ResourceError::OpenWrite,
                         ["Failed to setup socket for tokio: {}", err]
