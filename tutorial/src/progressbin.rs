@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::gobject_sys;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;

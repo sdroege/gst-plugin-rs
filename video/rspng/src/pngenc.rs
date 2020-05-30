@@ -10,7 +10,7 @@ use std::{io, io::Write, sync::Arc};
 
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::{glib_object_impl, glib_object_subclass, gobject_sys, GEnum};
+use glib::{glib_object_impl, glib_object_subclass, GEnum};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
