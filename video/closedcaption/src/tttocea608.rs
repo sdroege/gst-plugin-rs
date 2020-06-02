@@ -58,7 +58,7 @@ fn increment_pts(
         .mul_div_round(fps_d, fps_n)
         .unwrap();
 
-    if *frame_no <= max_frame_no {
+    if *frame_no < max_frame_no {
         *frame_no += 1;
     }
 
