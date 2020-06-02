@@ -1095,6 +1095,8 @@ impl ObjectImpl for Transcriber {
         let element = obj.downcast_ref::<gst::Element>().unwrap();
         element.add_pad(&self.sinkpad).unwrap();
         element.add_pad(&self.srcpad).unwrap();
+        element
+            .set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
     }
 
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
@@ -1169,6 +1171,10 @@ impl ElementImpl for Transcriber {
         }
 
         Ok(success)
+    }
+
+    fn provide_clock(&self, _element: &gst::Element) -> Option<gst::Clock> {
+        Some(gst::SystemClock::obtain())
     }
 }
 

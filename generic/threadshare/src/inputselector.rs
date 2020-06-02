@@ -556,6 +556,8 @@ impl ObjectImpl for InputSelector {
 
         let element = obj.downcast_ref::<gst::Element>().unwrap();
         element.add_pad(self.src_pad.gst_pad()).unwrap();
+        element
+            .set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
     }
 }
 
@@ -625,6 +627,10 @@ impl ElementImpl for InputSelector {
         drop(pads);
 
         let _ = element.post_message(&gst::Message::new_latency().src(Some(element)).build());
+    }
+
+    fn provide_clock(&self, _element: &gst::Element) -> Option<gst::Clock> {
+        Some(gst::SystemClock::obtain())
     }
 }
 

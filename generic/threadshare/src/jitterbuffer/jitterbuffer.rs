@@ -1592,6 +1592,8 @@ impl ObjectImpl for JitterBuffer {
         let element = obj.downcast_ref::<gst::Element>().unwrap();
         element.add_pad(self.sink_pad.gst_pad()).unwrap();
         element.add_pad(self.src_pad.gst_pad()).unwrap();
+        element
+            .set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
     }
 }
 
@@ -1633,6 +1635,10 @@ impl ElementImpl for JitterBuffer {
         }
 
         Ok(success)
+    }
+
+    fn provide_clock(&self, _element: &gst::Element) -> Option<gst::Clock> {
+        Some(gst::SystemClock::obtain())
     }
 }
 
