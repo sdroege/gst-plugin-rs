@@ -4,7 +4,10 @@ db-url = "https://github.com/rustsec/advisory-db"
 vulnerability = "deny"
 unmaintained = "warn"
 notice = "warn"
-ignore = []
+ignore = [
+    # ignore because mio/miow still depend on net2, next mio release fixes this
+    "RUSTSEC-2020-0016"
+]
 
 [licenses]
 unlicensed = "deny"
@@ -112,6 +115,7 @@ allow-git = [
   "https://github.com/gtk-rs/gio",
   "https://github.com/gtk-rs/cairo",
   "https://github.com/gtk-rs/pango",
+  "https://github.com/gtk-rs/pangocairo",
   "https://github.com/gtk-rs/atk",
   "https://github.com/gtk-rs/gdk-pixbuf",
   "https://github.com/gtk-rs/gdk",
