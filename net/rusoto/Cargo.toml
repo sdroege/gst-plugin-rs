@@ -15,11 +15,11 @@ futures = "0.3"
 glib = { git = "https://github.com/gtk-rs/glib" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
-rusoto_core = "0.43"
-rusoto_s3 = "0.43"
-rusoto_credential = "0.43"
-rusoto_transcribe = "0.43"
-rusoto_signature = "0.43"
+rusoto_core = "0.44"
+rusoto_s3 = "0.44"
+rusoto_credential = "0.44"
+rusoto_transcribe = "0.44"
+rusoto_signature = "0.44"
 url = "2"
 percent-encoding = "2"
 tokio = { version = "0.2", features = [ "rt-threaded" ] }
