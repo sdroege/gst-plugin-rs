@@ -156,7 +156,7 @@ struct GapPacket {
 
 impl GapPacket {
     fn new(buffer: gst::Buffer) -> Self {
-        let mut rtp_buffer = RTPBuffer::from_buffer_readable(&buffer).unwrap();
+        let rtp_buffer = RTPBuffer::from_buffer_readable(&buffer).unwrap();
         let seq = rtp_buffer.get_seq();
         let pt = rtp_buffer.get_payload_type();
         drop(rtp_buffer);
@@ -390,7 +390,7 @@ impl SinkHandler {
         };
 
         let (seq, rtptime, pt) = {
-            let mut rtp_buffer =
+            let rtp_buffer =
                 RTPBuffer::from_buffer_readable(&buffer).map_err(|_| gst::FlowError::Error)?;
             (
                 rtp_buffer.get_seq(),
