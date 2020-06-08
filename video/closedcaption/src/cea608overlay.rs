@@ -186,7 +186,8 @@ impl Cea608Overlay {
             gst_video::VideoFormat::Argb,
             width as u32,
             height as u32,
-        );
+        )
+        .unwrap();
         let buffer = buffer.into_mapped_buffer_writable().unwrap();
         let buffer = {
             let buffer_ptr = unsafe { buffer.get_buffer().as_ptr() };

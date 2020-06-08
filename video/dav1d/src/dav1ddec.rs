@@ -235,7 +235,8 @@ impl Dav1dDec {
                 info.height(),
                 &offsets,
                 &strides[..],
-            );
+            )
+            .unwrap();
         }
 
         let duration = pic.duration() as u64;
