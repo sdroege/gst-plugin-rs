@@ -384,6 +384,7 @@ impl TtToCea608 {
                 Mode::RollUp4 => roll_up_4(&mut buffers),
                 _ => (),
             }
+            preamble_buffer(&mut buffers, 14, 0);
             state.send_roll_up = false;
             state.roll_up_column = 0;
         }
@@ -416,7 +417,14 @@ impl TtToCea608 {
         let mut prev_char: u16 = if state.settings.mode == Mode::PopOn || col == 0 {
             0
         } else if col >= 31 {
+            match state.settings.mode {
+                Mode::RollUp2 => roll_up_2(&mut buffers),
+                Mode::RollUp3 => roll_up_3(&mut buffers),
+                Mode::RollUp4 => roll_up_4(&mut buffers),
+                _ => (),
+            }
             carriage_return(&mut buffers);
+            preamble_buffer(&mut buffers, 14, 0);
             col = 0;
             0
         } else {
@@ -508,7 +516,15 @@ impl TtToCea608 {
                     prev_char = 0;
                 }
 
+                match state.settings.mode {
+                    Mode::RollUp2 => roll_up_2(&mut buffers),
+                    Mode::RollUp3 => roll_up_3(&mut buffers),
+                    Mode::RollUp4 => roll_up_4(&mut buffers),
+                    _ => (),
+                }
+
                 carriage_return(&mut buffers);
+                preamble_buffer(&mut buffers, 14, 0);
                 col = 0;
             }
         }

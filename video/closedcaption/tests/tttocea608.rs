@@ -316,14 +316,16 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     let inbuf = new_timed_buffer(&"World", gst::SECOND, 1.into());
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 10] = [
+    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 12] = [
         (1_000_000_000.into(), 33_333_333.into(), [0x94, 0x2c]), /* erase_display_memory */
         (1_033_333_333.into(), 33_333_334.into(), [0x94, 0x2c]), /* control doubled */
         (1_066_666_667.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
         (1_100_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* control doubled */
-        (1_133_333_333.into(), 33_333_334.into(), [0xc8, 0xe5]), /* H e */
-        (1_166_666_667.into(), 33_333_333.into(), [0xec, 0xec]), /* l l */
-        (1_200_000_000.into(), 33_333_333.into(), [0xef, 0x80]), /* o, nil */
+        (1_133_333_333.into(), 33_333_334.into(), [0x94, 0xe0]), /* preamble */
+        (1_166_666_667.into(), 33_333_333.into(), [0x94, 0xe0]), /* control doubled */
+        (1_200_000_000.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
+        (1_233_333_333.into(), 33_333_334.into(), [0xec, 0xec]), /* l l */
+        (1_266_666_667.into(), 33_333_333.into(), [0xef, 0x80]), /* o, nil */
         (2_000_000_000.into(), 0.into(), [0x20, 0x57]),          /* SPACE, W */
         (2_000_000_000.into(), 0.into(), [0xef, 0xf2]),          /* o, r */
         (2_000_000_000.into(), 0.into(), [0xec, 0x64]),          /* l, d */
@@ -355,7 +357,7 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
 
     let expected_gaps: [(gst::ClockTime, gst::ClockTime); 2] = [
         (0.into(), 1_000_000_000.into()),
-        (1_233_333_333.into(), 766_666_667.into()),
+        (1_300_000_000.into(), 700_000_000.into()),
     ];
 
     for e in &expected_gaps {
