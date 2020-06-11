@@ -157,6 +157,14 @@ rustfmt:
     - cargo fmt --version
     - cargo fmt -- --color=always --check
 
+check commits:
+  extends: .img-stable
+  stage: "lint"
+  rules:
+    - when: 'always'
+  script:
+    - ci-fairy check-commits --textwidth 0 --no-signed-off-by
+
 clippy:
   extends: .img-stable
   stage: 'extras'
