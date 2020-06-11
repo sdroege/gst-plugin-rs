@@ -773,7 +773,7 @@ impl FallbackSrc {
             .get_pad_template(if is_audio { "audio" } else { "video" })
             .unwrap();
         let ghostpad =
-            gst::GhostPad::new_from_template(Some(&templ.get_name()), &srcpad, &templ).unwrap();
+            gst::GhostPad::from_template(Some(&templ.get_name()), &srcpad, &templ).unwrap();
 
         element.add_pad(&ghostpad).unwrap();
 
@@ -2215,7 +2215,7 @@ mod custom_source {
                 (element.get_pad_template("video_%u").unwrap(), name)
             };
 
-            let ghost_pad = gst::GhostPad::new_from_template(Some(&name), pad, &templ).unwrap();
+            let ghost_pad = gst::GhostPad::from_template(Some(&name), pad, &templ).unwrap();
 
             let stream = Stream {
                 source_pad: pad.clone(),

@@ -392,7 +392,7 @@ impl ObjectSubclass for FallbackSwitch {
         );
 
         let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new_with_gtype(
+        let src_pad_template = gst::PadTemplate::with_gtype(
             "src",
             gst::PadDirection::Src,
             gst::PadPresence::Always,
@@ -402,7 +402,7 @@ impl ObjectSubclass for FallbackSwitch {
         .unwrap();
         klass.add_pad_template(src_pad_template);
 
-        let sink_pad_template = gst::PadTemplate::new_with_gtype(
+        let sink_pad_template = gst::PadTemplate::with_gtype(
             "sink",
             gst::PadDirection::Sink,
             gst::PadPresence::Always,
@@ -412,7 +412,7 @@ impl ObjectSubclass for FallbackSwitch {
         .unwrap();
         klass.add_pad_template(sink_pad_template);
 
-        let fallbacksink_pad_template = gst::PadTemplate::new_with_gtype(
+        let fallbacksink_pad_template = gst::PadTemplate::with_gtype(
             "fallback_sink",
             gst::PadDirection::Sink,
             gst::PadPresence::Request,

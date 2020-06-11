@@ -1537,9 +1537,9 @@ impl ObjectSubclass for ToggleRecord {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, Some("sink"));
+        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, Some("src"));
+        let srcpad = gst::Pad::from_template(&templ, Some("src"));
 
         ToggleRecord::set_pad_functions(&sinkpad, &srcpad);
 
@@ -1734,10 +1734,10 @@ impl ElementImpl for ToggleRecord {
         *pad_count += 1;
 
         let templ = element.get_pad_template("sink_%u").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, Some(format!("sink_{}", id).as_str()));
+        let sinkpad = gst::Pad::from_template(&templ, Some(format!("sink_{}", id).as_str()));
 
         let templ = element.get_pad_template("src_%u").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, Some(format!("src_{}", id).as_str()));
+        let srcpad = gst::Pad::from_template(&templ, Some(format!("src_{}", id).as_str()));
 
         ToggleRecord::set_pad_functions(&sinkpad, &srcpad);
 

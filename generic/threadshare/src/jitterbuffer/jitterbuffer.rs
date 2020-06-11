@@ -1478,11 +1478,11 @@ impl ObjectSubclass for JitterBuffer {
 
         Self {
             sink_pad: PadSink::new(
-                gst::Pad::new_from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
                 sink_pad_handler.clone(),
             ),
             src_pad: PadSrc::new(
-                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
                 src_pad_handler.clone(),
             ),
             sink_pad_handler,

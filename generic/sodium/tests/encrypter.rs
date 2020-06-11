@@ -83,7 +83,7 @@ fn encrypt_file() {
     enc.set_property("block-size", &1024u32)
         .expect("failed to set property");
 
-    let mut h = gst_check::Harness::new_with_element(&enc, None, None);
+    let mut h = gst_check::Harness::with_element(&enc, None, None);
     h.add_element_src_pad(&enc.get_static_pad("src").expect("failed to get src pad"));
     h.add_element_sink_pad(&enc.get_static_pad("sink").expect("failed to get src pad"));
     h.set_src_caps_str("application/x-sodium-encrypted");

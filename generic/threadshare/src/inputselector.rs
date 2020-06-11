@@ -470,7 +470,7 @@ impl ObjectSubclass for InputSelector {
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         Self {
             src_pad: PadSrc::new(
-                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
                 InputSelectorPadSrcHandler,
             ),
             state: Mutex::new(State::default()),
@@ -598,7 +598,7 @@ impl ElementImpl for InputSelector {
         let mut state = self.state.lock().unwrap();
         let mut pads = self.pads.lock().unwrap();
         let sink_pad =
-            gst::Pad::new_from_template(&templ, Some(format!("sink_{}", pads.pad_serial).as_str()));
+            gst::Pad::from_template(&templ, Some(format!("sink_{}", pads.pad_serial).as_str()));
         pads.pad_serial += 1;
         sink_pad.set_active(true).unwrap();
         element.add_pad(&sink_pad).unwrap();

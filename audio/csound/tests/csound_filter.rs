@@ -68,7 +68,7 @@ fn build_harness(src_caps: gst::Caps, sink_caps: gst::Caps, csd: &str) -> gst_ch
     let filter = gst::ElementFactory::make("csoundfilter", None).unwrap();
     filter.set_property("csd-text", &csd).unwrap();
 
-    let mut h = gst_check::Harness::new_with_element(&filter, Some("sink"), Some("src"));
+    let mut h = gst_check::Harness::with_element(&filter, Some("sink"), Some("src"));
 
     h.set_caps(src_caps, sink_caps);
     h

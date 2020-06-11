@@ -325,7 +325,7 @@ impl ObjectSubclass for ElementSrcTest {
     fn new_with_class(klass: &glib::subclass::simple::ClassStruct<Self>) -> Self {
         ElementSrcTest {
             src_pad: PadSrc::new(
-                gst::Pad::new_from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
                 PadSrcTestHandler,
             ),
             task: Task::default(),
@@ -639,7 +639,7 @@ impl ObjectSubclass for ElementSinkTest {
     fn new_with_class(klass: &glib::subclass::simple::ClassStruct<Self>) -> Self {
         ElementSinkTest {
             sink_pad: PadSink::new(
-                gst::Pad::new_from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
                 PadSinkTestHandler,
             ),
             flushing: AtomicBool::new(true),

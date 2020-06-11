@@ -34,8 +34,8 @@ fn test_active_pad() {
 
     let is = gst::ElementFactory::make("ts-input-selector", None).unwrap();
 
-    let mut h1 = gst_check::Harness::new_with_element(&is, Some("sink_%u"), Some("src"));
-    let mut h2 = gst_check::Harness::new_with_element(&is, Some("sink_%u"), None);
+    let mut h1 = gst_check::Harness::with_element(&is, Some("sink_%u"), Some("src"));
+    let mut h2 = gst_check::Harness::with_element(&is, Some("sink_%u"), None);
 
     let active_pad = is
         .get_property("active-pad")

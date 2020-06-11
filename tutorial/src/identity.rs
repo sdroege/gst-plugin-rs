@@ -175,9 +175,9 @@ impl ObjectSubclass for Identity {
         // Create our two pads from the templates that were registered with
         // the class
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, Some("sink"));
+        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, Some("src"));
+        let srcpad = gst::Pad::from_template(&templ, Some("src"));
 
         // And then set all our pad functions for handling anything that happens
         // on these pads

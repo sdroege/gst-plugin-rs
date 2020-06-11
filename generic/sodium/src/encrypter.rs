@@ -425,9 +425,9 @@ impl ObjectSubclass for Encrypter {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, Some("sink"));
+        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, Some("src"));
+        let srcpad = gst::Pad::from_template(&templ, Some("src"));
 
         Encrypter::set_pad_functions(&sinkpad, &srcpad);
         let props = Mutex::new(Props::default());

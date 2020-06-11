@@ -279,10 +279,10 @@ impl ObjectSubclass for TextWrap {
 
     fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::new_from_template(&templ, Some("sink"));
+        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
         sinkpad.set_pad_flags(gst::PadFlags::PROXY_CAPS);
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::new_from_template(&templ, Some("src"));
+        let srcpad = gst::Pad::from_template(&templ, Some("src"));
         srcpad.set_pad_flags(gst::PadFlags::PROXY_CAPS);
 
         srcpad.use_fixed_caps();
