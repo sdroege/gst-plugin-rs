@@ -1744,7 +1744,7 @@ impl ObjectSubclass for AudioLoudNorm {
 
     glib_object_subclass!();
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
         sinkpad.set_pad_flags(gst::PadFlags::PROXY_CAPS);

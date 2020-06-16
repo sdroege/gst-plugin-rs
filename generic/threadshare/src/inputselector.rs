@@ -467,7 +467,7 @@ impl ObjectSubclass for InputSelector {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         Self {
             src_pad: PadSrc::new(
                 gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),

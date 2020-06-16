@@ -789,7 +789,7 @@ impl ObjectSubclass for Queue {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         Self {
             sink_pad: PadSink::new(
                 gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),

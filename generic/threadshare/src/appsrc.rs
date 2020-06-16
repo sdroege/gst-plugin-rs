@@ -625,7 +625,7 @@ impl ObjectSubclass for AppSrc {
         );
     }
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let src_pad_handler = AppSrcPadHandler::default();
 
         Self {

@@ -322,7 +322,7 @@ impl ObjectSubclass for ElementSrcTest {
         klass.install_properties(&SRC_PROPERTIES);
     }
 
-    fn new_with_class(klass: &glib::subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &glib::subclass::simple::ClassStruct<Self>) -> Self {
         ElementSrcTest {
             src_pad: PadSrc::new(
                 gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
@@ -636,7 +636,7 @@ impl ObjectSubclass for ElementSinkTest {
         klass.install_properties(&SINK_PROPERTIES);
     }
 
-    fn new_with_class(klass: &glib::subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &glib::subclass::simple::ClassStruct<Self>) -> Self {
         ElementSinkTest {
             sink_pad: PadSink::new(
                 gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),

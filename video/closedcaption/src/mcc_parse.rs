@@ -1172,7 +1172,7 @@ impl ObjectSubclass for MccParse {
 
     glib_object_subclass!();
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
         let templ = klass.get_pad_template("src").unwrap();

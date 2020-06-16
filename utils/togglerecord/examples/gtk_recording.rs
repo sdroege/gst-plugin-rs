@@ -219,9 +219,9 @@ fn create_ui(app: &gtk::Application) {
     vbox.pack_start(&hbox, false, false, 5);
 
     let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    let record_button = gtk::Button::new_with_label("Record");
+    let record_button = gtk::Button::with_label("Record");
     hbox.pack_start(&record_button, true, true, 5);
-    let finish_button = gtk::Button::new_with_label("Finish");
+    let finish_button = gtk::Button::with_label("Finish");
     hbox.pack_start(&finish_button, true, true, 5);
     vbox.pack_start(&hbox, false, false, 5);
 

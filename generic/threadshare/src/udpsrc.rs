@@ -456,12 +456,12 @@ impl TaskImpl for UdpSrcTask {
                     .retrieve_sender_address
                 {
                     let inet_addr = match saddr.ip() {
-                        IpAddr::V4(ip) => gio::InetAddress::new_from_bytes(
-                            gio::InetAddressBytes::V4(&ip.octets()),
-                        ),
-                        IpAddr::V6(ip) => gio::InetAddress::new_from_bytes(
-                            gio::InetAddressBytes::V6(&ip.octets()),
-                        ),
+                        IpAddr::V4(ip) => {
+                            gio::InetAddress::from_bytes(gio::InetAddressBytes::V4(&ip.octets()))
+                        }
+                        IpAddr::V6(ip) => {
+                            gio::InetAddress::from_bytes(gio::InetAddressBytes::V6(&ip.octets()))
+                        }
                     };
                     let inet_socket_addr = &gio::InetSocketAddress::new(&inet_addr, saddr.port());
                     NetAddressMeta::add(buffer.get_mut().unwrap(), inet_socket_addr);
@@ -818,7 +818,7 @@ impl ObjectSubclass for UdpSrc {
         }
     }
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let src_pad_handler = UdpSrcPadHandler::default();
 
         Self {

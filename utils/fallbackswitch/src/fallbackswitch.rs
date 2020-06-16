@@ -359,7 +359,7 @@ impl ObjectSubclass for FallbackSwitch {
 
     glib_object_subclass!();
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad: gst_base::AggregatorPad = glib::Object::new(
             gst_base::AggregatorPad::static_type(),

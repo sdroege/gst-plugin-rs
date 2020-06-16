@@ -117,7 +117,7 @@ fn create_ui(app: &gtk::Application) {
     let position_label = gtk::Label::new(Some("Position: 00:00:00"));
     vbox.pack_start(&position_label, true, true, 5);
 
-    let drop_button = gtk::ToggleButton::new_with_label("Drop Signal");
+    let drop_button = gtk::ToggleButton::with_label("Drop Signal");
     vbox.pack_start(&drop_button, true, true, 5);
 
     window.add(&vbox);

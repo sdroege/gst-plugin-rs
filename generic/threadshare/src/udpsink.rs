@@ -1288,7 +1288,7 @@ impl ObjectSubclass for UdpSink {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let settings = Arc::new(StdMutex::new(Settings::default()));
         let sink_pad_handler = UdpSinkPadHandler::new(Arc::clone(&settings));
 

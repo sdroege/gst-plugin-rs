@@ -680,7 +680,7 @@ impl ObjectSubclass for ProxySink {
         klass.install_properties(&PROPERTIES_SINK);
     }
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         Self {
             sink_pad: PadSink::new(
                 gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
@@ -1201,7 +1201,7 @@ impl ObjectSubclass for ProxySrc {
         unreachable!()
     }
 
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         Self {
             src_pad: PadSrc::new(
                 gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),

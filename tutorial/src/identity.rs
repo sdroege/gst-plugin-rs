@@ -171,7 +171,7 @@ impl ObjectSubclass for Identity {
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here and also get the class struct passed in case it's needed
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         // Create our two pads from the templates that were registered with
         // the class
         let templ = klass.get_pad_template("sink").unwrap();

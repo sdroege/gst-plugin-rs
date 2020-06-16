@@ -81,7 +81,7 @@ impl ObjectSubclass for ProgressBin {
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here and also get the class struct passed in case it's needed
-    fn new_with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         // Create our two ghostpads from the templates that were registered with
         // the class. We don't provide a target for them yet because we can only
         // do so after the progressreport element was added to the bin.
