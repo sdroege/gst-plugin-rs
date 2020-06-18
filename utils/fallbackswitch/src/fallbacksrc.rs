@@ -1877,6 +1877,8 @@ impl FallbackSrc {
                         });
                     })
                     .expect("failed to wait async");
+
+                state.source_pending_timeout = Some(timeout);
             }
 
             if state.source_retry_timeout.is_none() {
