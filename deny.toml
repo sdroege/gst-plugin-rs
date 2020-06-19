@@ -72,6 +72,12 @@ version = "0.2"
 name = "winapi"
 version = "0.2"
 
+# ignore duplicated deps because of image depending on old num-rational
+# https://github.com/image-rs/image/pull/1263
+[[bans.skip]]
+name = "num-rational"
+version = "0.2"
+
 # ignore duplicated deps because of chrono, cookie, cookie_store, hyper,
 # hyperx, reqwest depending on old time
 # https://github.com/chronotope/chrono/issues/400
