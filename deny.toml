@@ -29,12 +29,6 @@ confidence-threshold = 0.8
 multiple-versions = "deny"
 highlight = "all"
 
-# ignore duplicated deps because of nom 5.0 depending on old lexical-core
-# https://github.com/Geal/nom/issues/1157
-[[bans.skip]]
-name = "arrayvec"
-version = "0.4"
-
 # ignore duplicated deps because of hyperx and rust-argon2 via redox_users
 # depending on old base64
 # https://github.com/dekellum/hyperx/pull/20
@@ -67,12 +61,6 @@ version = "0.1"
 [[bans.skip]]
 name = "percent-encoding"
 version = "1.0"
-
-# ignore duplicated deps because of rav1e depending on old itertools
-# https://github.com/xiph/rav1e/pull/2261
-[[bans.skip]]
-name = "itertools"
-version = "0.8"
 
 # ignore duplicated deps because of mio-named-pipes via mio depending on old
 # miow
