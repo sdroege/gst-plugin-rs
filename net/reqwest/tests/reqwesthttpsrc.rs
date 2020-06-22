@@ -65,21 +65,26 @@ impl Harness {
         let (sender, receiver) = mpsc::sync_channel(0);
 
         // Sink pad that receives everything the source is generating
-        let pad = gst::Pad::new(Some("sink"), gst::PadDirection::Sink);
+        let pad = gst::Pad::builder(Some("sink"), gst::PadDirection::Sink)
+            .chain_function({
+                let sender_clone = sender.clone();
+                move |_pad, _parent, buffer| {
+                    let _ = sender_clone.send(Message::Buffer(buffer));
+                    Ok(gst::FlowSuccess::Ok)
+                }
+            })
+            .event_function({
+                let sender_clone = sender.clone();
+                move |_pad, _parent, event| {
+                    let _ = sender_clone.send(Message::Event(event));
+                    true
+                }
+            })
+            .build();
+
         let srcpad = src.get_static_pad("src").unwrap();
         srcpad.link(&pad).unwrap();
 
-        // Collect all buffers, events and messages sent from the source
-        let sender_clone = sender.clone();
-        pad.set_chain_function(move |_pad, _parent, buffer| {
-            let _ = sender_clone.send(Message::Buffer(buffer));
-            Ok(gst::FlowSuccess::Ok)
-        });
-        let sender_clone = sender.clone();
-        pad.set_event_function(move |_pad, _parent, event| {
-            let _ = sender_clone.send(Message::Event(event));
-            true
-        });
         let bus = gst::Bus::new();
         bus.set_flushing(false);
         src.set_bus(Some(&bus));

@@ -704,7 +704,11 @@ impl FallbackSrc {
         };
 
         input
-            .add_pad(&gst::GhostPad::new(Some("src"), &srcpad).unwrap())
+            .add_pad(
+                &gst::GhostPad::builder(Some("src"), gst::PadDirection::Src)
+                    .build_with_target(&srcpad)
+                    .unwrap(),
+            )
             .unwrap();
 
         Ok(input.upcast())
@@ -724,7 +728,11 @@ impl FallbackSrc {
 
         let srcpad = audiotestsrc.get_static_pad("src").unwrap();
         input
-            .add_pad(&gst::GhostPad::new(Some("src"), &srcpad).unwrap())
+            .add_pad(
+                &gst::GhostPad::builder(Some("src"), gst::PadDirection::Src)
+                    .build_with_target(&srcpad)
+                    .unwrap(),
+            )
             .unwrap();
 
         Ok(input.upcast())
@@ -772,22 +780,27 @@ impl FallbackSrc {
         let templ = element
             .get_pad_template(if is_audio { "audio" } else { "video" })
             .unwrap();
-        let ghostpad =
-            gst::GhostPad::from_template(Some(&templ.get_name()), &srcpad, &templ).unwrap();
-
-        element.add_pad(&ghostpad).unwrap();
+        let ghostpad = gst::GhostPad::builder_with_template(&templ, Some(&templ.get_name()))
+            .build_with_target(&srcpad)
+            .unwrap();
 
         let proxypad = ghostpad.get_internal().expect("no internal pad");
         let element_weak = element.downgrade();
-        proxypad.set_chain_function(move |pad, _parent, buffer| {
-            let element = match element_weak.upgrade() {
-                None => return Err(gst::FlowError::Flushing),
-                Some(element) => element,
-            };
+        // Safety: Nothing else can have a reference to the proxy pad yet apart from the ghost pad
+        // itself, so changing the chain function is still safe.
+        unsafe {
+            proxypad.set_chain_function(move |pad, _parent, buffer| {
+                let element = match element_weak.upgrade() {
+                    None => return Err(gst::FlowError::Flushing),
+                    Some(element) => element,
+                };
 
-            let src = FallbackSrc::from_instance(&element);
-            src.proxy_pad_chain(&element, pad, buffer)
-        });
+                let src = FallbackSrc::from_instance(&element);
+                src.proxy_pad_chain(&element, pad, buffer)
+            });
+        }
+
+        element.add_pad(&ghostpad).unwrap();
 
         Ok(Stream {
             fallback_input,
@@ -2215,7 +2228,9 @@ mod custom_source {
                 (element.get_pad_template("video_%u").unwrap(), name)
             };
 
-            let ghost_pad = gst::GhostPad::from_template(Some(&name), pad, &templ).unwrap();
+            let ghost_pad = gst::GhostPad::builder_with_template(&templ, Some(&name))
+                .build_with_target(pad)
+                .unwrap();
 
             let stream = Stream {
                 source_pad: pad.clone(),

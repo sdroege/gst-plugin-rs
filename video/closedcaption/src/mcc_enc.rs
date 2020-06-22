@@ -105,38 +105,6 @@ lazy_static! {
 }
 
 impl MccEnc {
-    fn set_pad_functions(sinkpad: &gst::Pad, srcpad: &gst::Pad) {
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            MccEnc::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |enc, element| enc.sink_chain(pad, element, buffer),
-            )
-        });
-        sinkpad.set_event_function(|pad, parent, event| {
-            MccEnc::catch_panic_pad_function(
-                parent,
-                || false,
-                |enc, element| enc.sink_event(pad, element, event),
-            )
-        });
-
-        srcpad.set_event_function(|pad, parent, event| {
-            MccEnc::catch_panic_pad_function(
-                parent,
-                || false,
-                |enc, element| enc.src_event(pad, element, event),
-            )
-        });
-        srcpad.set_query_function(|pad, parent, query| {
-            MccEnc::catch_panic_pad_function(
-                parent,
-                || false,
-                |enc, element| enc.src_query(pad, element, query),
-            )
-        });
-    }
-
     #[allow(clippy::write_with_newline)]
     fn generate_headers(&self, _state: &State, buffer: &mut Vec<u8>) -> Result<(), gst::FlowError> {
         let settings = self.settings.lock().unwrap();
@@ -502,11 +470,40 @@ impl ObjectSubclass for MccEnc {
 
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
-        let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                MccEnc::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |enc, element| enc.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                MccEnc::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |enc, element| enc.sink_event(pad, element, event),
+                )
+            })
+            .build();
 
-        MccEnc::set_pad_functions(&sinkpad, &srcpad);
+        let templ = klass.get_pad_template("src").unwrap();
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .event_function(|pad, parent, event| {
+                MccEnc::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |enc, element| enc.src_event(pad, element, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                MccEnc::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |enc, element| enc.src_query(pad, element, query),
+                )
+            })
+            .build();
 
         Self {
             srcpad,

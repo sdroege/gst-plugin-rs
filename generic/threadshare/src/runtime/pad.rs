@@ -385,69 +385,71 @@ impl PadSrc {
     }
 
     fn init_pad_functions<H: PadSrcHandler>(&self, handler: H) {
-        let handler_clone = handler.clone();
-        let inner_arc = Arc::clone(&self.0);
-        self.0
-            .gst_pad()
-            .set_activate_function(move |gst_pad, parent| {
-                let handler = handler_clone.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || {
-                        gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSrc activate");
-                        Err(gst_loggable_error!(RUNTIME_CAT, "Panic in PadSrc activate"))
-                    },
-                    move |imp, element| {
-                        let this_ref = PadSrcRef::new(inner_arc);
-                        handler.src_activate(&this_ref, imp, element)
-                    },
-                )
-            });
+        // FIXME: Do this better
+        unsafe {
+            let handler_clone = handler.clone();
+            let inner_arc = Arc::clone(&self.0);
+            self.0
+                .gst_pad()
+                .set_activate_function(move |gst_pad, parent| {
+                    let handler = handler_clone.clone();
+                    let inner_arc = inner_arc.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || {
+                            gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSrc activate");
+                            Err(gst_loggable_error!(RUNTIME_CAT, "Panic in PadSrc activate"))
+                        },
+                        move |imp, element| {
+                            let this_ref = PadSrcRef::new(inner_arc);
+                            handler.src_activate(&this_ref, imp, element)
+                        },
+                    )
+                });
 
-        let handler_clone = handler.clone();
-        let inner_arc = Arc::clone(&self.0);
-        self.gst_pad()
-            .set_activatemode_function(move |gst_pad, parent, mode, active| {
-                let handler = handler_clone.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || {
-                        gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSrc activatemode");
-                        Err(gst_loggable_error!(
-                            RUNTIME_CAT,
-                            "Panic in PadSrc activatemode"
-                        ))
-                    },
-                    move |imp, element| {
-                        let this_ref = PadSrcRef::new(inner_arc);
-                        this_ref.activate_mode_hook(mode, active)?;
-                        handler.src_activatemode(&this_ref, imp, element, mode, active)
-                    },
-                )
-            });
+            let handler_clone = handler.clone();
+            let inner_arc = Arc::clone(&self.0);
+            self.gst_pad()
+                .set_activatemode_function(move |gst_pad, parent, mode, active| {
+                    let handler = handler_clone.clone();
+                    let inner_arc = inner_arc.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || {
+                            gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSrc activatemode");
+                            Err(gst_loggable_error!(
+                                RUNTIME_CAT,
+                                "Panic in PadSrc activatemode"
+                            ))
+                        },
+                        move |imp, element| {
+                            let this_ref = PadSrcRef::new(inner_arc);
+                            this_ref.activate_mode_hook(mode, active)?;
+                            handler.src_activatemode(&this_ref, imp, element, mode, active)
+                        },
+                    )
+                });
 
-        // No need to `set_event_function` since `set_event_full_function`
-        // overrides it and dispatches to `src_event` when necessary
-        let handler_clone = handler.clone();
-        let inner_arc = Arc::clone(&self.0);
-        self.gst_pad()
-            .set_event_full_function(move |_gst_pad, parent, event| {
-                let handler = handler_clone.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || Err(FlowError::Error),
-                    move |imp, element| {
-                        let this_ref = PadSrcRef::new(inner_arc);
-                        handler.src_event_full(&this_ref, imp, &element, event)
-                    },
-                )
-            });
+            // No need to `set_event_function` since `set_event_full_function`
+            // overrides it and dispatches to `src_event` when necessary
+            let handler_clone = handler.clone();
+            let inner_arc = Arc::clone(&self.0);
+            self.gst_pad()
+                .set_event_full_function(move |_gst_pad, parent, event| {
+                    let handler = handler_clone.clone();
+                    let inner_arc = inner_arc.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || Err(FlowError::Error),
+                        move |imp, element| {
+                            let this_ref = PadSrcRef::new(inner_arc);
+                            handler.src_event_full(&this_ref, imp, &element, event)
+                        },
+                    )
+                });
 
-        let inner_arc = Arc::clone(&self.0);
-        self.gst_pad()
+            let inner_arc = Arc::clone(&self.0);
+            self.gst_pad()
             .set_query_function(move |_gst_pad, parent, query| {
                 let handler = handler.clone();
                 let inner_arc = inner_arc.clone();
@@ -465,25 +467,29 @@ impl PadSrc {
                     },
                 )
             });
+        }
     }
 }
 
 impl Drop for PadSrc {
     fn drop(&mut self) {
-        self.gst_pad()
-            .set_activate_function(move |_gst_pad, _parent| {
-                Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
-            });
-        self.gst_pad()
-            .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
-                Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
-            });
-        self.gst_pad()
-            .set_event_function(move |_gst_pad, _parent, _event| false);
-        self.gst_pad()
-            .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
-        self.gst_pad()
-            .set_query_function(move |_gst_pad, _parent, _query| false);
+        // FIXME: Do this better
+        unsafe {
+            self.gst_pad()
+                .set_activate_function(move |_gst_pad, _parent| {
+                    Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
+                });
+            self.gst_pad()
+                .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
+                    Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
+                });
+            self.gst_pad()
+                .set_event_function(move |_gst_pad, _parent, _event| false);
+            self.gst_pad()
+                .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
+            self.gst_pad()
+                .set_query_function(move |_gst_pad, _parent, _query| false);
+        }
     }
 }
 
@@ -781,134 +787,64 @@ impl PadSink {
     }
 
     fn init_pad_functions<H: PadSinkHandler>(&self, handler: H) {
-        let handler_clone = handler.clone();
-        let inner_arc = Arc::clone(&self.0);
-        self.gst_pad()
-            .set_activate_function(move |gst_pad, parent| {
-                let handler = handler_clone.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || {
-                        gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSink activate");
-                        Err(gst_loggable_error!(
-                            RUNTIME_CAT,
-                            "Panic in PadSink activate"
-                        ))
-                    },
-                    move |imp, element| {
-                        let this_ref = PadSinkRef::new(inner_arc);
-                        handler.sink_activate(&this_ref, imp, element)
-                    },
-                )
-            });
-
-        let handler_clone = handler.clone();
-        let inner_arc = Arc::clone(&self.0);
-        self.gst_pad()
-            .set_activatemode_function(move |gst_pad, parent, mode, active| {
-                let handler = handler_clone.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || {
-                        gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSink activatemode");
-                        Err(gst_loggable_error!(
-                            RUNTIME_CAT,
-                            "Panic in PadSink activatemode"
-                        ))
-                    },
-                    move |imp, element| {
-                        let this_ref = PadSinkRef::new(inner_arc);
-                        this_ref.activate_mode_hook(mode, active)?;
-
-                        handler.sink_activatemode(&this_ref, imp, element, mode, active)
-                    },
-                )
-            });
-
-        let handler_clone = handler.clone();
-        let inner_arc = Arc::clone(&self.0);
-        self.gst_pad()
-            .set_chain_function(move |_gst_pad, parent, buffer| {
-                let handler = handler_clone.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || Err(FlowError::Error),
-                    move |imp, element| {
-                        if Context::current_has_sub_tasks() {
-                            let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
-                            let handler = handler.clone();
-                            let element = element.clone();
-                            let delayed_fut = async move {
-                                let imp =
-                                    <H::ElementImpl as ObjectSubclass>::from_instance(&element);
-                                let this_ref =
-                                    this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
-                                handler.sink_chain(&this_ref, imp, &element, buffer).await
-                            };
-                            let _ = Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
-
-                            Ok(gst::FlowSuccess::Ok)
-                        } else {
+        // FIXME: Do this better
+        unsafe {
+            let handler_clone = handler.clone();
+            let inner_arc = Arc::clone(&self.0);
+            self.gst_pad()
+                .set_activate_function(move |gst_pad, parent| {
+                    let handler = handler_clone.clone();
+                    let inner_arc = inner_arc.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || {
+                            gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSink activate");
+                            Err(gst_loggable_error!(
+                                RUNTIME_CAT,
+                                "Panic in PadSink activate"
+                            ))
+                        },
+                        move |imp, element| {
                             let this_ref = PadSinkRef::new(inner_arc);
-                            let chain_fut = handler.sink_chain(&this_ref, imp, &element, buffer);
-                            this_ref.handle_future(chain_fut)
-                        }
-                    },
-                )
-            });
+                            handler.sink_activate(&this_ref, imp, element)
+                        },
+                    )
+                });
 
-        let handler_clone = handler.clone();
-        let inner_arc = Arc::clone(&self.0);
-        self.gst_pad()
-            .set_chain_list_function(move |_gst_pad, parent, list| {
-                let handler = handler_clone.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || Err(FlowError::Error),
-                    move |imp, element| {
-                        if Context::current_has_sub_tasks() {
-                            let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
-                            let handler = handler.clone();
-                            let element = element.clone();
-                            let delayed_fut = async move {
-                                let imp =
-                                    <H::ElementImpl as ObjectSubclass>::from_instance(&element);
-                                let this_ref =
-                                    this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
-                                handler
-                                    .sink_chain_list(&this_ref, imp, &element, list)
-                                    .await
-                            };
-                            let _ = Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
-
-                            Ok(gst::FlowSuccess::Ok)
-                        } else {
+            let handler_clone = handler.clone();
+            let inner_arc = Arc::clone(&self.0);
+            self.gst_pad()
+                .set_activatemode_function(move |gst_pad, parent, mode, active| {
+                    let handler = handler_clone.clone();
+                    let inner_arc = inner_arc.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || {
+                            gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSink activatemode");
+                            Err(gst_loggable_error!(
+                                RUNTIME_CAT,
+                                "Panic in PadSink activatemode"
+                            ))
+                        },
+                        move |imp, element| {
                             let this_ref = PadSinkRef::new(inner_arc);
-                            let chain_list_fut =
-                                handler.sink_chain_list(&this_ref, imp, &element, list);
-                            this_ref.handle_future(chain_list_fut)
-                        }
-                    },
-                )
-            });
+                            this_ref.activate_mode_hook(mode, active)?;
 
-        // No need to `set_event_function` since `set_event_full_function`
-        // overrides it and dispatches to `sink_event` when necessary
-        let handler_clone = handler.clone();
-        let inner_arc = Arc::clone(&self.0);
-        self.gst_pad()
-            .set_event_full_function(move |_gst_pad, parent, event| {
-                let handler = handler_clone.clone();
-                let inner_arc = inner_arc.clone();
-                H::ElementImpl::catch_panic_pad_function(
-                    parent,
-                    || Err(FlowError::Error),
-                    move |imp, element| {
-                        if event.is_serialized() {
+                            handler.sink_activatemode(&this_ref, imp, element, mode, active)
+                        },
+                    )
+                });
+
+            let handler_clone = handler.clone();
+            let inner_arc = Arc::clone(&self.0);
+            self.gst_pad()
+                .set_chain_function(move |_gst_pad, parent, buffer| {
+                    let handler = handler_clone.clone();
+                    let inner_arc = inner_arc.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || Err(FlowError::Error),
+                        move |imp, element| {
                             if Context::current_has_sub_tasks() {
                                 let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
                                 let handler = handler.clone();
@@ -918,9 +854,42 @@ impl PadSink {
                                         <H::ElementImpl as ObjectSubclass>::from_instance(&element);
                                     let this_ref =
                                         this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
+                                    handler.sink_chain(&this_ref, imp, &element, buffer).await
+                                };
+                                let _ = Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
 
+                                Ok(gst::FlowSuccess::Ok)
+                            } else {
+                                let this_ref = PadSinkRef::new(inner_arc);
+                                let chain_fut =
+                                    handler.sink_chain(&this_ref, imp, &element, buffer);
+                                this_ref.handle_future(chain_fut)
+                            }
+                        },
+                    )
+                });
+
+            let handler_clone = handler.clone();
+            let inner_arc = Arc::clone(&self.0);
+            self.gst_pad()
+                .set_chain_list_function(move |_gst_pad, parent, list| {
+                    let handler = handler_clone.clone();
+                    let inner_arc = inner_arc.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || Err(FlowError::Error),
+                        move |imp, element| {
+                            if Context::current_has_sub_tasks() {
+                                let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
+                                let handler = handler.clone();
+                                let element = element.clone();
+                                let delayed_fut = async move {
+                                    let imp =
+                                        <H::ElementImpl as ObjectSubclass>::from_instance(&element);
+                                    let this_ref =
+                                        this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
                                     handler
-                                        .sink_event_full_serialized(&this_ref, imp, &element, event)
+                                        .sink_chain_list(&this_ref, imp, &element, list)
                                         .await
                                 };
                                 let _ = Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
@@ -928,20 +897,65 @@ impl PadSink {
                                 Ok(gst::FlowSuccess::Ok)
                             } else {
                                 let this_ref = PadSinkRef::new(inner_arc);
-                                let event_fut = handler
-                                    .sink_event_full_serialized(&this_ref, imp, &element, event);
-                                this_ref.handle_future(event_fut)
+                                let chain_list_fut =
+                                    handler.sink_chain_list(&this_ref, imp, &element, list);
+                                this_ref.handle_future(chain_list_fut)
                             }
-                        } else {
-                            let this_ref = PadSinkRef::new(inner_arc);
-                            handler.sink_event_full(&this_ref, imp, &element, event)
-                        }
-                    },
-                )
-            });
+                        },
+                    )
+                });
 
-        let inner_arc = Arc::clone(&self.0);
-        self.gst_pad()
+            // No need to `set_event_function` since `set_event_full_function`
+            // overrides it and dispatches to `sink_event` when necessary
+            let handler_clone = handler.clone();
+            let inner_arc = Arc::clone(&self.0);
+            self.gst_pad()
+                .set_event_full_function(move |_gst_pad, parent, event| {
+                    let handler = handler_clone.clone();
+                    let inner_arc = inner_arc.clone();
+                    H::ElementImpl::catch_panic_pad_function(
+                        parent,
+                        || Err(FlowError::Error),
+                        move |imp, element| {
+                            if event.is_serialized() {
+                                if Context::current_has_sub_tasks() {
+                                    let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
+                                    let handler = handler.clone();
+                                    let element = element.clone();
+                                    let delayed_fut = async move {
+                                        let imp = <H::ElementImpl as ObjectSubclass>::from_instance(
+                                            &element,
+                                        );
+                                        let this_ref =
+                                            this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
+
+                                        handler
+                                            .sink_event_full_serialized(
+                                                &this_ref, imp, &element, event,
+                                            )
+                                            .await
+                                    };
+                                    let _ =
+                                        Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
+
+                                    Ok(gst::FlowSuccess::Ok)
+                                } else {
+                                    let this_ref = PadSinkRef::new(inner_arc);
+                                    let event_fut = handler.sink_event_full_serialized(
+                                        &this_ref, imp, &element, event,
+                                    );
+                                    this_ref.handle_future(event_fut)
+                                }
+                            } else {
+                                let this_ref = PadSinkRef::new(inner_arc);
+                                handler.sink_event_full(&this_ref, imp, &element, event)
+                            }
+                        },
+                    )
+                });
+
+            let inner_arc = Arc::clone(&self.0);
+            self.gst_pad()
             .set_query_function(move |_gst_pad, parent, query| {
                 let handler = handler.clone();
                 let inner_arc = inner_arc.clone();
@@ -959,29 +973,33 @@ impl PadSink {
                     },
                 )
             });
+        }
     }
 }
 
 impl Drop for PadSink {
     fn drop(&mut self) {
-        self.gst_pad()
-            .set_activate_function(move |_gst_pad, _parent| {
-                Err(gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists"))
-            });
-        self.gst_pad()
-            .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
-                Err(gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists"))
-            });
-        self.gst_pad()
-            .set_chain_function(move |_gst_pad, _parent, _buffer| Err(FlowError::Flushing));
-        self.gst_pad()
-            .set_chain_list_function(move |_gst_pad, _parent, _list| Err(FlowError::Flushing));
-        self.gst_pad()
-            .set_event_function(move |_gst_pad, _parent, _event| false);
-        self.gst_pad()
-            .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
-        self.gst_pad()
-            .set_query_function(move |_gst_pad, _parent, _query| false);
+        // FIXME: Do this better
+        unsafe {
+            self.gst_pad()
+                .set_activate_function(move |_gst_pad, _parent| {
+                    Err(gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists"))
+                });
+            self.gst_pad()
+                .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
+                    Err(gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists"))
+                });
+            self.gst_pad()
+                .set_chain_function(move |_gst_pad, _parent, _buffer| Err(FlowError::Flushing));
+            self.gst_pad()
+                .set_chain_list_function(move |_gst_pad, _parent, _list| Err(FlowError::Flushing));
+            self.gst_pad()
+                .set_event_function(move |_gst_pad, _parent, _event| false);
+            self.gst_pad()
+                .set_event_full_function(move |_gst_pad, _parent, _event| Err(FlowError::Flushing));
+            self.gst_pad()
+                .set_query_function(move |_gst_pad, _parent, _query| false);
+        }
     }
 }
 

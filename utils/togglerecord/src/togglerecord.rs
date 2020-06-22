@@ -362,59 +362,6 @@ lazy_static! {
 }
 
 impl ToggleRecord {
-    fn set_pad_functions(sinkpad: &gst::Pad, srcpad: &gst::Pad) {
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            ToggleRecord::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |togglerecord, element| togglerecord.sink_chain(pad, element, buffer),
-            )
-        });
-        sinkpad.set_event_function(|pad, parent, event| {
-            ToggleRecord::catch_panic_pad_function(
-                parent,
-                || false,
-                |togglerecord, element| togglerecord.sink_event(pad, element, event),
-            )
-        });
-        sinkpad.set_query_function(|pad, parent, query| {
-            ToggleRecord::catch_panic_pad_function(
-                parent,
-                || false,
-                |togglerecord, element| togglerecord.sink_query(pad, element, query),
-            )
-        });
-        sinkpad.set_iterate_internal_links_function(|pad, parent| {
-            ToggleRecord::catch_panic_pad_function(
-                parent,
-                || gst::Iterator::from_vec(vec![]),
-                |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
-            )
-        });
-
-        srcpad.set_event_function(|pad, parent, event| {
-            ToggleRecord::catch_panic_pad_function(
-                parent,
-                || false,
-                |togglerecord, element| togglerecord.src_event(pad, element, event),
-            )
-        });
-        srcpad.set_query_function(|pad, parent, query| {
-            ToggleRecord::catch_panic_pad_function(
-                parent,
-                || false,
-                |togglerecord, element| togglerecord.src_query(pad, element, query),
-            )
-        });
-        srcpad.set_iterate_internal_links_function(|pad, parent| {
-            ToggleRecord::catch_panic_pad_function(
-                parent,
-                || gst::Iterator::from_vec(vec![]),
-                |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
-            )
-        });
-    }
-
     fn handle_main_stream<T: HandleData>(
         &self,
         element: &gst::Element,
@@ -1537,11 +1484,61 @@ impl ObjectSubclass for ToggleRecord {
 
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
-        let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |togglerecord, element| togglerecord.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |togglerecord, element| togglerecord.sink_event(pad, element, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |togglerecord, element| togglerecord.sink_query(pad, element, query),
+                )
+            })
+            .iterate_internal_links_function(|pad, parent| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || gst::Iterator::from_vec(vec![]),
+                    |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
+                )
+            })
+            .build();
 
-        ToggleRecord::set_pad_functions(&sinkpad, &srcpad);
+        let templ = klass.get_pad_template("src").unwrap();
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .event_function(|pad, parent, event| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |togglerecord, element| togglerecord.src_event(pad, element, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |togglerecord, element| togglerecord.src_query(pad, element, query),
+                )
+            })
+            .iterate_internal_links_function(|pad, parent| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || gst::Iterator::from_vec(vec![]),
+                    |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
+                )
+            })
+            .build();
 
         let main_stream = Stream::new(sinkpad, srcpad);
 
@@ -1734,12 +1731,62 @@ impl ElementImpl for ToggleRecord {
         *pad_count += 1;
 
         let templ = element.get_pad_template("sink_%u").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some(format!("sink_{}", id).as_str()));
+        let sinkpad =
+            gst::Pad::builder_with_template(&templ, Some(format!("sink_{}", id).as_str()))
+                .chain_function(|pad, parent, buffer| {
+                    ToggleRecord::catch_panic_pad_function(
+                        parent,
+                        || Err(gst::FlowError::Error),
+                        |togglerecord, element| togglerecord.sink_chain(pad, element, buffer),
+                    )
+                })
+                .event_function(|pad, parent, event| {
+                    ToggleRecord::catch_panic_pad_function(
+                        parent,
+                        || false,
+                        |togglerecord, element| togglerecord.sink_event(pad, element, event),
+                    )
+                })
+                .query_function(|pad, parent, query| {
+                    ToggleRecord::catch_panic_pad_function(
+                        parent,
+                        || false,
+                        |togglerecord, element| togglerecord.sink_query(pad, element, query),
+                    )
+                })
+                .iterate_internal_links_function(|pad, parent| {
+                    ToggleRecord::catch_panic_pad_function(
+                        parent,
+                        || gst::Iterator::from_vec(vec![]),
+                        |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
+                    )
+                })
+                .build();
 
         let templ = element.get_pad_template("src_%u").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some(format!("src_{}", id).as_str()));
-
-        ToggleRecord::set_pad_functions(&sinkpad, &srcpad);
+        let srcpad = gst::Pad::builder_with_template(&templ, Some(format!("src_{}", id).as_str()))
+            .event_function(|pad, parent, event| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |togglerecord, element| togglerecord.src_event(pad, element, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |togglerecord, element| togglerecord.src_query(pad, element, query),
+                )
+            })
+            .iterate_internal_links_function(|pad, parent| {
+                ToggleRecord::catch_panic_pad_function(
+                    parent,
+                    || gst::Iterator::from_vec(vec![]),
+                    |togglerecord, element| togglerecord.iterate_internal_links(pad, element),
+                )
+            })
+            .build();
 
         sinkpad.set_active(true).unwrap();
         srcpad.set_active(true).unwrap();

@@ -127,16 +127,6 @@ struct TextWrap {
 }
 
 impl TextWrap {
-    fn set_pad_functions(sinkpad: &gst::Pad) {
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            TextWrap::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |textwrap, element| textwrap.sink_chain(pad, element, buffer),
-            )
-        });
-    }
-
     fn update_wrapper(&self, element: &gst::Element) {
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
@@ -279,16 +269,21 @@ impl ObjectSubclass for TextWrap {
 
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
-        sinkpad.set_pad_flags(gst::PadFlags::PROXY_CAPS);
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                TextWrap::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |textwrap, element| textwrap.sink_chain(pad, element, buffer),
+                )
+            })
+            .flags(gst::PadFlags::PROXY_CAPS | gst::PadFlags::FIXED_CAPS)
+            .build();
+
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
-        srcpad.set_pad_flags(gst::PadFlags::PROXY_CAPS);
-
-        srcpad.use_fixed_caps();
-        sinkpad.use_fixed_caps();
-
-        TextWrap::set_pad_functions(&sinkpad);
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .flags(gst::PadFlags::PROXY_CAPS | gst::PadFlags::FIXED_CAPS)
+            .build();
 
         let settings = Mutex::new(Settings::default());
         let state = Mutex::new(State::default());

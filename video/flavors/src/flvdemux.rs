@@ -132,43 +132,41 @@ impl ObjectSubclass for FlvDemux {
 
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
-
-        sinkpad.set_activate_function(|pad, parent| {
-            FlvDemux::catch_panic_pad_function(
-                parent,
-                || Err(gst_loggable_error!(CAT, "Panic activating sink pad")),
-                |demux, element| demux.sink_activate(pad, element),
-            )
-        });
-
-        sinkpad.set_activatemode_function(|pad, parent, mode, active| {
-            FlvDemux::catch_panic_pad_function(
-                parent,
-                || {
-                    Err(gst_loggable_error!(
-                        CAT,
-                        "Panic activating sink pad with mode"
-                    ))
-                },
-                |demux, element| demux.sink_activatemode(pad, element, mode, active),
-            )
-        });
-
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            FlvDemux::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |demux, element| demux.sink_chain(pad, element, buffer),
-            )
-        });
-        sinkpad.set_event_function(|pad, parent, event| {
-            FlvDemux::catch_panic_pad_function(
-                parent,
-                || false,
-                |demux, element| demux.sink_event(pad, element, event),
-            )
-        });
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .activate_function(|pad, parent| {
+                FlvDemux::catch_panic_pad_function(
+                    parent,
+                    || Err(gst_loggable_error!(CAT, "Panic activating sink pad")),
+                    |demux, element| demux.sink_activate(pad, element),
+                )
+            })
+            .activatemode_function(|pad, parent, mode, active| {
+                FlvDemux::catch_panic_pad_function(
+                    parent,
+                    || {
+                        Err(gst_loggable_error!(
+                            CAT,
+                            "Panic activating sink pad with mode"
+                        ))
+                    },
+                    |demux, element| demux.sink_activatemode(pad, element, mode, active),
+                )
+            })
+            .chain_function(|pad, parent, buffer| {
+                FlvDemux::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |demux, element| demux.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                FlvDemux::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |demux, element| demux.sink_event(pad, element, event),
+                )
+            })
+            .build();
 
         FlvDemux {
             sinkpad,
@@ -639,23 +637,22 @@ impl FlvDemux {
 
     fn create_srcpad(&self, element: &gst::Element, name: &str, caps: &gst::Caps) -> gst::Pad {
         let templ = element.get_element_class().get_pad_template(name).unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some(name));
-
-        srcpad.set_event_function(|pad, parent, event| {
-            FlvDemux::catch_panic_pad_function(
-                parent,
-                || false,
-                |demux, element| demux.src_event(pad, element, event),
-            )
-        });
-
-        srcpad.set_query_function(|pad, parent, query| {
-            FlvDemux::catch_panic_pad_function(
-                parent,
-                || false,
-                |demux, element| demux.src_query(pad, element, query),
-            )
-        });
+        let srcpad = gst::Pad::builder_with_template(&templ, Some(name))
+            .event_function(|pad, parent, event| {
+                FlvDemux::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |demux, element| demux.src_event(pad, element, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                FlvDemux::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |demux, element| demux.src_query(pad, element, query),
+                )
+            })
+            .build();
 
         srcpad.set_active(true).unwrap();
 

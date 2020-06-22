@@ -182,38 +182,6 @@ struct SccParse {
 }
 
 impl SccParse {
-    fn set_pad_functions(sinkpad: &gst::Pad, srcpad: &gst::Pad) {
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            SccParse::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |parse, element| parse.sink_chain(pad, element, buffer),
-            )
-        });
-        sinkpad.set_event_function(|pad, parent, event| {
-            SccParse::catch_panic_pad_function(
-                parent,
-                || false,
-                |parse, element| parse.sink_event(pad, element, event),
-            )
-        });
-
-        srcpad.set_event_function(|pad, parent, event| {
-            SccParse::catch_panic_pad_function(
-                parent,
-                || false,
-                |parse, element| parse.src_event(pad, element, event),
-            )
-        });
-        srcpad.set_query_function(|pad, parent, query| {
-            SccParse::catch_panic_pad_function(
-                parent,
-                || false,
-                |parse, element| parse.src_query(pad, element, query),
-            )
-        });
-    }
-
     fn handle_buffer(
         &self,
         element: &gst::Element,
@@ -453,11 +421,40 @@ impl ObjectSubclass for SccParse {
 
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
-        let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                SccParse::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |parse, element| parse.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                SccParse::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |parse, element| parse.sink_event(pad, element, event),
+                )
+            })
+            .build();
 
-        SccParse::set_pad_functions(&sinkpad, &srcpad);
+        let templ = klass.get_pad_template("src").unwrap();
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .event_function(|pad, parent, event| {
+                SccParse::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |parse, element| parse.src_event(pad, element, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                SccParse::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |parse, element| parse.src_query(pad, element, query),
+                )
+            })
+            .build();
 
         Self {
             srcpad,

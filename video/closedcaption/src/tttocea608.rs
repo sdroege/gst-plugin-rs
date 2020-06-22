@@ -793,34 +793,35 @@ impl ObjectSubclass for TtToCea608 {
 
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                TtToCea608::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |this, element| this.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                TtToCea608::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |this, element| this.sink_event(pad, element, event),
+                )
+            })
+            .flags(gst::PadFlags::FIXED_CAPS)
+            .build();
+
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
-
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            TtToCea608::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |this, element| this.sink_chain(pad, element, buffer),
-            )
-        });
-        sinkpad.set_event_function(|pad, parent, event| {
-            TtToCea608::catch_panic_pad_function(
-                parent,
-                || false,
-                |this, element| this.sink_event(pad, element, event),
-            )
-        });
-        srcpad.set_query_function(|pad, parent, query| {
-            TtToCea608::catch_panic_pad_function(
-                parent,
-                || false,
-                |this, element| this.src_query(pad, element, query),
-            )
-        });
-
-        sinkpad.use_fixed_caps();
-        srcpad.use_fixed_caps();
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .query_function(|pad, parent, query| {
+                TtToCea608::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |this, element| this.src_query(pad, element, query),
+                )
+            })
+            .flags(gst::PadFlags::FIXED_CAPS)
+            .build();
 
         Self {
             srcpad,

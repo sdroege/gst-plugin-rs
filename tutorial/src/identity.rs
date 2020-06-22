@@ -29,54 +29,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl Identity {
-    // After creating of our two pads set all the functions on them
-    //
-    // Each function is wrapped in catch_panic_pad_function(), which will
-    // - Catch panics from the pad functions and instead of aborting the process
-    //   it will simply convert them into an error message and poison the element
-    //   instance
-    // - Extract our Identity struct from the object instance and pass it to us
-    //
-    // Details about what each function is good for is next to each function definition
-    fn set_pad_functions(sinkpad: &gst::Pad, srcpad: &gst::Pad) {
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            Identity::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |identity, element| identity.sink_chain(pad, element, buffer),
-            )
-        });
-        sinkpad.set_event_function(|pad, parent, event| {
-            Identity::catch_panic_pad_function(
-                parent,
-                || false,
-                |identity, element| identity.sink_event(pad, element, event),
-            )
-        });
-        sinkpad.set_query_function(|pad, parent, query| {
-            Identity::catch_panic_pad_function(
-                parent,
-                || false,
-                |identity, element| identity.sink_query(pad, element, query),
-            )
-        });
-
-        srcpad.set_event_function(|pad, parent, event| {
-            Identity::catch_panic_pad_function(
-                parent,
-                || false,
-                |identity, element| identity.src_event(pad, element, event),
-            )
-        });
-        srcpad.set_query_function(|pad, parent, query| {
-            Identity::catch_panic_pad_function(
-                parent,
-                || false,
-                |identity, element| identity.src_query(pad, element, query),
-            )
-        });
-    }
-
     // Called whenever a new buffer is passed to our sink pad. Here buffers should be processed and
     // whenever some output buffer is available have to push it out of the source pad.
     // Here we just pass through all buffers directly
@@ -173,15 +125,57 @@ impl ObjectSubclass for Identity {
     // of our struct here and also get the class struct passed in case it's needed
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         // Create our two pads from the templates that were registered with
-        // the class
+        // the class and set all the functions on them.
+        //
+        // Each function is wrapped in catch_panic_pad_function(), which will
+        // - Catch panics from the pad functions and instead of aborting the process
+        //   it will simply convert them into an error message and poison the element
+        //   instance
+        // - Extract our Identity struct from the object instance and pass it to us
+        //
+        // Details about what each function is good for is next to each function definition
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
-        let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                Identity::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |identity, element| identity.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                Identity::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |identity, element| identity.sink_event(pad, element, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                Identity::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |identity, element| identity.sink_query(pad, element, query),
+                )
+            })
+            .build();
 
-        // And then set all our pad functions for handling anything that happens
-        // on these pads
-        Identity::set_pad_functions(&sinkpad, &srcpad);
+        let templ = klass.get_pad_template("src").unwrap();
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .event_function(|pad, parent, event| {
+                Identity::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |identity, element| identity.src_event(pad, element, event),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                Identity::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |identity, element| identity.src_query(pad, element, query),
+                )
+            })
+            .build();
 
         // Return an instance of our struct and also include our debug category here.
         // The debug category will be used later whenever we need to put something

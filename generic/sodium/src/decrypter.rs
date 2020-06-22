@@ -269,39 +269,6 @@ struct Decrypter {
 }
 
 impl Decrypter {
-    fn set_pad_functions(_sinkpad: &gst::Pad, srcpad: &gst::Pad) {
-        srcpad.set_getrange_function(|pad, parent, offset, buffer, size| {
-            Decrypter::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |decrypter, element| decrypter.get_range(pad, element, offset, buffer, size),
-            )
-        });
-
-        srcpad.set_activatemode_function(|pad, parent, mode, active| {
-            Decrypter::catch_panic_pad_function(
-                parent,
-                || {
-                    Err(gst_loggable_error!(
-                        CAT,
-                        "Panic activating srcpad with mode"
-                    ))
-                },
-                |decrypter, element| {
-                    decrypter.src_activatemode_function(pad, element, mode, active)
-                },
-            )
-        });
-
-        srcpad.set_query_function(|pad, parent, query| {
-            Decrypter::catch_panic_pad_function(
-                parent,
-                || false,
-                |decrypter, element| decrypter.src_query(pad, element, query),
-            )
-        });
-    }
-
     fn src_activatemode_function(
         &self,
         _pad: &gst::Pad,
@@ -597,10 +564,39 @@ impl ObjectSubclass for Decrypter {
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
-        let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
 
-        Decrypter::set_pad_functions(&sinkpad, &srcpad);
+        let templ = klass.get_pad_template("src").unwrap();
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .getrange_function(|pad, parent, offset, buffer, size| {
+                Decrypter::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |decrypter, element| decrypter.get_range(pad, element, offset, buffer, size),
+                )
+            })
+            .activatemode_function(|pad, parent, mode, active| {
+                Decrypter::catch_panic_pad_function(
+                    parent,
+                    || {
+                        Err(gst_loggable_error!(
+                            CAT,
+                            "Panic activating srcpad with mode"
+                        ))
+                    },
+                    |decrypter, element| {
+                        decrypter.src_activatemode_function(pad, element, mode, active)
+                    },
+                )
+            })
+            .query_function(|pad, parent, query| {
+                Decrypter::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |decrypter, element| decrypter.src_query(pad, element, query),
+                )
+            })
+            .build();
+
         let props = Mutex::new(Props::default());
         let state = Mutex::new(None);
 

@@ -198,38 +198,6 @@ struct Encrypter {
 }
 
 impl Encrypter {
-    fn set_pad_functions(sinkpad: &gst::Pad, srcpad: &gst::Pad) {
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            Encrypter::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |encrypter, element| encrypter.sink_chain(pad, element, buffer),
-            )
-        });
-        sinkpad.set_event_function(|pad, parent, event| {
-            Encrypter::catch_panic_pad_function(
-                parent,
-                || false,
-                |encrypter, element| encrypter.sink_event(pad, element, event),
-            )
-        });
-
-        srcpad.set_query_function(|pad, parent, query| {
-            Encrypter::catch_panic_pad_function(
-                parent,
-                || false,
-                |encrypter, element| encrypter.src_query(pad, element, query),
-            )
-        });
-        srcpad.set_event_function(|pad, parent, event| {
-            Encrypter::catch_panic_pad_function(
-                parent,
-                || false,
-                |encrypter, element| encrypter.src_event(pad, element, event),
-            )
-        });
-    }
-
     fn sink_chain(
         &self,
         pad: &gst::Pad,
@@ -425,11 +393,41 @@ impl ObjectSubclass for Encrypter {
 
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
-        let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                Encrypter::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |encrypter, element| encrypter.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                Encrypter::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |encrypter, element| encrypter.sink_event(pad, element, event),
+                )
+            })
+            .build();
 
-        Encrypter::set_pad_functions(&sinkpad, &srcpad);
+        let templ = klass.get_pad_template("src").unwrap();
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .query_function(|pad, parent, query| {
+                Encrypter::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |encrypter, element| encrypter.src_query(pad, element, query),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                Encrypter::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |encrypter, element| encrypter.src_event(pad, element, event),
+                )
+            })
+            .build();
+
         let props = Mutex::new(Props::default());
         let state = Mutex::new(None);
 

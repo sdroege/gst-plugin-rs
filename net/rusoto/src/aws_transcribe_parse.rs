@@ -230,43 +230,6 @@ fn build_packet(payload: &[u8]) -> Vec<u8> {
 }
 
 impl Transcriber {
-    fn set_pad_functions(sinkpad: &gst::Pad, srcpad: &gst::Pad) {
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            Transcriber::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |transcriber, element| transcriber.sink_chain(pad, element, buffer),
-            )
-        });
-        sinkpad.set_event_function(|pad, parent, event| {
-            Transcriber::catch_panic_pad_function(
-                parent,
-                || false,
-                |transcriber, element| transcriber.sink_event(pad, element, event),
-            )
-        });
-
-        srcpad.set_activatemode_function(|pad, parent, mode, active| {
-            Transcriber::catch_panic_pad_function(
-                parent,
-                || {
-                    Err(gst_loggable_error!(
-                        CAT,
-                        "Panic activating src pad with mode"
-                    ))
-                },
-                |transcriber, element| transcriber.src_activatemode(pad, element, mode, active),
-            )
-        });
-        srcpad.set_query_function(|pad, parent, query| {
-            Transcriber::catch_panic_pad_function(
-                parent,
-                || false,
-                |transcriber, element| transcriber.src_query(pad, element, query),
-            )
-        });
-    }
-
     fn dequeue(&self, element: &gst::Element) -> bool {
         /* First, check our pending buffers */
         let mut items = vec![];
@@ -1031,13 +994,47 @@ impl ObjectSubclass for Transcriber {
 
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                Transcriber::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |transcriber, element| transcriber.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                Transcriber::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |transcriber, element| transcriber.sink_event(pad, element, event),
+                )
+            })
+            .build();
+
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .activatemode_function(|pad, parent, mode, active| {
+                Transcriber::catch_panic_pad_function(
+                    parent,
+                    || {
+                        Err(gst_loggable_error!(
+                            CAT,
+                            "Panic activating src pad with mode"
+                        ))
+                    },
+                    |transcriber, element| transcriber.src_activatemode(pad, element, mode, active),
+                )
+            })
+            .query_function(|pad, parent, query| {
+                Transcriber::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |transcriber, element| transcriber.src_query(pad, element, query),
+                )
+            })
+            .flags(gst::PadFlags::FIXED_CAPS)
+            .build();
 
-        srcpad.use_fixed_caps();
-
-        Transcriber::set_pad_functions(&sinkpad, &srcpad);
         let settings = Mutex::new(Settings::default());
 
         Self {

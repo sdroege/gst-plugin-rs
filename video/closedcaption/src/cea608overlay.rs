@@ -75,23 +75,6 @@ struct Cea608Overlay {
 }
 
 impl Cea608Overlay {
-    fn set_pad_functions(sinkpad: &gst::Pad, _srcpad: &gst::Pad) {
-        sinkpad.set_chain_function(|pad, parent, buffer| {
-            Cea608Overlay::catch_panic_pad_function(
-                parent,
-                || Err(gst::FlowError::Error),
-                |overlay, element| overlay.sink_chain(pad, element, buffer),
-            )
-        });
-        sinkpad.set_event_function(|pad, parent, event| {
-            Cea608Overlay::catch_panic_pad_function(
-                parent,
-                || false,
-                |overlay, element| overlay.sink_event(pad, element, event),
-            )
-        });
-    }
-
     // FIXME: we want to render the text in the largest 32 x 15 characters
     // that will fit the viewport. This is a truly terrible way to determine
     // the appropriate font size, but we only need to run that on resolution
@@ -413,13 +396,28 @@ impl ObjectSubclass for Cea608Overlay {
 
     fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
-        sinkpad.set_pad_flags(gst::PadFlags::PROXY_CAPS);
-        let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::Pad::from_template(&templ, Some("src"));
-        srcpad.set_pad_flags(gst::PadFlags::PROXY_CAPS);
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                Cea608Overlay::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |overlay, element| overlay.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                Cea608Overlay::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |overlay, element| overlay.sink_event(pad, element, event),
+                )
+            })
+            .flags(gst::PadFlags::PROXY_CAPS)
+            .build();
 
-        Cea608Overlay::set_pad_functions(&sinkpad, &srcpad);
+        let templ = klass.get_pad_template("src").unwrap();
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .flags(gst::PadFlags::PROXY_CAPS)
+            .build();
 
         Self {
             srcpad,
