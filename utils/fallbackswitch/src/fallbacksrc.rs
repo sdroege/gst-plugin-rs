@@ -781,24 +781,20 @@ impl FallbackSrc {
             .get_pad_template(if is_audio { "audio" } else { "video" })
             .unwrap();
         let ghostpad = gst::GhostPad::builder_with_template(&templ, Some(&templ.get_name()))
+            .proxy_pad_chain_function({
+                let element_weak = element.downgrade();
+                move |pad, _parent, buffer| {
+                    let element = match element_weak.upgrade() {
+                        None => return Err(gst::FlowError::Flushing),
+                        Some(element) => element,
+                    };
+
+                    let src = FallbackSrc::from_instance(&element);
+                    src.proxy_pad_chain(&element, pad, buffer)
+                }
+            })
             .build_with_target(&srcpad)
             .unwrap();
-
-        let proxypad = ghostpad.get_internal().expect("no internal pad");
-        let element_weak = element.downgrade();
-        // Safety: Nothing else can have a reference to the proxy pad yet apart from the ghost pad
-        // itself, so changing the chain function is still safe.
-        unsafe {
-            proxypad.set_chain_function(move |pad, _parent, buffer| {
-                let element = match element_weak.upgrade() {
-                    None => return Err(gst::FlowError::Flushing),
-                    Some(element) => element,
-                };
-
-                let src = FallbackSrc::from_instance(&element);
-                src.proxy_pad_chain(&element, pad, buffer)
-            });
-        }
 
         element.add_pad(&ghostpad).unwrap();
 
