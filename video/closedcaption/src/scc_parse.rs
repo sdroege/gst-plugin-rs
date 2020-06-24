@@ -260,13 +260,13 @@ impl SccParse {
                 .field("format", &"raw")
                 .field("framerate", &framerate)
                 .build();
-            events.push(gst::Event::new_caps(&caps).build());
+            events.push(gst::event::Caps::new(&caps));
             state.framerate = Some(framerate);
         }
 
         if state.need_segment {
             let segment = gst::FormattedSegment::<gst::format::Time>::new();
-            events.push(gst::Event::new_segment(&segment).build());
+            events.push(gst::event::Segment::new(&segment));
             state.need_segment = false;
         }
 

@@ -170,7 +170,7 @@ fn csound_filter_eos() {
         num_buffers += 1;
     }
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     // pull the buffer produced after the EOS event
     let buffer = h.pull().unwrap();
@@ -242,7 +242,7 @@ fn csound_filter_underflow() {
         assert!(h.push(buffer).is_ok());
     }
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     // From here we check our output data
     let mut num_buffers = 0;
@@ -324,7 +324,7 @@ fn csound_filter_caps_negotiation() {
     h.play();
     assert!(h.push(gst::Buffer::with_size(2048).unwrap()).is_ok());
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     let buffer = h.pull().unwrap();
 
@@ -403,7 +403,7 @@ fn csound_filter_caps_negotiation_fail() {
     let buffer = gst::Buffer::with_size(2048).unwrap();
     assert!(h.push(buffer).is_err());
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     // The harness sinkpad end up not having defined caps
     // so, the get_current_caps should be None

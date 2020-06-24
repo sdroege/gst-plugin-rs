@@ -260,7 +260,7 @@ impl Encrypter {
             EventView::Caps(_) => {
                 // We send our own caps downstream
                 let caps = gst::Caps::builder("application/x-sodium-encrypted").build();
-                self.srcpad.push_event(gst::Event::new_caps(&caps).build())
+                self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
             EventView::Eos(_) => {
                 let mut state_mutex = self.state.lock().unwrap();
@@ -341,7 +341,7 @@ impl Encrypter {
                 }
 
                 /* First let's query the bytes duration upstream */
-                let mut peer_query = gst::query::Query::new_duration(gst::Format::Bytes);
+                let mut peer_query = gst::query::Duration::new(gst::Format::Bytes);
 
                 if !self.sinkpad.peer_query(&mut peer_query) {
                     gst_error!(CAT, "Failed to query upstream duration");

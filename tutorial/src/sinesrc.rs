@@ -316,7 +316,7 @@ impl ObjectImpl for SineSrc {
                 drop(settings);
 
                 let _ =
-                    basesrc.post_message(&gst::Message::new_latency().src(Some(basesrc)).build());
+                    basesrc.post_message(&gst::message::Latency::builder().src(basesrc).build());
             }
             subclass::Property("freq", ..) => {
                 let mut settings = self.settings.lock().unwrap();
@@ -483,7 +483,7 @@ impl BaseSrcImpl for SineSrc {
 
         drop(state);
 
-        let _ = element.post_message(&gst::Message::new_latency().src(Some(element)).build());
+        let _ = element.post_message(&gst::message::Latency::builder().src(element).build());
 
         Ok(())
     }

@@ -288,7 +288,7 @@ impl State {
         let mut events = Vec::new();
 
         if self.need_flush_stop {
-            let mut b = gst::Event::new_flush_stop(true);
+            let mut b = gst::event::FlushStop::builder(true);
 
             if let Some(seek_seqnum) = self.seek_seqnum {
                 b = b.seqnum(seek_seqnum);
@@ -300,7 +300,7 @@ impl State {
 
         if let Some(pull) = &mut self.pull {
             if pull.need_stream_start {
-                events.push(gst::Event::new_stream_start(&pull.stream_id).build());
+                events.push(gst::event::StreamStart::new(&pull.stream_id));
                 pull.need_stream_start = false;
             }
         }
@@ -320,13 +320,13 @@ impl State {
                         .build(),
                 };
 
-                events.push(gst::Event::new_caps(&caps).build());
+                events.push(gst::event::Caps::new(&caps));
                 gst_info!(CAT, obj: element, "Caps changed to {:?}", &caps);
             }
         }
 
         if self.need_segment {
-            let mut b = gst::Event::new_segment(&self.segment);
+            let mut b = gst::event::Segment::builder(&self.segment);
 
             if let Some(seek_seqnum) = self.seek_seqnum {
                 b = b.seqnum(seek_seqnum);
@@ -590,7 +590,7 @@ impl MccParse {
         element: &gst::Element,
     ) -> Result<(), gst::LoggableError> {
         let mode = {
-            let mut query = gst::Query::new_scheduling();
+            let mut query = gst::query::Scheduling::new();
             let mut state = self.state.lock().unwrap();
 
             state.pull = None;
@@ -664,7 +664,7 @@ impl MccParse {
         gst_debug!(CAT, obj: element, "Scanning duration");
 
         /* First let's query the bytes duration upstream */
-        let mut q = gst::query::Query::new_duration(gst::Format::Bytes);
+        let mut q = gst::query::Duration::new(gst::Format::Bytes);
 
         if !self.sinkpad.peer_query(&mut q) {
             return Err(gst_loggable_error!(
@@ -758,7 +758,7 @@ impl MccParse {
         match parse_timecode_rate(state.timecode_rate) {
             Ok((framerate, _)) => {
                 let mut events = state.create_events(element, None, framerate);
-                let mut eos_event = gst::Event::new_eos();
+                let mut eos_event = gst::event::Eos::builder();
 
                 if let Some(seek_seqnum) = state.seek_seqnum {
                     eos_event = eos_event.seqnum(seek_seqnum);
@@ -1006,12 +1006,16 @@ impl MccParse {
         let seek_seqnum = event.get_seqnum();
         state.seek_seqnum = Some(seek_seqnum);
 
-        let event = gst::Event::new_flush_start().seqnum(seek_seqnum).build();
+        let event = gst::event::FlushStart::builder()
+            .seqnum(seek_seqnum)
+            .build();
 
         gst_debug!(CAT, obj: element, "Sending event {:?} upstream", event);
         self.sinkpad.push_event(event);
 
-        let event = gst::Event::new_flush_start().seqnum(seek_seqnum).build();
+        let event = gst::event::FlushStart::builder()
+            .seqnum(seek_seqnum)
+            .build();
 
         gst_debug!(CAT, obj: element, "Pushing event {:?}", event);
         self.srcpad.push_event(event);
@@ -1020,7 +1024,9 @@ impl MccParse {
 
         state = self.flush(state);
 
-        let event = gst::Event::new_flush_stop(true).seqnum(seek_seqnum).build();
+        let event = gst::event::FlushStop::builder(true)
+            .seqnum(seek_seqnum)
+            .build();
 
         /* Drop our state while we push a serialized event upstream */
         drop(state);

@@ -812,7 +812,7 @@ impl SrcHandler {
                         ],
                     );
 
-                    events.push(gst::Event::new_custom_downstream(s).build());
+                    events.push(gst::event::CustomDownstream::new(s));
                 }
 
                 lost_seqnum = lost_seqnum.wrapping_add(n_packets as u16);
@@ -837,7 +837,7 @@ impl SrcHandler {
                         ],
                     );
 
-                    events.push(gst::Event::new_custom_downstream(s).build());
+                    events.push(gst::event::CustomDownstream::new(s));
                 }
 
                 state.stats.num_lost += 1;
@@ -1036,7 +1036,7 @@ impl PadSrcHandler for SrcHandler {
 
         match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                let mut peer_query = gst::query::Query::new_latency();
+                let mut peer_query = gst::query::Latency::new();
 
                 let ret = jb.sink_pad.gst_pad().peer_query(&mut peer_query);
 
@@ -1302,8 +1302,7 @@ impl TaskImpl for JitterBufferTask {
                     match err {
                         gst::FlowError::Eos => {
                             gst_debug!(CAT, obj: &self.element, "Pushing EOS event");
-                            let event = gst::Event::new_eos().build();
-                            let _ = jb.src_pad.push_event(event).await;
+                            let _ = jb.src_pad.push_event(gst::event::Eos::new()).await;
                         }
                         gst::FlowError::Flushing => gst_debug!(CAT, obj: &self.element, "Flushing"),
                         err => gst_error!(CAT, obj: &self.element, "Error {}", err),
@@ -1513,7 +1512,7 @@ impl ObjectImpl for JitterBuffer {
 
                 let element = obj.downcast_ref::<gst::Element>().unwrap();
                 let _ =
-                    element.post_message(&gst::Message::new_latency().src(Some(element)).build());
+                    element.post_message(&gst::message::Latency::builder().src(element).build());
             }
             subclass::Property("do-lost", ..) => {
                 let mut settings = self.settings.lock().unwrap();

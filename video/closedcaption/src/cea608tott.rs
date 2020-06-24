@@ -318,7 +318,7 @@ impl Cea608ToTt {
                     unreachable!();
                 };
 
-                let new_event = gst::Event::new_caps(&new_caps).build();
+                let new_event = gst::event::Caps::new(&new_caps);
 
                 return self.srcpad.push_event(new_event);
             }

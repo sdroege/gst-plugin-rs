@@ -79,7 +79,7 @@ fn test_parse() {
         data = &data[l..];
     }
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
     while let Some(buf) = h.try_pull() {
         output_len += buf.get_size();
         checksum = checksum.wrapping_add(

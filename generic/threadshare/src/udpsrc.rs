@@ -260,14 +260,13 @@ impl UdpSrcPadHandler {
             gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
 
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-            let stream_start_evt = gst::Event::new_stream_start(&stream_id)
+            let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
                 .group_id(gst::GroupId::next())
                 .build();
             pad.push_event(stream_start_evt).await;
 
             if let Some(ref caps) = state.caps {
-                let caps_evt = gst::Event::new_caps(&caps).build();
-                pad.push_event(caps_evt).await;
+                pad.push_event(gst::event::Caps::new(&caps)).await;
                 *self.0.configured_caps.lock().unwrap() = Some(caps.clone());
             }
 
@@ -276,7 +275,7 @@ impl UdpSrcPadHandler {
 
         if state.need_segment {
             let segment_evt =
-                gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build();
+                gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
             pad.push_event(segment_evt).await;
 
             state.need_segment = false;
@@ -478,8 +477,7 @@ impl TaskImpl for UdpSrcTask {
                 Err(gst::FlowError::Flushing) => gst_debug!(CAT, obj: &self.element, "Flushing"),
                 Err(gst::FlowError::Eos) => {
                     gst_debug!(CAT, obj: &self.element, "EOS");
-                    let eos = gst::Event::new_eos().build();
-                    pad.push_event(eos).await;
+                    pad.push_event(gst::event::Eos::new()).await;
                 }
                 Err(err) => {
                     gst_error!(CAT, obj: &self.element, "Got error {}", err);

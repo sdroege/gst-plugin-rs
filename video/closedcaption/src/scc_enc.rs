@@ -269,7 +269,7 @@ impl SccEnc {
 
                 // We send our own caps downstream
                 let caps = gst::Caps::builder("application/x-scc").build();
-                self.srcpad.push_event(gst::Event::new_caps(&caps).build())
+                self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
             EventView::Eos(_) => {
                 let mut state = self.state.lock().unwrap();

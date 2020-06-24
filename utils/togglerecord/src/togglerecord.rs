@@ -1013,7 +1013,7 @@ impl ToggleRecord {
             }
             HandleResult::Eos => {
                 stream.srcpad.push_event(
-                    gst::Event::new_eos()
+                    gst::event::Eos::builder()
                         .seqnum(stream.state.lock().segment_seqnum)
                         .build(),
                 );
@@ -1050,7 +1050,7 @@ impl ToggleRecord {
                     .offset_running_time(-(offset as i64))
                     .expect("Adjusting record duration");
                 events.push(
-                    gst::Event::new_segment(&state.out_segment)
+                    gst::event::Segment::builder(&state.out_segment)
                         .seqnum(state.segment_seqnum)
                         .build(),
                 );
@@ -1195,7 +1195,7 @@ impl ToggleRecord {
                 forward = match handle_result {
                     Ok(HandleResult::Pass((new_pts, new_duration))) if new_pts.is_some() => {
                         if new_pts != pts || new_duration != duration {
-                            event = gst::Event::new_gap(new_pts, new_duration).build();
+                            event = gst::event::Gap::new(new_pts, new_duration);
                         }
                         true
                     }
@@ -1248,7 +1248,7 @@ impl ToggleRecord {
             // the input segment
             if state.segment_pending {
                 events.push(
-                    gst::Event::new_segment(&state.in_segment)
+                    gst::event::Segment::builder(&state.in_segment)
                         .seqnum(state.segment_seqnum)
                         .build(),
                 );
@@ -1350,7 +1350,7 @@ impl ToggleRecord {
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
         match query.view_mut() {
             QueryView::Scheduling(ref mut q) => {
-                let mut new_query = gst::Query::new_scheduling();
+                let mut new_query = gst::query::Scheduling::new();
                 let res = stream.sinkpad.peer_query(&mut new_query);
                 if !res {
                     return res;

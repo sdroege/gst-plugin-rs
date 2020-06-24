@@ -334,7 +334,7 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
                 };
 
                 for pad in pads {
-                    let mut peer_query = gst::query::Query::new_latency();
+                    let mut peer_query = gst::query::Latency::new();
 
                     ret = pad.peer_query(&mut peer_query);
 
@@ -518,12 +518,12 @@ impl ObjectImpl for InputSelector {
 
                 if let Some(old_pad) = old_pad {
                     if Some(&old_pad) != pad.as_ref() {
-                        let _ = old_pad.push_event(gst::Event::new_reconfigure().build());
+                        let _ = old_pad.push_event(gst::event::Reconfigure::new());
                     }
                 }
 
                 if let Some(pad) = pad {
-                    let _ = pad.push_event(gst::Event::new_reconfigure().build());
+                    let _ = pad.push_event(gst::event::Reconfigure::new());
                 }
             }
             _ => unimplemented!(),
@@ -614,7 +614,7 @@ impl ElementImpl for InputSelector {
         drop(pads);
         drop(state);
 
-        let _ = element.post_message(&gst::Message::new_latency().src(Some(element)).build());
+        let _ = element.post_message(&gst::message::Latency::builder().src(element).build());
 
         Some(ret)
     }
@@ -626,7 +626,7 @@ impl ElementImpl for InputSelector {
         element.remove_pad(pad).unwrap();
         drop(pads);
 
-        let _ = element.post_message(&gst::Message::new_latency().src(Some(element)).build());
+        let _ = element.post_message(&gst::message::Latency::builder().src(element).build());
     }
 
     fn provide_clock(&self, _element: &gst::Element) -> Option<gst::Clock> {

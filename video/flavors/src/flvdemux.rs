@@ -293,7 +293,7 @@ impl FlvDemux {
         _element: &gst::Element,
     ) -> Result<(), gst::LoggableError> {
         let mode = {
-            let mut query = gst::Query::new_scheduling();
+            let mut query = gst::query::Scheduling::new();
             if !pad.peer_query(&mut query) {
                 return Err(gst_loggable_error!(CAT, "Scheduling query failed on peer"));
             }
@@ -598,7 +598,7 @@ impl FlvDemux {
                         }
                     };
 
-                    pad.push_event(gst::Event::new_caps(&caps).build());
+                    pad.push_event(gst::event::Caps::new(&caps));
                 }
                 Event::Buffer(stream, buffer) => {
                     let pad = match stream {
@@ -658,12 +658,12 @@ impl FlvDemux {
 
         let full_stream_id = srcpad.create_stream_id(element, Some(name)).unwrap();
         // FIXME group id
-        srcpad.push_event(gst::Event::new_stream_start(&full_stream_id).build());
-        srcpad.push_event(gst::Event::new_caps(&caps).build());
+        srcpad.push_event(gst::event::StreamStart::new(&full_stream_id));
+        srcpad.push_event(gst::event::Caps::new(&caps));
 
         // FIXME proper segment handling
         let segment = gst::FormattedSegment::<gst::ClockTime>::default();
-        srcpad.push_event(gst::Event::new_segment(&segment).build());
+        srcpad.push_event(gst::event::Segment::new(&segment));
 
         self.flow_combiner.lock().unwrap().add_pad(&srcpad);
 

@@ -1899,7 +1899,7 @@ impl FallbackSrc {
 
                             for pad in element.get_src_pads() {
                                 element.call_async(move |_element| {
-                                    pad.push_event(gst::Event::new_eos().build());
+                                    pad.push_event(gst::event::Eos::new());
                                 });
                             }
                         });
@@ -2286,8 +2286,8 @@ mod custom_source {
             element.no_more_pads();
 
             let _ = element.post_message(
-                &gst::Message::new_streams_selected(&collection)
-                    .src(Some(element))
+                &gst::message::StreamsSelected::builder(&collection)
+                    .src(element)
                     .build(),
             );
 

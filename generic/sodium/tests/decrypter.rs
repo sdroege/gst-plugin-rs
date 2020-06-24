@@ -198,7 +198,7 @@ fn test_pull_range() {
         .expect("Unable to set the pipeline to the `Playing` state");
 
     // Test that the decryptor is seekable
-    let mut q = gst::query::Query::new_seeking(gst::Format::Bytes);
+    let mut q = gst::query::Seeking::new(gst::Format::Bytes);
     srcpad.query(&mut q);
 
     // get the seeking capabilities

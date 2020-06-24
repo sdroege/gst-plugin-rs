@@ -350,7 +350,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         if let QueryView::Scheduling(ref mut q) = query.view_mut() {
-            let mut new_query = gst::Query::new_scheduling();
+            let mut new_query = gst::query::Scheduling::new();
             let res = queue.sink_pad.gst_pad().peer_query(&mut new_query);
             if !res {
                 return res;
@@ -439,8 +439,7 @@ impl TaskImpl for QueueTask {
                 Err(gst::FlowError::Eos) => {
                     gst_debug!(CAT, obj: &self.element, "EOS");
                     *queue.last_res.lock().unwrap() = Err(gst::FlowError::Eos);
-                    let eos = gst::Event::new_eos().build();
-                    pad.push_event(eos).await;
+                    pad.push_event(gst::event::Eos::new()).await;
                 }
                 Err(err) => {
                     gst_error!(CAT, obj: &self.element, "Got error {}", err);

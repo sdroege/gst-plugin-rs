@@ -127,7 +127,7 @@ Time Code Rate=30DF\r\n\
     };
 
     assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     let buf = h.pull().expect("Couldn't pull buffer");
     let timecode = buf

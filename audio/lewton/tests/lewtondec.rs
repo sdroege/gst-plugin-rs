@@ -80,7 +80,7 @@ fn run_test(inline_headers: bool) {
         h.push(buffer).unwrap();
     }
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     for samples in &decoded_samples {
         if *samples == 0 {

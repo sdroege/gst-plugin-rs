@@ -389,7 +389,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
             match event.view() {
                 EventView::Eos(..) => {
                     let _ =
-                        element.post_message(&gst::Message::new_eos().src(Some(&element)).build());
+                        element.post_message(&gst::message::Eos::builder().src(&element).build());
                 }
                 EventView::FlushStop(..) => proxysink.start(&element),
                 _ => (),

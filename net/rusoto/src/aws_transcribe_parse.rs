@@ -274,14 +274,15 @@ impl Transcriber {
 
             return self
                 .srcpad
-                .push_event(gst::Event::new_eos().seqnum(seqnum).build());
+                .push_event(gst::event::Eos::builder().seqnum(seqnum).build());
         }
 
         for mut buf in items.drain(..) {
             if buf.get_pts() > last_position {
-                let gap_event = gst::Event::new_gap(last_position, buf.get_pts() - last_position)
-                    .seqnum(seqnum)
-                    .build();
+                let gap_event =
+                    gst::event::Gap::builder(last_position, buf.get_pts() - last_position)
+                        .seqnum(seqnum)
+                        .build();
                 gst_debug!(
                     CAT,
                     "Pushing gap:    {} -> {}",
@@ -313,7 +314,7 @@ impl Transcriber {
         if now - last_position > latency {
             let duration = now - last_position - latency;
 
-            let gap_event = gst::Event::new_gap(last_position, duration)
+            let gap_event = gst::event::Gap::builder(last_position, duration)
                 .seqnum(seqnum)
                 .build();
             gst_debug!(
@@ -634,7 +635,7 @@ impl Transcriber {
 
         match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                let mut peer_query = gst::query::Query::new_latency();
+                let mut peer_query = gst::query::Latency::new();
 
                 let ret = self.sinkpad.peer_query(&mut peer_query);
 
@@ -744,7 +745,7 @@ impl Transcriber {
 
                     state.in_segment = segment;
                     state.seqnum = e.get_seqnum();
-                    gst::Event::new_segment(&state.out_segment)
+                    gst::event::Segment::builder(&state.out_segment)
                         .seqnum(state.seqnum)
                         .build()
                 };
@@ -762,7 +763,7 @@ impl Transcriber {
                     .build();
                 let seqnum = self.state.lock().unwrap().seqnum;
                 self.srcpad
-                    .push_event(gst::Event::new_caps(&caps).seqnum(seqnum).build())
+                    .push_event(gst::event::Caps::builder(&caps).seqnum(seqnum).build())
             }
             _ => pad.event_default(Some(element), event),
         }

@@ -96,7 +96,7 @@ fn do_test(data: &'static [u8], packet_sizes: &[usize], decoded_samples: &[usize
         h.push(buffer).unwrap();
     }
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     for samples in decoded_samples {
         if *samples == 0 {

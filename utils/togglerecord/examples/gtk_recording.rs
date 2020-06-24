@@ -285,8 +285,8 @@ fn create_ui(app: &gtk::Application) {
         record_button.set_sensitive(false);
         button.set_sensitive(false);
 
-        video_pad.send_event(gst::Event::new_eos().build());
-        audio_pad.send_event(gst::Event::new_eos().build());
+        video_pad.send_event(gst::event::Eos::new());
+        audio_pad.send_event(gst::event::Eos::new());
     });
 
     let app_weak = app.downgrade();

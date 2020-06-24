@@ -91,7 +91,7 @@ fn encrypt_file() {
     let buf = gst::Buffer::from_mut_slice(Vec::from(&input[..]));
 
     assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     println!("Pulling buffer...");
     while let Ok(buf) = h.pull() {

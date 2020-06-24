@@ -92,7 +92,7 @@ fn test_parse() {
         data = &data[l..];
     }
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
     while let Some(buf) = h.try_pull() {
         output_len += buf.get_size();
         checksum = checksum.wrapping_add(
@@ -173,17 +173,14 @@ fn test_pull() {
     }
 
     /* Now seek and check that we receive buffers with appropriate PTS */
-    h.push_upstream_event(
-        gst::Event::new_seek(
-            1.0,
-            gst::SeekFlags::FLUSH,
-            gst::SeekType::Set,
-            gst::GenericFormattedValue::Time(gst::SECOND),
-            gst::SeekType::Set,
-            gst::GenericFormattedValue::Time(2 * gst::SECOND),
-        )
-        .build(),
-    );
+    h.push_upstream_event(gst::event::Seek::new(
+        1.0,
+        gst::SeekFlags::FLUSH,
+        gst::SeekType::Set,
+        gst::GenericFormattedValue::Time(gst::SECOND),
+        gst::SeekType::Set,
+        gst::GenericFormattedValue::Time(2 * gst::SECOND),
+    ));
 
     loop {
         let mut done = false;

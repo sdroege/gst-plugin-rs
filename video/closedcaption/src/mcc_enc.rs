@@ -420,7 +420,7 @@ impl MccEnc {
                         },
                     )
                     .build();
-                self.srcpad.push_event(gst::Event::new_caps(&caps).build())
+                self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
             _ => pad.event_default(Some(element), event),
         }

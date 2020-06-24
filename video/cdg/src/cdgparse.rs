@@ -114,7 +114,7 @@ impl BaseParseImpl for CdgParse {
         element.set_min_frame_size(CDG_PACKET_SIZE as u32);
 
         /* Set duration */
-        let mut query = gst::Query::new_duration(gst::Format::Bytes);
+        let mut query = gst::query::Duration::new(gst::Format::Bytes);
         let pad = element.get_src_pad();
         if pad.query(&mut query) {
             let size = query.get_result();
@@ -143,7 +143,7 @@ impl BaseParseImpl for CdgParse {
                 ],
             );
 
-            pad.push_event(gst::Event::new_caps(&src_caps).build());
+            pad.push_event(gst::event::Caps::new(&src_caps));
         }
 
         // Scan for CDG instruction

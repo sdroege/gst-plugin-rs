@@ -64,7 +64,7 @@ fn test_encode(video_info: &gst_video::VideoInfo) {
         };
         h.push(buffer.clone()).unwrap();
     }
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     for _ in 0..6 {
         // last frame is the GIF trailer

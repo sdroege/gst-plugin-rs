@@ -105,7 +105,7 @@ fn test_one_timed_buffer_and_eos() {
 
     assert_eq!(h.buffers_in_queue(), 0);
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     /* Check that we do receive an erase_display */
     assert_eq!(h.buffers_in_queue(), 2);
@@ -222,7 +222,7 @@ fn test_erase_display_memory_gaps() {
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     /* Let's first push a gap that doesn't leave room for our two control codes */
-    let gap_event = gst::Event::new_gap(2 * gst::SECOND, 2_533_333_333.into()).build();
+    let gap_event = gst::event::Gap::new(2 * gst::SECOND, 2_533_333_333.into());
     assert_eq!(h.push_event(gap_event), true);
     let mut erase_display_buffers = 0;
 
@@ -237,7 +237,7 @@ fn test_erase_display_memory_gaps() {
 
     assert_eq!(erase_display_buffers, 0);
 
-    let gap_event = gst::Event::new_gap(4_533_333_333.into(), 1.into()).build();
+    let gap_event = gst::event::Gap::new(4_533_333_333.into(), 1.into());
     assert_eq!(h.push_event(gap_event), true);
 
     while h.buffers_in_queue() > 0 {
@@ -353,7 +353,7 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
 
     assert_eq!(h.buffers_in_queue(), 0);
 
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     let expected_gaps: [(gst::ClockTime, gst::ClockTime); 2] = [
         (0.into(), 1_000_000_000.into()),

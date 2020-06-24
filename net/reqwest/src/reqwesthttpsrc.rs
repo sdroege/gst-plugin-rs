@@ -276,15 +276,15 @@ impl ReqwestHttpSrc {
         }
 
         let srcpad = src.get_static_pad("src").unwrap();
-        let mut q = gst::Query::new_context(REQWEST_CLIENT_CONTEXT);
+        let mut q = gst::query::Context::new(REQWEST_CLIENT_CONTEXT);
         if srcpad.peer_query(&mut q) {
             if let Some(context) = q.get_context_owned() {
                 src.set_context(&context);
             }
         } else {
             let _ = src.post_message(
-                &gst::Message::new_need_context(REQWEST_CLIENT_CONTEXT)
-                    .src(Some(src))
+                &gst::message::NeedContext::builder(REQWEST_CLIENT_CONTEXT)
+                    .src(src)
                     .build(),
             );
         }
@@ -325,11 +325,7 @@ impl ReqwestHttpSrc {
             s.set("client", &client);
         }
         src.set_context(&context);
-        let _ = src.post_message(
-            &gst::Message::new_have_context(context)
-                .src(Some(src))
-                .build(),
-        );
+        let _ = src.post_message(&gst::message::HaveContext::builder(context).src(src).build());
 
         *client_guard = Some(client.clone());
 
@@ -1000,7 +996,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
         if let Some(tags) = tags {
             gst_debug!(CAT, obj: src, "Sending iradio tags {:?}", tags);
             let pad = src.get_static_pad("src").unwrap();
-            pad.push_event(gst::Event::new_tag(tags).build());
+            pad.push_event(gst::event::Tag::new(tags));
         }
 
         let future = async {

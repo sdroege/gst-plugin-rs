@@ -586,7 +586,7 @@ impl ElementSinkTest {
         gst_debug!(SINK_CAT, obj: element, "Pushing FlushStart");
         self.sink_pad
             .gst_pad()
-            .push_event(gst::Event::new_flush_start().build());
+            .push_event(gst::event::FlushStart::new());
         gst_debug!(SINK_CAT, obj: element, "FlushStart pushed");
     }
 
@@ -594,7 +594,7 @@ impl ElementSinkTest {
         gst_debug!(SINK_CAT, obj: element, "Pushing FlushStop");
         self.sink_pad
             .gst_pad()
-            .push_event(gst::Event::new_flush_stop(true).build());
+            .push_event(gst::event::FlushStop::new(true));
         gst_debug!(SINK_CAT, obj: element, "FlushStop pushed");
     }
 }
@@ -762,7 +762,7 @@ fn nominal_scenario(
     // Initial events
     elem_src_test
         .try_push(Item::Event(
-            gst::Event::new_stream_start(scenario_name)
+            gst::event::StreamStart::builder(scenario_name)
                 .group_id(gst::GroupId::next())
                 .build(),
         ))
@@ -777,9 +777,9 @@ fn nominal_scenario(
     }
 
     elem_src_test
-        .try_push(Item::Event(
-            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-        ))
+        .try_push(Item::Event(gst::event::Segment::new(
+            &gst::FormattedSegment::<gst::format::Time>::new(),
+        )))
         .unwrap();
 
     match futures::executor::block_on(receiver.next()).unwrap() {
@@ -838,8 +838,8 @@ fn nominal_scenario(
     }
 
     // Flush
-    src_element.send_event(gst::Event::new_flush_start().build());
-    src_element.send_event(gst::Event::new_flush_stop(true).build());
+    src_element.send_event(gst::event::FlushStart::new());
+    src_element.send_event(gst::event::FlushStop::new(true));
 
     match futures::executor::block_on(receiver.next()).unwrap() {
         Item::Event(event) => match event.view() {
@@ -850,9 +850,9 @@ fn nominal_scenario(
     }
 
     elem_src_test
-        .try_push(Item::Event(
-            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-        ))
+        .try_push(Item::Event(gst::event::Segment::new(
+            &gst::FormattedSegment::<gst::format::Time>::new(),
+        )))
         .unwrap();
 
     match futures::executor::block_on(receiver.next()).unwrap() {
@@ -878,7 +878,7 @@ fn nominal_scenario(
 
     // EOS
     elem_src_test
-        .try_push(Item::Event(gst::Event::new_eos().build()))
+        .try_push(Item::Event(gst::event::Eos::new()))
         .unwrap();
 
     match futures::executor::block_on(receiver.next()).unwrap() {
@@ -894,7 +894,7 @@ fn nominal_scenario(
     // Receiver was dropped when stopping => can't send anymore
     elem_src_test
         .try_push(Item::Event(
-            gst::Event::new_stream_start(&format!("{}_past_stop", scenario_name))
+            gst::event::StreamStart::builder(&format!("{}_past_stop", scenario_name))
                 .group_id(gst::GroupId::next())
                 .build(),
         ))
@@ -986,7 +986,7 @@ fn start_pause_start() {
     // Initial events
     elem_src_test
         .try_push(Item::Event(
-            gst::Event::new_stream_start(scenario_name)
+            gst::event::StreamStart::builder(scenario_name)
                 .group_id(gst::GroupId::next())
                 .build(),
         ))
@@ -1001,9 +1001,9 @@ fn start_pause_start() {
     }
 
     elem_src_test
-        .try_push(Item::Event(
-            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-        ))
+        .try_push(Item::Event(gst::event::Segment::new(
+            &gst::FormattedSegment::<gst::format::Time>::new(),
+        )))
         .unwrap();
 
     match futures::executor::block_on(receiver.next()).unwrap() {
@@ -1064,7 +1064,7 @@ fn start_stop_start() {
     // Initial events
     elem_src_test
         .try_push(Item::Event(
-            gst::Event::new_stream_start(&format!("{}-after_stop", scenario_name))
+            gst::event::StreamStart::builder(&format!("{}-after_stop", scenario_name))
                 .group_id(gst::GroupId::next())
                 .build(),
         ))
@@ -1079,9 +1079,9 @@ fn start_stop_start() {
     }
 
     elem_src_test
-        .try_push(Item::Event(
-            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-        ))
+        .try_push(Item::Event(gst::event::Segment::new(
+            &gst::FormattedSegment::<gst::format::Time>::new(),
+        )))
         .unwrap();
 
     match futures::executor::block_on(receiver.next()).unwrap() {
@@ -1104,7 +1104,7 @@ fn start_stop_start() {
     // Initial events again
     elem_src_test
         .try_push(Item::Event(
-            gst::Event::new_stream_start(scenario_name)
+            gst::event::StreamStart::builder(scenario_name)
                 .group_id(gst::GroupId::next())
                 .build(),
         ))
@@ -1134,9 +1134,9 @@ fn start_stop_start() {
     }
 
     elem_src_test
-        .try_push(Item::Event(
-            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-        ))
+        .try_push(Item::Event(gst::event::Segment::new(
+            &gst::FormattedSegment::<gst::format::Time>::new(),
+        )))
         .unwrap();
 
     match futures::executor::block_on(receiver.next()).unwrap() {
@@ -1177,7 +1177,7 @@ fn start_flush() {
     // Initial events
     elem_src_test
         .try_push(Item::Event(
-            gst::Event::new_stream_start(&format!("{}-after_stop", scenario_name))
+            gst::event::StreamStart::builder(&format!("{}-after_stop", scenario_name))
                 .group_id(gst::GroupId::next())
                 .build(),
         ))
@@ -1192,9 +1192,9 @@ fn start_flush() {
     }
 
     elem_src_test
-        .try_push(Item::Event(
-            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-        ))
+        .try_push(Item::Event(gst::event::Segment::new(
+            &gst::FormattedSegment::<gst::format::Time>::new(),
+        )))
         .unwrap();
 
     match futures::executor::block_on(receiver.next()).unwrap() {
@@ -1221,9 +1221,9 @@ fn start_flush() {
     elem_sink_test.push_flush_stop(&sink_element);
 
     elem_src_test
-        .try_push(Item::Event(
-            gst::Event::new_segment(&gst::FormattedSegment::<gst::format::Time>::new()).build(),
-        ))
+        .try_push(Item::Event(gst::event::Segment::new(
+            &gst::FormattedSegment::<gst::format::Time>::new(),
+        )))
         .unwrap();
 
     match futures::executor::block_on(receiver.next()).unwrap() {

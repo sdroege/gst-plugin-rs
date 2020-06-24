@@ -302,7 +302,7 @@ impl Decrypter {
 
         match query.view_mut() {
             QueryView::Scheduling(mut q) => {
-                let mut peer_query = gst::Query::new_scheduling();
+                let mut peer_query = gst::query::Scheduling::new();
                 let res = self.sinkpad.peer_query(&mut peer_query);
                 if !res {
                     return res;
@@ -324,7 +324,7 @@ impl Decrypter {
                 }
 
                 /* First let's query the bytes duration upstream */
-                let mut peer_query = gst::query::Query::new_duration(gst::Format::Bytes);
+                let mut peer_query = gst::query::Duration::new(gst::Format::Bytes);
 
                 if !self.sinkpad.peer_query(&mut peer_query) {
                     gst_error!(CAT, "Failed to query upstream duration");

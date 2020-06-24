@@ -60,7 +60,7 @@ fn test_encode_single_packet() {
     };
 
     assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     let buf = h.pull().expect("Couldn't pull buffer");
 
@@ -158,7 +158,7 @@ fn test_encode_multiple_packets() {
     buffers.iter().for_each(|buf| {
         assert_eq!(h.push(buf.clone()), Ok(gst::FlowSuccess::Ok));
     });
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     // Pull 1
     let buf = h.pull().expect("Couldn't pull buffer");

@@ -284,7 +284,7 @@ impl Cea608Overlay {
 
         self.recalculate_layout(element, state)?;
 
-        if !self.srcpad.push_event(gst::Event::new_caps(&caps).build()) {
+        if !self.srcpad.push_event(gst::event::Caps::new(&caps)) {
             Err(gst::FlowError::NotNegotiated)
         } else {
             Ok(gst::FlowSuccess::Ok)

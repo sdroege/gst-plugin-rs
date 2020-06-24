@@ -114,7 +114,7 @@ fn setup_sender_receiver(
         let mut first = true;
         while let Ok(send_data) = receiver_input.recv() {
             if first {
-                assert!(sinkpad.send_event(gst::Event::new_stream_start("test").build()));
+                assert!(sinkpad.send_event(gst::event::StreamStart::new("test")));
                 let caps = if main_stream {
                     gst::Caps::builder("video/x-raw")
                         .field("format", &"ARGB")
@@ -130,16 +130,16 @@ fn setup_sender_receiver(
                         .field("channels", &1i32)
                         .build()
                 };
-                assert!(sinkpad.send_event(gst::Event::new_caps(&caps).build()));
+                assert!(sinkpad.send_event(gst::event::Caps::new(&caps)));
 
                 let segment = gst::FormattedSegment::<gst::ClockTime>::new();
-                assert!(sinkpad.send_event(gst::Event::new_segment(&segment).build()));
+                assert!(sinkpad.send_event(gst::event::Segment::new(&segment)));
 
                 let mut tags = gst::TagList::new();
                 tags.get_mut()
                     .unwrap()
                     .add::<gst::tags::Title>(&"some title", gst::TagMergeMode::Append);
-                assert!(sinkpad.send_event(gst::Event::new_tag(tags).build()));
+                assert!(sinkpad.send_event(gst::event::Tag::new(tags)));
 
                 first = false;
             }
@@ -185,8 +185,7 @@ fn setup_sender_receiver(
                 SendData::Gaps(n) => {
                     for _ in 0..n {
                         let event =
-                            gst::Event::new_gap(offset + i * 20 * gst::MSECOND, 20 * gst::MSECOND)
-                                .build();
+                            gst::event::Gap::new(offset + i * 20 * gst::MSECOND, 20 * gst::MSECOND);
                         let _ = sinkpad.send_event(event);
                         i += 1;
                     }
@@ -196,7 +195,7 @@ fn setup_sender_receiver(
             let _ = sender_input_done.send(());
         }
 
-        let _ = sinkpad.send_event(gst::Event::new_eos().build());
+        let _ = sinkpad.send_event(gst::event::Eos::new());
         let _ = sender_input_done.send(());
     });
 

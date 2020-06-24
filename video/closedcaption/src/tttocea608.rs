@@ -296,7 +296,7 @@ impl TtToCea608 {
                 .mul_div_round(fps_d, fps_n)
                 .unwrap();
 
-            let event = gst::Event::new_gap(start, end - start).build();
+            let event = gst::event::Gap::new(start, end - start);
 
             drop(state);
 
@@ -635,7 +635,7 @@ impl TtToCea608 {
 
         match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                let mut peer_query = gst::query::Query::new_latency();
+                let mut peer_query = gst::query::Latency::new();
 
                 let ret = self.sinkpad.peer_query(&mut peer_query);
 
@@ -702,7 +702,7 @@ impl TtToCea608 {
 
                 gst_debug!(CAT, obj: pad, "Pushing caps {}", caps);
 
-                let new_event = gst::Event::new_caps(&downstream_caps).build();
+                let new_event = gst::event::Caps::new(&downstream_caps);
 
                 drop(state);
 

@@ -181,7 +181,7 @@ fn test_encode(video_info: &gst_video::VideoInfo) {
     for _ in 0..5 {
         h.push(buffer.clone()).unwrap();
     }
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     for i in 0..5 {
         let buffer = h.pull().unwrap();

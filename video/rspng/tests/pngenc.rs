@@ -81,7 +81,7 @@ fn test_png_encode(video_info: &gst_video::VideoInfo) {
         };
         h.push(buffer.clone()).unwrap();
     }
-    h.push_event(gst::Event::new_eos().build());
+    h.push_event(gst::event::Eos::new());
 
     (0..5).for_each(|_| {
         let buffer = h.pull().unwrap();

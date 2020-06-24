@@ -754,7 +754,7 @@ impl UdpSinkPadHandler {
     async fn handle_event(&self, element: &gst::Element, event: gst::Event) {
         match event.view() {
             EventView::Eos(_) => {
-                let _ = element.post_message(&gst::Message::new_eos().src(Some(element)).build());
+                let _ = element.post_message(&gst::message::Eos::builder().src(element).build());
             }
             EventView::Segment(e) => {
                 self.0.write().unwrap().segment = Some(e.get_segment().clone());

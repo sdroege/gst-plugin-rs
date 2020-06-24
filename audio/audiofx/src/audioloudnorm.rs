@@ -1718,7 +1718,7 @@ impl AudioLoudNorm {
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
         match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                let mut peer_query = gst::Query::new_latency();
+                let mut peer_query = gst::query::Latency::new();
                 if self.sinkpad.peer_query(&mut peer_query) {
                     let (live, min_latency, max_latency) = peer_query.get_result();
                     q.set(

@@ -193,7 +193,7 @@ fn flush_regular() {
     let _ = h.pull().unwrap();
 
     // FlushStart
-    assert!(h.push_upstream_event(gst::Event::new_flush_start().build()));
+    assert!(h.push_upstream_event(gst::event::FlushStart::new()));
 
     // Can't push buffer while flushing
     assert!(!appsrc
@@ -206,7 +206,7 @@ fn flush_regular() {
     assert!(h.try_pull().is_none());
 
     // FlushStop
-    assert!(h.push_upstream_event(gst::Event::new_flush_stop(true).build()));
+    assert!(h.push_upstream_event(gst::event::FlushStop::new(true)));
 
     // No buffer available due to flush
     assert!(h.try_pull().is_none());
@@ -258,7 +258,7 @@ fn pause_flush() {
         .unwrap();
 
     // FlushStart
-    assert!(h.push_upstream_event(gst::Event::new_flush_start().build()));
+    assert!(h.push_upstream_event(gst::event::FlushStart::new()));
 
     // Can't push buffers while flushing
     assert!(!appsrc
@@ -271,7 +271,7 @@ fn pause_flush() {
     assert!(h.try_pull().is_none());
 
     // FlushStop
-    assert!(h.push_upstream_event(gst::Event::new_flush_stop(true).build()));
+    assert!(h.push_upstream_event(gst::event::FlushStop::new(true)));
 
     appsrc
         .change_state(gst::StateChange::PausedToPlaying)
