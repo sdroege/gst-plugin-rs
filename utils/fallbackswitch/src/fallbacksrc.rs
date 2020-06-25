@@ -2293,7 +2293,9 @@ mod custom_source {
                 .iter()
                 .map(|p| p.stream.clone())
                 .collect::<Vec<_>>();
-            let collection = gst::StreamCollection::new(None).streams(&streams).build();
+            let collection = gst::StreamCollection::builder(None)
+                .streams(&streams)
+                .build();
             drop(state);
 
             element.no_more_pads();

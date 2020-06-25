@@ -28,7 +28,7 @@ fn init() {
 fn test_encode_i420() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::I420, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::I420, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -39,7 +39,7 @@ fn test_encode_i420() {
 fn test_encode_i420_10() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::I42010le, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::I42010le, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -50,7 +50,7 @@ fn test_encode_i420_10() {
 fn test_encode_i420_12() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::I42012le, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::I42012le, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -61,7 +61,7 @@ fn test_encode_i420_12() {
 fn test_encode_y42b() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Y42b, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Y42b, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -72,7 +72,7 @@ fn test_encode_y42b() {
 fn test_encode_i422_10() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::I42210le, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::I42210le, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -83,7 +83,7 @@ fn test_encode_i422_10() {
 fn test_encode_y422_12() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::I42212le, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::I42212le, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -94,7 +94,7 @@ fn test_encode_y422_12() {
 fn test_encode_y444() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Y444, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Y444, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -105,7 +105,7 @@ fn test_encode_y444() {
 fn test_encode_i444_10() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Y44410le, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Y44410le, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -116,7 +116,7 @@ fn test_encode_i444_10() {
 fn test_encode_i444_12() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Y44412le, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Y44412le, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();

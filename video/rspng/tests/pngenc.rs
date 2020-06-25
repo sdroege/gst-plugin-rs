@@ -20,7 +20,7 @@ fn init() {
 fn test_png_encode_gray() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Gray8, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Gray8, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -31,7 +31,7 @@ fn test_png_encode_gray() {
 fn test_png_encode_gray16() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Gray16Be, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Gray16Be, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -42,7 +42,7 @@ fn test_png_encode_gray16() {
 fn test_png_encode_rgb() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Rgb, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Rgb, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -53,7 +53,7 @@ fn test_png_encode_rgb() {
 fn test_png_encode_rgba() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Rgba, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Rgba, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();

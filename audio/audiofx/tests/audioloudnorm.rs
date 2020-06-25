@@ -81,7 +81,7 @@ fn run_test(
         .unwrap();
 
     sink.set_property("sync", &false).unwrap();
-    let caps = gst_audio::AudioInfo::new(gst_audio::AUDIO_FORMAT_F64, 192_000, channels)
+    let caps = gst_audio::AudioInfo::builder(gst_audio::AUDIO_FORMAT_F64, 192_000, channels)
         .build()
         .unwrap()
         .to_caps()
@@ -92,7 +92,7 @@ fn run_test(
 
     let samples_clone = samples.clone();
     sink.set_callbacks(
-        gst_app::AppSinkCallbacks::new()
+        gst_app::AppSinkCallbacks::builder()
             .new_sample(move |sink| {
                 let sample = sink.pull_sample().unwrap();
 

@@ -158,7 +158,7 @@ impl FallbackSwitch {
                     "Can't change back to sinkpad, waiting for keyframe"
                 );
                 self.sinkpad.push_event(
-                    gst_video::new_upstream_force_key_unit_event()
+                    gst_video::UpstreamForceKeyUnitEvent::builder()
                         .all_headers(true)
                         .build(),
                 );
@@ -284,7 +284,7 @@ impl FallbackSwitch {
                         "Can't change to fallback sinkpad yet, waiting for keyframe"
                     );
                     fallback_sinkpad.push_event(
-                        gst_video::new_upstream_force_key_unit_event()
+                        gst_video::UpstreamForceKeyUnitEvent::builder()
                             .all_headers(true)
                             .build(),
                     );

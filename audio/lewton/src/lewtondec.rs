@@ -318,7 +318,7 @@ impl LewtonDec {
             gst::FlowError::Error
         })?;
 
-        let mut audio_info = gst_audio::AudioInfo::new(
+        let mut audio_info = gst_audio::AudioInfo::builder(
             gst_audio::AUDIO_FORMAT_F32,
             ident.audio_sample_rate,
             ident.audio_channels as u32,

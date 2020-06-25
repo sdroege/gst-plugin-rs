@@ -105,7 +105,7 @@ fn test_pipeline() {
     let sink = sink.downcast::<gst_app::AppSink>().unwrap();
     let adapter_clone = adapter.clone();
     sink.set_callbacks(
-        gst_app::AppSinkCallbacks::new()
+        gst_app::AppSinkCallbacks::builder()
             // Add a handler to the "new-sample" signal.
             .new_sample(move |appsink| {
                 // Pull the sample in question out of the appsink's buffer.

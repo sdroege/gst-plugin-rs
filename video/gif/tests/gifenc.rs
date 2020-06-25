@@ -27,7 +27,7 @@ fn init() {
 fn test_encode_rgba() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Rgba, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Rgba, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();
@@ -37,7 +37,7 @@ fn test_encode_rgba() {
 fn test_encode_rgb() {
     init();
 
-    let video_info = gst_video::VideoInfo::new(gst_video::VideoFormat::Rgb, 160, 120)
+    let video_info = gst_video::VideoInfo::builder(gst_video::VideoFormat::Rgb, 160, 120)
         .fps((30, 1))
         .build()
         .unwrap();

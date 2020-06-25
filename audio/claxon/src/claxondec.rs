@@ -394,7 +394,7 @@ fn get_gstaudioinfo(
     };
     let to = &FLAC_CHANNEL_POSITIONS[index - 1][..index];
     let info_builder =
-        gst_audio::AudioInfo::new(format, streaminfo.sample_rate, streaminfo.channels)
+        gst_audio::AudioInfo::builder(format, streaminfo.sample_rate, streaminfo.channels)
             .positions(to);
 
     let audio_info = info_builder
