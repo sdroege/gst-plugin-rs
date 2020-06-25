@@ -1948,7 +1948,7 @@ mod custom_source {
             "Source",
             "Source",
             gst::Element::static_type(),
-            glib::ParamFlags::READWRITE | glib::ParamFlags::CONSTRUCT_ONLY,
+            glib::ParamFlags::WRITABLE | glib::ParamFlags::CONSTRUCT_ONLY,
         )
     })];
 
