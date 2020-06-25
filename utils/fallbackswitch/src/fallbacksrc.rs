@@ -599,7 +599,14 @@ impl FallbackSrc {
                     gst::ElementFactory::make("imagefreeze", Some("fallback_imagefreeze"))
                         .expect("No imagefreeze found");
                 let clocksync = gst::ElementFactory::make("clocksync", Some("fallback_clocksync"))
-                    .expect("No clocksync found");
+                    .or_else(|_| -> Result<_, glib::BoolError> {
+                        let identity =
+                            gst::ElementFactory::make("identity", Some("fallback_clocksync"))?;
+                        identity.set_property("sync", &true).unwrap();
+                        Ok(identity)
+                    })
+                    .expect("No clocksync or identity found");
+
                 input
                     .add_many(&[
                         &filesrc,
@@ -753,7 +760,13 @@ impl FallbackSrc {
 
         let switch =
             gst::ElementFactory::make("fallbackswitch", None).expect("No fallbackswitch found");
-        let clocksync = gst::ElementFactory::make("clocksync", None).expect("No clocksync found");
+        let clocksync = gst::ElementFactory::make("clocksync", None)
+            .or_else(|_| -> Result<_, glib::BoolError> {
+                let identity = gst::ElementFactory::make("identity", None)?;
+                identity.set_property("sync", &true).unwrap();
+                Ok(identity)
+            })
+            .expect("No clocksync or identity found");
 
         element
             .add_many(&[&fallback_input, &switch, &clocksync])
