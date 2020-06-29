@@ -635,6 +635,19 @@ impl FallbackSrc {
                         gst::StateChangeError
                     })?;
 
+                if imagefreeze.set_property("is-live", &true).is_err() {
+                    gst_error!(
+                        CAT,
+                        obj: element,
+                        "imagefreeze does not support live mode, this will probably misbehave"
+                    );
+                    gst_element_warning!(
+                        element,
+                        gst::LibraryError::Settings,
+                        ["imagefreeze does not support live mode, this will probably misbehave"]
+                    );
+                }
+
                 let element_weak = element.downgrade();
                 let input_weak = input.downgrade();
                 let videoconvert_weak = videoconvert.downgrade();
