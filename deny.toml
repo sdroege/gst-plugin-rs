@@ -72,12 +72,6 @@ version = "0.2"
 name = "winapi"
 version = "0.2"
 
-# ignore duplicated deps because of image depending on old num-rational
-# https://github.com/image-rs/image/pull/1263
-[[bans.skip]]
-name = "num-rational"
-version = "0.2"
-
 # ignore duplicated deps because of chrono, cookie, cookie_store, hyper,
 # hyperx, reqwest depending on old time
 # https://github.com/chronotope/chrono/issues/400
@@ -97,6 +91,19 @@ name = "tokio"
 version = "0.2.13"
 [[bans.skip]]
 name = "tokio-macros"
+
+# ignore duplicated textwrap dependency because clap depends on an old version
+# https://github.com/clap-rs/clap/pull/1994
+[[bans.skip]]
+name = "textwrap"
+version = "0.11"
+
+# ignore duplicated miniz_oxide dependency because png/tiff depend on an old version
+# https://github.com/image-rs/image-tiff/pull/76
+# https://github.com/image-rs/image-png/pull/235
+[[bans.skip]]
+name = "miniz_oxide"
+version = "0.3"
 
 [sources]
 unknown-registry = "deny"
