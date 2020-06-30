@@ -325,7 +325,7 @@ impl FlvDemux {
     ) -> Result<(), gst::LoggableError> {
         if active {
             self.start(element, mode).map_err(|err| {
-                element.post_error_message(&err);
+                element.post_error_message(err);
                 gst_loggable_error!(CAT, "Failed to start element with mode {:?}", mode)
             })?;
 
@@ -340,7 +340,7 @@ impl FlvDemux {
             }
 
             self.stop(element).map_err(|err| {
-                element.post_error_message(&err);
+                element.post_error_message(err);
                 gst_loggable_error!(CAT, "Failed to stop element")
             })?;
         }
@@ -532,7 +532,7 @@ impl FlvDemux {
                             state = self.state.lock().unwrap();
                         }
                         Err(err) => {
-                            element.post_error_message(&err);
+                            element.post_error_message(err);
                             return Err(gst::FlowError::Error);
                         }
                     }

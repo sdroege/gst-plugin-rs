@@ -696,7 +696,7 @@ impl ElementImpl for Decrypter {
                 // Create an internal state struct from the provided properties or
                 // refuse to change state
                 let state_ = State::from_props(&props).map_err(|err| {
-                    element.post_error_message(&err);
+                    element.post_error_message(err);
                     gst::StateChangeError
                 })?;
 

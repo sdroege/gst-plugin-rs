@@ -389,7 +389,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
             match event.view() {
                 EventView::Eos(..) => {
                     let _ =
-                        element.post_message(&gst::message::Eos::builder().src(&element).build());
+                        element.post_message(gst::message::Eos::builder().src(&element).build());
                 }
                 EventView::FlushStop(..) => proxysink.start(&element),
                 _ => (),
@@ -741,7 +741,7 @@ impl ElementImpl for ProxySink {
         match transition {
             gst::StateChange::NullToReady => {
                 self.prepare(element).map_err(|err| {
-                    element.post_error_message(&err);
+                    element.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }
@@ -1287,7 +1287,7 @@ impl ElementImpl for ProxySrc {
         match transition {
             gst::StateChange::NullToReady => {
                 self.prepare(element).map_err(|err| {
-                    element.post_error_message(&err);
+                    element.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }

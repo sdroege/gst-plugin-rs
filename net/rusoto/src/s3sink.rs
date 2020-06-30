@@ -502,7 +502,7 @@ impl BaseSinkImpl for S3Sink {
                         "Multipart upload failed: {}",
                         error_message
                     );
-                    element.post_error_message(&error_message);
+                    element.post_error_message(error_message);
                     Err(gst::FlowError::Error)
                 }
                 _ => {

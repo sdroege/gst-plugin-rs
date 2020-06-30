@@ -614,7 +614,7 @@ impl ElementImpl for InputSelector {
         drop(pads);
         drop(state);
 
-        let _ = element.post_message(&gst::message::Latency::builder().src(element).build());
+        let _ = element.post_message(gst::message::Latency::builder().src(element).build());
 
         Some(ret)
     }
@@ -626,7 +626,7 @@ impl ElementImpl for InputSelector {
         element.remove_pad(pad).unwrap();
         drop(pads);
 
-        let _ = element.post_message(&gst::message::Latency::builder().src(element).build());
+        let _ = element.post_message(gst::message::Latency::builder().src(element).build());
     }
 
     fn provide_clock(&self, _element: &gst::Element) -> Option<gst::Clock> {

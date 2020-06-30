@@ -555,7 +555,7 @@ impl FallbackSrc {
             let src = FallbackSrc::from_instance(&element);
 
             if let Err(msg) = src.handle_source_pad_added(&element, pad) {
-                element.post_error_message(&msg);
+                element.post_error_message(msg);
             }
         });
         let element_weak = element.downgrade();
@@ -567,7 +567,7 @@ impl FallbackSrc {
             let src = FallbackSrc::from_instance(&element);
 
             if let Err(msg) = src.handle_source_pad_removed(&element, pad) {
-                element.post_error_message(&msg);
+                element.post_error_message(msg);
             }
         });
 
@@ -1147,7 +1147,7 @@ impl FallbackSrc {
                     let src = FallbackSrc::from_instance(&element);
 
                     if let Err(msg) = src.handle_pad_blocked(&element, pad, pts) {
-                        element.post_error_message(&msg);
+                        element.post_error_message(msg);
                     }
 
                     gst::PadProbeReturn::Ok
@@ -2103,7 +2103,7 @@ mod custom_source {
                     // one here so that fallbacksrc can know about our streams. It is never
                     // forwarded.
                     if let Err(msg) = self.handle_source_no_more_pads(&bin) {
-                        bin.post_error_message(&msg);
+                        bin.post_error_message(msg);
                     }
                 }
                 _ => self.parent_handle_message(bin, msg),
@@ -2141,14 +2141,14 @@ mod custom_source {
             // Handle all source pads that already exist
             for pad in source.get_src_pads() {
                 if let Err(msg) = self.handle_source_pad_added(&element, &pad) {
-                    element.post_error_message(&msg);
+                    element.post_error_message(msg);
                     return Err(gst::StateChangeError);
                 }
             }
 
             if !has_sometimes_pads {
                 if let Err(msg) = self.handle_source_no_more_pads(&element) {
-                    element.post_error_message(&msg);
+                    element.post_error_message(msg);
                     return Err(gst::StateChangeError);
                 }
             } else {
@@ -2163,7 +2163,7 @@ mod custom_source {
                     let src = CustomSource::from_instance(&element);
 
                     if let Err(msg) = src.handle_source_pad_added(&element, pad) {
-                        element.post_error_message(&msg);
+                        element.post_error_message(msg);
                     }
                 });
                 let element_weak = element.downgrade();
@@ -2175,7 +2175,7 @@ mod custom_source {
                     let src = CustomSource::from_instance(&element);
 
                     if let Err(msg) = src.handle_source_pad_removed(&element, pad) {
-                        element.post_error_message(&msg);
+                        element.post_error_message(msg);
                     }
                 });
 
@@ -2188,7 +2188,7 @@ mod custom_source {
                     let src = CustomSource::from_instance(&element);
 
                     if let Err(msg) = src.handle_source_no_more_pads(&element) {
-                        element.post_error_message(&msg);
+                        element.post_error_message(msg);
                     }
                 });
             }
@@ -2314,7 +2314,7 @@ mod custom_source {
             element.no_more_pads();
 
             let _ = element.post_message(
-                &gst::message::StreamsSelected::builder(&collection)
+                gst::message::StreamsSelected::builder(&collection)
                     .src(element)
                     .build(),
             );

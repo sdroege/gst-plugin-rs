@@ -283,7 +283,7 @@ impl ReqwestHttpSrc {
             }
         } else {
             let _ = src.post_message(
-                &gst::message::NeedContext::builder(REQWEST_CLIENT_CONTEXT)
+                gst::message::NeedContext::builder(REQWEST_CLIENT_CONTEXT)
                     .src(src)
                     .build(),
             );
@@ -325,7 +325,7 @@ impl ReqwestHttpSrc {
             s.set("client", &client);
         }
         src.set_context(&context);
-        let _ = src.post_message(&gst::message::HaveContext::builder(context).src(src).build());
+        let _ = src.post_message(gst::message::HaveContext::builder(context).src(src).build());
 
         *client_guard = Some(client.clone());
 
@@ -944,7 +944,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
                 true
             }
             Err(Some(err)) => {
-                src.post_error_message(&err);
+                src.post_error_message(err);
                 false
             }
             Err(None) => false,
@@ -1013,7 +1013,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
             Ok(res) => res,
             Err(Some(err)) => {
                 gst_debug!(CAT, obj: src, "Error {:?}", err);
-                src.post_error_message(&err);
+                src.post_error_message(err);
                 return Err(gst::FlowError::Error);
             }
             Err(None) => {

@@ -929,7 +929,7 @@ impl ElementImpl for UdpSrc {
         match transition {
             gst::StateChange::NullToReady => {
                 self.prepare(element).map_err(|err| {
-                    element.post_error_message(&err);
+                    element.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }

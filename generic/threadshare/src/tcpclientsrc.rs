@@ -399,7 +399,7 @@ impl TaskImpl for TcpClientSrcTask {
             match trigger {
                 task::Trigger::Prepare => {
                     gst_error!(CAT, "Task preparation failed: {:?}", err);
-                    self.element.post_error_message(&err);
+                    self.element.post_error_message(err);
 
                     task::Trigger::Error
                 }
@@ -722,7 +722,7 @@ impl ElementImpl for TcpClientSrc {
         match transition {
             gst::StateChange::NullToReady => {
                 self.prepare(element).map_err(|err| {
-                    element.post_error_message(&err);
+                    element.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }

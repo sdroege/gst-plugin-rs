@@ -681,7 +681,7 @@ impl Transcriber {
                 gst_info!(CAT, obj: element, "Received flush start, disconnecting");
                 match self.disconnect(element) {
                     Err(err) => {
-                        element.post_error_message(&err);
+                        element.post_error_message(err);
                         false
                     }
                     Ok(_) => {
@@ -1149,7 +1149,7 @@ impl ElementImpl for Transcriber {
         match transition {
             gst::StateChange::PausedToReady => {
                 self.disconnect(element).map_err(|err| {
-                    element.post_error_message(&err);
+                    element.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }

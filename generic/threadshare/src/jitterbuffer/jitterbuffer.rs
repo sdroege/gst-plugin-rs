@@ -1511,8 +1511,7 @@ impl ObjectImpl for JitterBuffer {
                 state.jbuf.borrow().set_delay(latency_ms * gst::MSECOND);
 
                 let element = obj.downcast_ref::<gst::Element>().unwrap();
-                let _ =
-                    element.post_message(&gst::message::Latency::builder().src(element).build());
+                let _ = element.post_message(gst::message::Latency::builder().src(element).build());
             }
             subclass::Property("do-lost", ..) => {
                 let mut settings = self.settings.lock().unwrap();
@@ -1607,7 +1606,7 @@ impl ElementImpl for JitterBuffer {
         match transition {
             gst::StateChange::NullToReady => {
                 self.prepare(element).map_err(|err| {
-                    element.post_error_message(&err);
+                    element.post_error_message(err);
                     gst::StateChangeError
                 })?;
             }
