@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use crate::constants::{CDG_HEIGHT, CDG_WIDTH};
 
 struct CdgDec {
-    cdg_inter: Mutex<cdg_renderer::CdgInterpreter>,
+    cdg_inter: Mutex<Box<cdg_renderer::CdgInterpreter>>,
     output_info: Mutex<Option<gst_video::VideoInfo>>,
 }
 
@@ -37,7 +37,7 @@ impl ObjectSubclass for CdgDec {
 
     fn new() -> Self {
         Self {
-            cdg_inter: Mutex::new(cdg_renderer::CdgInterpreter::new()),
+            cdg_inter: Mutex::new(Box::new(cdg_renderer::CdgInterpreter::new())),
             output_info: Mutex::new(None),
         }
     }
