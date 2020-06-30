@@ -229,7 +229,7 @@ impl Dav1dDec {
         if video_meta_supported {
             gst_video::VideoMeta::add_full(
                 out_buffer.get_mut().unwrap(),
-                gst_video::VideoFrameFlags::NONE,
+                gst_video::VideoFrameFlags::empty(),
                 info.format(),
                 info.width(),
                 info.height(),

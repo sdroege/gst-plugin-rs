@@ -8,10 +8,9 @@
 
 use super::super::gst_base_sys;
 
+use glib::subclass::prelude::*;
 use glib::translate::*;
 
-use glib::subclass::prelude::*;
-use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use std::ptr;

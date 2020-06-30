@@ -162,7 +162,7 @@ impl Cea608Overlay {
 
         gst_video::VideoMeta::add(
             buffer.get_mut().unwrap(),
-            gst_video::VideoFrameFlags::NONE,
+            gst_video::VideoFrameFlags::empty(),
             #[cfg(target_endian = "little")]
             gst_video::VideoFormat::Bgra,
             #[cfg(target_endian = "big")]

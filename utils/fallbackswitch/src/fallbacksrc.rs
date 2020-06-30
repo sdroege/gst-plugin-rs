@@ -2258,7 +2258,7 @@ mod custom_source {
                 source_pad: pad.clone(),
                 ghost_pad: ghost_pad.clone().upcast(),
                 // TODO: We only add the stream type right now
-                stream: gst::Stream::new(None, None, stream_type, gst::StreamFlags::NONE),
+                stream: gst::Stream::new(None, None, stream_type, gst::StreamFlags::empty()),
             };
             state.pads.push(stream);
             drop(state);
