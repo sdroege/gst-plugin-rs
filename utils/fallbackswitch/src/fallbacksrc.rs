@@ -95,7 +95,7 @@ struct Stream {
     switch: gst::Element,
 
     // output source pad, connected to switch
-    srcpad: gst::Pad,
+    srcpad: gst::GhostPad,
 }
 
 struct State {
@@ -938,7 +938,8 @@ impl FallbackSrc {
             element.remove(&stream.switch).unwrap();
             element.remove(&stream.clocksync).unwrap();
             element.remove(&stream.fallback_input).unwrap();
-            element.remove_pad(&stream.srcpad).unwrap();
+            let _ = stream.srcpad.set_target(None::<&gst::Pad>);
+            let _ = element.remove_pad(&stream.srcpad);
         }
         state.video_stream = None;
         state.audio_stream = None;
@@ -1980,7 +1981,7 @@ mod custom_source {
 
     struct Stream {
         source_pad: gst::Pad,
-        ghost_pad: gst::Pad,
+        ghost_pad: gst::GhostPad,
         // Dummy stream we created
         stream: gst::Stream,
     }
@@ -2292,6 +2293,7 @@ mod custom_source {
             drop(state);
 
             ghost_pad.set_active(false).unwrap();
+            let _ = ghost_pad.set_target(None::<&gst::Pad>);
             let _ = element.remove_pad(&ghost_pad);
 
             Ok(())
@@ -2335,6 +2337,7 @@ mod custom_source {
             drop(state);
 
             for pad in pads {
+                let _ = pad.ghost_pad.set_target(None::<&gst::Pad>);
                 let _ = element.remove_pad(&pad.ghost_pad);
             }
 
