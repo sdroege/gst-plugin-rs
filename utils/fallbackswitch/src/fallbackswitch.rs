@@ -38,7 +38,7 @@ use std::sync::{Mutex, RwLock};
 struct FallbackSwitch {
     sinkpad: gst_base::AggregatorPad,
     fallback_sinkpad: RwLock<Option<gst_base::AggregatorPad>>,
-    active_sinkpad: Mutex<gst::Pad>,
+    active_sinkpad: Mutex<Option<gst::Pad>>,
     output_state: Mutex<OutputState>,
     pad_states: RwLock<PadStates>,
     settings: Mutex<Settings>,
@@ -149,7 +149,7 @@ impl FallbackSwitch {
         }
 
         let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
-        let pad_change = &*active_sinkpad != self.sinkpad.upcast_ref::<gst::Pad>();
+        let pad_change = active_sinkpad.as_ref() != Some(self.sinkpad.upcast_ref::<gst::Pad>());
         if pad_change {
             if buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT) {
                 gst_info!(
@@ -166,7 +166,7 @@ impl FallbackSwitch {
             }
 
             gst_info!(CAT, obj: agg, "Active pad changed to sinkpad");
-            *active_sinkpad = self.sinkpad.clone().upcast();
+            *active_sinkpad = Some(self.sinkpad.clone().upcast());
         }
         drop(active_sinkpad);
 
@@ -275,7 +275,8 @@ impl FallbackSwitch {
             );
 
             let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
-            let pad_change = &*active_sinkpad != fallback_sinkpad.upcast_ref::<gst::Pad>();
+            let pad_change =
+                active_sinkpad.as_ref() != Some(fallback_sinkpad.upcast_ref::<gst::Pad>());
             if pad_change {
                 if buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT) {
                     gst_info!(
@@ -292,7 +293,7 @@ impl FallbackSwitch {
                 }
 
                 gst_info!(CAT, obj: agg, "Active pad changed to fallback sinkpad");
-                *active_sinkpad = fallback_sinkpad.clone().upcast();
+                *active_sinkpad = Some(fallback_sinkpad.clone().upcast());
             }
             drop(active_sinkpad);
 
@@ -374,9 +375,9 @@ impl ObjectSubclass for FallbackSwitch {
         .unwrap();
 
         Self {
-            sinkpad: sinkpad.clone(),
+            sinkpad,
             fallback_sinkpad: RwLock::new(None),
-            active_sinkpad: Mutex::new(sinkpad.upcast()),
+            active_sinkpad: Mutex::new(None),
             output_state: Mutex::new(OutputState::default()),
             pad_states: RwLock::new(PadStates::default()),
             settings: Mutex::new(Settings::default()),
@@ -535,9 +536,14 @@ impl ElementImpl for FallbackSwitch {
 
 impl AggregatorImpl for FallbackSwitch {
     fn start(&self, _agg: &gst_base::Aggregator) -> Result<(), gst::ErrorMessage> {
-        *self.active_sinkpad.lock().unwrap() = self.sinkpad.clone().upcast();
         *self.output_state.lock().unwrap() = OutputState::default();
         *self.pad_states.write().unwrap() = PadStates::default();
+
+        Ok(())
+    }
+
+    fn stop(&self, _agg: &gst_base::Aggregator) -> Result<(), gst::ErrorMessage> {
+        *self.active_sinkpad.lock().unwrap() = None;
 
         Ok(())
     }
