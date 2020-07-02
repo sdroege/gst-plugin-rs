@@ -459,13 +459,13 @@ impl ObjectImpl for FallbackSrc {
                             .audio_stream
                             .as_ref()
                             .map(|s| s.source_srcpad.is_none() || s.source_srcpad_block.is_some())
-                            .unwrap_or(false))
+                            .unwrap_or(true))
                     || (have_video
                         && state
                             .video_stream
                             .as_ref()
                             .map(|s| s.source_srcpad.is_none() || s.source_srcpad_block.is_some())
-                            .unwrap_or(false))
+                            .unwrap_or(true))
                 {
                     return Ok(Status::Buffering.to_value());
                 }
@@ -1877,47 +1877,8 @@ impl FallbackSrc {
 
                     state.source_restart_timeout = None;
 
-                    let mut have_audio = false;
-                    let mut have_video = false;
-                    if let Some(ref streams) = state.streams {
-                        for stream in streams.iter() {
-                            have_audio = have_audio
-                                || stream.get_stream_type().contains(gst::StreamType::AUDIO);
-                            have_video = have_video
-                                || stream.get_stream_type().contains(gst::StreamType::VIDEO);
-                        }
-                    }
-
-                    // If we have neither audio nor video (no streams yet), or active pad for the ones we have
-                    // is the fallback pad then restart the source now.
-                    if (!have_audio && !have_video)
-                        || (have_audio
-                            && state
-                                .audio_stream
-                                .as_ref()
-                                .and_then(|s| {
-                                    s.switch
-                                        .get_property("active-pad")
-                                        .unwrap()
-                                        .get::<gst::Pad>()
-                                        .unwrap()
-                                })
-                                .map(|p| p.get_name() == "fallback_sink")
-                                .unwrap_or(true))
-                        || (have_video
-                            && state
-                                .video_stream
-                                .as_ref()
-                                .and_then(|s| {
-                                    s.switch
-                                        .get_property("active-pad")
-                                        .unwrap()
-                                        .get::<gst::Pad>()
-                                        .unwrap()
-                                })
-                                .map(|p| p.get_name() == "fallback_sink")
-                                .unwrap_or(true))
-                    {
+                    // If we have the fallback activated then restart the source now.
+                    if src.have_fallback_activated(element, state) {
                         // If we're not actively buffering right now let's restart the source
                         if state
                             .last_buffering_update
@@ -1949,15 +1910,7 @@ impl FallbackSrc {
     }
 
     #[allow(clippy::block_in_if_condition_stmt)]
-    fn handle_switch_active_pad_change(&self, element: &gst::Bin) {
-        let mut state_guard = self.state.lock().unwrap();
-        let state = match &mut *state_guard {
-            None => {
-                return;
-            }
-            Some(state) => state,
-        };
-
+    fn have_fallback_activated(&self, _element: &gst::Bin, state: &State) -> bool {
         let mut have_audio = false;
         let mut have_video = false;
         if let Some(ref streams) = state.streams {
@@ -1970,9 +1923,8 @@ impl FallbackSrc {
         }
 
         // If we have neither audio nor video (no streams yet), or active pad for the ones we have
-        // is the fallback pad then start the retry timeout unless it was started already.
-        // Otherwise cancel the retry timeout.
-        if (!have_audio && !have_video)
+        // is the fallback pad then we have the fallback activated.
+        (!have_audio && !have_video)
             || (have_audio
                 && state
                     .audio_stream
@@ -1999,11 +1951,27 @@ impl FallbackSrc {
                     })
                     .map(|p| p.get_name() == "fallback_sink")
                     .unwrap_or(true))
-        {
+    }
+
+    fn handle_switch_active_pad_change(&self, element: &gst::Bin) {
+        let mut state_guard = self.state.lock().unwrap();
+        let state = match &mut *state_guard {
+            None => {
+                return;
+            }
+            Some(state) => state,
+        };
+
+        // If we have the fallback activated then start the retry timeout unless it was started
+        // already. Otherwise cancel the retry timeout.
+        if self.have_fallback_activated(element, state) {
             gst_warning!(CAT, obj: element, "Switched to fallback stream");
             if state.source_restart_timeout.is_none() {
                 self.schedule_source_restart_timeout(element, state, 0.into());
             }
+
+            drop(state_guard);
+            element.notify("status");
         } else {
             gst_debug!(CAT, obj: element, "Switched to main stream");
             if let Some(timeout) = state.source_retry_timeout.take() {
