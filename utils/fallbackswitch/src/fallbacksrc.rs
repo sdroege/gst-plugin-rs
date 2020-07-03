@@ -45,6 +45,7 @@ struct Settings {
     timeout: u64,
     restart_timeout: u64,
     retry_timeout: u64,
+    restart_on_eos: bool,
 }
 
 impl Default for Settings {
@@ -58,6 +59,7 @@ impl Default for Settings {
             timeout: 5 * gst::SECOND_VAL,
             restart_timeout: 5 * gst::SECOND_VAL,
             retry_timeout: 60 * gst::SECOND_VAL,
+            restart_on_eos: false,
         }
     }
 }
@@ -144,7 +146,7 @@ enum Status {
     Running,
 }
 
-static PROPERTIES: [subclass::Property; 9] = [
+static PROPERTIES: [subclass::Property; 10] = [
     subclass::Property("enable-audio", |name| {
         glib::ParamSpec::boolean(
             name,
@@ -214,6 +216,15 @@ static PROPERTIES: [subclass::Property; 9] = [
             0,
             std::u64::MAX,
             60 * gst::SECOND_VAL,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("restart-on-eos", |name| {
+        glib::ParamSpec::boolean(
+            name,
+            "Restart on EOS",
+            "Restart source on EOS",
+            false,
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -378,6 +389,18 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.retry_timeout = new_value;
             }
+            subclass::Property("restart-on-eos", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let new_value = value.get_some().expect("type checked upstream");
+                gst_info!(
+                    CAT,
+                    obj: element,
+                    "Changing restart-on-eos from {:?} to {:?}",
+                    settings.restart_on_eos,
+                    new_value,
+                );
+                settings.restart_on_eos = new_value;
+            }
             _ => unimplemented!(),
         }
     }
@@ -420,6 +443,10 @@ impl ObjectImpl for FallbackSrc {
             subclass::Property("retry-timeout", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.retry_timeout.to_value())
+            }
+            subclass::Property("restart-on-eos", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.restart_on_eos.to_value())
             }
             subclass::Property("status", ..) => {
                 let state_guard = self.state.lock().unwrap();
@@ -1158,6 +1185,43 @@ impl FallbackSrc {
                 ["Failed to link source pad to clocksync: {}", err]
             )
         })?;
+
+        if state.settings.restart_on_eos {
+            let element_weak = element.downgrade();
+            pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |pad, info| {
+                let element = match element_weak.upgrade() {
+                    None => return gst::PadProbeReturn::Ok,
+                    Some(element) => element,
+                };
+
+                let src = FallbackSrc::from_instance(&element);
+
+                match info.data {
+                    Some(gst::PadProbeData::Event(ref ev))
+                        if ev.get_type() == gst::EventType::Eos =>
+                    {
+                        gst_debug!(
+                            CAT,
+                            obj: &element,
+                            "Received EOS from source on pad {}, restarting",
+                            pad.get_name()
+                        );
+
+                        let mut state_guard = src.state.lock().unwrap();
+                        let state = match &mut *state_guard {
+                            None => {
+                                return gst::PadProbeReturn::Ok;
+                            }
+                            Some(state) => state,
+                        };
+                        src.handle_source_error(&element, state);
+
+                        gst::PadProbeReturn::Drop
+                    }
+                    _ => gst::PadProbeReturn::Ok,
+                }
+            });
+        }
 
         stream.source_srcpad = Some(pad.clone());
         stream.source_srcpad_block = Some(self.add_pad_probe(element, pad));
