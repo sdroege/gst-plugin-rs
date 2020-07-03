@@ -121,6 +121,7 @@ impl FallbackSwitch {
         &self,
         agg: &gst_base::Aggregator,
         state: &mut OutputState,
+        settings: &Settings,
         mut buffer: gst::Buffer,
         fallback_sinkpad: Option<&gst_base::AggregatorPad>,
     ) -> Result<Option<(gst::Buffer, gst::Caps, bool)>, gst::FlowError> {
@@ -141,11 +142,53 @@ impl FallbackSwitch {
                 gst::FlowError::Error
             })?;
 
+        let running_time = segment.to_running_time(buffer.get_dts_or_pts());
         {
             // FIXME: This will not work correctly for negative DTS
             let buffer = buffer.make_mut();
             buffer.set_pts(segment.to_running_time(buffer.get_pts()));
             buffer.set_dts(segment.to_running_time(buffer.get_dts()));
+        }
+
+        let is_late = {
+            let clock = agg.get_clock();
+            let base_time = agg.get_base_time();
+
+            if let Some(clock) = clock {
+                let now = clock.get_time();
+                let latency = agg.get_latency();
+
+                if latency.is_some() {
+                    let deadline = base_time + running_time + latency;
+
+                    if now > deadline {
+                        gst_debug!(CAT, obj: agg, "Buffer is too late: {} > {}", now, deadline);
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
+
+        if state.last_sinkpad_time.is_some()
+            && is_late
+            && state.last_sinkpad_time + settings.timeout <= running_time
+        {
+            gst_debug!(
+                CAT,
+                obj: agg,
+                "Buffer is too late and timeout reached: {} + {} <= {}",
+                state.last_sinkpad_time,
+                settings.timeout,
+                running_time,
+            );
+
+            return Ok(None);
         }
 
         let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
@@ -170,7 +213,9 @@ impl FallbackSwitch {
         }
         drop(active_sinkpad);
 
-        state.last_sinkpad_time = buffer.get_dts_or_pts();
+        if !is_late || state.last_sinkpad_time.is_none() {
+            state.last_sinkpad_time = buffer.get_dts_or_pts();
+        }
 
         // Drop all older buffers from the fallback sinkpad
         if let Some(fallback_sinkpad) = fallback_sinkpad {
@@ -324,9 +369,13 @@ impl FallbackSwitch {
         gst_debug!(CAT, obj: agg, "Aggregate called: timeout {}", timeout);
 
         if let Some(buffer) = self.sinkpad.pop_buffer() {
-            if let Some(res) =
-                self.handle_main_buffer(agg, &mut *state, buffer, fallback_sinkpad.as_ref())?
-            {
+            if let Some(res) = self.handle_main_buffer(
+                agg,
+                &mut *state,
+                &settings,
+                buffer,
+                fallback_sinkpad.as_ref(),
+            )? {
                 return Ok(res);
             }
         } else if self.sinkpad.is_eos() {
