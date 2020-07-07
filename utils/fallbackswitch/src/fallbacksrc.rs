@@ -663,6 +663,13 @@ impl FallbackSrc {
                     .expect("No clocksync or identity found");
                 let queue = gst::ElementFactory::make("queue", Some("fallback_queue"))
                     .expect("No queue found");
+                queue
+                    .set_properties(&[
+                        ("max-size-buffers", &0u32),
+                        ("max-size-bytes", &0u32),
+                        ("max-size-time", &(5 * gst::SECOND)),
+                    ])
+                    .unwrap();
 
                 input
                     .add_many(&[
