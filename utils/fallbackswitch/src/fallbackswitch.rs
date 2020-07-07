@@ -159,7 +159,7 @@ impl FallbackSwitch {
                 let latency = agg.get_latency();
 
                 if latency.is_some() {
-                    let deadline = base_time + running_time + latency;
+                    let deadline = base_time + running_time + latency + 40 * gst::MSECOND;
 
                     if now > deadline {
                         gst_debug!(CAT, obj: agg, "Buffer is too late: {} > {}", now, deadline);
