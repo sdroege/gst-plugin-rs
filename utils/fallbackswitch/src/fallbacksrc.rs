@@ -46,6 +46,7 @@ struct Settings {
     restart_timeout: u64,
     retry_timeout: u64,
     restart_on_eos: bool,
+    min_latency: u64,
 }
 
 impl Default for Settings {
@@ -60,6 +61,7 @@ impl Default for Settings {
             restart_timeout: 5 * gst::SECOND_VAL,
             retry_timeout: 60 * gst::SECOND_VAL,
             restart_on_eos: false,
+            min_latency: 0,
         }
     }
 }
@@ -146,7 +148,7 @@ enum Status {
     Running,
 }
 
-static PROPERTIES: [subclass::Property; 10] = [
+static PROPERTIES: [subclass::Property; 11] = [
     subclass::Property("enable-audio", |name| {
         glib::ParamSpec::boolean(
             name,
@@ -236,6 +238,19 @@ static PROPERTIES: [subclass::Property; 10] = [
             Status::static_type(),
             Status::Stopped as i32,
             glib::ParamFlags::READABLE,
+        )
+    }),
+    subclass::Property("min-latency", |name| {
+        glib::ParamSpec::uint64(
+            name,
+            "Minimum Latency",
+            "When the main source has a higher latency than the fallback source \
+             this allows to configure a minimum latency that would be configured \
+             if initially the fallback is enabled",
+            0,
+            std::u64::MAX,
+            0,
+            glib::ParamFlags::READWRITE,
         )
     }),
 ];
@@ -401,6 +416,18 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.restart_on_eos = new_value;
             }
+            subclass::Property("min-latency", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let new_value = value.get_some().expect("type checked upstream");
+                gst_info!(
+                    CAT,
+                    obj: element,
+                    "Changing Minimum Latency from {:?} to {:?}",
+                    settings.min_latency,
+                    new_value,
+                );
+                settings.min_latency = new_value;
+            }
             _ => unimplemented!(),
         }
     }
@@ -499,6 +526,10 @@ impl ObjectImpl for FallbackSrc {
 
                 // Otherwise we're running now
                 Ok(Status::Running.to_value())
+            }
+            subclass::Property("min-latency", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.min_latency.to_value())
             }
             _ => unimplemented!(),
         }
@@ -634,6 +665,7 @@ impl FallbackSrc {
     fn create_fallback_video_input(
         &self,
         element: &gst::Bin,
+        min_latency: u64,
         fallback_uri: Option<&str>,
     ) -> Result<gst::Element, gst::StateChangeError> {
         let input = gst::Bin::new(Some("fallback_video"));
@@ -667,7 +699,10 @@ impl FallbackSrc {
                     .set_properties(&[
                         ("max-size-buffers", &0u32),
                         ("max-size-bytes", &0u32),
-                        ("max-size-time", &(5 * gst::SECOND)),
+                        (
+                            "max-size-time",
+                            &(std::cmp::max(5 * gst::SECOND, min_latency.into())),
+                        ),
                     ])
                     .unwrap();
 
@@ -833,13 +868,14 @@ impl FallbackSrc {
         &self,
         element: &gst::Bin,
         timeout: u64,
+        min_latency: u64,
         is_audio: bool,
         fallback_uri: Option<&str>,
     ) -> Result<Stream, gst::StateChangeError> {
         let fallback_input = if is_audio {
             self.create_fallback_audio_input(element)?
         } else {
-            self.create_fallback_video_input(element, fallback_uri)?
+            self.create_fallback_video_input(element, min_latency, fallback_uri)?
         };
 
         let switch =
@@ -867,6 +903,9 @@ impl FallbackSrc {
             src.handle_switch_active_pad_change(&element);
         });
         switch.set_property("timeout", &timeout).unwrap();
+        switch
+            .set_property("min-upstream-latency", &min_latency)
+            .unwrap();
 
         gst::Element::link_pads(&fallback_input, Some("src"), &switch, Some("fallback_sink"))
             .unwrap();
@@ -943,8 +982,13 @@ impl FallbackSrc {
 
         // Create video stream
         let video_stream = if settings.enable_video {
-            let stream =
-                self.create_stream(element, settings.timeout, false, fallback_uri.as_deref())?;
+            let stream = self.create_stream(
+                element,
+                settings.timeout,
+                settings.min_latency,
+                false,
+                fallback_uri.as_deref(),
+            )?;
             flow_combiner.add_pad(&stream.srcpad);
             Some(stream)
         } else {
@@ -953,7 +997,8 @@ impl FallbackSrc {
 
         // Create audio stream
         let audio_stream = if settings.enable_audio {
-            let stream = self.create_stream(element, settings.timeout, true, None)?;
+            let stream =
+                self.create_stream(element, settings.timeout, settings.min_latency, true, None)?;
             flow_combiner.add_pad(&stream.srcpad);
             Some(stream)
         } else {
