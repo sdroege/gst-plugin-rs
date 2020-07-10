@@ -47,6 +47,7 @@ struct Settings {
     retry_timeout: u64,
     restart_on_eos: bool,
     min_latency: u64,
+    buffer_duration: i64,
 }
 
 impl Default for Settings {
@@ -62,6 +63,7 @@ impl Default for Settings {
             retry_timeout: 60 * gst::SECOND_VAL,
             restart_on_eos: false,
             min_latency: 0,
+            buffer_duration: -1,
         }
     }
 }
@@ -148,7 +150,7 @@ enum Status {
     Running,
 }
 
-static PROPERTIES: [subclass::Property; 11] = [
+static PROPERTIES: [subclass::Property; 12] = [
     subclass::Property("enable-audio", |name| {
         glib::ParamSpec::boolean(
             name,
@@ -250,6 +252,17 @@ static PROPERTIES: [subclass::Property; 11] = [
             0,
             std::u64::MAX,
             0,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("buffer-duration", |name| {
+        glib::ParamSpec::int64(
+            name,
+            "Buffer Duration",
+            "Buffer duration when buffering streams (-1 default value)",
+            -1,
+            std::i64::MAX,
+            -1,
             glib::ParamFlags::READWRITE,
         )
     }),
@@ -428,6 +441,18 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.min_latency = new_value;
             }
+            subclass::Property("buffer-duration", ..) => {
+                let mut settings = self.settings.lock().unwrap();
+                let new_value = value.get_some().expect("type checked upstream");
+                gst_info!(
+                    CAT,
+                    obj: element,
+                    "Changing Buffer Duration from {:?} to {:?}",
+                    settings.buffer_duration,
+                    new_value,
+                );
+                settings.buffer_duration = new_value;
+            }
             _ => unimplemented!(),
         }
     }
@@ -531,6 +556,10 @@ impl ObjectImpl for FallbackSrc {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.min_latency.to_value())
             }
+            subclass::Property("buffer-duration", ..) => {
+                let settings = self.settings.lock().unwrap();
+                Ok(settings.buffer_duration.to_value())
+            }
             _ => unimplemented!(),
         }
     }
@@ -611,6 +640,7 @@ impl FallbackSrc {
         &self,
         element: &gst::Bin,
         source: &Source,
+        buffer_duration: i64,
     ) -> Result<gst::Element, gst::StateChangeError> {
         let source = match source {
             Source::Uri(ref uri) => {
@@ -619,6 +649,9 @@ impl FallbackSrc {
 
                 source.set_property("uri", &uri).unwrap();
                 source.set_property("use-buffering", &true).unwrap();
+                source
+                    .set_property("buffer-duration", &buffer_duration)
+                    .unwrap();
 
                 source
             }
@@ -976,7 +1009,8 @@ impl FallbackSrc {
         let fallback_uri = &settings.fallback_uri;
 
         // Create main input
-        let source = self.create_main_input(element, &configured_source)?;
+        let source =
+            self.create_main_input(element, &configured_source, settings.buffer_duration)?;
 
         let mut flow_combiner = gst_base::UniqueFlowCombiner::new();
 
@@ -1901,7 +1935,11 @@ impl FallbackSrc {
                             element.remove(&state.source).unwrap();
 
                             let source = src
-                                .create_main_input(element, &state.configured_source)
+                                .create_main_input(
+                                    element,
+                                    &state.configured_source,
+                                    state.settings.buffer_duration,
+                                )
                                 .expect("failed to create new source");
 
                             (
