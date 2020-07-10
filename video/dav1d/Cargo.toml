@@ -12,7 +12,7 @@ dav1d = "0.5"
 glib = { version = "0.10" }
 gstreamer = { version = "0.16" }
 gstreamer-base = { version = "0.16" }
-gstreamer-video = { version = "0.16" }
+gstreamer-video = { version = "0.16", features = ["v1_12"] }
 lazy_static = "1.0"
 
 [lib]

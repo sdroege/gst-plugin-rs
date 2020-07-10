@@ -10,7 +10,7 @@ edition = "2018"
 [dependencies]
 glib = { version = "0.10" }
 gstreamer = { version = "0.16" }
-gstreamer-video = { version = "0.16" }
+gstreamer-video = { version = "0.16", features = ["v1_12"] }
 gstreamer-check = { version = "0.16" }
 rav1e = { version = "0.3", default-features = false }
 atomic_refcell = "0.1"
