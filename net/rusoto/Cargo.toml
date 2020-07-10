@@ -12,9 +12,9 @@ edition = "2018"
 [dependencies]
 bytes = "0.5"
 futures = "0.3"
-glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
-gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
+glib = { version = "0.10" }
+gstreamer = { version = "0.16", features = ["v1_12"] }
+gstreamer-base = { version = "0.16", features = ["v1_12"] }
 rusoto_core = "0.44"
 rusoto_s3 = "0.44"
 rusoto_credential = "0.44"
@@ -38,4 +38,4 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path="../../version-helper", version = "0.2" }
