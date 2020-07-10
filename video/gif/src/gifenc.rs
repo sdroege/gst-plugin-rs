@@ -408,7 +408,6 @@ impl GifEnc {
             {
                 let trailer_buffer = trailer_buffer.get_mut().unwrap();
                 trailer_buffer.set_pts(state.last_actual_pts);
-                trailer_buffer.set_flags(gst::BufferFlags::NON_DROPPABLE);
             }
 
             // Initialize the encoder again, to be ready for a new round without format change
