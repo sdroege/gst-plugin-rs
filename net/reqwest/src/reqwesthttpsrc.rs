@@ -670,8 +670,6 @@ impl ReqwestHttpSrc {
 }
 
 impl ObjectImpl for ReqwestHttpSrc {
-    glib_object_impl!();
-
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {

@@ -80,9 +80,7 @@ impl ObjectSubclass for CdgDec {
     }
 }
 
-impl ObjectImpl for CdgDec {
-    glib_object_impl!();
-}
+impl ObjectImpl for CdgDec {}
 
 impl ElementImpl for CdgDec {}
 

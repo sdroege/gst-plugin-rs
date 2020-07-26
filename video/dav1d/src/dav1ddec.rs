@@ -405,9 +405,7 @@ impl ObjectSubclass for Dav1dDec {
     }
 }
 
-impl ObjectImpl for Dav1dDec {
-    glib_object_impl!();
-}
+impl ObjectImpl for Dav1dDec {}
 
 impl ElementImpl for Dav1dDec {}
 

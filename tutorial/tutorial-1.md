@@ -257,12 +257,10 @@ In the `new` function we return our empty struct.
 
 In the `class_init` function we, again, set up some metadata for our new element. In this case these are a description, a classification of our element, a longer description and the author. The metadata can later be retrieved and made use of via the [`Registry`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.Registry.html) and [`PluginFeature`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.PluginFeature.html)/[`ElementFactory`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.ElementFactory.html) API. We also configure the `BaseTransform` class and define that we will never operate in-place (producing our output in the input buffer), and that we don’t want to work in passthrough mode if the input/output formats are the same.
 
-Additionally we need to implement various traits on the Rgb2Gray struct, which will later be used to override virtual methods of the various parent classes of our element. For now we can keep the trait implementations empty, except for `ObjectImpl` trait which should simply call the `glib_object_impl!()` macro for some boilerplate code. There is one trait implementation required per parent class.
+Additionally we need to implement various traits on the Rgb2Gray struct, which will later be used to override virtual methods of the various parent classes of our element. For now we can keep the trait implementations empty. There is one trait implementation required per parent class.
 
 ```rust
-impl ObjectImpl for Rgb2Gray {
-    glib_object_impl!();
-}
+impl ObjectImpl for Rgb2Gray {}
 impl ElementImpl for Rgb2Gray {}
 impl BaseTransformImpl for Rgb2Gray {}
 ```
@@ -287,9 +285,7 @@ impl ObjectSubclass for Rgb2Gray {
     glib_object_subclass!();
 }
 
-impl ObjectImpl for Rgb2Gray {
-    glib_object_impl!();
-}
+impl ObjectImpl for Rgb2Gray {}
 
 impl ElementImpl for Rgb2Gray {}
 

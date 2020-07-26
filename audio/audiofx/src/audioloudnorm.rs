@@ -1824,8 +1824,6 @@ impl ObjectSubclass for AudioLoudNorm {
 }
 
 impl ObjectImpl for AudioLoudNorm {
-    glib_object_impl!();
-
     fn constructed(&self, obj: &glib::Object) {
         self.parent_constructed(obj);
 

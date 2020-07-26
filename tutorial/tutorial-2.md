@@ -230,9 +230,6 @@ impl ObjectSubclass for SineSrc {
 }
 
 impl ObjectImpl for SineSrc {
-    // This macro provides some boilerplate.
-    glib_object_impl!();
-
     // Called right after construction of a new instance
     fn constructed(&self, obj: &glib::Object) {
         // Call the parent class' ::constructed() implementation first

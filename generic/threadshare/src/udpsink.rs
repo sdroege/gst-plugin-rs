@@ -20,10 +20,10 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::prelude::*;
 
+use glib::glib_object_subclass;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::{glib_object_impl, glib_object_subclass};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -1305,8 +1305,6 @@ impl ObjectSubclass for UdpSink {
 }
 
 impl ObjectImpl for UdpSink {
-    glib_object_impl!();
-
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         let element = obj.downcast_ref::<gst::Element>().unwrap();

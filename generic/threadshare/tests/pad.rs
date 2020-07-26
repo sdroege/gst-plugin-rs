@@ -21,8 +21,8 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
+use glib::glib_object_subclass;
 use glib::GBoxed;
-use glib::{glib_object_impl, glib_object_subclass};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -336,8 +336,6 @@ impl ObjectSubclass for ElementSrcTest {
 }
 
 impl ObjectImpl for ElementSrcTest {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &SRC_PROPERTIES[id];
 
@@ -649,8 +647,6 @@ impl ObjectSubclass for ElementSinkTest {
 }
 
 impl ObjectImpl for ElementSinkTest {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &SINK_PROPERTIES[id];
 

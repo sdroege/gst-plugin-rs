@@ -10,7 +10,7 @@ use std::{io, io::Write, sync::Arc};
 
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::{glib_object_impl, glib_object_subclass, GEnum};
+use glib::{glib_object_subclass, GEnum};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -323,8 +323,6 @@ impl ObjectSubclass for PngEncoder {
 }
 
 impl ObjectImpl for PngEncoder {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 

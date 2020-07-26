@@ -83,9 +83,7 @@ impl ObjectSubclass for CdgParse {
     }
 }
 
-impl ObjectImpl for CdgParse {
-    glib_object_impl!();
-}
+impl ObjectImpl for CdgParse {}
 
 impl ElementImpl for CdgParse {}
 

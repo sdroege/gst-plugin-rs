@@ -1241,8 +1241,6 @@ impl ObjectSubclass for MccParse {
 }
 
 impl ObjectImpl for MccParse {
-    glib_object_impl!();
-
     fn constructed(&self, obj: &glib::Object) {
         self.parent_constructed(obj);
 

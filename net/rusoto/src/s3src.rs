@@ -251,8 +251,6 @@ impl ObjectSubclass for S3Src {
 }
 
 impl ObjectImpl for S3Src {
-    glib_object_impl!();
-
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
         let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();

@@ -93,9 +93,7 @@ impl ObjectSubclass for ClaxonDec {
     }
 }
 
-impl ObjectImpl for ClaxonDec {
-    glib_object_impl!();
-}
+impl ObjectImpl for ClaxonDec {}
 
 impl ElementImpl for ClaxonDec {}
 

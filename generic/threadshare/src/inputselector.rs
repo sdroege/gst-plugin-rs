@@ -19,10 +19,10 @@ use futures::future::BoxFuture;
 use futures::future::{abortable, AbortHandle};
 use futures::prelude::*;
 
+use glib::glib_object_subclass;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::{glib_object_impl, glib_object_subclass};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -481,8 +481,6 @@ impl ObjectSubclass for InputSelector {
 }
 
 impl ObjectImpl for InputSelector {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 

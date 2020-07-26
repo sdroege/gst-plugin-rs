@@ -156,9 +156,6 @@ impl ObjectSubclass for ProgressBin {
 
 // Implementation of glib::Object virtual methods
 impl ObjectImpl for ProgressBin {
-    // This macro provides some boilerplate
-    glib_object_impl!();
-
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {

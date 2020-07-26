@@ -173,8 +173,6 @@ impl ObjectSubclass for FileSrc {
 }
 
 impl ObjectImpl for FileSrc {
-    glib_object_impl!();
-
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {

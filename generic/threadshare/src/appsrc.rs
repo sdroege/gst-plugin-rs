@@ -21,10 +21,10 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
+use glib::glib_object_subclass;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::{glib_object_impl, glib_object_subclass};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -639,8 +639,6 @@ impl ObjectSubclass for AppSrc {
 }
 
 impl ObjectImpl for AppSrc {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 

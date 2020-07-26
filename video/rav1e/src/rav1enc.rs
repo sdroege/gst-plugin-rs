@@ -370,8 +370,6 @@ impl ObjectSubclass for Rav1Enc {
 }
 
 impl ObjectImpl for Rav1Enc {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 

@@ -314,8 +314,6 @@ impl ObjectSubclass for FallbackSrc {
 }
 
 impl ObjectImpl for FallbackSrc {
-    glib_object_impl!();
-
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         let element = obj.downcast_ref::<gst::Bin>().unwrap();
@@ -2235,8 +2233,6 @@ mod custom_source {
     }
 
     impl ObjectImpl for CustomSource {
-        glib_object_impl!();
-
         fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
             let prop = &PROPERTIES[id];
             let element = obj.downcast_ref::<gst::Bin>().unwrap();

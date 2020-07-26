@@ -418,8 +418,6 @@ impl ObjectSubclass for S3Sink {
 }
 
 impl ObjectImpl for S3Sink {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
         let mut settings = self.settings.lock().unwrap();

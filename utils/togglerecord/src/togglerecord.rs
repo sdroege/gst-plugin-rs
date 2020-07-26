@@ -1606,8 +1606,6 @@ impl ObjectSubclass for ToggleRecord {
 }
 
 impl ObjectImpl for ToggleRecord {
-    glib_object_impl!();
-
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         let element = obj.downcast_ref::<gst::Element>().unwrap();

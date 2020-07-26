@@ -500,8 +500,6 @@ impl ObjectSubclass for SccParse {
 }
 
 impl ObjectImpl for SccParse {
-    glib_object_impl!();
-
     fn constructed(&self, obj: &glib::Object) {
         self.parent_constructed(obj);
 

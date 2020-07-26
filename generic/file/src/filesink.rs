@@ -159,8 +159,6 @@ impl ObjectSubclass for FileSink {
 }
 
 impl ObjectImpl for FileSink {
-    glib_object_impl!();
-
     fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {

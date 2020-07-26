@@ -330,8 +330,6 @@ impl ObjectSubclass for TextWrap {
 }
 
 impl ObjectImpl for TextWrap {
-    glib_object_impl!();
-
     fn constructed(&self, obj: &glib::Object) {
         self.parent_constructed(obj);
 

@@ -19,10 +19,10 @@ use futures::channel::oneshot;
 use futures::future::BoxFuture;
 use futures::prelude::*;
 
+use glib::glib_object_subclass;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::{glib_object_impl, glib_object_subclass};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -693,8 +693,6 @@ impl ObjectSubclass for ProxySink {
 }
 
 impl ObjectImpl for ProxySink {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES_SINK[id];
 
@@ -1216,8 +1214,6 @@ impl ObjectSubclass for ProxySrc {
 }
 
 impl ObjectImpl for ProxySrc {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES_SRC[id];
 

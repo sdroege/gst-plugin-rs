@@ -15,9 +15,9 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use glib::glib_object_subclass;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::{glib_object_impl, glib_object_subclass};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{
@@ -431,8 +431,6 @@ impl ObjectSubclass for CsoundFilter {
 }
 
 impl ObjectImpl for CsoundFilter {
-    glib_object_impl!();
-
     fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {

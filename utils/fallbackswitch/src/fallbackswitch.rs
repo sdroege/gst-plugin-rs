@@ -477,8 +477,6 @@ impl ObjectSubclass for FallbackSwitch {
 }
 
 impl ObjectImpl for FallbackSwitch {
-    glib_object_impl!();
-
     fn constructed(&self, obj: &glib::Object) {
         self.parent_constructed(obj);
 

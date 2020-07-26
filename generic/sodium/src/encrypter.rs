@@ -470,8 +470,6 @@ impl ObjectSubclass for Encrypter {
 }
 
 impl ObjectImpl for Encrypter {
-    glib_object_impl!();
-
     fn constructed(&self, obj: &glib::Object) {
         self.parent_constructed(obj);
 

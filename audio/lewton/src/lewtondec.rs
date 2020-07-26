@@ -92,9 +92,7 @@ impl ObjectSubclass for LewtonDec {
     }
 }
 
-impl ObjectImpl for LewtonDec {
-    glib_object_impl!();
-}
+impl ObjectImpl for LewtonDec {}
 
 impl ElementImpl for LewtonDec {}
 

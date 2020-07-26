@@ -874,8 +874,6 @@ impl ObjectSubclass for TtToCea608 {
 }
 
 impl ObjectImpl for TtToCea608 {
-    glib_object_impl!();
-
     fn constructed(&self, obj: &glib::Object) {
         self.parent_constructed(obj);
 
