@@ -117,10 +117,6 @@ allow-git = [
   "https://github.com/gtk-rs/cairo",
   "https://github.com/gtk-rs/pango",
   "https://github.com/gtk-rs/pangocairo",
-  "https://github.com/gtk-rs/atk",
-  "https://github.com/gtk-rs/gdk-pixbuf",
-  "https://github.com/gtk-rs/gdk",
-  "https://github.com/gtk-rs/gtk",
   "https://github.com/fengalin/tokio",
   "https://github.com/rust-av/flavors",
 ]
