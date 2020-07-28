@@ -457,7 +457,7 @@ impl ObjectImpl for FallbackSrc {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    #[allow(clippy::block_in_if_condition_stmt)]
+    #[allow(clippy::blocks_in_if_conditions)]
     fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
@@ -1984,7 +1984,7 @@ impl FallbackSrc {
         });
     }
 
-    #[allow(clippy::block_in_if_condition_stmt)]
+    #[allow(clippy::blocks_in_if_conditions)]
     fn schedule_source_restart_timeout(
         &self,
         element: &gst::Bin,
@@ -2061,7 +2061,7 @@ impl FallbackSrc {
         state.source_restart_timeout = Some(timeout);
     }
 
-    #[allow(clippy::block_in_if_condition_stmt)]
+    #[allow(clippy::blocks_in_if_conditions)]
     fn have_fallback_activated(&self, _element: &gst::Bin, state: &State) -> bool {
         let mut have_audio = false;
         let mut have_video = false;

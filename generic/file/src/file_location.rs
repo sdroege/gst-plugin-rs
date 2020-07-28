@@ -30,11 +30,11 @@ impl FileLocation {
                     ));
                 }
 
-                let path = url.to_file_path().or_else(|_| {
-                    Err(glib::Error::new(
+                let path = url.to_file_path().map_err(|_| {
+                    glib::Error::new(
                         gst::URIError::BadUri,
                         format!("Unsupported URI {}", uri_str).as_str(),
-                    ))
+                    )
                 })?;
 
                 FileLocation::try_from(path)

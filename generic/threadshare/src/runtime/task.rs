@@ -338,7 +338,7 @@ impl TaskInner {
 
         gst_log!(RUNTIME_CAT, "Pushing {:?}", triggering_evt);
 
-        triggering_evt_tx.try_send(triggering_evt).or_else(|err| {
+        triggering_evt_tx.try_send(triggering_evt).map_err(|err| {
             let resource_err = if err.is_full() {
                 gst::ResourceError::NoSpaceLeft
             } else {
@@ -346,11 +346,11 @@ impl TaskInner {
             };
 
             gst_warning!(RUNTIME_CAT, "Unable to send {:?}: {:?}", trigger, err);
-            Err(TransitionError {
+            TransitionError {
                 trigger,
                 state: self.state,
                 err_msg: gst_error_msg!(resource_err, ["Unable to send {:?}: {:?}", trigger, err]),
-            })
+            }
         })?;
 
         Ok(ack_rx)

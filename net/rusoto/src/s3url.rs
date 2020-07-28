@@ -44,7 +44,7 @@ impl ToString for GstS3Url {
 }
 
 pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
-    let url = Url::parse(url_str).or_else(|err| Err(format!("Parse error: {}", err)))?;
+    let url = Url::parse(url_str).map_err(|err| format!("Parse error: {}", err))?;
 
     if url.scheme() != "s3" {
         return Err(format!("Unsupported URI '{}'", url.scheme()));
@@ -55,7 +55,7 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
     }
 
     let host = url.host_str().unwrap();
-    let region = Region::from_str(host).or_else(|_| Err(format!("Invalid region '{}'", host)))?;
+    let region = Region::from_str(host).map_err(|_| format!("Invalid region '{}'", host))?;
 
     let mut path = url
         .path_segments()

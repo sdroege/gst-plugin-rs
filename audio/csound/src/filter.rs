@@ -592,19 +592,15 @@ impl BaseTransformImpl for CsoundFilter {
     ) -> Result<(), gst::LoggableError> {
         // Flush previous state
         if self.state.lock().unwrap().is_some() {
-            self.drain(element).or_else(|e| {
-                Err(gst_loggable_error!(
-                    CAT,
-                    "Error flusing previous state data {:?}",
-                    e
-                ))
+            self.drain(element).map_err(|e| {
+                gst_loggable_error!(CAT, "Error flusing previous state data {:?}", e)
             })?;
         }
 
         let in_info = gst_audio::AudioInfo::from_caps(incaps)
-            .or_else(|_| Err(gst_loggable_error!(CAT, "Failed to parse input caps")))?;
+            .map_err(|_| gst_loggable_error!(CAT, "Failed to parse input caps"))?;
         let out_info = gst_audio::AudioInfo::from_caps(outcaps)
-            .or_else(|_| Err(gst_loggable_error!(CAT, "Failed to parse output caps")))?;
+            .map_err(|_| gst_loggable_error!(CAT, "Failed to parse output caps"))?;
 
         let csound = self.csound.lock().unwrap();
 

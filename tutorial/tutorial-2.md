@@ -410,13 +410,12 @@ The first part that we have to implement, just like last time, is caps negotiati
 First of all, we need to get notified whenever the caps that our source is configured for are changing. This will happen once in the very beginning and then whenever the pipeline topology or state changes and new caps would be more optimal for the new situation. This notification happens via the `BaseTransform::set_caps` virtual method.
 
 ```rust
-    fn set_caps(&self, element: &BaseSrc, caps: &gst::Caps) -> bool {
+    fn set_caps(&self, element: &BaseSrc, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         use std::f64::consts::PI;
 
-        let info = match gst_audio::AudioInfo::from_caps(caps) {
-            None => return false,
-            Some(info) => info,
-        };
+        let info = gst_audio::AudioInfo::from_caps(caps).map_err(|_| {
+            gst_loggable_error!(CAT, "Failed to build `AudioInfo` from caps {}", caps)
+        })?;
 
         gst_debug!(CAT, obj: element, "Configuring for caps {}", caps);
 
@@ -457,7 +456,7 @@ First of all, we need to get notified whenever the caps that our source is confi
 
         let _ = element.post_message(&gst::Message::new_latency().src(Some(element)).build());
 
-        true
+        Ok(())
     }
 ```
 
