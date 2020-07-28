@@ -49,19 +49,6 @@ version = "0.10"
 name = "toml"
 version = "0.2"
 
-# ignore duplicated deps because of url via cookie-store via request depending
-# on old url, idna and percent-encoding
-# https://github.com/pfernie/cookie_store/issues/11
-[[bans.skip]]
-name = "url"
-version = "1.0"
-[[bans.skip]]
-name = "idna"
-version = "0.1"
-[[bans.skip]]
-name = "percent-encoding"
-version = "1.0"
-
 # ignore duplicated deps because of mio-named-pipes via mio depending on old
 # miow
 # https://github.com/alexcrichton/mio-named-pipes/issues/7
@@ -104,6 +91,22 @@ version = "0.11"
 [[bans.skip]]
 name = "miniz_oxide"
 version = "0.3"
+
+# ignore duplicated block-buffer, digest, generic-array, opaque-debug because
+# of tungstenite still depending on old sha-1
+# https://github.com/snapview/tungstenite-rs/pull/132
+[[bans.skip]]
+name = "block-buffer"
+version = "0.7"
+[[bans.skip]]
+name = "digest"
+version = "0.8"
+[[bans.skip]]
+name = "generic-array"
+version = "0.12"
+[[bans.skip]]
+name = "opaque-debug"
+version = "0.2"
 
 [sources]
 unknown-registry = "deny"
