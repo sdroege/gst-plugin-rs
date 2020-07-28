@@ -1,3 +1,5 @@
+set -e
+
 RELEASE=0.7.1
 
 git clone https://code.videolan.org/videolan/dav1d.git --branch $RELEASE
