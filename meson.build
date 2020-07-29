@@ -124,12 +124,15 @@ foreach key, value : extra_env
 endforeach
 extra_env_str = ','.join(extra_env_list)
 
+plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
+
 # Always build the target so we don't have to list all source files as input
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
   output: output,
   console: true,
-  install: false,
+  install: true,
+  install_dir: plugins_install_dir,
   build_always_stale: true,
   depends: depends,
   command: [cargo_wrapper,
