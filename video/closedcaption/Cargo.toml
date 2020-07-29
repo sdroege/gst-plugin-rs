@@ -1,7 +1,7 @@
 [package]
 name = "gst-plugin-closedcaption"
 version = "0.6.0"
-authors = ["Sebastian Dröge <sebastian@centricular.com>", "Jordan Petridis <jordan@centricular.com>"]
+authors = ["Sebastian Dröge <sebastian@centricular.com>", "Jordan Petridis <jordan@centricular.com>", "Matthew Waters <matthew@centricular.com>"]
 license = "LGPL-2.1-or-later"
 edition = "2018"
 description = "Rust Closed Caption Plugin"
@@ -19,6 +19,7 @@ cairo-rs = { git = "https://github.com/gtk-rs/cairo", features=["use_glib"] }
 cairo-sys-rs = { git = "https://github.com/gtk-rs/cairo" }
 pango = { git = "https://github.com/gtk-rs/pango" }
 pangocairo = { git = "https://github.com/gtk-rs/pangocairo" }
+byteorder = "1"
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"

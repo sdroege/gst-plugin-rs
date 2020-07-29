@@ -34,6 +34,7 @@ extern crate lazy_static;
 extern crate pretty_assertions;
 
 mod caption_frame;
+mod ccdetect;
 mod cea608overlay;
 mod cea608tott;
 #[allow(non_camel_case_types, non_upper_case_globals)]
@@ -57,6 +58,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     cea608tott::register(plugin)?;
     tttocea608::register(plugin)?;
     cea608overlay::register(plugin)?;
+    ccdetect::register(plugin)?;
     Ok(())
 }
 
