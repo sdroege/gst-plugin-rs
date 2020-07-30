@@ -2078,6 +2078,7 @@ impl FallbackSrc {
         // is the fallback pad then we have the fallback activated.
         (!have_audio && !have_video)
             || (have_audio
+                && state.audio_stream.is_some()
                 && state
                     .audio_stream
                     .as_ref()
@@ -2091,6 +2092,7 @@ impl FallbackSrc {
                     .map(|p| p.get_name() == "fallback_sink")
                     .unwrap_or(true))
             || (have_video
+                && state.video_stream.is_some()
                 && state
                     .video_stream
                     .as_ref()
