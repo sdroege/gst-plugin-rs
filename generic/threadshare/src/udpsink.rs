@@ -1403,10 +1403,12 @@ impl ObjectImpl for UdpSink {
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
 
-                let current_client = settings
-                    .host
+                let host = settings.host.clone();
+                let port = settings.port;
+
+                let current_client = host
                     .iter()
-                    .filter_map(|host| try_into_socket_addr(&element, host, settings.port).ok());
+                    .filter_map(|host| try_into_socket_addr(&element, &host, port).ok());
 
                 let clients_iter = current_client.chain(clients.split(',').filter_map(|client| {
                     let rsplit: Vec<&str> = client.rsplitn(2, ':').collect();
@@ -1429,6 +1431,7 @@ impl ObjectImpl for UdpSink {
                         None
                     }
                 }));
+                drop(settings);
 
                 self.clear_clients(clients_iter);
             }
