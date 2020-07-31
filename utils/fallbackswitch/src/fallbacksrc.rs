@@ -2310,15 +2310,16 @@ mod custom_source {
                 _ => (),
             }
 
-            self.parent_change_state(element.upcast_ref(), transition)?;
+            let res = self.parent_change_state(element.upcast_ref(), transition)?;
 
             match transition {
                 gst::StateChange::ReadyToNull => {
                     self.stop(element)?;
-                    Ok(gst::StateChangeSuccess::Success)
                 }
-                _ => Ok(gst::StateChangeSuccess::Success),
+                _ => (),
             }
+
+            Ok(res)
         }
     }
 
