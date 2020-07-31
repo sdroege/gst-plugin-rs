@@ -1325,8 +1325,7 @@ impl FallbackSrc {
         }
 
         stream.source_srcpad = Some(pad.clone());
-        stream.source_srcpad_block =
-            Some(self.add_pad_probe(element, &stream.clocksync_queue_srcpad));
+        stream.source_srcpad_block = Some(self.add_pad_probe(element, stream));
 
         drop(state_guard);
         element.notify("status");
@@ -1334,11 +1333,21 @@ impl FallbackSrc {
         Ok(())
     }
 
-    fn add_pad_probe(&self, element: &gst::Bin, pad: &gst::Pad) -> Block {
-        gst_debug!(CAT, obj: element, "Adding probe to pad {}", pad.get_name());
+    fn add_pad_probe(&self, element: &gst::Bin, stream: &mut Stream) -> Block {
+        // FIXME: Not literally correct as we add the probe to the queue source pad but that's only
+        // a workaround until
+        //     https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/-/issues/800
+        // is fixed.
+        gst_debug!(
+            CAT,
+            obj: element,
+            "Adding probe to pad {}",
+            stream.source_srcpad.as_ref().unwrap().get_name()
+        );
 
         let element_weak = element.downgrade();
-        let probe_id = pad
+        let probe_id = stream
+            .clocksync_queue_srcpad
             .add_probe(
                 gst::PadProbeType::BLOCK
                     | gst::PadProbeType::BUFFER
@@ -1369,7 +1378,7 @@ impl FallbackSrc {
             .unwrap();
 
         Block {
-            pad: pad.clone(),
+            pad: stream.clocksync_queue_srcpad.clone(),
             probe_id,
             running_time: gst::CLOCK_TIME_NONE,
         }
@@ -1381,14 +1390,45 @@ impl FallbackSrc {
         pad: &gst::Pad,
         pts: gst::ClockTime,
     ) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Called probe on pad {}", pad.get_name());
-
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
             None => {
                 return Ok(());
             }
             Some(state) => state,
+        };
+
+        // FIXME: Not literally correct as we added the probe to the queue source pad but that's only
+        // a workaround until
+        //     https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/-/issues/800
+        // is fixed.
+
+        let stream = if let Some(stream) = state
+            .audio_stream
+            .as_mut()
+            .filter(|s| &s.clocksync_queue_srcpad == pad)
+        {
+            gst_debug!(
+                CAT,
+                obj: element,
+                "Called probe on pad {}",
+                stream.source_srcpad.as_ref().unwrap().get_name()
+            );
+            stream
+        } else if let Some(stream) = state
+            .video_stream
+            .as_mut()
+            .filter(|s| &s.clocksync_queue_srcpad == pad)
+        {
+            gst_debug!(
+                CAT,
+                obj: element,
+                "Called probe on pad {}",
+                stream.source_srcpad.as_ref().unwrap().get_name()
+            );
+            stream
+        } else {
+            unreachable!();
         };
 
         // Directly unblock for live streams
@@ -1410,22 +1450,6 @@ impl FallbackSrc {
         }
 
         // Update running time for this block
-        let stream = if let Some(stream) = state
-            .audio_stream
-            .as_mut()
-            .filter(|s| &s.clocksync_queue_srcpad == pad)
-        {
-            stream
-        } else if let Some(stream) = state
-            .video_stream
-            .as_mut()
-            .filter(|s| &s.clocksync_queue_srcpad == pad)
-        {
-            stream
-        } else {
-            unreachable!();
-        };
-
         let block = match stream.source_srcpad_block {
             Some(ref mut block) => block,
             None => return Ok(()),
@@ -1459,9 +1483,8 @@ impl FallbackSrc {
         gst_debug!(
             CAT,
             obj: element,
-            "Have block running time {} for pad {}",
+            "Have block running time {}",
             running_time,
-            pad.get_name()
         );
 
         block.running_time = running_time;
@@ -1728,14 +1751,12 @@ impl FallbackSrc {
             // Block source pads if needed to pause
             if let Some(ref mut stream) = state.audio_stream {
                 if stream.source_srcpad_block.is_none() && stream.source_srcpad.is_some() {
-                    stream.source_srcpad_block =
-                        Some(self.add_pad_probe(element, &stream.clocksync_queue_srcpad));
+                    stream.source_srcpad_block = Some(self.add_pad_probe(element, stream));
                 }
             }
             if let Some(ref mut stream) = state.video_stream {
                 if stream.source_srcpad_block.is_none() && stream.source_srcpad.is_some() {
-                    stream.source_srcpad_block =
-                        Some(self.add_pad_probe(element, &stream.clocksync_queue_srcpad));
+                    stream.source_srcpad_block = Some(self.add_pad_probe(element, stream));
                 }
             }
 
@@ -1800,8 +1821,7 @@ impl FallbackSrc {
             .filter_map(|v| v.as_mut())
         {
             if stream.source_srcpad.is_some() && stream.source_srcpad_block.is_none() {
-                stream.source_srcpad_block =
-                    Some(self.add_pad_probe(element, &stream.clocksync_queue_srcpad));
+                stream.source_srcpad_block = Some(self.add_pad_probe(element, stream));
             }
         }
 
