@@ -1324,6 +1324,7 @@ impl FallbackSrc {
             });
         }
 
+        assert!(stream.source_srcpad_block.is_none());
         stream.source_srcpad = Some(pad.clone());
         stream.source_srcpad_block = Some(self.add_pad_probe(element, stream));
 
@@ -1921,17 +1922,52 @@ impl FallbackSrc {
 
         let source_weak = state.source.downgrade();
         element.call_async(move |element| {
+            let src = FallbackSrc::from_instance(element);
+
             let source = match source_weak.upgrade() {
                 None => return,
                 Some(source) => source,
             };
 
+            // Remove blocking pad probes if they are still there as otherwise shutting down the
+            // source will deadlock on the probes.
+            let mut state_guard = src.state.lock().unwrap();
+            let state = match &mut *state_guard {
+                None
+                | Some(State {
+                    source_pending_restart: false,
+                    ..
+                }) => {
+                    gst_debug!(CAT, obj: element, "Restarting source not needed anymore");
+                    return;
+                }
+                Some(state) => state,
+            };
+            for (source_srcpad, block) in [state.video_stream.as_mut(), state.audio_stream.as_mut()]
+                .iter_mut()
+                .filter_map(|s| s.as_mut())
+                .filter_map(|s| {
+                    if let Some(block) = s.source_srcpad_block.take() {
+                        Some((s.source_srcpad.as_ref().unwrap(), block))
+                    } else {
+                        None
+                    }
+                })
+            {
+                gst_debug!(
+                    CAT,
+                    obj: element,
+                    "Removing pad probe for pad {}",
+                    source_srcpad.get_name()
+                );
+                block.pad.remove_probe(block.probe_id);
+            }
+            drop(state_guard);
+
             gst_debug!(CAT, obj: element, "Shutting down source");
             let _ = source.set_state(gst::State::Null);
 
             // Sleep for 1s before retrying
-
-            let src = FallbackSrc::from_instance(element);
 
             let mut state_guard = src.state.lock().unwrap();
             let state = match &mut *state_guard {
