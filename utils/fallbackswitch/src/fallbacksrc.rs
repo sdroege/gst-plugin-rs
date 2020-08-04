@@ -2048,6 +2048,15 @@ impl FallbackSrc {
         state: &mut State,
         elapsed: gst::ClockTime,
     ) {
+        if state.source_pending_restart {
+            gst_debug!(
+                CAT,
+                obj: element,
+                "Not scheduling source restart timeout because source is pending restart already",
+            );
+            return;
+        }
+
         let clock = gst::SystemClock::obtain();
         let wait_time = clock.get_time()
             + gst::ClockTime::from_nseconds(state.settings.restart_timeout)
