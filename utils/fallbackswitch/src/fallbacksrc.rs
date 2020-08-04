@@ -1433,11 +1433,23 @@ impl FallbackSrc {
 
         // Directly unblock for live streams
         if state.source_is_live {
-            for block in [state.video_stream.as_mut(), state.audio_stream.as_mut()]
+            for (source_srcpad, block) in [state.video_stream.as_mut(), state.audio_stream.as_mut()]
                 .iter_mut()
                 .filter_map(|s| s.as_mut())
-                .filter_map(|s| s.source_srcpad_block.take())
+                .filter_map(|s| {
+                    if let Some(block) = s.source_srcpad_block.take() {
+                        Some((s.source_srcpad.as_ref().unwrap(), block))
+                    } else {
+                        None
+                    }
+                })
             {
+                gst_debug!(
+                    CAT,
+                    obj: element,
+                    "Removing pad probe for pad {}",
+                    source_srcpad.get_name()
+                );
                 block.pad.remove_probe(block.probe_id);
             }
 
@@ -1563,11 +1575,21 @@ impl FallbackSrc {
         let current_running_time = element.get_current_running_time();
 
         if have_audio && want_audio && have_video && want_video {
-            if audio_running_time.is_none() && !audio_is_eos {
+            if audio_running_time.is_none()
+                && !audio_is_eos
+                && video_running_time.is_none()
+                && !video_is_eos
+            {
+                gst_debug!(
+                    CAT,
+                    obj: element,
+                    "Waiting for audio and video pads to block"
+                );
+                return;
+            } else if audio_running_time.is_none() && !audio_is_eos {
                 gst_debug!(CAT, obj: element, "Waiting for audio pad to block");
                 return;
-            }
-            if video_running_time.is_none() && !video_is_eos {
+            } else if video_running_time.is_none() && !video_is_eos {
                 gst_debug!(CAT, obj: element, "Waiting for video pad to block");
                 return;
             }
