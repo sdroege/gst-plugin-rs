@@ -1067,23 +1067,22 @@ fn test_three_stream_open_close_open() {
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(11)).unwrap();
-    sender_input_3.send(SendData::Buffers(10)).unwrap();
+    sender_input_3.send(SendData::Buffers(11)).unwrap();
 
-    // Sender 2 is waiting for sender 1 to continue, sender 1/3 are finished
+    // Sender 2/3 is waiting for sender 1 to continue
     receiver_input_done_1.recv().unwrap();
-    receiver_input_done_3.recv().unwrap();
 
     // Stop recording and push new buffers to sender 1, which will advance
-    // it and release the 11th buffer of sender 2 above
+    // it and release the 11th buffer of sender 2/3 above
     togglerecord.set_property("record", &false).unwrap();
     sender_input_1.send(SendData::Buffers(10)).unwrap();
+
     receiver_input_done_2.recv().unwrap();
+    receiver_input_done_3.recv().unwrap();
 
-    // Send another 9 buffers to sender 2, 1/2 are at the same position now
+    // Send another 9 buffers to sender 2/3, all streams are at the same position now
     sender_input_2.send(SendData::Buffers(9)).unwrap();
-
-    // Send the remaining 10 buffers to sender 3, all are at the same position now
-    sender_input_3.send(SendData::Buffers(10)).unwrap();
+    sender_input_3.send(SendData::Buffers(9)).unwrap();
 
     // Wait until all 20 buffers of all senders are done
     receiver_input_done_1.recv().unwrap();

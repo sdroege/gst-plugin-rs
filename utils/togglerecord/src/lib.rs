@@ -25,6 +25,9 @@ extern crate gstreamer_video as gst_video;
 #[macro_use]
 extern crate lazy_static;
 
+#[macro_use]
+extern crate more_asserts;
+
 extern crate parking_lot;
 
 mod togglerecord;
