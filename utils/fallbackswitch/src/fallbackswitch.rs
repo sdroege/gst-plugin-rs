@@ -214,7 +214,7 @@ impl FallbackSwitch {
         drop(active_sinkpad);
 
         if !is_late || state.last_sinkpad_time.is_none() {
-            state.last_sinkpad_time = buffer.get_dts_or_pts();
+            state.last_sinkpad_time = running_time;
         }
 
         // Drop all older buffers from the fallback sinkpad
