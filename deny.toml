@@ -28,6 +28,7 @@ confidence-threshold = 0.8
 [bans]
 multiple-versions = "deny"
 highlight = "all"
+wildcards = "allow"
 
 # ignore duplicated deps because of hyperx and rust-argon2 via redox_users
 # depending on old base64
@@ -58,6 +59,12 @@ version = "0.2"
 [[bans.skip]]
 name = "winapi"
 version = "0.2"
+
+# ignore duplicated deps because of rav1e depending on an old version of paste
+# https://github.com/xiph/rav1e/pull/2489
+[[bans.skip]]
+name = "paste"
+version = "0.1"
 
 # ignore duplicated deps because of chrono, cookie, cookie_store, hyper,
 # hyperx, reqwest depending on old time
