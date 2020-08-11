@@ -71,8 +71,6 @@ const DEFAULT_CONTEXT_WAIT: u32 = 0;
 
 #[derive(Debug, Clone)]
 struct Settings {
-    host: Option<String>,
-    port: i32,
     sync: bool,
     bind_address: String,
     bind_port: i32,
@@ -94,8 +92,6 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            host: DEFAULT_HOST.map(Into::into),
-            port: DEFAULT_PORT,
             sync: DEFAULT_SYNC,
             bind_address: DEFAULT_BIND_ADDRESS.into(),
             bind_port: DEFAULT_BIND_PORT,
@@ -124,27 +120,7 @@ lazy_static! {
     );
 }
 
-static PROPERTIES: [subclass::Property; 19] = [
-    subclass::Property("host", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Host",
-            "The host/IP/Multicast group to send the packets to",
-            DEFAULT_HOST,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("port", |name| {
-        glib::ParamSpec::int(
-            name,
-            "Port",
-            "The port to send the packets to",
-            0,
-            u16::MAX as i32,
-            DEFAULT_PORT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
+static PROPERTIES: [subclass::Property; 17] = [
     subclass::Property("sync", |name| {
         glib::ParamSpec::boolean(
             name,
@@ -383,21 +359,6 @@ impl UdpSinkPadHandlerInner {
         self.clients_to_configure.retain(|addr2| addr != *addr2);
     }
 
-    fn replace_client(
-        &mut self,
-        gst_pad: &gst::Pad,
-        addr: Option<SocketAddr>,
-        new_addr: Option<SocketAddr>,
-    ) {
-        if let Some(addr) = addr {
-            self.remove_client(gst_pad, addr);
-        }
-
-        if let Some(new_addr) = new_addr {
-            self.add_client(gst_pad, new_addr);
-        }
-    }
-
     fn add_client(&mut self, gst_pad: &gst::Pad, addr: SocketAddr) {
         if self.clients.contains(&addr) {
             gst_warning!(CAT, obj: gst_pad, "Not adding client {:?} again", &addr);
@@ -459,18 +420,6 @@ impl UdpSinkPadHandler {
 
     fn remove_client(&self, gst_pad: &gst::Pad, addr: SocketAddr) {
         self.0.write().unwrap().remove_client(gst_pad, addr);
-    }
-
-    fn replace_client(
-        &self,
-        gst_pad: &gst::Pad,
-        addr: Option<SocketAddr>,
-        new_addr: Option<SocketAddr>,
-    ) {
-        self.0
-            .write()
-            .unwrap()
-            .replace_client(gst_pad, addr, new_addr);
     }
 
     fn add_client(&self, gst_pad: &gst::Pad, addr: SocketAddr) {
@@ -1144,11 +1093,6 @@ impl UdpSink {
             .remove_client(&self.sink_pad.gst_pad(), addr);
     }
 
-    fn replace_client(&self, addr: Option<SocketAddr>, new_addr: Option<SocketAddr>) {
-        self.sink_pad_handler
-            .replace_client(&self.sink_pad.gst_pad(), addr, new_addr);
-    }
-
     fn add_client(&self, addr: SocketAddr) {
         self.sink_pad_handler
             .add_client(&self.sink_pad.gst_pad(), addr);
@@ -1249,12 +1193,9 @@ impl ObjectSubclass for UdpSink {
                     .expect("missing signal arg");
 
                 let udpsink = Self::from_instance(&element);
-                let settings = udpsink.settings.lock().unwrap();
 
-                if Some(&host) != settings.host.as_ref() || port != settings.port {
-                    if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
-                        udpsink.remove_client(addr);
-                    }
+                if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
+                    udpsink.remove_client(addr);
                 }
 
                 None
@@ -1273,13 +1214,7 @@ impl ObjectSubclass for UdpSink {
                     .expect("missing signal arg");
 
                 let udpsink = Self::from_instance(&element);
-                let settings = udpsink.settings.lock().unwrap();
-                let current_client = settings
-                    .host
-                    .iter()
-                    .filter_map(|host| try_into_socket_addr(&element, host, settings.port).ok());
-
-                udpsink.clear_clients(current_client);
+                udpsink.clear_clients(std::iter::empty());
 
                 None
             },
@@ -1311,38 +1246,6 @@ impl ObjectImpl for UdpSink {
 
         let mut settings = self.settings.lock().unwrap();
         match *prop {
-            subclass::Property("host", ..) => {
-                let current_client = settings
-                    .host
-                    .as_ref()
-                    .and_then(|host| try_into_socket_addr(&element, host, settings.port).ok());
-
-                let new_host = value.get().expect("type checked upstream");
-
-                let new_client = new_host
-                    .and_then(|host| try_into_socket_addr(&element, host, settings.port).ok());
-
-                self.replace_client(current_client, new_client);
-
-                settings.host = new_host.map(ToString::to_string);
-            }
-            subclass::Property("port", ..) => {
-                let current_client = settings
-                    .host
-                    .as_ref()
-                    .and_then(|host| try_into_socket_addr(&element, host, settings.port).ok());
-
-                let new_port = value.get_some().expect("type checked upstream");
-
-                let new_client = settings
-                    .host
-                    .as_ref()
-                    .and_then(|host| try_into_socket_addr(&element, host, new_port).ok());
-
-                self.replace_client(current_client, new_client);
-
-                settings.port = new_port;
-            }
             subclass::Property("sync", ..) => {
                 settings.sync = value.get_some().expect("type checked upstream");
             }
@@ -1403,14 +1306,7 @@ impl ObjectImpl for UdpSink {
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
 
-                let host = settings.host.clone();
-                let port = settings.port;
-
-                let current_client = host
-                    .iter()
-                    .filter_map(|host| try_into_socket_addr(&element, &host, port).ok());
-
-                let clients_iter = current_client.chain(clients.split(',').filter_map(|client| {
+                let clients_iter = clients.split(',').filter_map(|client| {
                     let rsplit: Vec<&str> = client.rsplitn(2, ':').collect();
 
                     if rsplit.len() == 2 {
@@ -1430,7 +1326,7 @@ impl ObjectImpl for UdpSink {
                     } else {
                         None
                     }
-                }));
+                });
                 drop(settings);
 
                 self.clear_clients(clients_iter);
@@ -1453,8 +1349,6 @@ impl ObjectImpl for UdpSink {
 
         let settings = self.settings.lock().unwrap();
         match *prop {
-            subclass::Property("host", ..) => Ok(settings.host.to_value()),
-            subclass::Property("port", ..) => Ok(settings.port.to_value()),
             subclass::Property("sync", ..) => Ok(settings.sync.to_value()),
             subclass::Property("bind-address", ..) => Ok(settings.bind_address.to_value()),
             subclass::Property("bind-port", ..) => Ok(settings.bind_port.to_value()),

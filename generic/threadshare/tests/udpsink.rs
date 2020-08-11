@@ -83,21 +83,8 @@ fn test_client_management() {
         .unwrap();
     assert_eq!(clients, "127.0.0.1:5004");
 
-    /* While the default host:address client is listed in clients,
-     * it can't be removed with the remove signal */
+    /* Removing the default client is possible */
     udpsink.emit("remove", &[&"127.0.0.1", &5004i32]).unwrap();
-    let clients = udpsink
-        .get_property("clients")
-        .unwrap()
-        .get::<String>()
-        .unwrap()
-        .unwrap();
-    assert_eq!(clients, "127.0.0.1:5004");
-
-    /* It is however possible to remove the default client by setting
-     * host to None */
-    let host: Option<String> = None;
-    udpsink.set_property("host", &host).unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
@@ -136,7 +123,7 @@ fn test_chain() {
     h.set_src_caps_str(&"foo/bar");
     {
         let udpsink = h.get_element().unwrap();
-        udpsink.set_property("port", &5005i32).unwrap();
+        udpsink.set_property("clients", &"127.0.0.1:5005").unwrap();
     }
 
     thread::spawn(move || {
