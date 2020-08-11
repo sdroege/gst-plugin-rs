@@ -1380,6 +1380,8 @@ impl ObjectImpl for UdpSink {
             subclass::Property("ttl-mc", ..) => Ok(settings.ttl_mc.to_value()),
             subclass::Property("qos-dscp", ..) => Ok(settings.qos_dscp.to_value()),
             subclass::Property("clients", ..) => {
+                drop(settings);
+
                 let clients: Vec<String> = self
                     .sink_pad_handler
                     .get_clients()
