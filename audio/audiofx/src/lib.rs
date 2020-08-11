@@ -20,9 +20,11 @@ extern crate lazy_static;
 
 mod audioecho;
 mod audioloudnorm;
+mod audiornnoise;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     audioecho::register(plugin)?;
+    audiornnoise::register(plugin)?;
     audioloudnorm::register(plugin)
 }
 

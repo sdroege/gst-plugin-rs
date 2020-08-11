@@ -31,7 +31,7 @@ You will find the following plugins in this repository:
 
   * `audio`
     - `audiofx`: Plugins to apply audio effects to a stream (such as adding
-      echo/reverb, or normalization).
+      echo/reverb, [removing noise](https://jmvalin.ca/demo/rnnoise/) or normalization).
 
     - `claxon`: A FLAC decoder based on the
       [Claxon](https://github.com/ruuda/claxon) library.
