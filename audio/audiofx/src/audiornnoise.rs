@@ -29,7 +29,7 @@ lazy_static! {
 const FRAME_SIZE: usize = DenoiseState::FRAME_SIZE;
 
 struct ChannelDenoiser {
-    denoiser: Box<DenoiseState>,
+    denoiser: Box<DenoiseState<'static>>,
     frame_chunk: Box<[f32; FRAME_SIZE]>,
     out_chunk: Box<[f32; FRAME_SIZE]>,
 }
