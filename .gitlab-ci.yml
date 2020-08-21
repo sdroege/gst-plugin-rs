@@ -27,6 +27,13 @@ stages:
   before_script:
     - source ./ci/env.sh
     - mkdir .cargo && echo -e "[net]\ngit-fetch-with-cli = true" > .cargo/config
+    # If cargo exists assume we probably will want to update
+    # the lockfile
+    - |
+      if command -v cargo; then
+        cargo generate-lockfile
+        cargo update
+      fi
 
 .debian:10-stable:
   extends: .debian:10
@@ -121,10 +128,11 @@ update-nightly:
   stage: "test"
   script:
     - rustc --version
-    - cargo build --color=always --all
-    - G_DEBUG=fatal_warnings cargo test --color=always --all
-    - cargo build --color=always --all --examples --all-features
-    - G_DEBUG=fatal_warnings cargo test --color=always --all --examples --all-features
+
+    - cargo build --locked --color=always --all
+    - G_DEBUG=fatal_warnings cargo test --locked --color=always --all
+    - cargo build --locked --color=always --all --examples --all-features
+    - G_DEBUG=fatal_warnings cargo test --locked --color=always --all --examples --all-features
 
 test 1.40:
   extends:
@@ -171,7 +179,7 @@ clippy:
   rules:
     - when: 'always'
   script:
-    - cargo clippy --color=always --all --all-features --all-targets -- -A clippy::redundant_pattern_matching -A clippy::single_match -A clippy::cast_lossless -D warnings
+    - cargo clippy --locked --color=always --all --all-features --all-targets -- -A clippy::redundant_pattern_matching -A clippy::single_match -A clippy::cast_lossless -D warnings
 
 deny:
   extends: .img-stable
