@@ -232,7 +232,7 @@ fn create_ui(app: &gtk::Application) {
 
     let video_sink_weak = video_sink.downgrade();
     let togglerecord_weak = togglerecord.downgrade();
-    let timeout_id = gtk::timeout_add(100, move || {
+    let timeout_id = glib::timeout_add_local(100, move || {
         let video_sink = match video_sink_weak.upgrade() {
             Some(video_sink) => video_sink,
             None => return glib::Continue(true),
