@@ -99,21 +99,10 @@ version = "0.11"
 name = "miniz_oxide"
 version = "0.3"
 
-# ignore duplicated block-buffer, digest, generic-array, opaque-debug because
-# of tungstenite still depending on old sha-1
-# https://github.com/snapview/tungstenite-rs/pull/132
+# ignore duplicated wasi dependency because rand/getrandom depend on an old version
 [[bans.skip]]
-name = "block-buffer"
-version = "0.7"
-[[bans.skip]]
-name = "digest"
-version = "0.8"
-[[bans.skip]]
-name = "generic-array"
-version = "0.12"
-[[bans.skip]]
-name = "opaque-debug"
-version = "0.2"
+name = "wasi"
+version = "0.9"
 
 [sources]
 unknown-registry = "deny"
