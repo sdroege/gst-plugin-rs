@@ -125,9 +125,9 @@ pub mod ffi {
     }
 }
 
+use glib::glib_wrapper;
 use glib::prelude::*;
 use glib::translate::*;
-use glib::{glib_object_wrapper, glib_wrapper};
 
 use std::mem;
 
