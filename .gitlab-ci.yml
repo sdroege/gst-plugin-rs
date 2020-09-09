@@ -40,10 +40,10 @@ stages:
   variables:
     RUST_VERSION: "stable"
 
-.debian:10-1-40:
+.debian:10-1-41:
   extends: .debian:10
   variables:
-    RUST_VERSION: "1.40.0"
+    RUST_VERSION: "1.41.0"
 
 .debian:10-nightly:
   extends: .debian:10
@@ -65,10 +65,10 @@ build-stable:
     - .build-debian-container
     - .debian:10-stable
 
-build-1-40:
+build-1-41:
   extends:
     - .build-debian-container
-    - .debian:10-1-40
+    - .debian:10-1-41
 
 build-nightly:
   extends:
@@ -83,10 +83,10 @@ update-stable:
   variables:
       FDO_FORCE_REBUILD: 1
 
-update-1-40:
-  extends: build-1-40
+update-1-41:
+  extends: build-1-41
   rules:
-    - if: '$UPDATE_IMG == "1-40"'
+    - if: '$UPDATE_IMG == "1-41"'
   variables:
       FDO_FORCE_REBUILD: 1
 
@@ -114,10 +114,10 @@ update-nightly:
     - .dist-debian-container
     - .debian:10-stable
 
-.img-1-40:
+.img-1-41:
   extends:
     - .dist-debian-container
-    - .debian:10-1-40
+    - .debian:10-1-41
 
 .img-nightly:
   extends:
@@ -134,12 +134,12 @@ update-nightly:
     - cargo build --locked --color=always --all --examples --all-features
     - G_DEBUG=fatal_warnings cargo test --locked --color=always --all --examples --all-features
 
-test 1.40:
+test 1.41:
   extends:
     - '.cargo test'
-    - .img-1-40
+    - .img-1-41
   rules:
-    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "1-40"'
+    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "1-41"'
 
 test stable:
   extends:
