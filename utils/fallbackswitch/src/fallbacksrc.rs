@@ -313,6 +313,21 @@ impl ObjectSubclass for FallbackSrc {
         klass.add_pad_template(src_pad_template);
 
         klass.install_properties(&PROPERTIES);
+
+        klass.add_signal_with_class_handler_and_accumulator(
+            "update-uri",
+            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
+            &[String::static_type()],
+            String::static_type(),
+            |_token, args| {
+                // Simplify return the input by default
+                Some(args[1].clone())
+            },
+            |_hint, ret, value| {
+                *ret = value.clone();
+                false
+            },
+        );
     }
 }
 
@@ -647,6 +662,14 @@ impl FallbackSrc {
             Source::Uri(ref uri) => {
                 let source = gst::ElementFactory::make("uridecodebin3", Some("uridecodebin"))
                     .expect("No uridecodebin3 found");
+
+                let uri = element
+                    .emit("update-uri", &[uri])
+                    .expect("Failed to emit update-uri signal")
+                    .expect("No value returned");
+                let uri = uri
+                    .get::<&str>()
+                    .expect("Wrong type returned from update-uri signal");
 
                 source.set_property("uri", &uri).unwrap();
                 source.set_property("use-buffering", &true).unwrap();
