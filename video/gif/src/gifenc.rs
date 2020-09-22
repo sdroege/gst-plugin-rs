@@ -7,7 +7,6 @@
 // except according to those terms.
 
 use atomic_refcell::AtomicRefCell;
-use gif::SetParameter;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
@@ -123,8 +122,8 @@ impl State {
         )
         .expect("Failed to initialize GIF encoder");
         match settings.repeat {
-            -1 => encoder.set(gif::Repeat::Infinite),
-            _ => encoder.set(gif::Repeat::Finite(settings.repeat as u16)),
+            -1 => encoder.set_repeat(gif::Repeat::Infinite),
+            _ => encoder.set_repeat(gif::Repeat::Finite(settings.repeat as u16)),
         }
         .expect("Failed to configure encoder");
         self.context = Some(encoder);
