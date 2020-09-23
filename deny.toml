@@ -30,14 +30,6 @@ multiple-versions = "deny"
 highlight = "all"
 wildcards = "allow"
 
-# ignore duplicated deps because of hyperx and rust-argon2 via redox_users
-# depending on old base64
-# https://github.com/dekellum/hyperx/pull/20
-# https://gitlab.redox-os.org/redox-os/users/-/merge_requests/34
-[[bans.skip]]
-name = "base64"
-version = "0.11"
-
 # ignore duplicated deps because of dav1d-sys via metadeps depending on old
 # error-chain and toml
 # https://github.com/rust-av/dav1d-rs/issues/26
@@ -103,6 +95,13 @@ version = "0.3"
 [[bans.skip]]
 name = "wasi"
 version = "0.9"
+
+# ignore duplicated gif dependency because of image depending on an old
+# version
+# https://github.com/image-rs/image/pull/1316
+[[bans.skip]]
+name = "gif"
+version = "0.10"
 
 [sources]
 unknown-registry = "deny"
