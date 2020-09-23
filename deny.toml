@@ -96,13 +96,6 @@ version = "0.3"
 name = "wasi"
 version = "0.9"
 
-# ignore duplicated gif dependency because of image depending on an old
-# version
-# https://github.com/image-rs/image/pull/1316
-[[bans.skip]]
-name = "gif"
-version = "0.10"
-
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
