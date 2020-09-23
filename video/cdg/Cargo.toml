@@ -14,7 +14,7 @@ gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
 gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 cdg = "0.1"
-cdg_renderer = "0.5"
+cdg_renderer = "0.6"
 image = "0.23"
 muldiv = "0.2"
 lazy_static = "1.0"
