@@ -1109,6 +1109,18 @@ impl FallbackSrc {
         state.video_stream = None;
         state.audio_stream = None;
 
+        if let Source::Element(ref source) = state.configured_source {
+            // Explicitly remove the source element from the CustomSource so that we can
+            // later create a new CustomSource and add it again there.
+            if source.has_as_parent(&state.source) {
+                let _ = source.set_state(gst::State::Null);
+                let _ = state
+                    .source
+                    .downcast_ref::<gst::Bin>()
+                    .unwrap()
+                    .remove(source);
+            }
+        }
         element.remove(&state.source).unwrap();
 
         if let Some(timeout) = state.source_pending_restart_timeout.take() {
