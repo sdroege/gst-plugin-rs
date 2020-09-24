@@ -219,29 +219,33 @@ impl FallbackSwitch {
 
         // Drop all older buffers from the fallback sinkpad
         if let Some(fallback_sinkpad) = fallback_sinkpad {
-            let fallback_segment = self
-                .sinkpad
-                .get_segment()
-                .downcast::<gst::ClockTime>()
-                .map_err(|_| {
-                    gst_error!(CAT, obj: agg, "Only TIME segments supported");
-                    gst::FlowError::Error
-                })?;
+            let segment = fallback_sinkpad.get_segment();
 
-            while let Some(fallback_buffer) = fallback_sinkpad.peek_buffer() {
-                let fallback_pts = fallback_buffer.get_dts_or_pts();
-                if fallback_pts.is_none()
-                    || fallback_segment.to_running_time(fallback_pts) <= state.last_sinkpad_time
-                {
-                    gst_debug!(
-                        CAT,
-                        obj: agg,
-                        "Dropping fallback buffer {:?}",
-                        fallback_buffer
-                    );
-                    fallback_sinkpad.drop_buffer();
-                } else {
-                    break;
+            // Might have no segment at all yet
+            if segment.get_format() != gst::Format::Undefined {
+                let fallback_segment = fallback_sinkpad
+                    .get_segment()
+                    .downcast::<gst::ClockTime>()
+                    .map_err(|_| {
+                        gst_error!(CAT, obj: agg, "Only TIME segments supported");
+                        gst::FlowError::Error
+                    })?;
+
+                while let Some(fallback_buffer) = fallback_sinkpad.peek_buffer() {
+                    let fallback_pts = fallback_buffer.get_dts_or_pts();
+                    if fallback_pts.is_none()
+                        || fallback_segment.to_running_time(fallback_pts) <= state.last_sinkpad_time
+                    {
+                        gst_debug!(
+                            CAT,
+                            obj: agg,
+                            "Dropping fallback buffer {:?}",
+                            fallback_buffer
+                        );
+                        fallback_sinkpad.drop_buffer();
+                    } else {
+                        break;
+                    }
                 }
             }
         }
