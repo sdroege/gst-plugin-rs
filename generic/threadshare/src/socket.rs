@@ -217,7 +217,7 @@ impl GioSocketWrapper {
     }
 
     #[cfg(unix)]
-    pub fn set_tos(&self, qos_dscp: i32) -> Result<(), glib::error::Error> {
+    pub fn set_tos(&self, qos_dscp: i32) -> Result<(), glib::Error> {
         use libc::{IPPROTO_IP, IPPROTO_IPV6, IPV6_TCLASS, IP_TOS};
 
         let tos = (qos_dscp & 0x3f) << 2;
@@ -234,7 +234,7 @@ impl GioSocketWrapper {
     }
 
     #[cfg(not(unix))]
-    pub fn set_tos(&self, qos_dscp: i32) -> Result<(), Error> {
+    pub fn set_tos(&self, qos_dscp: i32) -> Result<(), glib::Error> {
         Ok(())
     }
 
