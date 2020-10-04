@@ -60,6 +60,11 @@ fn compute_probability(typefind: &mut TypeFind) -> TypeFindProbability {
         .unwrap_or(TYPEFIND_SEARCH_WINDOW as u64 * NB_WINDOWS);
     let step = len / NB_WINDOWS;
 
+    // Too short file
+    if step == 0 {
+        return TypeFindProbability::None;
+    }
+
     for offset in (0..len).step_by(step as usize) {
         let proba = match cdg_packets_ratio(typefind, offset as i64, TYPEFIND_SEARCH_WINDOW) {
             0..=5 => TypeFindProbability::None,
