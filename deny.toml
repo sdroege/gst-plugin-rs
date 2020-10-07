@@ -96,6 +96,15 @@ version = "0.3"
 name = "wasi"
 version = "0.9"
 
+# ignore duplicated base64 dependency because reqwest/tungstenite/rusoto/rust-argon2 depend on an old version
+# https://github.com/seanmonstar/reqwest/pull/1050
+# https://github.com/rusoto/rusoto/pull/1837
+# https://github.com/snapview/tungstenite-rs/pull/149
+# https://github.com/sru-systems/rust-argon2/pull/39
+[[bans.skip]]
+name = "base64"
+version = "0.12"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
