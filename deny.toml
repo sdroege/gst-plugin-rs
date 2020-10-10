@@ -105,6 +105,12 @@ version = "0.9"
 name = "base64"
 version = "0.12"
 
+# ignore duplicated cfg-if dependency because a few dozen dependencies still
+# pull in the old version
+[[bans.skip]]
+name = "cfg-if"
+version = "0.1"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
