@@ -807,7 +807,7 @@ To prevent this, all waiting/blocking in GStreamer streaming threads should be i
 
 ```rust
 struct ClockWait {
-    clock_id: Option<gst::ClockId>,
+    clock_id: Option<gst::SingleShotClockId>,
     flushing: bool,
 }
 

@@ -129,7 +129,7 @@ impl Default for State {
 }
 
 struct ClockWait {
-    clock_id: Option<gst::ClockId>,
+    clock_id: Option<gst::SingleShotClockId>,
     flushing: bool,
 }
 

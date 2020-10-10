@@ -116,11 +116,11 @@ struct State {
     source_pending_restart: bool,
 
     // For timing out the source and shutting it down to restart it
-    source_restart_timeout: Option<gst::ClockId>,
+    source_restart_timeout: Option<gst::SingleShotClockId>,
     // For restarting the source after shutting it down
-    source_pending_restart_timeout: Option<gst::ClockId>,
+    source_pending_restart_timeout: Option<gst::SingleShotClockId>,
     // For failing completely if we didn't recover after the retry timeout
-    source_retry_timeout: Option<gst::ClockId>,
+    source_retry_timeout: Option<gst::SingleShotClockId>,
 
     // All our output streams, selected by properties
     video_stream: Option<Stream>,
