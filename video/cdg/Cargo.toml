@@ -16,7 +16,7 @@ gstreamer-app = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" 
 cdg = "0.1"
 cdg_renderer = "0.6"
 image = { version = "0.23", default-features = false }
-muldiv = "0.2"
+muldiv = "1.0"
 lazy_static = "1.0"
 
 [lib]
