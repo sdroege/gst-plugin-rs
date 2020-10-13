@@ -301,7 +301,7 @@ impl ClaxonDec {
         };
 
         let depth_adjusted = depth.adjust_samples(v);
-        let outbuf = gst::Buffer::from_slice(depth_adjusted);
+        let outbuf = gst::Buffer::from_mut_slice(depth_adjusted);
         element.finish_frame(Some(outbuf), 1)
     }
 }
@@ -316,6 +316,32 @@ enum AudioDepth {
     I24,
     /// 32bits.
     I32,
+}
+
+enum ByteVec {
+    I8(Vec<i8>),
+    I16(Vec<i16>),
+    I32(Vec<i32>),
+}
+
+impl AsRef<[u8]> for ByteVec {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            ByteVec::I8(ref vec) => vec.as_byte_slice(),
+            ByteVec::I16(ref vec) => vec.as_byte_slice(),
+            ByteVec::I32(ref vec) => vec.as_byte_slice(),
+        }
+    }
+}
+
+impl AsMut<[u8]> for ByteVec {
+    fn as_mut(&mut self) -> &mut [u8] {
+        match self {
+            ByteVec::I8(ref mut vec) => vec.as_mut_byte_slice(),
+            ByteVec::I16(ref mut vec) => vec.as_mut_byte_slice(),
+            ByteVec::I32(ref mut vec) => vec.as_mut_byte_slice(),
+        }
+    }
 }
 
 impl AudioDepth {
@@ -335,19 +361,13 @@ impl AudioDepth {
     ///
     /// This takes a vector of 32bits samples, adjusts the depth of each,
     /// and returns the adjusted bytes stream.
-    fn adjust_samples(&self, input: Vec<i32>) -> Vec<u8> {
+    fn adjust_samples(&self, input: Vec<i32>) -> ByteVec {
         match *self {
-            AudioDepth::I8 => input
-                .into_iter()
-                .map(|x| x as i8)
-                .collect::<Vec<_>>()
-                .into_byte_vec(),
-            AudioDepth::I16 => input
-                .into_iter()
-                .map(|x| x as i16)
-                .collect::<Vec<_>>()
-                .into_byte_vec(),
-            AudioDepth::I24 | AudioDepth::I32 => input.into_byte_vec(),
+            AudioDepth::I8 => ByteVec::I8(input.into_iter().map(|x| x as i8).collect::<Vec<_>>()),
+            AudioDepth::I16 => {
+                ByteVec::I16(input.into_iter().map(|x| x as i16).collect::<Vec<_>>())
+            }
+            AudioDepth::I24 | AudioDepth::I32 => ByteVec::I32(input),
         }
     }
 }

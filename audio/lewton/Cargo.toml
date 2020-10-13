@@ -13,7 +13,7 @@ gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 lewton = { version = "0.10", default-features = false }
-byte-slice-cast = "0.3"
+byte-slice-cast = "1.0"
 atomic_refcell = "0.1"
 lazy_static = "1.0"
 

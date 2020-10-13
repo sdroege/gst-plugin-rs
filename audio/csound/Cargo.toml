@@ -15,7 +15,7 @@ gst_audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org
 gst_check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 csound = "0.1.8"
 once_cell = "1.0"
-byte-slice-cast = "0.3"
+byte-slice-cast = "1.0"
 
 [lib]
 name = "gstcsound"

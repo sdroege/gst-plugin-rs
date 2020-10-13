@@ -13,7 +13,7 @@ gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-check = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 claxon = { version = "0.4" }
-byte-slice-cast = "~0.3.4"
+byte-slice-cast = "1.0"
 atomic_refcell = "0.1"
 
 [lib]
