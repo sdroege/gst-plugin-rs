@@ -6,7 +6,10 @@ unmaintained = "warn"
 notice = "warn"
 ignore = [
     # ignore because mio/miow still depend on net2, next mio release fixes this
-    "RUSTSEC-2020-0016"
+    "RUSTSEC-2020-0016",
+    # ignore because rusoto_credentials still depends on dirs instead of dirs-next
+    # https://github.com/rusoto/rusoto/pull/1846
+    "RUSTSEC-2020-0053",
 ]
 
 [licenses]
@@ -110,6 +113,18 @@ version = "0.12"
 [[bans.skip]]
 name = "cfg-if"
 version = "0.1"
+
+# ignore duplicated pin-project dependency because a futures, hyper and rusoto
+# still depend on the old version
+# https://github.com/rust-lang/futures-rs/commit/8a65340675fdf0ba16997cf507ee6bb27d1dcd15
+# https://github.com/hyperium/hyper/commit/02732bef0c1accb441b9b14c07cb2c494234a682
+# https://github.com/rusoto/rusoto/pull/1847
+[[bans.skip]]
+name = "pin-project"
+version = "0.4"
+[[bans.skip]]
+name = "pin-project-internal"
+version = "0.4"
 
 [sources]
 unknown-registry = "deny"
