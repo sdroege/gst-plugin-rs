@@ -632,15 +632,13 @@ impl Context {
         }
     }
 
-    pub fn drain_sub_tasks() -> impl Future<Output = SubTaskOutput> + Send + 'static {
-        async {
-            let (ctx, task_id) = match Context::current_task() {
-                Some(task) => task,
-                None => return Ok(()),
-            };
+    pub async fn drain_sub_tasks() -> SubTaskOutput {
+        let (ctx, task_id) = match Context::current_task() {
+            Some(task) => task,
+            None => return Ok(()),
+        };
 
-            ctx.drain_sub_tasks_internal(task_id).await
-        }
+        ctx.drain_sub_tasks_internal(task_id).await
     }
 
     fn drain_sub_tasks_internal(
