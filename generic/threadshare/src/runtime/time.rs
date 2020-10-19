@@ -26,7 +26,9 @@ use std::time::Duration;
 ///
 /// This must be called from within the target runtime environment.
 pub async fn delay_for(delay: Duration) {
-    tokio::time::delay_for(delay).map(drop).await;
+    if delay > Duration::from_nanos(0) {
+        tokio::time::delay_for(delay).map(drop).await;
+    }
 }
 
 /// Builds a `Stream` that yields at `interval.

@@ -117,7 +117,7 @@ fn csound_filter_eos() {
     h.play();
 
     // The input buffer pts and duration
-    let mut in_pts = gst::ClockTime(Some(0));
+    let mut in_pts = gst::ClockTime::zero();
     let in_duration = duration_from_samples(EOS_NUM_SAMPLES as _, sr as _);
     // The number of samples that were leftover during the previous iteration
     let mut samples_offset = 0;
@@ -125,7 +125,7 @@ fn csound_filter_eos() {
     let mut num_samples: usize = 0;
     let mut num_buffers = 0;
     // The expected pts of output buffers
-    let mut expected_pts = gst::ClockTime(Some(0));
+    let mut expected_pts = gst::ClockTime::zero();
 
     for _ in 0..EOS_NUM_BUFFERS {
         let mut buffer =
@@ -227,7 +227,7 @@ fn csound_filter_underflow() {
     h.play();
 
     // Input buffers timestamp
-    let mut in_pts = gst::ClockTime(Some(0));
+    let mut in_pts = gst::ClockTime::zero();
     let in_samples_duration = duration_from_samples(UNDERFLOW_NUM_SAMPLES as _, sr as _);
 
     for _ in 0..UNDERFLOW_NUM_BUFFERS {
@@ -250,7 +250,7 @@ fn csound_filter_underflow() {
 
     let expected_duration = duration_from_samples(UNDERFLOW_NUM_SAMPLES as u64 * 2, sr as _);
     let expected_buffers = UNDERFLOW_NUM_BUFFERS / 2;
-    let mut expected_pts = gst::ClockTime(Some(0));
+    let mut expected_pts = gst::ClockTime::zero();
 
     for _ in 0..expected_buffers {
         let buffer = h.pull().unwrap();

@@ -758,7 +758,7 @@ impl FallbackSrc {
                         ("max-size-bytes", &0u32),
                         (
                             "max-size-time",
-                            &(std::cmp::max(5 * gst::SECOND, min_latency.into())),
+                            &gst::ClockTime::max(5 * gst::SECOND, min_latency.into()).unwrap(),
                         ),
                     ])
                     .unwrap();
@@ -1635,7 +1635,8 @@ impl FallbackSrc {
             } else if video_is_eos {
                 audio_running_time
             } else {
-                std::cmp::min(audio_running_time, video_running_time)
+                assert!(audio_running_time.is_some() && video_running_time.is_some());
+                audio_running_time.min(video_running_time).unwrap()
             };
             let offset = if current_running_time > min_running_time {
                 (current_running_time - min_running_time).unwrap() as i64

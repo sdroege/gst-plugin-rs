@@ -1193,18 +1193,12 @@ impl StreamingState {
     }
 
     fn update_position(&mut self, buffer: &gst::Buffer) {
-        if buffer.get_pts() != gst::CLOCK_TIME_NONE {
+        if buffer.get_pts().is_some() {
             let pts = buffer.get_pts();
-            self.last_position = self
-                .last_position
-                .map(|last| cmp::max(last.into(), pts))
-                .unwrap_or(pts);
-        } else if buffer.get_dts() != gst::CLOCK_TIME_NONE {
+            self.last_position = self.last_position.max(pts).unwrap_or(pts);
+        } else if buffer.get_dts().is_some() {
             let dts = buffer.get_dts();
-            self.last_position = self
-                .last_position
-                .map(|last| cmp::max(last.into(), dts))
-                .unwrap_or(dts);
+            self.last_position = self.last_position.max(dts).unwrap_or(dts);
         }
     }
 }

@@ -401,18 +401,21 @@ impl ToggleRecord {
         };
 
         // This will only do anything for non-raw data
-        dts_or_pts = cmp::max(state.in_segment.get_start(), dts_or_pts);
-        dts_or_pts_end = cmp::max(state.in_segment.get_start(), dts_or_pts_end);
+        dts_or_pts = state.in_segment.get_start().max(dts_or_pts).unwrap();
+        dts_or_pts_end = state.in_segment.get_start().max(dts_or_pts_end).unwrap();
         if state.in_segment.get_stop().is_some() {
-            dts_or_pts = cmp::min(state.in_segment.get_stop(), dts_or_pts);
-            dts_or_pts_end = cmp::min(state.in_segment.get_stop(), dts_or_pts_end);
+            dts_or_pts = state.in_segment.get_stop().min(dts_or_pts).unwrap();
+            dts_or_pts_end = state.in_segment.get_stop().min(dts_or_pts_end).unwrap();
         }
 
         let current_running_time = state.in_segment.to_running_time(dts_or_pts);
         let current_running_time_end = state.in_segment.to_running_time(dts_or_pts_end);
-        state.current_running_time = cmp::max(current_running_time, state.current_running_time);
-        state.current_running_time_end =
-            cmp::max(current_running_time_end, state.current_running_time_end);
+        state.current_running_time = current_running_time
+            .max(state.current_running_time)
+            .unwrap_or(current_running_time);
+        state.current_running_time_end = current_running_time_end
+            .max(state.current_running_time_end)
+            .unwrap_or(current_running_time_end);
 
         // Wake up everybody, we advanced a bit
         // Important: They will only be able to advance once we're done with this
@@ -663,18 +666,21 @@ impl ToggleRecord {
         };
 
         // This will only do anything for non-raw data
-        pts = cmp::max(state.in_segment.get_start(), pts);
-        pts_end = cmp::max(state.in_segment.get_start(), pts_end);
+        pts = state.in_segment.get_start().max(pts).unwrap();
+        pts_end = state.in_segment.get_start().max(pts_end).unwrap();
         if state.in_segment.get_stop().is_some() {
-            pts = cmp::min(state.in_segment.get_stop(), pts);
-            pts_end = cmp::min(state.in_segment.get_stop(), pts_end);
+            pts = state.in_segment.get_stop().min(pts).unwrap();
+            pts_end = state.in_segment.get_stop().min(pts_end).unwrap();
         }
 
         let current_running_time = state.in_segment.to_running_time(pts);
         let current_running_time_end = state.in_segment.to_running_time(pts_end);
-        state.current_running_time = cmp::max(current_running_time, state.current_running_time);
-        state.current_running_time_end =
-            cmp::max(current_running_time_end, state.current_running_time_end);
+        state.current_running_time = current_running_time
+            .max(state.current_running_time)
+            .unwrap_or(current_running_time);
+        state.current_running_time_end = current_running_time_end
+            .max(state.current_running_time_end)
+            .unwrap_or(current_running_time_end);
 
         gst_log!(
             CAT,
@@ -704,14 +710,16 @@ impl ToggleRecord {
         // start/stop as in that case we should be in Recording/Stopped mode already. The main
         // stream is waiting for us to reach that position to switch to Recording/Stopped mode so
         // that in those modes we only have to pass through/drop the whole buffers.
-        while (main_state.current_running_time == gst::CLOCK_TIME_NONE
+        while (main_state.current_running_time.is_none()
             || rec_state.recording_state != RecordingState::Starting
                 && rec_state.recording_state != RecordingState::Stopping
                 && main_state.current_running_time_end < current_running_time_end
             || rec_state.recording_state == RecordingState::Starting
-                && rec_state.last_recording_start <= current_running_time
+                && (rec_state.last_recording_start.is_none()
+                    || rec_state.last_recording_start <= current_running_time)
             || rec_state.recording_state == RecordingState::Stopping
-                && rec_state.last_recording_stop <= current_running_time)
+                && (rec_state.last_recording_stop.is_none()
+                    || rec_state.last_recording_stop <= current_running_time))
             && !main_state.eos
             && !stream.state.lock().flushing
         {
@@ -957,10 +965,6 @@ impl ToggleRecord {
                 Ok(HandleResult::Drop)
             }
             RecordingState::Starting => {
-                // The start of our buffer must be before the last recording start as
-                // otherwise we would be in Recording state already
-                assert_lt!(current_running_time, rec_state.last_recording_start);
-
                 // If we have no start position yet, the main stream is waiting for a key-frame
                 if rec_state.last_recording_start.is_none() {
                     gst_log!(
@@ -968,8 +972,13 @@ impl ToggleRecord {
                         obj: pad,
                         "Dropping buffer (starting: waiting for keyframe)",
                     );
-                    Ok(HandleResult::Drop)
-                } else if current_running_time >= rec_state.last_recording_start {
+                    return Ok(HandleResult::Drop);
+                }
+
+                // The start of our buffer must be before the last recording start as
+                // otherwise we would be in Recording state already
+                assert_lt!(current_running_time, rec_state.last_recording_start);
+                if current_running_time >= rec_state.last_recording_start {
                     gst_log!(
                         CAT,
                         obj: pad,
@@ -1343,6 +1352,9 @@ impl ToggleRecord {
         stream.srcpad.peer_query(query)
     }
 
+    // FIXME `matches!` was introduced in rustc 1.42.0, current MSRV is 1.41.0
+    // FIXME uncomment when CI can upgrade to 1.47.1
+    //#[allow(clippy::match_like_matches_macro)]
     fn src_event(&self, pad: &gst::Pad, element: &gst::Element, mut event: gst::Event) -> bool {
         use gst::EventView;
 

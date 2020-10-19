@@ -240,7 +240,7 @@ impl State {
             nsecs - self.start_position
         };
 
-        if nsecs >= self.last_position {
+        if self.last_position.is_none() || nsecs >= self.last_position {
             self.last_position = nsecs;
         } else {
             gst_fixme!(
@@ -966,7 +966,7 @@ impl MccParse {
 
         let (rate, flags, start_type, start, stop_type, stop) = event.get();
 
-        let mut start = match start.try_into() {
+        let mut start: gst::ClockTime = match start.try_into() {
             Ok(start) => start,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");
@@ -974,7 +974,7 @@ impl MccParse {
             }
         };
 
-        let mut stop = match stop.try_into() {
+        let mut stop: gst::ClockTime = match stop.try_into() {
             Ok(stop) => stop,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");
@@ -994,12 +994,12 @@ impl MccParse {
 
         let pull = state.pull.as_ref().unwrap();
 
-        if start_type == gst::SeekType::Set && pull.duration.is_some() {
-            start = cmp::min(start, pull.duration);
+        if start_type == gst::SeekType::Set {
+            start = start.min(pull.duration).unwrap_or(start);
         }
 
-        if stop_type == gst::SeekType::Set && pull.duration.is_some() {
-            stop = cmp::min(stop, pull.duration);
+        if stop_type == gst::SeekType::Set {
+            stop = stop.min(pull.duration).unwrap_or(stop);
         }
 
         state.seeking = true;

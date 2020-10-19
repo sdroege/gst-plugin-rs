@@ -113,9 +113,11 @@ impl InputSelectorPadSinkHandler {
     async fn sync(&self, element: &gst::Element, running_time: gst::ClockTime) {
         let now = element.get_current_running_time();
 
-        if now.is_some() && now < running_time {
-            let delay = running_time - now;
-            runtime::time::delay_for(Duration::from_nanos(delay.nseconds().unwrap())).await;
+        if let Some(delay) = running_time
+            .saturating_sub(now)
+            .and_then(|delay| delay.nseconds())
+        {
+            runtime::time::delay_for(Duration::from_nanos(delay)).await;
         }
     }
 
@@ -324,7 +326,7 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
             QueryView::Latency(ref mut q) => {
                 let mut ret = true;
                 let mut min_latency = 0.into();
-                let mut max_latency = gst::CLOCK_TIME_NONE;
+                let mut max_latency = gst::ClockTime::none();
                 let pads = {
                     let pads = inputselector.pads.lock().unwrap();
                     pads.sink_pads
@@ -341,12 +343,8 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
                     if ret {
                         let (live, min, max) = peer_query.get_result();
                         if live {
-                            min_latency = std::cmp::max(min, min_latency);
-                            if max_latency.is_none() && max.is_some() {
-                                max_latency = max;
-                            } else if max_latency.is_some() && max.is_some() {
-                                max_latency = std::cmp::min(max, max_latency);
-                            }
+                            min_latency = min.max(min_latency).unwrap_or(min_latency);
+                            max_latency = max.min(max_latency).unwrap_or(max);
                         }
                     }
                 }

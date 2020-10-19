@@ -694,9 +694,11 @@ impl UdpSinkPadHandler {
     async fn sync(&self, element: &gst::Element, running_time: gst::ClockTime) {
         let now = element.get_current_running_time();
 
-        if now < running_time {
-            let delay = running_time - now;
-            runtime::time::delay_for(Duration::from_nanos(delay.nseconds().unwrap())).await;
+        if let Some(delay) = running_time
+            .saturating_sub(now)
+            .and_then(|delay| delay.nseconds())
+        {
+            runtime::time::delay_for(Duration::from_nanos(delay)).await;
         }
     }
 

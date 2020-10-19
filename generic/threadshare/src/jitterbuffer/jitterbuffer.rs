@@ -295,9 +295,10 @@ impl SinkHandler {
                 let new_packet_spacing = pts - inner.ips_pts;
                 let old_packet_spacing = state.packet_spacing;
 
+                assert!(old_packet_spacing.is_some());
                 if old_packet_spacing > new_packet_spacing {
                     state.packet_spacing = (new_packet_spacing + 3 * old_packet_spacing) / 4;
-                } else if old_packet_spacing > gst::ClockTime(Some(0)) {
+                } else if !old_packet_spacing.is_zero() {
                     state.packet_spacing = (3 * new_packet_spacing + old_packet_spacing) / 4;
                 } else {
                     state.packet_spacing = new_packet_spacing;
@@ -412,13 +413,13 @@ impl SinkHandler {
             pt
         );
 
-        if dts == gst::CLOCK_TIME_NONE {
+        if dts.is_none() {
             dts = pts;
-        } else if pts == gst::CLOCK_TIME_NONE {
+        } else if pts.is_none() {
             pts = dts;
         }
 
-        if dts == gst::CLOCK_TIME_NONE {
+        if dts.is_none() {
             dts = element.get_current_running_time();
             pts = dts;
 
@@ -957,13 +958,11 @@ impl SrcHandler {
 
         let next_wakeup = state.earliest_pts + latency - state.packet_spacing - context_wait / 2;
 
-        let delay = {
-            if next_wakeup > now {
-                (next_wakeup - now).nseconds().unwrap()
-            } else {
-                0
-            }
-        };
+        let delay = next_wakeup
+            .saturating_sub(now)
+            .unwrap_or_else(gst::ClockTime::zero)
+            .nseconds()
+            .unwrap();
 
         gst_debug!(
             CAT,
@@ -1121,7 +1120,7 @@ impl Default for State {
             segment: gst::FormattedSegment::<gst::ClockTime>::new(),
             clock_rate: None,
 
-            packet_spacing: gst::ClockTime(Some(0)),
+            packet_spacing: gst::ClockTime::zero(),
             equidistant: 0,
 
             discont: true,

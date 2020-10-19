@@ -141,7 +141,7 @@ impl State {
     ) {
         let nsecs = gst::ClockTime::from(timecode.nsec_since_daily_jam());
 
-        if nsecs >= self.last_position {
+        if self.last_position.is_none() || nsecs >= self.last_position {
             self.last_position = nsecs;
         } else {
             gst_fixme!(
