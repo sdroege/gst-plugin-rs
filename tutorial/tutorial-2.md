@@ -705,7 +705,7 @@ For working in live mode, we have to add a few different parts in various places
                 return Ok(buffer);
             }
 
-            let id = clock.new_single_shot_id(wait_until).unwrap();
+            let id = clock.new_single_shot_id(wait_until);
 
             gst_log!(
                 CAT,
@@ -863,7 +863,7 @@ Now as a last step, we need to actually make use of the new struct we added arou
                 return Err(gst::FlowReturn::Flushing);
             }
 
-            let id = clock.new_single_shot_id(wait_until).unwrap();
+            let id = clock.new_single_shot_id(wait_until);
             clock_wait.clock_id = Some(id.clone());
             drop(clock_wait);
 

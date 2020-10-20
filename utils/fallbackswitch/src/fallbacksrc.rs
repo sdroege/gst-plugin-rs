@@ -2022,9 +2022,7 @@ impl FallbackSrc {
             assert!(wait_time.is_some());
             assert!(state.source_pending_restart_timeout.is_none());
 
-            let timeout = clock
-                .new_single_shot_id(wait_time)
-                .expect("can't create clock id");
+            let timeout = clock.new_single_shot_id(wait_time);
             let element_weak = element.downgrade();
             timeout
                 .wait_async(move |_clock, _time, _id| {
@@ -2140,9 +2138,7 @@ impl FallbackSrc {
             wait_time,
         );
 
-        let timeout = clock
-            .new_single_shot_id(wait_time)
-            .expect("can't create clock id");
+        let timeout = clock.new_single_shot_id(wait_time);
         let element_weak = element.downgrade();
         timeout
             .wait_async(move |_clock, _time, _id| {

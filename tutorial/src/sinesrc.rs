@@ -802,7 +802,7 @@ impl PushSrcImpl for SineSrc {
                 return Err(gst::FlowError::Flushing);
             }
 
-            let id = clock.new_single_shot_id(wait_until).unwrap();
+            let id = clock.new_single_shot_id(wait_until);
             clock_wait.clock_id = Some(id.clone());
             drop(clock_wait);
 
