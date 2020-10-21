@@ -1802,6 +1802,11 @@ impl FallbackSrc {
             Some(state) => state,
         };
 
+        if state.source_pending_restart {
+            gst_debug!(CAT, obj: element, "Has pending restart");
+            return;
+        }
+
         gst_debug!(CAT, obj: element, "Got buffering {}%", m.get_percent());
 
         state.buffering_percent = m.get_percent() as u8;
