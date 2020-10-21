@@ -2017,6 +2017,15 @@ impl FallbackSrc {
                 }
                 Some(state) => state,
             };
+
+            for stream in [state.video_stream.as_mut(), state.audio_stream.as_mut()]
+                .iter_mut()
+                .filter_map(|s| s.as_mut())
+            {
+                stream.source_srcpad_block = None;
+                stream.source_srcpad = None;
+            }
+
             gst_debug!(CAT, obj: element, "Waiting for 1s before retrying");
             let clock = gst::SystemClock::obtain();
             let wait_time = clock.get_time() + gst::SECOND;
