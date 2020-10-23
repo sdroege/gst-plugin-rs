@@ -15,15 +15,8 @@ cargo_target_dir = os.path.join(meson_build_dir, 'target')
 env = os.environ.copy()
 env['CARGO_TARGET_DIR'] = cargo_target_dir
 
-# FIXME: hack so cargo will find gst libs when building inside gst-build.
-# We should fetch this from meson deps instead of hardcoding the paths,
-# when Meson will generate -uninstalled.pc files, they all will be in
-# <meson_build_root>/meson-uninstalled/
 pkg_config_path = env.get('PKG_CONFIG_PATH', '').split(':')
-pkg_config_path.append(os.path.join(
-    meson_build_root, 'subprojects', 'gstreamer', 'pkgconfig'))
-pkg_config_path.append(os.path.join(
-    meson_build_root, 'subprojects', 'gst-plugins-base', 'pkgconfig'))
+pkg_config_path.append(os.path.join(meson_build_root, 'meson-uninstalled'))
 env['PKG_CONFIG_PATH'] = ':'.join(pkg_config_path)
 
 if len(extra_env) > 0:
