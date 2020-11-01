@@ -35,12 +35,12 @@ stages:
 .debian:10-stable:
   extends: .debian:10
   variables:
-    RUST_VERSION: "1.46.0"
+    RUST_VERSION: "$GST_RS_STABLE"
 
-.debian:10-1-41:
+.debian:10-msrv:
   extends: .debian:10
   variables:
-    RUST_VERSION: "1.41.0"
+    RUST_VERSION: "$GST_RS_MSRV"
 
 .debian:10-nightly:
   extends: .debian:10
@@ -62,10 +62,10 @@ build-stable:
     - .build-debian-container
     - .debian:10-stable
 
-build-1-41:
+build-msrv:
   extends:
     - .build-debian-container
-    - .debian:10-1-41
+    - .debian:10-msrv
 
 build-nightly:
   extends:
@@ -80,10 +80,10 @@ update-stable:
   variables:
       FDO_FORCE_REBUILD: 1
 
-update-1-41:
-  extends: build-1-41
+update-msrv:
+  extends: build-msrv
   rules:
-    - if: '$UPDATE_IMG == "1-41"'
+    - if: '$UPDATE_IMG == "msrv"'
   variables:
       FDO_FORCE_REBUILD: 1
 
@@ -107,10 +107,10 @@ update-nightly:
     - .dist-debian-container
     - .debian:10-stable
 
-.img-1-41:
+.img-msrv:
   extends:
     - .dist-debian-container
-    - .debian:10-1-41
+    - .debian:10-msrv
 
 .img-nightly:
   extends:
@@ -127,12 +127,12 @@ update-nightly:
     - cargo build --locked --color=always --all --examples --all-features
     - G_DEBUG=fatal_warnings cargo test --locked --color=always --all --examples --all-features
 
-test 1.41:
+test msrv:
   extends:
     - '.cargo test'
-    - .img-1-41
+    - .img-msrv
   rules:
-    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "1-41"'
+    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "msrv"'
 
 test stable:
   extends:
