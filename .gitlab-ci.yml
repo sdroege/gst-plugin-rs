@@ -35,7 +35,7 @@ stages:
 .debian:10-stable:
   extends: .debian:10
   variables:
-    RUST_VERSION: "stable"
+    RUST_VERSION: "1.46.0"
 
 .debian:10-1-41:
   extends: .debian:10
