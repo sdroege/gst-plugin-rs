@@ -9,7 +9,7 @@ edition = "2018"
 
 [dependencies]
 url = "2.1"
-glib = { git = "https://github.com/gtk-rs/glib" }
+glib = { git = "https://github.com/gtk-rs/gtk-rs" }
 reqwest = { version = "0.10", features = ["cookies", "gzip"] }
 futures = "0.3"
 hyperx = "1.0"

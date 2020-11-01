@@ -8,7 +8,7 @@ edition = "2018"
 description = "An PNG encoder/decoder written in pure Rust"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib" }
+glib = { git = "https://github.com/gtk-rs/gtk-rs" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst_video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst_check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

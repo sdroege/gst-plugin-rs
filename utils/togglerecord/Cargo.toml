@@ -8,12 +8,12 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 edition = "2018"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib" }
+glib = { git = "https://github.com/gtk-rs/gtk-rs" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-audio = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gtk = { git = "https://github.com/gtk-rs/gtk", optional = true }
-gio = { git = "https://github.com/gtk-rs/gio", optional = true }
+gtk = { git = "https://github.com/gtk-rs/gtk-rs", optional = true }
+gio = { git = "https://github.com/gtk-rs/gtk-rs", optional = true }
 parking_lot = "0.11"
 more-asserts = "0.2"
 lazy_static = "1.0"

@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 bytes = "0.5"
 futures = "0.3"
-glib = { git = "https://github.com/gtk-rs/glib" }
+glib = { git = "https://github.com/gtk-rs/gtk-rs" }
 gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
 rusoto_core = "0.45"

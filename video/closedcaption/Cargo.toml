@@ -8,17 +8,17 @@ description = "Rust Closed Caption Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib" }
+glib = { git = "https://github.com/gtk-rs/gtk-rs" }
 combine = "4.0"
 either = "1"
 uuid = { version = "0.8", features = ["v4"] }
 chrono = "0.4"
 lazy_static = "1.2"
 atomic_refcell = "0.1"
-cairo-rs = { git = "https://github.com/gtk-rs/cairo", features=["use_glib"] }
-cairo-sys-rs = { git = "https://github.com/gtk-rs/cairo" }
-pango = { git = "https://github.com/gtk-rs/pango" }
-pangocairo = { git = "https://github.com/gtk-rs/pangocairo" }
+cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs", features=["use_glib"] }
+cairo-sys-rs = { git = "https://github.com/gtk-rs/gtk-rs" }
+pango = { git = "https://github.com/gtk-rs/gtk-rs" }
+pangocairo = { git = "https://github.com/gtk-rs/gtk-rs" }
 byteorder = "1"
 
 [dependencies.gst]
