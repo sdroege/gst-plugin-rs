@@ -1557,12 +1557,14 @@ impl FallbackSrc {
             None => return Ok(()),
         };
 
-        let ev = pad
-            .get_sticky_event(gst::EventType::Segment, 0)
-            .ok_or_else(|| {
-                gst_error!(CAT, obj: element, "Have no segment event");
-                gst_error_msg!(gst::CoreError::Clock, ["Have no segment event"])
-            })?;
+        let ev = match pad.get_sticky_event(gst::EventType::Segment, 0) {
+            Some(ev) => ev,
+            None => {
+                gst_warning!(CAT, obj: element, "Have no segment event yet");
+                return Ok(());
+            }
+        };
+
         let segment = match ev.view() {
             gst::EventView::Segment(s) => s.get_segment(),
             _ => unreachable!(),
