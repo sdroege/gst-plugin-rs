@@ -13,7 +13,7 @@ gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 num-rational = { version = "0.3", default-features = false, features = [] }
 nom = "5"
-flavors = { git = "https://github.com/rust-av/flavors" }
+flavors = { git = "https://github.com/rust-av/flavors", rev = "61f9e2463b06f590910974302741eaae185b2086" }
 muldiv = "1.0"
 byteorder = "1.0"
 lazy_static = "1.0"
