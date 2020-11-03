@@ -705,7 +705,7 @@ impl StreamingState {
 
         let data = adapter.map(15).unwrap();
 
-        match be_u32::<(_, nom::error::ErrorKind)>(&data[0..4]) {
+        match be_u32::<_, (_, nom::error::ErrorKind)>(&data[0..4]) {
             Err(_) => unreachable!(),
             Ok((_, previous_size)) => {
                 gst_trace!(CAT, obj: element, "Previous tag size {}", previous_size);
