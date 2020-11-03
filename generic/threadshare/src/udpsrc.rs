@@ -533,19 +533,19 @@ lazy_static! {
 
 impl UdpSrc {
     fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
-        let mut settings = self.settings.lock().unwrap().clone();
+        let mut settings_guard = self.settings.lock().unwrap();
 
         gst_debug!(CAT, obj: element, "Preparing");
 
-        let context =
-            Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
+        let context = Context::acquire(&settings_guard.context, settings_guard.context_wait)
+            .map_err(|err| {
                 gst_error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to acquire Context: {}", err]
                 )
             })?;
 
-        let socket = if let Some(ref wrapped_socket) = settings.socket {
+        let socket = if let Some(ref wrapped_socket) = settings_guard.socket {
             use std::net::UdpSocket;
 
             let socket: UdpSocket;
@@ -568,11 +568,11 @@ impl UdpSrc {
                 })
             })?;
 
-            settings.used_socket = Some(wrapped_socket.clone());
+            settings_guard.used_socket = Some(wrapped_socket.clone());
 
             socket
         } else {
-            let addr: IpAddr = match settings.address {
+            let addr: IpAddr = match settings_guard.address {
                 None => {
                     return Err(gst_error_msg!(
                         gst::ResourceError::Settings,
@@ -589,7 +589,7 @@ impl UdpSrc {
                     Ok(addr) => addr,
                 },
             };
-            let port = settings.port;
+            let port = settings_guard.port;
 
             // TODO: TTL, multicast loopback, etc
             let saddr = if addr.is_multicast() {
@@ -636,16 +636,18 @@ impl UdpSrc {
                 )
             })?;
 
-            socket.set_reuse_address(settings.reuse).map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to set reuse_address: {}", err]
-                )
-            })?;
+            socket
+                .set_reuse_address(settings_guard.reuse)
+                .map_err(|err| {
+                    gst_error_msg!(
+                        gst::ResourceError::OpenRead,
+                        ["Failed to set reuse_address: {}", err]
+                    )
+                })?;
 
             #[cfg(unix)]
             {
-                socket.set_reuse_port(settings.reuse).map_err(|err| {
+                socket.set_reuse_port(settings_guard.reuse).map_err(|err| {
                     gst_error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to set reuse_port: {}", err]
@@ -693,9 +695,24 @@ impl UdpSrc {
                 }
             }
 
-            settings.used_socket = Some(wrap_socket(&socket)?);
+            settings_guard.used_socket = Some(wrap_socket(&socket)?);
 
             socket
+        };
+
+        let port: i32 = socket.local_addr().unwrap().port().into();
+        let settings = if settings_guard.port != port {
+            settings_guard.port = port;
+            let settings = settings_guard.clone();
+            drop(settings_guard);
+            element.notify("port");
+
+            settings
+        } else {
+            let settings = settings_guard.clone();
+            drop(settings_guard);
+
+            settings
         };
 
         let buffer_pool = gst::BufferPool::new();
