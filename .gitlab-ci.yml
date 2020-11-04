@@ -19,8 +19,6 @@ stages:
 .debian:10:
   variables:
     FDO_DISTRIBUTION_VERSION: 10
-    FDO_DISTRIBUTION_TAG: '$RUST_VERSION-${GST_RS_IMG_TAG}_2020-04-28.1'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/10:$RUST_VERSION-$GST_RS_IMG_TAG"
   before_script:
     - source ./ci/env.sh
     - mkdir .cargo && echo -e "[net]\ngit-fetch-with-cli = true" > .cargo/config
@@ -35,17 +33,20 @@ stages:
 .debian:10-stable:
   extends: .debian:10
   variables:
-    RUST_VERSION: "$GST_RS_STABLE"
+    FDO_DISTRIBUTION_TAG: '$GST_RS_STABLE-${GST_RS_IMG_TAG}_2020-04-28.1'
+    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/10:$GST_RS_STABLE-$GST_RS_IMG_TAG"
 
 .debian:10-msrv:
   extends: .debian:10
   variables:
-    RUST_VERSION: "$GST_RS_MSRV"
+    FDO_DISTRIBUTION_TAG: '$GST_RS_MSRV-${GST_RS_IMG_TAG}_2020-04-28.1'
+    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/10:$GST_RS_MSRV-$GST_RS_IMG_TAG"
 
 .debian:10-nightly:
   extends: .debian:10
   variables:
-    RUST_VERSION: "nightly"
+    FDO_DISTRIBUTION_TAG: 'nightly-${GST_RS_IMG_TAG}_2020-04-28.1'
+    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/10:nightly-$GST_RS_IMG_TAG"
 
 .build-debian-container:
   extends:
