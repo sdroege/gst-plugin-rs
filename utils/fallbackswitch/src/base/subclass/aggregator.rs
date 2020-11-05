@@ -16,7 +16,6 @@ use gst::subclass::prelude::*;
 use std::ptr;
 
 use super::super::Aggregator;
-use super::super::AggregatorClass;
 use super::super::AggregatorPad;
 
 pub trait AggregatorImpl: AggregatorImplExt + ElementImpl {
@@ -592,14 +591,14 @@ impl<T: AggregatorImpl> AggregatorImplExt for T {
     }
 }
 
-unsafe impl<T: AggregatorImpl> IsSubclassable<T> for AggregatorClass
+unsafe impl<T: AggregatorImpl> IsSubclassable<T> for Aggregator
 where
     <T as ObjectSubclass>::Instance: PanicPoison,
 {
-    fn override_vfuncs(&mut self) {
-        <gst::ElementClass as IsSubclassable<T>>::override_vfuncs(self);
+    fn override_vfuncs(klass: &mut glib::object::Class<Self>) {
+        <gst::Element as IsSubclassable<T>>::override_vfuncs(klass);
         unsafe {
-            let klass = &mut *(self as *mut Self as *mut gst_base_sys::GstAggregatorClass);
+            let klass = &mut *(klass.as_mut() as *mut gst_base_sys::GstAggregatorClass);
             klass.flush = Some(aggregator_flush::<T>);
             klass.clip = Some(aggregator_clip::<T>);
             klass.finish_buffer = Some(aggregator_finish_buffer::<T>);
