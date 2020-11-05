@@ -23,8 +23,9 @@ use gst::subclass::prelude::*;
 
 use std::sync::{Mutex, MutexGuard};
 
-use super::parser::{SccLine, SccParser, TimeCode};
+use super::parser::{SccLine, SccParser};
 use crate::line_reader::LineReader;
+use crate::parser_utils::TimeCode;
 
 lazy_static! {
     static ref CAT: gst::DebugCategory = {

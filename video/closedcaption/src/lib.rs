@@ -40,6 +40,7 @@ mod cea608tott;
 mod line_reader;
 mod mcc_enc;
 mod mcc_parse;
+mod parser_utils;
 mod scc_enc;
 mod scc_parse;
 mod tttocea608;
