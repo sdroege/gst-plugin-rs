@@ -47,8 +47,6 @@ struct State {
     last_timecode: Option<gst_video::ValidVideoTimeCode>,
 }
 
-type CombineError<'a> = combine::easy::ParseError<&'a [u8]>;
-
 impl Default for State {
     fn default() -> Self {
         Self {
@@ -64,7 +62,10 @@ impl Default for State {
 }
 
 impl State {
-    fn get_line(&mut self, drain: bool) -> Result<Option<SccLine>, (&[u8], CombineError)> {
+    fn get_line(
+        &mut self,
+        drain: bool,
+    ) -> Result<Option<SccLine>, (&[u8], nom::error::Error<&[u8]>)> {
         let line = match self.reader.get_line_with_drain(drain) {
             None => {
                 return Ok(None);

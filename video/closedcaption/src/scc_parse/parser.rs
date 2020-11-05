@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2019,2020 Sebastian Dröge <sebastian@centricular.com>
 // Copyright (C) 2019 Jordan Petridis <jordan@centricular.com>
 //
 // This library is free software; you can redistribute it and/or
@@ -16,11 +16,7 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use combine::parser::byte::hex_digit;
-use combine::parser::range::{range, take_while1};
-use combine::parser::EasyParser;
-use combine::{choice, eof, from_str, many1, one_of, optional, token, unexpected_any, value};
-use combine::{ParseError, Parser, RangeStream};
+use nom::IResult;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TimeCode {
@@ -51,164 +47,161 @@ pub struct SccParser {
 }
 
 /// Parser for parsing a run of ASCII, decimal digits and converting them into a `u32`
-fn digits<'a, I: 'a>() -> impl Parser<I, Output = u32>
-where
-    I: RangeStream<Token = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Token, I::Range, I::Position>,
-{
-    from_str(take_while1(|c: u8| c >= b'0' && c <= b'9').message("while parsing digits"))
+fn digits(s: &[u8]) -> IResult<&[u8], u32> {
+    use nom::bytes::complete::take_while;
+    use nom::character::is_digit;
+    use nom::combinator::map_res;
+
+    map_res(
+        map_res(take_while(is_digit), |s: &[u8]| std::str::from_utf8(s)),
+        |s: &str| s.parse::<u32>(),
+    )(s)
 }
 
 /// Parser for a run of decimal digits, that converts them into a `u32` and checks if the result is
 /// in the allowed range.
-fn digits_range<'a, I: 'a, R: std::ops::RangeBounds<u32>>(range: R) -> impl Parser<I, Output = u32>
-where
-    I: RangeStream<Token = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Token, I::Range, I::Position>,
-{
-    digits().then(move |v| {
-        if range.contains(&v) {
-            value(v).left()
-        } else {
-            unexpected_any("digits out of range").right()
-        }
-    })
+fn digits_range<R: std::ops::RangeBounds<u32>>(
+    range: R,
+) -> impl FnMut(&[u8]) -> IResult<&[u8], u32> {
+    use nom::combinator::verify;
+    use nom::error::context;
+
+    move |s: &[u8]| context("digits out of range", verify(digits, |v| range.contains(v)))(s)
 }
 
 /// Parser for a timecode in the form `hh:mm:ss:fs`
-fn timecode<'a, I: 'a>() -> impl Parser<I, Output = TimeCode>
-where
-    I: RangeStream<Token = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Token, I::Range, I::Position>,
-{
-    (
-        digits(),
-        token(b':'),
-        digits_range(0..60),
-        token(b':'),
-        digits_range(0..60),
-        one_of([b':', b'.', b';', b','].iter().cloned()),
-        digits(),
-    )
-        .map(|(hours, _, minutes, _, seconds, sep, frames)| TimeCode {
-            hours,
-            minutes,
-            seconds,
-            frames,
-            drop_frame: sep == b';' || sep == b',',
-        })
-        .message("while parsing timecode")
+fn timecode(s: &[u8]) -> IResult<&[u8], TimeCode> {
+    use nom::character::complete::{char, one_of};
+    use nom::combinator::map;
+    use nom::error::context;
+    use nom::sequence::tuple;
+
+    context(
+        "invalid timecode",
+        map(
+            tuple((
+                digits,
+                char(':'),
+                digits_range(0..60),
+                char(':'),
+                digits_range(0..60),
+                one_of(":.;,"),
+                digits,
+            )),
+            |(hours, _, minutes, _, seconds, sep, frames)| TimeCode {
+                hours,
+                minutes,
+                seconds,
+                frames,
+                drop_frame: sep == ';' || sep == ',',
+            },
+        ),
+    )(s)
 }
 
 /// Parser that checks for EOF and optionally `\n` or `\r\n` before EOF
-fn end_of_line<'a, I: 'a>() -> impl Parser<I, Output = ()> + 'a
-where
-    I: RangeStream<Token = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Token, I::Range, I::Position>,
-{
-    (
-        optional(choice((range(b"\n".as_ref()), range(b"\r\n".as_ref())))),
-        eof(),
-    )
-        .map(|_| ())
-        .message("while parsing end of line")
+fn end_of_line(s: &[u8]) -> IResult<&[u8], ()> {
+    use nom::branch::alt;
+    use nom::bytes::complete::tag;
+    use nom::combinator::{eof, map, opt};
+    use nom::sequence::pair;
+
+    map(pair(opt(alt((tag("\r\n"), tag("\n")))), eof), |_| ())(s)
 }
 
 /// Parser for the SCC header
-fn header<'a, I: 'a>() -> impl Parser<I, Output = SccLine> + 'a
-where
-    I: RangeStream<Token = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Token, I::Range, I::Position>,
-{
-    (
-        optional(range(&[0xEFu8, 0xBBu8, 0xBFu8][..])),
-        range(b"Scenarist_SCC V1.0".as_ref()),
-        end_of_line(),
-    )
-        .map(|_| SccLine::Header)
-        .message("while parsing header")
+fn header(s: &[u8]) -> IResult<&[u8], SccLine> {
+    use nom::bytes::complete::tag;
+    use nom::combinator::{map, opt};
+    use nom::error::context;
+    use nom::sequence::tuple;
+
+    context(
+        "invalid header",
+        map(
+            tuple((
+                opt(tag(&[0xEFu8, 0xBBu8, 0xBFu8][..])),
+                tag("Scenarist_SCC V1.0"),
+                end_of_line,
+            )),
+            |_| SccLine::Header,
+        ),
+    )(s)
 }
 
 /// Parser that accepts only an empty line
-fn empty_line<'a, I: 'a>() -> impl Parser<I, Output = SccLine> + 'a
-where
-    I: RangeStream<Token = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Token, I::Range, I::Position>,
-{
-    end_of_line()
-        .map(|_| SccLine::Empty)
-        .message("while parsing empty line")
+fn empty_line(s: &[u8]) -> IResult<&[u8], SccLine> {
+    use nom::combinator::map;
+    use nom::error::context;
+
+    context("invalid empty line", map(end_of_line, |_| SccLine::Empty))(s)
 }
 
 /// A single SCC payload item. This is ASCII hex encoded bytes.
 /// It returns an tuple of `(u8, u8)` of the hex encoded bytes.
-fn scc_payload_item<'a, I: 'a>() -> impl Parser<I, Output = (u8, u8)>
-where
-    I: RangeStream<Token = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Token, I::Range, I::Position>,
-{
-    ((hex_digit(), hex_digit(), hex_digit(), hex_digit()).map(|(u, l, m, n)| {
-        let hex_to_u8 = |v: u8| match v {
-            v if v >= b'0' && v <= b'9' => v - b'0',
-            v if v >= b'A' && v <= b'F' => 10 + v - b'A',
-            v if v >= b'a' && v <= b'f' => 10 + v - b'a',
-            _ => unreachable!(),
-        };
-        let val = (hex_to_u8(u) << 4) | hex_to_u8(l);
-        let val2 = (hex_to_u8(m) << 4) | hex_to_u8(n);
-        (val, val2)
-    }))
-    .message("while parsing SCC payload")
-}
+fn scc_payload_item(s: &[u8]) -> IResult<&[u8], (u8, u8)> {
+    use nom::bytes::complete::take_while_m_n;
+    use nom::character::is_hex_digit;
+    use nom::combinator::map;
+    use nom::error::context;
 
-/// A wrapper around `Vec<u8>` that implements `Extend` in a special way. It can be
-/// extended from a `(u8, u8)` while the default `Extend` implementation for
-/// `Vec` only allows to extend over vector items.
-struct VecExtend(Vec<u8>);
+    context(
+        "invalid SCC payload item",
+        map(take_while_m_n(4, 4, is_hex_digit), |s: &[u8]| {
+            let hex_to_u8 = |v: u8| match v {
+                v if v >= b'0' && v <= b'9' => v - b'0',
+                v if v >= b'A' && v <= b'F' => 10 + v - b'A',
+                v if v >= b'a' && v <= b'f' => 10 + v - b'a',
+                _ => unreachable!(),
+            };
 
-impl Default for VecExtend {
-    fn default() -> Self {
-        VecExtend(Vec::with_capacity(256))
-    }
-}
+            let val1 = (hex_to_u8(s[0]) << 4) | hex_to_u8(s[1]);
+            let val2 = (hex_to_u8(s[2]) << 4) | hex_to_u8(s[3]);
 
-impl Extend<(u8, u8)> for VecExtend {
-    fn extend<T>(&mut self, iter: T)
-    where
-        T: IntoIterator<Item = (u8, u8)>,
-    {
-        for (item, item2) in iter {
-            self.0.extend_from_slice(&[item, item2]);
-        }
-    }
+            (val1, val2)
+        }),
+    )(s)
 }
 
 /// Parser for the whole SCC payload with conversion to the underlying byte values.
-fn scc_payload<'a, I: 'a>() -> impl Parser<I, Output = Vec<u8>> + 'a
-where
-    I: RangeStream<Token = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Token, I::Range, I::Position>,
-{
-    many1(
-        (
-            scc_payload_item(),
-            choice!(token(b' ').map(|_| ()), end_of_line()),
-        )
-            .map(|v| v.0),
-    )
-    .map(|v: VecExtend| v.0)
-    .message("while parsing SCC payloads")
+fn scc_payload(s: &[u8]) -> IResult<&[u8], Vec<u8>> {
+    use nom::branch::alt;
+    use nom::bytes::complete::tag;
+    use nom::combinator::map;
+    use nom::error::context;
+    use nom::multi::fold_many1;
+    use nom::sequence::pair;
+    use nom::Parser;
+
+    let parse_item = map(
+        pair(scc_payload_item, alt((tag(" ").map(|_| ()), end_of_line))),
+        |(item, _)| item,
+    );
+
+    context(
+        "invalid SCC payload",
+        fold_many1(parse_item, Vec::new(), |mut acc: Vec<_>, item| {
+            acc.push(item.0);
+            acc.push(item.1);
+            acc
+        }),
+    )(s)
 }
 
 /// Parser for a SCC caption line in the form `timecode\tpayload`.
-fn caption<'a, I: 'a>() -> impl Parser<I, Output = SccLine> + 'a
-where
-    I: RangeStream<Token = u8, Range = &'a [u8]>,
-    I::Error: ParseError<I::Token, I::Range, I::Position>,
-{
-    (timecode(), token(b'\t'), scc_payload(), end_of_line())
-        .map(|(tc, _, value, _)| SccLine::Caption(tc, value))
-        .message("while parsing caption")
+fn caption(s: &[u8]) -> IResult<&[u8], SccLine> {
+    use nom::bytes::complete::tag;
+    use nom::combinator::map;
+    use nom::error::context;
+    use nom::sequence::tuple;
+
+    context(
+        "invalid SCC caption line",
+        map(
+            tuple((timecode, tag("\t"), scc_payload, end_of_line)),
+            |(tc, _, value, _)| SccLine::Caption(tc, value),
+        ),
+    )(s)
 }
 
 /// SCC parser the parses line-by-line and keeps track of the current state in the file.
@@ -226,26 +219,34 @@ impl SccParser {
     pub fn parse_line<'a>(
         &mut self,
         line: &'a [u8],
-    ) -> Result<SccLine, combine::easy::ParseError<&'a [u8]>> {
+    ) -> Result<SccLine, nom::error::Error<&'a [u8]>> {
+        use nom::branch::alt;
+
         match self.state {
-            State::Header => header()
-                .message("while in Header state")
-                .easy_parse(line)
+            State::Header => header(line)
                 .map(|v| {
                     self.state = State::Empty;
-                    v.0
+                    v.1
+                })
+                .map_err(|err| match err {
+                    nom::Err::Incomplete(_) => unreachable!(),
+                    nom::Err::Error(e) | nom::Err::Failure(e) => e,
                 }),
-            State::Empty => empty_line()
-                .message("while in Empty state")
-                .easy_parse(line)
+            State::Empty => empty_line(line)
                 .map(|v| {
                     self.state = State::CaptionOrEmpty;
-                    v.0
+                    v.1
+                })
+                .map_err(|err| match err {
+                    nom::Err::Incomplete(_) => unreachable!(),
+                    nom::Err::Error(e) | nom::Err::Failure(e) => e,
                 }),
-            State::CaptionOrEmpty => choice!(caption(), empty_line())
-                .message("while in CaptionOrEmpty state")
-                .easy_parse(line)
-                .map(|v| v.0),
+            State::CaptionOrEmpty => alt((caption, empty_line))(line)
+                .map(|v| v.1)
+                .map_err(|err| match err {
+                    nom::Err::Incomplete(_) => unreachable!(),
+                    nom::Err::Error(e) | nom::Err::Failure(e) => e,
+                }),
         }
     }
 }
@@ -253,14 +254,13 @@ impl SccParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use combine::error::UnexpectedParse;
 
     #[test]
     fn test_timecode() {
-        let mut parser = timecode();
         assert_eq!(
-            parser.parse(b"11:12:13;14".as_ref()),
+            timecode(b"11:12:13;14".as_ref()),
             Ok((
+                b"".as_ref(),
                 TimeCode {
                     hours: 11,
                     minutes: 12,
@@ -268,13 +268,13 @@ mod tests {
                     frames: 14,
                     drop_frame: true
                 },
-                b"".as_ref()
             ))
         );
 
         assert_eq!(
-            parser.parse(b"11:12:13:14".as_ref()),
+            timecode(b"11:12:13:14".as_ref()),
             Ok((
+                b"".as_ref(),
                 TimeCode {
                     hours: 11,
                     minutes: 12,
@@ -282,13 +282,13 @@ mod tests {
                     frames: 14,
                     drop_frame: false
                 },
-                b"".as_ref()
             ))
         );
 
         assert_eq!(
-            parser.parse(b"11:12:13:14abcd".as_ref()),
+            timecode(b"11:12:13:14abcd".as_ref()),
             Ok((
+                b"abcd".as_ref(),
                 TimeCode {
                     hours: 11,
                     minutes: 12,
@@ -296,70 +296,73 @@ mod tests {
                     frames: 14,
                     drop_frame: false
                 },
-                b"abcd".as_ref()
             ))
         );
 
         assert_eq!(
-            parser.parse(b"abcd11:12:13:14".as_ref()),
-            Err(UnexpectedParse::Unexpected)
+            timecode(b"abcd11:12:13:14".as_ref()),
+            Err(nom::Err::Error(nom::error::Error::new(
+                b"abcd11:12:13:14".as_ref(),
+                nom::error::ErrorKind::MapRes
+            ))),
         );
     }
 
     #[test]
     fn test_header() {
-        let mut parser = header();
         assert_eq!(
-            parser.parse(b"Scenarist_SCC V1.0".as_ref()),
-            Ok((SccLine::Header, b"".as_ref()))
+            header(b"Scenarist_SCC V1.0".as_ref()),
+            Ok((b"".as_ref(), SccLine::Header,))
         );
 
         assert_eq!(
-            parser.parse(b"Scenarist_SCC V1.0\n".as_ref()),
-            Ok((SccLine::Header, b"".as_ref()))
+            header(b"Scenarist_SCC V1.0\n".as_ref()),
+            Ok((b"".as_ref(), SccLine::Header))
         );
 
         assert_eq!(
-            parser.parse(b"Scenarist_SCC V1.0\r\n".as_ref()),
-            Ok((SccLine::Header, b"".as_ref()))
+            header(b"Scenarist_SCC V1.0\r\n".as_ref()),
+            Ok((b"".as_ref(), SccLine::Header))
         );
 
         assert_eq!(
-            parser.parse(b"Scenarist_SCC V1.1".as_ref()),
-            Err(UnexpectedParse::Unexpected)
+            header(b"Scenarist_SCC V1.1".as_ref()),
+            Err(nom::Err::Error(nom::error::Error::new(
+                b"Scenarist_SCC V1.1".as_ref(),
+                nom::error::ErrorKind::Tag
+            ))),
         );
     }
 
     #[test]
     fn test_empty_line() {
-        let mut parser = empty_line();
+        assert_eq!(empty_line(b"".as_ref()), Ok((b"".as_ref(), SccLine::Empty)));
+
         assert_eq!(
-            parser.parse(b"".as_ref()),
-            Ok((SccLine::Empty, b"".as_ref()))
+            empty_line(b"\n".as_ref()),
+            Ok((b"".as_ref(), SccLine::Empty))
         );
 
         assert_eq!(
-            parser.parse(b"\n".as_ref()),
-            Ok((SccLine::Empty, b"".as_ref()))
+            empty_line(b"\r\n".as_ref()),
+            Ok((b"".as_ref(), SccLine::Empty))
         );
 
         assert_eq!(
-            parser.parse(b"\r\n".as_ref()),
-            Ok((SccLine::Empty, b"".as_ref()))
-        );
-
-        assert_eq!(
-            parser.parse(b" \r\n".as_ref()),
-            Err(UnexpectedParse::Unexpected)
+            empty_line(b" \r\n".as_ref()),
+            Err(nom::Err::Error(nom::error::Error::new(
+                b" \r\n".as_ref(),
+                nom::error::ErrorKind::Eof
+            ))),
         );
     }
 
     #[test]
     fn test_caption() {
-        let mut parser = caption();
         assert_eq!(
-            parser.parse(b"01:02:53:14\t94ae 94ae 9420 9420 947a 947a 97a2 97a2 a820 68ef f26e 2068 ef6e 6be9 6e67 2029 942c 942c 8080 8080 942f 942f".as_ref()),
+            caption(b"01:02:53:14\t94ae 94ae 9420 9420 947a 947a 97a2 97a2 a820 68ef f26e 2068 ef6e 6be9 6e67 2029 942c 942c 8080 8080 942f 942f".as_ref()),
             Ok((
+                b"".as_ref(),
                 SccLine::Caption(
                     TimeCode {
                         hours: 1,
@@ -376,13 +379,13 @@ mod tests {
                         0x94, 0x2f,
                     ]
                 ),
-                b"".as_ref()
             ))
         );
 
         assert_eq!(
-            parser.parse(b"01:02:55;14	942c 942c".as_ref()),
+            caption(b"01:02:55;14	942c 942c".as_ref()),
             Ok((
+                b"".as_ref(),
                 SccLine::Caption(
                     TimeCode {
                         hours: 1,
@@ -393,13 +396,13 @@ mod tests {
                     },
                     vec![0x94, 0x2c, 0x94, 0x2c]
                 ),
-                b"".as_ref()
             ))
         );
 
         assert_eq!(
-            parser.parse(b"01:03:27:29	94ae 94ae 9420 9420 94f2 94f2 c845 d92c 2054 c845 5245 ae80 942c 942c 8080 8080 942f 942f".as_ref()),
+            caption(b"01:03:27:29	94ae 94ae 9420 9420 94f2 94f2 c845 d92c 2054 c845 5245 ae80 942c 942c 8080 8080 942f 942f".as_ref()),
             Ok((
+                b"".as_ref(),
                 SccLine::Caption(
                     TimeCode {
                         hours: 1,
@@ -414,13 +417,13 @@ mod tests {
                         0x80, 0x80, 0x80, 0x80, 0x94, 0x2f, 0x94, 0x2f,
                     ]
                 ),
-                b"".as_ref()
             ))
         );
 
         assert_eq!(
-            parser.parse(b"00:00:00;00\t942c 942c".as_ref()),
+            caption(b"00:00:00;00\t942c 942c".as_ref()),
             Ok((
+                b"".as_ref(),
                 SccLine::Caption(
                     TimeCode {
                         hours: 0,
@@ -431,13 +434,13 @@ mod tests {
                     },
                     vec![0x94, 0x2c, 0x94, 0x2c],
                 ),
-                b"".as_ref()
             ))
         );
 
         assert_eq!(
-            parser.parse(b"00:00:00;00\t942c 942c\r\n".as_ref()),
+            caption(b"00:00:00;00\t942c 942c\r\n".as_ref()),
             Ok((
+                b"".as_ref(),
                 SccLine::Caption(
                     TimeCode {
                         hours: 0,
@@ -448,7 +451,6 @@ mod tests {
                     },
                     vec![0x94, 0x2c, 0x94, 0x2c],
                 ),
-                b"".as_ref()
             ))
         );
     }
