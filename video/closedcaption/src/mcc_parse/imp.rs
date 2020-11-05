@@ -26,8 +26,9 @@ use std::cmp;
 use std::convert::TryInto;
 use std::sync::{Mutex, MutexGuard};
 
-use super::parser::{MccLine, MccParser, TimeCode};
+use super::parser::{MccLine, MccParser};
 use crate::line_reader::LineReader;
+use crate::parser_utils::TimeCode;
 
 lazy_static! {
     static ref CAT: gst::DebugCategory = {
@@ -92,8 +93,6 @@ struct State {
     need_flush_stop: bool,
 }
 
-type CombineError<'a> = combine::easy::ParseError<&'a [u8]>;
-
 impl Default for State {
     fn default() -> Self {
         Self {
@@ -156,7 +155,10 @@ fn parse_timecode_rate(
 }
 
 impl State {
-    fn get_line(&mut self, drain: bool) -> Result<Option<MccLine>, (&[u8], CombineError)> {
+    fn get_line(
+        &mut self,
+        drain: bool,
+    ) -> Result<Option<MccLine>, (&[u8], nom::error::Error<&[u8]>)> {
         let line = if self.replay_last_line {
             self.replay_last_line = false;
             &self.last_raw_line
