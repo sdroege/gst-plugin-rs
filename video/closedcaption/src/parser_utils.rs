@@ -88,3 +88,61 @@ pub fn end_of_line(s: &[u8]) -> IResult<&[u8], ()> {
 
     map(pair(opt(alt((tag("\r\n"), tag("\n")))), eof), |_| ())(s)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_timecode() {
+        assert_eq!(
+            timecode(b"11:12:13;14".as_ref()),
+            Ok((
+                b"".as_ref(),
+                TimeCode {
+                    hours: 11,
+                    minutes: 12,
+                    seconds: 13,
+                    frames: 14,
+                    drop_frame: true
+                },
+            ))
+        );
+
+        assert_eq!(
+            timecode(b"11:12:13:14".as_ref()),
+            Ok((
+                b"".as_ref(),
+                TimeCode {
+                    hours: 11,
+                    minutes: 12,
+                    seconds: 13,
+                    frames: 14,
+                    drop_frame: false
+                },
+            ))
+        );
+
+        assert_eq!(
+            timecode(b"11:12:13:14abcd".as_ref()),
+            Ok((
+                b"abcd".as_ref(),
+                TimeCode {
+                    hours: 11,
+                    minutes: 12,
+                    seconds: 13,
+                    frames: 14,
+                    drop_frame: false
+                },
+            ))
+        );
+
+        assert_eq!(
+            timecode(b"abcd11:12:13:14".as_ref()),
+            Err(nom::Err::Error(nom::error::Error::new(
+                b"abcd11:12:13:14".as_ref(),
+                nom::error::ErrorKind::MapRes
+            ))),
+        );
+    }
+}
