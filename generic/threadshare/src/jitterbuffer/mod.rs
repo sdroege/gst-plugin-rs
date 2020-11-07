@@ -132,7 +132,7 @@ use glib::translate::*;
 use std::mem;
 
 glib_wrapper! {
-    pub struct RTPJitterBuffer(Object<ffi::RTPJitterBuffer, RTPJitterBufferClass>);
+    pub struct RTPJitterBuffer(Object<ffi::RTPJitterBuffer>);
 
     match fn {
         get_type => || ffi::rtp_jitter_buffer_get_type(),
