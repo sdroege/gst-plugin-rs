@@ -178,7 +178,7 @@ static PROPERTIES: [subclass::Property; 10] = [
             name,
             "Retrieve sender address",
             "Whether to retrieve the sender address and add it to buffers as meta. Disabling this might result in minor performance improvements in certain scenarios",
-            DEFAULT_REUSE,
+            DEFAULT_RETRIEVE_SENDER_ADDRESS,
             glib::ParamFlags::READWRITE,
         )
     }),
