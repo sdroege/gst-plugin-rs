@@ -454,16 +454,10 @@ impl TaskImpl for UdpSrcTask {
                     .await
                     .retrieve_sender_address
                 {
-                    let inet_addr = match saddr.ip() {
-                        IpAddr::V4(ip) => {
-                            gio::InetAddress::from_bytes(gio::InetAddressBytes::V4(&ip.octets()))
-                        }
-                        IpAddr::V6(ip) => {
-                            gio::InetAddress::from_bytes(gio::InetAddressBytes::V6(&ip.octets()))
-                        }
-                    };
-                    let inet_socket_addr = &gio::InetSocketAddress::new(&inet_addr, saddr.port());
-                    NetAddressMeta::add(buffer.get_mut().unwrap(), inet_socket_addr);
+                    NetAddressMeta::add(
+                        buffer.get_mut().unwrap(),
+                        &gio::InetSocketAddress::from(saddr),
+                    );
                 }
             }
 
