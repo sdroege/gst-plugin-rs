@@ -132,6 +132,12 @@ version = "0.4"
 name = "crossbeam-utils"
 version = "0.7"
 
+# ignore duplicated tinyvec dependency because lewton depends on an old version
+# https://github.com/RustAudio/lewton/commit/b8d72804db89db358b99784e1ad9d7a22534743c
+[[bans.skip]]
+name = "tinyvec"
+version = "0.3"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
