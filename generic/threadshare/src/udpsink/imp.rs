@@ -562,7 +562,7 @@ impl UdpSinkPadHandler {
 
     async fn render(
         &self,
-        element: &gst::Element,
+        element: &super::UdpSink,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let (
@@ -691,7 +691,7 @@ impl UdpSinkPadHandler {
     }
 
     /* Wait until specified time */
-    async fn sync(&self, element: &gst::Element, running_time: gst::ClockTime) {
+    async fn sync(&self, element: &super::UdpSink, running_time: gst::ClockTime) {
         let now = element.get_current_running_time();
 
         if let Some(delay) = running_time
@@ -702,7 +702,7 @@ impl UdpSinkPadHandler {
         }
     }
 
-    async fn handle_event(&self, element: &gst::Element, event: gst::Event) {
+    async fn handle_event(&self, element: &super::UdpSink, event: gst::Event) {
         match event.view() {
             EventView::Eos(_) => {
                 let _ = element.post_message(gst::message::Eos::builder().src(element).build());
@@ -726,7 +726,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         let sender = Arc::clone(&self.0.read().unwrap().sender);
-        let element = element.clone();
+        let element = element.clone().downcast::<super::UdpSink>().unwrap();
 
         async move {
             if let Some(sender) = sender.lock().await.as_mut() {
@@ -748,7 +748,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         let sender = Arc::clone(&self.0.read().unwrap().sender);
-        let element = element.clone();
+        let element = element.clone().downcast::<super::UdpSink>().unwrap();
 
         async move {
             if let Some(sender) = sender.lock().await.as_mut() {
@@ -773,7 +773,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         event: gst::Event,
     ) -> BoxFuture<'static, bool> {
         let sender = Arc::clone(&self.0.read().unwrap().sender);
-        let element = element.clone();
+        let element = element.clone().downcast::<super::UdpSink>().unwrap();
 
         async move {
             if let EventView::FlushStop(_) = event.view() {
@@ -807,13 +807,13 @@ impl PadSinkHandler for UdpSinkPadHandler {
 
 #[derive(Debug)]
 struct UdpSinkTask {
-    element: gst::Element,
+    element: super::UdpSink,
     sink_pad_handler: UdpSinkPadHandler,
     receiver: Option<mpsc::Receiver<TaskItem>>,
 }
 
 impl UdpSinkTask {
-    fn new(element: &gst::Element, sink_pad_handler: &UdpSinkPadHandler) -> Self {
+    fn new(element: &super::UdpSink, sink_pad_handler: &UdpSinkPadHandler) -> Self {
         UdpSinkTask {
             element: element.clone(),
             sink_pad_handler: sink_pad_handler.clone(),
@@ -877,7 +877,7 @@ enum SocketFamily {
 }
 
 #[derive(Debug)]
-struct UdpSink {
+pub struct UdpSink {
     sink_pad: PadSink,
     sink_pad_handler: UdpSinkPadHandler,
     task: Task,
@@ -889,7 +889,7 @@ impl UdpSink {
         &self,
         family: SocketFamily,
         context: &Context,
-        element: &gst::Element,
+        element: &super::UdpSink,
     ) -> Result<(), gst::ErrorMessage> {
         let mut settings = self.settings.lock().unwrap();
 
@@ -1028,7 +1028,7 @@ impl UdpSink {
         Ok(())
     }
 
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Preparing");
 
         let context = {
@@ -1060,7 +1060,7 @@ impl UdpSink {
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) {
+    fn unprepare(&self, element: &super::UdpSink) {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
         self.task.unprepare().unwrap();
@@ -1069,14 +1069,14 @@ impl UdpSink {
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Stopping");
         self.task.stop()?;
         gst_debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Starting");
         self.task.start()?;
         gst_debug!(CAT, obj: element, "Started");
@@ -1101,7 +1101,7 @@ impl UdpSink {
     }
 }
 
-fn try_into_socket_addr(element: &gst::Element, host: &str, port: i32) -> Result<SocketAddr, ()> {
+fn try_into_socket_addr(element: &super::UdpSink, host: &str, port: i32) -> Result<SocketAddr, ()> {
     let addr: IpAddr = match host.parse() {
         Err(err) => {
             gst_error!(CAT, obj: element, "Failed to parse host {}: {}", host, err);
@@ -1123,13 +1123,14 @@ fn try_into_socket_addr(element: &gst::Element, host: &str, port: i32) -> Result
 
 impl ObjectSubclass for UdpSink {
     const NAME: &'static str = "RsTsUdpSink";
+    type Type = super::UdpSink;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Thread-sharing UDP sink",
             "Sink/Network",
@@ -1154,7 +1155,7 @@ impl ObjectSubclass for UdpSink {
             glib::types::Type::Unit,
             |_, args| {
                 let element = args[0]
-                    .get::<gst::Element>()
+                    .get::<super::UdpSink>()
                     .expect("signal arg")
                     .expect("missing signal arg");
                 let host = args[1]
@@ -1182,7 +1183,7 @@ impl ObjectSubclass for UdpSink {
             glib::types::Type::Unit,
             |_, args| {
                 let element = args[0]
-                    .get::<gst::Element>()
+                    .get::<super::UdpSink>()
                     .expect("signal arg")
                     .expect("missing signal arg");
                 let host = args[1]
@@ -1211,7 +1212,7 @@ impl ObjectSubclass for UdpSink {
             glib::types::Type::Unit,
             |_, args| {
                 let element = args[0]
-                    .get::<gst::Element>()
+                    .get::<super::UdpSink>()
                     .expect("signal arg")
                     .expect("missing signal arg");
 
@@ -1225,7 +1226,7 @@ impl ObjectSubclass for UdpSink {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let settings = Arc::new(StdMutex::new(Settings::default()));
         let sink_pad_handler = UdpSinkPadHandler::new(Arc::clone(&settings));
 
@@ -1242,9 +1243,8 @@ impl ObjectSubclass for UdpSink {
 }
 
 impl ObjectImpl for UdpSink {
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
 
         let mut settings = self.settings.lock().unwrap();
         match *prop {
@@ -1315,15 +1315,9 @@ impl ObjectImpl for UdpSink {
                         rsplit[0]
                             .parse::<i32>()
                             .map_err(|err| {
-                                gst_error!(
-                                    CAT,
-                                    obj: element,
-                                    "Invalid port {}: {}",
-                                    rsplit[0],
-                                    err
-                                );
+                                gst_error!(CAT, obj: obj, "Invalid port {}: {}", rsplit[0], err);
                             })
-                            .and_then(|port| try_into_socket_addr(&element, rsplit[1], port))
+                            .and_then(|port| try_into_socket_addr(&obj, rsplit[1], port))
                             .ok()
                     } else {
                         None
@@ -1346,7 +1340,7 @@ impl ObjectImpl for UdpSink {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         let settings = self.settings.lock().unwrap();
@@ -1399,20 +1393,19 @@ impl ObjectImpl for UdpSink {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(self.sink_pad.gst_pad()).unwrap();
+        obj.add_pad(self.sink_pad.gst_pad()).unwrap();
 
-        super::set_element_flags(element, gst::ElementFlags::SINK);
+        crate::set_element_flags(obj, gst::ElementFlags::SINK);
     }
 }
 
 impl ElementImpl for UdpSink {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -1439,7 +1432,7 @@ impl ElementImpl for UdpSink {
         self.parent_change_state(element, transition)
     }
 
-    fn send_event(&self, _element: &gst::Element, event: gst::Event) -> bool {
+    fn send_event(&self, _element: &Self::Type, event: gst::Event) -> bool {
         match event.view() {
             EventView::Latency(ev) => {
                 self.sink_pad_handler.set_latency(ev.get_latency());
@@ -1449,13 +1442,4 @@ impl ElementImpl for UdpSink {
             _ => self.sink_pad.gst_pad().push_event(event),
         }
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "ts-udpsink",
-        gst::Rank::None,
-        UdpSink::get_type(),
-    )
 }

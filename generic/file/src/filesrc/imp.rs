@@ -23,7 +23,7 @@ use std::sync::Mutex;
 
 use url::Url;
 
-use file_location::FileLocation;
+use crate::file_location::FileLocation;
 
 const DEFAULT_LOCATION: Option<FileLocation> = None;
 
@@ -77,7 +77,7 @@ lazy_static! {
 impl FileSrc {
     fn set_location(
         &self,
-        element: &gst_base::BaseSrc,
+        element: &super::FileSrc,
         location: Option<FileLocation>,
     ) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
@@ -133,6 +133,7 @@ impl FileSrc {
 
 impl ObjectSubclass for FileSrc {
     const NAME: &'static str = "RsFileSrc";
+    type Type = super::FileSrc;
     type ParentType = gst_base::BaseSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -150,7 +151,7 @@ impl ObjectSubclass for FileSrc {
         type_.add_interface::<gst::URIHandler>();
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "File Source",
             "Source/File",
@@ -173,33 +174,26 @@ impl ObjectSubclass for FileSrc {
 }
 
 impl ObjectImpl for FileSrc {
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("location", ..) => {
-                let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
-
                 let res = match value.get::<String>() {
                     Ok(Some(location)) => FileLocation::try_from_path_str(location)
-                        .and_then(|file_location| self.set_location(&element, Some(file_location))),
-                    Ok(None) => self.set_location(&element, None),
+                        .and_then(|file_location| self.set_location(obj, Some(file_location))),
+                    Ok(None) => self.set_location(obj, None),
                     Err(_) => unreachable!("type checked upstream"),
                 };
 
                 if let Err(err) = res {
-                    gst_error!(
-                        CAT,
-                        obj: element,
-                        "Failed to set property `location`: {}",
-                        err
-                    );
+                    gst_error!(CAT, obj: obj, "Failed to set property `location`: {}", err);
                 }
             }
             _ => unimplemented!(),
         };
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("location", ..) => {
@@ -215,22 +209,21 @@ impl ObjectImpl for FileSrc {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
-        element.set_format(gst::Format::Bytes);
+        obj.set_format(gst::Format::Bytes);
     }
 }
 
 impl ElementImpl for FileSrc {}
 
 impl BaseSrcImpl for FileSrc {
-    fn is_seekable(&self, _src: &gst_base::BaseSrc) -> bool {
+    fn is_seekable(&self, _src: &Self::Type) -> bool {
         true
     }
 
-    fn get_size(&self, _src: &gst_base::BaseSrc) -> Option<u64> {
+    fn get_size(&self, _src: &Self::Type) -> Option<u64> {
         let state = self.state.lock().unwrap();
         if let State::Started { ref file, .. } = *state {
             file.metadata().ok().map(|m| m.len())
@@ -239,7 +232,7 @@ impl BaseSrcImpl for FileSrc {
         }
     }
 
-    fn start(&self, element: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             unreachable!("FileSrc already started");
@@ -273,7 +266,7 @@ impl BaseSrcImpl for FileSrc {
         Ok(())
     }
 
-    fn stop(&self, element: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Stopped = *state {
             return Err(gst_error_msg!(
@@ -291,7 +284,7 @@ impl BaseSrcImpl for FileSrc {
 
     fn fill(
         &self,
-        element: &gst_base::BaseSrc,
+        element: &Self::Type,
         offset: u64,
         _length: u32,
         buffer: &mut gst::BufferRef,
@@ -347,7 +340,7 @@ impl BaseSrcImpl for FileSrc {
 }
 
 impl URIHandlerImpl for FileSrc {
-    fn get_uri(&self, _element: &gst::URIHandler) -> Option<String> {
+    fn get_uri(&self, _element: &Self::Type) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
         // Conversion to Url already checked while building the `FileLocation`
@@ -358,9 +351,7 @@ impl URIHandlerImpl for FileSrc {
         })
     }
 
-    fn set_uri(&self, element: &gst::URIHandler, uri: &str) -> Result<(), glib::Error> {
-        let element = element.dynamic_cast_ref::<gst_base::BaseSrc>().unwrap();
-
+    fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
         // Special case for "file://" as this is used by some applications to test
         // with `gst_element_make_from_uri` if there's an element that supports the URI protocol
 
@@ -379,13 +370,4 @@ impl URIHandlerImpl for FileSrc {
     fn get_protocols() -> Vec<String> {
         vec!["file".to_string()]
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rsfilesrc",
-        gst::Rank::None,
-        FileSrc::get_type(),
-    )
 }

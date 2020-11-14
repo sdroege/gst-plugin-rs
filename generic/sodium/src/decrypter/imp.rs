@@ -123,7 +123,7 @@ impl State {
     // retrieval
     fn decrypt_into_adapter(
         &mut self,
-        element: &gst::Element,
+        element: &super::Decrypter,
         pad: &gst::Pad,
         buffer: &gst::Buffer,
         chunk_index: u64,
@@ -261,7 +261,7 @@ fn add_nonce(initial_nonce: box_::Nonce, chunk_index: u64) -> box_::Nonce {
     box_::Nonce::from_slice(&nonce).expect("Failed to convert slice back to Nonce")
 }
 
-struct Decrypter {
+pub struct Decrypter {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     props: Mutex<Props>,
@@ -272,7 +272,7 @@ impl Decrypter {
     fn src_activatemode_function(
         &self,
         _pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::Decrypter,
         mode: gst::PadMode,
         active: bool,
     ) -> Result<(), gst::LoggableError> {
@@ -295,7 +295,12 @@ impl Decrypter {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::Decrypter,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -349,7 +354,7 @@ impl Decrypter {
                 };
 
                 // subtract static offsets
-                let size = size - super::HEADERS_SIZE as u64;
+                let size = size - crate::HEADERS_SIZE as u64;
 
                 // calculate the number of chunks that exist in the stream
                 let total_chunks =
@@ -366,7 +371,7 @@ impl Decrypter {
         }
     }
 
-    fn check_headers(&self, element: &gst::Element) -> Result<(), gst::LoggableError> {
+    fn check_headers(&self, element: &super::Decrypter) -> Result<(), gst::LoggableError> {
         let is_none = {
             let mutex_state = self.state.lock().unwrap();
             let state = mutex_state.as_ref().unwrap();
@@ -440,12 +445,12 @@ impl Decrypter {
     fn pull_requested_buffer(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::Decrypter,
         requested_size: u32,
         block_size: u32,
         chunk_index: u64,
     ) -> Result<gst::Buffer, gst::FlowError> {
-        let pull_offset = super::HEADERS_SIZE as u64
+        let pull_offset = crate::HEADERS_SIZE as u64
             + (chunk_index * block_size as u64)
             + (chunk_index * box_::MACBYTES as u64);
 
@@ -508,7 +513,7 @@ impl Decrypter {
     fn get_range(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::Decrypter,
         offset: u64,
         buffer: Option<&mut gst::BufferRef>,
         requested_size: u32,
@@ -555,13 +560,14 @@ impl Decrypter {
 
 impl ObjectSubclass for Decrypter {
     const NAME: &'static str = "RsSodiumDecryptor";
+    type Type = super::Decrypter;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
 
@@ -608,7 +614,7 @@ impl ObjectSubclass for Decrypter {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Decrypter",
             "Generic",
@@ -639,15 +645,14 @@ impl ObjectSubclass for Decrypter {
 }
 
 impl ObjectImpl for Decrypter {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -665,7 +670,7 @@ impl ObjectImpl for Decrypter {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -682,7 +687,7 @@ impl ObjectImpl for Decrypter {
 impl ElementImpl for Decrypter {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_debug!(CAT, obj: element, "Changing state {:?}", transition);
@@ -715,13 +720,4 @@ impl ElementImpl for Decrypter {
 
         Ok(success)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "sodiumdecrypter",
-        gst::Rank::None,
-        Decrypter::get_type(),
-    )
 }

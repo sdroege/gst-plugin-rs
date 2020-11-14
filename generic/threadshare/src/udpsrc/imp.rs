@@ -41,7 +41,7 @@ use std::u16;
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task};
 
-use super::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead};
+use crate::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead};
 
 const DEFAULT_ADDRESS: Option<&str> = Some("0.0.0.0");
 const DEFAULT_PORT: i32 = 5000;
@@ -185,7 +185,7 @@ static PROPERTIES: [subclass::Property; 10] = [
 ];
 
 #[derive(Debug)]
-pub struct UdpReader(tokio::net::UdpSocket);
+struct UdpReader(tokio::net::UdpSocket);
 
 impl UdpReader {
     fn new(socket: tokio::net::UdpSocket) -> Self {
@@ -254,7 +254,7 @@ impl UdpSrcPadHandler {
         self.0.state.lock().await.need_segment = true;
     }
 
-    async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &gst::Element) {
+    async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &super::UdpSrc) {
         let mut state = self.0.state.lock().await;
         if state.need_initial_events {
             gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
@@ -285,7 +285,7 @@ impl UdpSrcPadHandler {
     async fn push_buffer(
         &self,
         pad: &PadSrcRef<'_>,
-        element: &gst::Element,
+        element: &super::UdpSrc,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
@@ -377,7 +377,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
 }
 
 struct UdpSrcTask {
-    element: gst::Element,
+    element: super::UdpSrc,
     src_pad: PadSrcWeak,
     src_pad_handler: UdpSrcPadHandler,
     socket: Socket<UdpReader>,
@@ -385,7 +385,7 @@ struct UdpSrcTask {
 
 impl UdpSrcTask {
     fn new(
-        element: &gst::Element,
+        element: &super::UdpSrc,
         src_pad: &PadSrc,
         src_pad_handler: &UdpSrcPadHandler,
         socket: Socket<UdpReader>,
@@ -510,7 +510,7 @@ impl TaskImpl for UdpSrcTask {
     }
 }
 
-struct UdpSrc {
+pub struct UdpSrc {
     src_pad: PadSrc,
     src_pad_handler: UdpSrcPadHandler,
     task: Task,
@@ -526,7 +526,7 @@ lazy_static! {
 }
 
 impl UdpSrc {
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {
         let mut settings_guard = self.settings.lock().unwrap();
 
         gst_debug!(CAT, obj: element, "Preparing");
@@ -719,13 +719,17 @@ impl UdpSrc {
             )
         })?;
 
-        let socket = Socket::try_new(element.clone(), buffer_pool, UdpReader::new(socket))
-            .map_err(|err| {
-                gst_error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Failed to prepare socket {:?}", err]
-                )
-            })?;
+        let socket = Socket::try_new(
+            element.clone().upcast(),
+            buffer_pool,
+            UdpReader::new(socket),
+        )
+        .map_err(|err| {
+            gst_error_msg!(
+                gst::ResourceError::OpenRead,
+                ["Failed to prepare socket {:?}", err]
+            )
+        })?;
 
         element.notify("used-socket");
 
@@ -749,7 +753,7 @@ impl UdpSrc {
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) {
+    fn unprepare(&self, element: &super::UdpSrc) {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
         self.settings.lock().unwrap().used_socket = None;
@@ -760,21 +764,21 @@ impl UdpSrc {
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Stopping");
         self.task.stop()?;
         gst_debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Starting");
         self.task.start()?;
         gst_debug!(CAT, obj: element, "Started");
         Ok(())
     }
 
-    fn pause(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn pause(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Pausing");
         self.task.pause()?;
         gst_debug!(CAT, obj: element, "Paused");
@@ -784,13 +788,14 @@ impl UdpSrc {
 
 impl ObjectSubclass for UdpSrc {
     const NAME: &'static str = "RsTsUdpSrc";
+    type Type = super::UdpSrc;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Thread-sharing UDP source",
             "Source/Network",
@@ -827,7 +832,7 @@ impl ObjectSubclass for UdpSrc {
         }
     }
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let src_pad_handler = UdpSrcPadHandler::default();
 
         Self {
@@ -843,7 +848,7 @@ impl ObjectSubclass for UdpSrc {
 }
 
 impl ObjectImpl for UdpSrc {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         let mut settings = self.settings.lock().unwrap();
@@ -888,7 +893,7 @@ impl ObjectImpl for UdpSrc {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         let settings = self.settings.lock().unwrap();
@@ -917,20 +922,19 @@ impl ObjectImpl for UdpSrc {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(self.src_pad.gst_pad()).unwrap();
+        obj.add_pad(self.src_pad.gst_pad()).unwrap();
 
-        super::set_element_flags(element, gst::ElementFlags::SOURCE);
+        crate::set_element_flags(obj, gst::ElementFlags::SOURCE);
     }
 }
 
 impl ElementImpl for UdpSrc {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -971,13 +975,4 @@ impl ElementImpl for UdpSrc {
 
         Ok(success)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "ts-udpsrc",
-        gst::Rank::None,
-        UdpSrc::get_type(),
-    )
 }

@@ -190,7 +190,7 @@ impl State {
     }
 }
 
-struct Encrypter {
+pub struct Encrypter {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     props: Mutex<Props>,
@@ -201,7 +201,7 @@ impl Encrypter {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::Encrypter,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -251,7 +251,7 @@ impl Encrypter {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &super::Encrypter, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -306,7 +306,7 @@ impl Encrypter {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &super::Encrypter, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -317,7 +317,12 @@ impl Encrypter {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::Encrypter,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -371,7 +376,7 @@ impl Encrypter {
                 let size = size + total_chunks * box_::MACBYTES as u64;
 
                 // add static offsets
-                let size = size + super::HEADERS_SIZE as u64;
+                let size = size + crate::HEADERS_SIZE as u64;
 
                 gst_debug!(CAT, obj: pad, "Setting duration bytes: {}", size);
                 q.set(gst::format::Bytes::from(size));
@@ -385,13 +390,14 @@ impl Encrypter {
 
 impl ObjectSubclass for Encrypter {
     const NAME: &'static str = "RsSodiumEncrypter";
+    type Type = super::Encrypter;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -439,7 +445,7 @@ impl ObjectSubclass for Encrypter {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Encrypter",
             "Generic",
@@ -470,15 +476,14 @@ impl ObjectSubclass for Encrypter {
 }
 
 impl ObjectImpl for Encrypter {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -501,7 +506,7 @@ impl ObjectImpl for Encrypter {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -523,7 +528,7 @@ impl ObjectImpl for Encrypter {
 impl ElementImpl for Encrypter {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_debug!(CAT, obj: element, "Changing state {:?}", transition);
@@ -556,13 +561,4 @@ impl ElementImpl for Encrypter {
 
         Ok(success)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "sodiumencrypter",
-        gst::Rank::None,
-        Encrypter::get_type(),
-    )
 }

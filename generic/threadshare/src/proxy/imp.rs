@@ -41,7 +41,7 @@ use crate::runtime::{
     Context, PadSink, PadSinkRef, PadSinkWeak, PadSrc, PadSrcRef, PadSrcWeak, Task,
 };
 
-use super::dataqueue::{DataQueue, DataQueueItem};
+use crate::dataqueue::{DataQueue, DataQueueItem};
 
 lazy_static! {
     static ref PROXY_CONTEXTS: StdMutex<HashMap<String, Weak<StdMutex<ProxyContextInner>>>> =
@@ -301,7 +301,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         let pad_weak = pad.downgrade();
-        let element = element.clone();
+        let element = element.clone().downcast::<super::ProxySink>().unwrap();
 
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
@@ -322,7 +322,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         let pad_weak = pad.downgrade();
-        let element = element.clone();
+        let element = element.clone().downcast::<super::ProxySink>().unwrap();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst_log!(SINK_CAT, obj: pad.gst_pad(), "Handling {:?}", list);
@@ -357,7 +357,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         };
 
         if let EventView::FlushStart(..) = event.view() {
-            proxysink.stop(&element);
+            proxysink.stop(element.downcast_ref::<super::ProxySink>().unwrap());
         }
 
         if let Some(src_pad) = src_pad {
@@ -381,7 +381,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         gst_log!(SINK_CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
 
         let pad_weak = pad.downgrade();
-        let element = element.clone();
+        let element = element.clone().downcast::<super::ProxySink>().unwrap();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             let proxysink = ProxySink::from_instance(&element);
@@ -406,7 +406,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
 }
 
 #[derive(Debug)]
-struct ProxySink {
+pub struct ProxySink {
     sink_pad: PadSink,
     proxy_ctx: StdMutex<Option<ProxyContext>>,
     settings: StdMutex<SettingsSink>,
@@ -421,7 +421,7 @@ lazy_static! {
 }
 
 impl ProxySink {
-    async fn schedule_pending_queue(&self, element: &gst::Element) {
+    async fn schedule_pending_queue(&self, element: &super::ProxySink) {
         loop {
             let more_queue_space_receiver = {
                 let proxy_ctx = self.proxy_ctx.lock().unwrap();
@@ -476,7 +476,7 @@ impl ProxySink {
 
     async fn enqueue_item(
         &self,
-        element: &gst::Element,
+        element: &super::ProxySink,
         item: DataQueueItem,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let wait_fut = {
@@ -589,7 +589,7 @@ impl ProxySink {
         shared_ctx.last_res
     }
 
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &super::ProxySink) -> Result<(), gst::ErrorMessage> {
         gst_debug!(SINK_CAT, obj: element, "Preparing");
 
         let proxy_context = self.settings.lock().unwrap().proxy_context.to_string();
@@ -614,13 +614,13 @@ impl ProxySink {
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) {
+    fn unprepare(&self, element: &super::ProxySink) {
         gst_debug!(SINK_CAT, obj: element, "Unpreparing");
         *self.proxy_ctx.lock().unwrap() = None;
         gst_debug!(SINK_CAT, obj: element, "Unprepared");
     }
 
-    fn start(&self, element: &gst::Element) {
+    fn start(&self, element: &super::ProxySink) {
         let proxy_ctx = self.proxy_ctx.lock().unwrap();
         let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
@@ -637,7 +637,7 @@ impl ProxySink {
         gst_debug!(SINK_CAT, obj: element, "Started");
     }
 
-    fn stop(&self, element: &gst::Element) {
+    fn stop(&self, element: &super::ProxySink) {
         let proxy_ctx = self.proxy_ctx.lock().unwrap();
         let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
@@ -652,13 +652,14 @@ impl ProxySink {
 
 impl ObjectSubclass for ProxySink {
     const NAME: &'static str = "RsTsProxySink";
+    type Type = super::ProxySink;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Thread-sharing proxy sink",
             "Sink/Generic",
@@ -680,7 +681,7 @@ impl ObjectSubclass for ProxySink {
         klass.install_properties(&PROPERTIES_SINK);
     }
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         Self {
             sink_pad: PadSink::new(
                 gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
@@ -693,7 +694,7 @@ impl ObjectSubclass for ProxySink {
 }
 
 impl ObjectImpl for ProxySink {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES_SINK[id];
 
         let mut settings = self.settings.lock().unwrap();
@@ -708,7 +709,7 @@ impl ObjectImpl for ProxySink {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES_SINK[id];
 
         let settings = self.settings.lock().unwrap();
@@ -718,20 +719,19 @@ impl ObjectImpl for ProxySink {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(self.sink_pad.gst_pad()).unwrap();
+        obj.add_pad(self.sink_pad.gst_pad()).unwrap();
 
-        super::set_element_flags(element, gst::ElementFlags::SINK);
+        crate::set_element_flags(obj, gst::ElementFlags::SINK);
     }
 }
 
 impl ElementImpl for ProxySink {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(SINK_CAT, obj: element, "Changing state {:?}", transition);
@@ -909,13 +909,13 @@ impl PadSrcHandler for ProxySrcPadHandler {
 
 #[derive(Debug)]
 struct ProxySrcTask {
-    element: gst::Element,
+    element: super::ProxySrc,
     src_pad: PadSrcWeak,
     dataqueue: DataQueue,
 }
 
 impl ProxySrcTask {
-    fn new(element: &gst::Element, src_pad: &PadSrc, dataqueue: DataQueue) -> Self {
+    fn new(element: &super::ProxySrc, src_pad: &PadSrc, dataqueue: DataQueue) -> Self {
         ProxySrcTask {
             element: element.clone(),
             src_pad: src_pad.downgrade(),
@@ -1043,7 +1043,7 @@ impl TaskImpl for ProxySrcTask {
 }
 
 #[derive(Debug)]
-struct ProxySrc {
+pub struct ProxySrc {
     src_pad: PadSrc,
     task: Task,
     proxy_ctx: StdMutex<Option<ProxyContext>>,
@@ -1060,7 +1060,7 @@ lazy_static! {
 }
 
 impl ProxySrc {
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &super::ProxySrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(SRC_CAT, obj: element, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
@@ -1126,7 +1126,7 @@ impl ProxySrc {
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) {
+    fn unprepare(&self, element: &super::ProxySrc) {
         gst_debug!(SRC_CAT, obj: element, "Unpreparing");
 
         {
@@ -1143,21 +1143,21 @@ impl ProxySrc {
         gst_debug!(SRC_CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &super::ProxySrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(SRC_CAT, obj: element, "Stopping");
         self.task.stop()?;
         gst_debug!(SRC_CAT, obj: element, "Stopped");
         Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &super::ProxySrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(SRC_CAT, obj: element, "Starting");
         self.task.start()?;
         gst_debug!(SRC_CAT, obj: element, "Started");
         Ok(())
     }
 
-    fn pause(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn pause(&self, element: &super::ProxySrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(SRC_CAT, obj: element, "Pausing");
         self.task.pause()?;
         gst_debug!(SRC_CAT, obj: element, "Paused");
@@ -1167,13 +1167,14 @@ impl ProxySrc {
 
 impl ObjectSubclass for ProxySrc {
     const NAME: &'static str = "RsTsProxySrc";
+    type Type = super::ProxySrc;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Thread-sharing proxy source",
             "Source/Generic",
@@ -1199,7 +1200,7 @@ impl ObjectSubclass for ProxySrc {
         unreachable!()
     }
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         Self {
             src_pad: PadSrc::new(
                 gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
@@ -1214,7 +1215,7 @@ impl ObjectSubclass for ProxySrc {
 }
 
 impl ObjectImpl for ProxySrc {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES_SRC[id];
 
         let mut settings = self.settings.lock().unwrap();
@@ -1247,7 +1248,7 @@ impl ObjectImpl for ProxySrc {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES_SRC[id];
 
         let settings = self.settings.lock().unwrap();
@@ -1262,20 +1263,19 @@ impl ObjectImpl for ProxySrc {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(self.src_pad.gst_pad()).unwrap();
+        obj.add_pad(self.src_pad.gst_pad()).unwrap();
 
-        super::set_element_flags(element, gst::ElementFlags::SOURCE);
+        crate::set_element_flags(obj, gst::ElementFlags::SOURCE);
     }
 }
 
 impl ElementImpl for ProxySrc {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(SRC_CAT, obj: element, "Changing state {:?}", transition);
@@ -1316,19 +1316,4 @@ impl ElementImpl for ProxySrc {
 
         Ok(success)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "ts-proxysink",
-        gst::Rank::None,
-        ProxySink::get_type(),
-    )?;
-    gst::Element::register(
-        Some(plugin),
-        "ts-proxysrc",
-        gst::Rank::None,
-        ProxySrc::get_type(),
-    )
 }

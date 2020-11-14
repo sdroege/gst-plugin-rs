@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2018 Sebastian Dröge <sebastian@centricular.com>
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Library General Public
@@ -15,29 +15,40 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use glib::glib_wrapper;
 use glib::prelude::*;
 
-mod ffi;
 mod imp;
-#[allow(clippy::module_inception)]
-pub mod jitterbuffer;
-
-use glib::glib_wrapper;
 
 glib_wrapper! {
-    pub struct JitterBuffer(ObjectSubclass<imp::JitterBuffer>) @extends gst::Element, gst::Object;
+    pub struct ProxySink(ObjectSubclass<imp::ProxySink>) @extends gst::Element, gst::Object;
 }
 
 // GStreamer elements need to be thread-safe. For the private implementation this is automatically
 // enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for JitterBuffer {}
-unsafe impl Sync for JitterBuffer {}
+unsafe impl Send for ProxySink {}
+unsafe impl Sync for ProxySink {}
+
+glib_wrapper! {
+    pub struct ProxySrc(ObjectSubclass<imp::ProxySrc>) @extends gst::Element, gst::Object;
+}
+
+// GStreamer elements need to be thread-safe. For the private implementation this is automatically
+// enforced but for the public wrapper type we need to specify this manually.
+unsafe impl Send for ProxySrc {}
+unsafe impl Sync for ProxySrc {}
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
-        "ts-jitterbuffer",
+        "ts-proxysink",
         gst::Rank::None,
-        JitterBuffer::static_type(),
+        ProxySink::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "ts-proxysrc",
+        gst::Rank::None,
+        ProxySrc::static_type(),
     )
 }

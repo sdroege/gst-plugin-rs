@@ -37,7 +37,7 @@ use std::{u32, u64};
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef, PadSrcWeak, Task};
 
-use super::dataqueue::{DataQueue, DataQueueItem};
+use crate::dataqueue::{DataQueue, DataQueueItem};
 
 const DEFAULT_MAX_SIZE_BUFFERS: u32 = 200;
 const DEFAULT_MAX_SIZE_BYTES: u32 = 1024 * 1024;
@@ -149,7 +149,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         let pad_weak = pad.downgrade();
-        let element = element.clone();
+        let element = element.clone().downcast::<super::Queue>().unwrap();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
@@ -169,7 +169,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         let pad_weak = pad.downgrade();
-        let element = element.clone();
+        let element = element.clone().downcast::<super::Queue>().unwrap();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", list);
@@ -221,7 +221,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
 
         let pad_weak = pad.downgrade();
-        let element = element.clone();
+        let element = element.clone().downcast::<super::Queue>().unwrap();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             let queue = Queue::from_instance(&element);
@@ -379,13 +379,13 @@ impl PadSrcHandler for QueuePadSrcHandler {
 
 #[derive(Debug)]
 struct QueueTask {
-    element: gst::Element,
+    element: super::Queue,
     src_pad: PadSrcWeak,
     dataqueue: DataQueue,
 }
 
 impl QueueTask {
-    fn new(element: &gst::Element, src_pad: &PadSrc, dataqueue: DataQueue) -> Self {
+    fn new(element: &super::Queue, src_pad: &PadSrc, dataqueue: DataQueue) -> Self {
         QueueTask {
             element: element.clone(),
             src_pad: src_pad.downgrade(),
@@ -503,7 +503,7 @@ impl TaskImpl for QueueTask {
 }
 
 #[derive(Debug)]
-struct Queue {
+pub struct Queue {
     sink_pad: PadSink,
     src_pad: PadSrc,
     task: Task,
@@ -561,7 +561,7 @@ impl Queue {
     /* Schedules emptying of the pending queue. If there is an upstream
      * TaskContext, the new task is spawned, it is otherwise
      * returned, for the caller to block on */
-    async fn schedule_pending_queue(&self, element: &gst::Element) {
+    async fn schedule_pending_queue(&self, element: &super::Queue) {
         loop {
             let more_queue_space_receiver = {
                 let dataqueue = self.dataqueue.lock().unwrap();
@@ -604,7 +604,7 @@ impl Queue {
 
     async fn enqueue_item(
         &self,
-        element: &gst::Element,
+        element: &super::Queue,
         item: DataQueueItem,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let wait_fut = {
@@ -672,7 +672,7 @@ impl Queue {
         *self.last_res.lock().unwrap()
     }
 
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn prepare(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
@@ -721,7 +721,7 @@ impl Queue {
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) {
+    fn unprepare(&self, element: &super::Queue) {
         gst_debug!(CAT, obj: element, "Unpreparing");
 
         self.task.unprepare().unwrap();
@@ -734,14 +734,14 @@ impl Queue {
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Stopping");
         self.task.stop()?;
         gst_debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Starting");
         self.task.start()?;
         gst_debug!(CAT, obj: element, "Started");
@@ -751,13 +751,14 @@ impl Queue {
 
 impl ObjectSubclass for Queue {
     const NAME: &'static str = "RsTsQueue";
+    type Type = super::Queue;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Thread-sharing queue",
             "Generic",
@@ -788,7 +789,7 @@ impl ObjectSubclass for Queue {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         Self {
             sink_pad: PadSink::new(
                 gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
@@ -808,7 +809,7 @@ impl ObjectSubclass for Queue {
 }
 
 impl ObjectImpl for Queue {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         let mut settings = self.settings.lock().unwrap();
@@ -835,7 +836,7 @@ impl ObjectImpl for Queue {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         let settings = self.settings.lock().unwrap();
@@ -849,19 +850,18 @@ impl ObjectImpl for Queue {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(self.sink_pad.gst_pad()).unwrap();
-        element.add_pad(self.src_pad.gst_pad()).unwrap();
+        obj.add_pad(self.sink_pad.gst_pad()).unwrap();
+        obj.add_pad(self.src_pad.gst_pad()).unwrap();
     }
 }
 
 impl ElementImpl for Queue {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -890,8 +890,4 @@ impl ElementImpl for Queue {
 
         Ok(success)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(Some(plugin), "ts-queue", gst::Rank::None, Queue::get_type())
 }

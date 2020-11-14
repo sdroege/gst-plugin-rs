@@ -23,7 +23,7 @@ use std::sync::Mutex;
 
 use url::Url;
 
-use file_location::FileLocation;
+use crate::file_location::FileLocation;
 
 const DEFAULT_LOCATION: Option<FileLocation> = None;
 
@@ -77,7 +77,7 @@ lazy_static! {
 impl FileSink {
     fn set_location(
         &self,
-        element: &gst_base::BaseSink,
+        element: &super::FileSink,
         location: Option<FileLocation>,
     ) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
@@ -119,6 +119,7 @@ impl FileSink {
 
 impl ObjectSubclass for FileSink {
     const NAME: &'static str = "RsFileSink";
+    type Type = super::FileSink;
     type ParentType = gst_base::BaseSink;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -136,7 +137,7 @@ impl ObjectSubclass for FileSink {
         type_.add_interface::<gst::URIHandler>();
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "File Sink",
             "Sink/File",
@@ -159,33 +160,26 @@ impl ObjectSubclass for FileSink {
 }
 
 impl ObjectImpl for FileSink {
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("location", ..) => {
-                let element = obj.downcast_ref::<gst_base::BaseSink>().unwrap();
-
                 let res = match value.get::<String>() {
                     Ok(Some(location)) => FileLocation::try_from_path_str(location)
-                        .and_then(|file_location| self.set_location(&element, Some(file_location))),
-                    Ok(None) => self.set_location(&element, None),
+                        .and_then(|file_location| self.set_location(obj, Some(file_location))),
+                    Ok(None) => self.set_location(obj, None),
                     Err(_) => unreachable!("type checked upstream"),
                 };
 
                 if let Err(err) = res {
-                    gst_error!(
-                        CAT,
-                        obj: element,
-                        "Failed to set property `location`: {}",
-                        err
-                    );
+                    gst_error!(CAT, obj: obj, "Failed to set property `location`: {}", err);
                 }
             }
             _ => unimplemented!(),
         };
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("location", ..) => {
@@ -205,7 +199,7 @@ impl ObjectImpl for FileSink {
 impl ElementImpl for FileSink {}
 
 impl BaseSinkImpl for FileSink {
-    fn start(&self, element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Started { .. } = *state {
             unreachable!("FileSink already started");
@@ -237,7 +231,7 @@ impl BaseSinkImpl for FileSink {
         Ok(())
     }
 
-    fn stop(&self, element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Stopped = *state {
             return Err(gst_error_msg!(
@@ -256,7 +250,7 @@ impl BaseSinkImpl for FileSink {
 
     fn render(
         &self,
-        element: &gst_base::BaseSink,
+        element: &Self::Type,
         buffer: &gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
@@ -293,7 +287,7 @@ impl BaseSinkImpl for FileSink {
 }
 
 impl URIHandlerImpl for FileSink {
-    fn get_uri(&self, _element: &gst::URIHandler) -> Option<String> {
+    fn get_uri(&self, _element: &Self::Type) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
         // Conversion to Url already checked while building the `FileLocation`
@@ -304,9 +298,7 @@ impl URIHandlerImpl for FileSink {
         })
     }
 
-    fn set_uri(&self, element: &gst::URIHandler, uri: &str) -> Result<(), glib::Error> {
-        let element = element.dynamic_cast_ref::<gst_base::BaseSink>().unwrap();
-
+    fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
         // Special case for "file://" as this is used by some applications to test
         // with `gst_element_make_from_uri` if there's an element that supports the URI protocol
 
@@ -325,13 +317,4 @@ impl URIHandlerImpl for FileSink {
     fn get_protocols() -> Vec<String> {
         vec!["file".to_string()]
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rsfilesink",
-        gst::Rank::None,
-        FileSink::get_type(),
-    )
 }

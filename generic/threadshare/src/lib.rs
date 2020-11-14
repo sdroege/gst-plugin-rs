@@ -53,7 +53,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     queue::register(plugin)?;
     proxy::register(plugin)?;
     appsrc::register(plugin)?;
-    jitterbuffer::jitterbuffer::register(plugin)?;
+    jitterbuffer::register(plugin)?;
     inputselector::register(plugin)?;
 
     Ok(())

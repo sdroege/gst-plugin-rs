@@ -1,5 +1,5 @@
 // Copyright (C) 2018 Sebastian Dröge <sebastian@centricular.com>
-// Copyright (C) 2019-2020 François Laignel <fengalin@free.fr>
+// Copyright (C) 2018 LEE Dongjun <redongjun@gmail.com>
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Library General Public
@@ -16,7 +16,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use futures::channel::mpsc;
 use futures::future::BoxFuture;
 use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
@@ -32,42 +31,92 @@ use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_t
 
 use lazy_static::lazy_static;
 
-use std::convert::TryInto;
+use std::io;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
+use std::u16;
 use std::u32;
 
+use tokio::io::AsyncReadExt;
+
 use crate::runtime::prelude::*;
+use crate::runtime::task;
 use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task, TaskState};
 
+use crate::socket::{Socket, SocketError, SocketRead};
+
+const DEFAULT_HOST: Option<&str> = Some("127.0.0.1");
+const DEFAULT_PORT: i32 = 4953;
+const DEFAULT_CAPS: Option<gst::Caps> = None;
+const DEFAULT_BLOCKSIZE: u32 = 4096;
 const DEFAULT_CONTEXT: &str = "";
 const DEFAULT_CONTEXT_WAIT: u32 = 0;
-const DEFAULT_CAPS: Option<gst::Caps> = None;
-const DEFAULT_MAX_BUFFERS: u32 = 10;
-const DEFAULT_DO_TIMESTAMP: bool = false;
 
 #[derive(Debug, Clone)]
 struct Settings {
+    host: Option<String>,
+    port: i32,
+    caps: Option<gst::Caps>,
+    blocksize: u32,
     context: String,
     context_wait: u32,
-    caps: Option<gst::Caps>,
-    max_buffers: u32,
-    do_timestamp: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            host: DEFAULT_HOST.map(Into::into),
+            port: DEFAULT_PORT,
+            caps: DEFAULT_CAPS,
+            blocksize: DEFAULT_BLOCKSIZE,
             context: DEFAULT_CONTEXT.into(),
             context_wait: DEFAULT_CONTEXT_WAIT,
-            caps: DEFAULT_CAPS,
-            max_buffers: DEFAULT_MAX_BUFFERS,
-            do_timestamp: DEFAULT_DO_TIMESTAMP,
         }
     }
 }
 
-static PROPERTIES: [subclass::Property; 5] = [
+static PROPERTIES: [subclass::Property; 6] = [
+    subclass::Property("host", |name| {
+        glib::ParamSpec::string(
+            name,
+            "Host",
+            "The host IP address to receive packets from",
+            DEFAULT_HOST,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("port", |name| {
+        glib::ParamSpec::int(
+            name,
+            "Port",
+            "Port to receive packets from",
+            0,
+            u16::MAX as i32,
+            DEFAULT_PORT,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("caps", |name| {
+        glib::ParamSpec::boxed(
+            name,
+            "Caps",
+            "Caps to use",
+            gst::Caps::static_type(),
+            glib::ParamFlags::READWRITE,
+        )
+    }),
+    subclass::Property("blocksize", |name| {
+        glib::ParamSpec::uint(
+            name,
+            "Blocksize",
+            "Size in bytes to read per buffer (-1 = default)",
+            0,
+            u32::MAX,
+            DEFAULT_BLOCKSIZE,
+            glib::ParamFlags::READWRITE,
+        )
+    }),
     subclass::Property("context", |name| {
         glib::ParamSpec::string(
             name,
@@ -88,61 +137,37 @@ static PROPERTIES: [subclass::Property; 5] = [
             glib::ParamFlags::READWRITE,
         )
     }),
-    subclass::Property("max-buffers", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Max Buffers",
-            "Maximum number of buffers to queue up",
-            1,
-            u32::MAX,
-            DEFAULT_MAX_BUFFERS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("caps", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Caps",
-            "Caps to use",
-            gst::Caps::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("do-timestamp", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Do Timestamp",
-            "Timestamp buffers with the current running time on arrival",
-            DEFAULT_DO_TIMESTAMP,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
 ];
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
-        "ts-appsrc",
-        gst::DebugColorFlags::empty(),
-        Some("Thread-sharing app source"),
-    );
+struct TcpClientReader(tokio::net::TcpStream);
+
+impl TcpClientReader {
+    pub fn new(socket: tokio::net::TcpStream) -> Self {
+        TcpClientReader(socket)
+    }
+}
+
+impl SocketRead for TcpClientReader {
+    const DO_TIMESTAMP: bool = false;
+
+    fn read<'buf>(
+        &'buf mut self,
+        buffer: &'buf mut [u8],
+    ) -> BoxFuture<'buf, io::Result<(usize, Option<std::net::SocketAddr>)>> {
+        async move { self.0.read(buffer).await.map(|read_size| (read_size, None)) }.boxed()
+    }
 }
 
 #[derive(Debug)]
-enum StreamItem {
-    Buffer(gst::Buffer),
-    Event(gst::Event),
-}
-
-#[derive(Debug)]
-struct AppSrcPadHandlerState {
+struct TcpClientSrcPadHandlerState {
     need_initial_events: bool,
     need_segment: bool,
     caps: Option<gst::Caps>,
 }
 
-impl Default for AppSrcPadHandlerState {
+impl Default for TcpClientSrcPadHandlerState {
     fn default() -> Self {
-        AppSrcPadHandlerState {
+        TcpClientSrcPadHandlerState {
             need_initial_events: true,
             need_segment: true,
             caps: None,
@@ -151,15 +176,15 @@ impl Default for AppSrcPadHandlerState {
 }
 
 #[derive(Debug, Default)]
-struct AppSrcPadHandlerInner {
-    state: FutMutex<AppSrcPadHandlerState>,
+struct TcpClientSrcPadHandlerInner {
+    state: FutMutex<TcpClientSrcPadHandlerState>,
     configured_caps: StdMutex<Option<gst::Caps>>,
 }
 
 #[derive(Clone, Debug, Default)]
-struct AppSrcPadHandler(Arc<AppSrcPadHandlerInner>);
+struct TcpClientSrcPadHandler(Arc<TcpClientSrcPadHandlerInner>);
 
-impl AppSrcPadHandler {
+impl TcpClientSrcPadHandler {
     fn prepare(&self, caps: Option<gst::Caps>) {
         self.0
             .state
@@ -169,14 +194,14 @@ impl AppSrcPadHandler {
     }
 
     async fn reset_state(&self) {
-        *self.0.state.lock().await = Default::default();
+        *self.0.configured_caps.lock().unwrap() = None;
     }
 
     async fn set_need_segment(&self) {
         self.0.state.lock().await.need_segment = true;
     }
 
-    async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &gst::Element) {
+    async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &super::TcpClientSrc) {
         let mut state = self.0.state.lock().await;
         if state.need_initial_events {
             gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
@@ -204,45 +229,32 @@ impl AppSrcPadHandler {
         }
     }
 
-    async fn push_item(
+    async fn push_buffer(
         &self,
         pad: &PadSrcRef<'_>,
-        element: &gst::Element,
-        item: StreamItem,
+        element: &super::TcpClientSrc,
+        buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", item);
+        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
 
         self.push_prelude(pad, element).await;
 
-        match item {
-            StreamItem::Buffer(buffer) => {
-                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
-                pad.push(buffer).await
-            }
-            StreamItem::Event(event) => {
-                match event.view() {
-                    gst::EventView::Eos(_) => {
-                        // Let the caller push the event
-                        Err(gst::FlowError::Eos)
-                    }
-                    _ => {
-                        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
-                        pad.push_event(event).await;
-                        Ok(gst::FlowSuccess::Ok)
-                    }
-                }
-            }
+        if buffer.get_size() == 0 {
+            pad.push_event(gst::event::Eos::new()).await;
+            return Ok(gst::FlowSuccess::Ok);
         }
+
+        pad.push(buffer).await
     }
 }
 
-impl PadSrcHandler for AppSrcPadHandler {
-    type ElementImpl = AppSrc;
+impl PadSrcHandler for TcpClientSrcPadHandler {
+    type ElementImpl = TcpClientSrc;
 
     fn src_event(
         &self,
         pad: &PadSrcRef,
-        appsrc: &AppSrc,
+        tcpclientsrc: &TcpClientSrc,
         _element: &gst::Element,
         event: gst::Event,
     ) -> bool {
@@ -251,8 +263,8 @@ impl PadSrcHandler for AppSrcPadHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
-            EventView::FlushStart(..) => appsrc.task.flush_start().is_ok(),
-            EventView::FlushStop(..) => appsrc.task.flush_stop().is_ok(),
+            EventView::FlushStart(..) => tcpclientsrc.task.flush_start().is_ok(),
+            EventView::FlushStop(..) => tcpclientsrc.task.flush_stop().is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -270,7 +282,7 @@ impl PadSrcHandler for AppSrcPadHandler {
     fn src_query(
         &self,
         pad: &PadSrcRef,
-        _appsrc: &AppSrc,
+        _tcpclientsrc: &TcpClientSrc,
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
@@ -279,7 +291,7 @@ impl PadSrcHandler for AppSrcPadHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                q.set(true, 0.into(), gst::CLOCK_TIME_NONE);
+                q.set(false, 0.into(), gst::CLOCK_TIME_NONE);
                 true
             }
             QueryView::Scheduling(ref mut q) => {
@@ -310,54 +322,123 @@ impl PadSrcHandler for AppSrcPadHandler {
         } else {
             gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", query);
         }
+
         ret
     }
 }
 
-#[derive(Debug)]
-struct AppSrcTask {
-    element: gst::Element,
+struct TcpClientSrcTask {
+    element: super::TcpClientSrc,
     src_pad: PadSrcWeak,
-    src_pad_handler: AppSrcPadHandler,
-    receiver: mpsc::Receiver<StreamItem>,
+    src_pad_handler: TcpClientSrcPadHandler,
+    saddr: SocketAddr,
+    buffer_pool: Option<gst::BufferPool>,
+    socket: Option<Socket<TcpClientReader>>,
 }
 
-impl AppSrcTask {
+impl TcpClientSrcTask {
     fn new(
-        element: &gst::Element,
+        element: &super::TcpClientSrc,
         src_pad: &PadSrc,
-        src_pad_handler: &AppSrcPadHandler,
-        receiver: mpsc::Receiver<StreamItem>,
+        src_pad_handler: &TcpClientSrcPadHandler,
+        saddr: SocketAddr,
+        buffer_pool: gst::BufferPool,
     ) -> Self {
-        AppSrcTask {
+        TcpClientSrcTask {
             element: element.clone(),
             src_pad: src_pad.downgrade(),
             src_pad_handler: src_pad_handler.clone(),
-            receiver,
+            saddr,
+            buffer_pool: Some(buffer_pool),
+            socket: None,
         }
     }
 }
 
-impl AppSrcTask {
-    fn flush(&mut self) {
-        // Purge the channel
-        while let Ok(Some(_item)) = self.receiver.try_next() {}
-    }
-}
+impl TaskImpl for TcpClientSrcTask {
+    fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
+        async move {
+            gst_log!(CAT, obj: &self.element, "Preparing task connecting to {:?}", self.saddr);
 
-impl TaskImpl for AppSrcTask {
+            let socket = tokio::net::TcpStream::connect(self.saddr)
+                .await
+                .map_err(|err| {
+                    gst_error_msg!(
+                        gst::ResourceError::OpenRead,
+                        ["Failed to connect to {:?}: {:?}", self.saddr, err]
+                    )
+                })?;
+
+            self.socket = Some(
+                Socket::try_new(
+                    self.element.clone().upcast(),
+                    self.buffer_pool.take().unwrap(),
+                    TcpClientReader::new(socket),
+                )
+                .map_err(|err| {
+                    gst_error_msg!(
+                        gst::ResourceError::OpenRead,
+                        ["Failed to prepare socket {:?}", err]
+                    )
+                })?,
+            );
+
+            gst_log!(CAT, obj: &self.element, "Task prepared");
+            Ok(())
+        }
+        .boxed()
+    }
+
+    fn handle_action_error(
+        &mut self,
+        trigger: task::Trigger,
+        state: TaskState,
+        err: gst::ErrorMessage,
+    ) -> BoxFuture<'_, task::Trigger> {
+        async move {
+            match trigger {
+                task::Trigger::Prepare => {
+                    gst_error!(CAT, "Task preparation failed: {:?}", err);
+                    self.element.post_error_message(err);
+
+                    task::Trigger::Error
+                }
+                other => unreachable!("Action error for {:?} in state {:?}", other, state),
+            }
+        }
+        .boxed()
+    }
+
     fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async move {
-            let item = match self.receiver.next().await {
-                Some(item) => item,
+            let item = self.socket.as_mut().unwrap().next().await;
+
+            let buffer = match item {
+                Some(Ok((buffer, _))) => buffer,
+                Some(Err(err)) => {
+                    gst_error!(CAT, obj: &self.element, "Got error {:?}", err);
+                    match err {
+                        SocketError::Gst(err) => {
+                            gst_element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("Internal data stream error"),
+                                ["streaming stopped, reason {}", err]
+                            );
+                        }
+                        SocketError::Io(err) => {
+                            gst_element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("I/O error"),
+                                ["streaming stopped, I/O error {}", err]
+                            );
+                        }
+                    }
+                    return Err(gst::FlowError::Error);
+                }
                 None => {
-                    gst_error!(CAT, obj: &self.element, "SrcPad channel aborted");
-                    gst_element_error!(
-                        &self.element,
-                        gst::StreamError::Failed,
-                        ("Internal data stream error"),
-                        ["streaming stopped, reason: channel aborted"]
-                    );
+                    gst_log!(CAT, obj: &self.element, "SocketStream Stopped");
                     return Err(gst::FlowError::Flushing);
                 }
             };
@@ -365,23 +446,23 @@ impl TaskImpl for AppSrcTask {
             let pad = self.src_pad.upgrade().expect("PadSrc no longer exists");
             let res = self
                 .src_pad_handler
-                .push_item(&pad, &self.element, item)
+                .push_buffer(&pad, &self.element, buffer)
                 .await;
             match res {
                 Ok(_) => {
-                    gst_log!(CAT, obj: &self.element, "Successfully pushed item");
+                    gst_log!(CAT, obj: &self.element, "Successfully pushed buffer");
+                }
+                Err(gst::FlowError::Flushing) => {
+                    gst_debug!(CAT, obj: &self.element, "Flushing");
                 }
                 Err(gst::FlowError::Eos) => {
                     gst_debug!(CAT, obj: &self.element, "EOS");
                     pad.push_event(gst::event::Eos::new()).await;
                 }
-                Err(gst::FlowError::Flushing) => {
-                    gst_debug!(CAT, obj: &self.element, "Flushing");
-                }
                 Err(err) => {
                     gst_error!(CAT, obj: &self.element, "Got error {}", err);
                     gst_element_error!(
-                        &self.element,
+                        self.element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
                         ["streaming stopped, reason {}", err]
@@ -397,96 +478,43 @@ impl TaskImpl for AppSrcTask {
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst_log!(CAT, obj: &self.element, "Stopping task");
-
-            self.flush();
             self.src_pad_handler.reset_state().await;
-
             gst_log!(CAT, obj: &self.element, "Task stopped");
             Ok(())
         }
         .boxed()
     }
 
-    fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
+    fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst_log!(CAT, obj: &self.element, "Starting task flush");
-
-            self.flush();
+            gst_log!(CAT, obj: &self.element, "Stopping task flush");
             self.src_pad_handler.set_need_segment().await;
-
-            gst_log!(CAT, obj: &self.element, "Task flush started");
+            gst_log!(CAT, obj: &self.element, "Task flush stopped");
             Ok(())
         }
         .boxed()
     }
 }
 
-#[derive(Debug)]
-struct AppSrc {
+pub struct TcpClientSrc {
     src_pad: PadSrc,
-    src_pad_handler: AppSrcPadHandler,
+    src_pad_handler: TcpClientSrcPadHandler,
     task: Task,
-    sender: StdMutex<Option<mpsc::Sender<StreamItem>>>,
     settings: StdMutex<Settings>,
 }
 
-impl AppSrc {
-    fn push_buffer(&self, element: &gst::Element, mut buffer: gst::Buffer) -> bool {
-        let state = self.task.lock_state();
-        if *state != TaskState::Started && *state != TaskState::Paused {
-            gst_debug!(CAT, obj: element, "Rejecting buffer due to element state");
-            return false;
-        }
+lazy_static! {
+    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+        "ts-tcpclientsrc",
+        gst::DebugColorFlags::empty(),
+        Some("Thread-sharing TCP Client source"),
+    );
+}
 
-        let do_timestamp = self.settings.lock().unwrap().do_timestamp;
-        if do_timestamp {
-            if let Some(clock) = element.get_clock() {
-                let base_time = element.get_base_time();
-                let now = clock.get_time();
+impl TcpClientSrc {
+    fn prepare(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
+        let settings = self.settings.lock().unwrap().clone();
 
-                let buffer = buffer.make_mut();
-                buffer.set_dts(now - base_time);
-                buffer.set_pts(gst::CLOCK_TIME_NONE);
-            } else {
-                gst_error!(CAT, obj: element, "Don't have a clock yet");
-                return false;
-            }
-        }
-
-        match self
-            .sender
-            .lock()
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .try_send(StreamItem::Buffer(buffer))
-        {
-            Ok(_) => true,
-            Err(err) => {
-                gst_error!(CAT, obj: element, "Failed to queue buffer: {}", err);
-                false
-            }
-        }
-    }
-
-    fn end_of_stream(&self, element: &gst::Element) -> bool {
-        let mut sender = self.sender.lock().unwrap();
-        let sender = match sender.as_mut() {
-            Some(sender) => sender,
-            None => return false,
-        };
-
-        match sender.try_send(StreamItem::Event(gst::event::Eos::new())) {
-            Ok(_) => true,
-            Err(err) => {
-                gst_error!(CAT, obj: element, "Failed to queue EOS: {}", err);
-                false
-            }
-        }
-    }
-
-    fn prepare(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
-        let settings = self.settings.lock().unwrap();
         gst_debug!(CAT, obj: element, "Preparing");
 
         let context =
@@ -497,21 +525,48 @@ impl AppSrc {
                 )
             })?;
 
-        let max_buffers = settings.max_buffers.try_into().map_err(|err| {
+        let host: IpAddr = match settings.host {
+            None => {
+                return Err(gst_error_msg!(
+                    gst::ResourceError::Settings,
+                    ["No host set"]
+                ));
+            }
+            Some(ref host) => match host.parse() {
+                Err(err) => {
+                    return Err(gst_error_msg!(
+                        gst::ResourceError::Settings,
+                        ["Invalid host '{}' set: {}", host, err]
+                    ));
+                }
+                Ok(host) => host,
+            },
+        };
+        let port = settings.port;
+
+        let buffer_pool = gst::BufferPool::new();
+        let mut config = buffer_pool.get_config();
+        config.set_params(None, settings.blocksize, 0, 0);
+        buffer_pool.set_config(config).map_err(|_| {
             gst_error_msg!(
                 gst::ResourceError::Settings,
-                ["Invalid max-buffers: {}, {}", settings.max_buffers, err]
+                ["Failed to configure buffer pool"]
             )
         })?;
 
-        let (sender, receiver) = mpsc::channel(max_buffers);
-        *self.sender.lock().unwrap() = Some(sender);
+        let saddr = SocketAddr::new(host, port as u16);
 
-        self.src_pad_handler.prepare(settings.caps.clone());
+        self.src_pad_handler.prepare(settings.caps);
 
         self.task
             .prepare(
-                AppSrcTask::new(element, &self.src_pad, &self.src_pad_handler, receiver),
+                TcpClientSrcTask::new(
+                    element,
+                    &self.src_pad,
+                    &self.src_pad_handler,
+                    saddr,
+                    buffer_pool,
+                ),
                 context,
             )
             .map_err(|err| {
@@ -526,30 +581,27 @@ impl AppSrc {
         Ok(())
     }
 
-    fn unprepare(&self, element: &gst::Element) {
+    fn unprepare(&self, element: &super::TcpClientSrc) {
         gst_debug!(CAT, obj: element, "Unpreparing");
-
-        *self.sender.lock().unwrap() = None;
         self.task.unprepare().unwrap();
-
         gst_debug!(CAT, obj: element, "Unprepared");
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Stopping");
         self.task.stop()?;
         gst_debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Starting");
         self.task.start()?;
         gst_debug!(CAT, obj: element, "Started");
         Ok(())
     }
 
-    fn pause(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn pause(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Pausing");
         self.task.pause()?;
         gst_debug!(CAT, obj: element, "Paused");
@@ -557,24 +609,24 @@ impl AppSrc {
     }
 }
 
-impl ObjectSubclass for AppSrc {
-    const NAME: &'static str = "RsTsAppSrc";
+impl ObjectSubclass for TcpClientSrc {
+    const NAME: &'static str = "RsTsTcpClientSrc";
+    type Type = super::TcpClientSrc;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
-            "Thread-sharing app source",
-            "Source/Generic",
-            "Thread-sharing app source",
-            "Sebastian Dröge <sebastian@centricular.com>",
+            "Thread-sharing TCP client source",
+            "Source/Network",
+            "Receives data over the network via TCP",
+            "Sebastian Dröge <sebastian@centricular.com>, LEE Dongjun <redongjun@gmail.com>",
         );
 
         let caps = gst::Caps::new_any();
-
         let src_pad_template = gst::PadTemplate::new(
             "src",
             gst::PadDirection::Src,
@@ -585,45 +637,10 @@ impl ObjectSubclass for AppSrc {
         klass.add_pad_template(src_pad_template);
 
         klass.install_properties(&PROPERTIES);
-
-        klass.add_signal_with_class_handler(
-            "push-buffer",
-            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
-            &[gst::Buffer::static_type()],
-            bool::static_type(),
-            |_, args| {
-                let element = args[0]
-                    .get::<gst::Element>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let buffer = args[1]
-                    .get::<gst::Buffer>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let appsrc = Self::from_instance(&element);
-
-                Some(appsrc.push_buffer(&element, buffer).to_value())
-            },
-        );
-
-        klass.add_signal_with_class_handler(
-            "end-of-stream",
-            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
-            &[],
-            bool::static_type(),
-            |_, args| {
-                let element = args[0]
-                    .get::<gst::Element>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let appsrc = Self::from_instance(&element);
-                Some(appsrc.end_of_stream(&element).to_value())
-            },
-        );
     }
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
-        let src_pad_handler = AppSrcPadHandler::default();
+    fn with_class(klass: &Self::Class) -> Self {
+        let src_pad_handler = TcpClientSrcPadHandler::default();
 
         Self {
             src_pad: PadSrc::new(
@@ -632,18 +649,29 @@ impl ObjectSubclass for AppSrc {
             ),
             src_pad_handler,
             task: Task::default(),
-            sender: StdMutex::new(None),
             settings: StdMutex::new(Settings::default()),
         }
     }
 }
 
-impl ObjectImpl for AppSrc {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+impl ObjectImpl for TcpClientSrc {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         let mut settings = self.settings.lock().unwrap();
         match *prop {
+            subclass::Property("host", ..) => {
+                settings.host = value.get().expect("type checked upstream");
+            }
+            subclass::Property("port", ..) => {
+                settings.port = value.get_some().expect("type checked upstream");
+            }
+            subclass::Property("caps", ..) => {
+                settings.caps = value.get().expect("type checked upstream");
+            }
+            subclass::Property("blocksize", ..) => {
+                settings.blocksize = value.get_some().expect("type checked upstream");
+            }
             subclass::Property("context", ..) => {
                 settings.context = value
                     .get()
@@ -653,47 +681,38 @@ impl ObjectImpl for AppSrc {
             subclass::Property("context-wait", ..) => {
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("caps", ..) => {
-                settings.caps = value.get().expect("type checked upstream");
-            }
-            subclass::Property("max-buffers", ..) => {
-                settings.max_buffers = value.get_some().expect("type checked upstream");
-            }
-            subclass::Property("do-timestamp", ..) => {
-                settings.do_timestamp = value.get_some().expect("type checked upstream");
-            }
             _ => unimplemented!(),
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         let settings = self.settings.lock().unwrap();
         match *prop {
+            subclass::Property("host", ..) => Ok(settings.host.to_value()),
+            subclass::Property("port", ..) => Ok(settings.port.to_value()),
+            subclass::Property("caps", ..) => Ok(settings.caps.to_value()),
+            subclass::Property("blocksize", ..) => Ok(settings.blocksize.to_value()),
             subclass::Property("context", ..) => Ok(settings.context.to_value()),
             subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
-            subclass::Property("caps", ..) => Ok(settings.caps.to_value()),
-            subclass::Property("max-buffers", ..) => Ok(settings.max_buffers.to_value()),
-            subclass::Property("do-timestamp", ..) => Ok(settings.do_timestamp.to_value()),
             _ => unimplemented!(),
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(self.src_pad.gst_pad()).unwrap();
+        obj.add_pad(self.src_pad.gst_pad()).unwrap();
 
-        super::set_element_flags(element, gst::ElementFlags::SOURCE);
+        crate::set_element_flags(obj, gst::ElementFlags::SOURCE);
     }
 }
 
-impl ElementImpl for AppSrc {
+impl ElementImpl for TcpClientSrc {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -734,13 +753,4 @@ impl ElementImpl for AppSrc {
 
         Ok(success)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "ts-appsrc",
-        gst::Rank::None,
-        AppSrc::get_type(),
-    )
 }

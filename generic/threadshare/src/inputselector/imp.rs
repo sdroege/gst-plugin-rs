@@ -110,7 +110,7 @@ struct InputSelectorPadSinkHandler(Arc<Mutex<InputSelectorPadSinkHandlerInner>>)
 
 impl InputSelectorPadSinkHandler {
     /* Wait until specified time */
-    async fn sync(&self, element: &gst::Element, running_time: gst::ClockTime) {
+    async fn sync(&self, element: &super::InputSelector, running_time: gst::ClockTime) {
         let now = element.get_current_running_time();
 
         if let Some(delay) = running_time
@@ -124,7 +124,7 @@ impl InputSelectorPadSinkHandler {
     async fn handle_item(
         &self,
         pad: &PadSinkRef<'_>,
-        element: &gst::Element,
+        element: &super::InputSelector,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let inputselector = InputSelector::from_instance(element);
@@ -199,7 +199,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         buffer: gst::Buffer,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         let this = self.clone();
-        let element = element.clone();
+        let element = element.clone().downcast::<super::InputSelector>().unwrap();
         let pad_weak = pad.downgrade();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
@@ -216,7 +216,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         list: gst::BufferList,
     ) -> BoxFuture<'static, Result<gst::FlowSuccess, gst::FlowError>> {
         let this = self.clone();
-        let element = element.clone();
+        let element = element.clone().downcast::<super::InputSelector>().unwrap();
         let pad_weak = pad.downgrade();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
@@ -400,7 +400,7 @@ impl Default for Pads {
 }
 
 #[derive(Debug)]
-struct InputSelector {
+pub struct InputSelector {
     src_pad: PadSrc,
     state: Mutex<State>,
     settings: Mutex<Settings>,
@@ -416,7 +416,7 @@ lazy_static! {
 }
 
 impl InputSelector {
-    fn unprepare(&self, element: &gst::Element) -> Result<(), ()> {
+    fn unprepare(&self, element: &super::InputSelector) -> Result<(), ()> {
         let mut state = self.state.lock().unwrap();
         gst_debug!(CAT, obj: element, "Unpreparing");
         *state = State::default();
@@ -428,13 +428,14 @@ impl InputSelector {
 
 impl ObjectSubclass for InputSelector {
     const NAME: &'static str = "RsTsInputSelector";
+    type Type = super::InputSelector;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Thread-sharing input selector",
             "Generic",
@@ -465,7 +466,7 @@ impl ObjectSubclass for InputSelector {
         klass.install_properties(&PROPERTIES);
     }
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         Self {
             src_pad: PadSrc::new(
                 gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
@@ -479,7 +480,7 @@ impl ObjectSubclass for InputSelector {
 }
 
 impl ObjectImpl for InputSelector {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -526,7 +527,7 @@ impl ObjectImpl for InputSelector {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -547,20 +548,18 @@ impl ObjectImpl for InputSelector {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(self.src_pad.gst_pad()).unwrap();
-        element
-            .set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
+        obj.add_pad(self.src_pad.gst_pad()).unwrap();
+        obj.set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
     }
 }
 
 impl ElementImpl for InputSelector {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -586,7 +585,7 @@ impl ElementImpl for InputSelector {
 
     fn request_new_pad(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
@@ -615,7 +614,7 @@ impl ElementImpl for InputSelector {
         Some(ret)
     }
 
-    fn release_pad(&self, element: &gst::Element, pad: &gst::Pad) {
+    fn release_pad(&self, element: &Self::Type, pad: &gst::Pad) {
         let mut pads = self.pads.lock().unwrap();
         let sink_pad = pads.sink_pads.remove(pad).unwrap();
         drop(sink_pad);
@@ -625,16 +624,7 @@ impl ElementImpl for InputSelector {
         let _ = element.post_message(gst::message::Latency::builder().src(element).build());
     }
 
-    fn provide_clock(&self, _element: &gst::Element) -> Option<gst::Clock> {
+    fn provide_clock(&self, _element: &Self::Type) -> Option<gst::Clock> {
         Some(gst::SystemClock::obtain())
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "ts-input-selector",
-        gst::Rank::None,
-        InputSelector::get_type(),
-    )
 }
