@@ -40,7 +40,7 @@ use std::pin::Pin;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::packet::*;
+use super::packet::*;
 
 use serde_derive::Deserialize;
 
@@ -199,7 +199,7 @@ impl Default for State {
 
 type WsSink = Pin<Box<dyn Sink<Message, Error = WsError> + Send>>;
 
-struct Transcriber {
+pub struct Transcriber {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     settings: Mutex<Settings>,
@@ -230,7 +230,7 @@ fn build_packet(payload: &[u8]) -> Vec<u8> {
 }
 
 impl Transcriber {
-    fn dequeue(&self, element: &gst::Element) -> bool {
+    fn dequeue(&self, element: &super::Transcriber) -> bool {
         /* First, check our pending buffers */
         let mut items = vec![];
 
@@ -340,7 +340,7 @@ impl Transcriber {
 
     fn enqueue(
         &self,
-        element: &gst::Element,
+        element: &super::Transcriber,
         state: &mut State,
         alternative: &TranscriptAlternative,
         partial: bool,
@@ -398,7 +398,7 @@ impl Transcriber {
 
     fn loop_fn(
         &self,
-        element: &gst::Element,
+        element: &super::Transcriber,
         receiver: &mut mpsc::Receiver<Message>,
     ) -> Result<(), gst::ErrorMessage> {
         let future = async move {
@@ -567,7 +567,7 @@ impl Transcriber {
         RUNTIME.enter(|| futures::executor::block_on(future))
     }
 
-    fn start_task(&self, element: &gst::Element) -> Result<(), gst::LoggableError> {
+    fn start_task(&self, element: &super::Transcriber) -> Result<(), gst::LoggableError> {
         let element_weak = element.downgrade();
         let pad_weak = self.srcpad.downgrade();
         let (sender, mut receiver) = mpsc::channel(1);
@@ -610,7 +610,7 @@ impl Transcriber {
     fn src_activatemode(
         &self,
         _pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::Transcriber,
         _mode: gst::PadMode,
         active: bool,
     ) -> Result<(), gst::LoggableError> {
@@ -628,7 +628,12 @@ impl Transcriber {
         Ok(())
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::Transcriber,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -664,7 +669,7 @@ impl Transcriber {
         }
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &super::Transcriber, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_debug!(CAT, obj: pad, "Handling event {:?}", event);
@@ -771,7 +776,7 @@ impl Transcriber {
 
     async fn sync_and_send(
         &self,
-        element: &gst::Element,
+        element: &super::Transcriber,
         buffer: Option<gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut delay = None;
@@ -819,7 +824,7 @@ impl Transcriber {
     fn handle_buffer(
         &self,
         _pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::Transcriber,
         buffer: Option<gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(CAT, obj: element, "Handling {:?}", buffer);
@@ -846,13 +851,13 @@ impl Transcriber {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::Transcriber,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.handle_buffer(pad, element, Some(buffer))
     }
 
-    fn ensure_connection(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn ensure_connection(&self, element: &super::Transcriber) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
 
         if state.connected {
@@ -959,7 +964,7 @@ impl Transcriber {
         Ok(())
     }
 
-    fn disconnect(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn disconnect(&self, element: &super::Transcriber) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
 
         gst_info!(CAT, obj: element, "Unpreparing");
@@ -987,13 +992,14 @@ impl Transcriber {
 
 impl ObjectSubclass for Transcriber {
     const NAME: &'static str = "RsAwsTranscriber";
+    type Type = super::Transcriber;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -1047,7 +1053,7 @@ impl ObjectSubclass for Transcriber {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Transcriber",
             "Audio/Text/Filter",
@@ -1085,17 +1091,15 @@ impl ObjectSubclass for Transcriber {
 }
 
 impl ObjectImpl for Transcriber {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
-        element
-            .set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
+        obj.set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
     }
 
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -1115,7 +1119,7 @@ impl ObjectImpl for Transcriber {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -1139,7 +1143,7 @@ impl ObjectImpl for Transcriber {
 impl ElementImpl for Transcriber {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_info!(CAT, obj: element, "Changing state {:?}", transition);
@@ -1169,16 +1173,7 @@ impl ElementImpl for Transcriber {
         Ok(success)
     }
 
-    fn provide_clock(&self, _element: &gst::Element) -> Option<gst::Clock> {
+    fn provide_clock(&self, _element: &Self::Type) -> Option<gst::Clock> {
         Some(gst::SystemClock::obtain())
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "awstranscriber",
-        gst::Rank::None,
-        Transcriber::get_type(),
-    )
 }

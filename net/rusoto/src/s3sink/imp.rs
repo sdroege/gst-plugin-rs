@@ -157,7 +157,7 @@ static PROPERTIES: [subclass::Property; 4] = [
 impl S3Sink {
     fn flush_current_buffer(
         &self,
-        element: &gst_base::BaseSink,
+        element: &super::S3Sink,
     ) -> Result<(), Option<gst::ErrorMessage>> {
         let upload_part_req = self.create_upload_part_request()?;
         let part_number = upload_part_req.part_number;
@@ -261,7 +261,7 @@ impl S3Sink {
         })
     }
 
-    fn finalize_upload(&self, element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
+    fn finalize_upload(&self, element: &super::S3Sink) -> Result<(), gst::ErrorMessage> {
         if self.flush_current_buffer(element).is_err() {
             return Err(gst_error_msg!(
                 gst::ResourceError::Settings,
@@ -339,7 +339,7 @@ impl S3Sink {
     fn update_buffer(
         &self,
         src: &[u8],
-        element: &gst_base::BaseSink,
+        element: &super::S3Sink,
     ) -> Result<(), Option<gst::ErrorMessage>> {
         let mut state = self.state.lock().unwrap();
         let started_state = match *state {
@@ -381,6 +381,7 @@ impl S3Sink {
 
 impl ObjectSubclass for S3Sink {
     const NAME: &'static str = "RusotoS3Sink";
+    type Type = super::S3Sink;
     type ParentType = gst_base::BaseSink;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -395,7 +396,7 @@ impl ObjectSubclass for S3Sink {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Amazon S3 sink",
             "Source/Network",
@@ -418,7 +419,7 @@ impl ObjectSubclass for S3Sink {
 }
 
 impl ObjectImpl for S3Sink {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
         let mut settings = self.settings.lock().unwrap();
 
@@ -445,7 +446,7 @@ impl ObjectImpl for S3Sink {
         }
     }
 
-    fn get_property(&self, _: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id as usize];
         let settings = self.settings.lock().unwrap();
 
@@ -462,11 +463,11 @@ impl ObjectImpl for S3Sink {
 impl ElementImpl for S3Sink {}
 
 impl BaseSinkImpl for S3Sink {
-    fn start(&self, _element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         self.start()
     }
 
-    fn stop(&self, element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         *state = State::Stopped;
         gst_info!(CAT, obj: element, "Stopped");
@@ -476,7 +477,7 @@ impl BaseSinkImpl for S3Sink {
 
     fn render(
         &self,
-        element: &gst_base::BaseSink,
+        element: &Self::Type,
         buffer: &gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         if let State::Stopped = *self.state.lock().unwrap() {
@@ -511,13 +512,13 @@ impl BaseSinkImpl for S3Sink {
         }
     }
 
-    fn unlock(&self, _element: &gst_base::BaseSink) -> Result<(), gst::ErrorMessage> {
+    fn unlock(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         self.cancel();
 
         Ok(())
     }
 
-    fn event(&self, element: &gst_base::BaseSink, event: gst::Event) -> bool {
+    fn event(&self, element: &Self::Type, event: gst::Event) -> bool {
         if let gst::EventView::Eos(_) = event.view() {
             if let Err(error_message) = self.finalize_upload(element) {
                 gst_error!(
@@ -532,13 +533,4 @@ impl BaseSinkImpl for S3Sink {
 
         BaseSinkImplExt::parent_event(self, element, event)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rusotos3sink",
-        gst::Rank::Primary,
-        S3Sink::get_type(),
-    )
 }

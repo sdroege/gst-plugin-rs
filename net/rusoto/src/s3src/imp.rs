@@ -72,11 +72,7 @@ impl S3Src {
         Ok(S3Client::new(url.region.clone()))
     }
 
-    fn set_uri(
-        self: &S3Src,
-        _: &gst_base::BaseSrc,
-        url_str: Option<&str>,
-    ) -> Result<(), glib::Error> {
+    fn set_uri(self: &S3Src, _: &super::S3Src, url_str: Option<&str>) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
@@ -108,7 +104,7 @@ impl S3Src {
 
     fn head(
         self: &S3Src,
-        src: &gst_base::BaseSrc,
+        src: &super::S3Src,
         client: &S3Client,
         url: &GstS3Url,
     ) -> Result<u64, gst::ErrorMessage> {
@@ -145,7 +141,7 @@ impl S3Src {
     /* Returns the bytes, Some(error) if one occured, or a None error if interrupted */
     fn get(
         self: &S3Src,
-        src: &gst_base::BaseSrc,
+        src: &super::S3Src,
         offset: u64,
         length: u64,
     ) -> Result<Bytes, Option<gst::ErrorMessage>> {
@@ -210,6 +206,7 @@ impl S3Src {
 
 impl ObjectSubclass for S3Src {
     const NAME: &'static str = "RusotoS3Src";
+    type Type = super::S3Src;
     type ParentType = gst_base::BaseSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -228,7 +225,7 @@ impl ObjectSubclass for S3Src {
         typ.add_interface::<gst::URIHandler>();
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Amazon S3 source",
             "Source/Network",
@@ -251,19 +248,18 @@ impl ObjectSubclass for S3Src {
 }
 
 impl ObjectImpl for S3Src {
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
-        let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
 
         match *prop {
             subclass::Property("uri", ..) => {
-                let _ = self.set_uri(basesrc, value.get().expect("type checked upstream"));
+                let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
             }
             _ => unimplemented!(),
         }
     }
 
-    fn get_property(&self, _: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id as usize];
 
         match *prop {
@@ -279,13 +275,12 @@ impl ObjectImpl for S3Src {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
-        basesrc.set_format(gst::Format::Bytes);
+        obj.set_format(gst::Format::Bytes);
         /* Set a larger default blocksize to make read more efficient */
-        basesrc.set_blocksize(256 * 1024);
+        obj.set_blocksize(256 * 1024);
     }
 }
 
@@ -294,13 +289,12 @@ impl ElementImpl for S3Src {
 }
 
 impl URIHandlerImpl for S3Src {
-    fn get_uri(&self, _: &gst::URIHandler) -> Option<String> {
+    fn get_uri(&self, _: &Self::Type) -> Option<String> {
         self.url.lock().unwrap().as_ref().map(|s| s.to_string())
     }
 
-    fn set_uri(&self, element: &gst::URIHandler, uri: &str) -> Result<(), glib::Error> {
-        let basesrc = element.dynamic_cast_ref::<gst_base::BaseSrc>().unwrap();
-        self.set_uri(basesrc, Some(uri))
+    fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
+        self.set_uri(element, Some(uri))
     }
 
     fn get_uri_type() -> gst::URIType {
@@ -313,18 +307,18 @@ impl URIHandlerImpl for S3Src {
 }
 
 impl BaseSrcImpl for S3Src {
-    fn is_seekable(&self, _: &gst_base::BaseSrc) -> bool {
+    fn is_seekable(&self, _: &Self::Type) -> bool {
         true
     }
 
-    fn get_size(&self, _: &gst_base::BaseSrc) -> Option<u64> {
+    fn get_size(&self, _: &Self::Type) -> Option<u64> {
         match *self.state.lock().unwrap() {
             StreamingState::Stopped => None,
             StreamingState::Started { size, .. } => Some(size),
         }
     }
 
-    fn start(&self, src: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, src: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
@@ -353,7 +347,7 @@ impl BaseSrcImpl for S3Src {
         Ok(())
     }
 
-    fn stop(&self, _: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _: &Self::Type) -> Result<(), gst::ErrorMessage> {
         // First, stop any asynchronous tasks if we're running, as they will have the state lock
         self.cancel();
 
@@ -368,7 +362,7 @@ impl BaseSrcImpl for S3Src {
         Ok(())
     }
 
-    fn query(&self, src: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, src: &Self::Type, query: &mut gst::QueryRef) -> bool {
         if let gst::QueryView::Scheduling(ref mut q) = query.view_mut() {
             q.set(
                 gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED,
@@ -385,7 +379,7 @@ impl BaseSrcImpl for S3Src {
 
     fn create(
         &self,
-        src: &gst_base::BaseSrc,
+        src: &Self::Type,
         offset: u64,
         buffer: Option<&mut gst::BufferRef>,
         length: u32,
@@ -416,21 +410,12 @@ impl BaseSrcImpl for S3Src {
     }
 
     /* FIXME: implement */
-    fn do_seek(&self, _: &gst_base::BaseSrc, _: &mut gst::Segment) -> bool {
+    fn do_seek(&self, _: &Self::Type, _: &mut gst::Segment) -> bool {
         true
     }
 
-    fn unlock(&self, _: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
+    fn unlock(&self, _: &Self::Type) -> Result<(), gst::ErrorMessage> {
         self.cancel();
         Ok(())
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rusotos3src",
-        gst::Rank::Primary,
-        S3Src::get_type(),
-    )
 }

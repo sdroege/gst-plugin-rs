@@ -230,7 +230,7 @@ lazy_static! {
 impl ReqwestHttpSrc {
     fn set_location(
         &self,
-        _element: &gst_base::BaseSrc,
+        _element: &super::ReqwestHttpSrc,
         uri: Option<&str>,
     ) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
@@ -268,7 +268,10 @@ impl ReqwestHttpSrc {
         Ok(())
     }
 
-    fn ensure_client(&self, src: &gst_base::BaseSrc) -> Result<ClientContext, gst::ErrorMessage> {
+    fn ensure_client(
+        &self,
+        src: &super::ReqwestHttpSrc,
+    ) -> Result<ClientContext, gst::ErrorMessage> {
         let mut client_guard = self.client.lock().unwrap();
         if let Some(ref client) = *client_guard {
             gst_debug!(CAT, obj: src, "Using already configured client");
@@ -334,7 +337,7 @@ impl ReqwestHttpSrc {
 
     fn do_request(
         &self,
-        src: &gst_base::BaseSrc,
+        src: &super::ReqwestHttpSrc,
         uri: Url,
         start: u64,
         stop: Option<u64>,
@@ -670,17 +673,15 @@ impl ReqwestHttpSrc {
 }
 
 impl ObjectImpl for ReqwestHttpSrc {
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("location", ..) => {
-                let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
-
                 let location = value.get::<&str>().expect("type checked upstream");
-                if let Err(err) = self.set_location(element, location) {
+                if let Err(err) = self.set_location(obj, location) {
                     gst_error!(
                         CAT,
-                        obj: element,
+                        obj: obj,
                         "Failed to set property `location`: {:?}",
                         err
                     );
@@ -695,9 +696,8 @@ impl ObjectImpl for ReqwestHttpSrc {
                 settings.user_agent = user_agent;
             }
             subclass::Property("is-live", ..) => {
-                let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
                 let is_live = value.get_some().expect("type checked upstream");
-                element.set_live(is_live);
+                obj.set_live(is_live);
             }
             subclass::Property("user-id", ..) => {
                 let mut settings = self.settings.lock().unwrap();
@@ -743,7 +743,7 @@ impl ObjectImpl for ReqwestHttpSrc {
         };
     }
 
-    fn get_property(&self, obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("location", ..) => {
@@ -756,10 +756,7 @@ impl ObjectImpl for ReqwestHttpSrc {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.user_agent.to_value())
             }
-            subclass::Property("is-live", ..) => {
-                let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
-                Ok(element.is_live().to_value())
-            }
+            subclass::Property("is-live", ..) => Ok(obj.is_live().to_value()),
             subclass::Property("user-id", ..) => {
                 let settings = self.settings.lock().unwrap();
                 Ok(settings.user_id.to_value())
@@ -796,16 +793,15 @@ impl ObjectImpl for ReqwestHttpSrc {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
-        let element = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
-        element.set_automatic_eos(false);
-        element.set_format(gst::Format::Bytes);
+        obj.set_automatic_eos(false);
+        obj.set_format(gst::Format::Bytes);
     }
 }
 
 impl ElementImpl for ReqwestHttpSrc {
-    fn set_context(&self, element: &gst::Element, context: &gst::Context) {
+    fn set_context(&self, element: &Self::Type, context: &gst::Context) {
         if context.get_context_type() == REQWEST_CLIENT_CONTEXT {
             let mut external_client = self.external_client.lock().unwrap();
             let s = context.get_structure();
@@ -820,7 +816,7 @@ impl ElementImpl for ReqwestHttpSrc {
 
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         if let gst::StateChange::ReadyToNull = transition {
@@ -832,21 +828,21 @@ impl ElementImpl for ReqwestHttpSrc {
 }
 
 impl BaseSrcImpl for ReqwestHttpSrc {
-    fn is_seekable(&self, _src: &gst_base::BaseSrc) -> bool {
+    fn is_seekable(&self, _src: &Self::Type) -> bool {
         match *self.state.lock().unwrap() {
             State::Started { seekable, .. } => seekable,
             _ => false,
         }
     }
 
-    fn get_size(&self, _src: &gst_base::BaseSrc) -> Option<u64> {
+    fn get_size(&self, _src: &Self::Type) -> Option<u64> {
         match *self.state.lock().unwrap() {
             State::Started { size, .. } => size,
             _ => None,
         }
     }
 
-    fn unlock(&self, _src: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
+    fn unlock(&self, _src: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let canceller = self.canceller.lock().unwrap();
         if let Some(ref canceller) = *canceller {
             canceller.abort();
@@ -854,7 +850,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
         Ok(())
     }
 
-    fn start(&self, src: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, src: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
 
         *state = State::Stopped;
@@ -881,14 +877,14 @@ impl BaseSrcImpl for ReqwestHttpSrc {
         Ok(())
     }
 
-    fn stop(&self, src: &gst_base::BaseSrc) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, src: &Self::Type) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: src, "Stopping");
         *self.state.lock().unwrap() = State::Stopped;
 
         Ok(())
     }
 
-    fn query(&self, element: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, element: &Self::Type, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
         match query.view_mut() {
@@ -906,7 +902,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
         }
     }
 
-    fn do_seek(&self, src: &gst_base::BaseSrc, segment: &mut gst::Segment) -> bool {
+    fn do_seek(&self, src: &Self::Type, segment: &mut gst::Segment) -> bool {
         let segment = segment.downcast_mut::<gst::format::Bytes>().unwrap();
 
         let mut state = self.state.lock().unwrap();
@@ -951,7 +947,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
 }
 
 impl PushSrcImpl for ReqwestHttpSrc {
-    fn create(&self, src: &gst_base::PushSrc) -> Result<gst::Buffer, gst::FlowError> {
+    fn create(&self, src: &Self::Type) -> Result<gst::Buffer, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
         let (response, position, caps, tags) = match *state {
@@ -1073,15 +1069,13 @@ impl PushSrcImpl for ReqwestHttpSrc {
 }
 
 impl URIHandlerImpl for ReqwestHttpSrc {
-    fn get_uri(&self, _element: &gst::URIHandler) -> Option<String> {
+    fn get_uri(&self, _element: &Self::Type) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
         settings.location.as_ref().map(Url::to_string)
     }
 
-    fn set_uri(&self, element: &gst::URIHandler, uri: &str) -> Result<(), glib::Error> {
-        let element = element.dynamic_cast_ref::<gst_base::BaseSrc>().unwrap();
-
+    fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
         self.set_location(&element, Some(uri))
     }
 
@@ -1096,6 +1090,7 @@ impl URIHandlerImpl for ReqwestHttpSrc {
 
 impl ObjectSubclass for ReqwestHttpSrc {
     const NAME: &'static str = "ReqwestHttpSrc";
+    type Type = super::ReqwestHttpSrc;
     type ParentType = gst_base::PushSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -1116,7 +1111,7 @@ impl ObjectSubclass for ReqwestHttpSrc {
         type_.add_interface::<gst::URIHandler>();
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "HTTP Source",
             "Source/Network/HTTP",
@@ -1136,13 +1131,4 @@ impl ObjectSubclass for ReqwestHttpSrc {
 
         klass.install_properties(&PROPERTIES);
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "reqwesthttpsrc",
-        gst::Rank::Marginal,
-        ReqwestHttpSrc::get_type(),
-    )
 }
