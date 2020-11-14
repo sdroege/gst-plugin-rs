@@ -28,7 +28,7 @@ struct State {
     reorder_map: Option<[usize; 8]>,
 }
 
-struct LewtonDec {
+pub struct LewtonDec {
     state: AtomicRefCell<Option<State>>,
 }
 
@@ -42,6 +42,7 @@ lazy_static! {
 
 impl ObjectSubclass for LewtonDec {
     const NAME: &'static str = "LewtonDec";
+    type Type = super::LewtonDec;
     type ParentType = gst_audio::AudioDecoder;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -54,7 +55,7 @@ impl ObjectSubclass for LewtonDec {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "lewton Vorbis decoder",
             "Decoder/Audio",
@@ -97,13 +98,13 @@ impl ObjectImpl for LewtonDec {}
 impl ElementImpl for LewtonDec {}
 
 impl AudioDecoderImpl for LewtonDec {
-    fn stop(&self, _element: &gst_audio::AudioDecoder) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = None;
 
         Ok(())
     }
 
-    fn start(&self, _element: &gst_audio::AudioDecoder) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = Some(State {
             header_bufs: (None, None, None),
             headerset: None,
@@ -115,11 +116,7 @@ impl AudioDecoderImpl for LewtonDec {
         Ok(())
     }
 
-    fn set_format(
-        &self,
-        element: &gst_audio::AudioDecoder,
-        caps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
+    fn set_format(&self, element: &Self::Type, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         gst_debug!(CAT, obj: element, "Setting format {:?}", caps);
 
         // When the caps are changing we require new headers
@@ -160,7 +157,7 @@ impl AudioDecoderImpl for LewtonDec {
         Ok(())
     }
 
-    fn flush(&self, element: &gst_audio::AudioDecoder, _hard: bool) {
+    fn flush(&self, element: &Self::Type, _hard: bool) {
         gst_debug!(CAT, obj: element, "Flushing");
 
         let mut state_guard = self.state.borrow_mut();
@@ -171,7 +168,7 @@ impl AudioDecoderImpl for LewtonDec {
 
     fn handle_frame(
         &self,
-        element: &gst_audio::AudioDecoder,
+        element: &Self::Type,
         inbuf: Option<&gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(CAT, obj: element, "Handling buffer {:?}", inbuf);
@@ -218,7 +215,7 @@ impl AudioDecoderImpl for LewtonDec {
 impl LewtonDec {
     fn handle_header(
         &self,
-        element: &gst_audio::AudioDecoder,
+        element: &super::LewtonDec,
         state: &mut State,
         inbuf: &gst::Buffer,
         indata: &[u8],
@@ -254,7 +251,7 @@ impl LewtonDec {
 
     fn initialize(
         &self,
-        element: &gst_audio::AudioDecoder,
+        element: &super::LewtonDec,
         state: &mut State,
     ) -> Result<(), gst::FlowError> {
         let (ident_buf, comment_buf, setup_buf) = match state.header_bufs {
@@ -369,7 +366,7 @@ impl LewtonDec {
 
     fn handle_data(
         &self,
-        element: &gst_audio::AudioDecoder,
+        element: &super::LewtonDec,
         state: &mut State,
         indata: &[u8],
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -471,15 +468,6 @@ impl LewtonDec {
 
         element.finish_frame(Some(outbuf), 1)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "lewtondec",
-        gst::Rank::Marginal,
-        LewtonDec::get_type(),
-    )
 }
 
 // http://www.xiph.org/vorbis/doc/Vorbis_I_spec.html#x1-800004.3.9

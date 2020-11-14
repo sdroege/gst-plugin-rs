@@ -23,13 +23,14 @@ struct State {
     audio_info: Option<gst_audio::AudioInfo>,
 }
 
-struct ClaxonDec {
+pub struct ClaxonDec {
     cat: gst::DebugCategory,
     state: AtomicRefCell<Option<State>>,
 }
 
 impl ObjectSubclass for ClaxonDec {
     const NAME: &'static str = "ClaxonDec";
+    type Type = super::ClaxonDec;
     type ParentType = gst_audio::AudioDecoder;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -47,7 +48,7 @@ impl ObjectSubclass for ClaxonDec {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Claxon FLAC decoder",
             "Decoder/Audio",
@@ -98,13 +99,13 @@ impl ObjectImpl for ClaxonDec {}
 impl ElementImpl for ClaxonDec {}
 
 impl AudioDecoderImpl for ClaxonDec {
-    fn stop(&self, _element: &gst_audio::AudioDecoder) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = None;
 
         Ok(())
     }
 
-    fn start(&self, _element: &gst_audio::AudioDecoder) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = Some(State {
             streaminfo: None,
             audio_info: None,
@@ -113,11 +114,7 @@ impl AudioDecoderImpl for ClaxonDec {
         Ok(())
     }
 
-    fn set_format(
-        &self,
-        element: &gst_audio::AudioDecoder,
-        caps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
+    fn set_format(&self, element: &Self::Type, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         gst_debug!(self.cat, obj: element, "Setting format {:?}", caps);
 
         let mut streaminfo: Option<claxon::metadata::StreamInfo> = None;
@@ -174,7 +171,7 @@ impl AudioDecoderImpl for ClaxonDec {
     #[allow(clippy::verbose_bit_mask)]
     fn handle_frame(
         &self,
-        element: &gst_audio::AudioDecoder,
+        element: &Self::Type,
         inbuf: Option<&gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(self.cat, obj: element, "Handling buffer {:?}", inbuf);
@@ -217,7 +214,7 @@ impl AudioDecoderImpl for ClaxonDec {
 impl ClaxonDec {
     fn handle_streaminfo_header(
         &self,
-        element: &gst_audio::AudioDecoder,
+        element: &super::ClaxonDec,
         state: &mut State,
         indata: &[u8],
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -249,7 +246,7 @@ impl ClaxonDec {
 
     fn handle_data(
         &self,
-        element: &gst_audio::AudioDecoder,
+        element: &super::ClaxonDec,
         state: &mut State,
         indata: &[u8],
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -370,15 +367,6 @@ impl AudioDepth {
             AudioDepth::I24 | AudioDepth::I32 => ByteVec::I32(input),
         }
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "claxondec",
-        gst::Rank::Marginal,
-        ClaxonDec::get_type(),
-    )
 }
 
 fn get_claxon_streaminfo(indata: &[u8]) -> Result<claxon::metadata::StreamInfo, &'static str> {

@@ -75,7 +75,7 @@ struct State {
     ksmps: u32,
 }
 
-struct CsoundFilter {
+pub struct CsoundFilter {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
     csound: Mutex<Csound>,
@@ -222,7 +222,7 @@ impl CsoundFilter {
         }
     }
 
-    fn drain(&self, element: &gst_base::BaseTransform) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn drain(&self, element: &super::CsoundFilter) -> Result<gst::FlowSuccess, gst::FlowError> {
         let csound = self.csound.lock().unwrap();
         let mut state_lock = self.state.lock().unwrap();
         let state = state_lock.as_mut().unwrap();
@@ -293,7 +293,7 @@ impl CsoundFilter {
 
     fn generate_output(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &super::CsoundFilter,
         state: &mut State,
     ) -> Result<GenerateOutputSuccess, gst::FlowError> {
         let output_size = state.max_output_size(state.adapter.available());
@@ -361,6 +361,7 @@ impl CsoundFilter {
 
 impl ObjectSubclass for CsoundFilter {
     const NAME: &'static str = "CsoundFilter";
+    type Type = super::CsoundFilter;
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -385,7 +386,7 @@ impl ObjectSubclass for CsoundFilter {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Audio filter",
             "Filter/Effect/Audio",
@@ -431,7 +432,7 @@ impl ObjectSubclass for CsoundFilter {
 }
 
 impl ObjectImpl for CsoundFilter {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("loop", ..) => {
@@ -464,7 +465,7 @@ impl ObjectImpl for CsoundFilter {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -492,10 +493,7 @@ impl ObjectImpl for CsoundFilter {
 impl ElementImpl for CsoundFilter {}
 
 impl BaseTransformImpl for CsoundFilter {
-    fn start(
-        &self,
-        _element: &gst_base::BaseTransform,
-    ) -> std::result::Result<(), gst::ErrorMessage> {
+    fn start(&self, _element: &Self::Type) -> std::result::Result<(), gst::ErrorMessage> {
         self.compile_score()?;
 
         let csound = self.csound.lock().unwrap();
@@ -509,7 +507,7 @@ impl BaseTransformImpl for CsoundFilter {
         Ok(())
     }
 
-    fn stop(&self, element: &gst_base::BaseTransform) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let csound = self.csound.lock().unwrap();
         csound.stop();
         csound.reset();
@@ -520,7 +518,7 @@ impl BaseTransformImpl for CsoundFilter {
         Ok(())
     }
 
-    fn sink_event(&self, element: &gst_base::BaseTransform, event: gst::Event) -> bool {
+    fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
         use gst::EventView;
 
         if let EventView::Eos(_) = event.view() {
@@ -534,7 +532,7 @@ impl BaseTransformImpl for CsoundFilter {
 
     fn transform_caps(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -586,7 +584,7 @@ impl BaseTransformImpl for CsoundFilter {
 
     fn set_caps(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         incaps: &gst::Caps,
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
@@ -646,7 +644,7 @@ impl BaseTransformImpl for CsoundFilter {
 
     fn generate_output(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
     ) -> Result<GenerateOutputSuccess, gst::FlowError> {
         // Check if there are enough data in the queued buffer and adapter,
         // if it is not the case, just notify the parent class to not generate
@@ -674,13 +672,4 @@ impl BaseTransformImpl for CsoundFilter {
         gst_log!(CAT, "No enough data to generate output");
         Ok(GenerateOutputSuccess::NoOutput)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "csoundfilter",
-        gst::Rank::None,
-        CsoundFilter::get_type(),
-    )
 }

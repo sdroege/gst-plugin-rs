@@ -13,7 +13,7 @@ use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use std::sync::Mutex;
-use std::{cmp, i32, iter, u64};
+use std::{cmp, i32, u64};
 
 use byte_slice_cast::*;
 
@@ -27,6 +27,8 @@ lazy_static! {
         Some("Rust Audio Echo Filter"),
     );
 }
+
+use super::ring_buffer::RingBuffer;
 
 const DEFAULT_MAX_DELAY: u64 = gst::SECOND_VAL;
 const DEFAULT_DELAY: u64 = 500 * gst::MSECOND_VAL;
@@ -57,7 +59,7 @@ struct State {
     buffer: RingBuffer,
 }
 
-struct AudioEcho {
+pub struct AudioEcho {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
 }
@@ -129,6 +131,7 @@ impl AudioEcho {
 
 impl ObjectSubclass for AudioEcho {
     const NAME: &'static str = "RsAudioEcho";
+    type Type = super::AudioEcho;
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -142,7 +145,7 @@ impl ObjectSubclass for AudioEcho {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Audio echo",
             "Filter/Effect/Audio",
@@ -194,7 +197,7 @@ impl ObjectSubclass for AudioEcho {
 }
 
 impl ObjectImpl for AudioEcho {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -220,7 +223,7 @@ impl ObjectImpl for AudioEcho {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -250,7 +253,7 @@ impl ElementImpl for AudioEcho {}
 impl BaseTransformImpl for AudioEcho {
     fn transform_ip(
         &self,
-        _element: &gst_base::BaseTransform,
+        _element: &Self::Type,
         buf: &mut gst::BufferRef,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut settings = *self.settings.lock().unwrap();
@@ -278,7 +281,7 @@ impl BaseTransformImpl for AudioEcho {
 
     fn set_caps(
         &self,
-        _element: &gst_base::BaseTransform,
+        _element: &Self::Type,
         incaps: &gst::Caps,
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
@@ -303,94 +306,10 @@ impl BaseTransformImpl for AudioEcho {
         Ok(())
     }
 
-    fn stop(&self, _element: &gst_base::BaseTransform) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
         Ok(())
-    }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rsaudioecho",
-        gst::Rank::None,
-        AudioEcho::get_type(),
-    )
-}
-
-struct RingBuffer {
-    buffer: Box<[f64]>,
-    pos: usize,
-}
-
-impl RingBuffer {
-    fn new(size: usize) -> Self {
-        let mut buffer = Vec::with_capacity(size as usize);
-        buffer.extend(iter::repeat(0.0).take(size as usize));
-
-        Self {
-            buffer: buffer.into_boxed_slice(),
-            pos: 0,
-        }
-    }
-
-    fn iter(&mut self, delay: usize) -> RingBufferIter {
-        RingBufferIter::new(self, delay)
-    }
-}
-
-struct RingBufferIter<'a> {
-    buffer: &'a mut [f64],
-    buffer_pos: &'a mut usize,
-    read_pos: usize,
-    write_pos: usize,
-}
-
-impl<'a> RingBufferIter<'a> {
-    fn new(buffer: &'a mut RingBuffer, delay: usize) -> RingBufferIter<'a> {
-        let size = buffer.buffer.len();
-
-        assert!(size >= delay);
-        assert_ne!(size, 0);
-
-        let read_pos = (size - delay + buffer.pos) % size;
-        let write_pos = buffer.pos % size;
-
-        let buffer_pos = &mut buffer.pos;
-        let buffer = &mut buffer.buffer;
-
-        RingBufferIter {
-            buffer,
-            buffer_pos,
-            read_pos,
-            write_pos,
-        }
-    }
-}
-
-impl<'a> Iterator for RingBufferIter<'a> {
-    type Item = (&'a mut f64, f64);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let res = unsafe {
-            let r = *self.buffer.get_unchecked(self.read_pos);
-            let w = self.buffer.get_unchecked_mut(self.write_pos);
-            // Cast needed to get from &mut f64 to &'a mut f64
-            (&mut *(w as *mut f64), r)
-        };
-
-        let size = self.buffer.len();
-        self.write_pos = (self.write_pos + 1) % size;
-        self.read_pos = (self.read_pos + 1) % size;
-
-        Some(res)
-    }
-}
-
-impl<'a> Drop for RingBufferIter<'a> {
-    fn drop(&mut self) {
-        *self.buffer_pos = self.write_pos;
     }
 }

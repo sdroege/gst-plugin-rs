@@ -24,8 +24,9 @@ mod audiornnoise;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     audioecho::register(plugin)?;
+    audioloudnorm::register(plugin)?;
     audiornnoise::register(plugin)?;
-    audioloudnorm::register(plugin)
+    Ok(())
 }
 
 gst_plugin_define!(

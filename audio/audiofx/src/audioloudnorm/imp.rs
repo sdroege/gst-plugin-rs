@@ -201,7 +201,7 @@ impl State {
     }
 }
 
-struct AudioLoudNorm {
+pub struct AudioLoudNorm {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     settings: Mutex<Settings>,
@@ -268,7 +268,7 @@ impl State {
     // Drains all full frames that are currently in the adapter
     fn drain_full_frames(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
     ) -> Result<Vec<gst::Buffer>, gst::FlowError> {
         let mut outbufs = vec![];
         while self.adapter.available() >= self.info.bpf() as usize * self.current_samples_per_frame
@@ -308,7 +308,7 @@ impl State {
     }
 
     // Drains everything
-    fn drain(&mut self, element: &gst::Element) -> Result<gst::Buffer, gst::FlowError> {
+    fn drain(&mut self, element: &super::AudioLoudNorm) -> Result<gst::Buffer, gst::FlowError> {
         gst_debug!(CAT, obj: element, "Draining");
 
         let (pts, distance) = self.adapter.prev_pts();
@@ -363,7 +363,7 @@ impl State {
 
     fn process_first_frame_is_last(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
     ) -> Result<(), gst::FlowError> {
         // Calculated loudness in LUFS
         let global = self
@@ -411,7 +411,7 @@ impl State {
 
     fn process_first_frame(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         src: &[f64],
         pts: gst::ClockTime,
     ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
@@ -485,7 +485,7 @@ impl State {
         Ok((outbuf, pts))
     }
 
-    fn process_fill_inner_frame(&mut self, element: &gst::Element, src: &[f64]) {
+    fn process_fill_inner_frame(&mut self, element: &super::AudioLoudNorm, src: &[f64]) {
         // Get gain for this and the next 100ms frame based the delta array
         // and smoothened with a gaussian filter.
         let gain = self.gaussian_filter(if self.index + 10 < 30 {
@@ -557,7 +557,7 @@ impl State {
 
     fn process_update_gain_inner_frame(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
     ) -> Result<(), gst::FlowError> {
         // Calculate global, shortterm loudness and relative threshold in LUFS.
         let global = self
@@ -641,7 +641,7 @@ impl State {
 
     fn process_inner_frame(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         src: &[f64],
         pts: gst::ClockTime,
     ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
@@ -681,7 +681,7 @@ impl State {
 
     fn process_fill_final_frame(
         &mut self,
-        _element: &gst::Element,
+        _element: &super::AudioLoudNorm,
         idx: usize,
         num_samples: usize,
     ) {
@@ -734,7 +734,7 @@ impl State {
 
     fn process_final_frame(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         src: &[f64],
         pts: gst::ClockTime,
     ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
@@ -818,7 +818,7 @@ impl State {
 
     fn process_linear_frame(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         src: &[f64],
         pts: gst::ClockTime,
     ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
@@ -855,7 +855,7 @@ impl State {
 
     fn process(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         src: &[f64],
         pts: gst::ClockTime,
     ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
@@ -882,7 +882,7 @@ impl State {
 
     fn true_peak_limiter_out(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         mut smp_cnt: usize,
         nb_samples: usize,
     ) -> usize {
@@ -923,7 +923,7 @@ impl State {
 
     fn true_peak_limiter_attack(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         mut smp_cnt: usize,
         nb_samples: usize,
     ) -> usize {
@@ -1136,7 +1136,7 @@ impl State {
 
     fn true_peak_limiter_sustain(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         mut smp_cnt: usize,
         nb_samples: usize,
     ) -> usize {
@@ -1252,7 +1252,7 @@ impl State {
 
     fn true_peak_limiter_release(
         &mut self,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         mut smp_cnt: usize,
         nb_samples: usize,
     ) -> usize {
@@ -1371,7 +1371,7 @@ impl State {
         smp_cnt
     }
 
-    fn true_peak_limiter_first_frame(&mut self, element: &gst::Element) {
+    fn true_peak_limiter_first_frame(&mut self, element: &super::AudioLoudNorm) {
         let channels = self.info.channels() as usize;
 
         assert_eq!(self.limiter_buf_index, 0);
@@ -1412,7 +1412,7 @@ impl State {
         }
     }
 
-    fn true_peak_limiter(&mut self, element: &gst::Element, dst: &mut [f64]) {
+    fn true_peak_limiter(&mut self, element: &super::AudioLoudNorm, dst: &mut [f64]) {
         let channels = self.info.channels() as usize;
         let nb_samples = dst.len() / channels;
 
@@ -1588,7 +1588,7 @@ impl AudioLoudNorm {
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::AudioLoudNorm,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: element, "Handling buffer {:?}", buffer);
@@ -1629,7 +1629,12 @@ impl AudioLoudNorm {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(
+        &self,
+        pad: &gst::Pad,
+        element: &super::AudioLoudNorm,
+        event: gst::Event,
+    ) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -1712,7 +1717,12 @@ impl AudioLoudNorm {
         pad.event_default(Some(element), event)
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::AudioLoudNorm,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -1738,13 +1748,14 @@ impl AudioLoudNorm {
 
 impl ObjectSubclass for AudioLoudNorm {
     const NAME: &'static str = "RsAudioLoudNorm";
+    type Type = super::AudioLoudNorm;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -1784,7 +1795,7 @@ impl ObjectSubclass for AudioLoudNorm {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Audio loudness normalizer",
             "Filter/Effect/Audio",
@@ -1824,15 +1835,14 @@ impl ObjectSubclass for AudioLoudNorm {
 }
 
 impl ObjectImpl for AudioLoudNorm {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -1856,7 +1866,7 @@ impl ObjectImpl for AudioLoudNorm {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -1884,7 +1894,7 @@ impl ObjectImpl for AudioLoudNorm {
 impl ElementImpl for AudioLoudNorm {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         let res = self.parent_change_state(element, transition);
@@ -1899,15 +1909,6 @@ impl ElementImpl for AudioLoudNorm {
 
         res
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rsaudioloudnorm",
-        gst::Rank::None,
-        AudioLoudNorm::get_type(),
-    )
 }
 
 fn init_gaussian_filter() -> [f64; 21] {

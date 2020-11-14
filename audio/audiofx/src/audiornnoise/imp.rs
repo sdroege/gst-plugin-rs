@@ -40,7 +40,7 @@ struct State {
     adapter: gst_base::UniqueAdapter,
 }
 
-struct AudioRNNoise {
+pub struct AudioRNNoise {
     state: Mutex<Option<State>>,
 }
 
@@ -111,7 +111,7 @@ impl State {
 }
 
 impl AudioRNNoise {
-    fn drain(&self, element: &gst_base::BaseTransform) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn drain(&self, element: &super::AudioRNNoise) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state_lock = self.state.lock().unwrap();
         let state = state_lock.as_mut().unwrap();
 
@@ -154,7 +154,7 @@ impl AudioRNNoise {
 
     fn generate_output(
         &self,
-        _element: &gst_base::BaseTransform,
+        _element: &super::AudioRNNoise,
         state: &mut State,
     ) -> Result<GenerateOutputSuccess, gst::FlowError> {
         let available = state.adapter.available();
@@ -189,6 +189,7 @@ impl AudioRNNoise {
 
 impl ObjectSubclass for AudioRNNoise {
     const NAME: &'static str = "AudioRNNoise";
+    type Type = super::AudioRNNoise;
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -201,7 +202,7 @@ impl ObjectSubclass for AudioRNNoise {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Audio denoise",
             "Filter/Effect/Audio",
@@ -250,7 +251,7 @@ impl ElementImpl for AudioRNNoise {}
 impl BaseTransformImpl for AudioRNNoise {
     fn set_caps(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         incaps: &gst::Caps,
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
@@ -293,7 +294,7 @@ impl BaseTransformImpl for AudioRNNoise {
 
     fn generate_output(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
     ) -> Result<GenerateOutputSuccess, gst::FlowError> {
         // Check if there are enough data in the queued buffer and adapter,
         // if it is not the case, just notify the parent class to not generate
@@ -321,7 +322,7 @@ impl BaseTransformImpl for AudioRNNoise {
         Ok(GenerateOutputSuccess::NoOutput)
     }
 
-    fn sink_event(&self, element: &gst_base::BaseTransform, event: gst::Event) -> bool {
+    fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
         use gst::EventView;
 
         if let EventView::Eos(_) = event.view() {
@@ -335,7 +336,7 @@ impl BaseTransformImpl for AudioRNNoise {
 
     fn query(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         direction: gst::PadDirection,
         query: &mut gst::QueryRef,
     ) -> bool {
@@ -364,19 +365,10 @@ impl BaseTransformImpl for AudioRNNoise {
         BaseTransformImplExt::parent_query(self, element, direction, query)
     }
 
-    fn stop(&self, _element: &gst_base::BaseTransform) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
         Ok(())
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "audiornnoise",
-        gst::Rank::None,
-        AudioRNNoise::get_type(),
-    )
 }
