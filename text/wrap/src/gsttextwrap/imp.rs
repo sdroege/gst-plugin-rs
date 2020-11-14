@@ -119,7 +119,7 @@ impl Default for State {
     }
 }
 
-struct TextWrap {
+pub struct TextWrap {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     settings: Mutex<Settings>,
@@ -127,7 +127,7 @@ struct TextWrap {
 }
 
 impl TextWrap {
-    fn update_wrapper(&self, element: &gst::Element) {
+    fn update_wrapper(&self, element: &super::TextWrap) {
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
 
@@ -173,7 +173,7 @@ impl TextWrap {
     fn sink_chain(
         &self,
         _pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::TextWrap,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.update_wrapper(element);
@@ -261,13 +261,14 @@ impl TextWrap {
 
 impl ObjectSubclass for TextWrap {
     const NAME: &'static str = "RsTextWrap";
+    type Type = super::TextWrap;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -296,7 +297,7 @@ impl ObjectSubclass for TextWrap {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Text Wrapper",
             "Text/Filter",
@@ -330,15 +331,14 @@ impl ObjectSubclass for TextWrap {
 }
 
 impl ObjectImpl for TextWrap {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -362,7 +362,7 @@ impl ObjectImpl for TextWrap {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -386,7 +386,7 @@ impl ObjectImpl for TextWrap {
 impl ElementImpl for TextWrap {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_info!(CAT, obj: element, "Changing state {:?}", transition);
@@ -403,13 +403,4 @@ impl ElementImpl for TextWrap {
 
         Ok(success)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "textwrap",
-        gst::Rank::None,
-        TextWrap::get_type(),
-    )
 }
