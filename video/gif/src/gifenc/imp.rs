@@ -12,7 +12,6 @@ use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
-use gstreamer_video as gst_video;
 use once_cell::sync::Lazy;
 use std::{
     io,
@@ -29,6 +28,7 @@ const DEFAULT_REPEAT: i32 = 0;
 struct CacheBuffer {
     buffer: AtomicRefCell<Vec<u8>>,
 }
+
 impl CacheBuffer {
     pub fn new() -> Self {
         Self {
@@ -47,6 +47,7 @@ impl CacheBuffer {
         std::mem::replace(&mut *buffer, Vec::new())
     }
 }
+
 /// Writer for a CacheBuffer instance. This class is passed to the gif::Encoder.
 /// Everything written to the CacheBufferWriter is stored in the underlying CacheBuffer.
 struct CacheBufferWriter {
@@ -98,6 +99,7 @@ struct State {
     last_actual_pts: gst::ClockTime,
     context: Option<gif::Encoder<CacheBufferWriter>>,
 }
+
 impl State {
     pub fn new(video_info: gst_video::VideoInfo) -> Self {
         Self {
@@ -130,7 +132,7 @@ impl State {
     }
 }
 
-struct GifEnc {
+pub struct GifEnc {
     state: AtomicRefCell<Option<State>>,
     settings: Mutex<Settings>,
 }
@@ -141,6 +143,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 impl ObjectSubclass for GifEnc {
     const NAME: &'static str = "GifEnc";
+    type Type = super::GifEnc;
     type ParentType = gst_video::VideoEncoder;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -154,7 +157,7 @@ impl ObjectSubclass for GifEnc {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "GIF encoder",
             "Encoder/Video",
@@ -211,7 +214,7 @@ impl ObjectSubclass for GifEnc {
 }
 
 impl ObjectImpl for GifEnc {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -223,7 +226,7 @@ impl ObjectImpl for GifEnc {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -239,14 +242,14 @@ impl ObjectImpl for GifEnc {
 impl ElementImpl for GifEnc {}
 
 impl VideoEncoderImpl for GifEnc {
-    fn stop(&self, _element: &gst_video::VideoEncoder) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = None;
         Ok(())
     }
 
     fn set_format(
         &self,
-        element: &gst_video::VideoEncoder,
+        element: &Self::Type,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         self.flush_encoder(element)
@@ -272,16 +275,13 @@ impl VideoEncoderImpl for GifEnc {
         self.parent_set_format(element, state)
     }
 
-    fn finish(
-        &self,
-        element: &gst_video::VideoEncoder,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.flush_encoder(element)
     }
 
     fn handle_frame(
         &self,
-        element: &gst_video::VideoEncoder,
+        element: &Self::Type,
         mut frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state_guard = self.state.borrow_mut();
@@ -388,10 +388,7 @@ impl VideoEncoderImpl for GifEnc {
 }
 
 impl GifEnc {
-    fn flush_encoder(
-        &self,
-        element: &gst_video::VideoEncoder,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn flush_encoder(&self, element: &super::GifEnc) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(CAT, obj: element, "Flushing");
 
         let trailer_buffer = self.state.borrow_mut().as_mut().map(|state| {
@@ -439,13 +436,4 @@ fn get_tightly_packed_framebuffer(frame: &gst_video::VideoFrameRef<&gst::BufferR
         .for_each(|line| raw_frame.extend_from_slice(line));
 
     raw_frame
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "gifenc",
-        gst::Rank::Primary,
-        GifEnc::get_type(),
-    )
 }

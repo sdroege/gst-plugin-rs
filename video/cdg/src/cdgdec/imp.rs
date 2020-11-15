@@ -17,18 +17,19 @@ use std::sync::Mutex;
 
 use crate::constants::{CDG_HEIGHT, CDG_WIDTH};
 
-struct CdgDec {
-    cdg_inter: Mutex<Box<cdg_renderer::CdgInterpreter>>,
-    output_info: Mutex<Option<gst_video::VideoInfo>>,
-}
-
 lazy_static! {
     static ref CAT: gst::DebugCategory =
         gst::DebugCategory::new("cdgdec", gst::DebugColorFlags::empty(), Some("CDG decoder"),);
 }
 
+pub struct CdgDec {
+    cdg_inter: Mutex<Box<cdg_renderer::CdgInterpreter>>,
+    output_info: Mutex<Option<gst_video::VideoInfo>>,
+}
+
 impl ObjectSubclass for CdgDec {
     const NAME: &'static str = "CdgDec";
+    type Type = super::CdgDec;
     type ParentType = gst_video::VideoDecoder;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -42,7 +43,7 @@ impl ObjectSubclass for CdgDec {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "CDG decoder",
             "Decoder/Video",
@@ -85,14 +86,14 @@ impl ObjectImpl for CdgDec {}
 impl ElementImpl for CdgDec {}
 
 impl VideoDecoderImpl for CdgDec {
-    fn start(&self, element: &gst_video::VideoDecoder) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut out_info = self.output_info.lock().unwrap();
         *out_info = None;
 
         self.parent_start(element)
     }
 
-    fn stop(&self, element: &gst_video::VideoDecoder) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         {
             let mut cdg_inter = self.cdg_inter.lock().unwrap();
             cdg_inter.reset(true);
@@ -102,7 +103,7 @@ impl VideoDecoderImpl for CdgDec {
 
     fn handle_frame(
         &self,
-        element: &gst_video::VideoDecoder,
+        element: &Self::Type,
         mut frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         {
@@ -192,7 +193,7 @@ impl VideoDecoderImpl for CdgDec {
 
     fn decide_allocation(
         &self,
-        element: &gst_video::VideoDecoder,
+        element: &Self::Type,
         query: &mut gst::QueryRef,
     ) -> Result<(), gst::ErrorMessage> {
         if let gst::query::QueryView::Allocation(allocation) = query.view() {
@@ -216,20 +217,11 @@ impl VideoDecoderImpl for CdgDec {
         self.parent_decide_allocation(element, query)
     }
 
-    fn flush(&self, element: &gst_video::VideoDecoder) -> bool {
+    fn flush(&self, element: &Self::Type) -> bool {
         gst_debug!(CAT, obj: element, "flushing, reset CDG interpreter");
 
         let mut cdg_inter = self.cdg_inter.lock().unwrap();
         cdg_inter.reset(false);
         true
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "cdgdec",
-        gst::Rank::Primary,
-        CdgDec::get_type(),
-    )
 }

@@ -31,8 +31,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug)]
-struct FlvDemux {
+pub struct FlvDemux {
     sinkpad: gst::Pad,
     audio_srcpad: Mutex<Option<gst::Pad>>,
     video_srcpad: Mutex<Option<gst::Pad>>,
@@ -42,7 +41,6 @@ struct FlvDemux {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
 enum State {
     Stopped,
     NeedHeader,
@@ -60,14 +58,13 @@ enum Stream {
     Video,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 enum Event {
     StreamChanged(Stream, gst::Caps),
     Buffer(Stream, gst::Buffer),
     HaveAllStreams,
 }
 
-#[derive(Debug)]
 struct StreamingState {
     audio: Option<AudioFormat>,
     expect_audio: bool,
@@ -124,13 +121,14 @@ struct Metadata {
 
 impl ObjectSubclass for FlvDemux {
     const NAME: &'static str = "RsFlvDemux";
+    type Type = super::FlvDemux;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .activate_function(|pad, parent| {
@@ -178,7 +176,7 @@ impl ObjectSubclass for FlvDemux {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "FLV Demuxer",
             "Codec/Demuxer",
@@ -274,11 +272,10 @@ impl ObjectSubclass for FlvDemux {
 }
 
 impl ObjectImpl for FlvDemux {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
     }
 }
 
@@ -288,7 +285,7 @@ impl FlvDemux {
     fn sink_activate(
         &self,
         pad: &gst::Pad,
-        _element: &gst::Element,
+        _element: &super::FlvDemux,
     ) -> Result<(), gst::LoggableError> {
         let mode = {
             let mut query = gst::query::Scheduling::new();
@@ -317,7 +314,7 @@ impl FlvDemux {
     fn sink_activatemode(
         &self,
         _pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         mode: gst::PadMode,
         active: bool,
     ) -> Result<(), gst::LoggableError> {
@@ -346,13 +343,17 @@ impl FlvDemux {
         Ok(())
     }
 
-    fn start(&self, _element: &gst::Element, _mode: gst::PadMode) -> Result<(), gst::ErrorMessage> {
+    fn start(
+        &self,
+        _element: &super::FlvDemux,
+        _mode: gst::PadMode,
+    ) -> Result<(), gst::ErrorMessage> {
         *self.state.lock().unwrap() = State::NeedHeader;
 
         Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &super::FlvDemux) -> Result<(), gst::ErrorMessage> {
         *self.state.lock().unwrap() = State::Stopped;
         self.adapter.lock().unwrap().clear();
 
@@ -372,7 +373,7 @@ impl FlvDemux {
         Ok(())
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &super::FlvDemux, event: gst::Event) -> bool {
         use crate::gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -397,7 +398,12 @@ impl FlvDemux {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::FlvDemux,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use crate::gst::QueryView;
 
         match query.view_mut() {
@@ -445,7 +451,7 @@ impl FlvDemux {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &super::FlvDemux, event: gst::Event) -> bool {
         use crate::gst::EventView;
 
         match event.view() {
@@ -460,7 +466,7 @@ impl FlvDemux {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -541,7 +547,7 @@ impl FlvDemux {
 
     fn find_header(
         &self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         adapter: &mut gst_base::UniqueAdapter,
     ) -> Result<flavors::Header, ()> {
         while adapter.available() >= 9 {
@@ -564,7 +570,7 @@ impl FlvDemux {
 
     fn handle_events(
         &self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         events: SmallVec<[Event; 4]>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         for event in events {
@@ -633,7 +639,7 @@ impl FlvDemux {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn create_srcpad(&self, element: &gst::Element, name: &str, caps: &gst::Caps) -> gst::Pad {
+    fn create_srcpad(&self, element: &super::FlvDemux, name: &str, caps: &gst::Caps) -> gst::Pad {
         let templ = element.get_element_class().get_pad_template(name).unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some(name))
             .event_function(|pad, parent, event| {
@@ -688,7 +694,7 @@ impl StreamingState {
 
     fn handle_tag(
         &mut self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         adapter: &mut gst_base::UniqueAdapter,
     ) -> Result<Option<SmallVec<[Event; 4]>>, gst::ErrorMessage> {
         use nom::number::complete::be_u32;
@@ -750,7 +756,7 @@ impl StreamingState {
 
     fn handle_script_tag(
         &mut self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         tag_header: &flavors::TagHeader,
         adapter: &mut gst_base::UniqueAdapter,
     ) -> Result<SmallVec<[Event; 4]>, gst::ErrorMessage> {
@@ -811,7 +817,7 @@ impl StreamingState {
 
     fn update_audio_stream(
         &mut self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         data_header: &flavors::AudioDataHeader,
     ) -> Result<SmallVec<[Event; 4]>, gst::ErrorMessage> {
         let mut events = SmallVec::new();
@@ -855,7 +861,7 @@ impl StreamingState {
 
     fn handle_aac_audio_packet_header(
         &mut self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         tag_header: &flavors::TagHeader,
         adapter: &mut gst_base::UniqueAdapter,
     ) -> Result<bool, gst::ErrorMessage> {
@@ -912,7 +918,7 @@ impl StreamingState {
 
     fn handle_audio_tag(
         &mut self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         tag_header: &flavors::TagHeader,
         adapter: &mut gst_base::UniqueAdapter,
     ) -> Result<SmallVec<[Event; 4]>, gst::ErrorMessage> {
@@ -981,7 +987,7 @@ impl StreamingState {
 
     fn update_video_stream(
         &mut self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         data_header: &flavors::VideoDataHeader,
     ) -> Result<SmallVec<[Event; 4]>, gst::ErrorMessage> {
         let mut events = SmallVec::new();
@@ -1025,7 +1031,7 @@ impl StreamingState {
 
     fn handle_avc_video_packet_header(
         &mut self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         tag_header: &flavors::TagHeader,
         adapter: &mut gst_base::UniqueAdapter,
     ) -> Result<Option<i32>, gst::ErrorMessage> {
@@ -1093,7 +1099,7 @@ impl StreamingState {
 
     fn handle_video_tag(
         &mut self,
-        element: &gst::Element,
+        element: &super::FlvDemux,
         tag_header: &flavors::TagHeader,
         adapter: &mut gst_base::UniqueAdapter,
     ) -> Result<SmallVec<[Event; 4]>, gst::ErrorMessage> {
@@ -1564,13 +1570,4 @@ impl Metadata {
 
         metadata
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rsflvdemux",
-        gst::Rank::None,
-        FlvDemux::get_type(),
-    )
 }

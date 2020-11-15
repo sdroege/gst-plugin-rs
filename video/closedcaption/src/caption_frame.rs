@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::cea608tott_ffi as ffi;
+use super::ffi;
 use std::mem;
 
 #[derive(Copy, Clone, Debug)]

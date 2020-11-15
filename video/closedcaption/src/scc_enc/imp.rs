@@ -16,7 +16,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
@@ -70,7 +69,7 @@ impl State {
 
     fn generate_caption(
         &mut self,
-        element: &gst::Element,
+        element: &super::SccEnc,
         buffer: gst::Buffer,
     ) -> Result<Option<gst::Buffer>, gst::FlowError> {
         // Arbitrary number that was chosen to keep in order
@@ -141,7 +140,7 @@ impl State {
     // Flush the internal buffers into a line
     fn write_line(
         &mut self,
-        element: &gst::Element,
+        element: &super::SccEnc,
     ) -> Result<Option<gst::Buffer>, gst::FlowError> {
         let mut outbuf = Vec::new();
         let mut line_start = true;
@@ -218,7 +217,7 @@ impl State {
     }
 }
 
-struct SccEnc {
+pub struct SccEnc {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     state: Mutex<State>,
@@ -228,7 +227,7 @@ impl SccEnc {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::SccEnc,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -246,7 +245,7 @@ impl SccEnc {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &super::SccEnc, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -294,7 +293,7 @@ impl SccEnc {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &super::SccEnc, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -307,7 +306,12 @@ impl SccEnc {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::SccEnc,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -330,13 +334,14 @@ impl SccEnc {
 
 impl ObjectSubclass for SccEnc {
     const NAME: &'static str = "RsSccEnc";
+    type Type = super::SccEnc;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -380,7 +385,7 @@ impl ObjectSubclass for SccEnc {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Scc Encoder",
             "Encoder/ClosedCaption",
@@ -416,19 +421,18 @@ impl ObjectSubclass for SccEnc {
 }
 
 impl ObjectImpl for SccEnc {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 }
 
 impl ElementImpl for SccEnc {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -444,13 +448,4 @@ impl ElementImpl for SccEnc {
 
         self.parent_change_state(element, transition)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "sccenc",
-        gst::Rank::Primary,
-        SccEnc::get_type(),
-    )
 }

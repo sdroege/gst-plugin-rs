@@ -69,7 +69,7 @@ struct State {
     last_cc708_change: gst::ClockTime,
 }
 
-struct CCDetect {
+pub struct CCDetect {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
 }
@@ -321,7 +321,7 @@ impl CCDetect {
 
     fn maybe_update_properties(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &super::CCDetect,
         ts: gst::ClockTime,
         cc_packet: CCPacketContents,
     ) -> Result<(), gst::FlowError> {
@@ -382,6 +382,7 @@ impl CCDetect {
 
 impl ObjectSubclass for CCDetect {
     const NAME: &'static str = "CCDetect";
+    type Type = super::CCDetect;
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -395,7 +396,7 @@ impl ObjectSubclass for CCDetect {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Closed Caption Detect",
             "Filter/Video/ClosedCaption/Detect",
@@ -441,7 +442,7 @@ impl ObjectSubclass for CCDetect {
 }
 
 impl ObjectImpl for CCDetect {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -453,7 +454,7 @@ impl ObjectImpl for CCDetect {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -479,7 +480,7 @@ impl ElementImpl for CCDetect {}
 impl BaseTransformImpl for CCDetect {
     fn transform_ip_passthrough(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         buf: &gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let map = buf.map_readable().map_err(|_| gst::FlowError::Error)?;
@@ -517,7 +518,7 @@ impl BaseTransformImpl for CCDetect {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn sink_event(&self, element: &gst_base::BaseTransform, event: gst::Event) -> bool {
+    fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
         match event.view() {
             gst::event::EventView::Gap(gap) => {
                 let _ = self.maybe_update_properties(
@@ -536,7 +537,7 @@ impl BaseTransformImpl for CCDetect {
 
     fn set_caps(
         &self,
-        _element: &gst_base::BaseTransform,
+        _element: &Self::Type,
         incaps: &gst::Caps,
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
@@ -569,19 +570,10 @@ impl BaseTransformImpl for CCDetect {
         Ok(())
     }
 
-    fn stop(&self, _element: &gst_base::BaseTransform) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
         Ok(())
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "ccdetect",
-        gst::Rank::None,
-        CCDetect::get_type(),
-    )
 }

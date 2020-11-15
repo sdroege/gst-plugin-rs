@@ -15,13 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-// Example command-line:
-//
-// gst-launch-1.0 cccombiner name=ccc ! cea608overlay ! autovideosink \
-//   videotestsrc ! video/x-raw, width=1280, height=720 ! queue ! ccc.sink \
-//   filesrc location=input.srt ! subparse ! tttocea608 ! queue ! ccc.caption
-
-use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
@@ -68,7 +61,7 @@ impl Default for State {
 
 unsafe impl Send for State {}
 
-struct Cea608Overlay {
+pub struct Cea608Overlay {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     state: Mutex<State>,
@@ -86,7 +79,7 @@ impl Cea608Overlay {
     // TODO: switch to the API presented in this post once it's been exposed
     fn recalculate_layout(
         &self,
-        element: &gst::Element,
+        element: &super::Cea608Overlay,
         state: &mut State,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let video_info = state.video_info.as_ref().unwrap();
@@ -242,7 +235,7 @@ impl Cea608Overlay {
 
     fn negotiate(
         &self,
-        element: &gst::Element,
+        element: &super::Cea608Overlay,
         state: &mut State,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let video_info = match state.video_info.as_ref() {
@@ -294,7 +287,7 @@ impl Cea608Overlay {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::Cea608Overlay,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -358,7 +351,12 @@ impl Cea608Overlay {
         self.srcpad.push(buffer)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(
+        &self,
+        pad: &gst::Pad,
+        element: &super::Cea608Overlay,
+        event: gst::Event,
+    ) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -388,13 +386,14 @@ impl Cea608Overlay {
 
 impl ObjectSubclass for Cea608Overlay {
     const NAME: &'static str = "RsCea608Overlay";
+    type Type = super::Cea608Overlay;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -426,7 +425,7 @@ impl ObjectSubclass for Cea608Overlay {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Cea 608 overlay",
             "Video/Overlay/Subtitle",
@@ -460,19 +459,18 @@ impl ObjectSubclass for Cea608Overlay {
 }
 
 impl ObjectImpl for Cea608Overlay {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 }
 
 impl ElementImpl for Cea608Overlay {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -488,13 +486,4 @@ impl ElementImpl for Cea608Overlay {
 
         self.parent_change_state(element, transition)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "cea608overlay",
-        gst::Rank::Primary,
-        Cea608Overlay::get_type(),
-    )
 }

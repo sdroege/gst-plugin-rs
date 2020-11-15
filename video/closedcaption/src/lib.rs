@@ -17,11 +17,6 @@
 
 #![recursion_limit = "128"]
 
-// These macros are in weird paths currently,
-// and extern crate is used to avoid the explicit imports
-// should not be needed ideally in the upcoming releases.
-// https://github.com/gtk-rs/glib/issues/420
-// https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/issues/170
 #[macro_use]
 extern crate glib;
 #[macro_use]
@@ -33,21 +28,20 @@ extern crate lazy_static;
 #[macro_use]
 extern crate pretty_assertions;
 
+#[allow(non_camel_case_types, non_upper_case_globals, unused)]
+#[allow(clippy::redundant_static_lifetimes, clippy::unreadable_literal)]
+#[allow(clippy::useless_transmute, clippy::trivially_copy_pass_by_ref)]
+mod ffi;
+
 mod caption_frame;
 mod ccdetect;
 mod cea608overlay;
 mod cea608tott;
-#[allow(non_camel_case_types, non_upper_case_globals)]
-#[allow(clippy::redundant_static_lifetimes, clippy::unreadable_literal)]
-#[allow(clippy::useless_transmute, clippy::trivially_copy_pass_by_ref)]
-pub mod cea608tott_ffi;
 mod line_reader;
 mod mcc_enc;
 mod mcc_parse;
-mod mcc_parser;
 mod scc_enc;
 mod scc_parse;
-mod scc_parser;
 mod tttocea608;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

@@ -455,7 +455,7 @@ mod tests {
 
     #[test]
     fn test_parser() {
-        let scc_file = include_bytes!("../tests/dn2018-1217.scc");
+        let scc_file = include_bytes!("../../tests/dn2018-1217.scc");
         let mut reader = crate::line_reader::LineReader::new();
         let mut parser = SccParser::new();
         let mut line_cnt = 0;

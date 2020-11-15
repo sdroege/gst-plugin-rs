@@ -752,7 +752,7 @@ mod tests {
 
     #[test]
     fn test_parser() {
-        let mcc_file = include_bytes!("../tests/captions-test_708.mcc");
+        let mcc_file = include_bytes!("../../tests/captions-test_708.mcc");
         let mut reader = crate::line_reader::LineReader::new();
         let mut parser = MccParser::new();
         let mut line_cnt = 0;

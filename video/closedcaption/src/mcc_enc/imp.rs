@@ -28,9 +28,7 @@ use uuid::Uuid;
 use std::io::Write;
 use std::sync::Mutex;
 
-#[path = "mcc_enc_headers.rs"]
-mod mcc_enc_headers;
-use self::mcc_enc_headers::*;
+use super::headers::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Format {
@@ -89,7 +87,7 @@ static PROPERTIES: [subclass::Property; 2] = [
     }),
 ];
 
-struct MccEnc {
+pub struct MccEnc {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     state: Mutex<State>,
@@ -291,7 +289,7 @@ impl MccEnc {
 
     fn generate_caption(
         &self,
-        element: &gst::Element,
+        element: &super::MccEnc,
         state: &State,
         buffer: &gst::Buffer,
         outbuf: &mut Vec<u8>,
@@ -359,7 +357,7 @@ impl MccEnc {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::MccEnc,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -383,7 +381,7 @@ impl MccEnc {
         self.srcpad.push(buf)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &super::MccEnc, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -426,7 +424,7 @@ impl MccEnc {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &super::MccEnc, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -439,7 +437,12 @@ impl MccEnc {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::MccEnc,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -462,13 +465,14 @@ impl MccEnc {
 
 impl ObjectSubclass for MccEnc {
     const NAME: &'static str = "RsMccEnc";
+    type Type = super::MccEnc;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -513,7 +517,7 @@ impl ObjectSubclass for MccEnc {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Mcc Encoder",
             "Encoder/ClosedCaption",
@@ -571,7 +575,7 @@ impl ObjectSubclass for MccEnc {
 }
 
 impl ObjectImpl for MccEnc {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -587,7 +591,7 @@ impl ObjectImpl for MccEnc {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -603,19 +607,18 @@ impl ObjectImpl for MccEnc {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 }
 
 impl ElementImpl for MccEnc {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -631,13 +634,4 @@ impl ElementImpl for MccEnc {
 
         self.parent_change_state(element, transition)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "mccenc",
-        gst::Rank::Primary,
-        MccEnc::get_type(),
-    )
 }

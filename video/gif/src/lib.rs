@@ -10,6 +10,7 @@
 extern crate glib;
 #[macro_use]
 extern crate gstreamer as gst;
+extern crate gstreamer_video as gst_video;
 
 mod gifenc;
 

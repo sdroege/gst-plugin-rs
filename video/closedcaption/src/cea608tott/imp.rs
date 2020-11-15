@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
@@ -42,7 +41,7 @@ impl Default for State {
     }
 }
 
-struct Cea608ToTt {
+pub struct Cea608ToTt {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
 
@@ -61,7 +60,7 @@ impl Cea608ToTt {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        _element: &gst::Element,
+        _element: &super::Cea608ToTt,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -271,7 +270,7 @@ impl Cea608ToTt {
         buffer
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &super::Cea608ToTt, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -371,13 +370,14 @@ impl Cea608ToTt {
 
 impl ObjectSubclass for Cea608ToTt {
     const NAME: &'static str = "Cea608ToTt";
+    type Type = super::Cea608ToTt;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -409,7 +409,7 @@ impl ObjectSubclass for Cea608ToTt {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "CEA-608 to TT",
             "Generic",
@@ -461,19 +461,18 @@ impl ObjectSubclass for Cea608ToTt {
 }
 
 impl ObjectImpl for Cea608ToTt {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 }
 
 impl ElementImpl for Cea608ToTt {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -498,13 +497,4 @@ impl ElementImpl for Cea608ToTt {
 
         Ok(ret)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "cea608tott",
-        gst::Rank::None,
-        Cea608ToTt::get_type(),
-    )
 }

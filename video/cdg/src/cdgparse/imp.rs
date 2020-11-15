@@ -23,7 +23,7 @@ const CDG_CMD_MEMORY_PRESET: u8 = 1;
 const CDG_CMD_MEMORY_LOAD_COLOR_TABLE_1: u8 = 30;
 const CDG_CMD_MEMORY_LOAD_COLOR_TABLE_2: u8 = 31;
 
-struct CdgParse;
+pub struct CdgParse;
 
 lazy_static! {
     static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
@@ -35,6 +35,7 @@ lazy_static! {
 
 impl ObjectSubclass for CdgParse {
     const NAME: &'static str = "CdgParse";
+    type Type = super::CdgParse;
     type ParentType = gst_base::BaseParse;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -45,7 +46,7 @@ impl ObjectSubclass for CdgParse {
         Self
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "CDG parser",
             "Codec/Parser/Video",
@@ -108,7 +109,7 @@ fn time_to_bytes(time: gst::ClockTime) -> Bytes {
 }
 
 impl BaseParseImpl for CdgParse {
-    fn start(&self, element: &gst_base::BaseParse) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         element.set_min_frame_size(CDG_PACKET_SIZE as u32);
 
         /* Set duration */
@@ -125,7 +126,7 @@ impl BaseParseImpl for CdgParse {
 
     fn handle_frame(
         &self,
-        element: &gst_base::BaseParse,
+        element: &Self::Type,
         mut frame: gst_base::BaseParseFrame,
     ) -> Result<(gst::FlowSuccess, u32), gst::FlowError> {
         let pad = element.get_src_pad();
@@ -212,7 +213,7 @@ impl BaseParseImpl for CdgParse {
 
     fn convert<V: Into<gst::GenericFormattedValue>>(
         &self,
-        _element: &gst_base::BaseParse,
+        _element: &Self::Type,
         src_val: V,
         dest_format: gst::Format,
     ) -> Option<gst::GenericFormattedValue> {
@@ -228,13 +229,4 @@ impl BaseParseImpl for CdgParse {
             _ => None,
         }
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "cdgparse",
-        gst::Rank::Primary,
-        CdgParse::get_type(),
-    )
 }

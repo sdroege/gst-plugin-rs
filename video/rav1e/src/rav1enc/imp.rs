@@ -281,7 +281,7 @@ struct State {
     video_info: gst_video::VideoInfo,
 }
 
-struct Rav1Enc {
+pub struct Rav1Enc {
     state: AtomicRefCell<Option<State>>,
     settings: Mutex<Settings>,
 }
@@ -296,6 +296,7 @@ lazy_static! {
 
 impl ObjectSubclass for Rav1Enc {
     const NAME: &'static str = "Rav1Enc";
+    type Type = super::Rav1Enc;
     type ParentType = gst_video::VideoEncoder;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -309,7 +310,7 @@ impl ObjectSubclass for Rav1Enc {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "rav1e AV1 encoder",
             "Encoder/Video",
@@ -370,7 +371,7 @@ impl ObjectSubclass for Rav1Enc {
 }
 
 impl ObjectImpl for Rav1Enc {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -421,7 +422,7 @@ impl ObjectImpl for Rav1Enc {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -473,7 +474,7 @@ impl ObjectImpl for Rav1Enc {
 impl ElementImpl for Rav1Enc {}
 
 impl VideoEncoderImpl for Rav1Enc {
-    fn stop(&self, _element: &gst_video::VideoEncoder) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         *self.state.borrow_mut() = None;
 
         Ok(())
@@ -483,7 +484,7 @@ impl VideoEncoderImpl for Rav1Enc {
     #[allow(clippy::wildcard_in_or_patterns)]
     fn set_format(
         &self,
-        element: &gst_video::VideoEncoder,
+        element: &Self::Type,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         self.finish(element)
@@ -629,7 +630,7 @@ impl VideoEncoderImpl for Rav1Enc {
         self.parent_set_format(element, state)
     }
 
-    fn flush(&self, element: &gst_video::VideoEncoder) -> bool {
+    fn flush(&self, element: &Self::Type) -> bool {
         gst_debug!(CAT, obj: element, "Flushing");
 
         let mut state_guard = self.state.borrow_mut();
@@ -643,10 +644,7 @@ impl VideoEncoderImpl for Rav1Enc {
         true
     }
 
-    fn finish(
-        &self,
-        element: &gst_video::VideoEncoder,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(CAT, obj: element, "Finishing");
 
         let mut state_guard = self.state.borrow_mut();
@@ -663,7 +661,7 @@ impl VideoEncoderImpl for Rav1Enc {
 
     fn handle_frame(
         &self,
-        element: &gst_video::VideoEncoder,
+        element: &Self::Type,
         frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state_guard = self.state.borrow_mut();
@@ -721,7 +719,7 @@ impl VideoEncoderImpl for Rav1Enc {
 impl Rav1Enc {
     fn output_frames(
         &self,
-        element: &gst_video::VideoEncoder,
+        element: &super::Rav1Enc,
         state: &mut State,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         loop {
@@ -767,13 +765,4 @@ impl Rav1Enc {
             }
         }
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rav1enc",
-        gst::Rank::Primary,
-        Rav1Enc::get_type(),
-    )
 }

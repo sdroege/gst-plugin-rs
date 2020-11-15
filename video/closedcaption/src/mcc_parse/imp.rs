@@ -26,8 +26,8 @@ use std::cmp;
 use std::convert::TryInto;
 use std::sync::{Mutex, MutexGuard};
 
+use super::parser::{MccLine, MccParser, TimeCode};
 use crate::line_reader::LineReader;
-use crate::mcc_parser::{MccLine, MccParser, TimeCode};
 
 lazy_static! {
     static ref CAT: gst::DebugCategory = {
@@ -54,7 +54,7 @@ struct PullState {
 }
 
 impl PullState {
-    fn new(element: &gst::Element, pad: &gst::Pad) -> Self {
+    fn new(element: &super::MccParse, pad: &gst::Pad) -> Self {
         Self {
             need_stream_start: true,
             stream_id: pad
@@ -180,7 +180,7 @@ impl State {
 
     fn handle_timecode(
         &mut self,
-        element: &gst::Element,
+        element: &super::MccParse,
         framerate: gst::Fraction,
         drop_frame: bool,
         tc: TimeCode,
@@ -219,7 +219,7 @@ impl State {
     /// not produce timestamps jumping backwards
     fn update_timestamp(
         &mut self,
-        element: &gst::Element,
+        element: &super::MccParse,
         timecode: &gst_video::ValidVideoTimeCode,
     ) {
         let nsecs = gst::ClockTime::from(timecode.nsec_since_daily_jam());
@@ -255,7 +255,7 @@ impl State {
 
     fn add_buffer_metadata(
         &mut self,
-        element: &gst::Element,
+        element: &super::MccParse,
         buffer: &mut gst::buffer::Buffer,
         timecode: &gst_video::ValidVideoTimeCode,
         framerate: gst::Fraction,
@@ -281,7 +281,7 @@ impl State {
 
     fn create_events(
         &mut self,
-        element: &gst::Element,
+        element: &super::MccParse,
         format: Option<Format>,
         framerate: gst::Fraction,
     ) -> Vec<gst::Event> {
@@ -341,7 +341,7 @@ impl State {
     }
 }
 
-struct MccParse {
+pub struct MccParse {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     state: Mutex<State>,
@@ -369,7 +369,7 @@ impl AsMut<[u8]> for OffsetVec {
 impl MccParse {
     fn handle_buffer(
         &self,
-        element: &gst::Element,
+        element: &super::MccParse,
         buffer: Option<gst::Buffer>,
         scan_tc_rate: bool,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -513,7 +513,7 @@ impl MccParse {
 
     fn handle_skipped_line(
         &self,
-        element: &gst::Element,
+        element: &super::MccParse,
         tc: TimeCode,
         mut state: MutexGuard<State>,
     ) -> Result<MutexGuard<State>, gst::FlowError> {
@@ -537,7 +537,7 @@ impl MccParse {
 
     fn handle_line(
         &self,
-        element: &gst::Element,
+        element: &super::MccParse,
         tc: TimeCode,
         data: Vec<u8>,
         format: Format,
@@ -587,7 +587,7 @@ impl MccParse {
     fn sink_activate(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::MccParse,
     ) -> Result<(), gst::LoggableError> {
         let mode = {
             let mut query = gst::query::Scheduling::new();
@@ -616,7 +616,7 @@ impl MccParse {
         Ok(())
     }
 
-    fn start_task(&self, element: &gst::Element) -> Result<(), gst::LoggableError> {
+    fn start_task(&self, element: &super::MccParse) -> Result<(), gst::LoggableError> {
         let element_weak = element.downgrade();
         let pad_weak = self.sinkpad.downgrade();
         let res = self.sinkpad.start_task(move || {
@@ -642,7 +642,7 @@ impl MccParse {
     fn sink_activatemode(
         &self,
         _pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::MccParse,
         mode: gst::PadMode,
         active: bool,
     ) -> Result<(), gst::LoggableError> {
@@ -659,7 +659,7 @@ impl MccParse {
 
     fn scan_duration(
         &self,
-        element: &gst::Element,
+        element: &super::MccParse,
     ) -> Result<Option<ValidVideoTimeCode>, gst::LoggableError> {
         gst_debug!(CAT, obj: element, "Scanning duration");
 
@@ -748,7 +748,7 @@ impl MccParse {
         }
     }
 
-    fn push_eos(&self, element: &gst::Element) {
+    fn push_eos(&self, element: &super::MccParse) {
         let mut state = self.state.lock().unwrap();
 
         if state.seeking {
@@ -784,7 +784,7 @@ impl MccParse {
         }
     }
 
-    fn loop_fn(&self, element: &gst::Element) {
+    fn loop_fn(&self, element: &super::MccParse) {
         let mut state = self.state.lock().unwrap();
         let State {
             timecode_rate: ref tc_rate,
@@ -882,7 +882,7 @@ impl MccParse {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::MccParse,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -910,7 +910,7 @@ impl MccParse {
         self.state.lock().unwrap()
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &super::MccParse, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -956,7 +956,7 @@ impl MccParse {
         }
     }
 
-    fn perform_seek(&self, event: &gst::event::Seek, element: &gst::Element) -> bool {
+    fn perform_seek(&self, event: &gst::event::Seek, element: &super::MccParse) -> bool {
         let mut state = self.state.lock().unwrap();
 
         if state.pull.is_none() {
@@ -1049,7 +1049,7 @@ impl MccParse {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &super::MccParse, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -1059,7 +1059,12 @@ impl MccParse {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::MccParse,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -1120,13 +1125,14 @@ impl MccParse {
 
 impl ObjectSubclass for MccParse {
     const NAME: &'static str = "RsMccParse";
+    type Type = super::MccParse;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .activate_function(|pad, parent| {
@@ -1189,7 +1195,7 @@ impl ObjectSubclass for MccParse {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Mcc Parse",
             "Parser/ClosedCaption",
@@ -1241,19 +1247,18 @@ impl ObjectSubclass for MccParse {
 }
 
 impl ObjectImpl for MccParse {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 }
 
 impl ElementImpl for MccParse {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -1269,13 +1274,4 @@ impl ElementImpl for MccParse {
 
         self.parent_change_state(element, transition)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "mccparse",
-        gst::Rank::Primary,
-        MccParse::get_type(),
-    )
 }

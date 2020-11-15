@@ -16,7 +16,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
@@ -24,8 +23,8 @@ use gst::subclass::prelude::*;
 
 use std::sync::{Mutex, MutexGuard};
 
+use super::parser::{SccLine, SccParser, TimeCode};
 use crate::line_reader::LineReader;
-use crate::scc_parser::{SccLine, SccParser, TimeCode};
 
 lazy_static! {
     static ref CAT: gst::DebugCategory = {
@@ -83,7 +82,7 @@ impl State {
         &mut self,
         tc: TimeCode,
         framerate: gst::Fraction,
-        element: &gst::Element,
+        element: &super::SccParse,
     ) -> Result<gst_video::ValidVideoTimeCode, gst::FlowError> {
         use std::convert::TryInto;
 
@@ -137,7 +136,7 @@ impl State {
     fn update_timestamp(
         &mut self,
         timecode: &gst_video::ValidVideoTimeCode,
-        element: &gst::Element,
+        element: &super::SccParse,
     ) {
         let nsecs = gst::ClockTime::from(timecode.nsec_since_daily_jam());
 
@@ -159,7 +158,7 @@ impl State {
         buffer: &mut gst::buffer::Buffer,
         timecode: &gst_video::ValidVideoTimeCode,
         framerate: gst::Fraction,
-        element: &gst::Element,
+        element: &super::SccParse,
     ) {
         let buffer = buffer.get_mut().unwrap();
         gst_video::VideoTimeCodeMeta::add(buffer, &timecode);
@@ -175,7 +174,7 @@ impl State {
     }
 }
 
-struct SccParse {
+pub struct SccParse {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     state: Mutex<State>,
@@ -184,7 +183,7 @@ struct SccParse {
 impl SccParse {
     fn handle_buffer(
         &self,
-        element: &gst::Element,
+        element: &super::SccParse,
         buffer: Option<gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
@@ -234,7 +233,7 @@ impl SccParse {
         &self,
         tc: TimeCode,
         data: Vec<u8>,
-        element: &gst::Element,
+        element: &super::SccParse,
         mut state: MutexGuard<State>,
     ) -> Result<MutexGuard<State>, gst::FlowError> {
         gst_trace!(
@@ -309,7 +308,7 @@ impl SccParse {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::SccParse,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -317,7 +316,7 @@ impl SccParse {
         self.handle_buffer(element, Some(buffer))
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &super::SccParse, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -367,7 +366,7 @@ impl SccParse {
         }
     }
 
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, element: &super::SccParse, event: gst::Event) -> bool {
         use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
@@ -380,7 +379,12 @@ impl SccParse {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::SccParse,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -413,13 +417,14 @@ impl SccParse {
 
 impl ObjectSubclass for SccParse {
     const NAME: &'static str = "RsSccParse";
+    type Type = super::SccParse;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -463,7 +468,7 @@ impl ObjectSubclass for SccParse {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Scc Parse",
             "Parser/ClosedCaption",
@@ -500,19 +505,18 @@ impl ObjectSubclass for SccParse {
 }
 
 impl ObjectImpl for SccParse {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 }
 
 impl ElementImpl for SccParse {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -528,13 +532,4 @@ impl ElementImpl for SccParse {
 
         self.parent_change_state(element, transition)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "sccparse",
-        gst::Rank::Primary,
-        SccParse::get_type(),
-    )
 }

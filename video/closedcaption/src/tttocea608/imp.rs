@@ -18,12 +18,13 @@
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::GEnum;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use super::cea608tott_ffi as ffi;
+use crate::ffi;
 use std::sync::Mutex;
+
+use super::Mode;
 
 fn decrement_pts(
     min_frame_no: u64,
@@ -208,16 +209,6 @@ const DEFAULT_FPS_D: i32 = 1;
  */
 const LATENCY_BUFFERS: u64 = 74;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
-#[repr(u32)]
-#[genum(type_name = "GstTtToCea608Mode")]
-enum Mode {
-    PopOn,
-    RollUp2,
-    RollUp3,
-    RollUp4,
-}
-
 const DEFAULT_MODE: Mode = Mode::RollUp2;
 
 static PROPERTIES: [subclass::Property; 1] = [subclass::Property("mode", |name| {
@@ -264,7 +255,7 @@ impl Default for State {
     }
 }
 
-struct TtToCea608 {
+pub struct TtToCea608 {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
 
@@ -346,7 +337,7 @@ impl TtToCea608 {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::TtToCea608,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let pts = match buffer.get_pts() {
@@ -628,7 +619,12 @@ impl TtToCea608 {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::TtToCea608,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -671,7 +667,7 @@ impl TtToCea608 {
         }
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, element: &super::TtToCea608, event: gst::Event) -> bool {
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
 
         use gst::EventView;
@@ -785,13 +781,14 @@ impl TtToCea608 {
 
 impl ObjectSubclass for TtToCea608 {
     const NAME: &'static str = "TtToCea608";
+    type Type = super::TtToCea608;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -831,7 +828,7 @@ impl ObjectSubclass for TtToCea608 {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "TT to CEA-608",
             "Generic",
@@ -874,15 +871,14 @@ impl ObjectSubclass for TtToCea608 {
 }
 
 impl ObjectImpl for TtToCea608 {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -894,7 +890,7 @@ impl ObjectImpl for TtToCea608 {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -910,7 +906,7 @@ impl ObjectImpl for TtToCea608 {
 impl ElementImpl for TtToCea608 {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -940,13 +936,4 @@ impl ElementImpl for TtToCea608 {
 
         Ok(ret)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "tttocea608",
-        gst::Rank::None,
-        TtToCea608::get_type(),
-    )
 }

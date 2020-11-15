@@ -8,9 +8,9 @@
 
 use std::{io, io::Write, sync::Arc};
 
+use glib::glib_object_subclass;
 use glib::subclass;
 use glib::subclass::prelude::*;
-use glib::{glib_object_subclass, GEnum};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -22,76 +22,11 @@ use atomic_refcell::AtomicRefCell;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 
+use super::CompressionLevel;
+use super::FilterType;
+
 const DEFAULT_COMPRESSION_LEVEL: CompressionLevel = CompressionLevel::Default;
 const DEFAULT_FILTER_TYPE: FilterType = FilterType::NoFilter;
-
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
-#[repr(u32)]
-#[genum(type_name = "GstRsPngCompressionLevel")]
-pub(crate) enum CompressionLevel {
-    #[genum(name = "Default: Use the default compression level.", nick = "default")]
-    Default,
-    #[genum(name = "Fast: A fast compression algorithm.", nick = "fast")]
-    Fast,
-    #[genum(
-        name = "Best: Uses the algorithm with the best results.",
-        nick = "best"
-    )]
-    Best,
-    #[genum(name = "Huffman: Huffman compression.", nick = "huffman")]
-    Huffman,
-    #[genum(name = "Rle: Rle compression.", nick = "rle")]
-    Rle,
-}
-
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
-#[repr(u32)]
-#[genum(type_name = "GstRsPngFilterType")]
-pub(crate) enum FilterType {
-    #[genum(
-        name = "NoFilter: No filtering applied to the output.",
-        nick = "nofilter"
-    )]
-    NoFilter,
-    #[genum(name = "Sub: filter applied to each pixel.", nick = "sub")]
-    Sub,
-    #[genum(name = "Up: Up filter similar to Sub.", nick = "up")]
-    Up,
-    #[genum(
-        name = "Avg: The Average filter uses the average of the two neighboring pixels.",
-        nick = "avg"
-    )]
-    Avg,
-    #[genum(
-        name = "Paeth: The Paeth filter computes a simple linear function of the three neighboring pixels.",
-        nick = "paeth"
-    )]
-    Paeth,
-}
-
-impl From<CompressionLevel> for png::Compression {
-    fn from(value: CompressionLevel) -> Self {
-        match value {
-            CompressionLevel::Default => png::Compression::Default,
-            CompressionLevel::Fast => png::Compression::Fast,
-            CompressionLevel::Best => png::Compression::Best,
-            CompressionLevel::Huffman => png::Compression::Huffman,
-            CompressionLevel::Rle => png::Compression::Rle,
-        }
-    }
-}
-
-impl From<FilterType> for png::FilterType {
-    fn from(value: FilterType) -> Self {
-        match value {
-            FilterType::NoFilter => png::FilterType::NoFilter,
-            FilterType::Sub => png::FilterType::Sub,
-            FilterType::Up => png::FilterType::Up,
-            FilterType::Avg => png::FilterType::Avg,
-            FilterType::Paeth => png::FilterType::Paeth,
-        }
-    }
-}
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -249,13 +184,14 @@ impl State {
     }
 }
 
-struct PngEncoder {
+pub struct PngEncoder {
     state: Mutex<Option<State>>,
     settings: Mutex<Settings>,
 }
 
 impl ObjectSubclass for PngEncoder {
     const NAME: &'static str = "PngEncoder";
+    type Type = super::PngEncoder;
     type ParentType = gst_video::VideoEncoder;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -269,7 +205,7 @@ impl ObjectSubclass for PngEncoder {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "PNG encoder",
             "Encoder/Video",
@@ -323,7 +259,7 @@ impl ObjectSubclass for PngEncoder {
 }
 
 impl ObjectImpl for PngEncoder {
-    fn set_property(&self, _obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -343,7 +279,7 @@ impl ObjectImpl for PngEncoder {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -363,14 +299,14 @@ impl ObjectImpl for PngEncoder {
 impl ElementImpl for PngEncoder {}
 
 impl VideoEncoderImpl for PngEncoder {
-    fn stop(&self, _element: &gst_video::VideoEncoder) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         *self.state.lock() = None;
         Ok(())
     }
 
     fn set_format(
         &self,
-        element: &gst_video::VideoEncoder,
+        element: &Self::Type,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         let video_info = state.get_info();
@@ -392,7 +328,7 @@ impl VideoEncoderImpl for PngEncoder {
 
     fn handle_frame(
         &self,
-        element: &gst_video::VideoEncoder,
+        element: &Self::Type,
         mut frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state_guard = self.state.lock();
@@ -426,13 +362,4 @@ impl VideoEncoderImpl for PngEncoder {
         frame.set_output_buffer(output_buffer);
         element.finish_frame(Some(frame))
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rspngenc",
-        gst::Rank::Primary,
-        PngEncoder::get_type(),
-    )
 }

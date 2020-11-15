@@ -18,7 +18,7 @@ use std::i32;
 use std::str::FromStr;
 use std::sync::Mutex;
 
-pub struct NegotiationInfos {
+struct NegotiationInfos {
     input_state:
         Option<gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>>,
     output_info: Option<gst_video::VideoInfo>,
@@ -84,7 +84,7 @@ impl Dav1dDec {
 
     pub fn handle_resolution_change(
         &self,
-        element: &gst_video::VideoDecoder,
+        element: &super::Dav1dDec,
         pic: &dav1d::Picture,
         format: gst_video::VideoFormat,
     ) -> Result<(), gst::FlowError> {
@@ -251,7 +251,7 @@ impl Dav1dDec {
 
     fn handle_picture(
         &self,
-        element: &gst_video::VideoDecoder,
+        element: &super::Dav1dDec,
         pic: &dav1d::Picture,
         format: gst_video::VideoFormat,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -297,7 +297,7 @@ impl Dav1dDec {
 
     fn forward_pending_pictures(
         &self,
-        element: &gst_video::VideoDecoder,
+        element: &super::Dav1dDec,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         for (pic, format) in self.get_pending_pictures()? {
             self.handle_picture(element, &pic, format)?;
@@ -344,6 +344,7 @@ fn video_output_formats() -> Vec<glib::SendValue> {
 
 impl ObjectSubclass for Dav1dDec {
     const NAME: &'static str = "RsDav1dDec";
+    type Type = super::Dav1dDec;
     type ParentType = gst_video::VideoDecoder;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -361,7 +362,7 @@ impl ObjectSubclass for Dav1dDec {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Dav1d AV1 Decoder",
             "Codec/Decoder/Video",
@@ -410,7 +411,7 @@ impl ObjectImpl for Dav1dDec {}
 impl ElementImpl for Dav1dDec {}
 
 impl VideoDecoderImpl for Dav1dDec {
-    fn start(&self, element: &gst_video::VideoDecoder) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         {
             let mut infos = self.negotiation_infos.lock().unwrap();
             infos.output_info = None;
@@ -421,7 +422,7 @@ impl VideoDecoderImpl for Dav1dDec {
 
     fn set_format(
         &self,
-        element: &gst_video::VideoDecoder,
+        element: &Self::Type,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         {
@@ -434,7 +435,7 @@ impl VideoDecoderImpl for Dav1dDec {
 
     fn handle_frame(
         &self,
-        element: &gst_video::VideoDecoder,
+        element: &Self::Type,
         frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let input_buffer = frame
@@ -447,24 +448,21 @@ impl VideoDecoderImpl for Dav1dDec {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn flush(&self, element: &gst_video::VideoDecoder) -> bool {
+    fn flush(&self, element: &Self::Type) -> bool {
         gst_info!(CAT, obj: element, "Flushing");
         self.flush_decoder();
         self.drop_decoded_pictures();
         true
     }
 
-    fn drain(&self, element: &gst_video::VideoDecoder) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn drain(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_info!(CAT, obj: element, "Draining");
         self.flush_decoder();
         self.forward_pending_pictures(element)?;
         self.parent_drain(element)
     }
 
-    fn finish(
-        &self,
-        element: &gst_video::VideoDecoder,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+    fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_info!(CAT, obj: element, "Finishing");
         self.flush_decoder();
         self.forward_pending_pictures(element)?;
@@ -473,7 +471,7 @@ impl VideoDecoderImpl for Dav1dDec {
 
     fn decide_allocation(
         &self,
-        element: &gst_video::VideoDecoder,
+        element: &Self::Type,
         query: &mut gst::QueryRef,
     ) -> Result<(), gst::ErrorMessage> {
         if let gst::query::QueryView::Allocation(allocation) = query.view() {
@@ -497,13 +495,4 @@ impl VideoDecoderImpl for Dav1dDec {
 
         self.parent_decide_allocation(element, query)
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rsdav1ddec",
-        gst::Rank::Primary + 1,
-        Dav1dDec::get_type(),
-    )
 }
