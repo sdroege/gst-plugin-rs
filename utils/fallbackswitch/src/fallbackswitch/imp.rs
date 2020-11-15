@@ -20,7 +20,7 @@ use self::gst_base::prelude::*;
 #[cfg(not(feature = "v1_18"))]
 use self::gst_base::subclass::prelude::*;
 #[cfg(not(feature = "v1_18"))]
-use super::gst_base_compat as gst_base;
+use crate::gst_base_compat as gst_base;
 
 #[cfg(feature = "v1_18")]
 use gst_base::prelude::*;
@@ -35,7 +35,7 @@ use once_cell::sync::Lazy;
 
 use std::sync::{Mutex, RwLock};
 
-struct FallbackSwitch {
+pub struct FallbackSwitch {
     sinkpad: gst_base::AggregatorPad,
     fallback_sinkpad: RwLock<Option<gst_base::AggregatorPad>>,
     active_sinkpad: Mutex<Option<gst::Pad>>,
@@ -119,7 +119,7 @@ static PROPERTIES: [subclass::Property; 2] = [
 impl FallbackSwitch {
     fn handle_main_buffer(
         &self,
-        agg: &gst_base::Aggregator,
+        agg: &super::FallbackSwitch,
         state: &mut OutputState,
         settings: &Settings,
         mut buffer: gst::Buffer,
@@ -259,7 +259,7 @@ impl FallbackSwitch {
 
     fn get_fallback_buffer(
         &self,
-        agg: &gst_base::Aggregator,
+        agg: &super::FallbackSwitch,
         state: &mut OutputState,
         settings: &Settings,
         fallback_sinkpad: &gst_base::AggregatorPad,
@@ -363,7 +363,7 @@ impl FallbackSwitch {
 
     fn get_next_buffer(
         &self,
-        agg: &gst_base::Aggregator,
+        agg: &super::FallbackSwitch,
         timeout: bool,
     ) -> Result<(gst::Buffer, gst::Caps, bool), gst::FlowError> {
         let settings = self.settings.lock().unwrap().clone();
@@ -407,25 +407,17 @@ impl FallbackSwitch {
 
 impl ObjectSubclass for FallbackSwitch {
     const NAME: &'static str = "FallbackSwitch";
+    type Type = super::FallbackSwitch;
     type ParentType = gst_base::Aggregator;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
-        let sinkpad: gst_base::AggregatorPad = glib::Object::new(
-            gst_base::AggregatorPad::static_type(),
-            &[
-                ("name", &"sink"),
-                ("direction", &gst::PadDirection::Sink),
-                ("template", &templ),
-            ],
-        )
-        .unwrap()
-        .downcast()
-        .unwrap();
+        let sinkpad =
+            gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ, Some("sink")).build();
 
         Self {
             sinkpad,
@@ -437,7 +429,7 @@ impl ObjectSubclass for FallbackSwitch {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Fallback Switch",
             "Generic",
@@ -481,16 +473,14 @@ impl ObjectSubclass for FallbackSwitch {
 }
 
 impl ObjectImpl for FallbackSwitch {
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let agg = obj.downcast_ref::<gst_base::Aggregator>().unwrap();
-        agg.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
     }
 
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
-        let agg = obj.downcast_ref::<gst_base::Aggregator>().unwrap();
 
         match *prop {
             subclass::Property("timeout", ..) => {
@@ -498,7 +488,7 @@ impl ObjectImpl for FallbackSwitch {
                 let timeout = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: agg,
+                    obj: obj,
                     "Changing timeout from {} to {}",
                     settings.timeout,
                     timeout
@@ -510,7 +500,7 @@ impl ObjectImpl for FallbackSwitch {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -530,47 +520,39 @@ impl ObjectImpl for FallbackSwitch {
 impl ElementImpl for FallbackSwitch {
     fn request_new_pad(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         templ: &gst::PadTemplate,
         name: Option<String>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
-        let agg = element.downcast_ref::<gst_base::Aggregator>().unwrap();
-        let fallback_sink_templ = agg.get_pad_template("fallback_sink").unwrap();
+        let fallback_sink_templ = element.get_pad_template("fallback_sink").unwrap();
         if templ != &fallback_sink_templ
             || (name.is_some() && name.as_deref() != Some("fallback_sink"))
         {
-            gst_error!(CAT, obj: agg, "Wrong pad template or name");
+            gst_error!(CAT, obj: element, "Wrong pad template or name");
             return None;
         }
 
         let mut fallback_sinkpad = self.fallback_sinkpad.write().unwrap();
         if fallback_sinkpad.is_some() {
-            gst_error!(CAT, obj: agg, "Already have a fallback sinkpad");
+            gst_error!(CAT, obj: element, "Already have a fallback sinkpad");
             return None;
         }
 
-        let sinkpad: gst_base::AggregatorPad = glib::Object::new(
-            gst_base::AggregatorPad::static_type(),
-            &[
-                ("name", &"fallback_sink"),
-                ("direction", &gst::PadDirection::Sink),
-                ("template", templ),
-            ],
+        let sinkpad = gst::PadBuilder::<gst_base::AggregatorPad>::from_template(
+            &templ,
+            Some("fallback_sink"),
         )
-        .unwrap()
-        .downcast()
-        .unwrap();
+        .build();
         *fallback_sinkpad = Some(sinkpad.clone());
         drop(fallback_sinkpad);
 
-        agg.add_pad(&sinkpad).unwrap();
+        element.add_pad(&sinkpad).unwrap();
 
         Some(sinkpad.upcast())
     }
 
-    fn release_pad(&self, element: &gst::Element, pad: &gst::Pad) {
-        let agg = element.downcast_ref::<gst_base::Aggregator>().unwrap();
+    fn release_pad(&self, element: &Self::Type, pad: &gst::Pad) {
         let mut fallback_sinkpad = self.fallback_sinkpad.write().unwrap();
         let mut pad_states = self.pad_states.write().unwrap();
 
@@ -579,21 +561,21 @@ impl ElementImpl for FallbackSwitch {
             pad_states.fallback_sinkpad = None;
             drop(pad_states);
             drop(fallback_sinkpad);
-            agg.remove_pad(pad).unwrap();
-            gst_debug!(CAT, obj: agg, "Removed fallback sinkpad {:?}", pad);
+            element.remove_pad(pad).unwrap();
+            gst_debug!(CAT, obj: element, "Removed fallback sinkpad {:?}", pad);
         }
     }
 }
 
 impl AggregatorImpl for FallbackSwitch {
-    fn start(&self, _agg: &gst_base::Aggregator) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, _agg: &Self::Type) -> Result<(), gst::ErrorMessage> {
         *self.output_state.lock().unwrap() = OutputState::default();
         *self.pad_states.write().unwrap() = PadStates::default();
 
         Ok(())
     }
 
-    fn stop(&self, _agg: &gst_base::Aggregator) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, _agg: &Self::Type) -> Result<(), gst::ErrorMessage> {
         *self.active_sinkpad.lock().unwrap() = None;
 
         Ok(())
@@ -601,7 +583,7 @@ impl AggregatorImpl for FallbackSwitch {
 
     fn sink_event_pre_queue(
         &self,
-        agg: &gst_base::Aggregator,
+        agg: &Self::Type,
         agg_pad: &gst_base::AggregatorPad,
         event: gst::Event,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -618,7 +600,7 @@ impl AggregatorImpl for FallbackSwitch {
 
     fn sink_event(
         &self,
-        agg: &gst_base::Aggregator,
+        agg: &Self::Type,
         agg_pad: &gst_base::AggregatorPad,
         event: gst::Event,
     ) -> bool {
@@ -662,7 +644,7 @@ impl AggregatorImpl for FallbackSwitch {
         }
     }
 
-    fn get_next_time(&self, agg: &gst_base::Aggregator) -> gst::ClockTime {
+    fn get_next_time(&self, agg: &Self::Type) -> gst::ClockTime {
         // If we have a buffer on the sinkpad then the timeout is always going to be immediately,
         // i.e. 0. We want to output that buffer immediately, no matter what.
         //
@@ -715,7 +697,7 @@ impl AggregatorImpl for FallbackSwitch {
     // calculating the running times later works correctly
     fn clip(
         &self,
-        agg: &gst_base::Aggregator,
+        agg: &Self::Type,
         agg_pad: &gst_base::AggregatorPad,
         mut buffer: gst::Buffer,
     ) -> Option<gst::Buffer> {
@@ -810,7 +792,7 @@ impl AggregatorImpl for FallbackSwitch {
 
     fn aggregate(
         &self,
-        agg: &gst_base::Aggregator,
+        agg: &Self::Type,
         timeout: bool,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(CAT, obj: agg, "Aggregate called: timeout {}", timeout);
@@ -838,16 +820,7 @@ impl AggregatorImpl for FallbackSwitch {
         agg.finish_buffer(buffer)
     }
 
-    fn negotiate(&self, _agg: &gst_base::Aggregator) -> bool {
+    fn negotiate(&self, _agg: &Self::Type) -> bool {
         true
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "fallbackswitch",
-        gst::Rank::None,
-        FallbackSwitch::get_type(),
-    )
 }

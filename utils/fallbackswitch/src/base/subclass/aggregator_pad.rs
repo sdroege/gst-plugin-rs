@@ -8,9 +8,10 @@
 
 use super::super::gst_base_sys;
 
+use glib::prelude::*;
+use glib::subclass::prelude::*;
 use glib::translate::*;
 
-use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
 
 use super::super::Aggregator;
@@ -19,7 +20,7 @@ use super::super::AggregatorPad;
 pub trait AggregatorPadImpl: AggregatorPadImplExt + PadImpl {
     fn flush(
         &self,
-        aggregator_pad: &AggregatorPad,
+        aggregator_pad: &Self::Type,
         aggregator: &Aggregator,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.parent_flush(aggregator_pad, aggregator)
@@ -27,7 +28,7 @@ pub trait AggregatorPadImpl: AggregatorPadImplExt + PadImpl {
 
     fn skip_buffer(
         &self,
-        aggregator_pad: &AggregatorPad,
+        aggregator_pad: &Self::Type,
         aggregator: &Aggregator,
         buffer: &gst::Buffer,
     ) -> bool {
@@ -35,16 +36,16 @@ pub trait AggregatorPadImpl: AggregatorPadImplExt + PadImpl {
     }
 }
 
-pub trait AggregatorPadImplExt {
+pub trait AggregatorPadImplExt: ObjectSubclass {
     fn parent_flush(
         &self,
-        aggregator_pad: &AggregatorPad,
+        aggregator_pad: &Self::Type,
         aggregator: &Aggregator,
     ) -> Result<gst::FlowSuccess, gst::FlowError>;
 
     fn parent_skip_buffer(
         &self,
-        aggregator_pad: &AggregatorPad,
+        aggregator_pad: &Self::Type,
         aggregator: &Aggregator,
         buffer: &gst::Buffer,
     ) -> bool;
@@ -53,7 +54,7 @@ pub trait AggregatorPadImplExt {
 impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
     fn parent_flush(
         &self,
-        aggregator_pad: &AggregatorPad,
+        aggregator_pad: &Self::Type,
         aggregator: &Aggregator,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         unsafe {
@@ -64,7 +65,10 @@ impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
                 .flush
                 .map(|f| {
                     from_glib(f(
-                        aggregator_pad.to_glib_none().0,
+                        aggregator_pad
+                            .unsafe_cast_ref::<AggregatorPad>()
+                            .to_glib_none()
+                            .0,
                         aggregator.to_glib_none().0,
                     ))
                 })
@@ -75,7 +79,7 @@ impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
 
     fn parent_skip_buffer(
         &self,
-        aggregator_pad: &AggregatorPad,
+        aggregator_pad: &Self::Type,
         aggregator: &Aggregator,
         buffer: &gst::Buffer,
     ) -> bool {
@@ -87,7 +91,10 @@ impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
                 .skip_buffer
                 .map(|f| {
                     from_glib(f(
-                        aggregator_pad.to_glib_none().0,
+                        aggregator_pad
+                            .unsafe_cast_ref::<AggregatorPad>()
+                            .to_glib_none()
+                            .0,
                         aggregator.to_glib_none().0,
                         buffer.to_glib_none().0,
                     ))
@@ -97,13 +104,11 @@ impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
     }
 }
 unsafe impl<T: AggregatorPadImpl> IsSubclassable<T> for AggregatorPad {
-    fn override_vfuncs(klass: &mut glib::object::Class<Self>) {
+    fn override_vfuncs(klass: &mut glib::Class<Self>) {
         <gst::Pad as IsSubclassable<T>>::override_vfuncs(klass);
-        unsafe {
-            let klass = &mut *(klass.as_mut() as *mut gst_base_sys::GstAggregatorPadClass);
-            klass.flush = Some(aggregator_pad_flush::<T>);
-            klass.skip_buffer = Some(aggregator_pad_skip_buffer::<T>);
-        }
+        let klass = klass.as_mut();
+        klass.flush = Some(aggregator_pad_flush::<T>);
+        klass.skip_buffer = Some(aggregator_pad_skip_buffer::<T>);
     }
 }
 
@@ -115,7 +120,9 @@ unsafe extern "C" fn aggregator_pad_flush<T: AggregatorPadImpl>(
     let imp = instance.get_impl();
     let wrap: Borrowed<AggregatorPad> = from_glib_borrow(ptr);
 
-    let res: gst::FlowReturn = imp.flush(&wrap, &from_glib_borrow(aggregator)).into();
+    let res: gst::FlowReturn = imp
+        .flush(wrap.unsafe_cast_ref(), &from_glib_borrow(aggregator))
+        .into();
     res.to_glib()
 }
 
@@ -129,7 +136,7 @@ unsafe extern "C" fn aggregator_pad_skip_buffer<T: AggregatorPadImpl>(
     let wrap: Borrowed<AggregatorPad> = from_glib_borrow(ptr);
 
     imp.skip_buffer(
-        &wrap,
+        wrap.unsafe_cast_ref(),
         &from_glib_borrow(aggregator),
         &from_glib_borrow(buffer),
     )

@@ -344,7 +344,7 @@ impl HandleData for gst::Buffer {
     }
 }
 
-struct ToggleRecord {
+pub struct ToggleRecord {
     settings: Mutex<Settings>,
     state: Mutex<State>,
     main_stream: Stream,
@@ -367,7 +367,7 @@ lazy_static! {
 impl ToggleRecord {
     fn handle_main_stream<T: HandleData>(
         &self,
-        element: &gst::Element,
+        element: &super::ToggleRecord,
         pad: &gst::Pad,
         stream: &Stream,
         data: T,
@@ -616,7 +616,7 @@ impl ToggleRecord {
 
     fn handle_secondary_stream<T: HandleData>(
         &self,
-        element: &gst::Element,
+        element: &super::ToggleRecord,
         pad: &gst::Pad,
         stream: &Stream,
         data: T,
@@ -1034,7 +1034,7 @@ impl ToggleRecord {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::ToggleRecord,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let stream = self.pads.lock().get(pad).cloned().ok_or_else(|| {
@@ -1143,7 +1143,12 @@ impl ToggleRecord {
         stream.srcpad.push(buffer)
     }
 
-    fn sink_event(&self, pad: &gst::Pad, element: &gst::Element, mut event: gst::Event) -> bool {
+    fn sink_event(
+        &self,
+        pad: &gst::Pad,
+        element: &super::ToggleRecord,
+        mut event: gst::Event,
+    ) -> bool {
         use gst::EventView;
 
         let stream = match self.pads.lock().get(pad) {
@@ -1332,7 +1337,7 @@ impl ToggleRecord {
     fn sink_query(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::ToggleRecord,
         query: &mut gst::QueryRef,
     ) -> bool {
         let stream = match self.pads.lock().get(pad) {
@@ -1355,7 +1360,12 @@ impl ToggleRecord {
     // FIXME `matches!` was introduced in rustc 1.42.0, current MSRV is 1.41.0
     // FIXME uncomment when CI can upgrade to 1.47.1
     //#[allow(clippy::match_like_matches_macro)]
-    fn src_event(&self, pad: &gst::Pad, element: &gst::Element, mut event: gst::Event) -> bool {
+    fn src_event(
+        &self,
+        pad: &gst::Pad,
+        element: &super::ToggleRecord,
+        mut event: gst::Event,
+    ) -> bool {
         use gst::EventView;
 
         let stream = match self.pads.lock().get(pad) {
@@ -1394,7 +1404,12 @@ impl ToggleRecord {
         }
     }
 
-    fn src_query(&self, pad: &gst::Pad, element: &gst::Element, query: &mut gst::QueryRef) -> bool {
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::ToggleRecord,
+        query: &mut gst::QueryRef,
+    ) -> bool {
         use gst::QueryView;
 
         let stream = match self.pads.lock().get(pad) {
@@ -1514,7 +1529,7 @@ impl ToggleRecord {
     fn iterate_internal_links(
         &self,
         pad: &gst::Pad,
-        element: &gst::Element,
+        element: &super::ToggleRecord,
     ) -> gst::Iterator<gst::Pad> {
         let stream = match self.pads.lock().get(pad) {
             None => {
@@ -1538,13 +1553,14 @@ impl ToggleRecord {
 
 impl ObjectSubclass for ToggleRecord {
     const NAME: &'static str = "RsToggleRecord";
+    type Type = super::ToggleRecord;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib_object_subclass!();
 
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
@@ -1618,7 +1634,7 @@ impl ObjectSubclass for ToggleRecord {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.install_properties(&PROPERTIES);
 
         klass.set_metadata(
@@ -1668,9 +1684,8 @@ impl ObjectSubclass for ToggleRecord {
 }
 
 impl ObjectImpl for ToggleRecord {
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
 
         match *prop {
             subclass::Property("record", ..) => {
@@ -1678,7 +1693,7 @@ impl ObjectImpl for ToggleRecord {
                 let record = value.get_some().expect("type checked upstream");
                 gst_debug!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Setting record from {:?} to {:?}",
                     settings.record,
                     record
@@ -1690,7 +1705,7 @@ impl ObjectImpl for ToggleRecord {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -1706,19 +1721,18 @@ impl ObjectImpl for ToggleRecord {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.main_stream.sinkpad).unwrap();
-        element.add_pad(&self.main_stream.srcpad).unwrap();
+        obj.add_pad(&self.main_stream.sinkpad).unwrap();
+        obj.add_pad(&self.main_stream.srcpad).unwrap();
     }
 }
 
 impl ElementImpl for ToggleRecord {
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -1778,7 +1792,7 @@ impl ElementImpl for ToggleRecord {
 
     fn request_new_pad(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         _templ: &gst::PadTemplate,
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
@@ -1867,7 +1881,7 @@ impl ElementImpl for ToggleRecord {
         Some(sinkpad)
     }
 
-    fn release_pad(&self, element: &gst::Element, pad: &gst::Pad) {
+    fn release_pad(&self, element: &Self::Type, pad: &gst::Pad) {
         let mut other_streams_guard = self.other_streams.lock();
         let (ref mut other_streams, _) = *other_streams_guard;
         let mut pads = self.pads.lock();
@@ -1893,13 +1907,4 @@ impl ElementImpl for ToggleRecord {
         element.remove_pad(&stream.sinkpad).unwrap();
         element.remove_pad(&stream.srcpad).unwrap();
     }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "togglerecord",
-        gst::Rank::None,
-        ToggleRecord::get_type(),
-    )
 }

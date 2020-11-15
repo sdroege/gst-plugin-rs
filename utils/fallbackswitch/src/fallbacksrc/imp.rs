@@ -27,6 +27,9 @@ use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
 
+use super::custom_source::CustomSource;
+use super::{RetryReason, Status};
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "fallbacksrc",
@@ -34,17 +37,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         Some("Fallback Source Bin"),
     )
 });
-
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
-#[repr(u32)]
-#[genum(type_name = "GstFallbackSourceRetryReason")]
-enum RetryReason {
-    None,
-    Error,
-    Eos,
-    StateChangeFailure,
-    Timeout,
-}
 
 #[derive(Debug, Clone)]
 struct Stats {
@@ -178,19 +170,9 @@ struct State {
     stats: Stats,
 }
 
-struct FallbackSrc {
+pub struct FallbackSrc {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
-}
-
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
-#[repr(u32)]
-#[genum(type_name = "GstFallbackSourceStatus")]
-enum Status {
-    Stopped,
-    Buffering,
-    Retrying,
-    Running,
 }
 
 static PROPERTIES: [subclass::Property; 13] = [
@@ -322,6 +304,7 @@ static PROPERTIES: [subclass::Property; 13] = [
 
 impl ObjectSubclass for FallbackSrc {
     const NAME: &'static str = "FallbackSrc";
+    type Type = super::FallbackSrc;
     type ParentType = gst::Bin;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -335,7 +318,7 @@ impl ObjectSubclass for FallbackSrc {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "Fallback Source",
             "Generic/Source",
@@ -381,9 +364,8 @@ impl ObjectSubclass for FallbackSrc {
 }
 
 impl ObjectImpl for FallbackSrc {
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
-        let element = obj.downcast_ref::<gst::Bin>().unwrap();
 
         match *prop {
             subclass::Property("enable-audio", ..) => {
@@ -391,7 +373,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing enable-audio from {:?} to {:?}",
                     settings.enable_audio,
                     new_value,
@@ -403,7 +385,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing enable-video from {:?} to {:?}",
                     settings.enable_video,
                     new_value,
@@ -415,7 +397,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing URI from {:?} to {:?}",
                     settings.uri,
                     new_value,
@@ -427,7 +409,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing source from {:?} to {:?}",
                     settings.source,
                     new_value,
@@ -439,7 +421,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing Fallback URI from {:?} to {:?}",
                     settings.fallback_uri,
                     new_value,
@@ -451,7 +433,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing timeout from {:?} to {:?}",
                     settings.timeout,
                     new_value,
@@ -463,7 +445,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing Restart Timeout from {:?} to {:?}",
                     settings.restart_timeout,
                     new_value,
@@ -475,7 +457,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing Retry Timeout from {:?} to {:?}",
                     settings.retry_timeout,
                     new_value,
@@ -487,7 +469,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing restart-on-eos from {:?} to {:?}",
                     settings.restart_on_eos,
                     new_value,
@@ -499,7 +481,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing Minimum Latency from {:?} to {:?}",
                     settings.min_latency,
                     new_value,
@@ -511,7 +493,7 @@ impl ObjectImpl for FallbackSrc {
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing Buffer Duration from {:?} to {:?}",
                     settings.buffer_duration,
                     new_value,
@@ -525,7 +507,7 @@ impl ObjectImpl for FallbackSrc {
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
     #[allow(clippy::blocks_in_if_conditions)]
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -630,13 +612,12 @@ impl ObjectImpl for FallbackSrc {
         }
     }
 
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
-        let bin = obj.downcast_ref::<gst::Bin>().unwrap();
-        bin.set_suppressed_flags(gst::ElementFlags::SOURCE | gst::ElementFlags::SINK);
-        bin.set_element_flags(gst::ElementFlags::SOURCE);
-        bin.set_bin_flags(gst::BinFlags::STREAMS_AWARE);
+        obj.set_suppressed_flags(gst::ElementFlags::SOURCE | gst::ElementFlags::SINK);
+        obj.set_element_flags(gst::ElementFlags::SOURCE);
+        obj.set_bin_flags(gst::BinFlags::STREAMS_AWARE);
     }
 }
 
@@ -644,7 +625,7 @@ impl ElementImpl for FallbackSrc {
     #[allow(clippy::single_match)]
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         match transition {
@@ -676,7 +657,7 @@ impl ElementImpl for FallbackSrc {
 }
 
 impl BinImpl for FallbackSrc {
-    fn handle_message(&self, bin: &gst::Bin, msg: gst::Message) {
+    fn handle_message(&self, bin: &Self::Type, msg: gst::Message) {
         use gst::MessageView;
 
         match msg.view() {
@@ -704,7 +685,7 @@ impl BinImpl for FallbackSrc {
 impl FallbackSrc {
     fn create_main_input(
         &self,
-        element: &gst::Bin,
+        element: &super::FallbackSrc,
         source: &Source,
         buffer_duration: i64,
     ) -> Result<gst::Element, gst::StateChangeError> {
@@ -729,7 +710,7 @@ impl FallbackSrc {
 
                 source
             }
-            Source::Element(ref source) => custom_source::CustomSource::new(source),
+            Source::Element(ref source) => CustomSource::new(source).upcast(),
         };
 
         // Handle any async state changes internally, they don't affect the pipeline because we
@@ -771,7 +752,7 @@ impl FallbackSrc {
 
     fn create_fallback_video_input(
         &self,
-        element: &gst::Bin,
+        element: &super::FallbackSrc,
         min_latency: u64,
         fallback_uri: Option<&str>,
     ) -> Result<gst::Element, gst::StateChangeError> {
@@ -949,7 +930,7 @@ impl FallbackSrc {
 
     fn create_fallback_audio_input(
         &self,
-        _element: &gst::Bin,
+        _element: &super::FallbackSrc,
     ) -> Result<gst::Element, gst::StateChangeError> {
         let input = gst::Bin::new(Some("fallback_audio"));
         let audiotestsrc = gst::ElementFactory::make("audiotestsrc", Some("fallback_audiosrc"))
@@ -973,7 +954,7 @@ impl FallbackSrc {
 
     fn create_stream(
         &self,
-        element: &gst::Bin,
+        element: &super::FallbackSrc,
         timeout: u64,
         min_latency: u64,
         is_audio: bool,
@@ -1064,9 +1045,7 @@ impl FallbackSrc {
         })
     }
 
-    fn start(&self, element: &gst::Element) -> Result<(), gst::StateChangeError> {
-        let element = element.downcast_ref::<gst::Bin>().unwrap();
-
+    fn start(&self, element: &super::FallbackSrc) -> Result<(), gst::StateChangeError> {
         gst_debug!(CAT, obj: element, "Starting");
         let mut state_guard = self.state.lock().unwrap();
         if state_guard.is_some() {
@@ -1153,9 +1132,7 @@ impl FallbackSrc {
         Ok(())
     }
 
-    fn stop(&self, element: &gst::Element) -> Result<(), gst::StateChangeError> {
-        let element = element.downcast_ref::<gst::Bin>().unwrap();
-
+    fn stop(&self, element: &super::FallbackSrc) -> Result<(), gst::StateChangeError> {
         gst_debug!(CAT, obj: element, "Stopping");
         let mut state_guard = self.state.lock().unwrap();
         let mut state = match state_guard.take() {
@@ -1214,11 +1191,9 @@ impl FallbackSrc {
 
     fn change_source_state(
         &self,
-        element: &gst::Element,
+        element: &super::FallbackSrc,
         transition: gst::StateChange,
     ) -> Result<(), gst::StateChangeError> {
-        let element = element.downcast_ref::<gst::Bin>().unwrap();
-
         gst_debug!(CAT, obj: element, "Changing source state: {:?}", transition);
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
@@ -1293,7 +1268,7 @@ impl FallbackSrc {
 
     fn proxy_pad_chain(
         &self,
-        element: &gst::Bin,
+        element: &super::FallbackSrc,
         pad: &gst::ProxyPad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -1310,7 +1285,7 @@ impl FallbackSrc {
 
     fn handle_source_pad_added(
         &self,
-        element: &gst::Bin,
+        element: &super::FallbackSrc,
         pad: &gst::Pad,
     ) -> Result<(), gst::ErrorMessage> {
         gst_debug!(CAT, obj: element, "Pad {} added to source", pad.get_name(),);
@@ -1423,7 +1398,7 @@ impl FallbackSrc {
         Ok(())
     }
 
-    fn add_pad_probe(&self, element: &gst::Bin, stream: &mut Stream) -> Block {
+    fn add_pad_probe(&self, element: &super::FallbackSrc, stream: &mut Stream) -> Block {
         // FIXME: Not literally correct as we add the probe to the queue source pad but that's only
         // a workaround until
         //     https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/-/issues/800
@@ -1476,7 +1451,7 @@ impl FallbackSrc {
 
     fn handle_pad_blocked(
         &self,
-        element: &gst::Bin,
+        element: &super::FallbackSrc,
         pad: &gst::Pad,
         pts: gst::ClockTime,
     ) -> Result<(), gst::ErrorMessage> {
@@ -1601,7 +1576,7 @@ impl FallbackSrc {
         Ok(())
     }
 
-    fn unblock_pads(&self, element: &gst::Bin, state: &mut State) {
+    fn unblock_pads(&self, element: &super::FallbackSrc, state: &mut State) {
         // Check if all streams are blocked and have a running time and we have
         // 100% buffering
         if state.stats.buffering_percent < 100 {
@@ -1802,7 +1777,7 @@ impl FallbackSrc {
 
     fn handle_source_pad_removed(
         &self,
-        element: &gst::Bin,
+        element: &super::FallbackSrc,
         pad: &gst::Pad,
     ) -> Result<(), gst::ErrorMessage> {
         gst_debug!(
@@ -1849,7 +1824,7 @@ impl FallbackSrc {
         Ok(())
     }
 
-    fn handle_buffering(&self, element: &gst::Bin, m: &gst::message::Buffering) {
+    fn handle_buffering(&self, element: &super::FallbackSrc, m: &gst::message::Buffering) {
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
             None => {
@@ -1889,7 +1864,11 @@ impl FallbackSrc {
         element.notify("statistics");
     }
 
-    fn handle_streams_selected(&self, element: &gst::Bin, m: &gst::message::StreamsSelected) {
+    fn handle_streams_selected(
+        &self,
+        element: &super::FallbackSrc,
+        m: &gst::message::StreamsSelected,
+    ) {
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
             None => {
@@ -1949,7 +1928,7 @@ impl FallbackSrc {
         element.notify("status");
     }
 
-    fn handle_error(&self, element: &gst::Bin, m: &gst::message::Error) -> bool {
+    fn handle_error(&self, element: &super::FallbackSrc, m: &gst::message::Error) -> bool {
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
             None => {
@@ -1981,7 +1960,12 @@ impl FallbackSrc {
         false
     }
 
-    fn handle_source_error(&self, element: &gst::Bin, state: &mut State, reason: RetryReason) {
+    fn handle_source_error(
+        &self,
+        element: &super::FallbackSrc,
+        state: &mut State,
+        reason: RetryReason,
+    ) {
         gst_debug!(CAT, obj: element, "Handling source error");
 
         state.stats.last_retry_reason = reason;
@@ -2194,7 +2178,7 @@ impl FallbackSrc {
     #[allow(clippy::blocks_in_if_conditions)]
     fn schedule_source_restart_timeout(
         &self,
-        element: &gst::Bin,
+        element: &super::FallbackSrc,
         state: &mut State,
         elapsed: gst::ClockTime,
     ) {
@@ -2278,7 +2262,7 @@ impl FallbackSrc {
     }
 
     #[allow(clippy::blocks_in_if_conditions)]
-    fn have_fallback_activated(&self, _element: &gst::Bin, state: &State) -> bool {
+    fn have_fallback_activated(&self, _element: &super::FallbackSrc, state: &State) -> bool {
         let mut have_audio = false;
         let mut have_video = false;
         if let Some(ref streams) = state.streams {
@@ -2323,7 +2307,7 @@ impl FallbackSrc {
                     .unwrap_or(true))
     }
 
-    fn handle_switch_active_pad_change(&self, element: &gst::Bin) {
+    fn handle_switch_active_pad_change(&self, element: &super::FallbackSrc) {
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
             None => {
@@ -2368,410 +2352,5 @@ impl FallbackSrc {
         };
 
         state.stats.to_structure()
-    }
-}
-
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "fallbacksrc",
-        gst::Rank::None,
-        FallbackSrc::get_type(),
-    )
-}
-
-mod custom_source {
-    use super::CAT;
-    use glib::prelude::*;
-    use glib::subclass;
-    use glib::subclass::prelude::*;
-    use gst::prelude::*;
-    use gst::subclass::prelude::*;
-
-    use std::{mem, sync::Mutex};
-
-    use once_cell::sync::OnceCell;
-
-    static PROPERTIES: [subclass::Property; 1] = [subclass::Property("source", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Source",
-            "Source",
-            gst::Element::static_type(),
-            glib::ParamFlags::WRITABLE | glib::ParamFlags::CONSTRUCT_ONLY,
-        )
-    })];
-
-    struct Stream {
-        source_pad: gst::Pad,
-        ghost_pad: gst::GhostPad,
-        // Dummy stream we created
-        stream: gst::Stream,
-    }
-
-    struct State {
-        pads: Vec<Stream>,
-        num_audio: usize,
-        num_video: usize,
-    }
-
-    pub struct CustomSource {
-        source: OnceCell<gst::Element>,
-        state: Mutex<State>,
-    }
-
-    impl ObjectSubclass for CustomSource {
-        const NAME: &'static str = "FallbackSrcCustomSource";
-        type ParentType = gst::Bin;
-        type Instance = gst::subclass::ElementInstanceStruct<Self>;
-        type Class = subclass::simple::ClassStruct<Self>;
-
-        glib_object_subclass!();
-
-        fn new() -> Self {
-            Self {
-                source: OnceCell::default(),
-                state: Mutex::new(State {
-                    pads: vec![],
-                    num_audio: 0,
-                    num_video: 0,
-                }),
-            }
-        }
-
-        fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
-            let src_pad_template = gst::PadTemplate::new(
-                "audio_%u",
-                gst::PadDirection::Src,
-                gst::PadPresence::Sometimes,
-                &gst::Caps::new_any(),
-            )
-            .unwrap();
-            klass.add_pad_template(src_pad_template);
-
-            let src_pad_template = gst::PadTemplate::new(
-                "video_%u",
-                gst::PadDirection::Src,
-                gst::PadPresence::Sometimes,
-                &gst::Caps::new_any(),
-            )
-            .unwrap();
-            klass.add_pad_template(src_pad_template);
-            klass.install_properties(&PROPERTIES);
-        }
-    }
-
-    impl ObjectImpl for CustomSource {
-        fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
-            let prop = &PROPERTIES[id];
-            let element = obj.downcast_ref::<gst::Bin>().unwrap();
-
-            match *prop {
-                subclass::Property("source", ..) => {
-                    let source = value.get::<gst::Element>().unwrap().unwrap();
-                    self.source.set(source.clone()).unwrap();
-                    element.add(&source).unwrap();
-                }
-                _ => unreachable!(),
-            }
-        }
-
-        fn constructed(&self, obj: &glib::Object) {
-            self.parent_constructed(obj);
-
-            let bin = obj.downcast_ref::<gst::Bin>().unwrap();
-            bin.set_suppressed_flags(gst::ElementFlags::SOURCE | gst::ElementFlags::SINK);
-            bin.set_element_flags(gst::ElementFlags::SOURCE);
-            bin.set_bin_flags(gst::BinFlags::STREAMS_AWARE);
-        }
-    }
-
-    impl ElementImpl for CustomSource {
-        #[allow(clippy::single_match)]
-        fn change_state(
-            &self,
-            element: &gst::Element,
-            transition: gst::StateChange,
-        ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-            let element = element.downcast_ref::<gst::Bin>().unwrap();
-
-            match transition {
-                gst::StateChange::NullToReady => {
-                    self.start(element)?;
-                }
-                _ => (),
-            }
-
-            let res = self.parent_change_state(element.upcast_ref(), transition)?;
-
-            match transition {
-                gst::StateChange::ReadyToNull => {
-                    self.stop(element)?;
-                }
-                _ => (),
-            }
-
-            Ok(res)
-        }
-    }
-
-    impl BinImpl for CustomSource {
-        #[allow(clippy::single_match)]
-        fn handle_message(&self, bin: &gst::Bin, msg: gst::Message) {
-            use gst::MessageView;
-
-            match msg.view() {
-                MessageView::StreamCollection(_) => {
-                    // TODO: Drop stream collection message for now, we only create a simple custom
-                    // one here so that fallbacksrc can know about our streams. It is never
-                    // forwarded.
-                    if let Err(msg) = self.handle_source_no_more_pads(&bin) {
-                        bin.post_error_message(msg);
-                    }
-                }
-                _ => self.parent_handle_message(bin, msg),
-            }
-        }
-    }
-
-    impl CustomSource {
-        fn start(
-            &self,
-            element: &gst::Bin,
-        ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-            gst_debug!(CAT, obj: element, "Starting");
-            let source = self.source.get().unwrap();
-
-            let templates = source.get_pad_template_list();
-
-            if templates
-                .iter()
-                .any(|templ| templ.get_property_presence() == gst::PadPresence::Request)
-            {
-                gst_error!(CAT, obj: element, "Request pads not supported");
-                gst_element_error!(
-                    element,
-                    gst::LibraryError::Settings,
-                    ["Request pads not supported"]
-                );
-                return Err(gst::StateChangeError);
-            }
-
-            let has_sometimes_pads = templates
-                .iter()
-                .any(|templ| templ.get_property_presence() == gst::PadPresence::Sometimes);
-
-            // Handle all source pads that already exist
-            for pad in source.get_src_pads() {
-                if let Err(msg) = self.handle_source_pad_added(&element, &pad) {
-                    element.post_error_message(msg);
-                    return Err(gst::StateChangeError);
-                }
-            }
-
-            if !has_sometimes_pads {
-                if let Err(msg) = self.handle_source_no_more_pads(&element) {
-                    element.post_error_message(msg);
-                    return Err(gst::StateChangeError);
-                }
-            } else {
-                gst_debug!(CAT, obj: element, "Found sometimes pads");
-
-                let element_weak = element.downgrade();
-                source.connect_pad_added(move |_, pad| {
-                    let element = match element_weak.upgrade() {
-                        None => return,
-                        Some(element) => element,
-                    };
-                    let src = CustomSource::from_instance(&element);
-
-                    if let Err(msg) = src.handle_source_pad_added(&element, pad) {
-                        element.post_error_message(msg);
-                    }
-                });
-                let element_weak = element.downgrade();
-                source.connect_pad_removed(move |_, pad| {
-                    let element = match element_weak.upgrade() {
-                        None => return,
-                        Some(element) => element,
-                    };
-                    let src = CustomSource::from_instance(&element);
-
-                    if let Err(msg) = src.handle_source_pad_removed(&element, pad) {
-                        element.post_error_message(msg);
-                    }
-                });
-
-                let element_weak = element.downgrade();
-                source.connect_no_more_pads(move |_| {
-                    let element = match element_weak.upgrade() {
-                        None => return,
-                        Some(element) => element,
-                    };
-                    let src = CustomSource::from_instance(&element);
-
-                    if let Err(msg) = src.handle_source_no_more_pads(&element) {
-                        element.post_error_message(msg);
-                    }
-                });
-            }
-
-            Ok(gst::StateChangeSuccess::Success)
-        }
-
-        fn handle_source_pad_added(
-            &self,
-            element: &gst::Bin,
-            pad: &gst::Pad,
-        ) -> Result<(), gst::ErrorMessage> {
-            gst_debug!(CAT, obj: element, "Source added pad {}", pad.get_name());
-
-            let mut state = self.state.lock().unwrap();
-
-            let mut stream_type = None;
-
-            // Take stream type from stream-start event if we can
-            if let Some(event) = pad.get_sticky_event(gst::EventType::StreamStart, 0) {
-                if let gst::EventView::StreamStart(ev) = event.view() {
-                    stream_type = ev.get_stream().map(|s| s.get_stream_type());
-                }
-            }
-
-            // Otherwise from the caps
-            if stream_type.is_none() {
-                let caps = match pad.get_current_caps().or_else(|| pad.query_caps(None)) {
-                    Some(caps) if !caps.is_any() && !caps.is_empty() => caps,
-                    _ => {
-                        gst_error!(CAT, obj: element, "Pad {} had no caps", pad.get_name());
-                        return Err(gst_error_msg!(
-                            gst::CoreError::Negotiation,
-                            ["Pad had no caps"]
-                        ));
-                    }
-                };
-
-                let s = caps.get_structure(0).unwrap();
-
-                if s.get_name().starts_with("audio/") {
-                    stream_type = Some(gst::StreamType::AUDIO);
-                } else if s.get_name().starts_with("video/") {
-                    stream_type = Some(gst::StreamType::VIDEO);
-                } else {
-                    return Ok(());
-                }
-            }
-
-            let stream_type = stream_type.unwrap();
-
-            let (templ, name) = if stream_type.contains(gst::StreamType::AUDIO) {
-                let name = format!("audio_{}", state.num_audio);
-                state.num_audio += 1;
-                (element.get_pad_template("audio_%u").unwrap(), name)
-            } else {
-                let name = format!("video_{}", state.num_video);
-                state.num_video += 1;
-                (element.get_pad_template("video_%u").unwrap(), name)
-            };
-
-            let ghost_pad = gst::GhostPad::builder_with_template(&templ, Some(&name))
-                .build_with_target(pad)
-                .unwrap();
-
-            let stream = Stream {
-                source_pad: pad.clone(),
-                ghost_pad: ghost_pad.clone().upcast(),
-                // TODO: We only add the stream type right now
-                stream: gst::Stream::new(None, None, stream_type, gst::StreamFlags::empty()),
-            };
-            state.pads.push(stream);
-            drop(state);
-
-            ghost_pad.set_active(true).unwrap();
-            element.add_pad(&ghost_pad).unwrap();
-
-            Ok(())
-        }
-
-        fn handle_source_pad_removed(
-            &self,
-            element: &gst::Bin,
-            pad: &gst::Pad,
-        ) -> Result<(), gst::ErrorMessage> {
-            gst_debug!(CAT, obj: element, "Source removed pad {}", pad.get_name());
-
-            let mut state = self.state.lock().unwrap();
-            let (i, stream) = match state
-                .pads
-                .iter()
-                .enumerate()
-                .find(|(_i, p)| &p.source_pad == pad)
-            {
-                None => return Ok(()),
-                Some(v) => v,
-            };
-
-            let ghost_pad = stream.ghost_pad.clone();
-            state.pads.remove(i);
-            drop(state);
-
-            ghost_pad.set_active(false).unwrap();
-            let _ = ghost_pad.set_target(None::<&gst::Pad>);
-            let _ = element.remove_pad(&ghost_pad);
-
-            Ok(())
-        }
-
-        fn handle_source_no_more_pads(&self, element: &gst::Bin) -> Result<(), gst::ErrorMessage> {
-            gst_debug!(CAT, obj: element, "Source signalled no-more-pads");
-
-            let state = self.state.lock().unwrap();
-            let streams = state
-                .pads
-                .iter()
-                .map(|p| p.stream.clone())
-                .collect::<Vec<_>>();
-            let collection = gst::StreamCollection::builder(None)
-                .streams(&streams)
-                .build();
-            drop(state);
-
-            element.no_more_pads();
-
-            let _ = element.post_message(
-                gst::message::StreamsSelected::builder(&collection)
-                    .src(element)
-                    .build(),
-            );
-
-            Ok(())
-        }
-
-        fn stop(
-            &self,
-            element: &gst::Bin,
-        ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-            gst_debug!(CAT, obj: element, "Stopping");
-
-            let mut state = self.state.lock().unwrap();
-            let pads = mem::replace(&mut state.pads, vec![]);
-            state.num_audio = 0;
-            state.num_video = 0;
-            drop(state);
-
-            for pad in pads {
-                let _ = pad.ghost_pad.set_target(None::<&gst::Pad>);
-                let _ = element.remove_pad(&pad.ghost_pad);
-            }
-
-            Ok(gst::StateChangeSuccess::Success)
-        }
-
-        #[allow(clippy::new_ret_no_self)]
-        pub fn new(source: &gst::Element) -> gst::Element {
-            glib::Object::new(CustomSource::get_type(), &[("source", source)])
-                .unwrap()
-                .downcast::<gst::Element>()
-                .unwrap()
-        }
     }
 }
