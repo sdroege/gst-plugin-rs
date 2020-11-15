@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
@@ -14,11 +13,7 @@ use gst::subclass::prelude::*;
 
 use once_cell::sync::Lazy;
 
-// Struct containing all the element data
-struct Identity {
-    srcpad: gst::Pad,
-    sinkpad: gst::Pad,
-}
+// This module contains the private implementation details of our element
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -27,6 +22,12 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         Some("Identity Element"),
     )
 });
+
+// Struct containing all the element data
+pub struct Identity {
+    srcpad: gst::Pad,
+    sinkpad: gst::Pad,
+}
 
 impl Identity {
     // Called whenever a new buffer is passed to our sink pad. Here buffers should be processed and
@@ -38,7 +39,7 @@ impl Identity {
     fn sink_chain(
         &self,
         pad: &gst::Pad,
-        _element: &gst::Element,
+        _element: &super::Identity,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
@@ -52,7 +53,7 @@ impl Identity {
     //
     // See the documentation of gst::Event and gst::EventRef to see what can be done with
     // events, and especially the gst::EventView type for inspecting events.
-    fn sink_event(&self, pad: &gst::Pad, _element: &gst::Element, event: gst::Event) -> bool {
+    fn sink_event(&self, pad: &gst::Pad, _element: &super::Identity, event: gst::Event) -> bool {
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
         self.srcpad.push_event(event)
     }
@@ -69,7 +70,7 @@ impl Identity {
     fn sink_query(
         &self,
         pad: &gst::Pad,
-        _element: &gst::Element,
+        _element: &super::Identity,
         query: &mut gst::QueryRef,
     ) -> bool {
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -84,7 +85,7 @@ impl Identity {
     //
     // See the documentation of gst::Event and gst::EventRef to see what can be done with
     // events, and especially the gst::EventView type for inspecting events.
-    fn src_event(&self, pad: &gst::Pad, _element: &gst::Element, event: gst::Event) -> bool {
+    fn src_event(&self, pad: &gst::Pad, _element: &super::Identity, event: gst::Event) -> bool {
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
         self.sinkpad.push_event(event)
     }
@@ -101,7 +102,7 @@ impl Identity {
     fn src_query(
         &self,
         pad: &gst::Pad,
-        _element: &gst::Element,
+        _element: &super::Identity,
         query: &mut gst::QueryRef,
     ) -> bool {
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
@@ -114,6 +115,7 @@ impl Identity {
 // up the class data
 impl ObjectSubclass for Identity {
     const NAME: &'static str = "RsIdentity";
+    type Type = super::Identity;
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -123,7 +125,7 @@ impl ObjectSubclass for Identity {
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here and also get the class struct passed in case it's needed
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         // Create our two pads from the templates that were registered with
         // the class and set all the functions on them.
         //
@@ -189,7 +191,7 @@ impl ObjectSubclass for Identity {
     //
     // Actual instances can create pads based on those pad templates
     // with a subset of the caps given here.
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         // Set the element specific metadata. This information is what
         // is visible from gst-inspect-1.0 and can also be programatically
         // retrieved from the gst::Registry after initial registration
@@ -231,15 +233,14 @@ impl ObjectSubclass for Identity {
 // Implementation of glib::Object virtual methods
 impl ObjectImpl for Identity {
     // Called right after construction of a new instance
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         // Call the parent class' ::constructed() implementation first
         self.parent_constructed(obj);
 
         // Here we actually add the pads we created in Identity::new() to the
         // element so that GStreamer is aware of their existence.
-        let element = obj.downcast_ref::<gst::Element>().unwrap();
-        element.add_pad(&self.sinkpad).unwrap();
-        element.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 }
 
@@ -250,7 +251,7 @@ impl ElementImpl for Identity {
     // the element again.
     fn change_state(
         &self,
-        element: &gst::Element,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
@@ -258,16 +259,4 @@ impl ElementImpl for Identity {
         // Call the parent class' implementation of ::change_state()
         self.parent_change_state(element, transition)
     }
-}
-
-// Registers the type for our element, and then registers in GStreamer under
-// the name "rsidentity" for being able to instantiate it via e.g.
-// gst::ElementFactory::make().
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rsidentity",
-        gst::Rank::None,
-        Identity::get_type(),
-    )
 }

@@ -19,6 +19,8 @@ Our sine wave element is going to produce raw audio, with a number of channels a
 
 So let's get started with all the boilerplate. This time our element will be based on the [`PushSrc`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstPushSrc.html) base class instead of [`BaseTransform`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseTransform.html). `PushSrc` is a subclass of the [`BaseSrc`](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstBaseSrc.html) base class that only works in push mode, i.e. creates buffers as they arrive instead of allowing downstream elements to explicitly pull them.
 
+In `src/sinesrc/imp.rs`:
+
 ```rust
 use glib;
 use gst;
@@ -134,7 +136,7 @@ impl Default for State {
 }
 
 // Struct containing all the element data
-struct SineSrc {
+pub struct SineSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
 }
@@ -149,6 +151,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 impl ObjectSubclass for SineSrc {
     const NAME: &'static str = "RsSineSrc";
+    type Type = super::SineSrc;
     type ParentType = gst_base::PushSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -179,7 +182,7 @@ impl ObjectSubclass for SineSrc {
     // will automatically instantiate pads for them.
     //
     // Our element here can output f32 and f64
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         // Set the element specific metadata. This information is what
         // is visible from gst-inspect-1.0 and can also be programatically
         // retrieved from the gst::Registry after initial registration
@@ -231,22 +234,20 @@ impl ObjectSubclass for SineSrc {
 
 impl ObjectImpl for SineSrc {
     // Called right after construction of a new instance
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         // Call the parent class' ::constructed() implementation first
         self.parent_constructed(obj);
 
         // Initialize live-ness and notify the base class that
         // we'd like to operate in Time format
-        let basesrc = obj.downcast_ref::<gst_base::BaseSrc>().unwrap();
-        basesrc.set_live(DEFAULT_IS_LIVE);
-        basesrc.set_format(gst::Format::Time);
+        obj.set_live(DEFAULT_IS_LIVE);
+        obj.set_format(gst::Format::Time);
     }
 
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: u32, value: &glib::Value) {
         let prop = &PROPERTIES[id as usize];
-        let element = obj.clone().downcast::<BaseSrc>().unwrap();
 
         match *prop {
             Property::UInt("samples-per-buffer", ..) => {
@@ -254,7 +255,7 @@ impl ObjectImpl for SineSrc {
                 let samples_per_buffer = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: &element,
+                    obj: obj,
                     "Changing samples-per-buffer from {} to {}",
                     settings.samples_per_buffer,
                     samples_per_buffer
@@ -263,14 +264,14 @@ impl ObjectImpl for SineSrc {
                 drop(settings);
 
                 let _ =
-                    element.post_message(&gst::Message::new_latency().src(Some(&element)).build());
+                    obj.post_message(&gst::Message::new_latency().src(Some(obj)).build());
             }
             Property::UInt("freq", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let freq = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: &element,
+                    obj: obj,
                     "Changing freq from {} to {}",
                     settings.freq,
                     freq
@@ -282,7 +283,7 @@ impl ObjectImpl for SineSrc {
                 let volume = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: &element,
+                    obj: obj,
                     "Changing volume from {} to {}",
                     settings.volume,
                     volume
@@ -294,7 +295,7 @@ impl ObjectImpl for SineSrc {
                 let mute = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: &element,
+                    obj: obj,
                     "Changing mute from {} to {}",
                     settings.mute,
                     mute
@@ -306,7 +307,7 @@ impl ObjectImpl for SineSrc {
                 let is_live = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: &element,
+                    obj: obj,
                     "Changing is-live from {} to {}",
                     settings.is_live,
                     is_live
@@ -319,7 +320,7 @@ impl ObjectImpl for SineSrc {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &glib::Object, id: u32) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: u32) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id as usize];
 
         match *prop {
@@ -353,7 +354,7 @@ impl ElementImpl for SineSrc { }
 
 impl BaseSrcImpl for SineSrc {
     // Called when starting, so we can initialize all stream-related state to its defaults
-    fn start(&self, element: &BaseSrc) -> bool {
+    fn start(&self, element: &Self::Type) -> bool {
         // Reset state
         *self.state.lock().unwrap() = Default::default();
 
@@ -363,7 +364,7 @@ impl BaseSrcImpl for SineSrc {
     }
 
     // Called when shutting down the element so we can release all stream-related state
-    fn stop(&self, element: &BaseSrc) -> bool {
+    fn stop(&self, element: &Self::Type) -> bool {
         // Reset state
         *self.state.lock().unwrap() = Default::default();
 
@@ -372,6 +373,24 @@ impl BaseSrcImpl for SineSrc {
         true
     }
 }
+```
+
+In `src/sinesrc/mod.rs`:
+
+```rust
+use glib::prelude::*;
+
+mod imp;
+
+// The public Rust wrapper type for our element
+glib_wrapper! {
+    pub struct SineSrc(ObjectSubclass<imp::SineSrc>) @extends gst_base::BaseSrc, gst::Element, gst::Object;
+}
+
+// GStreamer elements need to be thread-safe. For the private implementation this is automatically
+// enforced but for the public wrapper type we need to specify this manually.
+unsafe impl Send for SineSrc {}
+unsafe impl Sync for SineSrc {}
 
 // Registers the type for our element, and then registers in GStreamer under
 // the name "rssinesrc" for being able to instantiate it via e.g.
@@ -381,7 +400,7 @@ pub fn register(plugin: &gst::Plugin) {
         Some(plugin),
         "rssinesrc",
         gst::Rank::None,
-        SineSrc::get_type(),
+        SineSrc::static_type(),
     )
 }
 ```
@@ -410,7 +429,7 @@ The first part that we have to implement, just like last time, is caps negotiati
 First of all, we need to get notified whenever the caps that our source is configured for are changing. This will happen once in the very beginning and then whenever the pipeline topology or state changes and new caps would be more optimal for the new situation. This notification happens via the `BaseTransform::set_caps` virtual method.
 
 ```rust
-    fn set_caps(&self, element: &BaseSrc, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+    fn set_caps(&self, element: &Self::Type, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         use std::f64::consts::PI;
 
         let info = gst_audio::AudioInfo::from_caps(caps).map_err(|_| {
@@ -469,7 +488,7 @@ As a last step we post a new `LATENCY` message on the bus whenever the sample 
 `BaseSrc` is by default already selecting possible caps for us, if there are multiple options. However these defaults might not be (and often are not) ideal and we should override the default behaviour slightly. This is done in the `BaseSrc::fixate` virtual method.
 
 ```rust
-    fn fixate(&self, element: &BaseSrc, mut caps: gst::Caps) -> gst::Caps {
+    fn fixate(&self, element: &Self::Type, mut caps: gst::Caps) -> gst::Caps {
         // Fixate the caps. BaseSrc will do some fixation for us, but
         // as we allow any rate between 1 and MAX it would fixate to 1. 1Hz
         // is generally not a useful sample rate.
@@ -561,7 +580,7 @@ Now that this is done, we need to implement the `PushSrc::create` virtual meth
 ```rust
     fn create(
         &self,
-        element: &PushSrc,
+        element: &Self::Type,
     ) -> Result<gst::Buffer, gst::FlowReturn> {
         // Keep a local copy of the values of all our properties at this very moment. This
         // ensures that the mutex is never locked for long and the application wouldn't
@@ -742,7 +761,7 @@ Now we also have to tell the base class that we're running in live mode now. Thi
 impl ElementImpl for SineSrc {
     fn change_state(
         &self,
-        element: &BaseSrc,
+        element: &Self::Type,
         transition: gst::StateChange,
     ) -> gst::StateChangeReturn {
         // Configure live'ness once here just before starting the source
@@ -763,7 +782,7 @@ And as a last step, we also need to notify downstream elements about our [laten
 This querying is done with the `LATENCY` query, which we will have to handle in the `BaseSrc::query()` function.
 
 ```rust
-    fn query(&self, element: &BaseSrc, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, element: &Self::Type, query: &mut gst::QueryRef) -> bool {
         use gst::QueryView;
 
         match query.view_mut() {
@@ -819,7 +838,7 @@ struct SineSrc {
 
 [...]
 
-    fn unlock(&self, element: &BaseSrc) -> bool {
+    fn unlock(&self, element: &Self::Type) -> bool {
         // This should unblock the create() function ASAP, so we
         // just unschedule the clock it here, if any.
         gst_debug!(CAT, obj: element, "Unlocking");
@@ -838,7 +857,7 @@ We store the clock ID in our struct, together with a boolean to signal whether w
 Once everything is unlocked, we need to reset things again so that data flow can happen in the future. This is done in the `unlock_stop` virtual method.
 
 ```rust
-    fn unlock_stop(&self, element: &BaseSrc) -> bool {
+    fn unlock_stop(&self, element: &Self::Type) -> bool {
         // This signals that unlocking is done, so we can reset
         // all values again.
         gst_debug!(CAT, obj: element, "Unlock stop");
@@ -903,11 +922,11 @@ As a last feature we implement seeking on our source element. In our case that o
 Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signalling whether we can actually seek in the `is_seekable` virtual method.
 
 ```rust
-    fn is_seekable(&self, _element: &BaseSrc) -> bool {
+    fn is_seekable(&self, _element: &Self::Type) -> bool {
         true
     }
 
-    fn do_seek(&self, element: &BaseSrc, segment: &mut gst::Segment) -> bool {
+    fn do_seek(&self, element: &Self::Type, segment: &mut gst::Segment) -> bool {
         // Handle seeking here. For Time and Default (sample offset) seeks we can
         // do something and have to update our sample offset and accumulator accordingly.
         //

@@ -153,7 +153,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 ```
 
-With that our `src/lib.rs` is complete, and all following code is only in `src/rgb2gray.rs`. At the top of the new file we first need to add various `use-directives` to import various types and functions we’re going to use into the current module’s scope.
+With that our `src/lib.rs` is complete, and all following code is only in `src/rgb2gray/imp.rs`. At the top of the new file we first need to add various `use-directives` to import various types and functions we’re going to use into the current module’s scope.
 
 ```rust
 use glib;
@@ -178,12 +178,13 @@ GStreamer is based on the GLib object system ([GObject](https://developer.gnome.
 So, as a next step we need to register a new type for our RGB to Grayscale converter GStreamer element with the GObject type system, and then register that type with GStreamer to be able to create new instances of it. We do this with the following code
 
 ```rust
-struct Rgb2Gray{}
+pub struct Rgb2Gray{}
 
 impl Rgb2Gray{}
 
 impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
+    type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -200,29 +201,50 @@ impl ObjectSubclass for Rgb2Gray {
     }
 }
 
+This defines a struct `Rgb2Gray` which is empty for now and an empty implementation of the struct which will later be used. The `ObjectSubclass` trait is implemented on the struct `Rgb2Gray` for providing static information about the type to the type system. By implementing `ObjectSubclass` we allow registering our struct with the GObject object system.
+
+`ObjectSubclass` has an associated constant which contains the name of the type, some associated types, and functions for initializing/returning a new instance of our element (`new`) and for initializing the class metadata (`class_init`, more on that later). We simply let those functions proxy to associated functions on the `Rgb2Gray` struct that we’re going to define at a later time.
+
+We also add the following code is in `src/rgb2gray/mod.rs`:
+
+```rust
+use glib::prelude::*;
+
+mod imp;
+
+// The public Rust wrapper type for our element
+glib_wrapper! {
+    pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
+}
+
+// GStreamer elements need to be thread-safe. For the private implementation this is automatically
+// enforced but for the public wrapper type we need to specify this manually.
+unsafe impl Send for Rgb2Gray {}
+unsafe impl Sync for Rgb2Gray {}
+
+// Registers the type for our element, and then registers in GStreamer under
+// the name "rsrgb2gray" for being able to instantiate it via e.g.
+// gst::ElementFactory::make().
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rsrgb2gray",
         gst::Rank::None,
-        Rgb2Gray::get_type(),
+        Rgb2Gray::static_type(),
     )
 }
-
 ```
 
-This defines a struct `Rgb2Gray` which is empty for now and an empty implementation of the struct which will later be used. The `ObjectSubclass` trait is implemented on the struct `Rgb2Gray` for providing static information about the type to the type system. By implementing `ObjectSubclass` we allow registering our struct with the GObject object system.
+This defines a Rust wrapper type for our element subclass. This is similar to `gst::Element` and others and provides the public interface to our element.
 
-`ObjectSubclass` has an associated constant which contains the name of the type, some associated types, and functions for initializing/returning a new instance of our element (`new`) and for initializing the class metadata (`class_init`, more on that later). We simply let those functions proxy to associated functions on the `Rgb2Gray` struct that we’re going to define at a later time.
-
-In addition, we also define a `register` function (the one that is already called from our `plugin_init` function). When `register` function is called it registers the element factory with GStreamer based on the type ID, to be able to create new instances of it with the name “rsrgb2gray” (e.g. when using [`gst::ElementFactory::make`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.ElementFactory.html#method.make)). The `get_type` function will register the type with the GObject type system on the first call and the next time it's called (or on all the following calls) it will return the type ID.
+In addition, we also define a `register` function (the one that is already called from our `plugin_init` function). When `register` function is called it registers the element factory with GStreamer based on the type ID, to be able to create new instances of it with the name “rsrgb2gray” (e.g. when using [`gst::ElementFactory::make`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/struct.ElementFactory.html#method.make)). The `static_type` function will register the type with the GObject type system on the first call and the next time it's called (or on all the following calls) it will return the type ID.
 
 ## Type Class & Instance Initialization
 
 As a next step we implement the `new` funtion and `class_init` functions. In the first version, this struct is empty for now but we will later use it to store all state of our element.
 
 ```rust
-struct Rgb2Gray {
+pub struct Rgb2Gray {
 }
 
 impl Rgb2Gray{}
@@ -235,7 +257,7 @@ impl ObjectSubclass for Rgb2Gray {
         }
     }
 
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
             "RGB-GRAY Converter",
             "Filter/Effect/Converter/Video",
@@ -267,17 +289,18 @@ impl BaseTransformImpl for Rgb2Gray {}
 
 With all this defined, `gst-inspect-1.0` should be able to show some more information about our element already but will still complain that it’s not complete yet.
 
-**Side note:** This is the basic code that should be in `rgb2gray.rs` to successfully build the plugin. You can fill up the code while going through the later part of the tutorial.
+**Side note:** This is the basic code that should be in `src/rgb2gray/imp.rs` and `src/rgb2gray/mod.rs` to successfully build the plugin. You can fill up the code while going through the later part of the tutorial.
 
 ```rust
-//all imports...
+// all imports...
 
-struct Rgb2Gray {}
+pub struct Rgb2Gray {}
 
 impl Rgb2Gray {}
 
 impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
+    type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -290,13 +313,26 @@ impl ObjectImpl for Rgb2Gray {}
 impl ElementImpl for Rgb2Gray {}
 
 impl BaseTransformImpl for Rgb2Gray {}
+```
+
+```rust
+use glib::prelude::*;
+
+mod imp;
+
+glib_wrapper! {
+    pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
+}
+
+unsafe impl Send for Rgb2Gray {}
+unsafe impl Sync for Rgb2Gray {}
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
         "rsrgb2gray",
         gst::Rank::None,
-        Rgb2Gray::get_type(),
+        Rgb2Gray::static_type(),
     )
 }
 ```
@@ -401,7 +437,7 @@ struct State {
     out_info: gst_video::VideoInfo,
 }
 
-struct Rgb2Gray {
+pub struct Rgb2Gray {
     state: Mutex<Option<State>>
 }
 
@@ -426,7 +462,7 @@ Whenever input/output caps are configured on our element, the `set_caps` virtual
 impl BaseTransformImpl for Rgb2Gray {
     fn set_caps(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         incaps: &gst::Caps,
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
@@ -452,7 +488,7 @@ impl BaseTransformImpl for Rgb2Gray {
         Ok(())
     }
 
-    fn stop(&self, element: &gst_base::BaseTransform) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
@@ -469,7 +505,7 @@ Next we have to provide information to the `BaseTransform` base class about the 
 
 ```rust
 impl BaseTransformImpl for Rgb2Gray {
-    fn get_unit_size(&self, _element: &gst_base::BaseTransform, caps: &gst::Caps) -> Option<usize> {
+    fn get_unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
         gst_video::VideoInfo::from_caps(caps).map(|info| info.size())
     }
 }
@@ -489,7 +525,7 @@ This has to be implemented in the `transform_caps` virtual method, and looks as 
 impl BaseTransformImpl for Rgb2Gray {
     fn transform_caps(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -579,7 +615,7 @@ Afterwards we have to actually call this function on every pixel. For this the t
 impl BaseTransformImpl for Rgb2Gray {
     fn transform(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -752,7 +788,7 @@ static PROPERTIES: [subclass::Property; 2] = [
     }),
 ];
 
-struct Rgb2Gray {
+pub struct Rgb2Gray {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
 }
@@ -777,7 +813,7 @@ In the next step we have to make use of these: we need to tell the GObject type 
 
 ```rust
 impl ObjectSubclass for Rgb2Gray {
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         [...]
         klass.install_properties(&PROPERTIES);
         [...]
@@ -787,9 +823,8 @@ impl ObjectSubclass for Rgb2Gray {
 impl ObjectImpl for Rgb2Gray {
     [...]
 
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
-        let element = obj.downcast_ref::<gst_base::BaseTransform>().unwrap();
 
         match *prop {
             subclass::Property("invert", ..) => {
@@ -797,7 +832,7 @@ impl ObjectImpl for Rgb2Gray {
                 let invert = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing invert from {} to {}",
                     settings.invert,
                     invert
@@ -809,7 +844,7 @@ impl ObjectImpl for Rgb2Gray {
                 let shift = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing shift from {} to {}",
                     settings.shift,
                     shift
@@ -820,7 +855,7 @@ impl ObjectImpl for Rgb2Gray {
         }
     }
 
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -871,7 +906,7 @@ impl Rgb2Gray {
 impl BaseTransformImpl for Rgb2Gray {
     fn transform(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {

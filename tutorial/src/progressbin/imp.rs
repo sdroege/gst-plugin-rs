@@ -15,24 +15,9 @@ use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
 
-// This enum may be used to control what type of output the progressbin should produce.
-// It also serves the secondary purpose of illustrating how to add enum-type properties
-// to a plugin written in rust.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
-#[repr(u32)]
-#[genum(type_name = "GstProgressBinOutput")]
-pub(crate) enum ProgressBinOutput {
-    #[genum(
-        name = "Println: Outputs the progress using a println! macro.",
-        nick = "println"
-    )]
-    Println = 0,
-    #[genum(
-        name = "Debug Category: Outputs the progress as info logs under the element's debug category.",
-        nick = "debug-category"
-    )]
-    DebugCategory = 1,
-}
+use super::ProgressBinOutput;
+
+// This module contains the private implementation details of our element
 
 const DEFAULT_OUTPUT_TYPE: ProgressBinOutput = ProgressBinOutput::Println;
 
@@ -45,7 +30,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 // Struct containing all the element data
-struct ProgressBin {
+pub struct ProgressBin {
     progress: gst::Element,
     srcpad: gst::GhostPad,
     sinkpad: gst::GhostPad,
@@ -72,6 +57,7 @@ static PROPERTIES: [subclass::Property; 1] = [subclass::Property("output", |name
 // up the class data
 impl ObjectSubclass for ProgressBin {
     const NAME: &'static str = "RsProgressBin";
+    type Type = super::ProgressBin;
     type ParentType = gst::Bin;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -81,7 +67,7 @@ impl ObjectSubclass for ProgressBin {
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here and also get the class struct passed in case it's needed
-    fn with_class(klass: &subclass::simple::ClassStruct<Self>) -> Self {
+    fn with_class(klass: &Self::Class) -> Self {
         // Create our two ghostpads from the templates that were registered with
         // the class. We don't provide a target for them yet because we can only
         // do so after the progressreport element was added to the bin.
@@ -112,7 +98,7 @@ impl ObjectSubclass for ProgressBin {
     //
     // Actual instances can create pads based on those pad templates
     // with a subset of the caps given here.
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         // Set the element specific metadata. This information is what
         // is visible from gst-inspect-1.0 and can also be programatically
         // retrieved from the gst::Registry after initial registration
@@ -158,9 +144,8 @@ impl ObjectSubclass for ProgressBin {
 impl ObjectImpl for ProgressBin {
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
-        let element = obj.downcast_ref::<gst::Bin>().unwrap();
 
         match *prop {
             subclass::Property("output", ..) => {
@@ -170,7 +155,7 @@ impl ObjectImpl for ProgressBin {
                     .expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing output from {:?} to {:?}",
                     output_type,
                     new_output_type
@@ -183,7 +168,7 @@ impl ObjectImpl for ProgressBin {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -196,16 +181,15 @@ impl ObjectImpl for ProgressBin {
     }
 
     // Called right after construction of a new instance
-    fn constructed(&self, obj: &glib::Object) {
+    fn constructed(&self, obj: &Self::Type) {
         // Call the parent class' ::constructed() implementation first
         self.parent_constructed(obj);
 
         // Here we actually add the pads we created in ProgressBin::new() to the
         // element so that GStreamer is aware of their existence.
-        let bin = obj.downcast_ref::<gst::Bin>().unwrap();
 
         // Add the progressreport element to the bin.
-        bin.add(&self.progress).unwrap();
+        obj.add(&self.progress).unwrap();
 
         // Then set the ghost pad targets to the corresponding pads of the progressreport element.
         self.sinkpad
@@ -216,8 +200,8 @@ impl ObjectImpl for ProgressBin {
             .unwrap();
 
         // And finally add the two ghostpads to the bin.
-        bin.add_pad(&self.sinkpad).unwrap();
-        bin.add_pad(&self.srcpad).unwrap();
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
     }
 }
 
@@ -226,7 +210,7 @@ impl ElementImpl for ProgressBin {}
 
 // Implementation of gst::Bin virtual methods
 impl BinImpl for ProgressBin {
-    fn handle_message(&self, bin: &gst::Bin, msg: gst::Message) {
+    fn handle_message(&self, bin: &Self::Type, msg: gst::Message) {
         use gst::MessageView;
 
         match msg.view() {
@@ -255,16 +239,4 @@ impl BinImpl for ProgressBin {
             _ => self.parent_handle_message(bin, msg),
         }
     }
-}
-
-// Registers the type for our element, and then registers in GStreamer under
-// the name "rsprogressbin" for being able to instantiate it via e.g.
-// gst::ElementFactory::make().
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rsprogressbin",
-        gst::Rank::None,
-        ProgressBin::get_type(),
-    )
 }

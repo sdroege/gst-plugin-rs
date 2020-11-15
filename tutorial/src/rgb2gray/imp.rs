@@ -17,6 +17,16 @@ use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
 
+// This module contains the private implementation details of our element
+//
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "rsrgb2gray",
+        gst::DebugColorFlags::empty(),
+        Some("Rust RGB-GRAY converter"),
+    )
+});
+
 // Default values of properties
 const DEFAULT_INVERT: bool = false;
 const DEFAULT_SHIFT: u32 = 0;
@@ -68,18 +78,10 @@ struct State {
 }
 
 // Struct containing all the element data
-struct Rgb2Gray {
+pub struct Rgb2Gray {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
 }
-
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
-    gst::DebugCategory::new(
-        "rsrgb2gray",
-        gst::DebugColorFlags::empty(),
-        Some("Rust RGB-GRAY converter"),
-    )
-});
 
 impl Rgb2Gray {
     // Converts one pixel of BGRx to a grayscale value, shifting and/or
@@ -113,6 +115,7 @@ impl Rgb2Gray {
 // up the class data
 impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
+    type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
@@ -139,7 +142,7 @@ impl ObjectSubclass for Rgb2Gray {
     // will automatically instantiate pads for them.
     //
     // Our element here can convert BGRx to BGRx or GRAY8, both being grayscale.
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
+    fn class_init(klass: &mut Self::Class) {
         // Set the element specific metadata. This information is what
         // is visible from gst-inspect-1.0 and can also be programatically
         // retrieved from the gst::Registry after initial registration
@@ -239,9 +242,8 @@ impl ObjectSubclass for Rgb2Gray {
 impl ObjectImpl for Rgb2Gray {
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(&self, obj: &glib::Object, id: usize, value: &glib::Value) {
+    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
         let prop = &PROPERTIES[id];
-        let element = obj.downcast_ref::<gst_base::BaseTransform>().unwrap();
 
         match *prop {
             subclass::Property("invert", ..) => {
@@ -249,7 +251,7 @@ impl ObjectImpl for Rgb2Gray {
                 let invert = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing invert from {} to {}",
                     settings.invert,
                     invert
@@ -261,7 +263,7 @@ impl ObjectImpl for Rgb2Gray {
                 let shift = value.get_some().expect("type checked upstream");
                 gst_info!(
                     CAT,
-                    obj: element,
+                    obj: obj,
                     "Changing shift from {} to {}",
                     settings.shift,
                     shift
@@ -274,7 +276,7 @@ impl ObjectImpl for Rgb2Gray {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &glib::Object, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
         let prop = &PROPERTIES[id];
 
         match *prop {
@@ -302,7 +304,7 @@ impl BaseTransformImpl for Rgb2Gray {
     // In our case that means that:
     fn transform_caps(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         direction: gst::PadDirection,
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
@@ -360,7 +362,7 @@ impl BaseTransformImpl for Rgb2Gray {
     // Returns the size of one processing unit (i.e. a frame in our case) corresponding
     // to the given caps. This is used for allocating a big enough output buffer and
     // sanity checking the input buffer size, among other things.
-    fn get_unit_size(&self, _element: &gst_base::BaseTransform, caps: &gst::Caps) -> Option<usize> {
+    fn get_unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
         gst_video::VideoInfo::from_caps(caps)
             .map(|info| info.size())
             .ok()
@@ -374,7 +376,7 @@ impl BaseTransformImpl for Rgb2Gray {
     // the width, stride, etc when transforming buffers
     fn set_caps(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         incaps: &gst::Caps,
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
@@ -402,7 +404,7 @@ impl BaseTransformImpl for Rgb2Gray {
 
     // Called when shutting down the element so we can release all stream-related state
     // There's also start(), which is called whenever starting the element again
-    fn stop(&self, element: &gst_base::BaseTransform) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
@@ -414,7 +416,7 @@ impl BaseTransformImpl for Rgb2Gray {
     // Does the actual transformation of the input buffer to the output buffer
     fn transform(
         &self,
-        element: &gst_base::BaseTransform,
+        element: &Self::Type,
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
@@ -561,16 +563,4 @@ impl BaseTransformImpl for Rgb2Gray {
 
         Ok(gst::FlowSuccess::Ok)
     }
-}
-
-// Registers the type for our element, and then registers in GStreamer under
-// the name "rsrgb2gray" for being able to instantiate it via e.g.
-// gst::ElementFactory::make().
-pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
-    gst::Element::register(
-        Some(plugin),
-        "rsrgb2gray",
-        gst::Rank::None,
-        Rgb2Gray::get_type(),
-    )
 }
