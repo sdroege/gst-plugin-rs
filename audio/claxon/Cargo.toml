@@ -18,7 +18,7 @@ atomic_refcell = "0.1"
 
 [lib]
 name = "gstclaxon"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [build-dependencies]

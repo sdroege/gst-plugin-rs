@@ -20,7 +20,7 @@ nnnoiseless = { version = "0.3", default-features = false }
 
 [lib]
 name = "gstrsaudiofx"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [dev-dependencies]

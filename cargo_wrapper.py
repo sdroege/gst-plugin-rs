@@ -27,6 +27,12 @@ if len(extra_env) > 0:
 if command == 'build':
     # cargo build
     ext = sys.argv[8]
+    # when using --default-library=both 2 extensions are passed
+    try:
+        ext2 = sys.argv[9]
+    except IndexError:
+        ext2 = None
+
     cargo_cmd = ['cargo', 'build', '--all-targets',
                  '--manifest-path', os.path.join(
                      meson_current_source_dir, 'Cargo.toml'),
@@ -56,3 +62,6 @@ if command == 'build':
     # Copy so files to build dir
     for f in glob.glob(os.path.join(cargo_target_dir, target, '*.' + ext)):
         shutil.copy(f, meson_build_dir)
+    if ext2:
+        for f in glob.glob(os.path.join(cargo_target_dir, target, '*.' + ext2)):
+            shutil.copy(f, meson_build_dir)

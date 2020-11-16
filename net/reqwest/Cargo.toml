@@ -24,7 +24,7 @@ hyper = "0.13"
 
 [lib]
 name = "gstreqwest"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [build-dependencies]

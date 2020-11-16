@@ -20,7 +20,7 @@ package="gstreamer"
 
 [lib]
 name = "gstrstextwrap"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [build-dependencies]

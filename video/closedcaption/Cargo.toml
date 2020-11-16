@@ -46,7 +46,7 @@ package="gstreamer-check"
 
 [lib]
 name = "gstrsclosedcaption"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [build-dependencies]

@@ -17,7 +17,7 @@ lazy_static = "1.0"
 
 [lib]
 name = "gstrsdav1d"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [build-dependencies]

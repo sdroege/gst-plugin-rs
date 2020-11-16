@@ -19,7 +19,7 @@ byte-slice-cast = "1.0"
 
 [lib]
 name = "gstcsound"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [[example]]

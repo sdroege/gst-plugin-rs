@@ -27,7 +27,7 @@ gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org
 
 [lib]
 name = "gstfallbackswitch"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [[example]]

@@ -19,7 +19,7 @@ lazy_static = "1.0"
 
 [lib]
 name = "gstlewton"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [build-dependencies]

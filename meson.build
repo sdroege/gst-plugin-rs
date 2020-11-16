@@ -15,11 +15,14 @@ cargo_wrapper = find_program('cargo_wrapper.py')
 
 system = build_machine.system()
 if system == 'windows'
-  ext = 'dll'
+  ext_dynamic = 'dll'
+  ext_static = 'lib'
 elif system == 'darwin'
-  ext = 'dylib'
+  ext_dynamic = 'dylib'
+  ext_static = 'a'
 else
-  ext = 'so'
+  ext_dynamic = 'so'
+  ext_static = 'a'
 endif
 
 plugins_rep = {
@@ -82,10 +85,22 @@ endif
 
 output = []
 
-foreach p, lib : plugins_rep
-  # Add the plugin file as output
-  output += [lib + '.' + ext]
-endforeach
+extensions = []
+
+# Add the plugin file as output
+if get_option('default_library') == 'shared' or get_option('default_library') == 'both'
+  extensions += [ext_dynamic]
+  foreach p, lib : plugins_rep
+    output += [lib + '.' + ext_dynamic]
+  endforeach
+endif
+
+if get_option('default_library') == 'static' or get_option('default_library') == 'both'
+  extensions += [ext_static]
+  foreach p, lib : plugins_rep
+    output += [lib + '.' + ext_static]
+  endforeach
+endif
 
 # Need to depends on all gstreamer-rs deps to ensure they are built
 # before gstreamer-rs when building with gst-build.
@@ -143,7 +158,7 @@ rs_plugins = custom_target('gst-plugins-rs',
     target,
     exclude,
     extra_env_str,
-    ext])
+    extensions])
 
 # FIXME: raises a warning as the target has multiple outputs and meson will use
 # only the first one. All the plugins have the same basedir, hence

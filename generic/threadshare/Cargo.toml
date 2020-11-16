@@ -36,7 +36,7 @@ socket2 = { version = "0.3", features = ["reuseport"] }
 
 [lib]
 name = "gstthreadshare"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib", "rlib", "staticlib"]
 path = "src/lib.rs"
 
 [[example]]
