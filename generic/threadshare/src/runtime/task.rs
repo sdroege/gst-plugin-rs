@@ -657,7 +657,7 @@ impl Task {
 
             res
         })
-        .unwrap_or_else(|| {
+        .unwrap_or({
             // Future was spawned as a subtask
             Ok(TransitionStatus::Async { trigger, origin })
         })

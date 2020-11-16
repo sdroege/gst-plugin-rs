@@ -301,6 +301,7 @@ struct UdpSinkPadHandlerInner {
     latency: gst::ClockTime,
     socket: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
     socket_v6: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
+    #[allow(clippy::rc_buffer)]
     clients: Arc<Vec<SocketAddr>>,
     clients_to_configure: Vec<SocketAddr>,
     clients_to_unconfigure: Vec<SocketAddr>,

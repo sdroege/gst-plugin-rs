@@ -1382,10 +1382,7 @@ impl ToggleRecord {
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
 
-        let forward = match event.view() {
-            EventView::Seek(..) => false,
-            _ => true,
-        };
+        let forward = !matches!(event.view(), EventView::Seek(..));
 
         let rec_state = self.state.lock();
         let running_time_offset = rec_state.running_time_offset.unwrap_or(0) as i64;
