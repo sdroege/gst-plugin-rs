@@ -2,7 +2,7 @@ project('gst-plugins-rs',
         'rust',
         'c',
         version: '0.13.0',
-        meson_version : '>= 0.52')
+        meson_version : '>= 0.54')
 
 if get_option('debug')
   target = 'debug'
@@ -160,10 +160,7 @@ rs_plugins = custom_target('gst-plugins-rs',
     extra_env_str,
     extensions])
 
-# FIXME: raises a warning as the target has multiple outputs and meson will use
-# only the first one. All the plugins have the same basedir, hence
-# GST_PLUGIN_PATH will include them all, so that's ok.
-plugins = [rs_plugins]
+plugins = rs_plugins.to_list()
 
 test('tests',
   cargo_wrapper,
