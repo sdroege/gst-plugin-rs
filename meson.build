@@ -33,10 +33,13 @@ plugins_rep = {
   'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
   'gst-plugin-file': 'libgstrsfile',
   'gst-plugin-flv': 'libgstrsflv',
+  'gst-plugin-gif': 'libgstgif',
   'gst-plugin-lewton': 'libgstlewton',
   'gst-plugin-rav1e': 'libgstrav1e',
   'gst-plugin-reqwest': 'libgstreqwest',
+  'gst-plugin-rspng': 'libgstrspng',
   'gst-plugin-rusoto': 'libgstrusoto',
+  'gst-plugin-textwrap': 'libgstrstextwrap',
   'gst-plugin-threadshare': 'libgstthreadshare',
   'gst-plugin-togglerecord': 'libgsttogglerecord',
 }
