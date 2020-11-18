@@ -150,6 +150,22 @@ test nightly:
   rules:
     - if: '$UPDATE_IMG == null || $UPDATE_IMG == "nightly"'
 
+meson shared:
+  extends: .img-stable
+  script:
+    - meson build --default-library=shared
+    - ninja -C build
+  rules:
+    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
+
+meson static:
+  extends: .img-stable
+  script:
+    - meson build --default-library=static
+    - ninja -C build
+  rules:
+    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
+
 rustfmt:
   extends: .img-stable
   stage: "lint"
