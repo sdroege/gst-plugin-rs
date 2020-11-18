@@ -153,8 +153,9 @@ test nightly:
 meson shared:
   extends: .img-stable
   script:
-    - meson build --default-library=shared
-    - ninja -C build
+    - meson build --default-library=shared --prefix=$(pwd)/install
+    - ninja -C build install
+    - ./ci/check-plugins-installed.py install
   rules:
     - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
 
