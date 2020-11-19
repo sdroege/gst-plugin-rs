@@ -1866,25 +1866,25 @@ impl ObjectImpl for AudioLoudNorm {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("loudness-target", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.loudness_target.to_value())
+                settings.loudness_target.to_value()
             }
             subclass::Property("loudness-range-target", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.loudness_range_target.to_value())
+                settings.loudness_range_target.to_value()
             }
             subclass::Property("max-true-peak", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.max_true_peak.to_value())
+                settings.max_true_peak.to_value()
             }
             subclass::Property("offset", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.offset.to_value())
+                settings.offset.to_value()
             }
             _ => unimplemented!(),
         }

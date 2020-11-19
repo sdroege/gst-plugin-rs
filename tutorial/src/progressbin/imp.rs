@@ -168,13 +168,13 @@ impl ObjectImpl for ProgressBin {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("output", ..) => {
                 let output_type = self.output_type.lock().unwrap();
-                Ok(output_type.to_value())
+                output_type.to_value()
             }
             _ => unimplemented!(),
         }

@@ -890,13 +890,13 @@ impl ObjectImpl for TtToCea608 {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("mode", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.mode.to_value())
+                settings.mode.to_value()
             }
             _ => unimplemented!(),
         }

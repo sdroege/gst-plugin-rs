@@ -179,7 +179,7 @@ impl ObjectImpl for FileSink {
         };
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("location", ..) => {
@@ -189,7 +189,7 @@ impl ObjectImpl for FileSink {
                     .as_ref()
                     .map(|location| location.to_string());
 
-                Ok(location.to_value())
+                location.to_value()
             }
             _ => unimplemented!(),
         }

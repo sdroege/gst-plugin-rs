@@ -855,17 +855,17 @@ impl ObjectImpl for Rgb2Gray {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("invert", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.invert.to_value())
+                settings.invert.to_value()
             }
             subclass::Property("shift", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.shift.to_value())
+                settings.shift.to_value()
             }
             _ => unimplemented!(),
         }

@@ -259,7 +259,7 @@ impl ObjectImpl for S3Src {
         }
     }
 
-    fn get_property(&self, _: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id as usize];
 
         match *prop {
@@ -269,7 +269,7 @@ impl ObjectImpl for S3Src {
                     None => "".to_string(),
                 };
 
-                Ok(url.to_value())
+                url.to_value()
             }
             _ => unimplemented!(),
         }

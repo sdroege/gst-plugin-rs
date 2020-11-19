@@ -1702,17 +1702,17 @@ impl ObjectImpl for ToggleRecord {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("record", ..) => {
                 let settings = self.settings.lock();
-                Ok(settings.record.to_value())
+                settings.record.to_value()
             }
             subclass::Property("recording", ..) => {
                 let rec_state = self.state.lock();
-                Ok((rec_state.recording_state == RecordingState::Recording).to_value())
+                (rec_state.recording_state == RecordingState::Recording).to_value()
             }
             _ => unimplemented!(),
         }

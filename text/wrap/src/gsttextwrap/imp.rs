@@ -362,21 +362,21 @@ impl ObjectImpl for TextWrap {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("dictionary", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.dictionary.to_value())
+                settings.dictionary.to_value()
             }
             subclass::Property("columns", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.columns.to_value())
+                settings.columns.to_value()
             }
             subclass::Property("lines", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.lines.to_value())
+                settings.lines.to_value()
             }
             _ => unimplemented!(),
         }

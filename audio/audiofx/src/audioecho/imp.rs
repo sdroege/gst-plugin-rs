@@ -223,25 +223,25 @@ impl ObjectImpl for AudioEcho {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("max-delay", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.max_delay.to_value())
+                settings.max_delay.to_value()
             }
             subclass::Property("delay", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.delay.to_value())
+                settings.delay.to_value()
             }
             subclass::Property("intensity", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.intensity.to_value())
+                settings.intensity.to_value()
             }
             subclass::Property("feedback", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.feedback.to_value())
+                settings.feedback.to_value()
             }
             _ => unimplemented!(),
         }

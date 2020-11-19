@@ -743,51 +743,51 @@ impl ObjectImpl for ReqwestHttpSrc {
         };
     }
 
-    fn get_property(&self, obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
         match *prop {
             subclass::Property("location", ..) => {
                 let settings = self.settings.lock().unwrap();
                 let location = settings.location.as_ref().map(Url::to_string);
 
-                Ok(location.to_value())
+                location.to_value()
             }
             subclass::Property("user-agent", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.user_agent.to_value())
+                settings.user_agent.to_value()
             }
-            subclass::Property("is-live", ..) => Ok(obj.is_live().to_value()),
+            subclass::Property("is-live", ..) => obj.is_live().to_value(),
             subclass::Property("user-id", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.user_id.to_value())
+                settings.user_id.to_value()
             }
             subclass::Property("user-pw", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.user_pw.to_value())
+                settings.user_pw.to_value()
             }
             subclass::Property("timeout", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.timeout.to_value())
+                settings.timeout.to_value()
             }
             subclass::Property("compress", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.compress.to_value())
+                settings.compress.to_value()
             }
             subclass::Property("extra-headers", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.extra_headers.to_value())
+                settings.extra_headers.to_value()
             }
             subclass::Property("cookies", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.cookies.to_value())
+                settings.cookies.to_value()
             }
             subclass::Property("iradio-mode", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.iradio_mode.to_value())
+                settings.iradio_mode.to_value()
             }
             subclass::Property("keep-alive", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.keep_alive.to_value())
+                settings.keep_alive.to_value()
             }
             _ => unimplemented!(),
         }

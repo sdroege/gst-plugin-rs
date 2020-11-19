@@ -667,16 +667,16 @@ impl ObjectImpl for AppSrc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         let settings = self.settings.lock().unwrap();
         match *prop {
-            subclass::Property("context", ..) => Ok(settings.context.to_value()),
-            subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
-            subclass::Property("caps", ..) => Ok(settings.caps.to_value()),
-            subclass::Property("max-buffers", ..) => Ok(settings.max_buffers.to_value()),
-            subclass::Property("do-timestamp", ..) => Ok(settings.do_timestamp.to_value()),
+            subclass::Property("context", ..) => settings.context.to_value(),
+            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
+            subclass::Property("caps", ..) => settings.caps.to_value(),
+            subclass::Property("max-buffers", ..) => settings.max_buffers.to_value(),
+            subclass::Property("do-timestamp", ..) => settings.do_timestamp.to_value(),
             _ => unimplemented!(),
         }
     }

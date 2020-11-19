@@ -84,7 +84,7 @@ impl State {
         framerate: gst::Fraction,
         element: &super::SccParse,
     ) -> Result<gst_video::ValidVideoTimeCode, gst::FlowError> {
-        use std::convert::TryInto;
+        use std::convert::TryFrom;
 
         let timecode = gst_video::VideoTimeCode::new(
             framerate,
@@ -97,12 +97,17 @@ impl State {
             tc.hours,
             tc.minutes,
             tc.seconds,
-            tc.frames,
+            0,
             0,
         );
 
-        match timecode.try_into() {
-            Ok(timecode) => Ok(timecode),
+        match gst_video::ValidVideoTimeCode::try_from(timecode) {
+            Ok(mut timecode) => {
+                // Add the number of frames here as sometimes it's higher than 30 and we simply
+                // want to wrap around in that case while keeping the timecode valid.
+                timecode.add_frames(tc.frames as i64);
+                Ok(timecode)
+            }
             Err(timecode) => {
                 let last_timecode =
                     self.last_timecode

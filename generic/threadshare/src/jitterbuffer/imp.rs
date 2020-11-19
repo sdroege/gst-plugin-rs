@@ -1537,25 +1537,25 @@ impl ObjectImpl for JitterBuffer {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("latency", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.latency_ms.to_value())
+                settings.latency_ms.to_value()
             }
             subclass::Property("do-lost", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.do_lost.to_value())
+                settings.do_lost.to_value()
             }
             subclass::Property("max-dropout-time", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.max_dropout_time.to_value())
+                settings.max_dropout_time.to_value()
             }
             subclass::Property("max-misorder-time", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.max_misorder_time.to_value())
+                settings.max_misorder_time.to_value()
             }
             subclass::Property("stats", ..) => {
                 let state = self.state.lock().unwrap();
@@ -1567,15 +1567,15 @@ impl ObjectImpl for JitterBuffer {
                         ("num-late", &state.stats.num_late),
                     ],
                 );
-                Ok(s.to_value())
+                s.to_value()
             }
             subclass::Property("context", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.context.to_value())
+                settings.context.to_value()
             }
             subclass::Property("context-wait", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.context_wait.to_value())
+                settings.context_wait.to_value()
             }
             _ => unimplemented!(),
         }

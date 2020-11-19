@@ -369,29 +369,29 @@ impl ObjectImpl for SineSrc {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("samples-per-buffer", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.samples_per_buffer.to_value())
+                settings.samples_per_buffer.to_value()
             }
             subclass::Property("freq", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.freq.to_value())
+                settings.freq.to_value()
             }
             subclass::Property("volume", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.volume.to_value())
+                settings.volume.to_value()
             }
             subclass::Property("mute", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.mute.to_value())
+                settings.mute.to_value()
             }
             subclass::Property("is-live", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.is_live.to_value())
+                settings.is_live.to_value()
             }
             _ => unimplemented!(),
         }

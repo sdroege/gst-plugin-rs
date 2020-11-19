@@ -422,49 +422,49 @@ impl ObjectImpl for Rav1Enc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("speed-preset", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.speed_preset.to_value())
+                settings.speed_preset.to_value()
             }
             subclass::Property("low-latency", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.low_latency.to_value())
+                settings.low_latency.to_value()
             }
             subclass::Property("min-key-frame-interval", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.min_key_frame_interval.to_value())
+                settings.min_key_frame_interval.to_value()
             }
             subclass::Property("max-key-frame-interval", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.max_key_frame_interval.to_value())
+                settings.max_key_frame_interval.to_value()
             }
             subclass::Property("bitrate", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.bitrate.to_value())
+                settings.bitrate.to_value()
             }
             subclass::Property("quantizer", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok((settings.quantizer as u32).to_value())
+                (settings.quantizer as u32).to_value()
             }
             subclass::Property("tile-cols", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok((settings.tile_cols as u32).to_value())
+                (settings.tile_cols as u32).to_value()
             }
             subclass::Property("tile-rows", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok((settings.tile_rows as u32).to_value())
+                (settings.tile_rows as u32).to_value()
             }
             subclass::Property("tiles", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok((settings.tiles as u32).to_value())
+                (settings.tiles as u32).to_value()
             }
             subclass::Property("threads", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok((settings.threads as u32).to_value())
+                (settings.threads as u32).to_value()
             }
             _ => unimplemented!(),
         }

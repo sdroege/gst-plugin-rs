@@ -454,21 +454,21 @@ impl ObjectImpl for CCDetect {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("window", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.window.to_value())
+                settings.window.to_value()
             }
             subclass::Property("cc608", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.cc608.to_value())
+                settings.cc608.to_value()
             }
             subclass::Property("cc708", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.cc708.to_value())
+                settings.cc708.to_value()
             }
             _ => unimplemented!(),
         }

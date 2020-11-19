@@ -1119,21 +1119,21 @@ impl ObjectImpl for Transcriber {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("language-code", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.language_code.to_value())
+                settings.language_code.to_value()
             }
             subclass::Property("latency", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.latency_ms.to_value())
+                settings.latency_ms.to_value()
             }
             subclass::Property("use-partial-results", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.use_partial_results.to_value())
+                settings.use_partial_results.to_value()
             }
             _ => unimplemented!(),
         }

@@ -1341,41 +1341,41 @@ impl ObjectImpl for UdpSink {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         let settings = self.settings.lock().unwrap();
         match *prop {
-            subclass::Property("sync", ..) => Ok(settings.sync.to_value()),
-            subclass::Property("bind-address", ..) => Ok(settings.bind_address.to_value()),
-            subclass::Property("bind-port", ..) => Ok(settings.bind_port.to_value()),
-            subclass::Property("bind-address-v6", ..) => Ok(settings.bind_address_v6.to_value()),
-            subclass::Property("bind-port-v6", ..) => Ok(settings.bind_port_v6.to_value()),
-            subclass::Property("socket", ..) => Ok(settings
+            subclass::Property("sync", ..) => settings.sync.to_value(),
+            subclass::Property("bind-address", ..) => settings.bind_address.to_value(),
+            subclass::Property("bind-port", ..) => settings.bind_port.to_value(),
+            subclass::Property("bind-address-v6", ..) => settings.bind_address_v6.to_value(),
+            subclass::Property("bind-port-v6", ..) => settings.bind_port_v6.to_value(),
+            subclass::Property("socket", ..) => settings
                 .socket
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
-                .to_value()),
-            subclass::Property("used-socket", ..) => Ok(settings
+                .to_value(),
+            subclass::Property("used-socket", ..) => settings
                 .used_socket
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
-                .to_value()),
-            subclass::Property("socket-v6", ..) => Ok(settings
+                .to_value(),
+            subclass::Property("socket-v6", ..) => settings
                 .socket_v6
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
-                .to_value()),
-            subclass::Property("used-socket-v6", ..) => Ok(settings
+                .to_value(),
+            subclass::Property("used-socket-v6", ..) => settings
                 .used_socket_v6
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
-                .to_value()),
-            subclass::Property("auto-multicast", ..) => Ok(settings.sync.to_value()),
-            subclass::Property("loop", ..) => Ok(settings.multicast_loop.to_value()),
-            subclass::Property("ttl", ..) => Ok(settings.ttl.to_value()),
-            subclass::Property("ttl-mc", ..) => Ok(settings.ttl_mc.to_value()),
-            subclass::Property("qos-dscp", ..) => Ok(settings.qos_dscp.to_value()),
+                .to_value(),
+            subclass::Property("auto-multicast", ..) => settings.sync.to_value(),
+            subclass::Property("loop", ..) => settings.multicast_loop.to_value(),
+            subclass::Property("ttl", ..) => settings.ttl.to_value(),
+            subclass::Property("ttl-mc", ..) => settings.ttl_mc.to_value(),
+            subclass::Property("qos-dscp", ..) => settings.qos_dscp.to_value(),
             subclass::Property("clients", ..) => {
                 drop(settings);
 
@@ -1386,10 +1386,10 @@ impl ObjectImpl for UdpSink {
                     .map(ToString::to_string)
                     .collect();
 
-                Ok(clients.join(",").to_value())
+                clients.join(",").to_value()
             }
-            subclass::Property("context", ..) => Ok(settings.context.to_value()),
-            subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
+            subclass::Property("context", ..) => settings.context.to_value(),
+            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
             _ => unimplemented!(),
         }
     }

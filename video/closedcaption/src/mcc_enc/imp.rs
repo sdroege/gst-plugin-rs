@@ -591,17 +591,17 @@ impl ObjectImpl for MccEnc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("uuid", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.uuid.to_value())
+                settings.uuid.to_value()
             }
             subclass::Property("creation-date", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.creation_date.to_value())
+                settings.creation_date.to_value()
             }
             _ => unimplemented!(),
         }

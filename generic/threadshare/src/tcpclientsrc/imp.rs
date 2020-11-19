@@ -685,17 +685,17 @@ impl ObjectImpl for TcpClientSrc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         let settings = self.settings.lock().unwrap();
         match *prop {
-            subclass::Property("host", ..) => Ok(settings.host.to_value()),
-            subclass::Property("port", ..) => Ok(settings.port.to_value()),
-            subclass::Property("caps", ..) => Ok(settings.caps.to_value()),
-            subclass::Property("blocksize", ..) => Ok(settings.blocksize.to_value()),
-            subclass::Property("context", ..) => Ok(settings.context.to_value()),
-            subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
+            subclass::Property("host", ..) => settings.host.to_value(),
+            subclass::Property("port", ..) => settings.port.to_value(),
+            subclass::Property("caps", ..) => settings.caps.to_value(),
+            subclass::Property("blocksize", ..) => settings.blocksize.to_value(),
+            subclass::Property("context", ..) => settings.context.to_value(),
+            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
             _ => unimplemented!(),
         }
     }

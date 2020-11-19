@@ -507,52 +507,52 @@ impl ObjectImpl for FallbackSrc {
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
     #[allow(clippy::blocks_in_if_conditions)]
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("enable-audio", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.enable_audio.to_value())
+                settings.enable_audio.to_value()
             }
             subclass::Property("enable-video", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.enable_video.to_value())
+                settings.enable_video.to_value()
             }
             subclass::Property("uri", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.uri.to_value())
+                settings.uri.to_value()
             }
             subclass::Property("source", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.source.to_value())
+                settings.source.to_value()
             }
             subclass::Property("fallback-uri", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.fallback_uri.to_value())
+                settings.fallback_uri.to_value()
             }
             subclass::Property("timeout", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.timeout.to_value())
+                settings.timeout.to_value()
             }
             subclass::Property("restart-timeout", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.restart_timeout.to_value())
+                settings.restart_timeout.to_value()
             }
             subclass::Property("retry-timeout", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.retry_timeout.to_value())
+                settings.retry_timeout.to_value()
             }
             subclass::Property("restart-on-eos", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.restart_on_eos.to_value())
+                settings.restart_on_eos.to_value()
             }
             subclass::Property("status", ..) => {
                 let state_guard = self.state.lock().unwrap();
 
                 // If we have no state then we'r stopped
                 let state = match &*state_guard {
-                    None => return Ok(Status::Stopped.to_value()),
+                    None => return Status::Stopped.to_value(),
                     Some(ref state) => state,
                 };
 
@@ -561,7 +561,7 @@ impl ObjectImpl for FallbackSrc {
                     || state.source_pending_restart_timeout.is_some()
                     || state.source_retry_timeout.is_some()
                 {
-                    return Ok(Status::Retrying.to_value());
+                    return Status::Retrying.to_value();
                 }
 
                 // Otherwise if buffering < 100, we have no streams yet or of the expected
@@ -593,21 +593,21 @@ impl ObjectImpl for FallbackSrc {
                             .map(|s| s.source_srcpad.is_none() || s.source_srcpad_block.is_some())
                             .unwrap_or(true))
                 {
-                    return Ok(Status::Buffering.to_value());
+                    return Status::Buffering.to_value();
                 }
 
                 // Otherwise we're running now
-                Ok(Status::Running.to_value())
+                Status::Running.to_value()
             }
             subclass::Property("min-latency", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.min_latency.to_value())
+                settings.min_latency.to_value()
             }
             subclass::Property("buffer-duration", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.buffer_duration.to_value())
+                settings.buffer_duration.to_value()
             }
-            subclass::Property("statistics", ..) => Ok(self.get_stats().to_value()),
+            subclass::Property("statistics", ..) => self.get_stats().to_value(),
             _ => unimplemented!(),
         }
     }

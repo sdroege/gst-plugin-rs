@@ -446,15 +446,15 @@ impl ObjectImpl for S3Sink {
         }
     }
 
-    fn get_property(&self, _: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id as usize];
         let settings = self.settings.lock().unwrap();
 
         match *prop {
-            subclass::Property("key", ..) => Ok(settings.key.to_value()),
-            subclass::Property("bucket", ..) => Ok(settings.bucket.to_value()),
-            subclass::Property("region", ..) => Ok(settings.region.name().to_value()),
-            subclass::Property("part-size", ..) => Ok(settings.buffer_size.to_value()),
+            subclass::Property("key", ..) => settings.key.to_value(),
+            subclass::Property("bucket", ..) => settings.bucket.to_value(),
+            subclass::Property("region", ..) => settings.region.name().to_value(),
+            subclass::Property("part-size", ..) => settings.buffer_size.to_value(),
             _ => unimplemented!(),
         }
     }

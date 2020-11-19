@@ -893,30 +893,30 @@ impl ObjectImpl for UdpSrc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         let settings = self.settings.lock().unwrap();
         match *prop {
-            subclass::Property("address", ..) => Ok(settings.address.to_value()),
-            subclass::Property("port", ..) => Ok((settings.port).to_value()),
-            subclass::Property("reuse", ..) => Ok(settings.reuse.to_value()),
-            subclass::Property("caps", ..) => Ok(settings.caps.to_value()),
-            subclass::Property("mtu", ..) => Ok(settings.mtu.to_value()),
-            subclass::Property("socket", ..) => Ok(settings
+            subclass::Property("address", ..) => settings.address.to_value(),
+            subclass::Property("port", ..) => settings.port.to_value(),
+            subclass::Property("reuse", ..) => settings.reuse.to_value(),
+            subclass::Property("caps", ..) => settings.caps.to_value(),
+            subclass::Property("mtu", ..) => settings.mtu.to_value(),
+            subclass::Property("socket", ..) => settings
                 .socket
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
-                .to_value()),
-            subclass::Property("used-socket", ..) => Ok(settings
+                .to_value(),
+            subclass::Property("used-socket", ..) => settings
                 .used_socket
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
-                .to_value()),
-            subclass::Property("context", ..) => Ok(settings.context.to_value()),
-            subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
+                .to_value(),
+            subclass::Property("context", ..) => settings.context.to_value(),
+            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
             subclass::Property("retrieve-sender-address", ..) => {
-                Ok(settings.retrieve_sender_address.to_value())
+                settings.retrieve_sender_address.to_value()
             }
             _ => unimplemented!(),
         }

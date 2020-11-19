@@ -527,22 +527,22 @@ impl ObjectImpl for InputSelector {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("context", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.context.to_value())
+                settings.context.to_value()
             }
             subclass::Property("context-wait", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.context_wait.to_value())
+                settings.context_wait.to_value()
             }
             subclass::Property("active-pad", ..) => {
                 let state = self.state.lock().unwrap();
                 let active_pad = state.active_sinkpad.clone();
-                Ok(active_pad.to_value())
+                active_pad.to_value()
             }
             _ => unimplemented!(),
         }

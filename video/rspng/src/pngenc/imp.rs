@@ -279,17 +279,17 @@ impl ObjectImpl for PngEncoder {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("compression-level", ..) => {
                 let settings = self.settings.lock();
-                Ok(settings.compression.to_value())
+                settings.compression.to_value()
             }
             subclass::Property("filter", ..) => {
                 let settings = self.settings.lock();
-                Ok(settings.filter.to_value())
+                settings.filter.to_value()
             }
             _ => unimplemented!(),
         }

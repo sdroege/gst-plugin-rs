@@ -836,16 +836,16 @@ impl ObjectImpl for Queue {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         let settings = self.settings.lock().unwrap();
         match *prop {
-            subclass::Property("max-size-buffers", ..) => Ok(settings.max_size_buffers.to_value()),
-            subclass::Property("max-size-bytes", ..) => Ok(settings.max_size_bytes.to_value()),
-            subclass::Property("max-size-time", ..) => Ok(settings.max_size_time.to_value()),
-            subclass::Property("context", ..) => Ok(settings.context.to_value()),
-            subclass::Property("context-wait", ..) => Ok(settings.context_wait.to_value()),
+            subclass::Property("max-size-buffers", ..) => settings.max_size_buffers.to_value(),
+            subclass::Property("max-size-bytes", ..) => settings.max_size_bytes.to_value(),
+            subclass::Property("max-size-time", ..) => settings.max_size_time.to_value(),
+            subclass::Property("context", ..) => settings.context.to_value(),
+            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
             _ => unimplemented!(),
         }
     }

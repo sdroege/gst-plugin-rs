@@ -506,18 +506,18 @@ impl ObjectImpl for Encrypter {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("receiver-key", ..) => {
                 let props = self.props.lock().unwrap();
-                Ok(props.receiver_key.to_value())
+                props.receiver_key.to_value()
             }
 
             subclass::Property("block-size", ..) => {
                 let props = self.props.lock().unwrap();
-                Ok(props.block_size.to_value())
+                props.block_size.to_value()
             }
 
             _ => unimplemented!(),

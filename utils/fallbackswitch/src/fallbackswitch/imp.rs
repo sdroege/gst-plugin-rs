@@ -500,17 +500,17 @@ impl ObjectImpl for FallbackSwitch {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> Result<glib::Value, ()> {
+    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
         let prop = &PROPERTIES[id];
 
         match *prop {
             subclass::Property("timeout", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.timeout.to_value())
+                settings.timeout.to_value()
             }
             subclass::Property("active-pad", ..) => {
                 let active_pad = self.active_sinkpad.lock().unwrap().clone();
-                Ok(active_pad.to_value())
+                active_pad.to_value()
             }
             _ => unimplemented!(),
         }
