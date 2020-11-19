@@ -63,6 +63,7 @@ impl Default for State {
 }
 
 impl State {
+    #[allow(clippy::type_complexity)]
     fn get_line(
         &mut self,
         drain: bool,

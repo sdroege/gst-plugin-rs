@@ -155,6 +155,7 @@ fn parse_timecode_rate(
 }
 
 impl State {
+    #[allow(clippy::type_complexity)]
     fn get_line(
         &mut self,
         drain: bool,
