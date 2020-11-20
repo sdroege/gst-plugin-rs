@@ -46,8 +46,8 @@ eia608_row_pramble (int row, int chan, int x, int underline)
 {
   row = eia608_reverse_row_map[row & 0x0F];
   return eia608_parity (0x1040 | (chan ? 0x0800 : 0x0000) | ((row << 7) &
-          0x0700) | ((row << 5) & 0x0020)) | ((x << 1) & 0x001E) | (underline ?
-      0x0001 : 0x0000);
+          0x0700) | ((row << 5) & 0x0020) | ((x << 1) & 0x001E) | (underline ?
+      0x0001 : 0x0000));
 }
 
 uint16_t
