@@ -53,7 +53,7 @@ eia608_row_pramble (int row, int chan, int x, int underline)
 uint16_t
 eia608_row_column_pramble (int row, int col, int chan, int underline)
 {
-  return eia608_row_pramble (row, chan, 0x10 | (col / 4), underline);
+  return eia608_row_pramble (row, chan, 0x8 | (col / 4), underline);
 }
 
 uint16_t

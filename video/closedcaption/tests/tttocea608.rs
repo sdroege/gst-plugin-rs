@@ -73,8 +73,8 @@ fn test_one_timed_buffer_and_eos() {
         (733_333_333.into(), 33_333_334.into(), [0x94, 0x20]), /* control doubled */
         (766_666_667.into(), 33_333_333.into(), [0x94, 0xae]), /* erase_non_displayed_memory */
         (800_000_000.into(), 33_333_333.into(), [0x94, 0xae]), /* control doubled */
-        (833_333_333.into(), 33_333_334.into(), [0x94, 0x40]), /* preamble */
-        (866_666_667.into(), 33_333_333.into(), [0x94, 0x40]), /* control doubled */
+        (833_333_333.into(), 33_333_334.into(), [0x94, 0xd0]), /* preamble */
+        (866_666_667.into(), 33_333_333.into(), [0x94, 0xd0]), /* control doubled */
         (900_000_000.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
         (933_333_333.into(), 33_333_334.into(), [0xec, 0xec]), /* l l */
         (966_666_667.into(), 33_333_333.into(), [0xef, 0x80]), /* o, nil */
@@ -320,8 +320,8 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
         (1_033_333_333.into(), 33_333_334.into(), [0x94, 0x2c]), /* control doubled */
         (1_066_666_667.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
         (1_100_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* control doubled */
-        (1_133_333_333.into(), 33_333_334.into(), [0x94, 0xe0]), /* preamble */
-        (1_166_666_667.into(), 33_333_333.into(), [0x94, 0xe0]), /* control doubled */
+        (1_133_333_333.into(), 33_333_334.into(), [0x94, 0x70]), /* preamble */
+        (1_166_666_667.into(), 33_333_333.into(), [0x94, 0x70]), /* control doubled */
         (1_200_000_000.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
         (1_233_333_333.into(), 33_333_334.into(), [0xec, 0xec]), /* l l */
         (1_266_666_667.into(), 33_333_333.into(), [0xef, 0x80]), /* o, nil */
