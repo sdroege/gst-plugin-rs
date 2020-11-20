@@ -1,6 +1,6 @@
 [advisories]
 db-path = "~/.cargo/advisory-db"
-db-url = "https://github.com/rustsec/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
 vulnerability = "deny"
 unmaintained = "warn"
 notice = "warn"
@@ -137,6 +137,17 @@ version = "0.7"
 [[bans.skip]]
 name = "tinyvec"
 version = "0.3"
+
+# ignore duplicated pin-project-lite dependency because many crates depend on an old version
+[[bans.skip]]
+name = "pin-project-lite"
+version = "0.1"
+
+# ignore duplicated nom dependency because cexpr depends on an old version
+# https://github.com/jethrogb/rust-cexpr/issues/26
+[[bans.skip]]
+name = "nom"
+version = "5"
 
 [sources]
 unknown-registry = "deny"
