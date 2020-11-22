@@ -9,19 +9,20 @@
 use bytes::{buf::BufMut, Bytes, BytesMut};
 use futures::stream::TryStreamExt;
 use futures::{future, Future};
+use once_cell::sync::Lazy;
 use rusoto_core::ByteStream;
 use std::sync::Mutex;
 use tokio::runtime;
 
-lazy_static! {
-    static ref RUNTIME: runtime::Runtime = runtime::Builder::new()
+static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+    runtime::Builder::new()
         .threaded_scheduler()
         .enable_all()
         .core_threads(2)
         .thread_name("gst-rusoto-runtime")
         .build()
-        .unwrap();
-}
+        .unwrap()
+});
 
 pub enum WaitError<E> {
     Cancelled,

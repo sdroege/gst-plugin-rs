@@ -10,6 +10,7 @@ use std::sync::Mutex;
 
 use bytes::Bytes;
 use futures::future;
+use once_cell::sync::Lazy;
 use rusoto_s3::*;
 
 use glib::prelude::*;
@@ -17,6 +18,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_error, gst_error_msg, gst_info};
 
 use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
@@ -41,13 +43,13 @@ pub struct S3Src {
     canceller: Mutex<Option<future::AbortHandle>>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rusotos3src",
         gst::DebugColorFlags::empty(),
         Some("Amazon S3 Source"),
-    );
-}
+    )
+});
 
 static PROPERTIES: [subclass::Property; 1] = [subclass::Property("uri", |name| {
     glib::ParamSpec::string(
@@ -211,7 +213,7 @@ impl ObjectSubclass for S3Src {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

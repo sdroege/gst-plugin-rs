@@ -15,10 +15,13 @@ use reqwest::{Client, Response, StatusCode};
 use tokio::runtime;
 use url::Url;
 
+use once_cell::sync::Lazy;
+
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_trace, gst_warning};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
@@ -172,7 +175,7 @@ static PROPERTIES: [subclass::Property; 11] = [
 
 const REQWEST_CLIENT_CONTEXT: &str = "gst.reqwest.client";
 
-#[derive(Clone, Debug, GBoxed)]
+#[derive(Clone, Debug, glib::GBoxed)]
 #[gboxed(type_name = "ReqwestClientContext")]
 struct ClientContext(Arc<ClientContextInner>);
 
@@ -213,19 +216,22 @@ pub struct ReqwestHttpSrc {
     canceller: Mutex<Option<future::AbortHandle>>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "reqwesthttpsrc",
         gst::DebugColorFlags::empty(),
         Some("Rust HTTP source"),
-    );
-    static ref RUNTIME: runtime::Runtime = runtime::Builder::new()
+    )
+});
+
+static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+    runtime::Builder::new()
         .threaded_scheduler()
         .enable_all()
         .core_threads(1)
         .build()
-        .unwrap();
-}
+        .unwrap()
+});
 
 impl ReqwestHttpSrc {
     fn set_location(
@@ -1095,7 +1101,7 @@ impl ObjectSubclass for ReqwestHttpSrc {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

@@ -7,7 +7,6 @@
 // except according to those terms.
 
 use gst::prelude::*;
-use gstreamer as gst;
 
 use std::sync::mpsc;
 

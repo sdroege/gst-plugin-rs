@@ -13,8 +13,8 @@ edition = "2018"
 bytes = "0.5"
 futures = "0.3"
 glib = { git = "https://github.com/gtk-rs/gtk-rs" }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
-gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
 rusoto_core = "0.45"
 rusoto_s3 = "0.45"
 rusoto_credential = "0.45"
@@ -22,7 +22,6 @@ rusoto_signature = "0.45"
 url = "2"
 percent-encoding = "2"
 tokio = { version = "0.2", features = [ "rt-threaded" ] }
-lazy_static = "1.0"
 async-tungstenite = { version = "0.9", features = ["tokio", "tokio-runtime", "tokio-native-tls"] }
 nom = "5.1.1"
 crc = "1.8.1"

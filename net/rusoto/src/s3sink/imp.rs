@@ -12,6 +12,7 @@ use glib::subclass::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_element_error, gst_error, gst_error_msg, gst_info, gst_trace};
 
 use gst_base::subclass::prelude::*;
 
@@ -21,6 +22,8 @@ use rusoto_s3::{
     CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart,
     CreateMultipartUploadRequest, S3Client, UploadPartRequest, S3,
 };
+
+use once_cell::sync::Lazy;
 
 use std::convert::From;
 use std::str::FromStr;
@@ -93,13 +96,13 @@ pub struct S3Sink {
     canceller: Mutex<Option<future::AbortHandle>>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rusotos3sink",
         gst::DebugColorFlags::empty(),
         Some("Amazon S3 Sink"),
-    );
-}
+    )
+});
 
 impl Default for Settings {
     fn default() -> Self {
@@ -386,7 +389,7 @@ impl ObjectSubclass for S3Sink {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {
