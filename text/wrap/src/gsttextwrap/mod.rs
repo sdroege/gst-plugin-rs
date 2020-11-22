@@ -19,7 +19,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct TextWrap(ObjectSubclass<imp::TextWrap>) @extends gst::Element, gst::Object;
 }
 

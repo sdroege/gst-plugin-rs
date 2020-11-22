@@ -17,20 +17,13 @@
 
 #![recursion_limit = "128"]
 
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gst;
-extern crate hyphenation;
-extern crate textwrap;
-
 mod gsttextwrap;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gsttextwrap::register(plugin)
 }
 
-gst_plugin_define!(
+gst::gst_plugin_define!(
     rstextwrap,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
