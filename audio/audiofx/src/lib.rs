@@ -6,18 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate byte_slice_cast;
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gstreamer as gst;
-extern crate gstreamer_audio as gst_audio;
-extern crate gstreamer_base as gst_base;
-extern crate num_traits;
-
-#[macro_use]
-extern crate lazy_static;
-
 mod audioecho;
 mod audioloudnorm;
 mod audiornnoise;
@@ -29,7 +17,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-gst_plugin_define!(
+gst::gst_plugin_define!(
     rsaudiofx,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

@@ -12,19 +12,21 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_loggable_error};
 use gst_base::subclass::base_transform::BaseTransformImplExt;
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
 use nnnoiseless::DenoiseState;
 use std::sync::Mutex;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+use once_cell::sync::Lazy;
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "audiornnoise",
         gst::DebugColorFlags::empty(),
         Some("Rust Audio Denoise Filter"),
-    );
-}
+    )
+});
 
 const FRAME_SIZE: usize = DenoiseState::FRAME_SIZE;
 
@@ -194,7 +196,7 @@ impl ObjectSubclass for AudioRNNoise {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

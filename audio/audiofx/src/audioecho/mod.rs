@@ -11,7 +11,7 @@ use glib::prelude::*;
 mod imp;
 mod ring_buffer;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct AudioEcho(ObjectSubclass<imp::AudioEcho>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 

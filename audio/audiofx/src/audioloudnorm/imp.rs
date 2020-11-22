@@ -22,6 +22,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_error, gst_info, gst_log};
 
 use std::mem;
 use std::sync::Mutex;
@@ -29,13 +30,14 @@ use std::{i32, u64};
 
 use byte_slice_cast::*;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+use once_cell::sync::Lazy;
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rsaudioloudnorm",
         gst::DebugColorFlags::empty(),
         Some("Rust Audio Loudless Normalization Filter"),
-    );
-}
+    )
+});
 
 const DEFAULT_LOUDNESS_TARGET: f64 = -24.0;
 const DEFAULT_LOUDNESS_RANGE_TARGET: f64 = 7.0;
@@ -1753,7 +1755,7 @@ impl ObjectSubclass for AudioLoudNorm {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

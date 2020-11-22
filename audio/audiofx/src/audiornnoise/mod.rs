@@ -11,7 +11,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct AudioRNNoise(ObjectSubclass<imp::AudioRNNoise>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 

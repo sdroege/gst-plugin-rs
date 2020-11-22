@@ -9,6 +9,8 @@
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_warning};
+use gst_audio::gst_audio_decoder_error;
 use gst_audio::prelude::*;
 use gst_audio::subclass::prelude::*;
 
@@ -32,13 +34,14 @@ pub struct LewtonDec {
     state: AtomicRefCell<Option<State>>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+use once_cell::sync::Lazy;
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "lewtondec",
         gst::DebugColorFlags::empty(),
         Some("lewton Vorbis decoder"),
-    );
-}
+    )
+});
 
 impl ObjectSubclass for LewtonDec {
     const NAME: &'static str = "LewtonDec";
@@ -47,7 +50,7 @@ impl ObjectSubclass for LewtonDec {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

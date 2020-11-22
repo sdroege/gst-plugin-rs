@@ -8,6 +8,7 @@
 
 use glib::subclass;
 use glib::subclass::prelude::*;
+use gst::gst_loggable_error;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
@@ -20,13 +21,14 @@ use byte_slice_cast::*;
 use num_traits::cast::{FromPrimitive, ToPrimitive};
 use num_traits::float::Float;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+use once_cell::sync::Lazy;
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rsaudioecho",
         gst::DebugColorFlags::empty(),
         Some("Rust Audio Echo Filter"),
-    );
-}
+    )
+});
 
 use super::ring_buffer::RingBuffer;
 
@@ -136,7 +138,7 @@ impl ObjectSubclass for AudioEcho {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

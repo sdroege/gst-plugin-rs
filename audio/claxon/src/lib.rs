@@ -6,20 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gstreamer as gst;
-#[macro_use]
-extern crate gstreamer_audio as gst_audio;
-
 mod claxondec;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     claxondec::register(plugin)
 }
 
-gst_plugin_define!(
+gst::gst_plugin_define!(
     claxon,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

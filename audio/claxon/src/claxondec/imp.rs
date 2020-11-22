@@ -9,6 +9,8 @@
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error};
+use gst_audio::gst_audio_decoder_error;
 use gst_audio::prelude::*;
 use gst_audio::subclass::prelude::*;
 
@@ -35,7 +37,7 @@ impl ObjectSubclass for ClaxonDec {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {
