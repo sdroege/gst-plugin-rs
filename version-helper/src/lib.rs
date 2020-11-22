@@ -11,8 +11,6 @@
 //! plugin:
 //!
 //! ```rust,ignore
-//! extern crate gst_plugin_version_helper;
-//!
 //! gst_plugin_version_helper::get_info();
 //! ```
 //!
