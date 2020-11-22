@@ -18,17 +18,17 @@
 use gst::gst_debug;
 use gst::prelude::*;
 
-use lazy_static::lazy_static;
-
 use std::sync::mpsc;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+use once_cell::sync::Lazy;
+
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-test",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing test"),
-    );
-}
+    )
+});
 
 fn init() {
     use std::sync::Once;

@@ -9,22 +9,15 @@ edition = "2018"
 
 [dependencies]
 libc = "0.2"
-glib-sys = { git = "https://github.com/gtk-rs/gtk-rs" }
-gobject-sys = { git = "https://github.com/gtk-rs/gtk-rs" }
-gio-sys = { git = "https://github.com/gtk-rs/gtk-rs" }
 glib = { git = "https://github.com/gtk-rs/gtk-rs" }
 gio = { git = "https://github.com/gtk-rs/gtk-rs" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features=["v1_10"] }
-gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gstreamer-sys = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 pin-project = "1"
 once_cell = "1"
 tokio = { git = "https://github.com/fengalin/tokio", tag = "tokio-0.2.13-throttling", features = ["io-util", "macros", "rt-core", "sync", "stream", "time", "tcp", "udp", "rt-util"] }
 futures = { version = "0.3", features = ["thread-pool"] }
-lazy_static = "1.0"
 rand = "0.7"
 socket2 = "0.3"
 
@@ -33,6 +26,10 @@ winapi = { version = "0.3", features = ["winsock2", "processthreadsapi"] }
 
 [target.'cfg(unix)'.dependencies]
 socket2 = { version = "0.3", features = ["reuseport"] }
+
+[dev-dependencies]
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 
 [lib]
 name = "gstthreadshare"

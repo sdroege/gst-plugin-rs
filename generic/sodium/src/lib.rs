@@ -20,13 +20,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gst;
-#[macro_use]
-extern crate lazy_static;
-
 const TYPEFIND_HEADER: &[u8; 12] = b"gst-sodium10";
 // `core::slice::<impl [T]>::len` is not yet stable as a const fn
 // const TYPEFIND_HEADER_SIZE: usize = TYPEFIND_HEADER.len();
@@ -68,7 +61,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-gst_plugin_define!(
+gst::gst_plugin_define!(
     sodium,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

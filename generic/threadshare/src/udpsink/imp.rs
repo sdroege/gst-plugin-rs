@@ -33,7 +33,7 @@ use gst::{
     gst_warning,
 };
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use crate::runtime::prelude::*;
 use crate::runtime::{self, Context, PadSink, PadSinkRef, Task};
@@ -112,13 +112,13 @@ impl Default for Settings {
     }
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-udpsink",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing UDP sink"),
-    );
-}
+    )
+});
 
 static PROPERTIES: [subclass::Property; 17] = [
     subclass::Property("sync", |name| {

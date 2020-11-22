@@ -21,13 +21,11 @@ use futures::future::BoxFuture;
 use gst::prelude::*;
 use gst::{gst_debug, gst_error, gst_error_msg, gst_log};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::io;
 
 use gio::prelude::*;
-use gio_sys as gio_ffi;
-use gobject_sys as gobject_ffi;
 
 use std::error;
 use std::fmt;
@@ -38,13 +36,13 @@ use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket};
 
-lazy_static! {
-    static ref SOCKET_CAT: gst::DebugCategory = gst::DebugCategory::new(
+static SOCKET_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-socket",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing Socket"),
-    );
-}
+    )
+});
 
 pub trait SocketRead: Send + Unpin {
     const DO_TIMESTAMP: bool;
@@ -193,7 +191,7 @@ impl<T: SocketRead> Drop for Socket<T> {
 // fd is safe though, as is receiving/sending from two different threads
 #[derive(Debug)]
 pub struct GioSocketWrapper {
-    socket: *mut gio_ffi::GSocket,
+    socket: *mut gio::ffi::GSocket,
 }
 
 unsafe impl Send for GioSocketWrapper {}
@@ -240,14 +238,14 @@ impl GioSocketWrapper {
 
     #[cfg(unix)]
     pub fn get<T: FromRawFd>(&self) -> T {
-        unsafe { FromRawFd::from_raw_fd(libc::dup(gio_ffi::g_socket_get_fd(self.socket))) }
+        unsafe { FromRawFd::from_raw_fd(libc::dup(gio::ffi::g_socket_get_fd(self.socket))) }
     }
 
     #[cfg(windows)]
     pub fn get<T: FromRawSocket>(&self) -> T {
         unsafe {
             FromRawSocket::from_raw_socket(
-                dup_socket(gio_ffi::g_socket_get_fd(self.socket) as _) as _
+                dup_socket(gio::ffi::g_socket_get_fd(self.socket) as _) as _
             )
         }
     }
@@ -256,7 +254,7 @@ impl GioSocketWrapper {
 impl Clone for GioSocketWrapper {
     fn clone(&self) -> Self {
         Self {
-            socket: unsafe { gobject_ffi::g_object_ref(self.socket as *mut _) as *mut _ },
+            socket: unsafe { glib::gobject_ffi::g_object_ref(self.socket as *mut _) as *mut _ },
         }
     }
 }
@@ -264,7 +262,7 @@ impl Clone for GioSocketWrapper {
 impl Drop for GioSocketWrapper {
     fn drop(&mut self) {
         unsafe {
-            gobject_ffi::g_object_unref(self.socket as *mut _);
+            glib::gobject_ffi::g_object_unref(self.socket as *mut _);
         }
     }
 }

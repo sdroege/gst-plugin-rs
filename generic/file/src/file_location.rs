@@ -1,5 +1,3 @@
-use glib;
-use gst;
 use url::Url;
 
 use std::convert::AsRef;

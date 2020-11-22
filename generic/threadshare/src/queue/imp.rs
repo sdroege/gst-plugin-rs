@@ -28,7 +28,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::collections::VecDeque;
 use std::sync::Mutex as StdMutex;
@@ -513,13 +513,13 @@ pub struct Queue {
     settings: StdMutex<Settings>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-queue",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing queue"),
-    );
-}
+    )
+});
 
 impl Queue {
     /* Try transfering all the items from the pending queue to the DataQueue, then

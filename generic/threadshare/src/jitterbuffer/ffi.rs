@@ -15,11 +15,9 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib_ffi::{gboolean, gpointer, GList, GType};
-use glib_sys as glib_ffi;
+use glib::ffi::{gboolean, gpointer, GList, GType};
 
-use gst_ffi::GstClockTime;
-use gstreamer_sys as gst_ffi;
+use gst::ffi::GstClockTime;
 use libc::{c_int, c_uint, c_ulonglong, c_ushort, c_void};
 
 #[repr(C)]
@@ -70,7 +68,7 @@ extern "C" {
     pub fn rtp_jitter_buffer_get_clock_rate(jbuf: *mut RTPJitterBuffer) -> c_uint;
     pub fn rtp_jitter_buffer_reset_skew(jbuf: *mut RTPJitterBuffer);
 
-    pub fn rtp_jitter_buffer_flush(jbuf: *mut RTPJitterBuffer, free_func: glib_ffi::GFunc);
+    pub fn rtp_jitter_buffer_flush(jbuf: *mut RTPJitterBuffer, free_func: glib::ffi::GFunc);
     pub fn rtp_jitter_buffer_find_earliest(
         jbuf: *mut RTPJitterBuffer,
         pts: *mut GstClockTime,

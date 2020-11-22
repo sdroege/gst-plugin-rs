@@ -28,7 +28,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_log, gst_trace};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -407,13 +407,13 @@ pub struct InputSelector {
     pads: Mutex<Pads>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-input-selector",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing input selector"),
-    );
-}
+    )
+});
 
 impl InputSelector {
     fn unprepare(&self, element: &super::InputSelector) -> Result<(), ()> {

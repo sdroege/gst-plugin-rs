@@ -28,7 +28,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex as StdMutex;
@@ -43,14 +43,12 @@ use crate::runtime::{
 
 use crate::dataqueue::{DataQueue, DataQueueItem};
 
-lazy_static! {
-    static ref PROXY_CONTEXTS: StdMutex<HashMap<String, Weak<StdMutex<ProxyContextInner>>>> =
-        StdMutex::new(HashMap::new());
-    static ref PROXY_SRC_PADS: StdMutex<HashMap<String, PadSrcWeak>> =
-        StdMutex::new(HashMap::new());
-    static ref PROXY_SINK_PADS: StdMutex<HashMap<String, PadSinkWeak>> =
-        StdMutex::new(HashMap::new());
-}
+static PROXY_CONTEXTS: Lazy<StdMutex<HashMap<String, Weak<StdMutex<ProxyContextInner>>>>> =
+    Lazy::new(|| StdMutex::new(HashMap::new()));
+static PROXY_SRC_PADS: Lazy<StdMutex<HashMap<String, PadSrcWeak>>> =
+    Lazy::new(|| StdMutex::new(HashMap::new()));
+static PROXY_SINK_PADS: Lazy<StdMutex<HashMap<String, PadSinkWeak>>> =
+    Lazy::new(|| StdMutex::new(HashMap::new()));
 
 const DEFAULT_PROXY_CONTEXT: &str = "";
 
@@ -412,13 +410,13 @@ pub struct ProxySink {
     settings: StdMutex<SettingsSink>,
 }
 
-lazy_static! {
-    static ref SINK_CAT: gst::DebugCategory = gst::DebugCategory::new(
+static SINK_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-proxysink",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing proxy sink"),
-    );
-}
+    )
+});
 
 impl ProxySink {
     async fn schedule_pending_queue(&self, element: &super::ProxySink) {
@@ -1051,13 +1049,13 @@ pub struct ProxySrc {
     settings: StdMutex<SettingsSrc>,
 }
 
-lazy_static! {
-    static ref SRC_CAT: gst::DebugCategory = gst::DebugCategory::new(
+static SRC_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-proxysrc",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing proxy source"),
-    );
-}
+    )
+});
 
 impl ProxySrc {
     fn prepare(&self, element: &super::ProxySrc) -> Result<(), gst::ErrorMessage> {

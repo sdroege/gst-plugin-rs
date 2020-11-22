@@ -30,7 +30,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::convert::TryInto;
 use std::sync::Arc;
@@ -119,13 +119,13 @@ static PROPERTIES: [subclass::Property; 5] = [
     }),
 ];
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-appsrc",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing app source"),
-    );
-}
+    )
+});
 
 #[derive(Debug)]
 enum StreamItem {

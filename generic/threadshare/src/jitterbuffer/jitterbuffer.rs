@@ -19,9 +19,6 @@ use super::ffi;
 
 use std::ptr;
 
-use glib_sys as glib_ffi;
-use gstreamer_sys as gst_ffi;
-
 use glib::glib_wrapper;
 use glib::prelude::*;
 use glib::translate::*;
@@ -81,7 +78,7 @@ impl RTPJitterBufferItem {
         rtptime: u32,
     ) -> RTPJitterBufferItem {
         unsafe {
-            let ptr = ptr::NonNull::new(glib_sys::g_slice_alloc0(mem::size_of::<
+            let ptr = ptr::NonNull::new(glib::ffi::g_slice_alloc0(mem::size_of::<
                 ffi::RTPJitterBufferItem,
             >()) as *mut ffi::RTPJitterBufferItem)
             .expect("Allocation failed");
@@ -107,8 +104,8 @@ impl RTPJitterBufferItem {
     pub fn into_buffer(mut self) -> gst::Buffer {
         unsafe {
             let item = self.0.take().expect("Invalid wrapper");
-            let buf = item.as_ref().data as *mut gst_ffi::GstBuffer;
-            glib_sys::g_slice_free1(
+            let buf = item.as_ref().data as *mut gst::ffi::GstBuffer;
+            glib::ffi::g_slice_free1(
                 mem::size_of::<ffi::RTPJitterBufferItem>(),
                 item.as_ptr() as *mut _,
             );
@@ -119,7 +116,7 @@ impl RTPJitterBufferItem {
     pub fn get_dts(&self) -> gst::ClockTime {
         unsafe {
             let item = self.0.as_ref().expect("Invalid wrapper");
-            if item.as_ref().dts == gst_ffi::GST_CLOCK_TIME_NONE {
+            if item.as_ref().dts == gst::ffi::GST_CLOCK_TIME_NONE {
                 gst::CLOCK_TIME_NONE
             } else {
                 gst::ClockTime(Some(item.as_ref().dts))
@@ -130,7 +127,7 @@ impl RTPJitterBufferItem {
     pub fn get_pts(&self) -> gst::ClockTime {
         unsafe {
             let item = self.0.as_ref().expect("Invalid wrapper");
-            if item.as_ref().pts == gst_ffi::GST_CLOCK_TIME_NONE {
+            if item.as_ref().pts == gst::ffi::GST_CLOCK_TIME_NONE {
                 gst::CLOCK_TIME_NONE
             } else {
                 gst::ClockTime(Some(item.as_ref().pts))
@@ -163,10 +160,10 @@ impl Drop for RTPJitterBufferItem {
         unsafe {
             if let Some(ref item) = self.0 {
                 if !item.as_ref().data.is_null() {
-                    gst_ffi::gst_mini_object_unref(item.as_ref().data as *mut _);
+                    gst::ffi::gst_mini_object_unref(item.as_ref().data as *mut _);
                 }
 
-                glib_sys::g_slice_free1(
+                glib::ffi::g_slice_free1(
                     mem::size_of::<ffi::RTPJitterBufferItem>(),
                     item.as_ptr() as *mut _,
                 );
@@ -274,7 +271,7 @@ impl RTPJitterBuffer {
                 is_rtx.to_glib(),
             );
 
-            if pts == gst_ffi::GST_CLOCK_TIME_NONE {
+            if pts == gst::ffi::GST_CLOCK_TIME_NONE {
                 gst::CLOCK_TIME_NONE
             } else {
                 pts.into()
@@ -319,7 +316,7 @@ impl RTPJitterBuffer {
                 Some(seqnum as u16)
             };
 
-            if pts == gst_ffi::GST_CLOCK_TIME_NONE {
+            if pts == gst::ffi::GST_CLOCK_TIME_NONE {
                 (gst::CLOCK_TIME_NONE, seqnum)
             } else {
                 (pts.into(), seqnum)
@@ -361,7 +358,7 @@ impl RTPJitterBuffer {
     }
 
     pub fn flush(&self) {
-        unsafe extern "C" fn free_item(item: glib_ffi::gpointer, _: glib_ffi::gpointer) {
+        unsafe extern "C" fn free_item(item: glib::ffi::gpointer, _: glib::ffi::gpointer) {
             let _ =
                 RTPJitterBufferItem(Some(ptr::NonNull::new(item as *mut _).expect("NULL item")));
         }

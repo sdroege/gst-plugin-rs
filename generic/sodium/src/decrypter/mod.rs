@@ -26,7 +26,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct Decrypter(ObjectSubclass<imp::Decrypter>) @extends gst::Element, gst::Object;
 }
 

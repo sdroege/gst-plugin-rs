@@ -20,20 +20,20 @@ use futures::future::{self, abortable, AbortHandle};
 use gst::gst_debug;
 use gst::prelude::*;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::{u32, u64};
 
-lazy_static! {
-    static ref DATA_QUEUE_CAT: gst::DebugCategory = gst::DebugCategory::new(
+static DATA_QUEUE_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-dataqueue",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing queue"),
-    );
-}
+    )
+});
 
 #[derive(Debug)]
 pub enum DataQueueItem {

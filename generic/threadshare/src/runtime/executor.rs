@@ -40,7 +40,7 @@ use futures::prelude::*;
 
 use gst::{gst_debug, gst_log, gst_trace, gst_warning};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -66,9 +66,8 @@ use super::RUNTIME_CAT;
 //
 // Also, we want to be able to `acquire` a `Context` outside of an `async` context.
 // These `Mutex`es must be `lock`ed for a short period.
-lazy_static! {
-    static ref CONTEXTS: Mutex<HashMap<String, Weak<ContextInner>>> = Mutex::new(HashMap::new());
-}
+static CONTEXTS: Lazy<Mutex<HashMap<String, Weak<ContextInner>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 thread_local!(static CURRENT_THREAD_CONTEXT: RefCell<Option<ContextWeak>> = RefCell::new(None));
 

@@ -41,10 +41,8 @@ mod proxy;
 mod queue;
 
 use glib::translate::*;
-use glib_sys as glib_ffi;
 
 use gst::gst_plugin_define;
-use gstreamer_sys as gst_ffi;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     udpsrc::register(plugin)?;
@@ -76,19 +74,19 @@ pub fn set_element_flags<T: glib::IsA<gst::Object> + glib::IsA<gst::Element>>(
     flags: gst::ElementFlags,
 ) {
     unsafe {
-        let ptr: *mut gst_ffi::GstObject = element.as_ptr() as *mut _;
+        let ptr: *mut gst::ffi::GstObject = element.as_ptr() as *mut _;
         let _guard = MutexGuard::lock(&(*ptr).lock);
         (*ptr).flags |= flags.to_glib();
     }
 }
 
 #[must_use = "if unused the Mutex will immediately unlock"]
-struct MutexGuard<'a>(&'a glib_ffi::GMutex);
+struct MutexGuard<'a>(&'a glib::ffi::GMutex);
 
 impl<'a> MutexGuard<'a> {
-    pub fn lock(mutex: &'a glib_ffi::GMutex) -> Self {
+    pub fn lock(mutex: &'a glib::ffi::GMutex) -> Self {
         unsafe {
-            glib_ffi::g_mutex_lock(mut_override(mutex));
+            glib::ffi::g_mutex_lock(mut_override(mutex));
         }
         MutexGuard(mutex)
     }
@@ -97,7 +95,7 @@ impl<'a> MutexGuard<'a> {
 impl<'a> Drop for MutexGuard<'a> {
     fn drop(&mut self) {
         unsafe {
-            glib_ffi::g_mutex_unlock(mut_override(self.0));
+            glib::ffi::g_mutex_unlock(mut_override(self.0));
         }
     }
 }

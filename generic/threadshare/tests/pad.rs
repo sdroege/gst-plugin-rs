@@ -29,7 +29,7 @@ use gst::subclass::prelude::*;
 use gst::EventView;
 use gst::{gst_debug, gst_error_msg, gst_info, gst_log};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::boxed::Box;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -86,13 +86,13 @@ mod imp_src {
         context: String,
     }
 
-    lazy_static! {
-        pub static ref SRC_CAT: gst::DebugCategory = gst::DebugCategory::new(
+    pub static SRC_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+        gst::DebugCategory::new(
             "ts-element-src-test",
             gst::DebugColorFlags::empty(),
             Some("Thread-sharing Test Src Element"),
-        );
-    }
+        )
+    });
 
     #[derive(Clone, Debug)]
     struct PadSrcTestHandler;
@@ -623,13 +623,13 @@ mod imp_sink {
         }
     }
 
-    lazy_static! {
-        static ref SINK_CAT: gst::DebugCategory = gst::DebugCategory::new(
+    static SINK_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+        gst::DebugCategory::new(
             "ts-element-sink-test",
             gst::DebugColorFlags::empty(),
             Some("Thread-sharing Test Sink Element"),
-        );
-    }
+        )
+    });
 
     impl ObjectSubclass for ElementSinkTest {
         const NAME: &'static str = "TsElementSinkTest";

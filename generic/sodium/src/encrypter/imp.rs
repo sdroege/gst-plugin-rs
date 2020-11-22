@@ -27,6 +27,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log};
 use smallvec::SmallVec;
 use sodiumoxide::crypto::box_;
 
@@ -34,15 +35,14 @@ type BufferVec = SmallVec<[gst::Buffer; 16]>;
 
 use std::sync::Mutex;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = {
-        gst::DebugCategory::new(
-            "sodiumencrypter",
-            gst::DebugColorFlags::empty(),
-            Some("Encrypter Element"),
-        )
-    };
-}
+use once_cell::sync::Lazy;
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "sodiumencrypter",
+        gst::DebugColorFlags::empty(),
+        Some("Encrypter Element"),
+    )
+});
 
 static PROPERTIES: [subclass::Property; 3] = [
     subclass::Property("receiver-key", |name| {
@@ -395,7 +395,7 @@ impl ObjectSubclass for Encrypter {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

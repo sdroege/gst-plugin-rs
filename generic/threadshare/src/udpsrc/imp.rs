@@ -29,7 +29,7 @@ use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
 use gst_net::*;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
 use std::i32;
 use std::io;
@@ -517,13 +517,13 @@ pub struct UdpSrc {
     settings: StdMutex<Settings>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-udpsrc",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing UDP source"),
-    );
-}
+    )
+});
 
 impl UdpSrc {
     fn prepare(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {

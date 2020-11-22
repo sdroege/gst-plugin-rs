@@ -22,37 +22,35 @@
 //
 // SPDX-License-Identifier: MIT
 
-#[macro_use]
-extern crate lazy_static;
-extern crate gstsodium;
-
 use glib::prelude::*;
 use gst::prelude::*;
 
-lazy_static! {
-    static ref RECEIVER_PUBLIC: glib::Bytes = {
-        let public = [
-            28, 95, 33, 124, 28, 103, 80, 78, 7, 28, 234, 40, 226, 179, 253, 166, 169, 64, 78, 5,
-            57, 92, 151, 179, 221, 89, 68, 70, 44, 225, 219, 19,
-        ];
+use once_cell::sync::Lazy;
 
-        glib::Bytes::from_owned(public)
-    };
-    static ref SENDER_PRIVATE: glib::Bytes = {
-        let secret = [
-            154, 227, 90, 239, 206, 184, 202, 234, 176, 161, 14, 91, 218, 98, 142, 13, 145, 223,
-            210, 222, 224, 240, 98, 51, 142, 165, 255, 1, 159, 100, 242, 162,
-        ];
-        glib::Bytes::from_owned(secret)
-    };
-    static ref NONCE: glib::Bytes = {
-        let nonce = [
-            144, 187, 179, 230, 15, 4, 241, 15, 37, 133, 22, 30, 50, 106, 70, 159, 243, 218, 173,
-            22, 18, 36, 4, 45,
-        ];
-        glib::Bytes::from_owned(nonce)
-    };
-}
+use pretty_assertions::assert_eq;
+
+static RECEIVER_PUBLIC: Lazy<glib::Bytes> = Lazy::new(|| {
+    let public = [
+        28, 95, 33, 124, 28, 103, 80, 78, 7, 28, 234, 40, 226, 179, 253, 166, 169, 64, 78, 5, 57,
+        92, 151, 179, 221, 89, 68, 70, 44, 225, 219, 19,
+    ];
+
+    glib::Bytes::from_owned(public)
+});
+static SENDER_PRIVATE: Lazy<glib::Bytes> = Lazy::new(|| {
+    let secret = [
+        154, 227, 90, 239, 206, 184, 202, 234, 176, 161, 14, 91, 218, 98, 142, 13, 145, 223, 210,
+        222, 224, 240, 98, 51, 142, 165, 255, 1, 159, 100, 242, 162,
+    ];
+    glib::Bytes::from_owned(secret)
+});
+static NONCE: Lazy<glib::Bytes> = Lazy::new(|| {
+    let nonce = [
+        144, 187, 179, 230, 15, 4, 241, 15, 37, 133, 22, 30, 50, 106, 70, 159, 243, 218, 173, 22,
+        18, 36, 4, 45,
+    ];
+    glib::Bytes::from_owned(nonce)
+});
 
 fn init() {
     use std::sync::Once;

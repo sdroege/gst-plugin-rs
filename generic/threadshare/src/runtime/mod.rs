@@ -59,12 +59,12 @@ pub mod prelude {
 
 pub mod time;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
-lazy_static! {
-    static ref RUNTIME_CAT: gst::DebugCategory = gst::DebugCategory::new(
+static RUNTIME_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ts-runtime",
         gst::DebugColorFlags::empty(),
         Some("Thread-sharing Runtime"),
-    );
-}
+    )
+});
