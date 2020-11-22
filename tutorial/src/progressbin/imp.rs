@@ -9,6 +9,7 @@
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
+use gst::gst_info;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::sync::Mutex;
@@ -63,7 +64,7 @@ impl ObjectSubclass for ProgressBin {
     type Class = subclass::simple::ClassStruct<Self>;
 
     // This macro provides some boilerplate.
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here and also get the class struct passed in case it's needed

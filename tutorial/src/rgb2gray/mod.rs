@@ -11,7 +11,7 @@ use glib::prelude::*;
 mod imp;
 
 // The public Rust wrapper type for our element
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 

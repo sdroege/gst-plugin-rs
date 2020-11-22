@@ -22,18 +22,15 @@ So let's get started with all the boilerplate. This time our element will be bas
 In `src/sinesrc/imp.rs`:
 
 ```rust
-use glib;
-use gst;
+use glib::prelude::*;
+use glib::subclass::prelude::*;
 use gst::prelude::*;
+use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_info, gst_log, gst_loggable_error};
 use gst_base::prelude::*;
-use gst_audio;
+use gst_base::subclass::prelude::*;
 
 use byte_slice_cast::*;
-
-use gst_plugin::properties::*;
-use gst_plugin::object::*;
-use gst_plugin::element::*;
-use gst_plugin::base_src::*;
 
 use std::{i32, u32};
 use std::sync::Mutex;
@@ -157,7 +154,7 @@ impl ObjectSubclass for SineSrc {
     type Class = subclass::simple::ClassStruct<Self>;
 
     // This macro provides some boilerplate.
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here.
@@ -383,7 +380,7 @@ use glib::prelude::*;
 mod imp;
 
 // The public Rust wrapper type for our element
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct SineSrc(ObjectSubclass<imp::SineSrc>) @extends gst_base::BaseSrc, gst::Element, gst::Object;
 }
 

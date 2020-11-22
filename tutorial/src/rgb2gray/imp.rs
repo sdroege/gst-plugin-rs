@@ -10,6 +10,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_info, gst_loggable_error};
 use gst_base::subclass::prelude::*;
 
 use std::i32;
@@ -121,7 +122,7 @@ impl ObjectSubclass for Rgb2Gray {
     type Class = subclass::simple::ClassStruct<Self>;
 
     // This macro provides some boilerplate
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here.

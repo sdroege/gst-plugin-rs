@@ -6,14 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gstreamer as gst;
-extern crate gstreamer_audio as gst_audio;
-extern crate gstreamer_base as gst_base;
-extern crate gstreamer_video as gst_video;
-
 mod identity;
 mod progressbin;
 mod rgb2gray;
@@ -34,7 +26,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 // Plugin name, plugin description, plugin entry point function, version number of this plugin,
 // license of the plugin, source package name, binary package name, origin where it comes from
 // and the date/time of release.
-gst_plugin_define!(
+gst::gst_plugin_define!(
     rstutorial,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

@@ -42,9 +42,9 @@ description = "Rust Tutorial Plugin"
 
 [dependencies]
 glib = { git = "https://github.com/gtk-rs/glib" }
-gstreamer = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gstreamer-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gstreamer-video = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 once_cell = "1.0"
 
 [lib]
@@ -70,22 +70,12 @@ If you now run the `gst-inspect-1.0` tool on the `libgstrstutorial.so`, it will 
 
 ## Plugin Initialization
 
-Let’s start editing `src/lib.rs` to make this an actual GStreamer plugin. First of all, we need to add various extern crate directives to be able to use our dependencies and also mark some of them `#[macro_use]` because we’re going to use `macros` defined in some of them. This looks like the following
-
-```
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gstreamer as gst;
-extern crate gstreamer_base as gst_base;
-extern crate gstreamer_video as gst_video;
-extern crate once_cell;
-```
+Let’s start editing `src/lib.rs` to make this an actual GStreamer plugin.
 
 Next we make use of the `gst_plugin_define!` `macro` from the `gstreamer` crate to set-up the static metadata of the plugin (and make the shared library recognizeable by GStreamer to be a valid plugin), and to define the name of our entry point function (`plugin_init`) where we will register all the elements that this plugin provides.
 
 ```rust
-gst_plugin_define!(
+gst::gst_plugin_define!(
     rstutorial,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
@@ -115,8 +105,6 @@ The static plugin metadata that we provide here is
 Next we create `build.rs` in the project main directory.
 
 ```rust
-extern crate gst_plugin_version_helper;
-
 fn main() {
     gst_plugin_version_helper::get_info()
 }
@@ -153,19 +141,16 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 ```
 
-With that our `src/lib.rs` is complete, and all following code is only in `src/rgb2gray/imp.rs`. At the top of the new file we first need to add various `use-directives` to import various types and functions we’re going to use into the current module’s scope.
+With that our `src/lib.rs` is complete, and all following code is only in `src/rgb2gray/imp.rs`. At the top of the new file we first need to add various `use-directives` to import various types, macros and functions we’re going to use into the current module’s scope.
 
 ```rust
-use glib;
 use glib::subclass;
 use glib::subclass::prelude::*;
 
-use gst;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst_base;
+use gst::{gst_debug, gst_element_error, gst_info, gst_loggable_error};
 use gst_base::subclass::prelude::*;
-use gst_video;
 
 use std::i32;
 use std::sync::Mutex;
@@ -190,7 +175,7 @@ impl ObjectSubclass for Rgb2Gray {
     type Class = subclass::simple::ClassStruct<Self>;
 
     // This macro provides some boilerplate
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {}
@@ -213,7 +198,7 @@ use glib::prelude::*;
 mod imp;
 
 // The public Rust wrapper type for our element
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
@@ -305,7 +290,7 @@ impl ObjectSubclass for Rgb2Gray {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 }
 
 impl ObjectImpl for Rgb2Gray {}
@@ -320,7 +305,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 

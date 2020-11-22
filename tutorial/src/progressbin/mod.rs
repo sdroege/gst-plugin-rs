@@ -13,7 +13,7 @@ mod imp;
 // This enum may be used to control what type of output the progressbin should produce.
 // It also serves the secondary purpose of illustrating how to add enum-type properties
 // to a plugin written in rust.
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
 #[repr(u32)]
 #[genum(type_name = "GstProgressBinOutput")]
 pub enum ProgressBinOutput {
@@ -30,7 +30,7 @@ pub enum ProgressBinOutput {
 }
 
 // The public Rust wrapper type for our element
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct ProgressBin(ObjectSubclass<imp::ProgressBin>) @extends gst::Bin, gst::Element, gst::Object;
 }
 
