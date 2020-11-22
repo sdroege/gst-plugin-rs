@@ -20,7 +20,7 @@ use glib::prelude::*;
 mod custom_source;
 mod imp;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
 #[repr(u32)]
 #[genum(type_name = "GstFallbackSourceRetryReason")]
 enum RetryReason {
@@ -31,7 +31,7 @@ enum RetryReason {
     Timeout,
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
 #[repr(u32)]
 #[genum(type_name = "GstFallbackSourceStatus")]
 enum Status {
@@ -41,7 +41,7 @@ enum Status {
     Running,
 }
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct FallbackSrc(ObjectSubclass<imp::FallbackSrc>) @extends gst::Bin, gst::Element, gst::Object;
 }
 

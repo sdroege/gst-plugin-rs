@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::super::gst_base_sys;
+use super::super::ffi;
 
 use glib::prelude::*;
 use glib::subclass::prelude::*;
@@ -59,8 +59,7 @@ impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         unsafe {
             let data = T::type_data();
-            let parent_class =
-                data.as_ref().get_parent_class() as *mut gst_base_sys::GstAggregatorPadClass;
+            let parent_class = data.as_ref().get_parent_class() as *mut ffi::GstAggregatorPadClass;
             (*parent_class)
                 .flush
                 .map(|f| {
@@ -85,8 +84,7 @@ impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
     ) -> bool {
         unsafe {
             let data = T::type_data();
-            let parent_class =
-                data.as_ref().get_parent_class() as *mut gst_base_sys::GstAggregatorPadClass;
+            let parent_class = data.as_ref().get_parent_class() as *mut ffi::GstAggregatorPadClass;
             (*parent_class)
                 .skip_buffer
                 .map(|f| {
@@ -113,9 +111,9 @@ unsafe impl<T: AggregatorPadImpl> IsSubclassable<T> for AggregatorPad {
 }
 
 unsafe extern "C" fn aggregator_pad_flush<T: AggregatorPadImpl>(
-    ptr: *mut gst_base_sys::GstAggregatorPad,
-    aggregator: *mut gst_base_sys::GstAggregator,
-) -> gst_sys::GstFlowReturn {
+    ptr: *mut ffi::GstAggregatorPad,
+    aggregator: *mut ffi::GstAggregator,
+) -> gst::ffi::GstFlowReturn {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
     let wrap: Borrowed<AggregatorPad> = from_glib_borrow(ptr);
@@ -127,10 +125,10 @@ unsafe extern "C" fn aggregator_pad_flush<T: AggregatorPadImpl>(
 }
 
 unsafe extern "C" fn aggregator_pad_skip_buffer<T: AggregatorPadImpl>(
-    ptr: *mut gst_base_sys::GstAggregatorPad,
-    aggregator: *mut gst_base_sys::GstAggregator,
-    buffer: *mut gst_sys::GstBuffer,
-) -> glib_sys::gboolean {
+    ptr: *mut ffi::GstAggregatorPad,
+    aggregator: *mut ffi::GstAggregator,
+    buffer: *mut gst::ffi::GstBuffer,
+) -> glib::ffi::gboolean {
     let instance = &*(ptr as *mut T::Instance);
     let imp = instance.get_impl();
     let wrap: Borrowed<AggregatorPad> = from_glib_borrow(ptr);

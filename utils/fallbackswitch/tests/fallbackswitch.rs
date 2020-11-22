@@ -16,9 +16,7 @@
 // Boston, MA 02110-1335, USA.
 
 use glib::prelude::*;
-
-#[macro_use]
-extern crate gst;
+use gst::gst_debug;
 use gst::prelude::*;
 
 use once_cell::sync::Lazy;

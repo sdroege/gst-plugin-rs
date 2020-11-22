@@ -2,7 +2,7 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use super::super::gst_base_sys;
+use super::super::ffi;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::signal::connect_raw;
@@ -13,11 +13,11 @@ use glib::Value;
 use std::boxed::Box as Box_;
 use std::mem::transmute;
 
-glib_wrapper! {
-    pub struct Aggregator(Object<gst_base_sys::GstAggregator, gst_base_sys::GstAggregatorClass>) @extends gst::Element, gst::Object;
+glib::glib_wrapper! {
+    pub struct Aggregator(Object<ffi::GstAggregator, ffi::GstAggregatorClass>) @extends gst::Element, gst::Object;
 
     match fn {
-        get_type => || gst_base_sys::gst_aggregator_get_type(),
+        get_type => || ffi::gst_aggregator_get_type(),
     }
 }
 
@@ -58,12 +58,12 @@ pub trait AggregatorExt: 'static {
 
 impl<O: IsA<Aggregator>> AggregatorExt for O {
     //fn get_allocator(&self, allocator: /*Ignored*/gst::Allocator, params: /*Ignored*/gst::AllocationParams) {
-    //    unsafe { TODO: call gst_base_sys:gst_aggregator_get_allocator() }
+    //    unsafe { TODO: call ffi:gst_aggregator_get_allocator() }
     //}
 
     fn get_buffer_pool(&self) -> Option<gst::BufferPool> {
         unsafe {
-            from_glib_full(gst_base_sys::gst_aggregator_get_buffer_pool(
+            from_glib_full(ffi::gst_aggregator_get_buffer_pool(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -71,7 +71,7 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
 
     fn get_latency(&self) -> gst::ClockTime {
         unsafe {
-            from_glib(gst_base_sys::gst_aggregator_get_latency(
+            from_glib(ffi::gst_aggregator_get_latency(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -79,7 +79,7 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
 
     fn set_latency(&self, min_latency: gst::ClockTime, max_latency: gst::ClockTime) {
         unsafe {
-            gst_base_sys::gst_aggregator_set_latency(
+            ffi::gst_aggregator_set_latency(
                 self.as_ref().to_glib_none().0,
                 min_latency.to_glib(),
                 max_latency.to_glib(),
@@ -89,16 +89,13 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
 
     fn set_src_caps(&self, caps: &gst::Caps) {
         unsafe {
-            gst_base_sys::gst_aggregator_set_src_caps(
-                self.as_ref().to_glib_none().0,
-                caps.to_glib_none().0,
-            );
+            ffi::gst_aggregator_set_src_caps(self.as_ref().to_glib_none().0, caps.to_glib_none().0);
         }
     }
 
     fn simple_get_next_time(&self) -> gst::ClockTime {
         unsafe {
-            from_glib(gst_base_sys::gst_aggregator_simple_get_next_time(
+            from_glib(ffi::gst_aggregator_simple_get_next_time(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -107,8 +104,8 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
     fn get_property_start_time(&self) -> u64 {
         unsafe {
             let mut value = Value::from_type(<u64 as StaticType>::static_type());
-            gobject_sys::g_object_get_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
+            glib::gobject_ffi::g_object_get_property(
+                self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"start-time\0".as_ptr() as *const _,
                 value.to_glib_none_mut().0,
             );
@@ -121,8 +118,8 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
 
     fn set_property_start_time(&self, start_time: u64) {
         unsafe {
-            gobject_sys::g_object_set_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
+            glib::gobject_ffi::g_object_set_property(
+                self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"start-time\0".as_ptr() as *const _,
                 Value::from(&start_time).to_glib_none().0,
             );
@@ -134,9 +131,9 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
         f: F,
     ) -> SignalHandlerId {
         unsafe extern "C" fn notify_latency_trampoline<P, F: Fn(&P) + Send + Sync + 'static>(
-            this: *mut gst_base_sys::GstAggregator,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
+            this: *mut ffi::GstAggregator,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
         ) where
             P: IsA<Aggregator>,
         {
@@ -159,9 +156,9 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
         f: F,
     ) -> SignalHandlerId {
         unsafe extern "C" fn notify_start_time_trampoline<P, F: Fn(&P) + Send + Sync + 'static>(
-            this: *mut gst_base_sys::GstAggregator,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
+            this: *mut ffi::GstAggregator,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
         ) where
             P: IsA<Aggregator>,
         {
@@ -181,7 +178,7 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
 
     fn negotiate(&self) -> bool {
         unsafe {
-            from_glib(gst_base_sys::gst_aggregator_negotiate(
+            from_glib(ffi::gst_aggregator_negotiate(
                 self.as_ref().to_glib_none().0,
             ))
         }

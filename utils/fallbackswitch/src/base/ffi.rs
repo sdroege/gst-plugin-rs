@@ -5,7 +5,7 @@
     clippy::unreadable_literal
 )]
 
-use gst_sys as gst;
+use gst::ffi as gst;
 
 #[allow(unused_imports)]
 use libc::{
@@ -14,7 +14,7 @@ use libc::{
 };
 
 #[allow(unused_imports)]
-use glib_sys::{gboolean, gconstpointer, gpointer, GType};
+use glib::ffi::{gboolean, gconstpointer, gpointer, GType};
 
 #[repr(C)]
 #[derive(Copy, Clone)]

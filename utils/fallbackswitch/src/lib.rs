@@ -15,11 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gst;
-
 #[cfg(not(feature = "v1_18"))]
 #[path = "base/mod.rs"]
 pub mod gst_base_compat;
@@ -33,7 +28,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-gst_plugin_define!(
+gst::gst_plugin_define!(
     fallbackswitch,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

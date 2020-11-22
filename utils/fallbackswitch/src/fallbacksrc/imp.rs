@@ -20,6 +20,10 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{
+    gst_debug, gst_element_error, gst_element_warning, gst_error, gst_error_msg, gst_info,
+    gst_warning,
+};
 
 use std::mem;
 use std::sync::Mutex;
@@ -309,7 +313,7 @@ impl ObjectSubclass for FallbackSrc {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

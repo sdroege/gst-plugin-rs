@@ -20,7 +20,11 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_log, gst_trace, gst_warning};
 
+use more_asserts::{assert_ge, assert_le, assert_lt};
+
+use once_cell::sync::Lazy;
 use parking_lot::{Condvar, Mutex};
 use std::cmp;
 use std::collections::HashMap;
@@ -356,13 +360,13 @@ pub struct ToggleRecord {
     pads: Mutex<HashMap<gst::Pad, Stream>>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "togglerecord",
         gst::DebugColorFlags::empty(),
         Some("Toggle Record Element"),
-    );
-}
+    )
+});
 
 impl ToggleRecord {
     fn handle_main_stream<T: HandleData>(
@@ -1555,7 +1559,7 @@ impl ObjectSubclass for ToggleRecord {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

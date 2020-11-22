@@ -10,11 +10,8 @@ description = "Fallback Switcher Plugin"
 [dependencies]
 libc = { version = "0.2", optional = true }
 glib = { git = "https://github.com/gtk-rs/gtk-rs" }
-glib-sys = { git = "https://github.com/gtk-rs/gtk-rs", optional = true }
-gobject-sys = { git = "https://github.com/gtk-rs/gtk-rs", optional = true }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
-gst-sys = { package = "gstreamer-sys", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", optional = true }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
 gtk = { git = "https://github.com/gtk-rs/gtk-rs", optional = true }
@@ -41,5 +38,5 @@ cc = "1.0"
 pkg-config = "0.3"
 
 [features]
-default = ["glib-sys", "gobject-sys", "gst-sys", "libc"]
+default = ["libc"]
 v1_18 = ["gst-base/v1_18"]

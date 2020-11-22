@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::gst_base_sys;
+use super::ffi;
 use super::Aggregator;
 use glib::prelude::*;
 use glib::signal::{connect_raw, SignalHandlerId};
@@ -36,7 +36,7 @@ impl<O: IsA<Aggregator>> AggregatorExtManual for O {
         unsafe {
             let mut allocator = ptr::null_mut();
             let mut params = mem::zeroed();
-            gst_base_sys::gst_aggregator_get_allocator(
+            ffi::gst_aggregator_get_allocator(
                 self.as_ref().to_glib_none().0,
                 &mut allocator,
                 &mut params,
@@ -47,7 +47,7 @@ impl<O: IsA<Aggregator>> AggregatorExtManual for O {
 
     fn finish_buffer(&self, buffer: gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError> {
         let ret: gst::FlowReturn = unsafe {
-            from_glib(gst_base_sys::gst_aggregator_finish_buffer(
+            from_glib(ffi::gst_aggregator_finish_buffer(
                 self.as_ref().to_glib_none().0,
                 buffer.into_ptr(),
             ))
@@ -58,8 +58,8 @@ impl<O: IsA<Aggregator>> AggregatorExtManual for O {
     fn get_property_min_upstream_latency(&self) -> gst::ClockTime {
         unsafe {
             let mut value = Value::from_type(<gst::ClockTime as StaticType>::static_type());
-            gobject_sys::g_object_get_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
+            glib::gobject_ffi::g_object_get_property(
+                self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"min-upstream-latency\0".as_ptr() as *const _,
                 value.to_glib_none_mut().0,
             );
@@ -72,8 +72,8 @@ impl<O: IsA<Aggregator>> AggregatorExtManual for O {
 
     fn set_property_min_upstream_latency(&self, min_upstream_latency: gst::ClockTime) {
         unsafe {
-            gobject_sys::g_object_set_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
+            glib::gobject_ffi::g_object_set_property(
+                self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"min-upstream-latency\0".as_ptr() as *const _,
                 Value::from(&min_upstream_latency).to_glib_none().0,
             );
@@ -99,9 +99,9 @@ impl<O: IsA<Aggregator>> AggregatorExtManual for O {
 }
 
 unsafe extern "C" fn notify_min_upstream_latency_trampoline<P, F: Fn(&P) + Send + Sync + 'static>(
-    this: *mut gst_base_sys::GstAggregator,
-    _param_spec: glib_sys::gpointer,
-    f: glib_sys::gpointer,
+    this: *mut ffi::GstAggregator,
+    _param_spec: glib::ffi::gpointer,
+    f: glib::ffi::gpointer,
 ) where
     P: IsA<Aggregator>,
 {

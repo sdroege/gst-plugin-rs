@@ -15,17 +15,9 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-extern crate glib;
-use glib::prelude::*;
-extern crate gio;
-use gio::prelude::*;
-
-extern crate gstreamer as gst;
 use gst::prelude::*;
 
-extern crate gsttogglerecord;
-
-extern crate gtk;
+use gio::prelude::*;
 use gtk::prelude::*;
 use std::cell::RefCell;
 use std::env;

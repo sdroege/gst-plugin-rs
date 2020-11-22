@@ -2,7 +2,7 @@
 // from gir-files (https://github.com/gtk-rs/gir-files)
 // DO NOT EDIT
 
-use super::super::gst_base_sys;
+use super::super::ffi;
 use glib::object::Cast;
 use glib::object::IsA;
 use glib::signal::connect_raw;
@@ -13,11 +13,11 @@ use glib::Value;
 use std::boxed::Box as Box_;
 use std::mem::transmute;
 
-glib_wrapper! {
-    pub struct AggregatorPad(Object<gst_base_sys::GstAggregatorPad, gst_base_sys::GstAggregatorPadClass>) @extends gst::Pad, gst::Object;
+glib::glib_wrapper! {
+    pub struct AggregatorPad(Object<ffi::GstAggregatorPad, ffi::GstAggregatorPadClass>) @extends gst::Pad, gst::Object;
 
     match fn {
-        get_type => || gst_base_sys::gst_aggregator_pad_get_type(),
+        get_type => || ffi::gst_aggregator_pad_get_type(),
     }
 }
 
@@ -55,7 +55,7 @@ pub trait AggregatorPadExt: 'static {
 impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
     fn drop_buffer(&self) -> bool {
         unsafe {
-            from_glib(gst_base_sys::gst_aggregator_pad_drop_buffer(
+            from_glib(ffi::gst_aggregator_pad_drop_buffer(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -63,7 +63,7 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
 
     fn has_buffer(&self) -> bool {
         unsafe {
-            from_glib(gst_base_sys::gst_aggregator_pad_has_buffer(
+            from_glib(ffi::gst_aggregator_pad_has_buffer(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -71,7 +71,7 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
 
     fn is_eos(&self) -> bool {
         unsafe {
-            from_glib(gst_base_sys::gst_aggregator_pad_is_eos(
+            from_glib(ffi::gst_aggregator_pad_is_eos(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -79,7 +79,7 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
 
     fn peek_buffer(&self) -> Option<gst::Buffer> {
         unsafe {
-            from_glib_full(gst_base_sys::gst_aggregator_pad_peek_buffer(
+            from_glib_full(ffi::gst_aggregator_pad_peek_buffer(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -87,7 +87,7 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
 
     fn pop_buffer(&self) -> Option<gst::Buffer> {
         unsafe {
-            from_glib_full(gst_base_sys::gst_aggregator_pad_pop_buffer(
+            from_glib_full(ffi::gst_aggregator_pad_pop_buffer(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -96,8 +96,8 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
     fn get_property_emit_signals(&self) -> bool {
         unsafe {
             let mut value = Value::from_type(<bool as StaticType>::static_type());
-            gobject_sys::g_object_get_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
+            glib::gobject_ffi::g_object_get_property(
+                self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"emit-signals\0".as_ptr() as *const _,
                 value.to_glib_none_mut().0,
             );
@@ -110,8 +110,8 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
 
     fn set_property_emit_signals(&self, emit_signals: bool) {
         unsafe {
-            gobject_sys::g_object_set_property(
-                self.to_glib_none().0 as *mut gobject_sys::GObject,
+            glib::gobject_ffi::g_object_set_property(
+                self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"emit-signals\0".as_ptr() as *const _,
                 Value::from(&emit_signals).to_glib_none().0,
             );
@@ -126,9 +126,9 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
             P,
             F: Fn(&P, &gst::Buffer) + Send + Sync + 'static,
         >(
-            this: *mut gst_base_sys::GstAggregatorPad,
-            object: *mut gst_sys::GstBuffer,
-            f: glib_sys::gpointer,
+            this: *mut ffi::GstAggregatorPad,
+            object: *mut gst::ffi::GstBuffer,
+            f: glib::ffi::gpointer,
         ) where
             P: IsA<AggregatorPad>,
         {
@@ -154,9 +154,9 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
         f: F,
     ) -> SignalHandlerId {
         unsafe extern "C" fn notify_emit_signals_trampoline<P, F: Fn(&P) + Send + Sync + 'static>(
-            this: *mut gst_base_sys::GstAggregatorPad,
-            _param_spec: glib_sys::gpointer,
-            f: glib_sys::gpointer,
+            this: *mut ffi::GstAggregatorPad,
+            _param_spec: glib::ffi::gpointer,
+            f: glib::ffi::gpointer,
         ) where
             P: IsA<AggregatorPad>,
         {

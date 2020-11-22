@@ -21,7 +21,6 @@ pub mod prelude {
 
 pub mod subclass;
 
-mod sys;
-use sys as gst_base_sys;
+mod ffi;
 
 pub const AGGREGATOR_FLOW_NEED_DATA: gst::FlowError = gst::FlowError::CustomError;
