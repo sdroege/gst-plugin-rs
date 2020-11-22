@@ -19,7 +19,10 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_element_error, gst_error, gst_log, gst_trace};
 use gst_video::prelude::*;
+
+use once_cell::sync::Lazy;
 
 use std::sync::Mutex;
 
@@ -27,15 +30,13 @@ use pango::prelude::*;
 
 use crate::caption_frame::{CaptionFrame, Status};
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = {
-        gst::DebugCategory::new(
-            "cea608overlay",
-            gst::DebugColorFlags::empty(),
-            Some("CEA 608 overlay element"),
-        )
-    };
-}
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "cea608overlay",
+        gst::DebugColorFlags::empty(),
+        Some("CEA 608 overlay element"),
+    )
+});
 
 struct State {
     video_info: Option<gst_video::VideoInfo>,
@@ -209,7 +210,7 @@ impl Cea608Overlay {
             // anymore mutably.
             unsafe {
                 assert_eq!(
-                    cairo_sys::cairo_surface_get_reference_count(surface.to_raw_none()),
+                    cairo::ffi::cairo_surface_get_reference_count(surface.to_raw_none()),
                     1
                 );
                 let buffer = glib::translate::from_glib_none(buffer_ptr);
@@ -391,7 +392,7 @@ impl ObjectSubclass for Cea608Overlay {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

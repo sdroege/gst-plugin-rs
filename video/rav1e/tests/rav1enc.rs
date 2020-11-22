@@ -6,13 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate glib;
 use glib::prelude::*;
-extern crate gstreamer as gst;
-extern crate gstreamer_check as gst_check;
-extern crate gstreamer_video as gst_video;
-
-extern crate gstrav1e;
 
 fn init() {
     use std::sync::Once;

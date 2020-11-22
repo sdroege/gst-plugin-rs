@@ -21,20 +21,21 @@ use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::structure;
 use gst::subclass::prelude::*;
+use gst::{gst_element_error, gst_error, gst_log, gst_trace};
 use gst_video::{self, ValidVideoTimeCode};
+
+use once_cell::sync::Lazy;
 
 use std::io::Write;
 use std::sync::Mutex;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = {
-        gst::DebugCategory::new(
-            "sccenc",
-            gst::DebugColorFlags::empty(),
-            Some("Scc Encoder Element"),
-        )
-    };
-}
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "sccenc",
+        gst::DebugColorFlags::empty(),
+        Some("Scc Encoder Element"),
+    )
+});
 
 #[derive(Debug)]
 struct State {
@@ -339,7 +340,7 @@ impl ObjectSubclass for SccEnc {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

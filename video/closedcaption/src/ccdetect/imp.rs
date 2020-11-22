@@ -19,21 +19,24 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_element_error, gst_element_warning, gst_loggable_error, gst_trace, gst_warning};
 use gst_base::subclass::prelude::*;
 
 use byteorder::{BigEndian, ByteOrder};
+
+use once_cell::sync::Lazy;
 
 use std::fmt;
 use std::sync::Mutex;
 use std::u64;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "ccdetect",
         gst::DebugColorFlags::empty(),
         Some("Closed Caption Detection"),
-    );
-}
+    )
+});
 
 const DEFAULT_WINDOW: u64 = 10 * gst::SECOND_VAL;
 const DEFAULT_CC608: bool = false;
@@ -387,7 +390,7 @@ impl ObjectSubclass for CCDetect {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

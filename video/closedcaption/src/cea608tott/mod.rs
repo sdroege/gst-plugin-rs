@@ -10,7 +10,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct Cea608ToTt(ObjectSubclass<imp::Cea608ToTt>) @extends gst::Element, gst::Object;
 }
 

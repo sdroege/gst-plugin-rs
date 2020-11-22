@@ -6,9 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-extern crate gstreamer as gst;
-extern crate gstreamer_app as gst_app;
-
 use gst::prelude::*;
 use std::path::PathBuf;
 

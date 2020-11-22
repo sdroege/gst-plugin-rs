@@ -10,7 +10,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct CdgParse(ObjectSubclass<imp::CdgParse>) @extends gst_base::BaseParse, gst::Element, gst::Object;
 }
 

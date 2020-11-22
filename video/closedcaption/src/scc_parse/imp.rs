@@ -20,22 +20,23 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_fixme, gst_log, gst_trace, gst_warning};
 
 use std::sync::{Mutex, MutexGuard};
+
+use once_cell::sync::Lazy;
 
 use super::parser::{SccLine, SccParser};
 use crate::line_reader::LineReader;
 use crate::parser_utils::TimeCode;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = {
-        gst::DebugCategory::new(
-            "sccparse",
-            gst::DebugColorFlags::empty(),
-            Some("Scc Parser Element"),
-        )
-    };
-}
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "sccparse",
+        gst::DebugColorFlags::empty(),
+        Some("Scc Parser Element"),
+    )
+});
 
 #[derive(Debug)]
 struct State {
@@ -430,7 +431,7 @@ impl ObjectSubclass for SccParse {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

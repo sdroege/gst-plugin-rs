@@ -15,7 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-extern crate gstreamer as gst;
 use gst::prelude::*;
 
 const ENCODE_PIPELINE: &str = "videotestsrc is-live=false num-buffers=100 ! videoconvert ! gifenc ! filesink location=test.gif";

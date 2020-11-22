@@ -10,9 +10,12 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_error, gst_log, gst_trace};
 
 use crate::caption_frame::{CaptionFrame, Status};
 use atomic_refcell::AtomicRefCell;
+
+use once_cell::sync::Lazy;
 
 #[derive(Copy, Clone, Debug)]
 enum Format {
@@ -48,13 +51,13 @@ pub struct Cea608ToTt {
     state: AtomicRefCell<State>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "cea608tott",
         gst::DebugColorFlags::empty(),
         Some("CEA-608 to TT Element"),
-    );
-}
+    )
+});
 
 impl Cea608ToTt {
     fn sink_chain(
@@ -375,7 +378,7 @@ impl ObjectSubclass for Cea608ToTt {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

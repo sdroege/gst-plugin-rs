@@ -10,8 +10,10 @@ use atomic_refcell::AtomicRefCell;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_loggable_error};
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
+use once_cell::sync::Lazy;
 use rav1e::color;
 use rav1e::config;
 use rav1e::data;
@@ -286,13 +288,13 @@ pub struct Rav1Enc {
     settings: Mutex<Settings>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "rav1enc",
         gst::DebugColorFlags::empty(),
         Some("rav1e AV1 encoder"),
-    );
-}
+    )
+});
 
 impl ObjectSubclass for Rav1Enc {
     const NAME: &'static str = "Rav1Enc";
@@ -301,7 +303,7 @@ impl ObjectSubclass for Rav1Enc {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

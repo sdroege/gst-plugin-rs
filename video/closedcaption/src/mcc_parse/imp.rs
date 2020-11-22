@@ -20,25 +20,29 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{
+    gst_debug, gst_element_error, gst_error, gst_fixme, gst_info, gst_log, gst_loggable_error,
+    gst_trace, gst_warning,
+};
 use gst_video::ValidVideoTimeCode;
 
 use std::cmp;
 use std::convert::TryInto;
 use std::sync::{Mutex, MutexGuard};
 
+use once_cell::sync::Lazy;
+
 use super::parser::{MccLine, MccParser};
 use crate::line_reader::LineReader;
 use crate::parser_utils::TimeCode;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = {
-        gst::DebugCategory::new(
-            "mccparse",
-            gst::DebugColorFlags::empty(),
-            Some("Mcc Parser Element"),
-        )
-    };
-}
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "mccparse",
+        gst::DebugColorFlags::empty(),
+        Some("Mcc Parser Element"),
+    )
+});
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Format {
@@ -1133,7 +1137,7 @@ impl ObjectSubclass for MccParse {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

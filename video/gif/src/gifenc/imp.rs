@@ -10,6 +10,7 @@ use atomic_refcell::AtomicRefCell;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_loggable_error};
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use once_cell::sync::Lazy;
@@ -148,7 +149,7 @@ impl ObjectSubclass for GifEnc {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

@@ -20,7 +20,7 @@ use glib::prelude::*;
 mod headers;
 mod imp;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct MccEnc(ObjectSubclass<imp::MccEnc>) @extends gst::Element, gst::Object;
 }
 

@@ -16,11 +16,10 @@
 // Boston, MA 02110-1335, USA.
 
 use glib::prelude::*;
-use glib::GEnum;
 
 mod imp;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
 #[repr(u32)]
 #[genum(type_name = "GstTtToCea608Mode")]
 enum Mode {
@@ -30,7 +29,7 @@ enum Mode {
     RollUp4,
 }
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct TtToCea608(ObjectSubclass<imp::TtToCea608>) @extends gst::Element, gst::Object;
 }
 

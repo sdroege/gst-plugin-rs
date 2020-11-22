@@ -10,7 +10,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct Rav1Enc(ObjectSubclass<imp::Rav1Enc>) @extends gst_video::VideoEncoder, gst::Element, gst::Object;
 }
 

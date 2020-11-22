@@ -8,11 +8,13 @@
 
 use glib::subclass;
 use glib::subclass::prelude::*;
+use gst::format::Bytes;
 use gst::subclass::prelude::*;
 use gst::SECOND_VAL;
+use gst::{gst_debug, gst_element_error};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
-use gstreamer::format::Bytes;
+use once_cell::sync::Lazy;
 use std::convert::TryInto;
 
 use crate::constants::{
@@ -25,13 +27,13 @@ const CDG_CMD_MEMORY_LOAD_COLOR_TABLE_2: u8 = 31;
 
 pub struct CdgParse;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "cdgparse",
         gst::DebugColorFlags::empty(),
         Some("CDG parser"),
-    );
-}
+    )
+});
 
 impl ObjectSubclass for CdgParse {
     const NAME: &'static str = "CdgParse";
@@ -40,7 +42,7 @@ impl ObjectSubclass for CdgParse {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self

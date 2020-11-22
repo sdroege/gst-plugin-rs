@@ -17,17 +17,6 @@
 
 #![recursion_limit = "128"]
 
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gst;
-#[macro_use]
-extern crate lazy_static;
-
-#[cfg(test)]
-#[macro_use]
-extern crate pretty_assertions;
-
 #[allow(non_camel_case_types, non_upper_case_globals, unused)]
 #[allow(clippy::redundant_static_lifetimes, clippy::unreadable_literal)]
 #[allow(clippy::useless_transmute, clippy::trivially_copy_pass_by_ref)]
@@ -57,7 +46,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-gst_plugin_define!(
+gst::gst_plugin_define!(
     rsclosedcaption,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

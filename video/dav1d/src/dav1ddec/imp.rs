@@ -10,8 +10,11 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_error, gst_info, gst_trace, gst_warning};
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
+
+use once_cell::sync::Lazy;
 
 use std::convert::TryInto;
 use std::i32;
@@ -30,13 +33,13 @@ pub struct Dav1dDec {
     negotiation_infos: Mutex<NegotiationInfos>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "dav1ddec",
         gst::DebugColorFlags::empty(),
         Some("Dav1d AV1 decoder"),
-    );
-}
+    )
+});
 
 impl Dav1dDec {
     pub fn gst_video_format_from_dav1d_picture(
@@ -349,7 +352,7 @@ impl ObjectSubclass for Dav1dDec {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

@@ -9,18 +9,19 @@
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error};
 use gst_video::prelude::VideoDecoderExtManual;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use image::GenericImageView;
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
 use crate::constants::{CDG_HEIGHT, CDG_WIDTH};
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory =
-        gst::DebugCategory::new("cdgdec", gst::DebugColorFlags::empty(), Some("CDG decoder"),);
-}
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new("cdgdec", gst::DebugColorFlags::empty(), Some("CDG decoder"))
+});
 
 pub struct CdgDec {
     cdg_inter: Mutex<Box<cdg_renderer::CdgInterpreter>>,
@@ -34,7 +35,7 @@ impl ObjectSubclass for CdgDec {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn new() -> Self {
         Self {

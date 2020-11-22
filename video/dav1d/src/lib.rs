@@ -6,16 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[macro_use]
-extern crate glib;
-#[macro_use]
-extern crate gstreamer as gst;
-extern crate dav1d;
-extern crate gstreamer_base as gst_base;
-extern crate gstreamer_video as gst_video;
-#[macro_use]
-extern crate lazy_static;
-
 mod dav1ddec;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -23,7 +13,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-gst_plugin_define!(
+gst::gst_plugin_define!(
     rsdav1d,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

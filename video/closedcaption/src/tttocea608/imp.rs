@@ -20,6 +20,9 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{gst_debug, gst_element_error, gst_error, gst_log, gst_trace, gst_warning};
+
+use once_cell::sync::Lazy;
 
 use crate::ffi;
 use std::sync::Mutex;
@@ -263,14 +266,15 @@ pub struct TtToCea608 {
     settings: Mutex<Settings>,
 }
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = gst::DebugCategory::new(
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
         "tttocea608",
         gst::DebugColorFlags::empty(),
         Some("TT CEA 608 Element"),
-    );
-    static ref SPACE: u16 = eia608_from_utf8_1(&[0x20, 0, 0, 0, 0]);
-}
+    )
+});
+
+static SPACE: Lazy<u16> = Lazy::new(|| eia608_from_utf8_1(&[0x20, 0, 0, 0, 0]));
 
 impl TtToCea608 {
     fn push_gap(&self, last_frame_no: u64, new_frame_no: u64) {
@@ -786,7 +790,7 @@ impl ObjectSubclass for TtToCea608 {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

@@ -15,11 +15,9 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-#[macro_use]
-extern crate pretty_assertions;
-
 use gst::prelude::*;
 use gst::EventView;
+use pretty_assertions::assert_eq;
 use rand::{Rng, SeedableRng};
 use std::path::PathBuf;
 

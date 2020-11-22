@@ -13,10 +13,9 @@ nom = "6.0"
 either = "1"
 uuid = { version = "0.8", features = ["v4"] }
 chrono = "0.4"
-lazy_static = "1.2"
+once_cell = "1.0"
 atomic_refcell = "0.1"
 cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs", features=["use_glib"] }
-cairo-sys-rs = { git = "https://github.com/gtk-rs/gtk-rs" }
 pango = { git = "https://github.com/gtk-rs/gtk-rs" }
 pangocairo = { git = "https://github.com/gtk-rs/gtk-rs" }
 byteorder = "1"

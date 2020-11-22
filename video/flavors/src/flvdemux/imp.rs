@@ -16,20 +16,23 @@ use ::flavors::parser as flavors;
 use glib::subclass;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst::{
+    gst_debug, gst_error, gst_error_msg, gst_log, gst_loggable_error, gst_trace, gst_warning,
+};
 
 use num_rational::Rational32;
 
+use once_cell::sync::Lazy;
+
 use smallvec::SmallVec;
 
-lazy_static! {
-    static ref CAT: gst::DebugCategory = {
-        gst::DebugCategory::new(
-            "rsflvdemux",
-            gst::DebugColorFlags::empty(),
-            Some("Rust FLV demuxer"),
-        )
-    };
-}
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "rsflvdemux",
+        gst::DebugColorFlags::empty(),
+        Some("Rust FLV demuxer"),
+    )
+});
 
 pub struct FlvDemux {
     sinkpad: gst::Pad,
@@ -126,7 +129,7 @@ impl ObjectSubclass for FlvDemux {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::glib_object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();
@@ -374,7 +377,7 @@ impl FlvDemux {
     }
 
     fn sink_event(&self, pad: &gst::Pad, element: &super::FlvDemux, event: gst::Event) -> bool {
-        use crate::gst::EventView;
+        use gst::EventView;
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
@@ -404,7 +407,7 @@ impl FlvDemux {
         element: &super::FlvDemux,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use crate::gst::QueryView;
+        use gst::QueryView;
 
         match query.view_mut() {
             QueryView::Position(ref mut q) => {
@@ -452,7 +455,7 @@ impl FlvDemux {
     }
 
     fn src_event(&self, pad: &gst::Pad, element: &super::FlvDemux, event: gst::Event) -> bool {
-        use crate::gst::EventView;
+        use gst::EventView;
 
         match event.view() {
             EventView::Seek(..) => {

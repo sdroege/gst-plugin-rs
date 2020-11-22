@@ -15,12 +15,11 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-#[macro_use]
-extern crate pretty_assertions;
-
 use gst::prelude::*;
 
 use std::sync::{Arc, Mutex};
+
+use pretty_assertions::assert_eq;
 
 fn init() {
     use std::sync::Once;

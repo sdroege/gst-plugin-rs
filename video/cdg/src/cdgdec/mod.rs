@@ -10,7 +10,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::glib_wrapper! {
     pub struct CdgDec(ObjectSubclass<imp::CdgDec>) @extends gst_video::VideoDecoder, gst::Element, gst::Object;
 }
 
