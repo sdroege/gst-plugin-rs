@@ -711,6 +711,9 @@ impl UdpSinkPadHandler {
             EventView::Segment(e) => {
                 self.0.write().unwrap().segment = Some(e.get_segment().clone());
             }
+            EventView::SinkMessage(e) => {
+                let _ = element.post_message(e.get_message());
+            }
             _ => (),
         }
     }
