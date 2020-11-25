@@ -30,13 +30,13 @@ use gst_base::subclass::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_log};
+use gst::{gst_debug, gst_error, gst_info, gst_log, gst_warning};
 
 use once_cell::sync::Lazy;
 
 use std::sync::{Mutex, RwLock};
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
 #[repr(u32)]
 #[genum(type_name = "GstFallbackSwitchStreamHealth")]
 pub(crate) enum StreamHealth {
@@ -817,15 +817,15 @@ impl ObjectImpl for FallbackSwitch {
             }
             subclass::Property("auto-switch", ..) => {
                 let settings = self.settings.lock().unwrap();
-                Ok(settings.auto_switch.to_value())
+                settings.auto_switch.to_value()
             }
             subclass::Property("primary-health", ..) => {
                 let state = self.output_state.lock().unwrap();
-                Ok(state.primary.stream_health.to_value())
+                state.primary.stream_health.to_value()
             }
             subclass::Property("fallback-health", ..) => {
                 let state = self.output_state.lock().unwrap();
-                Ok(state.fallback.stream_health.to_value())
+                state.fallback.stream_health.to_value()
             }
             _ => unimplemented!(),
         }
