@@ -106,6 +106,12 @@ if get_option('default_library') == 'static' or get_option('default_library') ==
   endforeach
 endif
 
+pc_files = []
+foreach p, lib : plugins_rep
+  # skip the 'lib' prefix in plugin name
+  pc_files += [lib.substring(3) + '.pc']
+endforeach
+
 # Need to depends on all gstreamer-rs deps to ensure they are built
 # before gstreamer-rs when building with gst-build.
 # Custom targets can't depend on dependency() objects so we have to depend
@@ -144,6 +150,7 @@ endforeach
 extra_env_str = ','.join(extra_env_list)
 
 plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
+pkgconfig_install_dir = get_option('libdir') / 'pkgconfig'
 
 # Always build the target so we don't have to list all source files as input
 rs_plugins = custom_target('gst-plugins-rs',
@@ -162,9 +169,24 @@ rs_plugins = custom_target('gst-plugins-rs',
     target,
     exclude,
     extra_env_str,
+    get_option('prefix'),
+    get_option('libdir'),
     extensions])
 
 plugins = rs_plugins.to_list()
+
+# We don't need to pass a command as we depends on the target above
+# but it is currently mandatory ( https://github.com/mesonbuild/meson/issues/8059 )
+# so use python as it's guaranteed to be present on any setup
+python = import('python').find_installation()
+custom_target('gst-plugins-rs-pc-files',
+  build_by_default: true,
+  output: pc_files,
+  console: true,
+  install: true,
+  install_dir: pkgconfig_install_dir,
+  depends: rs_plugins,
+  command: [python, '-c', '""'])
 
 test('tests',
   cargo_wrapper,
@@ -174,5 +196,7 @@ test('tests',
     meson.build_root(),
     target,
     exclude,
-    extra_env_str],
+    extra_env_str,
+    get_option('prefix'),
+    get_option('libdir')],
   timeout: 600)

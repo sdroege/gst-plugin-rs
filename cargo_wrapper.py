@@ -9,8 +9,8 @@ import sys
 
 PLUGIN_DIRS = ['audio', 'generic', 'net', 'text', 'utils', 'video']
 
-command, meson_build_dir, meson_current_source_dir, meson_build_root, target, exclude, extra_env = sys.argv[
-    1:8]
+command, meson_build_dir, meson_current_source_dir, meson_build_root, target, exclude, extra_env, prefix, libdir = sys.argv[
+    1:10]
 
 cargo_target_dir = os.path.join(meson_build_dir, 'target')
 
@@ -28,10 +28,10 @@ if len(extra_env) > 0:
 
 if command == 'build':
     # cargo build
-    ext = sys.argv[8]
+    ext = sys.argv[10]
     # when using --default-library=both 2 extensions are passed
     try:
-        ext2 = sys.argv[9]
+        ext2 = sys.argv[11]
     except IndexError:
         ext2 = None
 
@@ -45,6 +45,9 @@ elif command == 'test':
 else:
     print("Unknown command:", command)
     sys.exit(1)
+
+cargo_cmd.extend(['--prefix', prefix, '--libdir',
+                  os.path.join(prefix, libdir)])
 
 
 def run(cargo_cmd, env):
@@ -71,3 +74,17 @@ if command == 'build':
     if ext2:
         for f in glob.glob(os.path.join(cargo_target_dir, target, '*.' + ext2)):
             shutil.copy(f, meson_build_dir)
+    # Copy generated pkg-config files
+    for f in glob.glob(os.path.join(cargo_target_dir, target, '*.pc')):
+        shutil.copy(f, meson_build_dir)
+
+    # Move -uninstalled.pc to meson-uninstalled
+    uninstalled = os.path.join(meson_build_dir, 'meson-uninstalled')
+    if not os.path.exists(uninstalled):
+        os.mkdir(uninstalled)
+    for f in glob.glob(os.path.join(meson_build_dir, '*-uninstalled.pc')):
+        # move() does not allow us to update the file so remove it if it already exists
+        dest = os.path.join(uninstalled, os.path.basename(f))
+        if os.path.exists(dest):
+            os.unlink(dest)
+        shutil.move(f, uninstalled)
