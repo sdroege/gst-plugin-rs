@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import sys
 
+PLUGIN_DIRS = ['audio', 'generic', 'net', 'text', 'utils', 'video']
+
 command, meson_build_dir, meson_current_source_dir, meson_build_root, target, exclude, extra_env = sys.argv[
     1:8]
 
@@ -33,30 +35,34 @@ if command == 'build':
     except IndexError:
         ext2 = None
 
-    cargo_cmd = ['cargo', 'build', '--all-targets',
-                 '--manifest-path', os.path.join(
-                     meson_current_source_dir, 'Cargo.toml'),
-                 '--workspace']
+    # Build with the 'static' feature enforcing the minimal gst version required for static builds
+    cargo_cmd = ['cargo', 'cbuild', '--features', 'static']
     if target == 'release':
         cargo_cmd.append('--release')
 elif command == 'test':
     # cargo test
-    cargo_cmd = ['cargo', 'test', '--no-fail-fast', '--color=always', '--manifest-path',
-                 os.path.join(meson_current_source_dir, 'Cargo.toml'),
-                 '--workspace']
+    cargo_cmd = ['cargo', 'ctest', '--no-fail-fast', '--color=always']
 else:
     print("Unknown command:", command)
     sys.exit(1)
 
-if len(exclude) > 0:
-    for e in exclude.split(','):
-        cargo_cmd.append('--exclude')
-        cargo_cmd.append(e)
 
-try:
-    subprocess.run(cargo_cmd, env=env, check=True)
-except subprocess.SubprocessError:
-    sys.exit(1)
+def run(cargo_cmd, env):
+    try:
+        subprocess.run(cargo_cmd, env=env, check=True)
+    except subprocess.SubprocessError:
+        sys.exit(1)
+
+
+for d in PLUGIN_DIRS:
+    for name in os.listdir(os.path.join(meson_current_source_dir, d)):
+        if '{}/{}'.format(d, name) in exclude:
+            continue
+
+        cargo_toml = os.path.join(
+            meson_current_source_dir, d, name, 'Cargo.toml')
+        cmd = cargo_cmd + ['--manifest-path', cargo_toml]
+        run(cmd, env)
 
 if command == 'build':
     # Copy so files to build dir

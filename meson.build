@@ -26,43 +26,43 @@ else
 endif
 
 plugins_rep = {
-  'gst-plugin-audiofx': 'libgstrsaudiofx',
-  'gst-plugin-cdg': 'libgstcdg',
-  'gst-plugin-claxon': 'libgstclaxon',
-  'gst-plugin-closedcaption': 'libgstrsclosedcaption',
-  'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
-  'gst-plugin-file': 'libgstrsfile',
-  'gst-plugin-flv': 'libgstrsflv',
-  'gst-plugin-gif': 'libgstgif',
-  'gst-plugin-lewton': 'libgstlewton',
-  'gst-plugin-rav1e': 'libgstrav1e',
-  'gst-plugin-reqwest': 'libgstreqwest',
-  'gst-plugin-rspng': 'libgstrspng',
-  'gst-plugin-rusoto': 'libgstrusoto',
-  'gst-plugin-textwrap': 'libgstrstextwrap',
-  'gst-plugin-threadshare': 'libgstthreadshare',
-  'gst-plugin-togglerecord': 'libgsttogglerecord',
-  'gst-plugin-hsv': 'libgsthsv',
+  'audio/audiofx': 'libgstrsaudiofx',
+  'video/cdg': 'libgstcdg',
+  'audio/claxon': 'libgstclaxon',
+  'video/closedcaption': 'libgstrsclosedcaption',
+  'utils/fallbackswitch': 'libgstfallbackswitch',
+  'generic/file': 'libgstrsfile',
+  'video/flavors': 'libgstrsflv',
+  'video/gif': 'libgstgif',
+  'audio/lewton': 'libgstlewton',
+  'video/rav1e': 'libgstrav1e',
+  'net/reqwest': 'libgstreqwest',
+  'video/rspng': 'libgstrspng',
+  'net/rusoto': 'libgstrusoto',
+  'text/wrap': 'libgstrstextwrap',
+  'generic/threadshare': 'libgstthreadshare',
+  'utils/togglerecord': 'libgsttogglerecord',
+  'video/hsv': 'libgsthsv',
 }
 
 exclude = []
 extra_env = {}
 
 if dependency('dav1d', required : get_option('dav1d')).found()
-  plugins_rep += {'gst-plugin-dav1d' : 'libgstrsdav1d'}
+  plugins_rep += {'video/dav1d' : 'libgstrsdav1d'}
 else
-  exclude += ['gst-plugin-dav1d']
+  exclude += ['video/dav1d']
 endif
 
 sodium = get_option ('sodium')
 if sodium == 'system'
   dependency('libsodium')
-  plugins_rep += {'gst-plugin-sodium': 'libgstsodium'}
+  plugins_rep += {'generic/sodium': 'libgstsodium'}
   extra_env += {'SODIUM_USE_PKG_CONFIG': '1'}
 elif sodium == 'built-in'
-  plugins_rep += {'gst-plugin-sodium': 'libgstsodium'}
+  plugins_rep += {'generic/sodium': 'libgstsodium'}
 else
-  exclude += ['gst-plugin-sodium']
+  exclude += ['generic/sodium']
 endif
 
 cc = meson.get_compiler('c')
@@ -82,9 +82,9 @@ if not csound_option.disabled()
 endif
 
 if csound_dep.found()
-  plugins_rep += {'gst-plugin-csound' : 'libgstcsound'}
+  plugins_rep += {'audio/csound' : 'libgstcsound'}
 else
-  exclude += ['gst-plugin-csound']
+  exclude += ['audio/csound']
 endif
 
 output = []
