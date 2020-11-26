@@ -20,7 +20,7 @@ gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org
 
 [lib]
 name = "gstgif"
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[example]]
@@ -29,3 +29,20 @@ path = "examples/testvideosrc2gif.rs"
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../../version-helper" }
+
+[features]
+# GStreamer 1.14 is required for static linking
+static = ["gst/v1_14"]
+
+[package.metadata.capi]
+min_version = "0.7.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-video-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

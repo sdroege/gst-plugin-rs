@@ -33,7 +33,7 @@ gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gst
 
 [lib]
 name = "gstthreadshare"
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[example]]
@@ -52,3 +52,20 @@ path = "examples/tcpclientsrc_benchmark_sender.rs"
 gst-plugin-version-helper = { path="../../version-helper" }
 cc = "1.0.38"
 pkg-config = "0.3.15"
+
+[features]
+# GStreamer 1.14 is required for static linking
+static = ["gst/v1_14"]
+
+[package.metadata.capi]
+min_version = "0.7.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-net-1.0, gstreamer-rtp-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

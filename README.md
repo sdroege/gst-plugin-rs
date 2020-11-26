@@ -68,6 +68,37 @@ You will find the following plugins in this repository:
     - `togglerecord`: Element to enable starting and stopping multiple
       streams together.
 
+## Building
+
+gst-plugins-rs relies on [cargo-c](https://github.com/lu-zero/cargo-c/) to
+generate shared and static C libraries. It can be installed using:
+
+```
+$ cargo install cargo-c
+```
+
+Then you can easily build and test a specific plugin:
+
+```
+$ cargo cbuild --manifest-path video/cdg/Cargo.toml
+$ GST_PLUGIN_PATH=$GST_PLUGIN_PATH:target/debug gst-inspect-1.0 cdgdec
+```
+
+The plugin can also be installed system-wide:
+
+```
+$ cargo cbuild --manifest-path video/cdg/Cargo.toml --prefix=/usr
+$ cargo cinstall --manifest-path video/cdg/Cargo.toml --prefix=/usr
+```
+
+This will install the plugin to `/usr/lib/gstreamer-1.0`.
+You can use `--libdir` to pass a custom `lib` directory
+such as `/usr/lib/x86_64-linux-gnu` for example.
+
+Note that you can also just use `cargo` directly to build Rust static libraries
+and shared C libraries. `cargo-c` is mostly useful to build static C libraries
+and generate `pkg-config` files.
+
 ## LICENSE
 
 gst-plugins-rs and all crates contained in here that are not listed below are

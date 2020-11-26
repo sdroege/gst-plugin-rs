@@ -45,9 +45,26 @@ package="gstreamer-check"
 
 [lib]
 name = "gstrsclosedcaption"
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../../version-helper" }
 cc = "1.0"
+
+[features]
+# We already use 1.16 which is new enough for static build
+static = []
+
+[package.metadata.capi]
+min_version = "0.7.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-video-1.0, gobject-2.0, glib-2.0, gmodule-2.0, pango, pangocairo, cairo-gobject"

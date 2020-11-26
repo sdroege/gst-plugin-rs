@@ -24,7 +24,7 @@ gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org
 
 [lib]
 name = "gstfallbackswitch"
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[example]]
@@ -40,3 +40,18 @@ pkg-config = "0.3"
 [features]
 default = ["libc"]
 v1_18 = ["gst-base/v1_18"]
+# We already use 1.14 which is new enough for static build
+static = []
+
+[package.metadata.capi]
+min_version = "0.7.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

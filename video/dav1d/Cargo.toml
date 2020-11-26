@@ -17,7 +17,7 @@ once_cell = "1.0"
 
 [lib]
 name = "gstrsdav1d"
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
@@ -25,3 +25,18 @@ gst-plugin-version-helper = { path = "../../version-helper" }
 
 [features]
 build = ["dav1d/build"]
+# GStreamer 1.14 is required for static linking
+static = ["gst/v1_14"]
+
+[package.metadata.capi]
+min_version = "0.7.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-video-1.0, gobject-2.0, glib-2.0, gmodule-2.0, dav1d"

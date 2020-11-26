@@ -20,7 +20,7 @@ package="gstreamer"
 
 [lib]
 name = "gstrstextwrap"
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
@@ -29,3 +29,20 @@ gst-plugin-version-helper = { path="../../version-helper" }
 [dev-dependencies.gst-check]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package="gstreamer-check"
+
+[features]
+# GStreamer 1.14 is required for static linking
+static = ["gst/v1_14"]
+
+[package.metadata.capi]
+min_version = "0.7.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

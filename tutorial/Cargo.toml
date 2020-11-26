@@ -19,7 +19,7 @@ once_cell = "1.0"
 
 [lib]
 name = "gstrstutorial"
-crate-type = ["cdylib", "rlib", "staticlib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
