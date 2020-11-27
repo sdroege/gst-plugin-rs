@@ -5,8 +5,7 @@ import sys
 import os
 import glob
 
-DIRS = ['audio', 'generic', 'net', 'text', 'utils', 'video']
-OVERRIDE = {'wrap': 'textwrap', 'flavors': 'rsflv'}
+from utils import iterate_plugins
 
 prefix = sys.argv[1]
 
@@ -17,17 +16,12 @@ print("Built plugins:", plugins)
 
 success = True
 
-for d in DIRS:
-    for name in os.listdir(d):
-        name = OVERRIDE.get(name, name)
+for name in iterate_plugins():
+    plugin = "libgst{}.so".format(name)
 
-        plugin = "libgst{}.so".format(name)
-        # Some plugins are prefixed with 'rs'
-        rs_plugin = "libgstrs{}.so".format(name)
-
-        if plugin not in plugins and rs_plugin not in plugins:
-            print(name, "missing in", prefix)
-            success = False
+    if plugin not in plugins:
+        print(name, "missing in", prefix)
+        success = False
 
 if not success:
     sys.exit(1)
