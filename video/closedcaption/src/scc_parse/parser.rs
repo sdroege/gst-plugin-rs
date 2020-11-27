@@ -141,6 +141,12 @@ impl SccParser {
         }
     }
 
+    pub fn new_scan_captions() -> Self {
+        Self {
+            state: State::CaptionOrEmpty,
+        }
+    }
+
     pub fn reset(&mut self) {
         self.state = State::Header;
     }

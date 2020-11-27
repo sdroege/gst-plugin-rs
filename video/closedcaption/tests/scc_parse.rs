@@ -17,10 +17,12 @@
 // Boston, MA 02110-1335, USA.
 
 use gst::prelude::*;
+use gst::EventView;
 use gst_video::{ValidVideoTimeCode, VideoTimeCode};
 use pretty_assertions::assert_eq;
 use rand::{Rng, SeedableRng};
 use std::collections::VecDeque;
+use std::path::PathBuf;
 
 fn init() {
     use std::sync::Once;
@@ -198,4 +200,84 @@ fn test_timecodes() {
             .field("framerate", &gst::Fraction::new(30000, 1001))
             .build()
     );
+}
+
+#[test]
+fn test_pull() {
+    init();
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests/dn2018-1217.scc");
+
+    let mut h = gst_check::Harness::new_parse(&format!("filesrc location={:?} ! sccparse", path));
+
+    h.play();
+
+    /* Let's first pull until EOS */
+    loop {
+        let mut done = false;
+
+        while h.events_in_queue() != 0 {
+            let event = h.pull_event();
+
+            if let Ok(event) = event {
+                match event.view() {
+                    EventView::Eos(_) => {
+                        done = true;
+                        break;
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        while h.buffers_in_queue() != 0 {
+            let _ = h.pull();
+        }
+
+        if done {
+            break;
+        }
+    }
+
+    /* Now seek and check that we receive buffers with appropriate PTS */
+    h.push_upstream_event(gst::event::Seek::new(
+        1.0,
+        gst::SeekFlags::FLUSH,
+        gst::SeekType::Set,
+        gst::GenericFormattedValue::Time(18 * gst::SECOND),
+        gst::SeekType::Set,
+        gst::GenericFormattedValue::Time(19 * gst::SECOND),
+    ));
+
+    loop {
+        let mut done = false;
+
+        while h.buffers_in_queue() != 0 {
+            if let Ok(buffer) = h.pull() {
+                let pts = buffer.get_pts();
+                let end_time = pts + buffer.get_duration();
+
+                assert!(end_time >= 18 * gst::SECOND && pts < 19 * gst::SECOND);
+            }
+        }
+
+        while h.events_in_queue() != 0 {
+            let event = h.pull_event();
+
+            if let Ok(event) = event {
+                match event.view() {
+                    EventView::Eos(_) => {
+                        done = true;
+                        break;
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        if done {
+            break;
+        }
+    }
 }
