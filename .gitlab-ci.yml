@@ -166,8 +166,13 @@ meson shared:
 meson static:
   extends: .img-stable
   script:
-    - meson build --default-library=static
+    - meson build --default-library=static --prefix=$(pwd)/install -Dsodium=built-in
+    - ninja -C build install
+    - ./ci/generate-static-test.py test-static-link-all
+    - cd test-static-link-all
+    - PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$(pwd)/../install/lib/x86_64-linux-gnu/pkgconfig meson build
     - ninja -C build
+    - ./build/test-gst-static
   rules:
     - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
 
