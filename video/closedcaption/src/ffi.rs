@@ -712,6 +712,13 @@ extern "C" {
 extern "C" {
     pub fn eia608_dump(cc_data: u16);
 }
+extern "C" {
+    pub fn eia608_to_text(
+        buf: *mut ::std::os::raw::c_char,
+        s: usize,
+        cc_data: u16,
+    ) -> ::std::os::raw::c_int;
+}
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct xds_t {

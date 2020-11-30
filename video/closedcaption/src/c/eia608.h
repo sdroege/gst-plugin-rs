@@ -27,6 +27,7 @@
 extern "C" {
 #endif
 
+#include <stdio.h>
 #include "eia608_charmap.h"
 #include "utf8.h"
 ////////////////////////////////////////////////////////////////////////////////
@@ -201,6 +202,10 @@ int eia608_to_utf8(uint16_t c, int* chan, utf8_char_t* char1, utf8_char_t* char2
     \param
 */
 void eia608_dump(uint16_t cc_data);
+/*! \brief
+    \param
+*/
+int eia608_to_text (char *buf, ssize_t size, uint16_t cc_data);
 ////////////////////////////////////////////////////////////////////////////////
 #ifdef __cplusplus
 }

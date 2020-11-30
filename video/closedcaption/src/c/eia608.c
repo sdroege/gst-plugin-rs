@@ -23,6 +23,7 @@
 /**********************************************************************************************/
 #include "eia608.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -231,14 +232,16 @@ eia608_from_utf8_2 (const utf8_char_t * c1, const utf8_char_t * c2)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-void
-eia608_dump (uint16_t cc_data)
+
+int
+eia608_to_text (char *buf, ssize_t size, uint16_t cc_data)
 {
   eia608_style_t style;
   const char *text = 0;
   char char1[5], char2[5];
   char1[0] = char2[0] = 0;
   int row, col, chan, underline;
+  int ret;
 
   if (!eia608_parity_varify (cc_data)) {
     text = "parity failed";
@@ -260,11 +263,9 @@ eia608_dump (uint16_t cc_data)
   } else if (eia608_is_norpak (cc_data)) {
     text = "norpak";
   } else if (eia608_is_preamble (cc_data)) {
-    text = "preamble";
     eia608_parse_preamble (cc_data, &row, &col, &style, &chan, &underline);
-    fprintf (stderr, "preamble %d %d %d %d %d\n", row, col, style, chan,
-        underline);
-
+    ret = snprintf(buf, size, "cc %04X (%04X) '%s' '%s' (preamble: row: %d col: %d style: %d chan: %d underline: %d)",
+        cc_data, eia608_parity_strip (cc_data), char1, char2, row, col, style, chan, underline);
   } else if (eia608_is_control (cc_data)) {
     switch (eia608_parse_control (cc_data, &chan)) {
 
@@ -352,6 +353,23 @@ eia608_dump (uint16_t cc_data)
     text = "unhandled";
   }
 
-  fprintf (stderr, "cc %04X (%04X) '%s' '%s' (%s)\n", cc_data,
-      eia608_parity_strip (cc_data), char1, char2, text);
+  if (text != 0) {
+    ret = snprintf (buf, size, "cc %04X (%04X) '%s' '%s' (%s)", cc_data, eia608_parity_strip (cc_data), char1, char2, text);
+  }
+
+  return ret;
+}
+
+void
+eia608_dump (uint16_t cc_data)
+{
+  char *text = NULL;
+  int bufsz;
+
+  bufsz = eia608_to_text (NULL, 0, cc_data);
+  text = malloc(bufsz + 1);
+  eia608_to_text (text, bufsz + 1, cc_data);
+  fprintf (stderr, "%s\n", text);
+
+  free (text);
 }
