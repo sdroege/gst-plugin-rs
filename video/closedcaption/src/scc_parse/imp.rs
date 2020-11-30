@@ -101,17 +101,12 @@ impl State {
             tc.hours,
             tc.minutes,
             tc.seconds,
-            0,
+            tc.frames,
             0,
         );
 
         match gst_video::ValidVideoTimeCode::try_from(timecode) {
-            Ok(mut timecode) => {
-                // Add the number of frames here as sometimes it's higher than 30 and we simply
-                // want to wrap around in that case while keeping the timecode valid.
-                timecode.add_frames(tc.frames as i64);
-                Ok(timecode)
-            }
+            Ok(timecode) => Ok(timecode),
             Err(timecode) => {
                 let last_timecode =
                     self.last_timecode
