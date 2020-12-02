@@ -830,9 +830,7 @@ impl SccParse {
     }
 
     fn perform_seek(&self, event: &gst::event::Seek, element: &super::SccParse) -> bool {
-        let mut state = self.state.lock().unwrap();
-
-        if state.pull.is_none() {
+        if self.state.lock().unwrap().pull.is_none() {
             gst_error!(CAT, obj: element, "seeking is only supported in pull mode");
             return false;
         }
@@ -865,19 +863,7 @@ impl SccParse {
             return false;
         }
 
-        let pull = state.pull.as_ref().unwrap();
-
-        if start_type == gst::SeekType::Set {
-            start = start.min(pull.duration).unwrap_or(start);
-        }
-
-        if stop_type == gst::SeekType::Set {
-            stop = stop.min(pull.duration).unwrap_or(stop);
-        }
-
-        state.seeking = true;
         let seek_seqnum = event.get_seqnum();
-        state.seek_seqnum = Some(seek_seqnum);
 
         let event = gst::event::FlushStart::builder()
             .seqnum(seek_seqnum)
@@ -894,6 +880,20 @@ impl SccParse {
         self.srcpad.push_event(event);
 
         self.sinkpad.pause_task().unwrap();
+
+        let mut state = self.state.lock().unwrap();
+        let pull = state.pull.as_ref().unwrap();
+
+        if start_type == gst::SeekType::Set {
+            start = start.min(pull.duration).unwrap_or(start);
+        }
+
+        if stop_type == gst::SeekType::Set {
+            stop = stop.min(pull.duration).unwrap_or(stop);
+        }
+
+        state.seeking = true;
+        state.seek_seqnum = Some(seek_seqnum);
 
         state = self.flush(state);
 
