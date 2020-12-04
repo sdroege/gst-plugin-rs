@@ -48,6 +48,7 @@ plugins_rep = {
   'generic/threadshare': 'libgstthreadshare',
   'utils/togglerecord': 'libgsttogglerecord',
   'video/hsv': 'libgsthsv',
+  'text/json': 'libgstrsjson',
 }
 
 exclude = []

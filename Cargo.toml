@@ -23,6 +23,7 @@ members = [
     "video/rspng",
     "video/hsv",
     "text/wrap",
+    "text/json",
 ]
 
 [profile.release]
