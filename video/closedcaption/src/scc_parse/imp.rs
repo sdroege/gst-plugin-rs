@@ -55,10 +55,7 @@ impl PullState {
     fn new(element: &super::SccParse, pad: &gst::Pad) -> Self {
         Self {
             need_stream_start: true,
-            stream_id: pad
-                .create_stream_id(element, Some("src"))
-                .unwrap()
-                .to_string(),
+            stream_id: pad.create_stream_id(element, Some("src")).to_string(),
             offset: 0,
             duration: gst::CLOCK_TIME_NONE,
         }

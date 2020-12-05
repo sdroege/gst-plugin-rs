@@ -279,8 +279,11 @@ impl CustomSource {
 
         // Otherwise from the caps
         if stream_type.is_none() {
-            let caps = match pad.get_current_caps().or_else(|| pad.query_caps(None)) {
-                Some(caps) if !caps.is_any() && !caps.is_empty() => caps,
+            let caps = match pad
+                .get_current_caps()
+                .unwrap_or_else(|| pad.query_caps(None))
+            {
+                caps if !caps.is_any() && !caps.is_empty() => caps,
                 _ => {
                     gst_error!(CAT, obj: element, "Pad {} had no caps", pad.get_name());
                     return Err(gst_error_msg!(

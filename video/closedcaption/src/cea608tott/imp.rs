@@ -286,7 +286,7 @@ impl Cea608ToTt {
                 }
 
                 let mut downstream_caps = match self.srcpad.get_allowed_caps() {
-                    None => self.srcpad.get_pad_template_caps().unwrap(),
+                    None => self.srcpad.get_pad_template_caps(),
                     Some(caps) => caps,
                 };
 

@@ -663,7 +663,7 @@ impl FlvDemux {
 
         srcpad.set_active(true).unwrap();
 
-        let full_stream_id = srcpad.create_stream_id(element, Some(name)).unwrap();
+        let full_stream_id = srcpad.create_stream_id(element, Some(name));
         // FIXME group id
         srcpad.push_event(gst::event::StreamStart::new(&full_stream_id));
         srcpad.push_event(gst::event::Caps::new(&caps));

@@ -1306,8 +1306,11 @@ impl FallbackSrc {
             x if x.starts_with("audio_") => ("audio", &mut state.audio_stream),
             x if x.starts_with("video_") => ("video", &mut state.video_stream),
             _ => {
-                let caps = match pad.get_current_caps().or_else(|| pad.query_caps(None)) {
-                    Some(caps) if !caps.is_any() && !caps.is_empty() => caps,
+                let caps = match pad
+                    .get_current_caps()
+                    .unwrap_or_else(|| pad.query_caps(None))
+                {
+                    caps if !caps.is_any() && !caps.is_empty() => caps,
                     _ => return Ok(()),
                 };
 
