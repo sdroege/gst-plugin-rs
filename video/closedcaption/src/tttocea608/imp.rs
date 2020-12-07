@@ -27,45 +27,7 @@ use once_cell::sync::Lazy;
 use crate::ffi;
 use std::sync::Mutex;
 
-use crate::Cea608Mode;
-
-use serde::Deserialize;
-
-#[derive(Clone, Copy, Deserialize, Debug, PartialEq)]
-enum TextStyle {
-    White,
-    Green,
-    Blue,
-    Cyan,
-    Red,
-    Yellow,
-    Magenta,
-    ItalicWhite,
-}
-
-#[derive(Deserialize, Debug)]
-struct Chunk {
-    style: TextStyle,
-    underline: bool,
-    text: String,
-}
-
-#[derive(Deserialize, Debug)]
-struct Line {
-    column: Option<u32>,
-    row: Option<u32>,
-    chunks: Vec<Chunk>,
-    /* In roll-up modes, new lines don't introduce a carriage return by
-     * default, but that can be overridden */
-    carriage_return: Option<bool>,
-}
-
-#[derive(Deserialize, Debug)]
-struct Lines {
-    lines: Vec<Line>,
-    mode: Option<Cea608Mode>,
-    clear: Option<bool>,
-}
+use crate::ttutils::{Cea608Mode, Chunk, Line, Lines, TextStyle};
 
 fn is_basicna(cc_data: u16) -> bool {
     0x0000 != (0x6000 & cc_data)
