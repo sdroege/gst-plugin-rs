@@ -218,7 +218,10 @@ impl State {
                     return Err(gst::FlowError::Error);
                 }
             };
-            self.adapter.copy(0, &mut map[..available_size]);
+            if let Err(_) = self.adapter.copy(0, &mut map[..available_size]) {
+                gst_error!(CAT, obj: pad, "Failed to copy into provided buffer");
+                return Err(gst::FlowError::Error);
+            }
             if map.len() != available_size {
                 drop(map);
                 buffer.set_size(available_size);
