@@ -19,16 +19,6 @@ use glib::prelude::*;
 
 mod imp;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
-#[repr(u32)]
-#[genum(type_name = "GstTtToCea608Mode")]
-enum Mode {
-    PopOn,
-    RollUp2,
-    RollUp3,
-    RollUp4,
-}
-
 glib::wrapper! {
     pub struct TtToCea608(ObjectSubclass<imp::TtToCea608>) @extends gst::Element, gst::Object;
 }

@@ -15,7 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use gst::EventView;
 use pretty_assertions::assert_eq;
 
 fn init() {
@@ -68,18 +67,24 @@ fn test_one_timed_buffer_and_eos() {
 
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 11] = [
-        (700_000_000.into(), 33_333_333.into(), [0x94, 0x20]), /* resume_caption_loading */
-        (733_333_333.into(), 33_333_334.into(), [0x94, 0x20]), /* control doubled */
-        (766_666_667.into(), 33_333_333.into(), [0x94, 0xae]), /* erase_non_displayed_memory */
-        (800_000_000.into(), 33_333_333.into(), [0x94, 0xae]), /* control doubled */
-        (833_333_333.into(), 33_333_334.into(), [0x94, 0xd0]), /* preamble */
-        (866_666_667.into(), 33_333_333.into(), [0x94, 0xd0]), /* control doubled */
-        (900_000_000.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
-        (933_333_333.into(), 33_333_334.into(), [0xec, 0xec]), /* l l */
-        (966_666_667.into(), 33_333_333.into(), [0xef, 0x80]), /* o, nil */
-        (gst::SECOND, 33_333_333.into(), [0x94, 0x2f]),        /* end_of_caption */
-        (1_033_333_333.into(), 33_333_334.into(), [0x94, 0x2f]), /* control doubled */
+    loop {
+        let outbuf = h.pull().unwrap();
+        if outbuf.get_pts() + outbuf.get_duration() >= gst::SECOND {
+            break;
+        }
+
+        let data = outbuf.map_readable().unwrap();
+        assert_eq!(&*data, &[0x80, 0x80]);
+    }
+
+    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 7] = [
+        (1_000_000_000.into(), 33_333_333.into(), [0x94, 0x20]), /* resume_caption_loading */
+        (1_033_333_333.into(), 33_333_334.into(), [0x94, 0xae]), /* erase_non_displayed_memory */
+        (1_066_666_667.into(), 33_333_333.into(), [0x94, 0x70]), /* preamble */
+        (1_100_000_000.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
+        (1_133_333_333.into(), 33_333_334.into(), [0xec, 0xec]), /* l l */
+        (1_166_666_667.into(), 33_333_333.into(), [0xef, 0x80]), /* o, nil */
+        (1_200_000_000.into(), 33_333_333.into(), [0x94, 0x2f]), /* end_of_caption */
     ];
 
     for (i, e) in expected.iter().enumerate() {
@@ -107,19 +112,18 @@ fn test_one_timed_buffer_and_eos() {
     h.push_event(gst::event::Eos::new());
 
     /* Check that we do receive an erase_display */
-    assert_eq!(h.buffers_in_queue(), 2);
-    while h.buffers_in_queue() > 0 {
+    loop {
         let outbuf = h.try_pull().unwrap();
         let data = outbuf.map_readable().unwrap();
-        assert_eq!(&*data, &[0x94, 0x2c]);
+        if outbuf.get_pts() == 2_200_000_000.into() {
+            assert_eq!(&*data, &[0x94, 0x2c]);
+            break;
+        } else {
+            assert_eq!(&*data, &[0x80, 0x80]);
+        }
     }
 
-    assert_eq!(h.events_in_queue() >= 1, true);
-
-    /* Gap event, we ignore those here and test them separately */
-    while h.events_in_queue() > 1 {
-        let _event = h.pull_event().unwrap();
-    }
+    assert_eq!(h.events_in_queue() == 1, true);
 
     let event = h.pull_event().unwrap();
     assert_eq!(event.get_type(), gst::EventType::Eos);
@@ -151,18 +155,18 @@ fn test_erase_display_memory_non_spliced() {
     while h.buffers_in_queue() > 0 {
         let outbuf = h.pull().unwrap();
 
-        if outbuf.get_pts() == 2_000_000_000.into() || outbuf.get_pts() == 2_033_333_333.into() {
+        if outbuf.get_pts() == 2_200_000_000.into() {
             let data = outbuf.map_readable().unwrap();
             assert_eq!(&*data, &[0x94, 0x2c]);
             erase_display_buffers += 1;
         }
     }
 
-    assert_eq!(erase_display_buffers, 2);
+    assert_eq!(erase_display_buffers, 1);
 }
 
 /* Here we test that the erase_display_memory control code
- * gets spliced in with the byte pairs of the following buffer
+ * gets inserted before the following pop-on captions
  * when there's not enough of an interval between them.
  */
 #[test]
@@ -179,7 +183,7 @@ fn test_erase_display_memory_spliced() {
     let inbuf = new_timed_buffer(&"Hello", 1_000_000_000.into(), gst::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let inbuf = new_timed_buffer(&"World", 2_200_000_000.into(), gst::SECOND);
+    let inbuf = new_timed_buffer(&"World", 2_000_000_000.into(), gst::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     let mut erase_display_buffers = 0;
@@ -189,9 +193,9 @@ fn test_erase_display_memory_spliced() {
         let outbuf = h.pull().unwrap();
 
         /* Check that our timestamps are strictly ascending */
-        assert!(outbuf.get_pts() > prev_pts);
+        assert!(outbuf.get_pts() >= prev_pts);
 
-        if outbuf.get_pts() == 2_000_000_000.into() || outbuf.get_pts() == 2_033_333_333.into() {
+        if outbuf.get_pts() == 2_000_000_000.into() {
             let data = outbuf.map_readable().unwrap();
             assert_eq!(&*data, &[0x94, 0x2c]);
             erase_display_buffers += 1;
@@ -200,59 +204,11 @@ fn test_erase_display_memory_spliced() {
         prev_pts = outbuf.get_pts();
     }
 
-    assert_eq!(erase_display_buffers, 2);
-}
-
-/* Here we test that the erase_display_memory control code
- * gets output "in time" when we receive gaps
- */
-#[test]
-fn test_erase_display_memory_gaps() {
-    init();
-
-    let mut h = gst_check::Harness::new_parse("tttocea608 mode=pop-on");
-    h.set_src_caps_str("text/x-raw");
-
-    while h.events_in_queue() != 0 {
-        let _event = h.pull_event().unwrap();
-    }
-
-    let inbuf = new_timed_buffer(&"Hello", 1_000_000_000.into(), gst::SECOND);
-    assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
-
-    /* Let's first push a gap that doesn't leave room for our two control codes */
-    let gap_event = gst::event::Gap::new(2 * gst::SECOND, 2_533_333_333.into());
-    assert_eq!(h.push_event(gap_event), true);
-    let mut erase_display_buffers = 0;
-
-    while h.buffers_in_queue() > 0 {
-        let outbuf = h.pull().unwrap();
-
-        let data = outbuf.map_readable().unwrap();
-        if *data == [0x94, 0x2c] {
-            erase_display_buffers += 1;
-        }
-    }
-
-    assert_eq!(erase_display_buffers, 0);
-
-    let gap_event = gst::event::Gap::new(4_533_333_333.into(), 1.into());
-    assert_eq!(h.push_event(gap_event), true);
-
-    while h.buffers_in_queue() > 0 {
-        let outbuf = h.pull().unwrap();
-
-        let data = outbuf.map_readable().unwrap();
-        if *data == [0x94, 0x2c] {
-            erase_display_buffers += 1;
-        }
-    }
-
-    assert_eq!(erase_display_buffers, 2);
+    assert_eq!(erase_display_buffers, 1);
 }
 
 /* Here we verify that the element outputs a continuous stream
- * with gap events
+ * with padding buffers
  */
 #[test]
 fn test_output_gaps() {
@@ -271,31 +227,61 @@ fn test_output_gaps() {
     let inbuf = new_timed_buffer(&"World", 3_000_000_000.into(), gst::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    assert_eq!(h.events_in_queue(), 3);
+    h.push_event(gst::event::Eos::new());
 
-    /* One gap from the start of the segment to the first
-     * buffer, another from the end_of_caption control code for
-     * the first buffer to its erase_display control code,
-     * then one gap from erase_display to the beginning
-     * of the second buffer
-     */
-    let expected: [(gst::ClockTime, gst::ClockTime); 3] = [
-        (0.into(), 700_000_000.into()),
-        (1_066_666_667.into(), 933_333_333.into()),
-        (2_066_666_667.into(), 633_333_333.into()),
-    ];
+    /* Padding */
+    loop {
+        let outbuf = h.pull().unwrap();
+        if outbuf.get_pts() + outbuf.get_duration() >= gst::SECOND {
+            break;
+        }
 
-    for e in &expected {
-        let event = h.pull_event().unwrap();
+        let data = outbuf.map_readable().unwrap();
+        assert_eq!(&*data, &[0x80, 0x80]);
+    }
 
-        assert_eq!(event.get_type(), gst::EventType::Gap);
+    /* Hello */
+    loop {
+        let outbuf = h.pull().unwrap();
+        if outbuf.get_pts() + outbuf.get_duration() >= 1_233_333_333.into() {
+            break;
+        }
 
-        if let EventView::Gap(ev) = event.view() {
-            let (timestamp, duration) = ev.get();
-            assert_eq!(e.0, timestamp);
-            assert_eq!(e.1, duration);
+        let data = outbuf.map_readable().unwrap();
+        assert_ne!(&*data, &[0x80, 0x80]);
+    }
+
+    /* Padding */
+    loop {
+        let outbuf = h.pull().unwrap();
+        if outbuf.get_pts() + outbuf.get_duration() >= 3_000_000_000.into() {
+            break;
+        }
+
+        let data = outbuf.map_readable().unwrap();
+        if outbuf.get_pts() == 2_200_000_000.into() {
+            /* Erase display one second after Hello */
+            assert_eq!(&*data, &[0x94, 0x2C]);
+        } else {
+            assert_eq!(&*data, &[0x80, 0x80]);
         }
     }
+
+    /* World */
+    loop {
+        let outbuf = h.pull().unwrap();
+        if outbuf.get_pts() + outbuf.get_duration() >= 3_233_333_333.into() {
+            break;
+        }
+
+        let data = outbuf.map_readable().unwrap();
+        assert_ne!(&*data, &[0x80, 0x80]);
+    }
+
+    assert_eq!(h.events_in_queue(), 1);
+
+    let event = h.pull_event().unwrap();
+    assert_eq!(event.get_type(), gst::EventType::Eos);
 }
 
 #[test]
@@ -312,22 +298,63 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     let inbuf = new_timed_buffer(&"Hello", gst::SECOND, gst::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let inbuf = new_timed_buffer(&"World", gst::SECOND, 1.into());
+    let inbuf = new_timed_buffer(&"World", 2 * gst::SECOND, 1.into());
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 12] = [
-        (1_000_000_000.into(), 33_333_333.into(), [0x94, 0x2c]), /* erase_display_memory */
-        (1_033_333_333.into(), 33_333_334.into(), [0x94, 0x2c]), /* control doubled */
-        (1_066_666_667.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
-        (1_100_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* control doubled */
-        (1_133_333_333.into(), 33_333_334.into(), [0x94, 0x70]), /* preamble */
-        (1_166_666_667.into(), 33_333_333.into(), [0x94, 0x70]), /* control doubled */
-        (1_200_000_000.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
-        (1_233_333_333.into(), 33_333_334.into(), [0xec, 0xec]), /* l l */
-        (1_266_666_667.into(), 33_333_333.into(), [0xef, 0x80]), /* o, nil */
-        (2_000_000_000.into(), 0.into(), [0x20, 0x57]),          /* SPACE, W */
-        (2_000_000_000.into(), 0.into(), [0xef, 0xf2]),          /* o, r */
-        (2_000_000_000.into(), 0.into(), [0xec, 0x64]),          /* l, d */
+    /* Padding */
+    loop {
+        let outbuf = h.pull().unwrap();
+        if outbuf.get_pts() + outbuf.get_duration() >= gst::SECOND {
+            break;
+        }
+
+        let data = outbuf.map_readable().unwrap();
+        assert_eq!(&*data, &[0x80, 0x80]);
+    }
+
+    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 5] = [
+        (1_000_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
+        (1_033_333_333.into(), 33_333_334.into(), [0x94, 0x70]), /* preamble */
+        (1_066_666_667.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
+        (1_100_000_000.into(), 33_333_333.into(), [0xec, 0xec]), /* l l */
+        (1_133_333_333.into(), 33_333_334.into(), [0xef, 0x80]), /* o nil */
+    ];
+
+    for (i, e) in expected.iter().enumerate() {
+        let outbuf = h.try_pull().unwrap();
+
+        assert_eq!(
+            e.0,
+            outbuf.get_pts(),
+            "Unexpected PTS for {}th buffer",
+            i + 1
+        );
+        assert_eq!(
+            e.1,
+            outbuf.get_duration(),
+            "Unexpected duration for {}th buffer",
+            i + 1
+        );
+
+        let data = outbuf.map_readable().unwrap();
+        assert_eq!(e.2, &*data);
+    }
+
+    /* Padding */
+    loop {
+        let outbuf = h.pull().unwrap();
+        if outbuf.get_pts() + outbuf.get_duration() >= 2 * gst::SECOND {
+            break;
+        }
+
+        let data = outbuf.map_readable().unwrap();
+        assert_eq!(&*data, &[0x80, 0x80]);
+    }
+
+    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 3] = [
+        (2_000_000_000.into(), 0.into(), [0x20, 0x57]), /* SPACE W */
+        (2_000_000_000.into(), 0.into(), [0xef, 0xf2]), /* o r */
+        (2_000_000_000.into(), 0.into(), [0xec, 0x64]), /* l d */
     ];
 
     for (i, e) in expected.iter().enumerate() {
@@ -353,23 +380,6 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     assert_eq!(h.buffers_in_queue(), 0);
 
     h.push_event(gst::event::Eos::new());
-
-    let expected_gaps: [(gst::ClockTime, gst::ClockTime); 2] = [
-        (0.into(), 1_000_000_000.into()),
-        (1_300_000_000.into(), 700_000_000.into()),
-    ];
-
-    for e in &expected_gaps {
-        let event = h.pull_event().unwrap();
-
-        assert_eq!(event.get_type(), gst::EventType::Gap);
-
-        if let EventView::Gap(ev) = event.view() {
-            let (timestamp, duration) = ev.get();
-            assert_eq!(e.0, timestamp);
-            assert_eq!(e.1, duration);
-        }
-    }
 
     assert_eq!(h.events_in_queue(), 1);
 

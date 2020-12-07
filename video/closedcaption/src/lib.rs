@@ -17,6 +17,20 @@
 
 #![recursion_limit = "128"]
 
+use serde::{Deserialize, Serialize};
+
+#[derive(
+    Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum,
+)]
+#[repr(u32)]
+#[genum(type_name = "GstTtToCea608Mode")]
+enum Cea608Mode {
+    PopOn,
+    RollUp2,
+    RollUp3,
+    RollUp4,
+}
+
 #[allow(non_camel_case_types, non_upper_case_globals, unused)]
 #[allow(clippy::redundant_static_lifetimes, clippy::unreadable_literal)]
 #[allow(clippy::useless_transmute, clippy::trivially_copy_pass_by_ref)]
