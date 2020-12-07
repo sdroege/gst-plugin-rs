@@ -513,7 +513,7 @@ impl SccParse {
                 Some(element) => element,
                 None => {
                     if let Some(pad) = pad_weak.upgrade() {
-                        pad.pause_task().unwrap();
+                        let _ = pad.pause_task();
                     }
                     return;
                 }
@@ -682,7 +682,7 @@ impl SccParse {
             Err(gst::FlowError::Flushing) => {
                 gst_debug!(CAT, obj: &self.sinkpad, "Pausing after pulling buffer, reason: flushing");
 
-                self.sinkpad.pause_task().unwrap();
+                let _ = self.sinkpad.pause_task();
                 return;
             }
             Err(flow) => {
@@ -694,7 +694,7 @@ impl SccParse {
                     ["Streaming stopped, failed to pull buffer"]
                 );
 
-                self.sinkpad.pause_task().unwrap();
+                let _ = self.sinkpad.pause_task();
                 return;
             }
         };
@@ -722,7 +722,7 @@ impl SccParse {
                                 ["Failed to scan duration"]
                             );
 
-                            self.sinkpad.pause_task().unwrap();
+                            let _ = self.sinkpad.pause_task();
                         }
                     }
                 }
@@ -750,7 +750,7 @@ impl SccParse {
                     }
                 }
 
-                self.sinkpad.pause_task().unwrap();
+                let _ = self.sinkpad.pause_task();
             }
         }
     }
@@ -879,7 +879,7 @@ impl SccParse {
         gst_debug!(CAT, obj: element, "Pushing event {:?}", event);
         self.srcpad.push_event(event);
 
-        self.sinkpad.pause_task().unwrap();
+        let _ = self.sinkpad.pause_task();
 
         let mut state = self.state.lock().unwrap();
         let pull = state.pull.as_ref().unwrap();

@@ -628,7 +628,7 @@ impl MccParse {
                 Some(element) => element,
                 None => {
                     if let Some(pad) = pad_weak.upgrade() {
-                        pad.pause_task().unwrap();
+                        let _ = pad.pause_task();
                     }
                     return;
                 }
@@ -809,7 +809,7 @@ impl MccParse {
             Err(gst::FlowError::Flushing) => {
                 gst_debug!(CAT, obj: &self.sinkpad, "Pausing after pulling buffer, reason: flushing");
 
-                self.sinkpad.pause_task().unwrap();
+                let _ = self.sinkpad.pause_task();
                 return;
             }
             Err(flow) => {
@@ -821,7 +821,7 @@ impl MccParse {
                     ["Streaming stopped, failed to pull buffer"]
                 );
 
-                self.sinkpad.pause_task().unwrap();
+                let _ = self.sinkpad.pause_task();
                 return;
             }
         };
@@ -850,7 +850,7 @@ impl MccParse {
                                 ["Failed to scan duration"]
                             );
 
-                            self.sinkpad.pause_task().unwrap();
+                            let _ = self.sinkpad.pause_task();
                         }
                     }
                 }
@@ -878,7 +878,7 @@ impl MccParse {
                     }
                 }
 
-                self.sinkpad.pause_task().unwrap();
+                let _ = self.sinkpad.pause_task();
             }
         }
     }
@@ -1010,7 +1010,7 @@ impl MccParse {
         gst_debug!(CAT, obj: element, "Pushing event {:?}", event);
         self.srcpad.push_event(event);
 
-        self.sinkpad.pause_task().unwrap();
+        let _ = self.sinkpad.pause_task();
 
         let mut state = self.state.lock().unwrap();
         let pull = state.pull.as_ref().unwrap();
