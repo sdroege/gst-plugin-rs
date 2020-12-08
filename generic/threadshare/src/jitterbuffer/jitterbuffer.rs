@@ -54,7 +54,7 @@ impl ToGlib for RTPJitterBufferMode {
 }
 
 impl FromGlib<ffi::RTPJitterBufferMode> for RTPJitterBufferMode {
-    fn from_glib(value: ffi::RTPJitterBufferMode) -> Self {
+    unsafe fn from_glib(value: ffi::RTPJitterBufferMode) -> Self {
         match value {
             0 => RTPJitterBufferMode::None,
             1 => RTPJitterBufferMode::Slave,
