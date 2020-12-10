@@ -20,10 +20,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{
-    gst_debug, gst_element_error, gst_element_warning, gst_error, gst_error_msg, gst_info,
-    gst_warning,
-};
+use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info, gst_warning};
 
 use std::mem;
 use std::sync::Mutex;
@@ -32,6 +29,7 @@ use std::time::{Duration, Instant};
 use once_cell::sync::Lazy;
 
 use super::custom_source::CustomSource;
+use super::video_fallback::VideoFallbackSource;
 use super::{RetryReason, Status};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -756,180 +754,11 @@ impl FallbackSrc {
 
     fn create_fallback_video_input(
         &self,
-        element: &super::FallbackSrc,
+        _element: &super::FallbackSrc,
         min_latency: u64,
         fallback_uri: Option<&str>,
     ) -> Result<gst::Element, gst::StateChangeError> {
-        let input = gst::Bin::new(Some("fallback_video"));
-
-        let srcpad = match fallback_uri {
-            Some(fallback_uri) => {
-                let filesrc = gst::ElementFactory::make("filesrc", Some("fallback_filesrc"))
-                    .expect("No filesrc found");
-                let typefind = gst::ElementFactory::make("typefind", Some("fallback_typefind"))
-                    .expect("No typefind found");
-                let videoconvert =
-                    gst::ElementFactory::make("videoconvert", Some("fallback_videoconvert"))
-                        .expect("No videoconvert found");
-                let videoscale =
-                    gst::ElementFactory::make("videoscale", Some("fallback_videoscale"))
-                        .expect("No videoscale found");
-                let imagefreeze =
-                    gst::ElementFactory::make("imagefreeze", Some("fallback_imagefreeze"))
-                        .expect("No imagefreeze found");
-                let clocksync = gst::ElementFactory::make("clocksync", Some("fallback_clocksync"))
-                    .or_else(|_| -> Result<_, glib::BoolError> {
-                        let identity =
-                            gst::ElementFactory::make("identity", Some("fallback_clocksync"))?;
-                        identity.set_property("sync", &true).unwrap();
-                        Ok(identity)
-                    })
-                    .expect("No clocksync or identity found");
-                let queue = gst::ElementFactory::make("queue", Some("fallback_queue"))
-                    .expect("No queue found");
-                queue
-                    .set_properties(&[
-                        ("max-size-buffers", &0u32),
-                        ("max-size-bytes", &0u32),
-                        (
-                            "max-size-time",
-                            &gst::ClockTime::max(5 * gst::SECOND, min_latency.into()).unwrap(),
-                        ),
-                    ])
-                    .unwrap();
-
-                input
-                    .add_many(&[
-                        &filesrc,
-                        &typefind,
-                        &videoconvert,
-                        &videoscale,
-                        &imagefreeze,
-                        &clocksync,
-                        &queue,
-                    ])
-                    .unwrap();
-                gst::Element::link_many(&[&filesrc, &typefind]).unwrap();
-                gst::Element::link_many(&[
-                    &videoconvert,
-                    &videoscale,
-                    &imagefreeze,
-                    &clocksync,
-                    &queue,
-                ])
-                .unwrap();
-
-                filesrc
-                    .dynamic_cast_ref::<gst::URIHandler>()
-                    .unwrap()
-                    .set_uri(fallback_uri)
-                    .map_err(|err| {
-                        gst_error!(CAT, obj: element, "Failed to set fallback URI: {}", err);
-                        gst_element_error!(
-                            element,
-                            gst::LibraryError::Settings,
-                            ["Failed to set fallback URI: {}", err]
-                        );
-                        gst::StateChangeError
-                    })?;
-
-                if imagefreeze.set_property("is-live", &true).is_err() {
-                    gst_error!(
-                        CAT,
-                        obj: element,
-                        "imagefreeze does not support live mode, this will probably misbehave"
-                    );
-                    gst_element_warning!(
-                        element,
-                        gst::LibraryError::Settings,
-                        ["imagefreeze does not support live mode, this will probably misbehave"]
-                    );
-                }
-
-                let element_weak = element.downgrade();
-                let input_weak = input.downgrade();
-                let videoconvert_weak = videoconvert.downgrade();
-                typefind
-                    .connect("have-type", false, move |args| {
-                        let typefind = args[0].get::<gst::Element>().unwrap().unwrap();
-                        let _probability = args[1].get_some::<u32>().unwrap();
-                        let caps = args[2].get::<gst::Caps>().unwrap().unwrap();
-
-                        let element = match element_weak.upgrade() {
-                            Some(element) => element,
-                            None => return None,
-                        };
-
-                        let input = match input_weak.upgrade() {
-                            Some(element) => element,
-                            None => return None,
-                        };
-
-                        let videoconvert = match videoconvert_weak.upgrade() {
-                            Some(element) => element,
-                            None => return None,
-                        };
-
-                        let s = caps.get_structure(0).unwrap();
-                        let decoder;
-                        if s.get_name() == "image/jpeg" {
-                            decoder = gst::ElementFactory::make("jpegdec", Some("decoder"))
-                                .expect("jpegdec not found");
-                        } else if s.get_name() == "image/png" {
-                            decoder = gst::ElementFactory::make("pngdec", Some("decoder"))
-                                .expect("pngdec not found");
-                        } else {
-                            gst_error!(CAT, obj: &element, "Unsupported caps {}", caps);
-                            gst_element_error!(
-                                element,
-                                gst::StreamError::Format,
-                                ["Unsupported caps {}", caps]
-                            );
-                            return None;
-                        }
-
-                        input.add(&decoder).unwrap();
-                        decoder.sync_state_with_parent().unwrap();
-                        if let Err(_err) =
-                            gst::Element::link_many(&[&typefind, &decoder, &videoconvert])
-                        {
-                            gst_error!(CAT, obj: &element, "Can't link fallback image decoder");
-                            gst_element_error!(
-                                element,
-                                gst::StreamError::Format,
-                                ["Can't link fallback image decoder"]
-                            );
-                            return None;
-                        }
-
-                        None
-                    })
-                    .unwrap();
-
-                queue.get_static_pad("src").unwrap()
-            }
-            None => {
-                let videotestsrc =
-                    gst::ElementFactory::make("videotestsrc", Some("fallback_videosrc"))
-                        .expect("No videotestsrc found");
-                input.add_many(&[&videotestsrc]).unwrap();
-
-                videotestsrc.set_property_from_str("pattern", "black");
-                videotestsrc.set_property("is-live", &true).unwrap();
-
-                videotestsrc.get_static_pad("src").unwrap()
-            }
-        };
-
-        input
-            .add_pad(
-                &gst::GhostPad::builder(Some("src"), gst::PadDirection::Src)
-                    .build_with_target(&srcpad)
-                    .unwrap(),
-            )
-            .unwrap();
-
-        Ok(input.upcast())
+        Ok(VideoFallbackSource::new(fallback_uri, min_latency).upcast())
     }
 
     fn create_fallback_audio_input(
@@ -1963,6 +1792,46 @@ impl FallbackSrc {
             element.notify("statistics");
             return true;
         }
+
+        // Check if error is from video fallback input and if so, try another
+        // fallback to videotestsrc
+        if let Some(ref mut video_stream) = state.video_stream {
+            if src == video_stream.fallback_input
+                || src.has_as_ancestor(&video_stream.fallback_input)
+            {
+                gst_debug!(CAT, obj: element, "Got error from video fallback input");
+
+                let prev_fallback_uri = video_stream
+                    .fallback_input
+                    .get_property("uri")
+                    .unwrap()
+                    .get::<String>()
+                    .unwrap();
+
+                // This means previously videotestsrc was configured
+                // Something went wrong and there is no other way than to error out
+                if prev_fallback_uri.is_none() {
+                    return false;
+                }
+
+                let fallback_input = &video_stream.fallback_input;
+                fallback_input.call_async(|fallback_input| {
+                    // Re-run video fallback input with videotestsrc
+                    let _ = fallback_input.set_state(gst::State::Null);
+                    let _ = fallback_input.set_property("uri", &None::<&str>);
+                    let _ = fallback_input.sync_state_with_parent();
+                });
+
+                return true;
+            }
+        }
+
+        gst_error!(
+            CAT,
+            obj: element,
+            "Give up for error message from {}",
+            src.get_path_string()
+        );
 
         false
     }
