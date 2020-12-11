@@ -888,6 +888,8 @@ impl ElementImpl for FallbackSwitch {
             element.remove_pad(pad).unwrap();
             gst_debug!(CAT, obj: element, "Removed fallback sinkpad {:?}", pad);
         }
+        *self.fallback_state.write().unwrap() = PadInputState::default();
+        *self.active_sinkpad.lock().unwrap() = None;
     }
 }
 
