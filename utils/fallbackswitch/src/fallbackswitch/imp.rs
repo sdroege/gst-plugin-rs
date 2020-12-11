@@ -173,6 +173,64 @@ static PROPERTIES: [subclass::Property; 5] = [
     }),
 ];
 
+impl OutputState {
+    fn get_health(
+        &self,
+        settings: &Settings,
+        check_primary_pad: bool,
+        cur_running_time: gst::ClockTime,
+    ) -> StreamHealth {
+        let last_sinkpad_time = if check_primary_pad {
+            self.primary.last_sinkpad_time
+        } else {
+            self.fallback.last_sinkpad_time
+        };
+
+        if last_sinkpad_time == gst::ClockTime::none() {
+            StreamHealth::Inactive
+        } else if cur_running_time != gst::ClockTime::none()
+            && cur_running_time < last_sinkpad_time + settings.timeout
+        {
+            StreamHealth::Present
+        } else {
+            StreamHealth::Inactive
+        }
+    }
+
+    fn check_health_changes(
+        &mut self,
+        settings: &Settings,
+        backup_pad: &Option<&gst_base::AggregatorPad>,
+        preferred_is_primary: bool,
+        cur_running_time: gst::ClockTime,
+    ) -> (bool, bool) {
+        let preferred_health = self.get_health(settings, preferred_is_primary, cur_running_time);
+        let backup_health = if backup_pad.is_some() {
+            self.get_health(settings, !preferred_is_primary, cur_running_time)
+        } else {
+            StreamHealth::Inactive
+        };
+
+        if preferred_is_primary {
+            let primary_changed = preferred_health != self.primary.stream_health;
+            let fallback_changed = backup_health != self.fallback.stream_health;
+
+            self.primary.stream_health = preferred_health;
+            self.fallback.stream_health = backup_health;
+
+            (primary_changed, fallback_changed)
+        } else {
+            let primary_changed = backup_health != self.primary.stream_health;
+            let fallback_changed = preferred_health != self.fallback.stream_health;
+
+            self.primary.stream_health = backup_health;
+            self.fallback.stream_health = preferred_health;
+
+            (primary_changed, fallback_changed)
+        }
+    }
+}
+
 impl FallbackSwitch {
     fn drain_pad_to_time(
         &self,
@@ -214,66 +272,6 @@ impl FallbackSwitch {
             }
         }
         Ok(())
-    }
-
-    fn get_health(
-        &self,
-        state: &OutputState,
-        settings: &Settings,
-        pad: &gst_base::AggregatorPad,
-        cur_running_time: gst::ClockTime,
-    ) -> StreamHealth {
-        let last_sinkpad_time = if pad == &self.primary_sinkpad {
-            state.primary.last_sinkpad_time
-        } else {
-            state.fallback.last_sinkpad_time
-        };
-
-        if last_sinkpad_time == gst::ClockTime::none() {
-            StreamHealth::Inactive
-        } else if cur_running_time != gst::ClockTime::none()
-            && cur_running_time < last_sinkpad_time + settings.timeout
-        {
-            StreamHealth::Present
-        } else {
-            StreamHealth::Inactive
-        }
-    }
-
-    fn check_health_changes(
-        &self,
-        state: &mut OutputState,
-        settings: &Settings,
-        preferred_pad: &gst_base::AggregatorPad,
-        backup_pad: &Option<&gst_base::AggregatorPad>,
-        cur_running_time: gst::ClockTime,
-    ) -> (bool, bool) {
-        let preferred_is_primary = preferred_pad == &self.primary_sinkpad;
-
-        let preferred_health = self.get_health(state, settings, preferred_pad, cur_running_time);
-        let backup_health = if let Some(pad) = backup_pad {
-            self.get_health(state, settings, pad, cur_running_time)
-        } else {
-            StreamHealth::Inactive
-        };
-
-        if preferred_is_primary {
-            let primary_changed = preferred_health != state.primary.stream_health;
-            let fallback_changed = backup_health != state.fallback.stream_health;
-
-            state.primary.stream_health = preferred_health;
-            state.fallback.stream_health = backup_health;
-
-            (primary_changed, fallback_changed)
-        } else {
-            let primary_changed = backup_health != state.primary.stream_health;
-            let fallback_changed = preferred_health != state.fallback.stream_health;
-
-            state.primary.stream_health = backup_health;
-            state.fallback.stream_health = preferred_health;
-
-            (primary_changed, fallback_changed)
-        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -580,11 +578,10 @@ impl FallbackSwitch {
                 Ok(Some(res)) => {
                     return (
                         Ok(res),
-                        self.check_health_changes(
-                            &mut *state,
+                        state.check_health_changes(
                             &settings,
-                            preferred_pad,
                             &backup_pad,
+                            prefer_primary,
                             cur_running_time,
                         ),
                     )
@@ -592,11 +589,10 @@ impl FallbackSwitch {
                 Err(e) => {
                     return (
                         Err(e),
-                        self.check_health_changes(
-                            &mut *state,
+                        state.check_health_changes(
                             &settings,
-                            preferred_pad,
                             &backup_pad,
+                            prefer_primary,
                             cur_running_time,
                         ),
                     )
@@ -617,11 +613,10 @@ impl FallbackSwitch {
                 ) {
                     return (
                         Err(e),
-                        self.check_health_changes(
-                            &mut *state,
+                        state.check_health_changes(
                             &settings,
-                            preferred_pad,
                             &Some(backup_pad),
+                            prefer_primary,
                             cur_running_time,
                         ),
                     );
@@ -630,11 +625,10 @@ impl FallbackSwitch {
 
             return (
                 Err(gst_base::AGGREGATOR_FLOW_NEED_DATA),
-                self.check_health_changes(
-                    &mut *state,
+                state.check_health_changes(
                     &settings,
-                    preferred_pad,
                     &backup_pad,
+                    prefer_primary,
                     cur_running_time,
                 ),
             );
@@ -644,22 +638,20 @@ impl FallbackSwitch {
             gst_debug!(CAT, obj: agg, "Have fallback sinkpad but no timeout yet");
             (
                 Err(gst_base::AGGREGATOR_FLOW_NEED_DATA),
-                self.check_health_changes(
-                    &mut *state,
+                state.check_health_changes(
                     &settings,
-                    preferred_pad,
                     &Some(backup_pad),
+                    prefer_primary,
                     cur_running_time,
                 ),
             )
         } else if let (true, Some(backup_pad)) = (timeout, &backup_pad) {
             (
                 self.get_backup_buffer(agg, &mut *state, &settings, backup_pad),
-                self.check_health_changes(
-                    &mut *state,
+                state.check_health_changes(
                     &settings,
-                    preferred_pad,
                     &Some(backup_pad),
+                    prefer_primary,
                     cur_running_time,
                 ),
             )
@@ -672,11 +664,10 @@ impl FallbackSwitch {
             );
             (
                 Err(gst_base::AGGREGATOR_FLOW_NEED_DATA),
-                self.check_health_changes(
-                    &mut *state,
+                state.check_health_changes(
                     &settings,
-                    preferred_pad,
                     &backup_pad,
+                    prefer_primary,
                     cur_running_time,
                 ),
             )
