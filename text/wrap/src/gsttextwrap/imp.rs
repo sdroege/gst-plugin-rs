@@ -95,28 +95,23 @@ impl Default for Settings {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
-enum Wrapper {
-    H(textwrap::Wrapper<'static, Standard>),
-    N(textwrap::Wrapper<'static, textwrap::NoHyphenation>),
+// FIXME: Not needed anymore after https://github.com/mgeisler/textwrap/pull/254
+#[derive(Debug)]
+struct Splitter(Box<dyn textwrap::WordSplitter + Send>);
+
+impl textwrap::WordSplitter for Splitter {
+    fn split_points(&self, word: &str) -> Vec<usize> {
+        self.0.split_points(word)
+    }
 }
 
 struct State {
-    wrapper: Option<Wrapper>,
-}
-
-impl Wrapper {
-    fn fill(&self, s: &str) -> String {
-        match *self {
-            Wrapper::H(ref w) => w.fill(s),
-            Wrapper::N(ref w) => w.fill(s),
-        }
-    }
+    options: Option<textwrap::Options<'static, Splitter>>,
 }
 
 impl Default for State {
     fn default() -> Self {
-        Self { wrapper: None }
+        Self { options: None }
     }
 }
 
@@ -132,11 +127,11 @@ impl TextWrap {
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
 
-        if state.wrapper.is_some() {
+        if state.options.is_some() {
             return;
         }
 
-        state.wrapper = if let Some(dictionary) = &settings.dictionary {
+        state.options = if let Some(dictionary) = &settings.dictionary {
             let dict_file = match File::open(dictionary) {
                 Err(err) => {
                     gst_error!(CAT, obj: element, "Failed to open dictionary file: {}", err);
@@ -159,15 +154,15 @@ impl TextWrap {
                 Ok(standard) => standard,
             };
 
-            Some(Wrapper::H(textwrap::Wrapper::with_splitter(
+            Some(textwrap::Options::with_splitter(
                 settings.columns as usize,
-                standard,
-            )))
+                Splitter(Box::new(standard)),
+            ))
         } else {
-            Some(Wrapper::N(textwrap::Wrapper::with_splitter(
+            Some(textwrap::Options::with_splitter(
                 settings.columns as usize,
-                textwrap::NoHyphenation,
-            )))
+                Splitter(Box::new(textwrap::NoHyphenation)),
+            ))
         };
     }
 
@@ -211,11 +206,11 @@ impl TextWrap {
 
         let data = {
             let state = self.state.lock().unwrap();
-            let wrapper = state
-                .wrapper
+            let options = state
+                .options
                 .as_ref()
                 .expect("We should have a wrapper by now");
-            wrapper.fill(data)
+            textwrap::fill(data, options)
         };
 
         // If the lines property was set, we want to split the result into buffers
@@ -347,13 +342,13 @@ impl ObjectImpl for TextWrap {
                 let mut settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
                 settings.dictionary = value.get().expect("type checked upstream");
-                state.wrapper = None;
+                state.options = None;
             }
             subclass::Property("columns", ..) => {
                 let mut settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
                 settings.columns = value.get_some().expect("type checked upstream");
-                state.wrapper = None;
+                state.options = None;
             }
             subclass::Property("lines", ..) => {
                 let mut settings = self.settings.lock().unwrap();
