@@ -531,8 +531,18 @@ impl FallbackSwitch {
         agg: &super::FallbackSwitch,
         timeout: bool,
     ) -> (
-        Result<(gst::Buffer, gst::Caps, bool), gst::FlowError>,
-        (bool, bool),
+        Result<
+            (
+                gst::Buffer, // Next buffer from the chosen pad
+                gst::Caps,   // Caps for the buffer
+                bool,        // If the input pad changed to/from primary<->fallback
+            ),
+            gst::FlowError,
+        >,
+        (
+            bool, // If the health of the primary pad changed
+            bool, // If the health of the fallback pad changed
+        ),
     ) {
         let settings = self.settings.lock().unwrap().clone();
         let mut state = self.output_state.lock().unwrap();
