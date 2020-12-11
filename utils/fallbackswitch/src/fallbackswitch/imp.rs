@@ -234,7 +234,6 @@ impl OutputState {
 impl FallbackSwitch {
     fn drain_pad_to_time(
         &self,
-        agg: &super::FallbackSwitch,
         state: &mut OutputState,
         pad: &gst_base::AggregatorPad,
         target_running_time: gst::ClockTime,
@@ -247,7 +246,7 @@ impl FallbackSwitch {
         }
 
         let segment = segment.downcast::<gst::ClockTime>().map_err(|_| {
-            gst_error!(CAT, obj: agg, "Only TIME segments supported");
+            gst_error!(CAT, obj: pad, "Only TIME segments supported");
             gst::FlowError::Error
         })?;
 
@@ -257,7 +256,7 @@ impl FallbackSwitch {
             let pts = buffer.get_dts_or_pts();
             let new_running_time = segment.to_running_time(pts);
             if pts.is_none() || running_time <= target_running_time {
-                gst_debug!(CAT, obj: agg, "Dropping trailing buffer {:?}", buffer);
+                gst_debug!(CAT, obj: pad, "Dropping trailing buffer {:?}", buffer);
                 pad.drop_buffer();
                 running_time = new_running_time;
             } else {
@@ -288,14 +287,14 @@ impl FallbackSwitch {
         // If we got a buffer on the sinkpad just handle it
         gst_debug!(
             CAT,
-            obj: agg,
+            obj: preferred_pad,
             "Got buffer on pad {} - {:?}",
             preferred_pad.get_name(),
             buffer
         );
 
         if buffer.get_pts().is_none() {
-            gst_error!(CAT, obj: agg, "Only buffers with PTS supported");
+            gst_error!(CAT, obj: preferred_pad, "Only buffers with PTS supported");
             return Err(gst::FlowError::Error);
         }
 
@@ -303,7 +302,7 @@ impl FallbackSwitch {
             .get_segment()
             .downcast::<gst::ClockTime>()
             .map_err(|_| {
-                gst_error!(CAT, obj: agg, "Only TIME segments supported");
+                gst_error!(CAT, obj: preferred_pad, "Only TIME segments supported");
                 gst::FlowError::Error
             })?;
 
@@ -331,7 +330,7 @@ impl FallbackSwitch {
                     if cur_running_time > deadline {
                         gst_debug!(
                             CAT,
-                            obj: agg,
+                            obj: preferred_pad,
                             "Buffer is too late: {} > {}",
                             cur_running_time,
                             deadline
@@ -356,7 +355,7 @@ impl FallbackSwitch {
              * to the other pad or there's no point outputting this anyway */
             gst_debug!(
                 CAT,
-                obj: agg,
+                obj: preferred_pad,
                 "Buffer is too late and timeout reached: {} + {} <= {}",
                 state.last_output_time,
                 settings.timeout,
@@ -374,7 +373,7 @@ impl FallbackSwitch {
             if buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT) {
                 gst_info!(
                     CAT,
-                    obj: agg,
+                    obj: preferred_pad,
                     "Can't change back to sinkpad {}, waiting for keyframe",
                     preferred_pad.get_name()
                 );
@@ -386,7 +385,7 @@ impl FallbackSwitch {
                 return Ok(None);
             }
 
-            gst_info!(CAT, obj: agg, "Active pad changed to sinkpad");
+            gst_info!(CAT, obj: preferred_pad, "Active pad changed to sinkpad");
             *active_sinkpad = Some(preferred_pad.clone().upcast());
         }
         drop(active_sinkpad);
@@ -405,7 +404,7 @@ impl FallbackSwitch {
 
         // Drop all older buffers from the fallback sinkpad
         if let Some(backup_pad) = backup_pad {
-            self.drain_pad_to_time(&agg, state, &backup_pad, state.last_output_time)?;
+            self.drain_pad_to_time(state, &backup_pad, state.last_output_time)?;
         }
 
         Ok(Some((buffer, active_caps, pad_change)))
@@ -413,7 +412,6 @@ impl FallbackSwitch {
 
     fn get_backup_buffer(
         &self,
-        agg: &super::FallbackSwitch,
         state: &mut OutputState,
         settings: &Settings,
         backup_pad: &gst_base::AggregatorPad,
@@ -425,10 +423,15 @@ impl FallbackSwitch {
                 .pop_buffer()
                 .ok_or(gst_base::AGGREGATOR_FLOW_NEED_DATA)?;
 
-            gst_debug!(CAT, obj: agg, "Got buffer on fallback sinkpad {:?}", buffer);
+            gst_debug!(
+                CAT,
+                obj: backup_pad,
+                "Got buffer on fallback sinkpad {:?}",
+                buffer
+            );
 
             if buffer.get_pts().is_none() {
-                gst_error!(CAT, obj: agg, "Only buffers with PTS supported");
+                gst_error!(CAT, obj: backup_pad, "Only buffers with PTS supported");
                 return Err(gst::FlowError::Error);
             }
 
@@ -436,7 +439,7 @@ impl FallbackSwitch {
                 .get_segment()
                 .downcast::<gst::ClockTime>()
                 .map_err(|_| {
-                    gst_error!(CAT, obj: agg, "Only TIME segments supported");
+                    gst_error!(CAT, obj: backup_pad, "Only TIME segments supported");
                     gst::FlowError::Error
                 })?;
             let running_time = backup_segment.to_running_time(buffer.get_dts_or_pts());
@@ -463,7 +466,7 @@ impl FallbackSwitch {
             if state.last_output_time + settings.timeout > running_time {
                 gst_debug!(
                     CAT,
-                    obj: agg,
+                    obj: backup_pad,
                     "Timeout not reached yet: {} + {} > {}",
                     state.last_output_time,
                     settings.timeout,
@@ -475,7 +478,7 @@ impl FallbackSwitch {
 
             gst_debug!(
                 CAT,
-                obj: agg,
+                obj: backup_pad,
                 "Timeout reached: {} + {} <= {}",
                 state.last_output_time,
                 settings.timeout,
@@ -489,7 +492,7 @@ impl FallbackSwitch {
                 if buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT) {
                     gst_info!(
                         CAT,
-                        obj: agg,
+                        obj: backup_pad,
                         "Can't change to sinkpad {} yet, waiting for keyframe",
                         backup_pad.get_name()
                     );
@@ -501,7 +504,11 @@ impl FallbackSwitch {
                     continue;
                 }
 
-                gst_info!(CAT, obj: agg, "Active pad changed to fallback sinkpad");
+                gst_info!(
+                    CAT,
+                    obj: backup_pad,
+                    "Active pad changed to fallback sinkpad"
+                );
                 *active_sinkpad = Some(backup_pad.clone().upcast());
             }
             drop(active_sinkpad);
@@ -606,7 +613,6 @@ impl FallbackSwitch {
             /* Use a dummy drain_pad_to_time() call to update the last_sinkpad_time */
             if let Some(backup_pad) = &backup_pad {
                 if let Err(e) = self.drain_pad_to_time(
-                    &agg,
                     &mut *state,
                     &backup_pad,
                     gst::ClockTime::from_seconds(0),
@@ -647,7 +653,7 @@ impl FallbackSwitch {
             )
         } else if let (true, Some(backup_pad)) = (timeout, &backup_pad) {
             (
-                self.get_backup_buffer(agg, &mut *state, &settings, backup_pad),
+                self.get_backup_buffer(&mut *state, &settings, backup_pad),
                 state.check_health_changes(
                     &settings,
                     &Some(backup_pad),
