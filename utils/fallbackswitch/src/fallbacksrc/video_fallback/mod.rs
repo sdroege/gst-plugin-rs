@@ -16,8 +16,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::prelude::*;
-
 mod imp;
 
 glib::glib_wrapper! {
@@ -31,12 +29,6 @@ unsafe impl Sync for VideoFallbackSource {}
 
 impl VideoFallbackSource {
     pub fn new(uri: Option<&str>, min_latency: u64) -> VideoFallbackSource {
-        glib::Object::new(
-            VideoFallbackSource::static_type(),
-            &[("uri", &uri), ("min-latency", &min_latency)],
-        )
-        .unwrap()
-        .downcast()
-        .unwrap()
+        glib::Object::new(&[("uri", &uri), ("min-latency", &min_latency)]).unwrap()
     }
 }

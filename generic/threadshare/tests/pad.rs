@@ -741,10 +741,7 @@ fn setup(
     let pipeline = gst::Pipeline::new(None);
 
     // Src
-    let src_element = glib::Object::new(ElementSrcTest::static_type(), &[])
-        .unwrap()
-        .downcast::<ElementSrcTest>()
-        .unwrap();
+    let src_element = glib::Object::new::<ElementSrcTest>(&[]).unwrap();
     src_element.set_property("context", &context_name).unwrap();
     pipeline.add(&src_element).unwrap();
 
@@ -763,10 +760,7 @@ fn setup(
     }
 
     // Sink
-    let sink_element = glib::Object::new(ElementSinkTest::static_type(), &[])
-        .unwrap()
-        .downcast::<ElementSinkTest>()
-        .unwrap();
+    let sink_element = glib::Object::new::<ElementSinkTest>(&[]).unwrap();
     pipeline.add(&sink_element).unwrap();
     last_element.link(&sink_element).unwrap();
 

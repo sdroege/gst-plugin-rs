@@ -15,8 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::prelude::*;
-
 mod imp;
 
 glib::glib_wrapper! {
@@ -30,9 +28,6 @@ unsafe impl Sync for CustomSource {}
 
 impl CustomSource {
     pub fn new(source: &gst::Element) -> CustomSource {
-        glib::Object::new(CustomSource::static_type(), &[("source", source)])
-            .unwrap()
-            .downcast()
-            .unwrap()
+        glib::Object::new(&[("source", source)]).unwrap()
     }
 }
