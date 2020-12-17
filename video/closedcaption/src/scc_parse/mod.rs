@@ -21,7 +21,7 @@ use glib::prelude::*;
 mod imp;
 mod parser;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct SccParse(ObjectSubclass<imp::SccParse>) @extends gst::Element, gst::Object;
 }
 

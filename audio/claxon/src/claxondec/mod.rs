@@ -10,7 +10,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct ClaxonDec(ObjectSubclass<imp::ClaxonDec>) @extends gst_audio::AudioDecoder, gst::Element, gst::Object;
 }
 

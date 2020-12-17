@@ -10,7 +10,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct LewtonDec(ObjectSubclass<imp::LewtonDec>) @extends gst_audio::AudioDecoder, gst::Element, gst::Object;
 }
 

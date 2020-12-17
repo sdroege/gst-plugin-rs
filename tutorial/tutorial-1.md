@@ -175,7 +175,7 @@ impl ObjectSubclass for Rgb2Gray {
     type Class = subclass::simple::ClassStruct<Self>;
 
     // This macro provides some boilerplate
-    glib::glib_object_subclass!();
+    glib::object_subclass!();
 
     fn new() -> Self {
         Self {}
@@ -198,7 +198,7 @@ use glib::prelude::*;
 mod imp;
 
 // The public Rust wrapper type for our element
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
@@ -290,7 +290,7 @@ impl ObjectSubclass for Rgb2Gray {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib::glib_object_subclass!();
+    glib::object_subclass!();
 }
 
 impl ObjectImpl for Rgb2Gray {}
@@ -305,7 +305,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 

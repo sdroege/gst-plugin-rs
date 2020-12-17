@@ -19,7 +19,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct CCDetect(ObjectSubclass<imp::CCDetect>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 

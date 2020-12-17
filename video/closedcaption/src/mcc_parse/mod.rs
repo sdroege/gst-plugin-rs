@@ -20,7 +20,7 @@ use glib::prelude::*;
 mod imp;
 mod parser;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct MccParse(ObjectSubclass<imp::MccParse>) @extends gst::Element, gst::Object;
 }
 

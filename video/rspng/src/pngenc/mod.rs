@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use glib::prelude::*;
-use glib::{glib_wrapper, GEnum};
+use glib::GEnum;
 
 mod imp;
 
@@ -79,7 +79,7 @@ impl From<FilterType> for png::FilterType {
     }
 }
 
-glib_wrapper! {
+glib::wrapper! {
     pub struct PngEncoder(ObjectSubclass<imp::PngEncoder>) @extends gst_video::VideoEncoder, gst::Element, gst::Object;
 }
 

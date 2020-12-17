@@ -207,7 +207,7 @@ impl ObjectSubclass for SineSrc {
     type Class = subclass::simple::ClassStruct<Self>;
 
     // This macro provides some boilerplate.
-    glib::glib_object_subclass!();
+    glib::object_subclass!();
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here.

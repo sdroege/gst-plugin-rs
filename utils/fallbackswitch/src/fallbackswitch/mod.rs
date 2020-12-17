@@ -22,7 +22,7 @@ use crate::gst_base_compat as gst_base;
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct FallbackSwitch(ObjectSubclass<imp::FallbackSwitch>) @extends gst_base::Aggregator, gst::Element, gst::Object;
 }
 

@@ -29,7 +29,7 @@ enum Mode {
     RollUp4,
 }
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct TtToCea608(ObjectSubclass<imp::TtToCea608>) @extends gst::Element, gst::Object;
 }
 

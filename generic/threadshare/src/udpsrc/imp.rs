@@ -19,7 +19,6 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
-use glib::glib_object_subclass;
 use glib::prelude::*;
 use glib::subclass;
 use glib::subclass::prelude::*;
@@ -793,7 +792,7 @@ impl ObjectSubclass for UdpSrc {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::object_subclass!();
 
     fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(

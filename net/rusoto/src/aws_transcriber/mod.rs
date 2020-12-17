@@ -20,7 +20,7 @@ use glib::prelude::*;
 mod imp;
 mod packet;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct Transcriber(ObjectSubclass<imp::Transcriber>) @extends gst::Element, gst::Object;
 }
 

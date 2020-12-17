@@ -22,7 +22,6 @@ use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
 use glib::GBoxed;
-use glib::{glib_object_subclass, glib_wrapper};
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -320,7 +319,7 @@ mod imp_src {
         type Instance = gst::subclass::ElementInstanceStruct<Self>;
         type Class = glib::subclass::simple::ClassStruct<Self>;
 
-        glib_object_subclass!();
+        glib::object_subclass!();
 
         fn class_init(klass: &mut Self::Class) {
             klass.set_metadata(
@@ -442,7 +441,7 @@ mod imp_src {
     }
 }
 
-glib_wrapper! {
+glib::wrapper! {
     pub struct ElementSrcTest(ObjectSubclass<imp_src::ElementSrcTest>) @extends gst::Element, gst::Object;
 }
 unsafe impl Send for ElementSrcTest {}
@@ -638,7 +637,7 @@ mod imp_sink {
         type Instance = gst::subclass::ElementInstanceStruct<Self>;
         type Class = glib::subclass::simple::ClassStruct<Self>;
 
-        glib_object_subclass!();
+        glib::object_subclass!();
 
         fn class_init(klass: &mut Self::Class) {
             klass.set_metadata(
@@ -720,7 +719,7 @@ mod imp_sink {
     }
 }
 
-glib_wrapper! {
+glib::wrapper! {
     pub struct ElementSinkTest(ObjectSubclass<imp_sink::ElementSinkTest>) @extends gst::Element, gst::Object;
 }
 unsafe impl Send for ElementSinkTest {}

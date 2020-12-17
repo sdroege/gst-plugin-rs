@@ -15,12 +15,11 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::glib_wrapper;
 use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::wrapper! {
     pub struct InputSelector(ObjectSubclass<imp::InputSelector>) @extends gst::Element, gst::Object;
 }
 

@@ -19,13 +19,12 @@ use super::ffi;
 
 use std::ptr;
 
-use glib::glib_wrapper;
 use glib::prelude::*;
 use glib::translate::*;
 
 use std::mem;
 
-glib_wrapper! {
+glib::wrapper! {
     pub struct RTPJitterBuffer(Object<ffi::RTPJitterBuffer>);
 
     match fn {

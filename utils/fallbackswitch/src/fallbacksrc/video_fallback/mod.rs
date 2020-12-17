@@ -18,7 +18,7 @@
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct VideoFallbackSource(ObjectSubclass<imp::VideoFallbackSource>) @extends gst::Bin, gst::Element, gst::Object;
 }
 

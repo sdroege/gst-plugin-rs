@@ -15,7 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::glib_object_subclass;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
@@ -366,7 +365,7 @@ impl ObjectSubclass for CsoundFilter {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib_object_subclass!();
+    glib::object_subclass!();
 
     fn new() -> Self {
         let csound = Csound::new();

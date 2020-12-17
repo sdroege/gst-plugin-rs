@@ -11,7 +11,7 @@ use glib::prelude::*;
 mod imp;
 
 // The public Rust wrapper type for our element
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct SineSrc(ObjectSubclass<imp::SineSrc>) @extends gst_base::BaseSrc, gst::Element, gst::Object;
 }
 

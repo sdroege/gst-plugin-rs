@@ -22,9 +22,7 @@ mod imp;
 #[allow(clippy::module_inception)]
 pub mod jitterbuffer;
 
-use glib::glib_wrapper;
-
-glib_wrapper! {
+glib::wrapper! {
     pub struct JitterBuffer(ObjectSubclass<imp::JitterBuffer>) @extends gst::Element, gst::Object;
 }
 

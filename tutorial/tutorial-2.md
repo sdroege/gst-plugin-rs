@@ -154,7 +154,7 @@ impl ObjectSubclass for SineSrc {
     type Class = subclass::simple::ClassStruct<Self>;
 
     // This macro provides some boilerplate.
-    glib::glib_object_subclass!();
+    glib::object_subclass!();
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here.
@@ -380,7 +380,7 @@ use glib::prelude::*;
 mod imp;
 
 // The public Rust wrapper type for our element
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct SineSrc(ObjectSubclass<imp::SineSrc>) @extends gst_base::BaseSrc, gst::Element, gst::Object;
 }
 

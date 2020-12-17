@@ -15,12 +15,11 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::glib_wrapper;
 use glib::prelude::*;
 
 mod imp;
 
-glib_wrapper! {
+glib::wrapper! {
     pub struct ProxySink(ObjectSubclass<imp::ProxySink>) @extends gst::Element, gst::Object;
 }
 
@@ -29,7 +28,7 @@ glib_wrapper! {
 unsafe impl Send for ProxySink {}
 unsafe impl Sync for ProxySink {}
 
-glib_wrapper! {
+glib::wrapper! {
     pub struct ProxySrc(ObjectSubclass<imp::ProxySrc>) @extends gst::Element, gst::Object;
 }
 

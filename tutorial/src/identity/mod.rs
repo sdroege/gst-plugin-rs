@@ -11,7 +11,7 @@ use glib::prelude::*;
 mod imp;
 
 // The public Rust wrapper type for our element
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct Identity(ObjectSubclass<imp::Identity>) @extends gst::Element, gst::Object;
 }
 

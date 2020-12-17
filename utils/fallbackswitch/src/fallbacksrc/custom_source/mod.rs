@@ -17,7 +17,7 @@
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct CustomSource(ObjectSubclass<imp::CustomSource>) @extends gst::Bin, gst::Element, gst::Object;
 }
 

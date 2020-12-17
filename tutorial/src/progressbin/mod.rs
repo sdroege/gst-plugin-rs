@@ -30,7 +30,7 @@ pub enum ProgressBinOutput {
 }
 
 // The public Rust wrapper type for our element
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct ProgressBin(ObjectSubclass<imp::ProgressBin>) @extends gst::Bin, gst::Element, gst::Object;
 }
 

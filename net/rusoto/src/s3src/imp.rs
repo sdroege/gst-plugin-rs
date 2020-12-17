@@ -213,7 +213,7 @@ impl ObjectSubclass for S3Src {
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
-    glib::glib_object_subclass!();
+    glib::object_subclass!();
 
     fn new() -> Self {
         Self {

@@ -22,7 +22,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct AudioLoudNorm(ObjectSubclass<imp::AudioLoudNorm>) @extends gst::Element, gst::Object;
 }
 

@@ -19,7 +19,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct ToggleRecord(ObjectSubclass<imp::ToggleRecord>) @extends gst::Element, gst::Object;
 }
 

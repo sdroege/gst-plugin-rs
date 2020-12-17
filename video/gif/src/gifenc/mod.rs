@@ -10,7 +10,7 @@ use glib::prelude::*;
 
 mod imp;
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct GifEnc(ObjectSubclass<imp::GifEnc>) @extends gst_video::VideoEncoder, gst::Element, gst::Object;
 }
 

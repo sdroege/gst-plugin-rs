@@ -42,7 +42,7 @@ enum Status {
     Running,
 }
 
-glib::glib_wrapper! {
+glib::wrapper! {
     pub struct FallbackSrc(ObjectSubclass<imp::FallbackSrc>) @extends gst::Bin, gst::Element, gst::Object;
 }
 
