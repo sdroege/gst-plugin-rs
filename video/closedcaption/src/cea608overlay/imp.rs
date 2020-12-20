@@ -19,7 +19,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_element_error, gst_error, gst_log, gst_trace};
+use gst::{gst_error, gst_log, gst_trace};
 use gst_video::prelude::*;
 
 use once_cell::sync::Lazy;
@@ -87,7 +87,7 @@ impl Cea608Overlay {
         let fontmap = match pangocairo::FontMap::new() {
             Some(fontmap) => Ok(fontmap),
             None => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::LibraryError::Failed,
                     ["Failed to create pangocairo font map"]
@@ -98,7 +98,7 @@ impl Cea608Overlay {
         let context = match fontmap.create_context() {
             Some(context) => Ok(context),
             None => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::LibraryError::Failed,
                     ["Failed to create font map context"]
@@ -242,7 +242,7 @@ impl Cea608Overlay {
         let video_info = match state.video_info.as_ref() {
             Some(video_info) => Ok(video_info),
             None => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Negotiation,
                     ["Element hasn't received valid video caps at negotiation time"]

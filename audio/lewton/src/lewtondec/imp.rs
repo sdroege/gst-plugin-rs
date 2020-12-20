@@ -9,8 +9,8 @@
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_warning};
-use gst_audio::gst_audio_decoder_error;
+use gst::{gst_debug, gst_error, gst_warning};
+use gst_audio::audio_decoder_error;
 use gst_audio::prelude::*;
 use gst_audio::subclass::prelude::*;
 
@@ -262,7 +262,7 @@ impl LewtonDec {
                 (ident_buf, comment_buf, setup_buf)
             }
             _ => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::StreamError::Decode,
                     ["Got no headers before data packets"]
@@ -277,7 +277,7 @@ impl LewtonDec {
             gst::FlowError::Error
         })?;
         let ident = lewton::header::read_header_ident(ident_map.as_ref()).map_err(|err| {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Decode,
                 ["Failed to parse ident header: {:?}", err]
@@ -290,7 +290,7 @@ impl LewtonDec {
             gst::FlowError::Error
         })?;
         let comment = lewton::header::read_header_comment(comment_map.as_ref()).map_err(|err| {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Decode,
                 ["Failed to parse comment header: {:?}", err]
@@ -308,7 +308,7 @@ impl LewtonDec {
             (ident.blocksize_0, ident.blocksize_1),
         )
         .map_err(|err| {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Decode,
                 ["Failed to parse setup header: {:?}", err]
@@ -384,7 +384,7 @@ impl LewtonDec {
         {
             Ok(decoded) => decoded,
             Err(err) => {
-                return gst_audio_decoder_error!(
+                return audio_decoder_error!(
                     element,
                     1,
                     gst::StreamError::Decode,
@@ -394,7 +394,7 @@ impl LewtonDec {
         };
 
         if decoded.channel_count != audio_info.channels() as usize {
-            return gst_audio_decoder_error!(
+            return audio_decoder_error!(
                 element,
                 1,
                 gst::StreamError::Decode,
@@ -417,7 +417,7 @@ impl LewtonDec {
             let mut outbuf = element
                 .allocate_output_buffer(sample_count as usize * audio_info.bpf() as usize)
                 .map_err(|_| {
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Decode,
                         ["Failed to allocate output buffer"]
@@ -429,7 +429,7 @@ impl LewtonDec {
                 // GStreamer channel order
                 let outbuf = outbuf.get_mut().unwrap();
                 let mut outmap = outbuf.map_writable().map_err(|_| {
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Decode,
                         ["Failed to map output buffer writable"]

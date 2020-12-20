@@ -25,7 +25,7 @@ use glib::subclass::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info, gst_log, gst_trace};
+use gst::{gst_debug, gst_error, gst_info, gst_log, gst_trace};
 use gst_rtp::RTPBuffer;
 
 use once_cell::sync::Lazy;
@@ -664,7 +664,7 @@ impl PadSinkHandler for SinkHandler {
         if let EventView::FlushStart(..) = event.view() {
             if let Err(err) = jb.task.flush_start() {
                 gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::StreamError::Failed,
                     ("Internal data stream error"),
@@ -710,7 +710,7 @@ impl PadSinkHandler for SinkHandler {
                 EventView::FlushStop(..) => {
                     if let Err(err) = jb.task.flush_stop() {
                         gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
-                        gst_element_error!(
+                        gst::element_error!(
                             element,
                             gst::StreamError::Failed,
                             ("Internal data stream error"),
@@ -993,7 +993,7 @@ impl PadSrcHandler for SrcHandler {
             EventView::FlushStart(..) => {
                 if let Err(err) = jb.task.flush_start() {
                     gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -1005,7 +1005,7 @@ impl PadSrcHandler for SrcHandler {
             EventView::FlushStop(..) => {
                 if let Err(err) = jb.task.flush_stop() {
                     gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -1377,7 +1377,7 @@ impl JitterBuffer {
                 context,
             )
             .map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error preparing Task: {:?}", err]
                 )

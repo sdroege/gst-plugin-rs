@@ -9,9 +9,9 @@
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::format::Bytes;
+use gst::gst_debug;
 use gst::subclass::prelude::*;
 use gst::SECOND_VAL;
-use gst::{gst_debug, gst_element_error};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 use once_cell::sync::Lazy;
@@ -151,7 +151,7 @@ impl BaseParseImpl for CdgParse {
         let input = frame.get_buffer().unwrap();
         let skip = {
             let map = input.map_readable().map_err(|_| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Failed,
                     ["Failed to map input buffer readable"]
@@ -175,7 +175,7 @@ impl BaseParseImpl for CdgParse {
 
         let (keyframe, header) = {
             let map = input.map_readable().map_err(|_| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Failed,
                     ["Failed to map input buffer readable"]

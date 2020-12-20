@@ -12,7 +12,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info, gst_trace};
+use gst::{gst_debug, gst_error, gst_info, gst_trace};
 use gst_base::subclass::prelude::*;
 
 use std::fs::File;
@@ -206,14 +206,14 @@ impl BaseSinkImpl for FileSink {
 
         let settings = self.settings.lock().unwrap();
         let location = settings.location.as_ref().ok_or_else(|| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["File location is not defined"]
             )
         })?;
 
         let file = File::create(location).map_err(|err| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::OpenWrite,
                 [
                     "Could not open file {} for writing: {}",
@@ -233,7 +233,7 @@ impl BaseSinkImpl for FileSink {
     fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Stopped = *state {
-            return Err(gst_error_msg!(
+            return Err(gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["FileSink not started"]
             ));
@@ -259,19 +259,19 @@ impl BaseSinkImpl for FileSink {
                 ref mut position,
             } => (file, position),
             State::Stopped => {
-                gst_element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
+                gst::element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
                 return Err(gst::FlowError::Error);
             }
         };
 
         gst_trace!(CAT, obj: element, "Rendering {:?}", buffer);
         let map = buffer.map_readable().map_err(|_| {
-            gst_element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
+            gst::element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
         })?;
 
         file.write_all(map.as_ref()).map_err(|err| {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::ResourceError::Write,
                 ["Failed to write buffer: {}", err]

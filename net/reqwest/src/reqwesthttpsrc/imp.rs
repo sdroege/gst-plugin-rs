@@ -21,7 +21,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_trace, gst_warning};
+use gst::{gst_debug, gst_error, gst_trace, gst_warning};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
@@ -319,7 +319,7 @@ impl ReqwestHttpSrc {
                 .gzip(true)
                 .build()
                 .map_err(|err| {
-                    gst_error_msg!(
+                    gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to create Client: {}", err]
                     )
@@ -485,7 +485,7 @@ impl ReqwestHttpSrc {
 
         let future = async {
             req.send().await.map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to fetch {}: {:?}", uri, err]
                 )
@@ -511,7 +511,7 @@ impl ReqwestHttpSrc {
             match res.status() {
                 StatusCode::NOT_FOUND => {
                     gst_error!(CAT, obj: src, "Resource not found");
-                    return Err(Some(gst_error_msg!(
+                    return Err(Some(gst::error_msg!(
                         gst::ResourceError::NotFound,
                         ["Resource '{}' not found", uri]
                     )));
@@ -521,14 +521,14 @@ impl ReqwestHttpSrc {
                 | StatusCode::FORBIDDEN
                 | StatusCode::PROXY_AUTHENTICATION_REQUIRED => {
                     gst_error!(CAT, obj: src, "Not authorized: {}", res.status());
-                    return Err(Some(gst_error_msg!(
+                    return Err(Some(gst::error_msg!(
                         gst::ResourceError::NotAuthorized,
                         ["Not Authorized for resource '{}': {}", uri, res.status()]
                     )));
                 }
                 _ => {
                     gst_error!(CAT, obj: src, "Request failed: {}", res.status());
-                    return Err(Some(gst_error_msg!(
+                    return Err(Some(gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Request for '{}' failed: {}", uri, res.status()]
                     )));
@@ -557,7 +557,7 @@ impl ReqwestHttpSrc {
         };
 
         if position != start {
-            return Err(Some(gst_error_msg!(
+            return Err(Some(gst::error_msg!(
                 gst::ResourceError::Seek,
                 ["Failed to seek to {}: Got {}", start, position]
             )));
@@ -653,7 +653,7 @@ impl ReqwestHttpSrc {
 
                 match res {
                     Ok(res) => res,
-                    Err(_) => Err(gst_error_msg!(
+                    Err(_) => Err(gst::error_msg!(
                         gst::ResourceError::Read,
                         ["Request timeout"]
                     )),
@@ -868,7 +868,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             .location
             .as_ref()
             .ok_or_else(|| {
-                gst_error_msg!(gst::CoreError::StateChange, ["Can't start without an URI"])
+                gst::error_msg!(gst::CoreError::StateChange, ["Can't start without an URI"])
             })
             .map(|uri| uri.clone())?;
 
@@ -876,7 +876,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
 
         *state = self.do_request(src, uri, 0, None).map_err(|err| {
             err.unwrap_or_else(|| {
-                gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
+                gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
             })
         })?;
 
@@ -921,7 +921,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
                 ..
             } => (position, stop, uri.clone()),
             State::Stopped => {
-                gst_element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
+                gst::element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
 
                 return false;
             }
@@ -965,7 +965,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
                 ..
             } => (response, position, caps, tags),
             State::Stopped => {
-                gst_element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
+                gst::element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
 
                 return Err(gst::FlowError::Error);
             }
@@ -977,7 +977,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
             Some(response) => response,
             None => {
                 gst_error!(CAT, obj: src, "Don't have a response");
-                gst_element_error!(src, gst::ResourceError::Read, ["Don't have a response"]);
+                gst::element_error!(src, gst::ResourceError::Read, ["Don't have a response"]);
 
                 return Err(gst::FlowError::Error);
             }
@@ -1001,7 +1001,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
 
         let future = async {
             current_response.chunk().await.map_err(move |err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::Read,
                     ["Failed to read chunk at offset {}: {:?}", offset, err]
                 )
@@ -1030,7 +1030,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
                 ..
             } => (response, position),
             State::Stopped => {
-                gst_element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
+                gst::element_error!(src, gst::LibraryError::Failed, ["Not started yet"]);
 
                 return Err(gst::FlowError::Error);
             }

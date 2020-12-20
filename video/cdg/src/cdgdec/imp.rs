@@ -8,8 +8,8 @@
 
 use glib::subclass;
 use glib::subclass::prelude::*;
+use gst::gst_debug;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error};
 use gst_video::prelude::VideoDecoderExtManual;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
@@ -127,7 +127,7 @@ impl VideoDecoderImpl for CdgDec {
         let cmd = {
             let input = frame.get_input_buffer().unwrap();
             let map = input.map_readable().map_err(|_| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Failed,
                     ["Failed to map input buffer readable"]
@@ -159,7 +159,7 @@ impl VideoDecoderImpl for CdgDec {
             let mut out_frame =
                 gst_video::VideoFrameRef::from_buffer_ref_writable(output, info.as_ref().unwrap())
                     .map_err(|_| {
-                        gst_element_error!(
+                        gst::element_error!(
                             element,
                             gst::CoreError::Failed,
                             ["Failed to map output buffer writable"]
@@ -208,7 +208,7 @@ impl VideoDecoderImpl for CdgDec {
                         let mut config = pool.get_config();
                         config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
                         pool.set_config(config).map_err(|e| {
-                            gst::gst_error_msg!(gst::CoreError::Negotiation, [&e.message])
+                            gst::error_msg!(gst::CoreError::Negotiation, [&e.message])
                         })?;
                     }
                 }

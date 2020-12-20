@@ -488,7 +488,7 @@ impl VideoDecoderImpl for Dav1dDec {
                         let mut config = pool.get_config();
                         config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
                         pool.set_config(config).map_err(|e| {
-                            gst::gst_error_msg!(gst::CoreError::Negotiation, [&e.message])
+                            gst::error_msg!(gst::CoreError::Negotiation, [&e.message])
                         })?;
                         self.negotiation_infos.lock().unwrap().video_meta_supported = true;
                     }

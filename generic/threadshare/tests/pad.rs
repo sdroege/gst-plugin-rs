@@ -26,7 +26,7 @@ use glib::GBoxed;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::EventView;
-use gst::{gst_debug, gst_error_msg, gst_info, gst_log};
+use gst::{gst_debug, gst_info, gst_log};
 
 use once_cell::sync::Lazy;
 
@@ -258,7 +258,7 @@ mod imp_src {
             let settings = self.settings.lock().unwrap().clone();
             let context =
                 Context::acquire(&settings.context, THROTTLING_DURATION).map_err(|err| {
-                    gst_error_msg!(
+                    gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to acquire Context: {}", err]
                     )
@@ -273,7 +273,7 @@ mod imp_src {
                     context,
                 )
                 .map_err(|err| {
-                    gst_error_msg!(
+                    gst::error_msg!(
                         gst::ResourceError::Failed,
                         ["Error preparing Task: {:?}", err]
                     )

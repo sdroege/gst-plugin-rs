@@ -20,7 +20,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info, gst_warning};
+use gst::{gst_debug, gst_error, gst_info, gst_warning};
 
 use std::mem;
 use std::sync::Mutex;
@@ -896,7 +896,7 @@ impl FallbackSrc {
             Some(source) => source,
             None => {
                 gst_error!(CAT, obj: element, "No URI or source element configured");
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::LibraryError::Settings,
                     ["No URI or source element configured"]
@@ -1179,7 +1179,7 @@ impl FallbackSrc {
                 "Failed to link source pad to clocksync: {}",
                 err
             );
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::CoreError::Negotiation,
                 ["Failed to link source pad to clocksync: {}", err]
             )
@@ -1382,7 +1382,7 @@ impl FallbackSrc {
         };
         let segment = segment.downcast_ref::<gst::ClockTime>().ok_or_else(|| {
             gst_error!(CAT, obj: element, "Have no time segment");
-            gst_error_msg!(gst::CoreError::Clock, ["Have no time segment"])
+            gst::error_msg!(gst::CoreError::Clock, ["Have no time segment"])
         })?;
 
         let running_time = if pts < segment.get_start() {

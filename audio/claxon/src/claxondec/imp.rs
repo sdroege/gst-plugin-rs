@@ -9,8 +9,7 @@
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error};
-use gst_audio::gst_audio_decoder_error;
+use gst::{gst_debug, gst_error};
 use gst_audio::prelude::*;
 use gst_audio::subclass::prelude::*;
 
@@ -221,12 +220,12 @@ impl ClaxonDec {
         indata: &[u8],
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let streaminfo = get_claxon_streaminfo(indata).map_err(|e| {
-            gst_element_error!(element, gst::StreamError::Decode, [e]);
+            gst::element_error!(element, gst::StreamError::Decode, [e]);
             gst::FlowError::Error
         })?;
 
         let audio_info = get_gstaudioinfo(streaminfo).map_err(|e| {
-            gst_element_error!(element, gst::StreamError::Decode, [&e]);
+            gst::element_error!(element, gst::StreamError::Decode, [&e]);
             gst::FlowError::Error
         })?;
 
@@ -275,7 +274,7 @@ impl ClaxonDec {
             Ok(Some(result)) => result,
             Ok(None) => return element.finish_frame(None, 1),
             Err(err) => {
-                return gst_audio_decoder_error!(
+                return gst_audio::audio_decoder_error!(
                     element,
                     1,
                     gst::StreamError::Decode,

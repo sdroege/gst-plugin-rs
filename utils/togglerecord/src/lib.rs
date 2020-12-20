@@ -21,7 +21,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     togglerecord::register(plugin)
 }
 
-gst::gst_plugin_define!(
+gst::plugin_define!(
     togglerecord,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

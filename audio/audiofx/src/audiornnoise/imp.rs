@@ -12,7 +12,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_loggable_error};
+use gst::{gst_debug, gst_error};
 use gst_base::subclass::base_transform::BaseTransformImplExt;
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
@@ -260,11 +260,11 @@ impl BaseTransformImpl for AudioRNNoise {
         // Flush previous state
         if self.state.lock().unwrap().is_some() {
             self.drain(element).map_err(|e| {
-                gst_loggable_error!(CAT, "Error flusing previous state data {:?}", e)
+                gst::loggable_error!(CAT, "Error flusing previous state data {:?}", e)
             })?;
         }
         if incaps != outcaps {
-            return Err(gst_loggable_error!(
+            return Err(gst::loggable_error!(
                 CAT,
                 "Input and output caps are not the same"
             ));
@@ -273,7 +273,7 @@ impl BaseTransformImpl for AudioRNNoise {
         gst_debug!(CAT, obj: element, "Set caps to {}", incaps);
 
         let in_info = gst_audio::AudioInfo::from_caps(incaps)
-            .map_err(|e| gst_loggable_error!(CAT, "Failed to parse input caps {:?}", e))?;
+            .map_err(|e| gst::loggable_error!(CAT, "Failed to parse input caps {:?}", e))?;
 
         let mut denoisers = vec![];
         for _i in 0..in_info.channels() {
@@ -308,7 +308,7 @@ impl BaseTransformImpl for AudioRNNoise {
 
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().ok_or_else(|| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Negotiation,
                     ["Can not generate an output without State"]

@@ -19,7 +19,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_element_error, gst_element_warning, gst_loggable_error, gst_trace, gst_warning};
+use gst::{gst_trace, gst_warning};
 use gst_base::subclass::prelude::*;
 
 use byteorder::{BigEndian, ByteOrder};
@@ -489,7 +489,7 @@ impl BaseTransformImpl for CCDetect {
         let map = buf.map_readable().map_err(|_| gst::FlowError::Error)?;
 
         if buf.get_pts().is_none() {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::ResourceError::Read,
                 ["Input buffers must have valid timestamps"]
@@ -507,7 +507,7 @@ impl BaseTransformImpl for CCDetect {
             Ok(v) => v,
             Err(e) => {
                 gst_warning!(CAT, "{}", &e.to_string());
-                gst_element_warning!(element, gst::StreamError::Decode, [&e.to_string()]);
+                gst::element_warning!(element, gst::StreamError::Decode, [&e.to_string()]);
                 CCPacketContents {
                     cc608: false,
                     cc708: false,
@@ -545,7 +545,7 @@ impl BaseTransformImpl for CCDetect {
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
         if incaps != outcaps {
-            return Err(gst_loggable_error!(
+            return Err(gst::loggable_error!(
                 CAT,
                 "Input and output caps are not the same"
             ));
@@ -553,15 +553,15 @@ impl BaseTransformImpl for CCDetect {
 
         let s = incaps
             .get_structure(0)
-            .ok_or_else(|| gst_loggable_error!(CAT, "Failed to parse input caps"))?;
+            .ok_or_else(|| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
         let format_str = s
             .get::<&str>("format")
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to parse input caps"))?
-            .ok_or_else(|| gst_loggable_error!(CAT, "Failed to parse input caps"))?;
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to parse input caps"))?
+            .ok_or_else(|| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
         let cc_format = match format_str {
             "cdp" => CCFormat::Cc708Cdp,
             "cc_data" => CCFormat::Cc708CcData,
-            _ => return Err(gst_loggable_error!(CAT, "Failed to parse input caps")),
+            _ => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
         };
 
         *self.state.lock().unwrap() = Some(State {

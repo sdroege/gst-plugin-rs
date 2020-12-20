@@ -18,7 +18,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_error_msg, gst_info};
+use gst::{gst_debug, gst_error, gst_info};
 
 use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
@@ -120,12 +120,12 @@ impl S3Src {
         let response = client.head_object(request);
 
         let output = s3utils::wait(&self.canceller, response).map_err(|err| match err {
-            WaitError::FutureError(err) => gst_error_msg!(
+            WaitError::FutureError(err) => gst::error_msg!(
                 gst::ResourceError::NotFound,
                 ["Failed to HEAD object: {}", err]
             ),
             WaitError::Cancelled => {
-                gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
+                gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
             }
         })?;
 
@@ -133,7 +133,7 @@ impl S3Src {
             gst_info!(CAT, obj: src, "HEAD success, content length = {}", size);
             Ok(size as u64)
         } else {
-            Err(gst_error_msg!(
+            Err(gst::error_msg!(
                 gst::ResourceError::Read,
                 ["Failed to get content length"]
             ))
@@ -156,7 +156,7 @@ impl S3Src {
                 ..
             } => (url, client),
             StreamingState::Stopped => {
-                return Err(Some(gst_error_msg!(
+                return Err(Some(gst::error_msg!(
                     gst::LibraryError::Failed,
                     ["Cannot GET before start()"]
                 )));
@@ -182,7 +182,7 @@ impl S3Src {
         let response = client.get_object(request);
 
         let output = s3utils::wait(&self.canceller, response).map_err(|err| match err {
-            WaitError::FutureError(err) => Some(gst_error_msg!(
+            WaitError::FutureError(err) => Some(gst::error_msg!(
                 gst::ResourceError::Read,
                 ["Could not read: {}", err]
             )),
@@ -197,7 +197,7 @@ impl S3Src {
         );
 
         s3utils::wait_stream(&self.canceller, &mut output.body.unwrap()).map_err(|err| match err {
-            WaitError::FutureError(err) => Some(gst_error_msg!(
+            WaitError::FutureError(err) => Some(gst::error_msg!(
                 gst::ResourceError::Read,
                 ["Could not read: {}", err]
             )),
@@ -330,7 +330,7 @@ impl BaseSrcImpl for S3Src {
         let s3url = match *self.url.lock().unwrap() {
             Some(ref url) => url.clone(),
             None => {
-                return Err(gst_error_msg!(
+                return Err(gst::error_msg!(
                     gst::ResourceError::Settings,
                     ["Cannot start without a URL being set"]
                 ));

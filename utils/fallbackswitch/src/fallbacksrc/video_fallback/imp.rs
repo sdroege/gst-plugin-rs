@@ -21,7 +21,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_element_warning, gst_error, gst_info, gst_warning};
+use gst::{gst_debug, gst_error, gst_info, gst_warning};
 
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Mutex};
 
@@ -341,7 +341,7 @@ impl VideoFallbackSource {
                         obj: element,
                         "imagefreeze does not support live mode, this will probably misbehave"
                     );
-                    gst_element_warning!(
+                    gst::element_warning!(
                         element,
                         gst::LibraryError::Settings,
                         ["imagefreeze does not support live mode, this will probably misbehave"]
@@ -382,7 +382,7 @@ impl VideoFallbackSource {
                                 .expect("pngdec not found");
                         } else {
                             gst_error!(CAT, obj: &element, "Unsupported caps {}", caps);
-                            gst_element_error!(
+                            gst::element_error!(
                                 element,
                                 gst::StreamError::Format,
                                 ["Unsupported caps {}", caps]
@@ -396,7 +396,7 @@ impl VideoFallbackSource {
                             gst::Element::link_many(&[&typefind, &decoder, &videoconvert])
                         {
                             gst_error!(CAT, obj: &element, "Can't link fallback image decoder");
-                            gst_element_error!(
+                            gst::element_error!(
                                 element,
                                 gst::StreamError::Format,
                                 ["Can't link fallback image decoder"]

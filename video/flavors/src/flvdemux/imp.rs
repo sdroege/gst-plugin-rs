@@ -16,9 +16,7 @@ use ::flavors::parser as flavors;
 use glib::subclass;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{
-    gst_debug, gst_error, gst_error_msg, gst_log, gst_loggable_error, gst_trace, gst_warning,
-};
+use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};
 
 use num_rational::Rational32;
 
@@ -137,7 +135,7 @@ impl ObjectSubclass for FlvDemux {
             .activate_function(|pad, parent| {
                 FlvDemux::catch_panic_pad_function(
                     parent,
-                    || Err(gst_loggable_error!(CAT, "Panic activating sink pad")),
+                    || Err(gst::loggable_error!(CAT, "Panic activating sink pad")),
                     |demux, element| demux.sink_activate(pad, element),
                 )
             })
@@ -145,7 +143,7 @@ impl ObjectSubclass for FlvDemux {
                 FlvDemux::catch_panic_pad_function(
                     parent,
                     || {
-                        Err(gst_loggable_error!(
+                        Err(gst::loggable_error!(
                             CAT,
                             "Panic activating sink pad with mode"
                         ))
@@ -293,7 +291,7 @@ impl FlvDemux {
         let mode = {
             let mut query = gst::query::Scheduling::new();
             if !pad.peer_query(&mut query) {
-                return Err(gst_loggable_error!(CAT, "Scheduling query failed on peer"));
+                return Err(gst::loggable_error!(CAT, "Scheduling query failed on peer"));
             }
 
             // TODO: pull mode
@@ -324,7 +322,7 @@ impl FlvDemux {
         if active {
             self.start(element, mode).map_err(|err| {
                 element.post_error_message(err);
-                gst_loggable_error!(CAT, "Failed to start element with mode {:?}", mode)
+                gst::loggable_error!(CAT, "Failed to start element with mode {:?}", mode)
             })?;
 
             if mode == gst::PadMode::Pull {
@@ -339,7 +337,7 @@ impl FlvDemux {
 
             self.stop(element).map_err(|err| {
                 element.post_error_message(err);
-                gst_loggable_error!(CAT, "Failed to stop element")
+                gst::loggable_error!(CAT, "Failed to stop element")
             })?;
         }
 
@@ -718,7 +716,7 @@ impl StreamingState {
 
         let tag_header = match flavors::tag_header(&data[4..]) {
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
-                return Err(gst_error_msg!(
+                return Err(gst::error_msg!(
                     gst::StreamError::Demux,
                     ["Invalid tag header: {:?}", err]
                 ));

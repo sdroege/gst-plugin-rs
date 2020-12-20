@@ -15,8 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use gst::gst_plugin_define;
-
 mod filter;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -24,7 +22,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-gst_plugin_define!(
+gst::plugin_define!(
     csound,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

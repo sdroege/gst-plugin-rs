@@ -25,7 +25,7 @@ use glib::subclass::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+use gst::{gst_debug, gst_error, gst_log, gst_trace};
 use gst_net::*;
 
 use once_cell::sync::Lazy;
@@ -420,7 +420,7 @@ impl TaskImpl for UdpSrcTask {
                     gst_error!(CAT, obj: &self.element, "Got error {:?}", err);
                     match err {
                         SocketError::Gst(err) => {
-                            gst_element_error!(
+                            gst::element_error!(
                                 self.element,
                                 gst::StreamError::Failed,
                                 ("Internal data stream error"),
@@ -428,7 +428,7 @@ impl TaskImpl for UdpSrcTask {
                             );
                         }
                         SocketError::Io(err) => {
-                            gst_element_error!(
+                            gst::element_error!(
                                 self.element,
                                 gst::StreamError::Failed,
                                 ("I/O error"),
@@ -474,7 +474,7 @@ impl TaskImpl for UdpSrcTask {
                 }
                 Err(err) => {
                     gst_error!(CAT, obj: &self.element, "Got error {}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         self.element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -532,7 +532,7 @@ impl UdpSrc {
 
         let context = Context::acquire(&settings_guard.context, settings_guard.context_wait)
             .map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to acquire Context: {}", err]
                 )
@@ -554,7 +554,7 @@ impl UdpSrc {
 
             let socket = context.enter(|| {
                 tokio::net::UdpSocket::from_std(socket).map_err(|err| {
-                    gst_error_msg!(
+                    gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to setup socket for tokio: {}", err]
                     )
@@ -567,14 +567,14 @@ impl UdpSrc {
         } else {
             let addr: IpAddr = match settings_guard.address {
                 None => {
-                    return Err(gst_error_msg!(
+                    return Err(gst::error_msg!(
                         gst::ResourceError::Settings,
                         ["No address set"]
                     ));
                 }
                 Some(ref addr) => match addr.parse() {
                     Err(err) => {
-                        return Err(gst_error_msg!(
+                        return Err(gst::error_msg!(
                             gst::ResourceError::Settings,
                             ["Invalid address '{}' set: {}", addr, err]
                         ));
@@ -623,7 +623,7 @@ impl UdpSrc {
                 )
             }
             .map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to create socket: {}", err]
                 )
@@ -632,7 +632,7 @@ impl UdpSrc {
             socket
                 .set_reuse_address(settings_guard.reuse)
                 .map_err(|err| {
-                    gst_error_msg!(
+                    gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to set reuse_address: {}", err]
                     )
@@ -641,7 +641,7 @@ impl UdpSrc {
             #[cfg(unix)]
             {
                 socket.set_reuse_port(settings_guard.reuse).map_err(|err| {
-                    gst_error_msg!(
+                    gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to set reuse_port: {}", err]
                     )
@@ -649,7 +649,7 @@ impl UdpSrc {
             }
 
             socket.bind(&saddr.into()).map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to bind socket: {}", err]
                 )
@@ -657,7 +657,7 @@ impl UdpSrc {
 
             let socket = context.enter(|| {
                 tokio::net::UdpSocket::from_std(socket.into()).map_err(|err| {
-                    gst_error_msg!(
+                    gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to setup socket for tokio: {}", err]
                     )
@@ -671,7 +671,7 @@ impl UdpSrc {
                         socket
                             .join_multicast_v4(addr, Ipv4Addr::new(0, 0, 0, 0))
                             .map_err(|err| {
-                                gst_error_msg!(
+                                gst::error_msg!(
                                     gst::ResourceError::OpenRead,
                                     ["Failed to join multicast group: {}", err]
                                 )
@@ -679,7 +679,7 @@ impl UdpSrc {
                     }
                     IpAddr::V6(addr) => {
                         socket.join_multicast_v6(&addr, 0).map_err(|err| {
-                            gst_error_msg!(
+                            gst::error_msg!(
                                 gst::ResourceError::OpenRead,
                                 ["Failed to join multicast group: {}", err]
                             )
@@ -712,7 +712,7 @@ impl UdpSrc {
         let mut config = buffer_pool.get_config();
         config.set_params(None, settings.mtu, 0, 0);
         buffer_pool.set_config(config).map_err(|err| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["Failed to configure buffer pool {:?}", err]
             )
@@ -724,7 +724,7 @@ impl UdpSrc {
             UdpReader::new(socket),
         )
         .map_err(|err| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to prepare socket {:?}", err]
             )
@@ -741,7 +741,7 @@ impl UdpSrc {
                 context,
             )
             .map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error preparing Task: {:?}", err]
                 )

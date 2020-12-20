@@ -20,7 +20,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_log, gst_trace, gst_warning};
+use gst::{gst_debug, gst_log, gst_trace, gst_warning};
 
 use more_asserts::{assert_ge, assert_le, assert_lt};
 
@@ -382,7 +382,7 @@ impl ToggleRecord {
         let duration = data.get_duration(&state);
 
         if !dts_or_pts.is_some() {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Format,
                 ["Buffer without DTS or PTS"]
@@ -632,13 +632,13 @@ impl ToggleRecord {
         let duration = data.get_duration(&state);
 
         if pts.is_none() {
-            gst_element_error!(element, gst::StreamError::Format, ["Buffer without PTS"]);
+            gst::element_error!(element, gst::StreamError::Format, ["Buffer without PTS"]);
             return Err(gst::FlowError::Error);
         }
 
         let dts = data.get_dts();
         if dts.is_some() && pts.is_some() && dts != pts {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Format,
                 ["DTS != PTS not supported for secondary streams"]
@@ -647,7 +647,7 @@ impl ToggleRecord {
         }
 
         if !data.is_keyframe() {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Format,
                 ["Delta-units not supported for secondary streams"]
@@ -1042,7 +1042,7 @@ impl ToggleRecord {
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let stream = self.pads.lock().get(pad).cloned().ok_or_else(|| {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::CoreError::Pad,
                 ["Unknown pad {:?}", pad.get_name()]
@@ -1157,7 +1157,7 @@ impl ToggleRecord {
 
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.get_name()]
@@ -1216,7 +1216,7 @@ impl ToggleRecord {
 
                 let segment = match e.get_segment().clone().downcast::<gst::ClockTime>() {
                     Err(segment) => {
-                        gst_element_error!(
+                        gst::element_error!(
                             element,
                             gst::StreamError::Format,
                             [
@@ -1230,7 +1230,7 @@ impl ToggleRecord {
                 };
 
                 if (segment.get_rate() - 1.0).abs() > f64::EPSILON {
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Format,
                         [
@@ -1346,7 +1346,7 @@ impl ToggleRecord {
     ) -> bool {
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.get_name()]
@@ -1374,7 +1374,7 @@ impl ToggleRecord {
 
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.get_name()]
@@ -1415,7 +1415,7 @@ impl ToggleRecord {
 
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.get_name()]
@@ -1534,7 +1534,7 @@ impl ToggleRecord {
     ) -> gst::Iterator<gst::Pad> {
         let stream = match self.pads.lock().get(pad) {
             None => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Pad,
                     ["Unknown pad {:?}", pad.get_name()]

@@ -42,8 +42,6 @@ mod queue;
 
 use glib::translate::*;
 
-use gst::gst_plugin_define;
-
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     udpsrc::register(plugin)?;
     udpsink::register(plugin)?;
@@ -57,7 +55,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-gst_plugin_define!(
+gst::plugin_define!(
     threadshare,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

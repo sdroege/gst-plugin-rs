@@ -10,7 +10,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_info, gst_log, gst_loggable_error};
+use gst::{gst_debug, gst_error, gst_info, gst_log};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
@@ -431,7 +431,7 @@ impl BaseSrcImpl for SineSrc {
         use std::f64::consts::PI;
 
         let info = gst_audio::AudioInfo::from_caps(caps).map_err(|_| {
-            gst_loggable_error!(CAT, "Failed to build `AudioInfo` from caps {}", caps)
+            gst::loggable_error!(CAT, "Failed to build `AudioInfo` from caps {}", caps)
         })?;
 
         gst_debug!(CAT, obj: element, "Configuring for caps {}", caps);
@@ -691,7 +691,7 @@ impl PushSrcImpl for SineSrc {
         let mut state = self.state.lock().unwrap();
         let info = match state.info {
             None => {
-                gst_element_error!(element, gst::CoreError::Negotiation, ["Have no caps yet"]);
+                gst::element_error!(element, gst::CoreError::Negotiation, ["Have no caps yet"]);
                 return Err(gst::FlowError::NotNegotiated);
             }
             Some(ref info) => info.clone(),

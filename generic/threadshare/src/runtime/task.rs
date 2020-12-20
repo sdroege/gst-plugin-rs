@@ -24,7 +24,7 @@ use futures::future::{self, abortable, AbortHandle, Aborted, BoxFuture, RemoteHa
 use futures::prelude::*;
 use futures::stream::StreamExt;
 
-use gst::{gst_debug, gst_error, gst_error_msg, gst_fixme, gst_log, gst_trace, gst_warning};
+use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_trace, gst_warning};
 
 use std::fmt;
 use std::ops::Deref;
@@ -244,7 +244,7 @@ impl TriggeringEvent {
         let res = Err(TransitionError {
             trigger: self.trigger,
             state: TaskState::Error,
-            err_msg: gst_error_msg!(
+            err_msg: gst::error_msg!(
                 gst::CoreError::StateChange,
                 [
                     "Triggering Event {:?} rejected due to a previous unrecoverable error",
@@ -305,7 +305,7 @@ impl TaskInner {
         let res = Err(TransitionError {
             trigger: triggering_evt.trigger,
             state: self.state,
-            err_msg: gst_error_msg!(
+            err_msg: gst::error_msg!(
                 gst::CoreError::StateChange,
                 [
                     "Unrecoverable error for {:?} from state {:?}",
@@ -349,7 +349,7 @@ impl TaskInner {
             TransitionError {
                 trigger,
                 state: self.state,
-                err_msg: gst_error_msg!(resource_err, ["Unable to send {:?}: {:?}", trigger, err]),
+                err_msg: gst::error_msg!(resource_err, ["Unable to send {:?}: {:?}", trigger, err]),
             }
         })?;
 
@@ -426,7 +426,7 @@ impl Task {
                 return Err(TransitionError {
                     trigger: Trigger::Prepare,
                     state: inner.state,
-                    err_msg: gst_error_msg!(
+                    err_msg: gst::error_msg!(
                         gst::CoreError::StateChange,
                         ["Attempt to prepare Task in state {:?}", state]
                     ),
@@ -479,7 +479,7 @@ impl Task {
                 return Err(TransitionError {
                     trigger: Trigger::Unprepare,
                     state: inner.state,
-                    err_msg: gst_error_msg!(
+                    err_msg: gst::error_msg!(
                         gst::CoreError::StateChange,
                         ["Attempt to unprepare Task in state {:?}", state]
                     ),
@@ -704,7 +704,7 @@ macro_rules! exec_action {
                     res = Context::drain_sub_tasks().await.map_err(|err| {
                         let msg = format!("{} subtask returned {:?}", stringify!($action), err);
                         gst_log!(RUNTIME_CAT, "{}", &msg);
-                        gst_error_msg!(gst::CoreError::StateChange, ["{}", &msg])
+                        gst::error_msg!(gst::CoreError::StateChange, ["{}", &msg])
                     });
 
                     if res.is_err() {
@@ -1036,7 +1036,7 @@ impl StateMachine {
                     res = Context::drain_sub_tasks().await.map_err(|err| {
                         let msg = format!("start subtask returned {:?}", err);
                         gst_log!(RUNTIME_CAT, "{}", &msg);
-                        gst_error_msg!(gst::CoreError::StateChange, ["{}", &msg])
+                        gst::error_msg!(gst::CoreError::StateChange, ["{}", &msg])
                     });
 
                     if res.is_err() {
@@ -1483,7 +1483,7 @@ mod tests {
             fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
                     gst_debug!(RUNTIME_CAT, "prepare_error: prepare returning an error");
-                    Err(gst_error_msg!(
+                    Err(gst::error_msg!(
                         gst::ResourceError::Failed,
                         ["prepare_error: intentional error"]
                     ))
@@ -1680,7 +1680,7 @@ mod tests {
                     self.prepare_receiver.next().await.unwrap();
                     gst_debug!(RUNTIME_CAT, "prepare_start_error: preparation complete Err");
 
-                    Err(gst_error_msg!(
+                    Err(gst::error_msg!(
                         gst::ResourceError::Failed,
                         ["prepare_start_error: intentional error"]
                     ))

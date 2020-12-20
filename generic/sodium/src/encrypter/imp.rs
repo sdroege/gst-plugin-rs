@@ -27,7 +27,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log};
+use gst::{gst_debug, gst_error, gst_log};
 use smallvec::SmallVec;
 use sodiumoxide::crypto::box_;
 
@@ -109,7 +109,7 @@ impl State {
             .as_ref()
             .and_then(|k| box_::SecretKey::from_slice(&k))
             .ok_or_else(|| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::NotFound,
                     [format!(
                         "Failed to set Sender's Key from property: {:?}",
@@ -124,7 +124,7 @@ impl State {
             .as_ref()
             .and_then(|k| box_::PublicKey::from_slice(&k))
             .ok_or_else(|| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::NotFound,
                     [format!(
                         "Failed to set Receiver's Key from property: {:?}",
@@ -230,7 +230,7 @@ impl Encrypter {
                 .encrypt_blocks(state.block_size as usize)
                 .map_err(|err| {
                     // log the error to the bus
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::ResourceError::Write,
                         ["Failed to decrypt buffer"]
@@ -279,7 +279,7 @@ impl Encrypter {
                 if avail > 0 {
                     match state.encrypt_blocks(avail) {
                         Err(_) => {
-                            gst_element_error!(
+                            gst::element_error!(
                                 element,
                                 gst::ResourceError::Write,
                                 ["Failed to encrypt buffers at EOS"]

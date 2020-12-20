@@ -12,7 +12,7 @@ use glib::subclass::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_element_error, gst_error, gst_error_msg, gst_info, gst_trace};
+use gst::{gst_error, gst_info, gst_trace};
 
 use gst_base::subclass::prelude::*;
 
@@ -55,7 +55,7 @@ impl Started {
         const MAX_MULTIPART_NUMBER: i64 = 10000;
 
         if self.part_number > MAX_MULTIPART_NUMBER {
-            return Err(gst_error_msg!(
+            return Err(gst::error_msg!(
                 gst::ResourceError::Failed,
                 [
                     "Maximum number of parts ({}) reached.",
@@ -177,7 +177,7 @@ impl S3Sink {
 
         let output =
             s3utils::wait(&self.canceller, upload_part_req_future).map_err(|err| match err {
-                WaitError::FutureError(err) => Some(gst_error_msg!(
+                WaitError::FutureError(err) => Some(gst::error_msg!(
                     gst::ResourceError::OpenWrite,
                     ["Failed to upload part: {}", err]
                 )),
@@ -247,7 +247,7 @@ impl S3Sink {
         settings: &Settings,
     ) -> Result<CreateMultipartUploadRequest, gst::ErrorMessage> {
         if settings.bucket.is_none() || settings.key.is_none() {
-            return Err(gst_error_msg!(
+            return Err(gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["Bucket or key is not defined"]
             ));
@@ -266,7 +266,7 @@ impl S3Sink {
 
     fn finalize_upload(&self, element: &super::S3Sink) -> Result<(), gst::ErrorMessage> {
         if self.flush_current_buffer(element).is_err() {
-            return Err(gst_error_msg!(
+            return Err(gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["Failed to flush internal buffer."]
             ));
@@ -288,12 +288,12 @@ impl S3Sink {
         s3utils::wait(&self.canceller, complete_req_future)
             .map(|_| ())
             .map_err(|err| match err {
-                WaitError::FutureError(err) => gst_error_msg!(
+                WaitError::FutureError(err) => gst::error_msg!(
                     gst::ResourceError::Write,
                     ["Failed to complete multipart upload: {}.", err.to_string()]
                 ),
                 WaitError::Cancelled => {
-                    gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during stop"])
+                    gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during stop"])
                 }
             })
     }
@@ -313,18 +313,18 @@ impl S3Sink {
 
         let response = s3utils::wait(&self.canceller, create_multipart_req_future).map_err(
             |err| match err {
-                WaitError::FutureError(err) => gst_error_msg!(
+                WaitError::FutureError(err) => gst::error_msg!(
                     gst::ResourceError::OpenWrite,
                     ["Failed to create multipart upload: {}", err]
                 ),
                 WaitError::Cancelled => {
-                    gst_error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
+                    gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
                 }
             },
         )?;
 
         let upload_id = response.upload_id.ok_or_else(|| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::Failed,
                 ["Failed to get multipart upload ID"]
             )
@@ -484,13 +484,13 @@ impl BaseSinkImpl for S3Sink {
         buffer: &gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         if let State::Stopped = *self.state.lock().unwrap() {
-            gst_element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
+            gst::element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
             return Err(gst::FlowError::Error);
         }
 
         gst_trace!(CAT, obj: element, "Rendering {:?}", buffer);
         let map = buffer.map_readable().map_err(|_| {
-            gst_element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
+            gst::element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
         })?;
 

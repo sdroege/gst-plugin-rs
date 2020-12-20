@@ -20,7 +20,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg};
+use gst::{gst_debug, gst_error};
 
 use std::{mem, sync::Mutex};
 
@@ -189,7 +189,7 @@ impl CustomSource {
             .any(|templ| templ.get_property_presence() == gst::PadPresence::Request)
         {
             gst_error!(CAT, obj: element, "Request pads not supported");
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::LibraryError::Settings,
                 ["Request pads not supported"]
@@ -286,7 +286,7 @@ impl CustomSource {
                 caps if !caps.is_any() && !caps.is_empty() => caps,
                 _ => {
                     gst_error!(CAT, obj: element, "Pad {} had no caps", pad.get_name());
-                    return Err(gst_error_msg!(
+                    return Err(gst::error_msg!(
                         gst::CoreError::Negotiation,
                         ["Pad had no caps"]
                     ));

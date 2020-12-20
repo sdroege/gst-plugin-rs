@@ -20,7 +20,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_log, gst_trace, gst_warning};
+use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};
 
 use once_cell::sync::Lazy;
 
@@ -346,7 +346,7 @@ impl TtToCea608 {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let pts = match buffer.get_pts() {
             gst::CLOCK_TIME_NONE => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::StreamError::Format,
                     ["Stream with timestamped buffers required"]
@@ -358,7 +358,7 @@ impl TtToCea608 {
 
         let duration = match buffer.get_duration() {
             gst::CLOCK_TIME_NONE => {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::StreamError::Format,
                     ["Buffers of stream need to have a duration"]

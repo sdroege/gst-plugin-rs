@@ -6,8 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use gst::gst_plugin_define;
-
 mod pngenc;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -15,7 +13,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-gst_plugin_define!(
+gst::plugin_define!(
     rspng,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

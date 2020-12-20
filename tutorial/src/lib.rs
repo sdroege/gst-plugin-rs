@@ -26,7 +26,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 // Plugin name, plugin description, plugin entry point function, version number of this plugin,
 // license of the plugin, source package name, binary package name, origin where it comes from
 // and the date/time of release.
-gst::gst_plugin_define!(
+gst::plugin_define!(
     rstutorial,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

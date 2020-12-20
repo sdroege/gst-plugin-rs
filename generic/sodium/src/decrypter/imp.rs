@@ -27,7 +27,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_loggable_error};
+use gst::{gst_debug, gst_error, gst_log};
 use sodiumoxide::crypto::box_;
 
 use std::sync::Mutex;
@@ -83,7 +83,7 @@ impl State {
             .as_ref()
             .and_then(|k| box_::PublicKey::from_slice(&k))
             .ok_or_else(|| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::NotFound,
                     [format!(
                         "Failed to set Sender's Key from property: {:?}",
@@ -98,7 +98,7 @@ impl State {
             .as_ref()
             .and_then(|k| box_::SecretKey::from_slice(&k))
             .ok_or_else(|| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::NotFound,
                     [format!(
                         "Failed to set Receiver's Key from property: {:?}",
@@ -129,7 +129,7 @@ impl State {
         chunk_index: u64,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let map = buffer.map_readable().map_err(|_| {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Format,
                 ["Failed to map buffer readable"]
@@ -146,7 +146,7 @@ impl State {
         for subbuffer in map.chunks(block_size) {
             let plain = box_::open_precomputed(&subbuffer, &nonce, &self.precomputed_key).map_err(
                 |_| {
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Format,
                         ["Failed to decrypt buffer"]
@@ -289,8 +289,8 @@ impl Decrypter {
                 // right after we activate the pad
                 self.check_headers(element)
             }
-            gst::PadMode::Push => Err(gst_loggable_error!(CAT, "Push mode not supported")),
-            _ => Err(gst_loggable_error!(
+            gst::PadMode::Push => Err(gst::loggable_error!(CAT, "Push mode not supported")),
+            _ => Err(gst::loggable_error!(
                 CAT,
                 "Failed to activate the pad in Unknown mode, {:?}",
                 mode
@@ -389,7 +389,7 @@ impl Decrypter {
             .sinkpad
             .pull_range(0, crate::HEADERS_SIZE as u32)
             .map_err(|err| {
-                let err = gst_loggable_error!(
+                let err = gst::loggable_error!(
                     CAT,
                     "Failed to pull nonce from the stream, reason: {:?}",
                     err
@@ -399,20 +399,20 @@ impl Decrypter {
             })?;
 
         if buffer.get_size() != crate::HEADERS_SIZE {
-            let err = gst_loggable_error!(CAT, "Headers buffer has wrong size");
+            let err = gst::loggable_error!(CAT, "Headers buffer has wrong size");
             err.log_with_object(element);
             return Err(err);
         }
 
         let map = buffer.map_readable().map_err(|_| {
-            let err = gst_loggable_error!(CAT, "Failed to map buffer readable");
+            let err = gst::loggable_error!(CAT, "Failed to map buffer readable");
             err.log_with_object(element);
             err
         })?;
 
         let sodium_header_slice = &map[..crate::TYPEFIND_HEADER_SIZE];
         if sodium_header_slice != crate::TYPEFIND_HEADER {
-            let err = gst_loggable_error!(CAT, "Buffer has wrong typefind header");
+            let err = gst::loggable_error!(CAT, "Buffer has wrong typefind header");
             err.log_with_object(element);
             return Err(err);
         }
@@ -421,7 +421,7 @@ impl Decrypter {
             &map[crate::TYPEFIND_HEADER_SIZE..crate::TYPEFIND_HEADER_SIZE + box_::NONCEBYTES];
         assert_eq!(nonce_slice.len(), box_::NONCEBYTES);
         let nonce = box_::Nonce::from_slice(nonce_slice).ok_or_else(|| {
-            let err = gst_loggable_error!(CAT, "Failed to create nonce from buffer");
+            let err = gst::loggable_error!(CAT, "Failed to create nonce from buffer");
             err.log_with_object(&self.srcpad);
             err
         })?;
@@ -463,7 +463,7 @@ impl Decrypter {
         // calculate how many chunks are needed, if we need something like 3.2
         // round the number to 4 and cut the buffer afterwards.
         let checked = requested_size.checked_add(block_size).ok_or_else(|| {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::LibraryError::Failed,
                 [
@@ -481,7 +481,7 @@ impl Decrypter {
 
         // Pull a buffer of all the chunks we will need
         let checked_size = total_chunks.checked_mul(block_size).ok_or_else(|| {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::LibraryError::Failed,
                 [
@@ -587,7 +587,7 @@ impl ObjectSubclass for Decrypter {
                 Decrypter::catch_panic_pad_function(
                     parent,
                     || {
-                        Err(gst_loggable_error!(
+                        Err(gst::loggable_error!(
                             CAT,
                             "Panic activating srcpad with mode"
                         ))

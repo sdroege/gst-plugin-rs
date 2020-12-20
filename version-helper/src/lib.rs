@@ -17,7 +17,7 @@
 //! Inside `lib.rs` of the plugin, the information provided by `get_info` are usable as follows:
 //!
 //! ```rust,ignore
-//! gst_plugin_define!(
+//! plugin_define!(
 //!     the_plugin_name,
 //!     env!("CARGO_PKG_DESCRIPTION"),
 //!     plugin_init,

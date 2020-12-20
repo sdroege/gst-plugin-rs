@@ -8,7 +8,6 @@
 
 use glib::subclass;
 use glib::subclass::prelude::*;
-use gst::gst_loggable_error;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
@@ -288,14 +287,14 @@ impl BaseTransformImpl for AudioEcho {
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
         if incaps != outcaps {
-            return Err(gst_loggable_error!(
+            return Err(gst::loggable_error!(
                 CAT,
                 "Input and output caps are not the same"
             ));
         }
 
         let info = gst_audio::AudioInfo::from_caps(incaps)
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to parse input caps"))?;
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
         let max_delay = self.settings.lock().unwrap().max_delay;
         let size = max_delay * (info.rate() as u64) / gst::SECOND_VAL;
         let buffer_size = size * (info.channels() as u64);

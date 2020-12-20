@@ -12,7 +12,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     rav1enc::register(plugin)
 }
 
-gst::gst_plugin_define!(
+gst::plugin_define!(
     rav1e,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

@@ -19,7 +19,7 @@
 use futures::future::BoxFuture;
 
 use gst::prelude::*;
-use gst::{gst_debug, gst_error, gst_error_msg, gst_log};
+use gst::{gst_debug, gst_error, gst_log};
 
 use once_cell::sync::Lazy;
 
@@ -314,7 +314,7 @@ pub fn wrap_socket(socket: &tokio::net::UdpSocket) -> Result<GioSocketWrapper, g
         let fd = FdConverter(fd);
 
         let gio_socket = gio::Socket::from_fd(fd).map_err(|err| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::OpenWrite,
                 ["Failed to create wrapped GIO socket: {}", err]
             )
@@ -339,7 +339,7 @@ pub fn wrap_socket(socket: &tokio::net::UdpSocket) -> Result<GioSocketWrapper, g
         let fd = SocketConverter(fd);
 
         let gio_socket = gio::Socket::from_socket(fd).map_err(|err| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::OpenWrite,
                 ["Failed to create wrapped GIO socket: {}", err]
             )

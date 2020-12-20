@@ -28,8 +28,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::EventView;
 use gst::{
-    gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info, gst_log, gst_trace,
-    gst_warning,
+    element_error, error_msg, gst_debug, gst_error, gst_info, gst_log, gst_trace, gst_warning,
 };
 
 use once_cell::sync::Lazy;
@@ -445,7 +444,7 @@ impl UdpSinkPadHandler {
                             socket
                                 .join_multicast_v4(addr, Ipv4Addr::new(0, 0, 0, 0))
                                 .map_err(|err| {
-                                    gst_error_msg!(
+                                    error_msg!(
                                         gst::ResourceError::OpenWrite,
                                         ["Failed to join multicast group: {}", err]
                                     )
@@ -453,7 +452,7 @@ impl UdpSinkPadHandler {
                         }
                         if settings.multicast_loop {
                             socket.set_multicast_loop_v4(true).map_err(|err| {
-                                gst_error_msg!(
+                                error_msg!(
                                     gst::ResourceError::OpenWrite,
                                     ["Failed to set multicast loop: {}", err]
                                 )
@@ -462,7 +461,7 @@ impl UdpSinkPadHandler {
                         socket
                             .set_multicast_ttl_v4(settings.ttl_mc)
                             .map_err(|err| {
-                                gst_error_msg!(
+                                error_msg!(
                                     gst::ResourceError::OpenWrite,
                                     ["Failed to set multicast ttl: {}", err]
                                 )
@@ -473,7 +472,7 @@ impl UdpSinkPadHandler {
                     if let Some(socket) = socket_v6.as_mut() {
                         if settings.auto_multicast {
                             socket.join_multicast_v6(&addr, 0).map_err(|err| {
-                                gst_error_msg!(
+                                error_msg!(
                                     gst::ResourceError::OpenWrite,
                                     ["Failed to join multicast group: {}", err]
                                 )
@@ -481,7 +480,7 @@ impl UdpSinkPadHandler {
                         }
                         if settings.multicast_loop {
                             socket.set_multicast_loop_v6(true).map_err(|err| {
-                                gst_error_msg!(
+                                error_msg!(
                                     gst::ResourceError::OpenWrite,
                                     ["Failed to set multicast loop: {}", err]
                                 )
@@ -496,7 +495,7 @@ impl UdpSinkPadHandler {
                 IpAddr::V4(_) => {
                     if let Some(socket) = socket.as_mut() {
                         socket.set_ttl(settings.ttl).map_err(|err| {
-                            gst_error_msg!(
+                            error_msg!(
                                 gst::ResourceError::OpenWrite,
                                 ["Failed to set unicast ttl: {}", err]
                             )
@@ -506,7 +505,7 @@ impl UdpSinkPadHandler {
                 IpAddr::V6(_) => {
                     if let Some(socket) = socket_v6.as_mut() {
                         socket.set_ttl(settings.ttl).map_err(|err| {
-                            gst_error_msg!(
+                            error_msg!(
                                 gst::ResourceError::OpenWrite,
                                 ["Failed to set unicast ttl: {}", err]
                             )
@@ -534,7 +533,7 @@ impl UdpSinkPadHandler {
                             socket
                                 .leave_multicast_v4(addr, Ipv4Addr::new(0, 0, 0, 0))
                                 .map_err(|err| {
-                                    gst_error_msg!(
+                                    error_msg!(
                                         gst::ResourceError::OpenWrite,
                                         ["Failed to join multicast group: {}", err]
                                     )
@@ -546,7 +545,7 @@ impl UdpSinkPadHandler {
                     if let Some(socket) = socket_v6.as_mut() {
                         if settings.auto_multicast {
                             socket.leave_multicast_v6(&addr, 0).map_err(|err| {
-                                gst_error_msg!(
+                                error_msg!(
                                     gst::ResourceError::OpenWrite,
                                     ["Failed to join multicast group: {}", err]
                                 )
@@ -612,7 +611,7 @@ impl UdpSinkPadHandler {
             for client in &clients_to_configure {
                 self.configure_client(&settings, &mut socket, &mut socket_v6, &client)
                     .map_err(|err| {
-                        gst_element_error!(
+                        element_error!(
                             element,
                             gst::StreamError::Failed,
                             ["Failed to configure client {:?}: {}", client, err]
@@ -627,7 +626,7 @@ impl UdpSinkPadHandler {
             for client in &clients_to_unconfigure {
                 self.unconfigure_client(&settings, &mut socket, &mut socket_v6, &client)
                     .map_err(|err| {
-                        gst_element_error!(
+                        element_error!(
                             element,
                             gst::StreamError::Failed,
                             ["Failed to unconfigure client {:?}: {}", client, err]
@@ -643,7 +642,7 @@ impl UdpSinkPadHandler {
         }
 
         let data = buffer.map_readable().map_err(|_| {
-            gst_element_error!(
+            element_error!(
                 element,
                 gst::StreamError::Format,
                 ["Failed to map buffer readable"]
@@ -661,7 +660,7 @@ impl UdpSinkPadHandler {
             if let Some(socket) = socket.as_mut() {
                 gst_log!(CAT, obj: element, "Sending to {:?}", &client);
                 socket.send_to(&data, client).await.map_err(|err| {
-                    gst_element_error!(
+                    element_error!(
                         element,
                         gst::StreamError::Failed,
                         ("I/O error"),
@@ -670,7 +669,7 @@ impl UdpSinkPadHandler {
                     gst::FlowError::Error
                 })?;
             } else {
-                gst_element_error!(
+                element_error!(
                     element,
                     gst::StreamError::Failed,
                     ("I/O error"),
@@ -849,7 +848,7 @@ impl TaskImpl for UdpSinkTask {
                 Some(TaskItem::Buffer(buffer)) => {
                     match self.sink_pad_handler.render(&self.element, buffer).await {
                         Err(err) => {
-                            gst_element_error!(
+                            element_error!(
                                 &self.element,
                                 gst::StreamError::Failed,
                                 ["Failed to render item, stopping task: {}", err]
@@ -919,7 +918,7 @@ impl UdpSink {
 
             let socket = context.enter(|| {
                 tokio::net::UdpSocket::from_std(socket).map_err(|err| {
-                    gst_error_msg!(
+                    error_msg!(
                         gst::ResourceError::OpenWrite,
                         ["Failed to setup socket for tokio: {}", err]
                     )
@@ -943,7 +942,7 @@ impl UdpSink {
             };
 
             let bind_addr: IpAddr = bind_addr.parse().map_err(|err| {
-                gst_error_msg!(
+                error_msg!(
                     gst::ResourceError::Settings,
                     ["Invalid address '{}' set: {}", bind_addr, err]
                 )
@@ -988,7 +987,7 @@ impl UdpSink {
             };
 
             socket.bind(&saddr.into()).map_err(|err| {
-                gst_error_msg!(
+                error_msg!(
                     gst::ResourceError::OpenWrite,
                     ["Failed to bind socket: {}", err]
                 )
@@ -996,7 +995,7 @@ impl UdpSink {
 
             let socket = context.enter(|| {
                 tokio::net::UdpSocket::from_std(socket.into()).map_err(|err| {
-                    gst_error_msg!(
+                    error_msg!(
                         gst::ResourceError::OpenWrite,
                         ["Failed to setup socket for tokio: {}", err]
                     )
@@ -1007,7 +1006,7 @@ impl UdpSink {
 
             if settings.qos_dscp != -1 {
                 wrapper.set_tos(settings.qos_dscp).map_err(|err| {
-                    gst_error_msg!(
+                    error_msg!(
                         gst::ResourceError::OpenWrite,
                         ["Failed to set QoS DSCP: {}", err]
                     )
@@ -1038,7 +1037,7 @@ impl UdpSink {
             let settings = self.settings.lock().unwrap();
 
             Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
-                gst_error_msg!(
+                error_msg!(
                     gst::ResourceError::OpenWrite,
                     ["Failed to acquire Context: {}", err]
                 )
@@ -1052,7 +1051,7 @@ impl UdpSink {
         self.task
             .prepare(UdpSinkTask::new(&element, &self.sink_pad_handler), context)
             .map_err(|err| {
-                gst_error_msg!(
+                error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error preparing Task: {:?}", err]
                 )

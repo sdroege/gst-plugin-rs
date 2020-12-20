@@ -20,8 +20,7 @@ use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{
-    gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info, gst_log, gst_loggable_error,
-    gst_warning,
+    element_error, error_msg, gst_debug, gst_error, gst_info, gst_log, gst_warning, loggable_error,
 };
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
@@ -194,13 +193,13 @@ impl CsoundFilter {
         if let Some(ref location) = settings.location {
             csound
                 .compile_csd(location)
-                .map_err(|e| gst_error_msg!(gst::LibraryError::Failed, [e]))?;
+                .map_err(|e| error_msg!(gst::LibraryError::Failed, [e]))?;
         } else if let Some(ref text) = settings.csd_text {
             csound
                 .compile_csd_text(text)
-                .map_err(|e| gst_error_msg!(gst::LibraryError::Failed, [e]))?;
+                .map_err(|e| error_msg!(gst::LibraryError::Failed, [e]))?;
         } else {
-            return Err(gst_error_msg!(
+            return Err(error_msg!(
                 gst::LibraryError::Failed,
                 ["No Csound score specified to compile. Use either location or csd-text but not both"]
             ));
@@ -500,7 +499,7 @@ impl BaseTransformImpl for CsoundFilter {
         csound.set_score_offset_seconds(settings.offset);
 
         if let Err(e) = csound.start() {
-            return Err(gst_error_msg!(gst::LibraryError::Failed, [e]));
+            return Err(error_msg!(gst::LibraryError::Failed, [e]));
         }
 
         Ok(())
@@ -589,15 +588,14 @@ impl BaseTransformImpl for CsoundFilter {
     ) -> Result<(), gst::LoggableError> {
         // Flush previous state
         if self.state.lock().unwrap().is_some() {
-            self.drain(element).map_err(|e| {
-                gst_loggable_error!(CAT, "Error flusing previous state data {:?}", e)
-            })?;
+            self.drain(element)
+                .map_err(|e| loggable_error!(CAT, "Error flusing previous state data {:?}", e))?;
         }
 
         let in_info = gst_audio::AudioInfo::from_caps(incaps)
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to parse input caps"))?;
+            .map_err(|_| loggable_error!(CAT, "Failed to parse input caps"))?;
         let out_info = gst_audio::AudioInfo::from_caps(outcaps)
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to parse output caps"))?;
+            .map_err(|_| loggable_error!(CAT, "Failed to parse output caps"))?;
 
         let csound = self.csound.lock().unwrap();
 
@@ -607,19 +605,19 @@ impl BaseTransformImpl for CsoundFilter {
 
         // Check if the negotiated caps are the right ones
         if rate != out_info.rate() || rate != csound.get_sample_rate() as _ {
-            return Err(gst_loggable_error!(
+            return Err(loggable_error!(
                 CAT,
                 "Failed to negotiate caps: invalid sample rate {}",
                 rate
             ));
         } else if ichannels != csound.input_channels() {
-            return Err(gst_loggable_error!(
+            return Err(loggable_error!(
                 CAT,
                 "Failed to negotiate caps: input channels {} not supported",
                 ichannels
             ));
         } else if ochannels != csound.output_channels() {
-            return Err(gst_loggable_error!(
+            return Err(loggable_error!(
                 CAT,
                 "Failed to negotiate caps: output channels {} not supported",
                 ochannels
@@ -655,7 +653,7 @@ impl BaseTransformImpl for CsoundFilter {
 
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().ok_or_else(|| {
-                gst_element_error!(
+                element_error!(
                     element,
                     gst::CoreError::Negotiation,
                     ["Can not generate an output without State"]

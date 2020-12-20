@@ -72,7 +72,7 @@ use futures::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_loggable_error};
+use gst::{gst_debug, gst_error, gst_fixme, gst_log};
 use gst::{FlowError, FlowSuccess};
 
 use std::marker::PhantomData;
@@ -145,7 +145,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
                     "Error in PadSrc activate: {:?}",
                     err
                 );
-                gst_loggable_error!(RUNTIME_CAT, "Error in PadSrc activate: {:?}", err)
+                gst::loggable_error!(RUNTIME_CAT, "Error in PadSrc activate: {:?}", err)
             })
     }
 
@@ -335,7 +335,7 @@ impl<'a> PadSrcRef<'a> {
 
         if mode == gst::PadMode::Pull {
             gst_error!(RUNTIME_CAT, obj: self.gst_pad(), "Pull mode not supported by PadSrc");
-            return Err(gst_loggable_error!(
+            return Err(gst::loggable_error!(
                 RUNTIME_CAT,
                 "Pull mode not supported by PadSrc"
             ));
@@ -398,7 +398,10 @@ impl PadSrc {
                         parent,
                         || {
                             gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSrc activate");
-                            Err(gst_loggable_error!(RUNTIME_CAT, "Panic in PadSrc activate"))
+                            Err(gst::loggable_error!(
+                                RUNTIME_CAT,
+                                "Panic in PadSrc activate"
+                            ))
                         },
                         move |imp, element| {
                             let this_ref = PadSrcRef::new(inner_arc);
@@ -421,7 +424,7 @@ impl PadSrc {
                         parent,
                         || {
                             gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSrc activatemode");
-                            Err(gst_loggable_error!(
+                            Err(gst::loggable_error!(
                                 RUNTIME_CAT,
                                 "Panic in PadSrc activatemode"
                             ))
@@ -492,11 +495,11 @@ impl Drop for PadSrc {
         unsafe {
             self.gst_pad()
                 .set_activate_function(move |_gst_pad, _parent| {
-                    Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
+                    Err(gst::loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
                 });
             self.gst_pad()
                 .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
-                    Err(gst_loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
+                    Err(gst::loggable_error!(RUNTIME_CAT, "PadSrc no longer exists"))
                 });
             self.gst_pad()
                 .set_event_function(move |_gst_pad, _parent, _event| false);
@@ -553,7 +556,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
                     "Error in PadSink activate: {:?}",
                     err
                 );
-                gst_loggable_error!(RUNTIME_CAT, "Error in PadSink activate: {:?}", err)
+                gst::loggable_error!(RUNTIME_CAT, "Error in PadSink activate: {:?}", err)
             })
     }
 
@@ -746,7 +749,7 @@ impl<'a> PadSinkRef<'a> {
 
         if mode == gst::PadMode::Pull {
             gst_error!(RUNTIME_CAT, obj: self.gst_pad(), "Pull mode not supported by PadSink");
-            return Err(gst_loggable_error!(
+            return Err(gst::loggable_error!(
                 RUNTIME_CAT,
                 "Pull mode not supported by PadSink"
             ));
@@ -816,7 +819,7 @@ impl PadSink {
                         parent,
                         || {
                             gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSink activate");
-                            Err(gst_loggable_error!(
+                            Err(gst::loggable_error!(
                                 RUNTIME_CAT,
                                 "Panic in PadSink activate"
                             ))
@@ -842,7 +845,7 @@ impl PadSink {
                         parent,
                         || {
                             gst_error!(RUNTIME_CAT, obj: gst_pad, "Panic in PadSink activatemode");
-                            Err(gst_loggable_error!(
+                            Err(gst::loggable_error!(
                                 RUNTIME_CAT,
                                 "Panic in PadSink activatemode"
                             ))
@@ -1031,11 +1034,17 @@ impl Drop for PadSink {
         unsafe {
             self.gst_pad()
                 .set_activate_function(move |_gst_pad, _parent| {
-                    Err(gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists"))
+                    Err(gst::loggable_error!(
+                        RUNTIME_CAT,
+                        "PadSink no longer exists"
+                    ))
                 });
             self.gst_pad()
                 .set_activatemode_function(move |_gst_pad, _parent, _mode, _active| {
-                    Err(gst_loggable_error!(RUNTIME_CAT, "PadSink no longer exists"))
+                    Err(gst::loggable_error!(
+                        RUNTIME_CAT,
+                        "PadSink no longer exists"
+                    ))
                 });
             self.gst_pad()
                 .set_chain_function(move |_gst_pad, _parent, _buffer| Err(FlowError::Flushing));

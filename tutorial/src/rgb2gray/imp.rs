@@ -10,7 +10,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_info, gst_loggable_error};
+use gst::{gst_debug, gst_info};
 use gst_base::subclass::prelude::*;
 
 use std::i32;
@@ -382,11 +382,11 @@ impl BaseTransformImpl for Rgb2Gray {
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
         let in_info = match gst_video::VideoInfo::from_caps(incaps) {
-            Err(_) => return Err(gst_loggable_error!(CAT, "Failed to parse input caps")),
+            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
             Ok(info) => info,
         };
         let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
-            Err(_) => return Err(gst_loggable_error!(CAT, "Failed to parse output caps")),
+            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse output caps")),
             Ok(info) => info,
         };
 
@@ -429,7 +429,7 @@ impl BaseTransformImpl for Rgb2Gray {
         // Get a locked reference to our state, i.e. the input and output VideoInfo
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().ok_or_else(|| {
-            gst_element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
+            gst::element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
             gst::FlowError::NotNegotiated
         })?;
 
@@ -444,7 +444,7 @@ impl BaseTransformImpl for Rgb2Gray {
         let in_frame =
             gst_video::VideoFrameRef::from_buffer_ref_readable(inbuf.as_ref(), &state.in_info)
                 .map_err(|_| {
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::CoreError::Failed,
                         ["Failed to map input buffer readable"]
@@ -456,7 +456,7 @@ impl BaseTransformImpl for Rgb2Gray {
         let mut out_frame =
             gst_video::VideoFrameRef::from_buffer_ref_writable(outbuf, &state.out_info).map_err(
                 |_| {
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::CoreError::Failed,
                         ["Failed to map output buffer writable"]

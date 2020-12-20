@@ -11,7 +11,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info};
+use gst::{gst_debug, gst_error, gst_info};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
@@ -239,14 +239,14 @@ impl BaseSrcImpl for FileSrc {
 
         let settings = self.settings.lock().unwrap();
         let location = settings.location.as_ref().ok_or_else(|| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["File location is not defined"]
             )
         })?;
 
         let file = File::open(location).map_err(|err| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::OpenRead,
                 [
                     "Could not open file {} for reading: {}",
@@ -268,7 +268,7 @@ impl BaseSrcImpl for FileSrc {
     fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         if let State::Stopped = *state {
-            return Err(gst_error_msg!(
+            return Err(gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["FileSrc not started"]
             ));
@@ -296,14 +296,14 @@ impl BaseSrcImpl for FileSrc {
                 ref mut position,
             } => (file, position),
             State::Stopped => {
-                gst_element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
+                gst::element_error!(element, gst::CoreError::Failed, ["Not started yet"]);
                 return Err(gst::FlowError::Error);
             }
         };
 
         if *position != offset {
             file.seek(SeekFrom::Start(offset)).map_err(|err| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::LibraryError::Failed,
                     ["Failed to seek to {}: {}", offset, err.to_string()]
@@ -316,12 +316,12 @@ impl BaseSrcImpl for FileSrc {
 
         let size = {
             let mut map = buffer.map_writable().map_err(|_| {
-                gst_element_error!(element, gst::LibraryError::Failed, ["Failed to map buffer"]);
+                gst::element_error!(element, gst::LibraryError::Failed, ["Failed to map buffer"]);
                 gst::FlowError::Error
             })?;
 
             file.read(map.as_mut()).map_err(|err| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::LibraryError::Failed,
                     ["Failed to read at {}: {}", offset, err.to_string()]

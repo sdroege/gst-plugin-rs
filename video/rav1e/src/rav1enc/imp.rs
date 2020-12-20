@@ -9,8 +9,8 @@
 use atomic_refcell::AtomicRefCell;
 use glib::subclass;
 use glib::subclass::prelude::*;
+use gst::gst_debug;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_loggable_error};
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use once_cell::sync::Lazy;
@@ -490,7 +490,7 @@ impl VideoEncoderImpl for Rav1Enc {
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         self.finish(element)
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to drain"))?;
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
 
         let video_info = state.get_info();
         gst_debug!(CAT, obj: element, "Setting format {:?}", video_info);
@@ -612,11 +612,11 @@ impl VideoEncoderImpl for Rav1Enc {
         *self.state.borrow_mut() = Some(State {
             context: if video_info.format_info().depth()[0] > 8 {
                 Context::Sixteen(cfg.new_context().map_err(|err| {
-                    gst_loggable_error!(CAT, "Failed to create context: {:?}", err)
+                    gst::loggable_error!(CAT, "Failed to create context: {:?}", err)
                 })?)
             } else {
                 Context::Eight(cfg.new_context().map_err(|err| {
-                    gst_loggable_error!(CAT, "Failed to create context: {:?}", err)
+                    gst::loggable_error!(CAT, "Failed to create context: {:?}", err)
                 })?)
             },
             video_info,
@@ -624,10 +624,10 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let output_state = element
             .set_output_state(gst::Caps::new_simple("video/x-av1", &[]), Some(state))
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to set output state"))?;
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
         element
             .negotiate(output_state)
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to negotiate"))?;
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to negotiate"))?;
 
         self.parent_set_format(element, state)
     }
@@ -685,7 +685,7 @@ impl VideoEncoderImpl for Rav1Enc {
         let in_frame =
             gst_video::VideoFrameRef::from_buffer_ref_readable(&*input_buffer, &state.video_info)
                 .map_err(|_| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Failed,
                     ["Failed to map output buffer readable"]
@@ -708,7 +708,7 @@ impl VideoEncoderImpl for Rav1Enc {
                 );
             }
             Err(data::EncoderStatus::Failure) => {
-                gst_element_error!(element, gst::CoreError::Failed, ["Failed to send frame"]);
+                gst::element_error!(element, gst::CoreError::Failed, ["Failed to send frame"]);
                 return Err(gst::FlowError::Error);
             }
             Err(_) => (),
@@ -748,7 +748,7 @@ impl Rav1Enc {
                     gst_debug!(CAT, obj: element, "Encoded but not output frame yet",);
                 }
                 Err(data::EncoderStatus::Failure) => {
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::CoreError::Failed,
                         ["Failed to receive frame"]

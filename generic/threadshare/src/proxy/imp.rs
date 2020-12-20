@@ -25,7 +25,7 @@ use glib::subclass::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+use gst::{gst_debug, gst_error, gst_log, gst_trace};
 
 use once_cell::sync::Lazy;
 
@@ -592,7 +592,7 @@ impl ProxySink {
         let proxy_context = self.settings.lock().unwrap().proxy_context.to_string();
 
         let proxy_ctx = ProxyContext::get(&proxy_context, true).ok_or_else(|| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to create or get ProxyContext"]
             )
@@ -823,7 +823,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
             EventView::FlushStart(..) => {
                 if let Err(err) = proxysrc.task.flush_start() {
                     gst_error!(SRC_CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -835,7 +835,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
             EventView::FlushStop(..) => {
                 if let Err(err) = proxysrc.task.flush_stop() {
                     gst_error!(SRC_CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -980,7 +980,7 @@ impl TaskImpl for ProxySrcTask {
                 }
                 Err(err) => {
                     gst_error!(SRC_CAT, obj: &self.element, "Got error {}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -1063,14 +1063,14 @@ impl ProxySrc {
         let settings = self.settings.lock().unwrap().clone();
 
         let proxy_ctx = ProxyContext::get(&settings.proxy_context, false).ok_or_else(|| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to create get shared_state"]
             )
         })?;
 
         let ts_ctx = Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::OpenRead,
                 ["Failed to acquire Context: {}", err]
             )
@@ -1112,7 +1112,7 @@ impl ProxySrc {
         self.task
             .prepare(ProxySrcTask::new(element, &self.src_pad, dataqueue), ts_ctx)
             .map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error preparing Task: {:?}", err]
                 )

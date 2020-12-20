@@ -13,7 +13,7 @@ use glib::subclass::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_loggable_error};
+use gst::{gst_debug, gst_error};
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 
@@ -168,7 +168,7 @@ impl State {
         encoder.set_filter(png::FilterType::from(settings.filter));
         // Write the header for this video format into our inner buffer
         let writer = encoder.write_header().map_err(|e| {
-            gst_loggable_error!(CAT, "Failed to create encoder error: {}", e.to_string())
+            gst::loggable_error!(CAT, "Failed to create encoder error: {}", e.to_string())
         })?;
         self.writer = Some(writer);
         Ok(())
@@ -319,10 +319,10 @@ impl VideoEncoderImpl for PngEncoder {
 
         let output_state = element
             .set_output_state(gst::Caps::new_simple("image/png", &[]), Some(state))
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to set output state"))?;
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
         element
             .negotiate(output_state)
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to negotiate"))
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to negotiate"))
     }
 
     fn handle_frame(
@@ -347,7 +347,7 @@ impl VideoEncoderImpl for PngEncoder {
             let input_map = input_buffer.map_readable().unwrap();
             let data = input_map.as_slice();
             state.write_data(data).map_err(|e| {
-                gst_element_error!(element, gst::CoreError::Failed, [&e.to_string()]);
+                gst::element_error!(element, gst::CoreError::Failed, [&e.to_string()]);
                 gst::FlowError::Error
             })?;
         }

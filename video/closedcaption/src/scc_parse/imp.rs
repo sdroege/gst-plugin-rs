@@ -21,8 +21,8 @@ use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{
-    gst_debug, gst_element_error, gst_error, gst_fixme, gst_info, gst_log, gst_loggable_error,
-    gst_trace, gst_warning,
+    element_error, gst_debug, gst_error, gst_fixme, gst_info, gst_log, gst_trace, gst_warning,
+    loggable_error,
 };
 
 use std::cmp;
@@ -163,7 +163,7 @@ impl State {
                         .as_ref()
                         .map(Clone::clone)
                         .ok_or_else(|| {
-                            gst_element_error!(
+                            element_error!(
                                 element,
                                 gst::StreamError::Decode,
                                 ["Invalid first timecode {:?}", timecode]
@@ -300,7 +300,7 @@ impl SccParse {
         let drain;
         if let Some(buffer) = buffer {
             let buffer = buffer.into_mapped_buffer_readable().map_err(|_| {
-                gst_element_error!(
+                element_error!(
                     element,
                     gst::ResourceError::Read,
                     ["Failed to map buffer readable"]
@@ -325,7 +325,7 @@ impl SccParse {
                     gst_debug!(CAT, obj: element, "Got line '{:?}'", line);
                 }
                 Err((line, err)) => {
-                    gst_element_error!(
+                    element_error!(
                         element,
                         gst::StreamError::Decode,
                         ["Couldn't parse line '{:?}': {:?}", line, err]
@@ -523,7 +523,7 @@ impl SccParse {
             parse.loop_fn(&element);
         });
         if res.is_err() {
-            return Err(gst_loggable_error!(CAT, "Failed to start pad task"));
+            return Err(loggable_error!(CAT, "Failed to start pad task"));
         }
         Ok(())
     }
@@ -556,19 +556,13 @@ impl SccParse {
         let mut q = gst::query::Duration::new(gst::Format::Bytes);
 
         if !self.sinkpad.peer_query(&mut q) {
-            return Err(gst_loggable_error!(
-                CAT,
-                "Failed to query upstream duration"
-            ));
+            return Err(loggable_error!(CAT, "Failed to query upstream duration"));
         }
 
         let size = match q.get_result().try_into().unwrap() {
             gst::format::Bytes(Some(size)) => size,
             gst::format::Bytes(None) => {
-                return Err(gst_loggable_error!(
-                    CAT,
-                    "Failed to query upstream duration"
-                ));
+                return Err(loggable_error!(CAT, "Failed to query upstream duration"));
             }
         };
 
@@ -586,7 +580,7 @@ impl SccParse {
                     buffers.push(buffer);
                 }
                 Err(flow) => {
-                    return Err(gst_loggable_error!(
+                    return Err(loggable_error!(
                         CAT,
                         "Failed to pull buffer while scanning duration: {:?}",
                         flow
@@ -601,7 +595,7 @@ impl SccParse {
                 let buf = buf
                     .clone()
                     .into_mapped_buffer_readable()
-                    .map_err(|_| gst_loggable_error!(CAT, "Failed to map buffer readable"))?;
+                    .map_err(|_| loggable_error!(CAT, "Failed to map buffer readable"))?;
 
                 reader.push(buf);
             }
@@ -688,7 +682,7 @@ impl SccParse {
             Err(flow) => {
                 gst_error!(CAT, obj: &self.sinkpad, "Failed to pull, reason: {:?}", flow);
 
-                gst_element_error!(
+                element_error!(
                     element,
                     gst::StreamError::Failed,
                     ["Streaming stopped, failed to pull buffer"]
@@ -716,7 +710,7 @@ impl SccParse {
                         Err(err) => {
                             err.log();
 
-                            gst_element_error!(
+                            element_error!(
                                 element,
                                 gst::StreamError::Decode,
                                 ["Failed to scan duration"]
@@ -742,7 +736,7 @@ impl SccParse {
 
                         gst_error!(CAT, obj: element, "Pausing after flow {:?}", flow);
 
-                        gst_element_error!(
+                        element_error!(
                             element,
                             gst::StreamError::Failed,
                             ["Streaming stopped, reason: {:?}", flow]
@@ -1011,19 +1005,14 @@ impl ObjectSubclass for SccParse {
             .activate_function(|pad, parent| {
                 SccParse::catch_panic_pad_function(
                     parent,
-                    || Err(gst_loggable_error!(CAT, "Panic activating sink pad")),
+                    || Err(loggable_error!(CAT, "Panic activating sink pad")),
                     |parse, element| parse.sink_activate(pad, element),
                 )
             })
             .activatemode_function(|pad, parent, mode, active| {
                 SccParse::catch_panic_pad_function(
                     parent,
-                    || {
-                        Err(gst_loggable_error!(
-                            CAT,
-                            "Panic activating sink pad with mode"
-                        ))
-                    },
+                    || Err(loggable_error!(CAT, "Panic activating sink pad with mode")),
                     |parse, element| parse.sink_activatemode(pad, element, mode, active),
                 )
             })

@@ -26,7 +26,7 @@ use glib::prelude::*;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_info, gst_log, gst_loggable_error};
+use gst::{gst_debug, gst_error, gst_info, gst_log};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
@@ -430,7 +430,7 @@ First of all, we need to get notified whenever the caps that our source is confi
         use std::f64::consts::PI;
 
         let info = gst_audio::AudioInfo::from_caps(caps).map_err(|_| {
-            gst_loggable_error!(CAT, "Failed to build `AudioInfo` from caps {}", caps)
+            gst::loggable_error!(CAT, "Failed to build `AudioInfo` from caps {}", caps)
         })?;
 
         gst_debug!(CAT, obj: element, "Configuring for caps {}", caps);
@@ -588,7 +588,7 @@ Now that this is done, we need to implement the `PushSrc::create` virtual meth
         let mut state = self.state.lock().unwrap();
         let info = match state.info {
             None => {
-                gst_element_error!(element, gst::CoreError::Negotiation, ["Have no caps yet"]);
+                gst::element_error!(element, gst::CoreError::Negotiation, ["Have no caps yet"]);
                 return Err(gst::FlowReturn::NotNegotiated);
             }
             Some(ref info) => info.clone(),

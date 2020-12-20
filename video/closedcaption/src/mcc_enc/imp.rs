@@ -21,7 +21,7 @@ use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::structure;
 use gst::subclass::prelude::*;
-use gst::{gst_element_error, gst_error, gst_log, gst_trace};
+use gst::{gst_error, gst_log, gst_trace};
 
 use chrono::prelude::*;
 use uuid::Uuid;
@@ -300,7 +300,7 @@ impl MccEnc {
         let meta = buffer
             .get_meta::<gst_video::VideoTimeCodeMeta>()
             .ok_or_else(|| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::StreamError::Format,
                     ["Stream with timecodes on each buffer required"]
@@ -312,7 +312,7 @@ impl MccEnc {
         let _ = write!(outbuf, "{}\t", meta.get_tc());
 
         let map = buffer.map_readable().map_err(|_| {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Format,
                 ["Failed to map buffer readable"]
@@ -323,7 +323,7 @@ impl MccEnc {
 
         let len = map.len();
         if len >= 256 {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Format,
                 ["Too big buffer: {}", map.len()]

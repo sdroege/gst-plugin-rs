@@ -13,7 +13,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     flvdemux::register(plugin)
 }
 
-gst::gst_plugin_define!(
+gst::plugin_define!(
     rsflv,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

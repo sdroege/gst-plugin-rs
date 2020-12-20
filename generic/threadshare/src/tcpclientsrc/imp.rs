@@ -26,7 +26,7 @@ use glib::subclass::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+use gst::{gst_debug, gst_error, gst_log, gst_trace};
 
 use once_cell::sync::Lazy;
 
@@ -362,7 +362,7 @@ impl TaskImpl for TcpClientSrcTask {
             let socket = tokio::net::TcpStream::connect(self.saddr)
                 .await
                 .map_err(|err| {
-                    gst_error_msg!(
+                    gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to connect to {:?}: {:?}", self.saddr, err]
                     )
@@ -375,7 +375,7 @@ impl TaskImpl for TcpClientSrcTask {
                     TcpClientReader::new(socket),
                 )
                 .map_err(|err| {
-                    gst_error_msg!(
+                    gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Failed to prepare socket {:?}", err]
                     )
@@ -418,7 +418,7 @@ impl TaskImpl for TcpClientSrcTask {
                     gst_error!(CAT, obj: &self.element, "Got error {:?}", err);
                     match err {
                         SocketError::Gst(err) => {
-                            gst_element_error!(
+                            gst::element_error!(
                                 self.element,
                                 gst::StreamError::Failed,
                                 ("Internal data stream error"),
@@ -426,7 +426,7 @@ impl TaskImpl for TcpClientSrcTask {
                             );
                         }
                         SocketError::Io(err) => {
-                            gst_element_error!(
+                            gst::element_error!(
                                 self.element,
                                 gst::StreamError::Failed,
                                 ("I/O error"),
@@ -460,7 +460,7 @@ impl TaskImpl for TcpClientSrcTask {
                 }
                 Err(err) => {
                     gst_error!(CAT, obj: &self.element, "Got error {}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         self.element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -518,7 +518,7 @@ impl TcpClientSrc {
 
         let context =
             Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to acquire Context: {}", err]
                 )
@@ -526,14 +526,14 @@ impl TcpClientSrc {
 
         let host: IpAddr = match settings.host {
             None => {
-                return Err(gst_error_msg!(
+                return Err(gst::error_msg!(
                     gst::ResourceError::Settings,
                     ["No host set"]
                 ));
             }
             Some(ref host) => match host.parse() {
                 Err(err) => {
-                    return Err(gst_error_msg!(
+                    return Err(gst::error_msg!(
                         gst::ResourceError::Settings,
                         ["Invalid host '{}' set: {}", host, err]
                     ));
@@ -547,7 +547,7 @@ impl TcpClientSrc {
         let mut config = buffer_pool.get_config();
         config.set_params(None, settings.blocksize, 0, 0);
         buffer_pool.set_config(config).map_err(|_| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["Failed to configure buffer pool"]
             )
@@ -569,7 +569,7 @@ impl TcpClientSrc {
                 context,
             )
             .map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error preparing Task: {:?}", err]
                 )

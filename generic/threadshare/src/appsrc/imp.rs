@@ -27,7 +27,7 @@ use glib::subclass::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+use gst::{gst_debug, gst_error, gst_log, gst_trace};
 
 use once_cell::sync::Lazy;
 
@@ -351,7 +351,7 @@ impl TaskImpl for AppSrcTask {
                 Some(item) => item,
                 None => {
                     gst_error!(CAT, obj: &self.element, "SrcPad channel aborted");
-                    gst_element_error!(
+                    gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -379,7 +379,7 @@ impl TaskImpl for AppSrcTask {
                 }
                 Err(err) => {
                     gst_error!(CAT, obj: &self.element, "Got error {}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -490,14 +490,14 @@ impl AppSrc {
 
         let context =
             Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to acquire Context: {}", err]
                 )
             })?;
 
         let max_buffers = settings.max_buffers.try_into().map_err(|err| {
-            gst_error_msg!(
+            gst::error_msg!(
                 gst::ResourceError::Settings,
                 ["Invalid max-buffers: {}, {}", settings.max_buffers, err]
             )
@@ -514,7 +514,7 @@ impl AppSrc {
                 context,
             )
             .map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error preparing Task: {:?}", err]
                 )

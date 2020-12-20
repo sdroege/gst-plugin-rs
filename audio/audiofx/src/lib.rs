@@ -17,7 +17,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-gst::gst_plugin_define!(
+gst::plugin_define!(
     rsaudiofx,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

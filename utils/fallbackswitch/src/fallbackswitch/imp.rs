@@ -28,7 +28,9 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use glib::subclass;
+#[cfg(not(feature = "v1_18"))]
 use glib::subclass::prelude::*;
+#[cfg(not(feature = "v1_18"))]
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info, gst_log, gst_warning};
 

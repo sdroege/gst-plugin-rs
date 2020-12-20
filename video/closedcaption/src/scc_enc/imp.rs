@@ -21,7 +21,7 @@ use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::structure;
 use gst::subclass::prelude::*;
-use gst::{gst_element_error, gst_error, gst_log, gst_trace};
+use gst::{gst_error, gst_log, gst_trace};
 use gst_video::{self, ValidVideoTimeCode};
 
 use once_cell::sync::Lazy;
@@ -80,7 +80,7 @@ impl State {
         assert!(self.internal_buffer.len() < MAXIMUM_PACKETES_PER_LINE);
 
         if buffer.get_size() != 2 {
-            gst_element_error!(
+            gst::element_error!(
                 element,
                 gst::StreamError::Format,
                 ["Wrongly sized CEA608 packet: {}", buffer.get_size()]
@@ -92,7 +92,7 @@ impl State {
         let mut timecode = buffer
             .get_meta::<gst_video::VideoTimeCodeMeta>()
             .ok_or_else(|| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::StreamError::Format,
                     ["Stream with timecodes on each buffer required"]
@@ -157,7 +157,7 @@ impl State {
         let first_buf = self.internal_buffer.first().unwrap();
         for buffer in self.internal_buffer.iter() {
             let map = buffer.map_readable().map_err(|_| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::StreamError::Format,
                     ["Failed to map buffer readable"]

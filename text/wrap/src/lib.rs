@@ -23,7 +23,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gsttextwrap::register(plugin)
 }
 
-gst::gst_plugin_define!(
+gst::plugin_define!(
     rstextwrap,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,

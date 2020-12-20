@@ -25,7 +25,7 @@ use glib::subclass::prelude::*;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_error, gst_error_msg, gst_log, gst_trace};
+use gst::{gst_debug, gst_error, gst_log, gst_trace};
 
 use once_cell::sync::Lazy;
 
@@ -194,7 +194,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         if let EventView::FlushStart(..) = event.view() {
             if let Err(err) = queue.task.flush_start() {
                 gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::StreamError::Failed,
                     ("Internal data stream error"),
@@ -228,7 +228,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
             if let EventView::FlushStop(..) = event.view() {
                 if let Err(err) = queue.task.flush_stop() {
                     gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -321,7 +321,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
             EventView::FlushStop(..) => {
                 if let Err(err) = queue.task.flush_stop() {
                     gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -442,7 +442,7 @@ impl TaskImpl for QueueTask {
                 }
                 Err(err) => {
                     gst_error!(CAT, obj: &self.element, "Got error {}", err);
-                    gst_element_error!(
+                    gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
                         ("Internal data stream error"),
@@ -700,7 +700,7 @@ impl Queue {
 
         let context =
             Context::acquire(&settings.context, settings.context_wait).map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Failed to acquire Context: {}", err]
                 )
@@ -709,7 +709,7 @@ impl Queue {
         self.task
             .prepare(QueueTask::new(element, &self.src_pad, dataqueue), context)
             .map_err(|err| {
-                gst_error_msg!(
+                gst::error_msg!(
                     gst::ResourceError::OpenRead,
                     ["Error preparing Task: {:?}", err]
                 )

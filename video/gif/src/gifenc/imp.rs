@@ -9,8 +9,8 @@
 use atomic_refcell::AtomicRefCell;
 use glib::subclass;
 use glib::subclass::prelude::*;
+use gst::gst_debug;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_element_error, gst_loggable_error};
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use once_cell::sync::Lazy;
@@ -254,7 +254,7 @@ impl VideoEncoderImpl for GifEnc {
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         self.flush_encoder(element)
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to drain"))?;
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
 
         let video_info = state.get_info();
         gst_debug!(CAT, obj: element, "Setting format {:?}", video_info);
@@ -268,10 +268,10 @@ impl VideoEncoderImpl for GifEnc {
 
         let output_state = element
             .set_output_state(gst::Caps::new_simple("image/gif", &[]), Some(state))
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to set output state"))?;
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
         element
             .negotiate(output_state)
-            .map_err(|_| gst_loggable_error!(CAT, "Failed to negotiate"))?;
+            .map_err(|_| gst::loggable_error!(CAT, "Failed to negotiate"))?;
 
         self.parent_set_format(element, state)
     }
@@ -305,7 +305,7 @@ impl VideoEncoderImpl for GifEnc {
                 &state.video_info,
             )
             .map_err(|_| {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Failed,
                     ["Failed to map output buffer readable"]
@@ -326,7 +326,7 @@ impl VideoEncoderImpl for GifEnc {
             }
             let frame_delay = in_frame.buffer().get_pts() - state.gif_pts.unwrap();
             if frame_delay.is_none() {
-                gst_element_error!(
+                gst::element_error!(
                     element,
                     gst::CoreError::Failed,
                     ["No PTS set on input frame. Unable to calculate proper frame timing."]
@@ -367,7 +367,7 @@ impl VideoEncoderImpl for GifEnc {
             // encode new frame
             let context = state.context.as_mut().unwrap();
             if let Err(e) = context.write_frame(&gif_frame) {
-                gst_element_error!(element, gst::CoreError::Failed, [&e.to_string()]);
+                gst::element_error!(element, gst::CoreError::Failed, [&e.to_string()]);
                 return Err(gst::FlowError::Error);
             }
         }

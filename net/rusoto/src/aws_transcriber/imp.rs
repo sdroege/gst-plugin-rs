@@ -21,8 +21,7 @@ use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{
-    gst_debug, gst_element_error, gst_error, gst_error_msg, gst_info, gst_log, gst_loggable_error,
-    gst_warning,
+    element_error, error_msg, gst_debug, gst_error, gst_info, gst_log, gst_warning, loggable_error,
 };
 
 use std::default::Default;
@@ -419,7 +418,7 @@ impl Transcriber {
                 Message::Binary(buf) => {
                     let (_, pkt) = parse_packet(&buf).map_err(|err| {
                         gst_error!(CAT, obj: element, "Failed to parse packet: {}", err);
-                        gst_error_msg!(
+                        error_msg!(
                             gst::StreamError::Failed,
                             ["Failed to parse packet: {}", err]
                         )
@@ -437,7 +436,7 @@ impl Transcriber {
                                     payload,
                                     err
                                 );
-                                gst_error_msg!(
+                                error_msg!(
                                     gst::StreamError::Failed,
                                     ["Unexpected exception message: {} ({})", payload, err]
                                 )
@@ -449,7 +448,7 @@ impl Transcriber {
                             message.message
                         );
 
-                        return Err(gst_error_msg!(
+                        return Err(error_msg!(
                             gst::StreamError::Failed,
                             ["AWS raised an error: {}", message.message]
                         ));
@@ -457,7 +456,7 @@ impl Transcriber {
 
                     let mut transcript: Transcript =
                         serde_json::from_str(&payload).map_err(|err| {
-                            gst_error_msg!(
+                            error_msg!(
                                 gst::StreamError::Failed,
                                 ["Unexpected binary message: {} ({})", payload, err]
                             )
@@ -595,7 +594,7 @@ impl Transcriber {
             let transcribe = Self::from_instance(&element);
             match transcribe.loop_fn(&element, &mut receiver) {
                 Err(err) => {
-                    gst_element_error!(
+                    element_error!(
                         &element,
                         gst::StreamError::Failed,
                         ["Streaming failed: {}", err]
@@ -606,7 +605,7 @@ impl Transcriber {
             };
         });
         if res.is_err() {
-            return Err(gst_loggable_error!(CAT, "Failed to start pad task"));
+            return Err(loggable_error!(CAT, "Failed to start pad task"));
         }
         Ok(())
     }
@@ -731,7 +730,7 @@ impl Transcriber {
             EventView::Segment(e) => {
                 let segment = match e.get_segment().clone().downcast::<gst::ClockTime>() {
                     Err(segment) => {
-                        gst_element_error!(
+                        element_error!(
                             element,
                             gst::StreamError::Format,
                             [
@@ -834,7 +833,7 @@ impl Transcriber {
         gst_debug!(CAT, obj: element, "Handling {:?}", buffer);
 
         self.ensure_connection(element).map_err(|err| {
-            gst_element_error!(
+            element_error!(
                 &element,
                 gst::StreamError::Failed,
                 ["Streaming failed: {}", err]
@@ -880,7 +879,7 @@ impl Transcriber {
             .enter(|| futures::executor::block_on(EnvironmentProvider::default().credentials()))
             .map_err(|err| {
                 gst_error!(CAT, obj: element, "Failed to generate credentials: {}", err);
-                gst_error_msg!(
+                error_msg!(
                     gst::CoreError::Failed,
                     ["Failed to generate credentials: {}", err]
                 )
@@ -912,7 +911,7 @@ impl Transcriber {
             .enter(|| futures::executor::block_on(connect_async(format!("wss{}", &url[5..]))))
             .map_err(|err| {
                 gst_error!(CAT, obj: element, "Failed to connect: {}", err);
-                gst_error_msg!(gst::CoreError::Failed, ["Failed to connect: {}", err])
+                error_msg!(gst::CoreError::Failed, ["Failed to connect: {}", err])
             })?;
 
         let (ws_sink, mut ws_stream) = ws.split();
@@ -936,7 +935,7 @@ impl Transcriber {
                     Ok(msg) => msg,
                     Err(err) => {
                         gst_error!(CAT, "Failed to receive data: {}", err);
-                        gst_element_error!(
+                        element_error!(
                             element,
                             gst::StreamError::Failed,
                             ["Streaming failed: {}", err]
@@ -1027,12 +1026,7 @@ impl ObjectSubclass for Transcriber {
             .activatemode_function(|pad, parent, mode, active| {
                 Transcriber::catch_panic_pad_function(
                     parent,
-                    || {
-                        Err(gst_loggable_error!(
-                            CAT,
-                            "Panic activating src pad with mode"
-                        ))
-                    },
+                    || Err(loggable_error!(CAT, "Panic activating src pad with mode")),
                     |transcriber, element| transcriber.src_activatemode(pad, element, mode, active),
                 )
             })
