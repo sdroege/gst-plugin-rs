@@ -21,6 +21,7 @@ members = [
     "video/gif",
     "video/rav1e",
     "video/rspng",
+    "video/hsv",
     "text/wrap",
 ]
 

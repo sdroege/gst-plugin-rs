@@ -42,6 +42,7 @@ plugins_rep = {
   'gst-plugin-textwrap': 'libgstrstextwrap',
   'gst-plugin-threadshare': 'libgstthreadshare',
   'gst-plugin-togglerecord': 'libgsttogglerecord',
+  'gst-plugin-hsv': 'libgsthsv',
 }
 
 exclude = []
