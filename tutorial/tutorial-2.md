@@ -476,7 +476,7 @@ First of all, we need to get notified whenever the caps that our source is confi
     }
 ```
 
-In here we parse the caps into a [`AudioInfo`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer_audio/struct.AudioInfo.html) and then store that in our internal state, while updating various fields. We tell the base class about the number of bytes each buffer is usually going to hold, and update our current sample position, the stop sample position (when a seek with stop position happens, we need to know when to stop) and our accumulator. This happens by scaling both positions by the old and new sample rate. If we don't have an old sample rate, we assume nanoseconds (this will make more sense once seeking is implemented). The scaling is done with the help of the [`muldiv`](https://crates.io/crates/muldiv) crate, which implements scaling of integer types by a fraction with protection against overflows by doing up to 128 bit integer arithmetic for intermediate values.
+In here we parse the caps into a [`AudioInfo`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer_audio/struct.AudioInfo.html) and then store that in our internal state, while updating various fields. We tell the base class about the number of bytes each buffer is usually going to hold, and update our current sample position, the stop sample position (when a seek with stop position happens, we need to know when to stop) and our accumulator. This happens by scaling both positions by the old and new sample rate. If we don't have an old sample rate, we assume nanoseconds (this will make more sense once seeking is implemented). The scaling is done with the help of the [`muldiv`](https://crates.io/crates/muldiv) crate, which implements scaling of integer types by a fraction with protection against overflows by doing up to 128 bit integer arithmetic for intermediate values.
 
 The accumulator is the updated based on the current phase of the sine wave at the current sample position.
 
@@ -507,7 +507,7 @@ As a last step we post a new `LATENCY` message on the bus whenever the sample 
     }
 ```
 
-Here we take the caps that are passed in, truncate them (i.e. remove all but the very first [`Structure`](https://slomo.pages.freedesktop.org/rustdocs/gstreamer/gstreamer/structure/struct.Structure.html)) and then manually fixate the sample rate to the closest value to 48kHz. By default, caps fixation would result in the lowest possible sample rate but this is usually not desired.
+Here we take the caps that are passed in, truncate them (i.e. remove all but the very first [`Structure`](https://gstreamer.pages.freedesktop.org/gstreamer-rs/gstreamer/structure/struct.Structure.html)) and then manually fixate the sample rate to the closest value to 48kHz. By default, caps fixation would result in the lowest possible sample rate but this is usually not desired.
 
 For good measure, we also fixate the number of channels to the closest value to 1, but this would already be the default behaviour anyway. And then chain up to the parent class' implementation of `fixate`, which for now basically does the same as `caps.fixate()`. After this, the caps are fixated, i.e. there is only a single `Structure` left and all fields have concrete values (no ranges or sets).
 
