@@ -82,6 +82,93 @@ impl ObjectSubclass for HsvDetector {
     type ParentType = gst_base::BaseTransform;
 }
 
+fn video_input_formats() -> Vec<glib::SendValue> {
+    let values = [
+        gst_video::VideoFormat::Rgbx,
+        gst_video::VideoFormat::Xrgb,
+        gst_video::VideoFormat::Bgrx,
+        gst_video::VideoFormat::Xbgr,
+        gst_video::VideoFormat::Rgb,
+        gst_video::VideoFormat::Bgr,
+    ];
+    values.iter().map(|i| i.to_str().to_send_value()).collect()
+}
+
+fn video_output_formats() -> Vec<glib::SendValue> {
+    let values = [
+        gst_video::VideoFormat::Rgba,
+        gst_video::VideoFormat::Argb,
+        gst_video::VideoFormat::Bgra,
+        gst_video::VideoFormat::Abgr,
+    ];
+    values.iter().map(|i| i.to_str().to_send_value()).collect()
+}
+
+impl HsvDetector {
+    #[inline]
+    fn hsv_detect<CF, DF>(
+        &self,
+        in_frame: &gst_video::video_frame::VideoFrameRef<&gst::buffer::BufferRef>,
+        out_frame: &mut gst_video::video_frame::VideoFrameRef<&mut gst::buffer::BufferRef>,
+        to_hsv: CF,
+        apply_alpha: DF,
+    ) where
+        CF: Fn(&[u8]) -> [f32; 3],
+        DF: Fn(&[u8], &mut [u8], u8),
+    {
+        let settings = self.settings.lock().unwrap();
+
+        // Keep the various metadata we need for working with the video frames in
+        // local variables. This saves some typing below.
+        let width = in_frame.width() as usize;
+        let in_stride = in_frame.plane_stride()[0] as usize;
+        let in_data = in_frame.plane_data(0).unwrap();
+        let out_stride = out_frame.plane_stride()[0] as usize;
+        let out_data = out_frame.plane_data_mut(0).unwrap();
+        let nb_input_channels = in_frame.format_info().pixel_stride()[0] as usize;
+
+        assert_eq!(out_data.len() / out_stride, in_data.len() / in_stride);
+        assert_eq!(in_data.len() % nb_input_channels, 0);
+
+        let in_line_bytes = width * nb_input_channels;
+        let out_line_bytes = width * 4;
+
+        assert!(in_line_bytes <= in_stride);
+        assert!(out_line_bytes <= out_stride);
+
+        for (in_line, out_line) in in_data
+            .chunks_exact(in_stride)
+            .zip(out_data.chunks_exact_mut(out_stride))
+        {
+            for (in_p, out_p) in in_line[..in_line_bytes]
+                .chunks_exact(nb_input_channels)
+                .zip(out_line[..out_line_bytes].chunks_exact_mut(4))
+            {
+                let hsv = to_hsv(in_p);
+
+                // We handle hue being circular here
+                let ref_hue_offset = 180.0 - settings.hue_ref;
+                let mut shifted_hue = hsv[0] + ref_hue_offset;
+
+                if shifted_hue < 0.0 {
+                    shifted_hue += 360.0;
+                }
+
+                shifted_hue %= 360.0;
+
+                if (shifted_hue - 180.0).abs() <= settings.hue_var
+                    && (hsv[1] - settings.saturation_ref).abs() <= settings.saturation_var
+                    && (hsv[2] - settings.value_ref).abs() <= settings.value_var
+                {
+                    apply_alpha(in_p, out_p, 255);
+                } else {
+                    apply_alpha(in_p, out_p, 0);
+                };
+            }
+        }
+    }
+}
+
 impl ObjectImpl for HsvDetector {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
@@ -282,10 +369,7 @@ impl ElementImpl for HsvDetector {
             let caps = gst::Caps::new_simple(
                 "video/x-raw",
                 &[
-                    (
-                        "format",
-                        &gst::List::new(&[&gst_video::VideoFormat::Rgba.to_str()]),
-                    ),
+                    ("format", &gst::List::from_owned(video_output_formats())),
                     ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
                     ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
                     (
@@ -310,10 +394,7 @@ impl ElementImpl for HsvDetector {
             let caps = gst::Caps::new_simple(
                 "video/x-raw",
                 &[
-                    (
-                        "format",
-                        &gst::List::new(&[&gst_video::VideoFormat::Rgbx.to_str()]),
-                    ),
+                    ("format", &gst::List::from_owned(video_input_formats())),
                     ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
                     ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
                     (
@@ -358,7 +439,7 @@ impl BaseTransformImpl for HsvDetector {
             let mut caps = caps.clone();
 
             for s in caps.make_mut().iter_mut() {
-                s.set("format", &gst_video::VideoFormat::Rgbx.to_str());
+                s.set("format", &gst::List::from_owned(video_input_formats()));
             }
 
             caps
@@ -366,7 +447,7 @@ impl BaseTransformImpl for HsvDetector {
             let mut caps = caps.clone();
 
             for s in caps.make_mut().iter_mut() {
-                s.set("format", &gst_video::VideoFormat::Rgba.to_str());
+                s.set("format", &gst::List::from_owned(video_output_formats()));
             }
 
             caps
@@ -439,8 +520,6 @@ impl BaseTransformImpl for HsvDetector {
         inbuf: &gst::Buffer,
         outbuf: &mut gst::BufferRef,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let settings = *self.settings.lock().unwrap();
-
         let mut state_guard = self.state.borrow_mut();
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
@@ -468,57 +547,283 @@ impl BaseTransformImpl for HsvDetector {
                 },
             )?;
 
-        // Keep the various metadata we need for working with the video frames in
-        // local variables. This saves some typing below.
-        let width = in_frame.width() as usize;
-        let in_stride = in_frame.plane_stride()[0] as usize;
-        let in_data = in_frame.plane_data(0).unwrap();
-        let out_stride = out_frame.plane_stride()[0] as usize;
-        let out_data = out_frame.plane_data_mut(0).unwrap();
-
-        assert_eq!(in_data.len() % 4, 0);
-        assert_eq!(out_data.len() / out_stride, in_data.len() / in_stride);
-
-        let in_line_bytes = width * 4;
-        let out_line_bytes = width * 4;
-
-        assert!(in_line_bytes <= in_stride);
-        assert!(out_line_bytes <= out_stride);
-
-        for (in_line, out_line) in in_data
-            .chunks_exact(in_stride)
-            .zip(out_data.chunks_exact_mut(out_stride))
-        {
-            for (in_p, out_p) in in_line[..in_line_bytes]
-                .chunks_exact(4)
-                .zip(out_line[..out_line_bytes].chunks_exact_mut(4))
-            {
-                assert_eq!(out_p.len(), 4);
-                let hsv =
-                    hsvutils::from_rgb(in_p[..3].try_into().expect("slice with incorrect length"));
-
-                // We handle hue being circular here
-                let ref_hue_offset = 180.0 - settings.hue_ref;
-                let mut shifted_hue = hsv[0] + ref_hue_offset;
-
-                if shifted_hue < 0.0 {
-                    shifted_hue += 360.0;
+        match state.in_info.format() {
+            gst_video::VideoFormat::Rgbx | gst_video::VideoFormat::Rgb => {
+                match state.out_info.format() {
+                    gst_video::VideoFormat::Rgba => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_rgb(
+                                    in_p[..3].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[..3].copy_from_slice(&in_p[..3]);
+                                out_p[3] = val;
+                            },
+                        );
+                    }
+                    gst_video::VideoFormat::Argb => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_rgb(
+                                    in_p[..3].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[1..4].copy_from_slice(&in_p[..3]);
+                                out_p[0] = val;
+                            },
+                        );
+                    }
+                    gst_video::VideoFormat::Bgra => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_rgb(
+                                    in_p[..3].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[0] = in_p[2];
+                                out_p[1] = in_p[1];
+                                out_p[2] = in_p[0];
+                                out_p[3] = val;
+                            },
+                        );
+                    }
+                    gst_video::VideoFormat::Abgr => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_rgb(
+                                    in_p[..3].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[1] = in_p[2];
+                                out_p[2] = in_p[1];
+                                out_p[3] = in_p[0];
+                                out_p[0] = val;
+                            },
+                        );
+                    }
+                    _ => unreachable!(),
                 }
-
-                shifted_hue %= 360.0;
-
-                out_p[..3].copy_from_slice(&in_p[..3]);
-
-                out_p[3] = if (shifted_hue - 180.0).abs() <= settings.hue_var
-                    && (hsv[1] - settings.saturation_ref).abs() <= settings.saturation_var
-                    && (hsv[2] - settings.value_ref).abs() <= settings.value_var
-                {
-                    255
-                } else {
-                    0
+            }
+            gst_video::VideoFormat::Xrgb => {
+                match state.out_info.format() {
+                    gst_video::VideoFormat::Rgba => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_rgb(
+                                    in_p[1..4].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[..3].copy_from_slice(&in_p[1..4]);
+                                out_p[3] = val;
+                            },
+                        );
+                    }
+                    gst_video::VideoFormat::Argb => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_rgb(
+                                    in_p[1..4].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[1..4].copy_from_slice(&in_p[1..4]);
+                                out_p[0] = val;
+                            },
+                        );
+                    }
+                    gst_video::VideoFormat::Bgra => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_rgb(
+                                    in_p[1..4].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[0] = in_p[3];
+                                out_p[1] = in_p[2];
+                                out_p[2] = in_p[1];
+                                out_p[3] = val;
+                            },
+                        );
+                    }
+                    gst_video::VideoFormat::Abgr => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_rgb(
+                                    in_p[1..4].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[1] = in_p[3];
+                                out_p[2] = in_p[2];
+                                out_p[3] = in_p[1];
+                                out_p[0] = val;
+                            },
+                        );
+                    }
+                    _ => unreachable!(),
                 };
             }
-        }
+            gst_video::VideoFormat::Bgrx | gst_video::VideoFormat::Bgr => {
+                match state.out_info.format() {
+                    gst_video::VideoFormat::Rgba => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_bgr(
+                                    in_p[..3].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[0] = in_p[2];
+                                out_p[1] = in_p[1];
+                                out_p[2] = in_p[0];
+                                out_p[3] = val;
+                            },
+                        );
+                    }
+                    gst_video::VideoFormat::Argb => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_bgr(
+                                    in_p[..3].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[1] = in_p[2];
+                                out_p[2] = in_p[1];
+                                out_p[3] = in_p[0];
+                                out_p[0] = val;
+                            },
+                        );
+                    }
+                    gst_video::VideoFormat::Bgra => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_bgr(
+                                    in_p[..3].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[..3].copy_from_slice(&in_p[..3]);
+                                out_p[3] = val;
+                            },
+                        );
+                    }
+                    gst_video::VideoFormat::Abgr => {
+                        self.hsv_detect(
+                            &in_frame,
+                            &mut out_frame,
+                            |in_p| {
+                                hsvutils::from_bgr(
+                                    in_p[..3].try_into().expect("slice with incorrect length"),
+                                )
+                            },
+                            |in_p, out_p, val| {
+                                out_p[1..4].copy_from_slice(&in_p[..3]);
+                                out_p[0] = val;
+                            },
+                        );
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            gst_video::VideoFormat::Xbgr => match state.out_info.format() {
+                gst_video::VideoFormat::Rgba => {
+                    self.hsv_detect(
+                        &in_frame,
+                        &mut out_frame,
+                        |in_p| {
+                            hsvutils::from_bgr(
+                                in_p[1..4].try_into().expect("slice with incorrect length"),
+                            )
+                        },
+                        |in_p, out_p, val| {
+                            out_p[0] = in_p[3];
+                            out_p[1] = in_p[2];
+                            out_p[2] = in_p[1];
+                            out_p[3] = val;
+                        },
+                    );
+                }
+                gst_video::VideoFormat::Argb => {
+                    self.hsv_detect(
+                        &in_frame,
+                        &mut out_frame,
+                        |in_p| {
+                            hsvutils::from_bgr(
+                                in_p[1..4].try_into().expect("slice with incorrect length"),
+                            )
+                        },
+                        |in_p, out_p, val| {
+                            out_p[1] = in_p[3];
+                            out_p[2] = in_p[2];
+                            out_p[3] = in_p[1];
+                            out_p[0] = val;
+                        },
+                    );
+                }
+                gst_video::VideoFormat::Bgra => {
+                    self.hsv_detect(
+                        &in_frame,
+                        &mut out_frame,
+                        |in_p| {
+                            hsvutils::from_bgr(
+                                in_p[1..4].try_into().expect("slice with incorrect length"),
+                            )
+                        },
+                        |in_p, out_p, val| {
+                            out_p[..3].copy_from_slice(&in_p[1..4]);
+                            out_p[3] = val;
+                        },
+                    );
+                }
+                gst_video::VideoFormat::Abgr => {
+                    self.hsv_detect(
+                        &in_frame,
+                        &mut out_frame,
+                        |in_p| {
+                            hsvutils::from_bgr(
+                                in_p[1..4].try_into().expect("slice with incorrect length"),
+                            )
+                        },
+                        |in_p, out_p, val| {
+                            out_p[1..4].copy_from_slice(&in_p[1..4]);
+                            out_p[0] = val;
+                        },
+                    );
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        };
 
         Ok(gst::FlowSuccess::Ok)
     }
