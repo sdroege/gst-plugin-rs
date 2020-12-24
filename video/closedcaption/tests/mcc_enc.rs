@@ -96,7 +96,7 @@ Time Code Rate=30DF\r\n\
             .unwrap();
         enc.set_property(
             "creation-date",
-            &glib::DateTime::new_utc(2018, 12, 27, 17, 34, 47.0),
+            &glib::DateTime::new_utc(2018, 12, 27, 17, 34, 47.0).unwrap(),
         )
         .unwrap();
     }
