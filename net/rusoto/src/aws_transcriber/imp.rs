@@ -43,6 +43,8 @@ use std::pin::Pin;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use atomic_refcell::AtomicRefCell;
+
 use super::packet::*;
 
 use serde_derive::Deserialize;
@@ -200,14 +202,14 @@ impl Default for State {
     }
 }
 
-type WsSink = Pin<Box<dyn Sink<Message, Error = WsError> + Send>>;
+type WsSink = Pin<Box<dyn Sink<Message, Error = WsError> + Send + Sync>>;
 
 pub struct Transcriber {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     settings: Mutex<Settings>,
     state: Mutex<State>,
-    ws_sink: Mutex<Option<WsSink>>,
+    ws_sink: AtomicRefCell<Option<WsSink>>,
 }
 
 fn build_packet(payload: &[u8]) -> Vec<u8> {
@@ -801,7 +803,7 @@ impl Transcriber {
             tokio::time::delay_for(Duration::from_nanos(delay.nseconds().unwrap())).await;
         }
 
-        if let Some(ws_sink) = self.ws_sink.lock().unwrap().as_mut() {
+        if let Some(ws_sink) = self.ws_sink.borrow_mut().as_mut() {
             if let Some(buffer) = buffer {
                 let data = buffer.map_readable().unwrap();
                 for chunk in data.chunks(8192) {
@@ -916,7 +918,7 @@ impl Transcriber {
 
         let (ws_sink, mut ws_stream) = ws.split();
 
-        *self.ws_sink.lock().unwrap() = Some(Box::pin(ws_sink));
+        *self.ws_sink.borrow_mut() = Some(Box::pin(ws_sink));
 
         let element_weak = element.downgrade();
         let future = async move {
@@ -1047,7 +1049,7 @@ impl ObjectSubclass for Transcriber {
             sinkpad,
             settings,
             state: Mutex::new(State::default()),
-            ws_sink: Mutex::new(None),
+            ws_sink: AtomicRefCell::new(None),
         }
     }
 
