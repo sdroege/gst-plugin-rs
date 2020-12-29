@@ -72,7 +72,7 @@ fn test_have_cc_data_notify() {
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data");
     h.get_element()
         .unwrap()
-        .set_property("window", &(500_000_000 as u64))
+        .set_property("window", &(500_000_000u64))
         .unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));

@@ -57,7 +57,7 @@ fn test_push() {
         let socket = net::UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let dest = SocketAddr::new(ipaddr, 5000 as u16);
+        let dest = SocketAddr::new(ipaddr, 5000u16);
 
         for _ in 0..3 {
             socket.send_to(&buffer, dest).unwrap();
@@ -149,7 +149,7 @@ fn test_socket_reuse() {
         let socket = net::UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let dest = SocketAddr::new(ipaddr, 6000 as u16);
+        let dest = SocketAddr::new(ipaddr, 6000u16);
 
         for _ in 0..3 {
             socket.send_to(&buffer, dest).unwrap();
