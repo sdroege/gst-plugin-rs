@@ -67,7 +67,7 @@ impl<T: SocketRead> Socket<T> {
         element: gst::Element,
         buffer_pool: gst::BufferPool,
         reader: T,
-    ) -> Result<Self, ()> {
+    ) -> Result<Self, glib::BoolError> {
         // FIXME couldn't we just delegate this to caller?
         buffer_pool.set_active(true).map_err(|err| {
             gst_error!(
@@ -76,6 +76,8 @@ impl<T: SocketRead> Socket<T> {
                 "Failed to prepare socket: {}",
                 err
             );
+
+            err
         })?;
 
         Ok(Socket::<T> {
