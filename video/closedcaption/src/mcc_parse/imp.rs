@@ -722,13 +722,10 @@ impl MccParse {
                     let state = self.state.lock().unwrap();
                     let (framerate, drop_frame) = parse_timecode_rate(state.timecode_rate)
                         .map_err(|_| loggable_error!(CAT, "Failed to parse timecode rate"))?;
-                    last_tc = match parse_timecode(framerate, drop_frame, tc) {
-                        Ok(mut timecode) => {
-                            /* We're looking for the total duration */
-                            timecode.increment_frame();
-                            Some(timecode)
-                        }
-                        Err(_) => None,
+                    if let Ok(mut timecode) = parse_timecode(framerate, drop_frame, tc) {
+                        /* We're looking for the total duration */
+                        timecode.increment_frame();
+                        last_tc = Some(timecode);
                     }
                 }
                 /* We ignore everything else including errors */
