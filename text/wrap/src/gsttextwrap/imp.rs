@@ -95,18 +95,8 @@ impl Default for Settings {
     }
 }
 
-// FIXME: Not needed anymore after https://github.com/mgeisler/textwrap/pull/254
-#[derive(Debug)]
-struct Splitter(Box<dyn textwrap::WordSplitter + Send>);
-
-impl textwrap::WordSplitter for Splitter {
-    fn split_points(&self, word: &str) -> Vec<usize> {
-        self.0.split_points(word)
-    }
-}
-
 struct State {
-    options: Option<textwrap::Options<'static, Splitter>>,
+    options: Option<textwrap::Options<'static, Box<dyn textwrap::WordSplitter + Send>>>,
 }
 
 impl Default for State {
@@ -156,12 +146,12 @@ impl TextWrap {
 
             Some(textwrap::Options::with_splitter(
                 settings.columns as usize,
-                Splitter(Box::new(standard)),
+                Box::new(standard),
             ))
         } else {
             Some(textwrap::Options::with_splitter(
                 settings.columns as usize,
-                Splitter(Box::new(textwrap::NoHyphenation)),
+                Box::new(textwrap::NoHyphenation),
             ))
         };
     }

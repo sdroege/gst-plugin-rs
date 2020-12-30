@@ -10,7 +10,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 [dependencies]
 glib = { git = "https://github.com/gtk-rs/gtk-rs" }
 once_cell = "1.0"
-textwrap = { version = "0.13", features = ["hyphenation"] }
+textwrap = { version = "0.13.2", features = ["hyphenation"] }
 hyphenation = "0.8"
 
 [dependencies.gst]
