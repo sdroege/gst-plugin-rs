@@ -370,7 +370,7 @@ impl SccParse {
             // If we are in the middle of seeking, check whether this line
             // contains start frame, and if so, unset seeking flag
             let num_bufs = (data.len() / 2) as i64;
-            let mut end_timecode = parse_timecode(framerate, &tc).unwrap();
+            let mut end_timecode = timecode.clone();
             // add one more frame here so that add duration of the last frame
             end_timecode.add_frames(num_bufs + 1);
             let stop_time = gst::ClockTime::from(end_timecode.nsec_since_daily_jam());
