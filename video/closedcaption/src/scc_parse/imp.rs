@@ -109,6 +109,17 @@ fn parse_timecode(
 ) -> Result<gst_video::ValidVideoTimeCode, gst::FlowError> {
     use std::convert::TryFrom;
 
+    let mut tc = tc.clone();
+    // Workaround for various SCC files having invalid drop frame timecodes:
+    // Every full minute the first two timecodes are skipped, except for every tenth minute.
+    if tc.drop_frame
+        && tc.seconds == 0
+        && tc.minutes % 10 != 0
+        && (tc.frames == 0 || tc.frames == 1)
+    {
+        tc.frames = 2;
+    }
+
     let timecode = gst_video::VideoTimeCode::new(
         framerate,
         None,
