@@ -124,10 +124,7 @@ fn parse_timecode(
         0,
     );
 
-    match gst_video::ValidVideoTimeCode::try_from(timecode).map_err(|_| gst::FlowError::Error) {
-        Ok(timecode) => Ok(timecode),
-        Err(timecode) => Err(timecode),
-    }
+    gst_video::ValidVideoTimeCode::try_from(timecode).map_err(|_| gst::FlowError::Error)
 }
 
 impl State {
@@ -157,7 +154,7 @@ impl State {
     ) -> Result<gst_video::ValidVideoTimeCode, gst::FlowError> {
         match parse_timecode(framerate, &tc) {
             Ok(timecode) => Ok(timecode),
-            Err(timecode) => {
+            Err(err) => {
                 let last_timecode =
                     self.last_timecode
                         .as_ref()
@@ -166,7 +163,7 @@ impl State {
                             element_error!(
                                 element,
                                 gst::StreamError::Decode,
-                                ["Invalid first timecode {:?}", timecode]
+                                ["Invalid first timecode {:?}", err]
                             );
 
                             gst::FlowError::Error
@@ -176,7 +173,7 @@ impl State {
                     CAT,
                     obj: element,
                     "Invalid timecode {:?}, using previous {:?}",
-                    timecode,
+                    err,
                     last_timecode
                 );
 
