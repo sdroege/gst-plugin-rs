@@ -1061,6 +1061,9 @@ impl ToggleRecord {
             if state.eos {
                 return Err(gst::FlowError::Eos);
             }
+            if state.flushing {
+                return Err(gst::FlowError::Flushing);
+            }
         }
 
         let handle_result = if stream != self.main_stream {
