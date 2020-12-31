@@ -497,12 +497,14 @@ impl ToggleRecord {
                 // instead.
                 drop(rec_state);
 
-                while !self.other_streams.lock().0.iter().all(|s| {
-                    let s = s.state.lock();
-                    s.eos
-                        || (s.current_running_time.is_some()
-                            && s.current_running_time >= current_running_time)
-                }) {
+                while !state.flushing
+                    && !self.other_streams.lock().0.iter().all(|s| {
+                        let s = s.state.lock();
+                        s.eos
+                            || (s.current_running_time.is_some()
+                                && s.current_running_time >= current_running_time)
+                    })
+                {
                     gst_log!(CAT, obj: pad, "Waiting for other streams to stop");
                     self.main_stream_cond.wait(&mut state);
                 }
@@ -582,12 +584,14 @@ impl ToggleRecord {
                 // go EOS instead.
                 drop(rec_state);
 
-                while !self.other_streams.lock().0.iter().all(|s| {
-                    let s = s.state.lock();
-                    s.eos
-                        || (s.current_running_time.is_some()
-                            && s.current_running_time >= current_running_time)
-                }) {
+                while !state.flushing
+                    && !self.other_streams.lock().0.iter().all(|s| {
+                        let s = s.state.lock();
+                        s.eos
+                            || (s.current_running_time.is_some()
+                                && s.current_running_time >= current_running_time)
+                    })
+                {
                     gst_log!(CAT, obj: pad, "Waiting for other streams to start");
                     self.main_stream_cond.wait(&mut state);
                 }
