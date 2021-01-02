@@ -213,13 +213,18 @@ impl State {
         let res = if let Some(buffer) = buffer {
             let mut map = match buffer.map_writable() {
                 Ok(map) => map,
-                Err(_) => {
-                    gst_error!(CAT, obj: pad, "Failed to map provided buffer writable");
+                Err(e) => {
+                    gst_error!(
+                        CAT,
+                        obj: pad,
+                        "Failed to map provided buffer writable: {}",
+                        e
+                    );
                     return Err(gst::FlowError::Error);
                 }
             };
-            if let Err(_) = self.adapter.copy(0, &mut map[..available_size]) {
-                gst_error!(CAT, obj: pad, "Failed to copy into provided buffer");
+            if let Err(e) = self.adapter.copy(0, &mut map[..available_size]) {
+                gst_error!(CAT, obj: pad, "Failed to copy into provided buffer: {}", e);
                 return Err(gst::FlowError::Error);
             }
             if map.len() != available_size {
