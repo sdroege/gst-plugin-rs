@@ -56,7 +56,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper = {  git = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs" }
 ```
 
-We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later, and the `glib` crate to be able to use some GLib API that we’ll need. GStreamer is building upon GLib, and this leaks through in various places. We also have one build dependency on the `gst-plugin-version-helper` crate, which helps to get some information about the plugin for the `gst_plugin_define!` macro automatically, and the `once_cell` crate, which allows to declare lazily initialized global variables.
+We depend on the `gstreamer`, `gstreamer-base` and `gstreamer-video` crates for various GStreamer APIs that will be used later, and the `glib` crate to be able to use some GLib API that we’ll need. GStreamer is building upon GLib, and this leaks through in various places. We also have one build dependency on the `gst-plugin-version-helper` crate, which helps to get some information about the plugin for the `gst::plugin_define!` macro automatically, and the `once_cell` crate, which allows to declare lazily initialized global variables.
 
 With the basic project structure being set-up, we should be able to compile the project with `cargo build` now, which will download and build all dependencies and then creates a file called `target/debug/libgstrstutorial.so` (or .dll on Windows, .dylib on macOS). This is going to be our GStreamer plugin.
 
@@ -72,7 +72,7 @@ If you now run the `gst-inspect-1.0` tool on the `libgstrstutorial.so`, it will 
 
 Let’s start editing `src/lib.rs` to make this an actual GStreamer plugin.
 
-Next we make use of the `gst_plugin_define!` `macro` from the `gstreamer` crate to set-up the static metadata of the plugin (and make the shared library recognizeable by GStreamer to be a valid plugin), and to define the name of our entry point function (`plugin_init`) where we will register all the elements that this plugin provides.
+Next we make use of the `gst::plugin_define!` `macro` from the `gstreamer` crate to set-up the static metadata of the plugin (and make the shared library recognizeable by GStreamer to be a valid plugin), and to define the name of our entry point function (`plugin_init`) where we will register all the elements that this plugin provides.
 
 ```rust
 gst::plugin_define!(
@@ -112,7 +112,7 @@ fn main() {
 
 `build.rs` compiles and runs before anything else, [see](https://doc.rust-lang.org/cargo/reference/build-scripts.html).
 
-Therefore, `gst_plugin_version_helper::get_info()` will provide various information via `cargo` environment variables such as `COMMIT_ID` and `BUILD_REL_DATE` and these environment variables are then later accessed by our invocation of the `gst_plugin_define!` macro during compilation.
+Therefore, `gst_plugin_version_helper::get_info()` will provide various information via `cargo` environment variables such as `COMMIT_ID` and `BUILD_REL_DATE` and these environment variables are then later accessed by our invocation of the `gst::plugin_define!` macro during compilation.
 
 In addition we’re defining an empty plugin entry point function that just returns `Ok(())`
 
