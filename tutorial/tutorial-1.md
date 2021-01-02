@@ -185,6 +185,7 @@ impl ObjectSubclass for Rgb2Gray {
 
     }
 }
+```
 
 This defines a struct `Rgb2Gray` which is empty for now and an empty implementation of the struct which will later be used. The `ObjectSubclass` trait is implemented on the struct `Rgb2Gray` for providing static information about the type to the type system. By implementing `ObjectSubclass` we allow registering our struct with the GObject object system.
 
