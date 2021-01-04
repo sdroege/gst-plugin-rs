@@ -12,6 +12,11 @@ endif
 
 cargo = find_program('cargo', version:'>=1.40')
 cargo_wrapper = find_program('cargo_wrapper.py')
+cargo_c = find_program('cargo-cbuild', required: false)
+
+if not cargo_c.found()
+  error('cargo-c missing, install it with: \'cargo install cargo-c\'')
+endif
 
 system = build_machine.system()
 if system == 'windows'
