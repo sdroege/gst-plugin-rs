@@ -175,7 +175,7 @@ impl Default for State {
 enum HandleResult<T> {
     Pass(T),
     Drop,
-    Eos,
+    Eos(bool),
     Flushing,
 }
 
@@ -760,7 +760,12 @@ impl ToggleRecord {
             // If we have no start or stop position (we never recorded) then we're EOS too now
             if rec_state.last_recording_stop.is_none() || rec_state.last_recording_start.is_none() {
                 gst_debug!(CAT, obj: pad, "Main stream EOS and recording never started",);
-                return Ok(HandleResult::Eos);
+                return Ok(HandleResult::Eos(self.check_and_update_eos(
+                    pad,
+                    stream,
+                    &mut state,
+                    &mut rec_state,
+                )));
             } else if data.can_clip(&*state)
                 && current_running_time < rec_state.last_recording_start
                 && current_running_time_end > rec_state.last_recording_start
@@ -849,7 +854,12 @@ impl ToggleRecord {
                     return Ok(HandleResult::Pass(data));
                 } else {
                     gst_warning!(CAT, obj: pad, "Complete buffer clipped!");
-                    return Ok(HandleResult::Eos);
+                    return Ok(HandleResult::Eos(self.check_and_update_eos(
+                        pad,
+                        stream,
+                        &mut state,
+                        &mut rec_state,
+                    )));
                 }
             } else if current_running_time_end > rec_state.last_recording_stop {
                 // Otherwise if the end of the buffer is after the recording stop, we're EOS
@@ -862,7 +872,12 @@ impl ToggleRecord {
                     current_running_time_end,
                     rec_state.last_recording_stop
                 );
-                return Ok(HandleResult::Eos);
+                return Ok(HandleResult::Eos(self.check_and_update_eos(
+                    pad,
+                    stream,
+                    &mut state,
+                    &mut rec_state,
+                )));
             } else {
                 // In all other cases the buffer is fully between recording start and end and
                 // can be passed through as is
@@ -1039,6 +1054,49 @@ impl ToggleRecord {
         }
     }
 
+    // should be called only if main stream is in eos state
+    fn check_and_update_eos(
+        &self,
+        pad: &gst::Pad,
+        stream: &Stream,
+        stream_state: &mut StreamState,
+        rec_state: &mut State,
+    ) -> bool {
+        stream_state.eos = true;
+
+        // Check whether all secondary streams are in eos. If so, update recording
+        // state to Stopped
+        if rec_state.recording_state != RecordingState::Stopped {
+            let mut others_eos = true;
+
+            // Check eos state of all secondary streams
+            self.other_streams.lock().0.iter().all(|s| {
+                if s == stream {
+                    return true;
+                }
+
+                let s = s.state.lock();
+                if !s.eos {
+                    others_eos = false;
+                }
+                others_eos
+            });
+
+            if others_eos {
+                gst_debug!(
+                    CAT,
+                    obj: pad,
+                    "All streams are in EOS state, change state to Stopped"
+                );
+
+                rec_state.recording_state = RecordingState::Stopped;
+                return true;
+            }
+        }
+
+        false
+    }
+
     fn sink_chain(
         &self,
         pad: &gst::Pad,
@@ -1079,12 +1137,17 @@ impl ToggleRecord {
             HandleResult::Flushing => {
                 return Err(gst::FlowError::Flushing);
             }
-            HandleResult::Eos => {
+            HandleResult::Eos(recording_state_updated) => {
                 stream.srcpad.push_event(
                     gst::event::Eos::builder()
                         .seqnum(stream.state.lock().segment_seqnum)
                         .build(),
                 );
+
+                if recording_state_updated {
+                    element.notify("recording");
+                }
+
                 return Err(gst::FlowError::Eos);
             }
             HandleResult::Pass(buffer) => {
@@ -1178,6 +1241,7 @@ impl ToggleRecord {
 
         let mut forward = true;
         let mut send_pending = false;
+        let mut recording_state_changed = false;
 
         match event.view() {
             EventView::FlushStart(..) => {
@@ -1279,14 +1343,26 @@ impl ToggleRecord {
                 };
             }
             EventView::Eos(..) => {
-                let _main_state = if stream != self.main_stream {
+                let main_state = if stream != self.main_stream {
                     Some(self.main_stream.state.lock())
                 } else {
                     None
                 };
                 let mut state = stream.state.lock();
-
                 state.eos = true;
+
+                let main_is_eos = if let Some(main_state) = main_state {
+                    main_state.eos
+                } else {
+                    true
+                };
+
+                if main_is_eos {
+                    let mut rec_state = self.state.lock();
+                    recording_state_changed =
+                        self.check_and_update_eos(pad, &stream, &mut state, &mut rec_state);
+                }
+
                 self.main_stream_cond.notify_all();
                 gst_debug!(
                     CAT,
@@ -1298,6 +1374,10 @@ impl ToggleRecord {
             }
             _ => (),
         };
+
+        if recording_state_changed {
+            element.notify("recording");
+        }
 
         // If a serialized event and coming after Segment and a new Segment is pending,
         // queue up and send at a later time (buffer/gap) after we sent the Segment
