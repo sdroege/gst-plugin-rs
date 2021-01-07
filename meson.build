@@ -2,7 +2,7 @@ project('gst-plugins-rs',
         'rust',
         'c',
         version: '0.13.0',
-        meson_version : '>= 0.54')
+        meson_version : '>= 0.56')
 
 if get_option('debug')
   target = 'debug'
