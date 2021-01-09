@@ -18,7 +18,7 @@ pin-project = "1"
 once_cell = "1"
 tokio = { git = "https://github.com/fengalin/tokio", tag = "tokio-0.2.13-throttling", features = ["io-util", "macros", "rt-core", "sync", "stream", "time", "tcp", "udp", "rt-util"] }
 futures = { version = "0.3", features = ["thread-pool"] }
-rand = "0.7"
+rand = "0.8"
 socket2 = "0.3"
 
 [target.'cfg(windows)'.dependencies]

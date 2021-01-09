@@ -61,7 +61,7 @@ fn test_parse() {
         let l = if data.len() == 1 {
             1
         } else {
-            rnd.gen_range(1, data.len())
+            rnd.gen_range(1..=data.len())
         };
         let buf = gst::Buffer::from_mut_slice(Vec::from(&data[0..l]));
         input_len += buf.get_size();
