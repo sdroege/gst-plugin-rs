@@ -152,7 +152,7 @@ pub fn parse_packet(input: &[u8]) -> IResult<&[u8], Packet> {
     let (_, msg_crc) = be_u32(&input[input.len() - 4..])?;
 
     if msg_crc != sum {
-        return Err(nom::Err::Error((
+        return Err(nom::Err::Error(nom::error::Error::new(
             b"Prelude CRC doesn't match",
             nom::error::ErrorKind::MapRes,
         )));
