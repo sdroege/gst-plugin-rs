@@ -105,10 +105,9 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
-    runtime::Builder::new()
-        .threaded_scheduler()
+    runtime::Builder::new_multi_thread()
         .enable_all()
-        .core_threads(1)
+        .worker_threads(1)
         .build()
         .unwrap()
 });
@@ -569,7 +568,8 @@ impl Transcriber {
             }
         };
 
-        RUNTIME.enter(|| futures::executor::block_on(future))
+        let _enter = RUNTIME.enter();
+        futures::executor::block_on(future)
     }
 
     fn start_task(&self, element: &super::Transcriber) -> Result<(), gst::LoggableError> {
@@ -800,7 +800,7 @@ impl Transcriber {
         }
 
         if let Some(delay) = delay {
-            tokio::time::delay_for(Duration::from_nanos(delay.nseconds().unwrap())).await;
+            tokio::time::sleep(Duration::from_nanos(delay.nseconds().unwrap())).await;
         }
 
         if let Some(ws_sink) = self.ws_sink.borrow_mut().as_mut() {
@@ -847,7 +847,12 @@ impl Transcriber {
 
         self.state.lock().unwrap().send_abort_handle = Some(abort_handle);
 
-        match RUNTIME.enter(|| futures::executor::block_on(future)) {
+        let res = {
+            let _enter = RUNTIME.enter();
+            futures::executor::block_on(future)
+        };
+
+        match res {
             Err(_) => Err(gst::FlowError::Flushing),
             Ok(res) => res,
         }
@@ -877,15 +882,18 @@ impl Transcriber {
 
         gst_info!(CAT, obj: element, "Connecting ..");
 
-        let creds = RUNTIME
-            .enter(|| futures::executor::block_on(EnvironmentProvider::default().credentials()))
-            .map_err(|err| {
-                gst_error!(CAT, obj: element, "Failed to generate credentials: {}", err);
-                error_msg!(
-                    gst::CoreError::Failed,
-                    ["Failed to generate credentials: {}", err]
-                )
-            })?;
+        let creds = {
+            let _enter = RUNTIME.enter();
+            futures::executor::block_on(EnvironmentProvider::default().credentials()).map_err(
+                |err| {
+                    gst_error!(CAT, obj: element, "Failed to generate credentials: {}", err);
+                    error_msg!(
+                        gst::CoreError::Failed,
+                        ["Failed to generate credentials: {}", err]
+                    )
+                },
+            )?
+        };
 
         let language_code = settings
             .language_code
@@ -909,12 +917,15 @@ impl Transcriber {
         signed.add_param("sample-rate", &sample_rate.to_string());
         let url = signed.generate_presigned_url(&creds, &std::time::Duration::from_secs(60), true);
 
-        let (ws, _) = RUNTIME
-            .enter(|| futures::executor::block_on(connect_async(format!("wss{}", &url[5..]))))
-            .map_err(|err| {
-                gst_error!(CAT, obj: element, "Failed to connect: {}", err);
-                error_msg!(gst::CoreError::Failed, ["Failed to connect: {}", err])
-            })?;
+        let (ws, _) = {
+            let _enter = RUNTIME.enter();
+            futures::executor::block_on(connect_async(format!("wss{}", &url[5..]))).map_err(
+                |err| {
+                    gst_error!(CAT, obj: element, "Failed to connect: {}", err);
+                    error_msg!(gst::CoreError::Failed, ["Failed to connect: {}", err])
+                },
+            )?
+        };
 
         let (ws_sink, mut ws_stream) = ws.split();
 

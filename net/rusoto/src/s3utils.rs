@@ -15,10 +15,9 @@ use std::sync::Mutex;
 use tokio::runtime;
 
 static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
-    runtime::Builder::new()
-        .threaded_scheduler()
+    runtime::Builder::new_multi_thread()
         .enable_all()
-        .core_threads(2)
+        .worker_threads(2)
         .thread_name("gst-rusoto-runtime")
         .build()
         .unwrap()
@@ -49,7 +48,8 @@ where
 
     // FIXME: add a timeout as well
 
-    let res = RUNTIME.enter(|| {
+    let res = {
+        let _enter = RUNTIME.enter();
         futures::executor::block_on(async {
             match abortable_future.await {
                 // Future resolved successfully
@@ -60,7 +60,7 @@ where
                 Err(future::Aborted) => Err(WaitError::Cancelled),
             }
         })
-    });
+    };
 
     /* Clear out the canceller */
     canceller_guard = canceller.lock().unwrap();
