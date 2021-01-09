@@ -5,11 +5,6 @@ vulnerability = "deny"
 unmaintained = "warn"
 notice = "warn"
 ignore = [
-    # ignore because mio/miow still depend on net2, next mio release fixes this
-    "RUSTSEC-2020-0016",
-    # ignore because rusoto_credentials still depends on dirs instead of dirs-next
-    # https://github.com/rusoto/rusoto/pull/1846
-    "RUSTSEC-2020-0053",
 ]
 
 [licenses]
@@ -99,15 +94,6 @@ version = "0.3"
 name = "wasi"
 version = "0.9"
 
-# ignore duplicated base64 dependency because reqwest/tungstenite/rusoto/rust-argon2 depend on an old version
-# https://github.com/seanmonstar/reqwest/pull/1050
-# https://github.com/rusoto/rusoto/pull/1837
-# https://github.com/snapview/tungstenite-rs/pull/149
-# https://github.com/sru-systems/rust-argon2/pull/39
-[[bans.skip]]
-name = "base64"
-version = "0.12"
-
 # ignore duplicated cfg-if dependency because a few dozen dependencies still
 # pull in the old version
 [[bans.skip]]
@@ -126,12 +112,6 @@ version = "0.4"
 name = "pin-project-internal"
 version = "0.4"
 
-# ignore duplicated crossbeam-utils dependency because rust-argon2 depend on an old version
-# https://github.com/sru-systems/rust-argon2/pull/39
-[[bans.skip]]
-name = "crossbeam-utils"
-version = "0.7"
-
 # ignore duplicated tinyvec dependency because lewton depends on an old version
 # https://github.com/RustAudio/lewton/commit/b8d72804db89db358b99784e1ad9d7a22534743c
 [[bans.skip]]
@@ -148,6 +128,36 @@ version = "0.1"
 [[bans.skip]]
 name = "nom"
 version = "5"
+
+# ignore duplicated nom dependency because tokio v0.2 depends on an old version
+[[bans.skip]]
+name = "bytes"
+version = "0.5"
+[[bans.skip]]
+name = "mio"
+version = "0.6"
+
+# ignore duplicated rand-related dependency because rav1e depends on an old version
+[[bans.skip]]
+name = "rand"
+version = "0.7"
+[[bans.skip]]
+name = "rand_chacha"
+version = "0.2"
+[[bans.skip]]
+name = "rand_core"
+version = "0.5"
+[[bans.skip]]
+name = "rand_hc"
+version = "0.2"
+[[bans.skip]]
+name = "getrandom"
+version = "0.1"
+
+# ignore duplicated redox_syscall dependency because parking_lot/dirs-next depends on an old version
+[[bans.skip]]
+name = "redox_syscall"
+version = "0.1"
 
 [sources]
 unknown-registry = "deny"
