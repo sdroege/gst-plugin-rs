@@ -225,10 +225,9 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
-    runtime::Builder::new()
-        .threaded_scheduler()
+    runtime::Builder::new_multi_thread()
         .enable_all()
-        .core_threads(1)
+        .worker_threads(1)
         .build()
         .unwrap()
 });
@@ -669,7 +668,10 @@ impl ReqwestHttpSrc {
             }
         };
 
-        let res = RUNTIME.enter(|| futures::executor::block_on(future));
+        let res = {
+            let _enter = RUNTIME.enter();
+            futures::executor::block_on(future)
+        };
 
         /* Clear out the canceller */
         let _ = self.canceller.lock().unwrap().take();

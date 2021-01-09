@@ -97,10 +97,8 @@ impl Harness {
         pad.set_active(true).unwrap();
 
         // Create the tokio runtime used for the HTTP server in this test
-        let rt = tokio::runtime::Builder::new()
-            .core_threads(1)
+        let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
-            .threaded_scheduler()
             .build()
             .unwrap();
 
