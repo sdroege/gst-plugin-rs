@@ -216,3 +216,28 @@ outdated:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
     - cargo outdated --root-deps-only --exit-code 1 -v
+
+coverage:
+  extends:
+    - .img-nightly
+  stage: 'extras'
+  rules:
+    - when: 'always'
+  variables:
+    RUSTFLAGS: "-Zinstrument-coverage"
+    LLVM_PROFILE_FILE: "gst-plugins-rs-%p-%m.profraw"
+  script:
+    - cargo test --locked --color=always --all-features
+    # generate html report
+    - grcov . --binary-path ./target/debug/ -s . -t html --branch --ignore-not-existing --ignore "*target*" -o ./coverage/
+    # generate cobertura report for gitlab integration
+    - grcov . --binary-path ./target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "*target*" -o lcov
+    - python3 /usr/local/lib/python3.7/dist-packages/lcov_cobertura.py lcov
+    # output coverage summary for gitlab parsing
+    - lcov -r lcov "/*" 2&> out
+    - grep lines out
+  artifacts:
+    paths:
+      - 'coverage'
+    reports:
+      cobertura: coverage.xml
