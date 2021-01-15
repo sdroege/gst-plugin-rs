@@ -177,25 +177,43 @@ enum Context {
 }
 
 impl Context {
-    fn receive_packet(&mut self) -> Result<(data::FrameType, u64, Vec<u8>), data::EncoderStatus> {
+    fn receive_packet(
+        &mut self,
+    ) -> Result<(data::FrameType, u64, u32, Vec<u8>), data::EncoderStatus> {
         match self {
-            Context::Eight(ref mut context) => context
-                .receive_packet()
-                .map(|packet| (packet.frame_type, packet.input_frameno, packet.data)),
-            Context::Sixteen(ref mut context) => context
-                .receive_packet()
-                .map(|packet| (packet.frame_type, packet.input_frameno, packet.data)),
+            Context::Eight(ref mut context) => context.receive_packet().map(|packet| {
+                (
+                    packet.frame_type,
+                    packet.input_frameno,
+                    *packet
+                        .opaque
+                        .and_then(|o| o.downcast::<u32>().ok())
+                        .expect("no frame number"),
+                    packet.data,
+                )
+            }),
+            Context::Sixteen(ref mut context) => context.receive_packet().map(|packet| {
+                (
+                    packet.frame_type,
+                    packet.input_frameno,
+                    *packet
+                        .opaque
+                        .and_then(|o| o.downcast::<u32>().ok())
+                        .expect("no frame number"),
+                    packet.data,
+                )
+            }),
         }
     }
 
     fn send_frame(
         &mut self,
-        in_frame: Option<&gst_video::VideoFrameRef<&gst::BufferRef>>,
+        in_frame: Option<(u32, &gst_video::VideoFrameRef<&gst::BufferRef>)>,
         force_keyframe: bool,
     ) -> Result<(), data::EncoderStatus> {
         match self {
             Context::Eight(ref mut context) => {
-                if let Some(in_frame) = in_frame {
+                if let Some((frame_number, in_frame)) = in_frame {
                     let mut enc_frame = context.new_frame();
                     enc_frame.planes[0].copy_from_raw_u8(
                         in_frame.plane_data(0).unwrap(),
@@ -224,7 +242,7 @@ impl Context {
                             } else {
                                 rav1e::prelude::FrameTypeOverride::No
                             },
-                            opaque: None,
+                            opaque: Some(Box::new(frame_number)),
                         }),
                     ))
                 } else {
@@ -232,7 +250,7 @@ impl Context {
                 }
             }
             Context::Sixteen(ref mut context) => {
-                if let Some(in_frame) = in_frame {
+                if let Some((frame_number, in_frame)) = in_frame {
                     let mut enc_frame = context.new_frame();
                     enc_frame.planes[0].copy_from_raw_u8(
                         in_frame.plane_data(0).unwrap(),
@@ -261,7 +279,7 @@ impl Context {
                             } else {
                                 rav1e::prelude::FrameTypeOverride::No
                             },
-                            opaque: None,
+                            opaque: Some(Box::new(frame_number)),
                         }),
                     ))
                 } else {
@@ -695,7 +713,7 @@ impl VideoEncoderImpl for Rav1Enc {
             })?;
 
         match state.context.send_frame(
-            Some(&in_frame),
+            Some((frame.get_system_frame_number(), &in_frame)),
             frame
                 .get_flags()
                 .contains(gst_video::VideoCodecFrameFlags::FORCE_KEYFRAME),
@@ -727,7 +745,7 @@ impl Rav1Enc {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         loop {
             match state.context.receive_packet() {
-                Ok((packet_type, packet_number, packet_data)) => {
+                Ok((packet_type, packet_number, frame_number, packet_data)) => {
                     gst_debug!(
                         CAT,
                         obj: element,
@@ -737,7 +755,10 @@ impl Rav1Enc {
                         packet_type
                     );
 
-                    let mut frame = element.get_oldest_frame().expect("frame not found");
+                    let mut frame = element
+                        .get_frame(frame_number as i32)
+                        .expect("frame not found");
+
                     if packet_type == data::FrameType::KEY {
                         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);
                     }
