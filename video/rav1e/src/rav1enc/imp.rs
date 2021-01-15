@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use atomic_refcell::AtomicRefCell;
 use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::gst_debug;
@@ -225,6 +224,7 @@ impl Context {
                             } else {
                                 rav1e::prelude::FrameTypeOverride::No
                             },
+                            opaque: None,
                         }),
                     ))
                 } else {
@@ -261,6 +261,7 @@ impl Context {
                             } else {
                                 rav1e::prelude::FrameTypeOverride::No
                             },
+                            opaque: None,
                         }),
                     ))
                 } else {
@@ -284,7 +285,7 @@ struct State {
 }
 
 pub struct Rav1Enc {
-    state: AtomicRefCell<Option<State>>,
+    state: Mutex<Option<State>>,
     settings: Mutex<Settings>,
 }
 
@@ -307,7 +308,7 @@ impl ObjectSubclass for Rav1Enc {
 
     fn new() -> Self {
         Self {
-            state: AtomicRefCell::new(None),
+            state: Mutex::new(None),
             settings: Mutex::new(Default::default()),
         }
     }
@@ -477,7 +478,7 @@ impl ElementImpl for Rav1Enc {}
 
 impl VideoEncoderImpl for Rav1Enc {
     fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        *self.state.borrow_mut() = None;
+        *self.state.lock().unwrap() = None;
 
         Ok(())
     }
@@ -498,8 +499,8 @@ impl VideoEncoderImpl for Rav1Enc {
         let settings = self.settings.lock().unwrap();
 
         // TODO: More properties, HDR information
-        let cfg = config::Config {
-            enc: config::EncoderConfig {
+        let cfg = config::Config::new()
+            .with_encoder_config(config::EncoderConfig {
                 width: video_info.width() as usize,
                 height: video_info.height() as usize,
                 bit_depth: video_info.format_info().depth()[0] as usize,
@@ -605,11 +606,11 @@ impl VideoEncoderImpl for Rav1Enc {
                 tile_rows: settings.tile_rows,
                 tiles: settings.tiles,
                 ..Default::default()
-            },
-            threads: settings.threads,
-        };
+            })
+            .with_threads(settings.threads);
+        // TODO: RateControlConfig
 
-        *self.state.borrow_mut() = Some(State {
+        *self.state.lock().unwrap() = Some(State {
             context: if video_info.format_info().depth()[0] > 8 {
                 Context::Sixteen(cfg.new_context().map_err(|err| {
                     gst::loggable_error!(CAT, "Failed to create context: {:?}", err)
@@ -635,7 +636,7 @@ impl VideoEncoderImpl for Rav1Enc {
     fn flush(&self, element: &Self::Type) -> bool {
         gst_debug!(CAT, obj: element, "Flushing");
 
-        let mut state_guard = self.state.borrow_mut();
+        let mut state_guard = self.state.lock().unwrap();
         if let Some(ref mut state) = *state_guard {
             state.context.flush();
             while let Ok(_) | Err(data::EncoderStatus::Encoded) = state.context.receive_packet() {
@@ -649,7 +650,7 @@ impl VideoEncoderImpl for Rav1Enc {
     fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(CAT, obj: element, "Finishing");
 
-        let mut state_guard = self.state.borrow_mut();
+        let mut state_guard = self.state.lock().unwrap();
         if let Some(ref mut state) = *state_guard {
             if let Err(data::EncoderStatus::Failure) = state.context.send_frame(None, false) {
                 return Err(gst::FlowError::Error);
@@ -666,7 +667,7 @@ impl VideoEncoderImpl for Rav1Enc {
         element: &Self::Type,
         frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state_guard = self.state.borrow_mut();
+        let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
         self.output_frames(element, state)?;
