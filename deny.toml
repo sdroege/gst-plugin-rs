@@ -50,12 +50,6 @@ version = "0.2"
 name = "winapi"
 version = "0.2"
 
-# ignore duplicated deps because of rav1e depending on an old version of paste
-# https://github.com/xiph/rav1e/pull/2489
-[[bans.skip]]
-name = "paste"
-version = "0.1"
-
 # ignore duplicated deps because of chrono, cookie, cookie_store, hyper,
 # hyperx, reqwest depending on old time
 # https://github.com/chronotope/chrono/issues/400
@@ -88,11 +82,6 @@ version = "0.11"
 [[bans.skip]]
 name = "miniz_oxide"
 version = "0.3"
-
-# ignore duplicated wasi dependency because rand/getrandom depend on an old version
-[[bans.skip]]
-name = "wasi"
-version = "0.9"
 
 # ignore duplicated cfg-if dependency because a few dozen dependencies still
 # pull in the old version
@@ -137,27 +126,27 @@ version = "0.5"
 name = "mio"
 version = "0.6"
 
-# ignore duplicated rand-related dependency because rav1e depends on an old version
-[[bans.skip]]
-name = "rand"
-version = "0.7"
-[[bans.skip]]
-name = "rand_chacha"
-version = "0.2"
-[[bans.skip]]
-name = "rand_core"
-version = "0.5"
-[[bans.skip]]
-name = "rand_hc"
-version = "0.2"
-[[bans.skip]]
-name = "getrandom"
-version = "0.1"
-
 # ignore duplicated redox_syscall dependency because parking_lot/dirs-next depends on an old version
 [[bans.skip]]
 name = "redox_syscall"
 version = "0.1"
+
+# ignore duplicated itertools dependency because glib-macros depends on an old version
+# https://github.com/gtk-rs/gtk-rs/pull/264
+[[bans.skip]]
+name = "itertools"
+version = "0.9"
+
+# ignore duplicated rustc_version dependency because various crates depend on an old version
+[[bans.skip]]
+name = "rustc_version"
+version = "0.2"
+[[bans.skip]]
+name = "semver"
+version = "0.9"
+[[bans.skip]]
+name = "semver-parser"
+version = "0.7"
 
 [sources]
 unknown-registry = "deny"
