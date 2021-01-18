@@ -1128,7 +1128,6 @@ impl AggregatorImpl for FallbackSwitch {
                 {
                     let buffer = buffer.make_mut();
                     buffer.set_pts(start);
-                    buffer.set_dts(start);
                     if duration.is_some() {
                         buffer.set_duration(stop - start);
                     }

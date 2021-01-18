@@ -336,7 +336,6 @@ impl HandleData for gst::Buffer {
                 {
                     let buffer = self.make_mut();
                     buffer.set_pts(start);
-                    buffer.set_dts(start);
                     buffer.set_duration(stop - start);
                 }
 
