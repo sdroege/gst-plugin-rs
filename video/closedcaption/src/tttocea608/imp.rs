@@ -263,6 +263,30 @@ impl State {
         )
     }
 
+    fn resume_direct_captioning(
+        &mut self,
+        element: &super::TtToCea608,
+        bufferlist: &mut gst::BufferListRef,
+    ) {
+        self.cc_data(
+            element,
+            bufferlist,
+            eia608_control_command(ffi::eia608_control_t_eia608_control_resume_direct_captioning),
+        )
+    }
+
+    fn delete_to_end_of_row(
+        &mut self,
+        element: &super::TtToCea608,
+        bufferlist: &mut gst::BufferListRef,
+    ) {
+        self.cc_data(
+            element,
+            bufferlist,
+            eia608_control_command(ffi::eia608_control_t_eia608_control_delete_to_end_of_row),
+        )
+    }
+
     fn roll_up_2(&mut self, element: &super::TtToCea608, bufferlist: &mut gst::BufferListRef) {
         self.cc_data(
             element,
@@ -438,7 +462,7 @@ impl TtToCea608 {
         let mut ret = true;
 
         let do_preamble = match state.mode {
-            Cea608Mode::PopOn => true,
+            Cea608Mode::PopOn | Cea608Mode::PaintOn => true,
             Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
                 if let Some(carriage_return) = carriage_return {
                     if carriage_return {
@@ -495,6 +519,10 @@ impl TtToCea608 {
                 );
             }
 
+            if state.mode == Cea608Mode::PaintOn {
+                state.delete_to_end_of_row(element, bufferlist);
+            }
+
             state.tab_offset(element, bufferlist, offset);
 
             state.underline = chunk.underline;
@@ -522,7 +550,7 @@ impl TtToCea608 {
         let mut bufferlist = gst::BufferList::new();
         let mut_list = bufferlist.get_mut().unwrap();
 
-        let mut col = if state.mode == Cea608Mode::PopOn {
+        let mut col = if state.mode == Cea608Mode::PopOn || state.mode == Cea608Mode::PaintOn {
             0
         } else {
             state.column
@@ -564,7 +592,7 @@ impl TtToCea608 {
             if clear && !cleared {
                 state.erase_display_frame_no = None;
                 state.erase_display_memory(element, mut_list);
-                if state.mode != Cea608Mode::PopOn {
+                if state.mode != Cea608Mode::PopOn && state.mode != Cea608Mode::PaintOn {
                     state.send_roll_up_preamble = true;
                 }
                 col = 0;
@@ -578,6 +606,8 @@ impl TtToCea608 {
             }
             state.resume_caption_loading(element, mut_list);
             state.cc_data(element, mut_list, erase_non_displayed_memory());
+        } else if state.mode == Cea608Mode::PaintOn {
+            state.resume_direct_captioning(element, mut_list);
         }
 
         let mut prev_char = 0;
@@ -600,11 +630,11 @@ impl TtToCea608 {
             }
 
             if let Some(line_column) = line.column {
-                if state.mode != Cea608Mode::PopOn {
+                if state.mode != Cea608Mode::PopOn && state.mode != Cea608Mode::PaintOn {
                     state.send_roll_up_preamble = true;
                 }
                 col = line_column;
-            } else if state.mode == Cea608Mode::PopOn {
+            } else if state.mode == Cea608Mode::PopOn || state.mode == Cea608Mode::PaintOn {
                 col = 0;
             }
 
@@ -686,7 +716,7 @@ impl TtToCea608 {
 
                     if col > 31 {
                         match state.mode {
-                            Cea608Mode::PopOn => {
+                            Cea608Mode::PaintOn | Cea608Mode::PopOn => {
                                 gst_warning!(
                                     CAT,
                                     obj: element,
@@ -716,7 +746,7 @@ impl TtToCea608 {
                 }
             }
 
-            if state.mode == Cea608Mode::PopOn {
+            if state.mode == Cea608Mode::PopOn || state.mode == Cea608Mode::PaintOn {
                 if prev_char != 0 {
                     state.cc_data(element, mut_list, prev_char);
                     prev_char = 0;

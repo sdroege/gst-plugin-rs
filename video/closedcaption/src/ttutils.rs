@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 #[genum(type_name = "GstTtToCea608Mode")]
 pub enum Cea608Mode {
     PopOn,
+    PaintOn,
     RollUp2,
     RollUp3,
     RollUp4,
