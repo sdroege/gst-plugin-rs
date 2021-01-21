@@ -51,16 +51,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property("uri", |name| {
-    glib::ParamSpec::string(
-        name,
-        "URI",
-        "The S3 object URI",
-        None,
-        glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
-    )
-})];
-
 impl S3Src {
     fn cancel(&self) {
         let mut canceller = self.canceller.lock().unwrap();
@@ -210,6 +200,7 @@ impl ObjectSubclass for S3Src {
     const NAME: &'static str = "RusotoS3Src";
     type Type = super::S3Src;
     type ParentType = gst_base::BaseSrc;
+    type Interfaces = (gst::URIHandler,);
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -222,50 +213,41 @@ impl ObjectSubclass for S3Src {
             canceller: Mutex::new(None),
         }
     }
-
-    fn type_init(typ: &mut subclass::InitializingType<Self>) {
-        typ.add_interface::<gst::URIHandler>();
-    }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Amazon S3 source",
-            "Source/Network",
-            "Reads an object from Amazon S3",
-            "Arun Raghavan <arun@arunraghavan.net>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for S3Src {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::string(
+                "uri",
+                "URI",
+                "The S3 object URI",
+                None,
+                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+            )]
+        });
 
-        match *prop {
-            subclass::Property("uri", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "uri" => {
                 let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
             }
             _ => unimplemented!(),
         }
     }
 
-    fn get_property(&self, _: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id as usize];
-
-        match *prop {
-            subclass::Property("uri", ..) => {
+    fn get_property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "uri" => {
                 let url = match *self.url.lock().unwrap() {
                     Some(ref url) => url.to_string(),
                     None => "".to_string(),
@@ -287,24 +269,50 @@ impl ObjectImpl for S3Src {
 }
 
 impl ElementImpl for S3Src {
-    // No overrides
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Amazon S3 source",
+                "Source/Network",
+                "Reads an object from Amazon S3",
+                "Arun Raghavan <arun@arunraghavan.net>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
 }
 
 impl URIHandlerImpl for S3Src {
+    const URI_TYPE: gst::URIType = gst::URIType::Src;
+
+    fn get_protocols() -> &'static [&'static str] {
+        &["s3"]
+    }
+
     fn get_uri(&self, _: &Self::Type) -> Option<String> {
         self.url.lock().unwrap().as_ref().map(|s| s.to_string())
     }
 
     fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
         self.set_uri(element, Some(uri))
-    }
-
-    fn get_uri_type() -> gst::URIType {
-        gst::URIType::Src
-    }
-
-    fn get_protocols() -> Vec<String> {
-        vec!["s3".to_string()]
     }
 }
 

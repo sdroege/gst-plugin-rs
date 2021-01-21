@@ -47,6 +47,7 @@ impl ObjectSubclass for LewtonDec {
     const NAME: &'static str = "LewtonDec";
     type Type = super::LewtonDec;
     type ParentType = gst_audio::AudioDecoder;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -57,48 +58,58 @@ impl ObjectSubclass for LewtonDec {
             state: AtomicRefCell::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "lewton Vorbis decoder",
-            "Decoder/Audio",
-            "lewton Vorbis decoder",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let sink_caps = gst::Caps::new_simple("audio/x-vorbis", &[]);
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &sink_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_caps = gst::Caps::new_simple(
-            "audio/x-raw",
-            &[
-                ("format", &gst_audio::AUDIO_FORMAT_F32.to_str()),
-                ("rate", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                ("channels", &gst::IntRange::<i32>::new(1, 255)),
-                ("layout", &"interleaved"),
-            ],
-        );
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &src_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-    }
 }
 
 impl ObjectImpl for LewtonDec {}
 
-impl ElementImpl for LewtonDec {}
+impl ElementImpl for LewtonDec {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "lewton Vorbis decoder",
+                "Decoder/Audio",
+                "lewton Vorbis decoder",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_caps = gst::Caps::new_simple("audio/x-vorbis", &[]);
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst::Caps::new_simple(
+                "audio/x-raw",
+                &[
+                    ("format", &gst_audio::AUDIO_FORMAT_F32.to_str()),
+                    ("rate", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
+                    ("channels", &gst::IntRange::<i32>::new(1, 255)),
+                    ("layout", &"interleaved"),
+                ],
+            );
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl AudioDecoderImpl for LewtonDec {
     fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {

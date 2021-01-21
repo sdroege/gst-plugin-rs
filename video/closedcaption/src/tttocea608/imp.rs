@@ -95,17 +95,6 @@ const DEFAULT_FPS_D: i32 = 1;
 
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
 
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property("mode", |name| {
-    glib::ParamSpec::enum_(
-        name,
-        "Mode",
-        "Which mode to operate in",
-        Cea608Mode::static_type(),
-        DEFAULT_MODE as i32,
-        glib::ParamFlags::READWRITE,
-    )
-})];
-
 #[derive(Debug, Clone)]
 struct Settings {
     mode: Cea608Mode,
@@ -958,6 +947,7 @@ impl ObjectSubclass for TtToCea608 {
     const NAME: &'static str = "TtToCea608";
     type Type = super::TtToCea608;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -995,61 +985,24 @@ impl ObjectSubclass for TtToCea608 {
             settings: Mutex::new(Settings::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "TT to CEA-608",
-            "Generic",
-            "Converts timed text to CEA-608 Closed Captions",
-            "Mathieu Duponchelle <mathieu@centricular.com>",
-        );
-
-        let mut caps = gst::Caps::new_empty();
-        {
-            let caps = caps.get_mut().unwrap();
-
-            let s = gst::Structure::new_empty("text/x-raw");
-            caps.append_structure(s);
-
-            let s = gst::Structure::builder("application/x-json")
-                .field("format", &"cea608")
-                .build();
-            caps.append_structure(s);
-        }
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let framerate = gst::FractionRange::new(
-            gst::Fraction::new(1, std::i32::MAX),
-            gst::Fraction::new(std::i32::MAX, 1),
-        );
-
-        let caps = gst::Caps::builder("closedcaption/x-cea-608")
-            .field("format", &"raw")
-            .field("framerate", &framerate)
-            .build();
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for TtToCea608 {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::enum_(
+                "mode",
+                "Mode",
+                "Which mode to operate in",
+                Cea608Mode::static_type(),
+                DEFAULT_MODE as i32,
+                glib::ParamFlags::READWRITE,
+            )]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
@@ -1057,11 +1010,15 @@ impl ObjectImpl for TtToCea608 {
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("mode", ..) => {
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "mode" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.mode = value
                     .get_some::<Cea608Mode>()
@@ -1071,11 +1028,9 @@ impl ObjectImpl for TtToCea608 {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("mode", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "mode" => {
                 let settings = self.settings.lock().unwrap();
                 settings.mode.to_value()
             }
@@ -1085,6 +1040,66 @@ impl ObjectImpl for TtToCea608 {
 }
 
 impl ElementImpl for TtToCea608 {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "TT to CEA-608",
+                "Generic",
+                "Converts timed text to CEA-608 Closed Captions",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let mut caps = gst::Caps::new_empty();
+            {
+                let caps = caps.get_mut().unwrap();
+
+                let s = gst::Structure::new_empty("text/x-raw");
+                caps.append_structure(s);
+
+                let s = gst::Structure::builder("application/x-json")
+                    .field("format", &"cea608")
+                    .build();
+                caps.append_structure(s);
+            }
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let framerate = gst::FractionRange::new(
+                gst::Fraction::new(1, std::i32::MAX),
+                gst::Fraction::new(std::i32::MAX, 1),
+            );
+
+            let caps = gst::Caps::builder("closedcaption/x-cea-608")
+                .field("format", &"raw")
+                .field("framerate", &framerate)
+                .build();
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

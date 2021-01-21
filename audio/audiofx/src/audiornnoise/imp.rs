@@ -193,6 +193,7 @@ impl ObjectSubclass for AudioRNNoise {
     const NAME: &'static str = "AudioRNNoise";
     type Type = super::AudioRNNoise;
     type ParentType = gst_base::BaseTransform;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -203,54 +204,64 @@ impl ObjectSubclass for AudioRNNoise {
             state: Mutex::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Audio denoise",
-            "Filter/Effect/Audio",
-            "Removes noise from an audio stream",
-            "Philippe Normand <philn@igalia.com>",
-        );
-
-        let caps = gst::Caps::new_simple(
-            "audio/x-raw",
-            &[
-                ("format", &gst_audio::AUDIO_FORMAT_F32.to_str()),
-                ("rate", &48000),
-                ("channels", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                ("layout", &"interleaved"),
-            ],
-        );
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        klass.configure(
-            gst_base::subclass::BaseTransformMode::NeverInPlace,
-            false,
-            false,
-        );
-    }
 }
 
 impl ObjectImpl for AudioRNNoise {}
-impl ElementImpl for AudioRNNoise {}
+
+impl ElementImpl for AudioRNNoise {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Audio denoise",
+                "Filter/Effect/Audio",
+                "Removes noise from an audio stream",
+                "Philippe Normand <philn@igalia.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_simple(
+                "audio/x-raw",
+                &[
+                    ("format", &gst_audio::AUDIO_FORMAT_F32.to_str()),
+                    ("rate", &48000),
+                    ("channels", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
+                    ("layout", &"interleaved"),
+                ],
+            );
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseTransformImpl for AudioRNNoise {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::NeverInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+
     fn set_caps(
         &self,
         element: &Self::Type,

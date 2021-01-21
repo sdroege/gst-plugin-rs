@@ -100,29 +100,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 2] = [
-    subclass::Property("compression-level", |name| {
-        glib::ParamSpec::enum_(
-            name,
-            "Compression level",
-            "Selects the compression algorithm to use",
-            CompressionLevel::static_type(),
-            DEFAULT_COMPRESSION_LEVEL as i32,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("filter", |name| {
-        glib::ParamSpec::enum_(
-            name,
-            "Filter",
-            "Selects the filter type to applied",
-            FilterType::static_type(),
-            DEFAULT_FILTER_TYPE as i32,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 struct State {
     video_info: gst_video::VideoInfo,
     cache: Arc<CacheBuffer>,
@@ -192,6 +169,7 @@ impl ObjectSubclass for PngEncoder {
     const NAME: &'static str = "PngEncoder";
     type Type = super::PngEncoder;
     type ParentType = gst_video::VideoEncoder;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -203,72 +181,49 @@ impl ObjectSubclass for PngEncoder {
             settings: Mutex::new(Default::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "PNG encoder",
-            "Encoder/Video",
-            "PNG encoder",
-            "Natanael Mojica <neithanmo@gmail>",
-        );
-
-        let sink_caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[
-                        &gst_video::VideoFormat::Gray8.to_str(),
-                        &gst_video::VideoFormat::Gray16Be.to_str(),
-                        &gst_video::VideoFormat::Rgb.to_str(),
-                        &gst_video::VideoFormat::Rgba.to_str(),
-                    ]),
-                ),
-                ("width", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                ("height", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(1, 1),
-                        gst::Fraction::new(std::i32::MAX, 1),
-                    ),
-                ),
-            ],
-        );
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &sink_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_caps = gst::Caps::new_simple("image/png", &[]);
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &src_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for PngEncoder {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::enum_(
+                    "compression-level",
+                    "Compression level",
+                    "Selects the compression algorithm to use",
+                    CompressionLevel::static_type(),
+                    DEFAULT_COMPRESSION_LEVEL as i32,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::enum_(
+                    "filter",
+                    "Filter",
+                    "Selects the filter type to applied",
+                    FilterType::static_type(),
+                    DEFAULT_FILTER_TYPE as i32,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("compression-level", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "compression-level" => {
                 let mut settings = self.settings.lock();
                 settings.compression = value
                     .get_some::<CompressionLevel>()
                     .expect("type checked upstream");
             }
-            subclass::Property("filter", ..) => {
+            "filter" => {
                 let mut settings = self.settings.lock();
                 settings.filter = value
                     .get_some::<FilterType>()
@@ -278,15 +233,13 @@ impl ObjectImpl for PngEncoder {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("compression-level", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "compression-level" => {
                 let settings = self.settings.lock();
                 settings.compression.to_value()
             }
-            subclass::Property("filter", ..) => {
+            "filter" => {
                 let settings = self.settings.lock();
                 settings.filter.to_value()
             }
@@ -295,7 +248,68 @@ impl ObjectImpl for PngEncoder {
     }
 }
 
-impl ElementImpl for PngEncoder {}
+impl ElementImpl for PngEncoder {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "PNG encoder",
+                "Encoder/Video",
+                "PNG encoder",
+                "Natanael Mojica <neithanmo@gmail>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_caps = gst::Caps::new_simple(
+                "video/x-raw",
+                &[
+                    (
+                        "format",
+                        &gst::List::new(&[
+                            &gst_video::VideoFormat::Gray8.to_str(),
+                            &gst_video::VideoFormat::Gray16Be.to_str(),
+                            &gst_video::VideoFormat::Rgb.to_str(),
+                            &gst_video::VideoFormat::Rgba.to_str(),
+                        ]),
+                    ),
+                    ("width", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
+                    ("height", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
+                    (
+                        "framerate",
+                        &gst::FractionRange::new(
+                            gst::Fraction::new(1, 1),
+                            gst::Fraction::new(std::i32::MAX, 1),
+                        ),
+                    ),
+                ],
+            );
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst::Caps::new_simple("image/png", &[]);
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl VideoEncoderImpl for PngEncoder {
     fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {

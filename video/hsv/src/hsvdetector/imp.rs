@@ -55,76 +55,6 @@ impl Default for Settings {
     }
 }
 
-// Metadata for the properties
-static PROPERTIES: [subclass::Property; 6] = [
-    subclass::Property("hue-ref", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Hue reference",
-            "Hue reference in degrees",
-            f32::MIN,
-            f32::MAX,
-            DEFAULT_HUE_REF,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("hue-var", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Hue variation",
-            "Allowed hue variation from the reference hue angle, in degrees",
-            0.0,
-            180.0,
-            DEFAULT_HUE_VAR,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("saturation-ref", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Saturation reference",
-            "Reference saturation value",
-            0.0,
-            1.0,
-            DEFAULT_SATURATION_REF,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("saturation-var", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Saturation variation",
-            "Allowed saturation variation from the reference value",
-            0.0,
-            1.0,
-            DEFAULT_SATURATION_VAR,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("value-ref", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Value reference",
-            "Reference value value",
-            0.0,
-            1.0,
-            DEFAULT_VALUE_REF,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("value-var", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Value variation",
-            "Allowed value variation from the reference value",
-            0.0,
-            1.0,
-            DEFAULT_VALUE_VAR,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 // Stream-specific state, i.e. video format configuration
 struct State {
     in_info: gst_video::VideoInfo,
@@ -149,6 +79,7 @@ impl ObjectSubclass for HsvDetector {
     const NAME: &'static str = "HsvDetector";
     type Type = super::HsvDetector;
     type ParentType = gst_base::BaseTransform;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -162,90 +93,81 @@ impl ObjectSubclass for HsvDetector {
             state: AtomicRefCell::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "HSV detector",
-            "Filter/Effect/Converter/Video",
-            "Works within the HSV colorspace to mark positive pixels",
-            "Julien Bardagi <julien.bardagi@gmail.com>",
-        );
-
-        // src pad capabilities
-        let caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[&gst_video::VideoFormat::Rgba.to_str()]),
-                ),
-                ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                ),
-            ],
-        );
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        // sink pad capabilities
-        let caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[&gst_video::VideoFormat::Rgbx.to_str()]),
-                ),
-                ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                ),
-            ],
-        );
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        // Install all our properties
-        klass.install_properties(&PROPERTIES);
-
-        klass.configure(
-            gst_base::subclass::BaseTransformMode::NeverInPlace,
-            false,
-            false,
-        );
-    }
 }
 
 impl ObjectImpl for HsvDetector {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::float(
+                    "hue-ref",
+                    "Hue reference",
+                    "Hue reference in degrees",
+                    f32::MIN,
+                    f32::MAX,
+                    DEFAULT_HUE_REF,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::float(
+                    "hue-var",
+                    "Hue variation",
+                    "Allowed hue variation from the reference hue angle, in degrees",
+                    0.0,
+                    180.0,
+                    DEFAULT_HUE_VAR,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::float(
+                    "saturation-ref",
+                    "Saturation reference",
+                    "Reference saturation value",
+                    0.0,
+                    1.0,
+                    DEFAULT_SATURATION_REF,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::float(
+                    "saturation-var",
+                    "Saturation variation",
+                    "Allowed saturation variation from the reference value",
+                    0.0,
+                    1.0,
+                    DEFAULT_SATURATION_VAR,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::float(
+                    "value-ref",
+                    "Value reference",
+                    "Reference value value",
+                    0.0,
+                    1.0,
+                    DEFAULT_VALUE_REF,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::float(
+                    "value-var",
+                    "Value variation",
+                    "Allowed value variation from the reference value",
+                    0.0,
+                    1.0,
+                    DEFAULT_VALUE_VAR,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("hue-ref", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "hue-ref" => {
                 let mut settings = self.settings.lock().unwrap();
                 let hue_ref = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -257,7 +179,7 @@ impl ObjectImpl for HsvDetector {
                 );
                 settings.hue_ref = hue_ref;
             }
-            subclass::Property("hue-var", ..) => {
+            "hue-var" => {
                 let mut settings = self.settings.lock().unwrap();
                 let hue_var = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -269,7 +191,7 @@ impl ObjectImpl for HsvDetector {
                 );
                 settings.hue_var = hue_var;
             }
-            subclass::Property("saturation-ref", ..) => {
+            "saturation-ref" => {
                 let mut settings = self.settings.lock().unwrap();
                 let saturation_ref = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -281,7 +203,7 @@ impl ObjectImpl for HsvDetector {
                 );
                 settings.saturation_ref = saturation_ref;
             }
-            subclass::Property("saturation-var", ..) => {
+            "saturation-var" => {
                 let mut settings = self.settings.lock().unwrap();
                 let saturation_var = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -293,7 +215,7 @@ impl ObjectImpl for HsvDetector {
                 );
                 settings.saturation_var = saturation_var;
             }
-            subclass::Property("value-ref", ..) => {
+            "value-ref" => {
                 let mut settings = self.settings.lock().unwrap();
                 let value_ref = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -305,7 +227,7 @@ impl ObjectImpl for HsvDetector {
                 );
                 settings.value_ref = value_ref;
             }
-            subclass::Property("value-var", ..) => {
+            "value-var" => {
                 let mut settings = self.settings.lock().unwrap();
                 let value_var = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -323,31 +245,29 @@ impl ObjectImpl for HsvDetector {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("hue-ref", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "hue-ref" => {
                 let settings = self.settings.lock().unwrap();
                 settings.hue_ref.to_value()
             }
-            subclass::Property("hue-var", ..) => {
+            "hue-var" => {
                 let settings = self.settings.lock().unwrap();
                 settings.hue_var.to_value()
             }
-            subclass::Property("saturation-ref", ..) => {
+            "saturation-ref" => {
                 let settings = self.settings.lock().unwrap();
                 settings.saturation_ref.to_value()
             }
-            subclass::Property("saturation-var", ..) => {
+            "saturation-var" => {
                 let settings = self.settings.lock().unwrap();
                 settings.saturation_var.to_value()
             }
-            subclass::Property("value-ref", ..) => {
+            "value-ref" => {
                 let settings = self.settings.lock().unwrap();
                 settings.value_ref.to_value()
             }
-            subclass::Property("value-var", ..) => {
+            "value-var" => {
                 let settings = self.settings.lock().unwrap();
                 settings.value_var.to_value()
             }
@@ -356,9 +276,90 @@ impl ObjectImpl for HsvDetector {
     }
 }
 
-impl ElementImpl for HsvDetector {}
+impl ElementImpl for HsvDetector {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "HSV detector",
+                "Filter/Effect/Converter/Video",
+                "Works within the HSV colorspace to mark positive pixels",
+                "Julien Bardagi <julien.bardagi@gmail.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_simple(
+                "video/x-raw",
+                &[
+                    (
+                        "format",
+                        &gst::List::new(&[&gst_video::VideoFormat::Rgba.to_str()]),
+                    ),
+                    ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    (
+                        "framerate",
+                        &gst::FractionRange::new(
+                            gst::Fraction::new(0, 1),
+                            gst::Fraction::new(i32::MAX, 1),
+                        ),
+                    ),
+                ],
+            );
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            // sink pad capabilities
+            let caps = gst::Caps::new_simple(
+                "video/x-raw",
+                &[
+                    (
+                        "format",
+                        &gst::List::new(&[&gst_video::VideoFormat::Rgbx.to_str()]),
+                    ),
+                    ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    (
+                        "framerate",
+                        &gst::FractionRange::new(
+                            gst::Fraction::new(0, 1),
+                            gst::Fraction::new(i32::MAX, 1),
+                        ),
+                    ),
+                ],
+            );
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseTransformImpl for HsvDetector {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::NeverInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+
     fn transform_caps(
         &self,
         element: &Self::Type,

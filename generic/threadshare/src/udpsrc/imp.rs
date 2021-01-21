@@ -84,105 +84,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 10] = [
-    subclass::Property("address", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Address",
-            "Address/multicast group to listen on",
-            DEFAULT_ADDRESS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("port", |name| {
-        glib::ParamSpec::int(
-            name,
-            "Port",
-            "Port to listen on",
-            0,
-            u16::MAX as i32,
-            DEFAULT_PORT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("reuse", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Reuse",
-            "Allow reuse of the port",
-            DEFAULT_REUSE,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("caps", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Caps",
-            "Caps to use",
-            gst::Caps::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("mtu", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "MTU",
-            "Maximum expected packet size. This directly defines the allocation size of the receive buffer pool",
-            0,
-            i32::MAX as u32,
-            DEFAULT_MTU,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("socket", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Socket",
-            "Socket to use for UDP reception. (None == allocate)",
-            gio::Socket::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("used-socket", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Used Socket",
-            "Socket currently in use for UDP reception. (None = no socket)",
-            gio::Socket::static_type(),
-            glib::ParamFlags::READABLE,
-        )
-    }),
-    subclass::Property("context", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Context",
-            "Context name to share threads with",
-            Some(DEFAULT_CONTEXT),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context-wait", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Context Wait",
-            "Throttle poll loop to run at most once every this many ms",
-            0,
-            1000,
-            DEFAULT_CONTEXT_WAIT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("retrieve-sender-address", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Retrieve sender address",
-            "Whether to retrieve the sender address and add it to buffers as meta. Disabling this might result in minor performance improvements in certain scenarios",
-            DEFAULT_RETRIEVE_SENDER_ADDRESS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 #[derive(Debug)]
 struct UdpReader(tokio::net::UdpSocket);
 
@@ -789,47 +690,11 @@ impl ObjectSubclass for UdpSrc {
     const NAME: &'static str = "RsTsUdpSrc";
     type Type = super::UdpSrc;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib::object_subclass!();
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Thread-sharing UDP source",
-            "Source/Network",
-            "Receives data over the network via UDP",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        #[cfg(not(windows))]
-        {
-            klass.install_properties(&PROPERTIES);
-        }
-        #[cfg(windows)]
-        {
-            let properties = PROPERTIES
-                .iter()
-                .filter(|p| match *p {
-                    subclass::Property("socket", ..) | subclass::Property("used-socket", ..) => {
-                        false
-                    }
-                    _ => true,
-                })
-                .collect::<Vec<_>>();
-            klass.install_properties(properties.as_slice());
-        }
-    }
 
     fn with_class(klass: &Self::Class) -> Self {
         let src_pad_handler = UdpSrcPadHandler::default();
@@ -847,76 +712,167 @@ impl ObjectSubclass for UdpSrc {
 }
 
 impl ObjectImpl for UdpSrc {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            let mut properties = vec![
+                glib::ParamSpec::string(
+                    "context",
+                    "Context",
+                    "Context name to share threads with",
+                    Some(DEFAULT_CONTEXT),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "context-wait",
+                    "Context Wait",
+                    "Throttle poll loop to run at most once every this many ms",
+                    0,
+                    1000,
+                    DEFAULT_CONTEXT_WAIT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "address",
+                    "Address",
+                    "Address/multicast group to listen on",
+                    DEFAULT_ADDRESS,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::int(
+                    "port",
+                    "Port",
+                    "Port to listen on",
+                    0,
+                    u16::MAX as i32,
+                    DEFAULT_PORT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "reuse",
+                    "Reuse",
+                    "Allow reuse of the port",
+                    DEFAULT_REUSE,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boxed(
+                    "caps",
+                    "Caps",
+                    "Caps to use",
+                    gst::Caps::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "mtu",
+                    "MTU",
+                    "Maximum expected packet size. This directly defines the allocation size of the receive buffer pool",
+                    0,
+                    i32::MAX as u32,
+                    DEFAULT_MTU,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "retrieve-sender-address",
+                    "Retrieve sender address",
+                    "Whether to retrieve the sender address and add it to buffers as meta. Disabling this might result in minor performance improvements in certain scenarios",
+                    DEFAULT_RETRIEVE_SENDER_ADDRESS,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ];
 
+            #[cfg(not(windows))]
+            {
+                properties.push(glib::ParamSpec::object(
+                    "socket",
+                    "Socket",
+                    "Socket to use for UDP reception. (None == allocate)",
+                    gio::Socket::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ));
+                properties.push(glib::ParamSpec::object(
+                    "used-socket",
+                    "Used Socket",
+                    "Socket currently in use for UDP reception. (None = no socket)",
+                    gio::Socket::static_type(),
+                    glib::ParamFlags::READABLE,
+                ));
+            }
+
+            properties
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
         let mut settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("address", ..) => {
+        match pspec.get_name() {
+            "address" => {
                 settings.address = value.get().expect("type checked upstream");
             }
-            subclass::Property("port", ..) => {
+            "port" => {
                 settings.port = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("reuse", ..) => {
+            "reuse" => {
                 settings.reuse = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("caps", ..) => {
+            "caps" => {
                 settings.caps = value.get().expect("type checked upstream");
             }
-            subclass::Property("mtu", ..) => {
+            "mtu" => {
                 settings.mtu = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("socket", ..) => {
+            "socket" => {
                 settings.socket = value
                     .get::<gio::Socket>()
                     .expect("type checked upstream")
                     .map(|socket| GioSocketWrapper::new(&socket));
             }
-            subclass::Property("used-socket", ..) => {
+            "used-socket" => {
                 unreachable!();
             }
-            subclass::Property("context", ..) => {
+            "context" => {
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
-            subclass::Property("context-wait", ..) => {
+            "context-wait" => {
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("retrieve-sender-address", ..) => {
+            "retrieve-sender-address" => {
                 settings.retrieve_sender_address = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("address", ..) => settings.address.to_value(),
-            subclass::Property("port", ..) => settings.port.to_value(),
-            subclass::Property("reuse", ..) => settings.reuse.to_value(),
-            subclass::Property("caps", ..) => settings.caps.to_value(),
-            subclass::Property("mtu", ..) => settings.mtu.to_value(),
-            subclass::Property("socket", ..) => settings
+        match pspec.get_name() {
+            "address" => settings.address.to_value(),
+            "port" => settings.port.to_value(),
+            "reuse" => settings.reuse.to_value(),
+            "caps" => settings.caps.to_value(),
+            "mtu" => settings.mtu.to_value(),
+            "socket" => settings
                 .socket
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
                 .to_value(),
-            subclass::Property("used-socket", ..) => settings
+            "used-socket" => settings
                 .used_socket
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
                 .to_value(),
-            subclass::Property("context", ..) => settings.context.to_value(),
-            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
-            subclass::Property("retrieve-sender-address", ..) => {
-                settings.retrieve_sender_address.to_value()
-            }
+            "context" => settings.context.to_value(),
+            "context-wait" => settings.context_wait.to_value(),
+            "retrieve-sender-address" => settings.retrieve_sender_address.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -931,6 +887,36 @@ impl ObjectImpl for UdpSrc {
 }
 
 impl ElementImpl for UdpSrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Thread-sharing UDP source",
+                "Source/Network",
+                "Receives data over the network via UDP",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

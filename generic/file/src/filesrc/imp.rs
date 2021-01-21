@@ -38,16 +38,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property("location", |name| {
-    glib::ParamSpec::string(
-        name,
-        "File Location",
-        "Location of the file to read from",
-        None,
-        glib::ParamFlags::READWRITE,
-    )
-})];
-
 enum State {
     Stopped,
     Started { file: File, position: u64 },
@@ -134,6 +124,7 @@ impl ObjectSubclass for FileSrc {
     const NAME: &'static str = "RsFileSrc";
     type Type = super::FileSrc;
     type ParentType = gst_base::BaseSrc;
+    type Interfaces = (gst::URIHandler,);
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -145,38 +136,32 @@ impl ObjectSubclass for FileSrc {
             state: Mutex::new(Default::default()),
         }
     }
-
-    fn type_init(type_: &mut subclass::InitializingType<Self>) {
-        type_.add_interface::<gst::URIHandler>();
-    }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "File Source",
-            "Source/File",
-            "Read stream from a file",
-            "François Laignel <fengalin@free.fr>, Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for FileSrc {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-        match *prop {
-            subclass::Property("location", ..) => {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::string(
+                "location",
+                "File Location",
+                "Location of the file to read from",
+                None,
+                glib::ParamFlags::READWRITE,
+            )]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "location" => {
                 let res = match value.get::<String>() {
                     Ok(Some(location)) => FileLocation::try_from_path_str(location)
                         .and_then(|file_location| self.set_location(obj, Some(file_location))),
@@ -192,10 +177,9 @@ impl ObjectImpl for FileSrc {
         };
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-        match *prop {
-            subclass::Property("location", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "location" => {
                 let settings = self.settings.lock().unwrap();
                 let location = settings
                     .location
@@ -215,7 +199,37 @@ impl ObjectImpl for FileSrc {
     }
 }
 
-impl ElementImpl for FileSrc {}
+impl ElementImpl for FileSrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "File Source",
+                "Source/File",
+                "Read stream from a file",
+                "François Laignel <fengalin@free.fr>, Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseSrcImpl for FileSrc {
     fn is_seekable(&self, _src: &Self::Type) -> bool {
@@ -339,6 +353,12 @@ impl BaseSrcImpl for FileSrc {
 }
 
 impl URIHandlerImpl for FileSrc {
+    const URI_TYPE: gst::URIType = gst::URIType::Src;
+
+    fn get_protocols() -> &'static [&'static str] {
+        &["file"]
+    }
+
     fn get_uri(&self, _element: &Self::Type) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
@@ -360,13 +380,5 @@ impl URIHandlerImpl for FileSrc {
         } else {
             Ok(())
         }
-    }
-
-    fn get_uri_type() -> gst::URIType {
-        gst::URIType::Src
-    }
-
-    fn get_protocols() -> Vec<String> {
-        vec!["file".to_string()]
     }
 }

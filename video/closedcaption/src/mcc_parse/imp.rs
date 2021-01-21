@@ -1122,6 +1122,7 @@ impl ObjectSubclass for MccParse {
     const NAME: &'static str = "RsMccParse";
     type Type = super::MccParse;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -1184,56 +1185,6 @@ impl ObjectSubclass for MccParse {
             state: Mutex::new(State::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Mcc Parse",
-            "Parser/ClosedCaption",
-            "Parses MCC Closed Caption Files",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let mut caps = gst::Caps::new_empty();
-        {
-            let caps = caps.get_mut().unwrap();
-            let framerate = gst::FractionRange::new(
-                gst::Fraction::new(1, std::i32::MAX),
-                gst::Fraction::new(std::i32::MAX, 1),
-            );
-
-            let s = gst::Structure::builder("closedcaption/x-cea-708")
-                .field("format", &"cdp")
-                .field("framerate", &framerate)
-                .build();
-            caps.append_structure(s);
-
-            let s = gst::Structure::builder("closedcaption/x-cea-608")
-                .field("format", &"s334-1a")
-                .field("framerate", &framerate)
-                .build();
-            caps.append_structure(s);
-        }
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let caps = gst::Caps::builder("application/x-mcc")
-            .field("version", &gst::List::new(&[&1i32, &2i32]))
-            .build();
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-    }
 }
 
 impl ObjectImpl for MccParse {
@@ -1246,6 +1197,66 @@ impl ObjectImpl for MccParse {
 }
 
 impl ElementImpl for MccParse {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Mcc Parse",
+                "Parser/ClosedCaption",
+                "Parses MCC Closed Caption Files",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let mut caps = gst::Caps::new_empty();
+            {
+                let caps = caps.get_mut().unwrap();
+                let framerate = gst::FractionRange::new(
+                    gst::Fraction::new(1, std::i32::MAX),
+                    gst::Fraction::new(std::i32::MAX, 1),
+                );
+
+                let s = gst::Structure::builder("closedcaption/x-cea-708")
+                    .field("format", &"cdp")
+                    .field("framerate", &framerate)
+                    .build();
+                caps.append_structure(s);
+
+                let s = gst::Structure::builder("closedcaption/x-cea-608")
+                    .field("format", &"s334-1a")
+                    .field("framerate", &framerate)
+                    .build();
+                caps.append_structure(s);
+            }
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let caps = gst::Caps::builder("application/x-mcc")
+                .field("version", &gst::List::new(&[&1i32, &2i32]))
+                .build();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

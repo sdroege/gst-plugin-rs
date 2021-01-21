@@ -35,29 +35,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static PROPERTIES: [subclass::Property; 2] = [
-    subclass::Property("uri", |name| {
-        glib::ParamSpec::string(
-            name,
-            "URI",
-            "URI to use for video in case the main stream doesn't work",
-            None,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("min-latency", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Minimum Latency",
-            "Minimum Latency",
-            0,
-            std::u64::MAX,
-            0,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 #[derive(Debug, Clone)]
 struct Settings {
     uri: Option<String>,
@@ -89,6 +66,7 @@ impl ObjectSubclass for VideoFallbackSource {
     const NAME: &'static str = "FallbackSrcVideoFallbackSource";
     type Type = super::VideoFallbackSource;
     type ParentType = gst::Bin;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -105,26 +83,43 @@ impl ObjectSubclass for VideoFallbackSource {
             settings: Mutex::new(Settings::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &gst::Caps::new_any(),
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for VideoFallbackSource {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "uri",
+                    "URI",
+                    "URI to use for video in case the main stream doesn't work",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint64(
+                    "min-latency",
+                    "Minimum Latency",
+                    "Minimum Latency",
+                    0,
+                    std::u64::MAX,
+                    0,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("uri", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "uri" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
                 gst_info!(
@@ -136,7 +131,7 @@ impl ObjectImpl for VideoFallbackSource {
                 );
                 settings.uri = new_value;
             }
-            subclass::Property("min-latency", ..) => {
+            "min-latency" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -152,15 +147,13 @@ impl ObjectImpl for VideoFallbackSource {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("uri", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "uri" => {
                 let settings = self.settings.lock().unwrap();
                 settings.uri.to_value()
             }
-            subclass::Property("min-latency", ..) => {
+            "min-latency" => {
                 let settings = self.settings.lock().unwrap();
                 settings.min_latency.to_value()
             }
@@ -178,6 +171,22 @@ impl ObjectImpl for VideoFallbackSource {
 }
 
 impl ElementImpl for VideoFallbackSource {
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &gst::Caps::new_any(),
+            )
+            .unwrap();
+
+            vec![src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     #[allow(clippy::single_match)]
     fn change_state(
         &self,

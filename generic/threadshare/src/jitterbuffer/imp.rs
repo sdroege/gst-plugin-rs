@@ -72,80 +72,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 7] = [
-    subclass::Property("latency", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Buffer latency in ms",
-            "Amount of ms to buffer",
-            0,
-            std::u32::MAX,
-            DEFAULT_LATENCY_MS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("do-lost", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Do Lost",
-            "Send an event downstream when a packet is lost",
-            DEFAULT_DO_LOST,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("max-dropout-time", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Max dropout time",
-            "The maximum time (milliseconds) of missing packets tolerated.",
-            0,
-            std::u32::MAX,
-            DEFAULT_MAX_DROPOUT_TIME,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("max-misorder-time", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Max misorder time",
-            "The maximum time (milliseconds) of misordered packets tolerated.",
-            0,
-            std::u32::MAX,
-            DEFAULT_MAX_MISORDER_TIME,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("stats", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Statistics",
-            "Various statistics",
-            gst::Structure::static_type(),
-            glib::ParamFlags::READABLE,
-        )
-    }),
-    subclass::Property("context", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Context",
-            "Context name to share threads with",
-            Some(DEFAULT_CONTEXT),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context-wait", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Context Wait",
-            "Throttle poll loop to run at most once every this many ms",
-            0,
-            1000,
-            DEFAULT_CONTEXT_WAIT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 #[derive(Eq)]
 struct GapPacket {
     buffer: gst::Buffer,
@@ -1413,62 +1339,11 @@ impl ObjectSubclass for JitterBuffer {
     const NAME: &'static str = "RsTsJitterBuffer";
     type Type = super::JitterBuffer;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib::object_subclass!();
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Thread-sharing jitterbuffer",
-            "Generic",
-            "Simple jitterbuffer",
-            "Mathieu Duponchelle <mathieu@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-        klass.add_signal(
-            "request-pt-map",
-            glib::SignalFlags::RUN_LAST,
-            &[u32::static_type()],
-            gst::Caps::static_type(),
-        );
-
-        klass.add_signal_with_class_handler(
-            "clear-pt-map",
-            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
-            &[],
-            glib::types::Type::Unit,
-            |_, args| {
-                let element = args[0]
-                    .get::<super::JitterBuffer>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let jb = Self::from_instance(&element);
-                jb.clear_pt_map(&element);
-                None
-            },
-        );
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-        klass.install_properties(&PROPERTIES);
-    }
 
     fn with_class(klass: &Self::Class) -> Self {
         let sink_pad_handler = SinkHandler::default();
@@ -1493,11 +1368,102 @@ impl ObjectSubclass for JitterBuffer {
 }
 
 impl ObjectImpl for JitterBuffer {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "context",
+                    "Context",
+                    "Context name to share threads with",
+                    Some(DEFAULT_CONTEXT),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "context-wait",
+                    "Context Wait",
+                    "Throttle poll loop to run at most once every this many ms",
+                    0,
+                    1000,
+                    DEFAULT_CONTEXT_WAIT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "latency",
+                    "Buffer latency in ms",
+                    "Amount of ms to buffer",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_LATENCY_MS,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "do-lost",
+                    "Do Lost",
+                    "Send an event downstream when a packet is lost",
+                    DEFAULT_DO_LOST,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "max-dropout-time",
+                    "Max dropout time",
+                    "The maximum time (milliseconds) of missing packets tolerated.",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_MAX_DROPOUT_TIME,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "max-misorder-time",
+                    "Max misorder time",
+                    "The maximum time (milliseconds) of misordered packets tolerated.",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_MAX_MISORDER_TIME,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boxed(
+                    "stats",
+                    "Statistics",
+                    "Various statistics",
+                    gst::Structure::static_type(),
+                    glib::ParamFlags::READABLE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("latency", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![
+                glib::subclass::Signal::builder("clear-pt-map", &[], glib::types::Type::Unit)
+                    .action()
+                    .class_handler(|_, args| {
+                        let element = args[0]
+                            .get::<super::JitterBuffer>()
+                            .expect("signal arg")
+                            .expect("missing signal arg");
+                        let jb = JitterBuffer::from_instance(&element);
+                        jb.clear_pt_map(&element);
+                        None
+                    })
+                    .build(),
+            ]
+        });
+
+        SIGNALS.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "latency" => {
                 let latency_ms = {
                     let mut settings = self.settings.lock().unwrap();
                     settings.latency_ms = value.get_some().expect("type checked upstream");
@@ -1509,26 +1475,26 @@ impl ObjectImpl for JitterBuffer {
 
                 let _ = obj.post_message(gst::message::Latency::builder().src(obj).build());
             }
-            subclass::Property("do-lost", ..) => {
+            "do-lost" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.do_lost = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("max-dropout-time", ..) => {
+            "max-dropout-time" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_dropout_time = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("max-misorder-time", ..) => {
+            "max-misorder-time" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_misorder_time = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("context", ..) => {
+            "context" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
-            subclass::Property("context-wait", ..) => {
+            "context-wait" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
@@ -1536,27 +1502,25 @@ impl ObjectImpl for JitterBuffer {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("latency", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "latency" => {
                 let settings = self.settings.lock().unwrap();
                 settings.latency_ms.to_value()
             }
-            subclass::Property("do-lost", ..) => {
+            "do-lost" => {
                 let settings = self.settings.lock().unwrap();
                 settings.do_lost.to_value()
             }
-            subclass::Property("max-dropout-time", ..) => {
+            "max-dropout-time" => {
                 let settings = self.settings.lock().unwrap();
                 settings.max_dropout_time.to_value()
             }
-            subclass::Property("max-misorder-time", ..) => {
+            "max-misorder-time" => {
                 let settings = self.settings.lock().unwrap();
                 settings.max_misorder_time.to_value()
             }
-            subclass::Property("stats", ..) => {
+            "stats" => {
                 let state = self.state.lock().unwrap();
                 let s = gst::Structure::new(
                     "application/x-rtp-jitterbuffer-stats",
@@ -1568,11 +1532,11 @@ impl ObjectImpl for JitterBuffer {
                 );
                 s.to_value()
             }
-            subclass::Property("context", ..) => {
+            "context" => {
                 let settings = self.settings.lock().unwrap();
                 settings.context.to_value()
             }
-            subclass::Property("context-wait", ..) => {
+            "context-wait" => {
                 let settings = self.settings.lock().unwrap();
                 settings.context_wait.to_value()
             }
@@ -1590,6 +1554,45 @@ impl ObjectImpl for JitterBuffer {
 }
 
 impl ElementImpl for JitterBuffer {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Thread-sharing jitterbuffer",
+                "Generic",
+                "Simple jitterbuffer",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

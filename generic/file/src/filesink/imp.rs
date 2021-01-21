@@ -38,16 +38,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property("location", |name| {
-    glib::ParamSpec::string(
-        name,
-        "File Location",
-        "Location of the file to write",
-        None,
-        glib::ParamFlags::READWRITE,
-    )
-})];
-
 enum State {
     Stopped,
     Started { file: File, position: u64 },
@@ -120,6 +110,7 @@ impl ObjectSubclass for FileSink {
     const NAME: &'static str = "RsFileSink";
     type Type = super::FileSink;
     type ParentType = gst_base::BaseSink;
+    type Interfaces = (gst::URIHandler,);
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -131,38 +122,32 @@ impl ObjectSubclass for FileSink {
             state: Mutex::new(Default::default()),
         }
     }
-
-    fn type_init(type_: &mut subclass::InitializingType<Self>) {
-        type_.add_interface::<gst::URIHandler>();
-    }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "File Sink",
-            "Sink/File",
-            "Write stream to a file",
-            "François Laignel <fengalin@free.fr>, Luis de Bethencourt <luisbg@osg.samsung.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for FileSink {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-        match *prop {
-            subclass::Property("location", ..) => {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::string(
+                "location",
+                "File Location",
+                "Location of the file to write",
+                None,
+                glib::ParamFlags::READWRITE,
+            )]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "location" => {
                 let res = match value.get::<String>() {
                     Ok(Some(location)) => FileLocation::try_from_path_str(location)
                         .and_then(|file_location| self.set_location(obj, Some(file_location))),
@@ -178,10 +163,9 @@ impl ObjectImpl for FileSink {
         };
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-        match *prop {
-            subclass::Property("location", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "location" => {
                 let settings = self.settings.lock().unwrap();
                 let location = settings
                     .location
@@ -195,7 +179,37 @@ impl ObjectImpl for FileSink {
     }
 }
 
-impl ElementImpl for FileSink {}
+impl ElementImpl for FileSink {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "File Sink",
+                "Sink/File",
+                "Write stream to a file",
+                "François Laignel <fengalin@free.fr>, Luis de Bethencourt <luisbg@osg.samsung.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseSinkImpl for FileSink {
     fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
@@ -286,6 +300,12 @@ impl BaseSinkImpl for FileSink {
 }
 
 impl URIHandlerImpl for FileSink {
+    const URI_TYPE: gst::URIType = gst::URIType::Sink;
+
+    fn get_protocols() -> &'static [&'static str] {
+        &["file"]
+    }
+
     fn get_uri(&self, _element: &Self::Type) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
@@ -307,13 +327,5 @@ impl URIHandlerImpl for FileSink {
         } else {
             Ok(())
         }
-    }
-
-    fn get_uri_type() -> gst::URIType {
-        gst::URIType::Sink
-    }
-
-    fn get_protocols() -> Vec<String> {
-        vec!["file".to_string()]
     }
 }

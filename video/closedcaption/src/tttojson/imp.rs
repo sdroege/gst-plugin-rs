@@ -37,17 +37,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
 
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property("mode", |name| {
-    glib::ParamSpec::enum_(
-        name,
-        "Mode",
-        "Which mode to operate in",
-        Cea608Mode::static_type(),
-        DEFAULT_MODE as i32,
-        glib::ParamFlags::READWRITE,
-    )
-})];
-
 #[derive(Debug, Clone)]
 struct Settings {
     mode: Cea608Mode,
@@ -156,12 +145,54 @@ impl TtToJson {
     }
 }
 
-impl ElementImpl for TtToJson {}
+impl ElementImpl for TtToJson {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Timed text to JSON encoder",
+                "Encoder/ClosedCaption",
+                "Encodes Timed Text to JSON",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::builder("text/x-raw")
+                .field("format", &"utf8")
+                .build();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let caps = gst::Caps::builder("application/x-json").build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl ObjectSubclass for TtToJson {
     const NAME: &'static str = "RsTtToJson";
     type Type = super::TtToJson;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -195,42 +226,24 @@ impl ObjectSubclass for TtToJson {
             settings: Mutex::new(Settings::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Timed text to JSON encoder",
-            "Encoder/ClosedCaption",
-            "Encodes Timed Text to JSON",
-            "Mathieu Duponchelle <mathieu@centricular.com>",
-        );
-
-        let caps = gst::Caps::builder("text/x-raw")
-            .field("format", &"utf8")
-            .build();
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let caps = gst::Caps::builder("application/x-json").build();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for TtToJson {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::enum_(
+                "mode",
+                "Mode",
+                "Which mode to operate in",
+                Cea608Mode::static_type(),
+                DEFAULT_MODE as i32,
+                glib::ParamFlags::READWRITE,
+            )]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
@@ -238,11 +251,15 @@ impl ObjectImpl for TtToJson {
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("mode", ..) => {
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "mode" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.mode = value
                     .get_some::<Cea608Mode>()
@@ -252,11 +269,9 @@ impl ObjectImpl for TtToJson {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("mode", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "mode" => {
                 let settings = self.settings.lock().unwrap();
                 settings.mode.to_value()
             }

@@ -69,110 +69,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 11] = [
-    subclass::Property("location", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Location",
-            "URL to read from",
-            None,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("user-agent", |name| {
-        glib::ParamSpec::string(
-            name,
-            "User-Agent",
-            "Value of the User-Agent HTTP request header field",
-            DEFAULT_USER_AGENT.into(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("is-live", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Is Live",
-            "Act like a live source",
-            DEFAULT_IS_LIVE,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("user-id", |name| {
-        glib::ParamSpec::string(
-            name,
-            "User-id",
-            "HTTP location URI user id for authentication",
-            None,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("user-pw", |name| {
-        glib::ParamSpec::string(
-            name,
-            "User-pw",
-            "HTTP location URI user password for authentication",
-            None,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("timeout", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Timeout",
-            "Value in seconds to timeout a blocking I/O (0 = No timeout).",
-            0,
-            3600,
-            DEFAULT_TIMEOUT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("compress", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Compress",
-            "Allow compressed content encodings",
-            DEFAULT_COMPRESS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("extra-headers", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Extra Headers",
-            "Extra headers to append to the HTTP request",
-            gst::Structure::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("cookies", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Cookies",
-            "HTTP request cookies",
-            Vec::<String>::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("iradio-mode", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "I-Radio Mode",
-            "Enable internet radio mode (ask server to send shoutcast/icecast metadata interleaved with the actual stream data",
-            DEFAULT_IRADIO_MODE,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("keep-alive", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Keep Alive",
-            "Use HTTP persistent connections",
-            DEFAULT_KEEP_ALIVE,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 const REQWEST_CLIENT_CONTEXT: &str = "gst.reqwest.client";
 
 #[derive(Clone, Debug, glib::GBoxed)]
@@ -681,10 +577,103 @@ impl ReqwestHttpSrc {
 }
 
 impl ObjectImpl for ReqwestHttpSrc {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-        match *prop {
-            subclass::Property("location", ..) => {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "location",
+                    "Location",
+                    "URL to read from",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "user-agent",
+                    "User-Agent",
+                    "Value of the User-Agent HTTP request header field",
+                    DEFAULT_USER_AGENT.into(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "is-live",
+                    "Is Live",
+                    "Act like a live source",
+                    DEFAULT_IS_LIVE,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "user-id",
+                    "User-id",
+                    "HTTP location URI user id for authentication",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "user-pw",
+                    "User-pw",
+                    "HTTP location URI user password for authentication",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "timeout",
+                    "Timeout",
+                    "Value in seconds to timeout a blocking I/O (0 = No timeout).",
+                    0,
+                    3600,
+                    DEFAULT_TIMEOUT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "compress",
+                    "Compress",
+                    "Allow compressed content encodings",
+                    DEFAULT_COMPRESS,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boxed(
+                    "extra-headers",
+                    "Extra Headers",
+                    "Extra headers to append to the HTTP request",
+                    gst::Structure::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boxed(
+                    "cookies",
+                    "Cookies",
+                    "HTTP request cookies",
+                    Vec::<String>::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "iradio-mode",
+                    "I-Radio Mode",
+                    "Enable internet radio mode (ask server to send shoutcast/icecast metadata interleaved with the actual stream data",
+                    DEFAULT_IRADIO_MODE,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "keep-alive",
+                    "Keep Alive",
+                    "Use HTTP persistent connections",
+                    DEFAULT_KEEP_ALIVE,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "location" => {
                 let location = value.get::<&str>().expect("type checked upstream");
                 if let Err(err) = self.set_location(obj, location) {
                     gst_error!(
@@ -695,7 +684,7 @@ impl ObjectImpl for ReqwestHttpSrc {
                     );
                 }
             }
-            subclass::Property("user-agent", ..) => {
+            "user-agent" => {
                 let mut settings = self.settings.lock().unwrap();
                 let user_agent = value
                     .get()
@@ -703,46 +692,46 @@ impl ObjectImpl for ReqwestHttpSrc {
                     .unwrap_or_else(|| DEFAULT_USER_AGENT.into());
                 settings.user_agent = user_agent;
             }
-            subclass::Property("is-live", ..) => {
+            "is-live" => {
                 let is_live = value.get_some().expect("type checked upstream");
                 obj.set_live(is_live);
             }
-            subclass::Property("user-id", ..) => {
+            "user-id" => {
                 let mut settings = self.settings.lock().unwrap();
                 let user_id = value.get().expect("type checked upstream");
                 settings.user_id = user_id;
             }
-            subclass::Property("user-pw", ..) => {
+            "user-pw" => {
                 let mut settings = self.settings.lock().unwrap();
                 let user_pw = value.get().expect("type checked upstream");
                 settings.user_pw = user_pw;
             }
-            subclass::Property("timeout", ..) => {
+            "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let timeout = value.get_some().expect("type checked upstream");
                 settings.timeout = timeout;
             }
-            subclass::Property("compress", ..) => {
+            "compress" => {
                 let mut settings = self.settings.lock().unwrap();
                 let compress = value.get_some().expect("type checked upstream");
                 settings.compress = compress;
             }
-            subclass::Property("extra-headers", ..) => {
+            "extra-headers" => {
                 let mut settings = self.settings.lock().unwrap();
                 let extra_headers = value.get().expect("type checked upstream");
                 settings.extra_headers = extra_headers;
             }
-            subclass::Property("cookies", ..) => {
+            "cookies" => {
                 let mut settings = self.settings.lock().unwrap();
                 let cookies = value.get().expect("type checked upstream");
                 settings.cookies = cookies.unwrap_or_else(Vec::new);
             }
-            subclass::Property("iradio-mode", ..) => {
+            "iradio-mode" => {
                 let mut settings = self.settings.lock().unwrap();
                 let iradio_mode = value.get_some().expect("type checked upstream");
                 settings.iradio_mode = iradio_mode;
             }
-            subclass::Property("keep-alive", ..) => {
+            "keep-alive" => {
                 let mut settings = self.settings.lock().unwrap();
                 let keep_alive = value.get_some().expect("type checked upstream");
                 settings.keep_alive = keep_alive;
@@ -751,49 +740,48 @@ impl ObjectImpl for ReqwestHttpSrc {
         };
     }
 
-    fn get_property(&self, obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-        match *prop {
-            subclass::Property("location", ..) => {
+    fn get_property(&self, obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "location" => {
                 let settings = self.settings.lock().unwrap();
                 let location = settings.location.as_ref().map(Url::to_string);
 
                 location.to_value()
             }
-            subclass::Property("user-agent", ..) => {
+            "user-agent" => {
                 let settings = self.settings.lock().unwrap();
                 settings.user_agent.to_value()
             }
-            subclass::Property("is-live", ..) => obj.is_live().to_value(),
-            subclass::Property("user-id", ..) => {
+            "is-live" => obj.is_live().to_value(),
+            "user-id" => {
                 let settings = self.settings.lock().unwrap();
                 settings.user_id.to_value()
             }
-            subclass::Property("user-pw", ..) => {
+            "user-pw" => {
                 let settings = self.settings.lock().unwrap();
                 settings.user_pw.to_value()
             }
-            subclass::Property("timeout", ..) => {
+            "timeout" => {
                 let settings = self.settings.lock().unwrap();
                 settings.timeout.to_value()
             }
-            subclass::Property("compress", ..) => {
+            "compress" => {
                 let settings = self.settings.lock().unwrap();
                 settings.compress.to_value()
             }
-            subclass::Property("extra-headers", ..) => {
+            "extra-headers" => {
                 let settings = self.settings.lock().unwrap();
                 settings.extra_headers.to_value()
             }
-            subclass::Property("cookies", ..) => {
+            "cookies" => {
                 let settings = self.settings.lock().unwrap();
                 settings.cookies.to_value()
             }
-            subclass::Property("iradio-mode", ..) => {
+            "iradio-mode" => {
                 let settings = self.settings.lock().unwrap();
                 settings.iradio_mode.to_value()
             }
-            subclass::Property("keep-alive", ..) => {
+            "keep-alive" => {
                 let settings = self.settings.lock().unwrap();
                 settings.keep_alive.to_value()
             }
@@ -809,6 +797,36 @@ impl ObjectImpl for ReqwestHttpSrc {
 }
 
 impl ElementImpl for ReqwestHttpSrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "HTTP Source",
+                "Source/Network/HTTP",
+                "Read stream from an HTTP/HTTPS location",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn set_context(&self, element: &Self::Type, context: &gst::Context) {
         if context.get_context_type() == REQWEST_CLIENT_CONTEXT {
             let mut external_client = self.external_client.lock().unwrap();
@@ -1077,6 +1095,12 @@ impl PushSrcImpl for ReqwestHttpSrc {
 }
 
 impl URIHandlerImpl for ReqwestHttpSrc {
+    const URI_TYPE: gst::URIType = gst::URIType::Src;
+
+    fn get_protocols() -> &'static [&'static str] {
+        &["http", "https"]
+    }
+
     fn get_uri(&self, _element: &Self::Type) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
@@ -1086,20 +1110,13 @@ impl URIHandlerImpl for ReqwestHttpSrc {
     fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
         self.set_location(&element, Some(uri))
     }
-
-    fn get_uri_type() -> gst::URIType {
-        gst::URIType::Src
-    }
-
-    fn get_protocols() -> Vec<String> {
-        vec!["http".to_string(), "https".to_string()]
-    }
 }
 
 impl ObjectSubclass for ReqwestHttpSrc {
     const NAME: &'static str = "ReqwestHttpSrc";
     type Type = super::ReqwestHttpSrc;
     type ParentType = gst_base::PushSrc;
+    type Interfaces = (gst::URIHandler,);
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -1113,30 +1130,5 @@ impl ObjectSubclass for ReqwestHttpSrc {
             state: Mutex::new(Default::default()),
             canceller: Mutex::new(None),
         }
-    }
-
-    fn type_init(type_: &mut subclass::InitializingType<Self>) {
-        type_.add_interface::<gst::URIHandler>();
-    }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "HTTP Source",
-            "Source/Network/HTTP",
-            "Read stream from an HTTP/HTTPS location",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
     }
 }

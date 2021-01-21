@@ -19,13 +19,22 @@ use atomic_refcell::AtomicRefCell;
 
 use byte_slice_cast::*;
 
+use once_cell::sync::Lazy;
+
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "claxondec",
+        gst::DebugColorFlags::empty(),
+        Some("Claxon FLAC decoder"),
+    )
+});
+
 struct State {
     streaminfo: Option<claxon::metadata::StreamInfo>,
     audio_info: Option<gst_audio::AudioInfo>,
 }
 
 pub struct ClaxonDec {
-    cat: gst::DebugCategory,
     state: AtomicRefCell<Option<State>>,
 }
 
@@ -33,6 +42,7 @@ impl ObjectSubclass for ClaxonDec {
     const NAME: &'static str = "ClaxonDec";
     type Type = super::ClaxonDec;
     type ParentType = gst_audio::AudioDecoder;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -40,64 +50,69 @@ impl ObjectSubclass for ClaxonDec {
 
     fn new() -> Self {
         Self {
-            cat: gst::DebugCategory::new(
-                "claxondec",
-                gst::DebugColorFlags::empty(),
-                Some("Claxon FLAC decoder"),
-            ),
             state: AtomicRefCell::new(None),
         }
-    }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Claxon FLAC decoder",
-            "Decoder/Audio",
-            "Claxon FLAC decoder",
-            "Ruben Gonzalez <rgonzalez@fluendo.com>",
-        );
-
-        let sink_caps = gst::Caps::new_simple("audio/x-flac", &[("framed", &true)]);
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &sink_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_caps = gst::Caps::new_simple(
-            "audio/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[
-                        &gst_audio::AudioFormat::S8.to_str(),
-                        &gst_audio::AUDIO_FORMAT_S16.to_str(),
-                        &gst_audio::AUDIO_FORMAT_S2432.to_str(),
-                        &gst_audio::AUDIO_FORMAT_S32.to_str(),
-                    ]),
-                ),
-                ("rate", &gst::IntRange::<i32>::new(1, 655_350)),
-                ("channels", &gst::IntRange::<i32>::new(1, 8)),
-                ("layout", &"interleaved"),
-            ],
-        );
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &src_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
     }
 }
 
 impl ObjectImpl for ClaxonDec {}
 
-impl ElementImpl for ClaxonDec {}
+impl ElementImpl for ClaxonDec {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Claxon FLAC decoder",
+                "Decoder/Audio",
+                "Claxon FLAC decoder",
+                "Ruben Gonzalez <rgonzalez@fluendo.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_caps = gst::Caps::new_simple("audio/x-flac", &[("framed", &true)]);
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst::Caps::new_simple(
+                "audio/x-raw",
+                &[
+                    (
+                        "format",
+                        &gst::List::new(&[
+                            &gst_audio::AudioFormat::S8.to_str(),
+                            &gst_audio::AUDIO_FORMAT_S16.to_str(),
+                            &gst_audio::AUDIO_FORMAT_S2432.to_str(),
+                            &gst_audio::AUDIO_FORMAT_S32.to_str(),
+                        ]),
+                    ),
+                    ("rate", &gst::IntRange::<i32>::new(1, 655_350)),
+                    ("channels", &gst::IntRange::<i32>::new(1, 8)),
+                    ("layout", &"interleaved"),
+                ],
+            );
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl AudioDecoderImpl for ClaxonDec {
     fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
@@ -116,7 +131,7 @@ impl AudioDecoderImpl for ClaxonDec {
     }
 
     fn set_format(&self, element: &Self::Type, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        gst_debug!(self.cat, obj: element, "Setting format {:?}", caps);
+        gst_debug!(CAT, obj: element, "Setting format {:?}", caps);
 
         let mut streaminfo: Option<claxon::metadata::StreamInfo> = None;
         let mut audio_info: Option<gst_audio::AudioInfo> = None;
@@ -127,18 +142,18 @@ impl AudioDecoderImpl for ClaxonDec {
 
             if streamheaders.len() < 2 {
                 gst_debug!(
-                    self.cat,
+                    CAT,
                     obj: element,
                     "Not enough streamheaders, trying in-band"
                 );
             } else {
                 let ident_buf = streamheaders[0].get::<gst::Buffer>();
                 if let Ok(Some(ident_buf)) = ident_buf {
-                    gst_debug!(self.cat, obj: element, "Got streamheader buffers");
+                    gst_debug!(CAT, obj: element, "Got streamheader buffers");
                     let inmap = ident_buf.map_readable().unwrap();
 
                     if inmap[0..7] != [0x7f, b'F', b'L', b'A', b'C', 0x01, 0x00] {
-                        gst_debug!(self.cat, obj: element, "Unknown streamheader format");
+                        gst_debug!(CAT, obj: element, "Unknown streamheader format");
                     } else if let Ok(tstreaminfo) = get_claxon_streaminfo(&inmap[13..]) {
                         if let Ok(taudio_info) = get_gstaudioinfo(tstreaminfo) {
                             // To speed up negotiation
@@ -146,7 +161,7 @@ impl AudioDecoderImpl for ClaxonDec {
                                 || element.negotiate().is_err()
                             {
                                 gst_debug!(
-                                    self.cat,
+                                    CAT,
                                     obj: element,
                                     "Error to negotiate output from based on in-caps streaminfo"
                                 );
@@ -175,7 +190,7 @@ impl AudioDecoderImpl for ClaxonDec {
         element: &Self::Type,
         inbuf: Option<&gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(self.cat, obj: element, "Handling buffer {:?}", inbuf);
+        gst_debug!(CAT, obj: element, "Handling buffer {:?}", inbuf);
 
         let inbuf = match inbuf {
             None => return Ok(gst::FlowSuccess::Ok),
@@ -183,7 +198,7 @@ impl AudioDecoderImpl for ClaxonDec {
         };
 
         let inmap = inbuf.map_readable().map_err(|_| {
-            gst_error!(self.cat, obj: element, "Failed to buffer readable");
+            gst_error!(CAT, obj: element, "Failed to buffer readable");
             gst::FlowError::Error
         })?;
 
@@ -191,17 +206,17 @@ impl AudioDecoderImpl for ClaxonDec {
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
         if inmap.as_slice() == b"fLaC" {
-            gst_debug!(self.cat, obj: element, "fLaC buffer received");
+            gst_debug!(CAT, obj: element, "fLaC buffer received");
         } else if inmap[0] & 0x7F == 0x00 {
-            gst_debug!(self.cat, obj: element, "Streaminfo header buffer received");
+            gst_debug!(CAT, obj: element, "Streaminfo header buffer received");
             return self.handle_streaminfo_header(element, state, inmap.as_ref());
         } else if inmap[0] == 0b1111_1111 && inmap[1] & 0b1111_1100 == 0b1111_1000 {
-            gst_debug!(self.cat, obj: element, "Data buffer received");
+            gst_debug!(CAT, obj: element, "Data buffer received");
             return self.handle_data(element, state, inmap.as_ref());
         } else {
             // info about other headers in flacparse and https://xiph.org/flac/format.html
             gst_debug!(
-                self.cat,
+                CAT,
                 obj: element,
                 "Other header buffer received {:?}",
                 inmap[0] & 0x7F
@@ -230,7 +245,7 @@ impl ClaxonDec {
         })?;
 
         gst_debug!(
-            self.cat,
+            CAT,
             obj: element,
             "Successfully parsed headers: {:?}",
             audio_info

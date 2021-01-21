@@ -45,52 +45,6 @@ const DEFAULT_COLUMNS: u32 = 32; /* CEA 608 max columns */
 const DEFAULT_LINES: u32 = 0;
 const DEFAULT_ACCUMULATE: i64 = -1;
 
-static PROPERTIES: [subclass::Property; 4] = [
-    subclass::Property("dictionary", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Dictionary",
-            "Path to a dictionary to load at runtime to perform hyphenation, see \
-                <https://docs.rs/crate/hyphenation/0.7.1> for more information",
-            None,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("columns", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Columns",
-            "Maximum number of columns for any given line",
-            1,
-            std::u32::MAX,
-            DEFAULT_COLUMNS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("lines", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Lines",
-            "Split input buffer into output buffers with max lines (0=do not split)",
-            0,
-            std::u32::MAX,
-            DEFAULT_LINES,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("accumulate-time", |name| {
-        glib::ParamSpec::int64(
-            name,
-            "accumulate-time",
-            "Cut-off time for input text accumulation (-1=do not accumulate)",
-            -1,
-            std::i64::MAX,
-            DEFAULT_ACCUMULATE,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 #[derive(Debug, Clone)]
 struct Settings {
     dictionary: Option<String>,
@@ -409,6 +363,7 @@ impl ObjectSubclass for TextWrap {
     const NAME: &'static str = "RsTextWrap";
     type Type = super::TextWrap;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -449,41 +404,53 @@ impl ObjectSubclass for TextWrap {
             state,
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Text Wrapper",
-            "Text/Filter",
-            "Breaks text into fixed-size lines, with optional hyphenationz",
-            "Mathieu Duponchelle <mathieu@centricular.com>",
-        );
-
-        let caps = gst::Caps::builder("text/x-raw")
-            .field("format", &"utf8")
-            .build();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for TextWrap {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "dictionary",
+                    "Dictionary",
+                    "Path to a dictionary to load at runtime to perform hyphenation, see \
+                        <https://docs.rs/crate/hyphenation/0.7.1> for more information",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "columns",
+                    "Columns",
+                    "Maximum number of columns for any given line",
+                    1,
+                    std::u32::MAX,
+                    DEFAULT_COLUMNS,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "lines",
+                    "Lines",
+                    "Split input buffer into output buffers with max lines (0=do not split)",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_LINES,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::int64(
+                    "accumulate-time",
+                    "accumulate-time",
+                    "Cut-off time for input text accumulation (-1=do not accumulate)",
+                    -1,
+                    std::i64::MAX,
+                    DEFAULT_ACCUMULATE,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
@@ -491,27 +458,31 @@ impl ObjectImpl for TextWrap {
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("dictionary", ..) => {
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "dictionary" => {
                 let mut settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
                 settings.dictionary = value.get().expect("type checked upstream");
                 state.options = None;
             }
-            subclass::Property("columns", ..) => {
+            "columns" => {
                 let mut settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
                 settings.columns = value.get_some().expect("type checked upstream");
                 state.options = None;
             }
-            subclass::Property("lines", ..) => {
+            "lines" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.lines = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("accumulate-time", ..) => {
+            "accumulate-time" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.accumulate_time = match value.get_some().expect("type checked upstream") {
                     -1i64 => gst::CLOCK_TIME_NONE,
@@ -522,23 +493,21 @@ impl ObjectImpl for TextWrap {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("dictionary", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "dictionary" => {
                 let settings = self.settings.lock().unwrap();
                 settings.dictionary.to_value()
             }
-            subclass::Property("columns", ..) => {
+            "columns" => {
                 let settings = self.settings.lock().unwrap();
                 settings.columns.to_value()
             }
-            subclass::Property("lines", ..) => {
+            "lines" => {
                 let settings = self.settings.lock().unwrap();
                 settings.lines.to_value()
             }
-            subclass::Property("accumulate-time", ..) => {
+            "accumulate-time" => {
                 let settings = self.settings.lock().unwrap();
                 match settings.accumulate_time.0 {
                     Some(time) => (time as i64).to_value(),
@@ -551,6 +520,46 @@ impl ObjectImpl for TextWrap {
 }
 
 impl ElementImpl for TextWrap {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Text Wrapper",
+                "Text/Filter",
+                "Breaks text into fixed-size lines, with optional hyphenation",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::builder("text/x-raw")
+                .field("format", &"utf8")
+                .build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

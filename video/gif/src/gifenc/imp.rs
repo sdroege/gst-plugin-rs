@@ -81,18 +81,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property("repeat", |name| {
-    glib::ParamSpec::int(
-        name,
-        "Repeat",
-        "Repeat (-1 to loop forever, 0 .. n finite repetitions)",
-        -1,
-        std::u16::MAX as i32,
-        DEFAULT_REPEAT,
-        glib::ParamFlags::READWRITE,
-    )
-})];
-
 struct State {
     video_info: gst_video::VideoInfo,
     cache: Arc<CacheBuffer>,
@@ -146,6 +134,7 @@ impl ObjectSubclass for GifEnc {
     const NAME: &'static str = "GifEnc";
     type Type = super::GifEnc;
     type ParentType = gst_video::VideoEncoder;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -157,69 +146,34 @@ impl ObjectSubclass for GifEnc {
             settings: Mutex::new(Default::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "GIF encoder",
-            "Encoder/Video",
-            "GIF encoder",
-            "Markus Ebner <info@ebner-markus.de>",
-        );
-
-        let sink_caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[
-                        &gst_video::VideoFormat::Rgb.to_str(),
-                        &gst_video::VideoFormat::Rgba.to_str(),
-                    ]),
-                ),
-                ("width", &gst::IntRange::<i32>::new(1, std::u16::MAX as i32)),
-                (
-                    "height",
-                    &gst::IntRange::<i32>::new(1, std::u16::MAX as i32),
-                ),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(1, 1),
-                        // frame-delay timing in gif is a multiple of 10ms -> max 100fps
-                        gst::Fraction::new(100, 1),
-                    ),
-                ),
-            ],
-        );
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &sink_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_caps = gst::Caps::new_simple("image/gif", &[]);
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &src_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for GifEnc {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::int(
+                "repeat",
+                "Repeat",
+                "Repeat (-1 to loop forever, 0 .. n finite repetitions)",
+                -1,
+                std::u16::MAX as i32,
+                DEFAULT_REPEAT,
+                glib::ParamFlags::READWRITE,
+            )]
+        });
 
-        match *prop {
-            subclass::Property("repeat", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "repeat" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.repeat = value.get_some().expect("type checked upstream");
             }
@@ -227,11 +181,9 @@ impl ObjectImpl for GifEnc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("repeat", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "repeat" => {
                 let settings = self.settings.lock().unwrap();
                 settings.repeat.to_value()
             }
@@ -240,7 +192,70 @@ impl ObjectImpl for GifEnc {
     }
 }
 
-impl ElementImpl for GifEnc {}
+impl ElementImpl for GifEnc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "GIF encoder",
+                "Encoder/Video",
+                "GIF encoder",
+                "Markus Ebner <info@ebner-markus.de>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_caps = gst::Caps::new_simple(
+                "video/x-raw",
+                &[
+                    (
+                        "format",
+                        &gst::List::new(&[
+                            &gst_video::VideoFormat::Rgb.to_str(),
+                            &gst_video::VideoFormat::Rgba.to_str(),
+                        ]),
+                    ),
+                    ("width", &gst::IntRange::<i32>::new(1, std::u16::MAX as i32)),
+                    (
+                        "height",
+                        &gst::IntRange::<i32>::new(1, std::u16::MAX as i32),
+                    ),
+                    (
+                        "framerate",
+                        &gst::FractionRange::new(
+                            gst::Fraction::new(1, 1),
+                            // frame-delay timing in gif is a multiple of 10ms -> max 100fps
+                            gst::Fraction::new(100, 1),
+                        ),
+                    ),
+                ],
+            );
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst::Caps::new_simple("image/gif", &[]);
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl VideoEncoderImpl for GifEnc {
     fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {

@@ -93,81 +93,6 @@ impl Default for SettingsSrc {
     }
 }
 
-static PROPERTIES_SRC: [subclass::Property; 6] = [
-    subclass::Property("max-size-buffers", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Max Size Buffers",
-            "Maximum number of buffers to queue (0=unlimited)",
-            0,
-            u32::MAX,
-            DEFAULT_MAX_SIZE_BUFFERS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("max-size-bytes", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Max Size Bytes",
-            "Maximum number of bytes to queue (0=unlimited)",
-            0,
-            u32::MAX,
-            DEFAULT_MAX_SIZE_BYTES,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("max-size-time", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Max Size Time",
-            "Maximum number of nanoseconds to queue (0=unlimited)",
-            0,
-            u64::MAX - 1,
-            DEFAULT_MAX_SIZE_TIME,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Context",
-            "Context name to share threads with",
-            Some(DEFAULT_CONTEXT),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context-wait", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Context Wait",
-            "Throttle poll loop to run at most once every this many ms",
-            0,
-            1000,
-            DEFAULT_CONTEXT_WAIT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("proxy-context", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Proxy Context",
-            "Context name of the proxy to share with",
-            Some(DEFAULT_PROXY_CONTEXT),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
-static PROPERTIES_SINK: [subclass::Property; 1] = [subclass::Property("proxy-context", |name| {
-    glib::ParamSpec::string(
-        name,
-        "Proxy Context",
-        "Context name of the proxy to share with",
-        Some(DEFAULT_PROXY_CONTEXT),
-        glib::ParamFlags::READWRITE,
-    )
-})];
-
 // TODO: Refactor into a Sender and Receiver instead of the have_ booleans
 
 #[derive(Debug, Default)]
@@ -650,33 +575,12 @@ impl ProxySink {
 impl ObjectSubclass for ProxySink {
     const NAME: &'static str = "RsTsProxySink";
     type Type = super::ProxySink;
+    type Interfaces = ();
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib::object_subclass!();
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Thread-sharing proxy sink",
-            "Sink/Generic",
-            "Thread-sharing proxy sink",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES_SINK);
-    }
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {
@@ -691,12 +595,30 @@ impl ObjectSubclass for ProxySink {
 }
 
 impl ObjectImpl for ProxySink {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES_SINK[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::string(
+                "proxy-context",
+                "Proxy Context",
+                "Context name of the proxy to share with",
+                Some(DEFAULT_PROXY_CONTEXT),
+                glib::ParamFlags::READWRITE,
+            )]
+        });
 
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
         let mut settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("proxy-context", ..) => {
+        match pspec.get_name() {
+            "proxy-context" => {
                 settings.proxy_context = value
                     .get()
                     .expect("type checked upstream")
@@ -706,12 +628,10 @@ impl ObjectImpl for ProxySink {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES_SINK[id];
-
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("proxy-context", ..) => settings.proxy_context.to_value(),
+        match pspec.get_name() {
+            "proxy-context" => settings.proxy_context.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -726,6 +646,37 @@ impl ObjectImpl for ProxySink {
 }
 
 impl ElementImpl for ProxySink {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Thread-sharing proxy sink",
+                "Sink/Generic",
+                "Thread-sharing proxy sink",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,
@@ -1166,32 +1117,11 @@ impl ObjectSubclass for ProxySrc {
     const NAME: &'static str = "RsTsProxySrc";
     type Type = super::ProxySrc;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib::object_subclass!();
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Thread-sharing proxy source",
-            "Source/Generic",
-            "Thread-sharing proxy source",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES_SRC);
-    }
 
     fn new() -> Self {
         unreachable!()
@@ -1212,30 +1142,93 @@ impl ObjectSubclass for ProxySrc {
 }
 
 impl ObjectImpl for ProxySrc {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES_SRC[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "context",
+                    "Context",
+                    "Context name to share threads with",
+                    Some(DEFAULT_CONTEXT),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "context-wait",
+                    "Context Wait",
+                    "Throttle poll loop to run at most once every this many ms",
+                    0,
+                    1000,
+                    DEFAULT_CONTEXT_WAIT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "proxy-context",
+                    "Proxy Context",
+                    "Context name of the proxy to share with",
+                    Some(DEFAULT_PROXY_CONTEXT),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "max-size-buffers",
+                    "Max Size Buffers",
+                    "Maximum number of buffers to queue (0=unlimited)",
+                    0,
+                    u32::MAX,
+                    DEFAULT_MAX_SIZE_BUFFERS,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "max-size-bytes",
+                    "Max Size Bytes",
+                    "Maximum number of bytes to queue (0=unlimited)",
+                    0,
+                    u32::MAX,
+                    DEFAULT_MAX_SIZE_BYTES,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint64(
+                    "max-size-time",
+                    "Max Size Time",
+                    "Maximum number of nanoseconds to queue (0=unlimited)",
+                    0,
+                    u64::MAX - 1,
+                    DEFAULT_MAX_SIZE_TIME,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
         let mut settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("max-size-buffers", ..) => {
+        match pspec.get_name() {
+            "max-size-buffers" => {
                 settings.max_size_buffers = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("max-size-bytes", ..) => {
+            "max-size-bytes" => {
                 settings.max_size_bytes = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("max-size-time", ..) => {
+            "max-size-time" => {
                 settings.max_size_time = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("context", ..) => {
+            "context" => {
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
-            subclass::Property("context-wait", ..) => {
+            "context-wait" => {
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("proxy-context", ..) => {
+            "proxy-context" => {
                 settings.proxy_context = value
                     .get()
                     .expect("type checked upstream")
@@ -1245,17 +1238,15 @@ impl ObjectImpl for ProxySrc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES_SRC[id];
-
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("max-size-buffers", ..) => settings.max_size_buffers.to_value(),
-            subclass::Property("max-size-bytes", ..) => settings.max_size_bytes.to_value(),
-            subclass::Property("max-size-time", ..) => settings.max_size_time.to_value(),
-            subclass::Property("context", ..) => settings.context.to_value(),
-            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
-            subclass::Property("proxy-context", ..) => settings.proxy_context.to_value(),
+        match pspec.get_name() {
+            "max-size-buffers" => settings.max_size_buffers.to_value(),
+            "max-size-bytes" => settings.max_size_bytes.to_value(),
+            "max-size-time" => settings.max_size_time.to_value(),
+            "context" => settings.context.to_value(),
+            "context-wait" => settings.context_wait.to_value(),
+            "proxy-context" => settings.proxy_context.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -1270,6 +1261,37 @@ impl ObjectImpl for ProxySrc {
 }
 
 impl ElementImpl for ProxySrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Thread-sharing proxy source",
+                "Source/Generic",
+                "Thread-sharing proxy source",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

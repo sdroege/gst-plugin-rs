@@ -116,40 +116,6 @@ const DEFAULT_LATENCY_MS: u32 = 8000;
 const DEFAULT_USE_PARTIAL_RESULTS: bool = true;
 const GRANULARITY_MS: u32 = 100;
 
-static PROPERTIES: [subclass::Property; 3] = [
-    subclass::Property("language-code", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Language Code",
-            "The Language of the Stream, see \
-                <https://docs.aws.amazon.com/transcribe/latest/dg/how-streaming-transcription.html> \
-                for an up to date list of allowed languages",
-            Some("en-US"),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("use-partial-results", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Latency",
-            "Whether partial results from AWS should be used",
-            DEFAULT_USE_PARTIAL_RESULTS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("latency", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Latency",
-            "Amount of milliseconds to allow AWS transcribe",
-            2 * GRANULARITY_MS,
-            std::u32::MAX,
-            DEFAULT_LATENCY_MS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 #[derive(Debug, Clone)]
 struct Settings {
     latency_ms: u32,
@@ -1010,6 +976,7 @@ impl ObjectSubclass for Transcriber {
     const NAME: &'static str = "RsAwsTranscriber";
     type Type = super::Transcriber;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -1063,45 +1030,43 @@ impl ObjectSubclass for Transcriber {
             ws_sink: AtomicRefCell::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Transcriber",
-            "Audio/Text/Filter",
-            "Speech to Text filter, using AWS transcribe",
-            "Jordan Petridis <jordan@centricular.com>, Mathieu Duponchelle <mathieu@centricular.com>",
-        );
-
-        let src_caps = gst::Caps::builder("text/x-raw")
-            .field("format", &"utf8")
-            .build();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &src_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_caps = gst::Caps::builder("audio/x-raw")
-            .field("format", &"S16LE")
-            .field("rate", &gst::IntRange::<i32>::new(8000, 48000))
-            .field("channels", &1)
-            .build();
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &sink_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for Transcriber {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "language-code",
+                    "Language Code",
+                    "The Language of the Stream, see \
+                        <https://docs.aws.amazon.com/transcribe/latest/dg/how-streaming-transcription.html> \
+                        for an up to date list of allowed languages",
+                    Some("en-US"),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "use-partial-results",
+                    "Latency",
+                    "Whether partial results from AWS should be used",
+                    DEFAULT_USE_PARTIAL_RESULTS,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "latency",
+                    "Latency",
+                    "Amount of milliseconds to allow AWS transcribe",
+                    2 * GRANULARITY_MS,
+                    std::u32::MAX,
+                    DEFAULT_LATENCY_MS,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
@@ -1110,19 +1075,23 @@ impl ObjectImpl for Transcriber {
         obj.set_element_flags(gst::ElementFlags::PROVIDE_CLOCK | gst::ElementFlags::REQUIRE_CLOCK);
     }
 
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("language_code", ..) => {
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "language_code" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.language_code = value.get().expect("type checked upstream");
             }
-            subclass::Property("latency", ..) => {
+            "latency" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.latency_ms = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("use-partial-results", ..) => {
+            "use-partial-results" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.use_partial_results = value.get_some().expect("type checked upstream");
             }
@@ -1130,19 +1099,17 @@ impl ObjectImpl for Transcriber {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("language-code", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "language-code" => {
                 let settings = self.settings.lock().unwrap();
                 settings.language_code.to_value()
             }
-            subclass::Property("latency", ..) => {
+            "latency" => {
                 let settings = self.settings.lock().unwrap();
                 settings.latency_ms.to_value()
             }
-            subclass::Property("use-partial-results", ..) => {
+            "use-partial-results" => {
                 let settings = self.settings.lock().unwrap();
                 settings.use_partial_results.to_value()
             }
@@ -1152,6 +1119,51 @@ impl ObjectImpl for Transcriber {
 }
 
 impl ElementImpl for Transcriber {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+            "Transcriber",
+            "Audio/Text/Filter",
+            "Speech to Text filter, using AWS transcribe",
+            "Jordan Petridis <jordan@centricular.com>, Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let src_caps = gst::Caps::builder("text/x-raw")
+                .field("format", &"utf8")
+                .build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            let sink_caps = gst::Caps::builder("audio/x-raw")
+                .field("format", &"S16LE")
+                .field("rate", &gst::IntRange::<i32>::new(8000, 48000))
+                .field("channels", &1)
+                .build();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

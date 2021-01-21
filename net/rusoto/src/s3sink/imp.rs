@@ -116,47 +116,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 4] = [
-    subclass::Property("bucket", |name| {
-        glib::ParamSpec::string(
-            name,
-            "S3 Bucket",
-            "The bucket of the file to write",
-            None,
-            glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
-        )
-    }),
-    subclass::Property("key", |name| {
-        glib::ParamSpec::string(
-            name,
-            "S3 Key",
-            "The key of the file to write",
-            None,
-            glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
-        )
-    }),
-    subclass::Property("region", |name| {
-        glib::ParamSpec::string(
-            name,
-            "AWS Region",
-            "An AWS region (e.g. eu-west-2).",
-            None,
-            glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
-        )
-    }),
-    subclass::Property("part-size", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Part size",
-            "A size (in bytes) of an individual part used for multipart upload.",
-            5 * 1024 * 1024,        // 5 MB
-            5 * 1024 * 1024 * 1024, // 5 GB
-            DEFAULT_BUFFER_SIZE,
-            glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
-        )
-    }),
-];
-
 impl S3Sink {
     fn flush_current_buffer(
         &self,
@@ -386,6 +345,7 @@ impl ObjectSubclass for S3Sink {
     const NAME: &'static str = "RusotoS3Sink";
     type Type = super::S3Sink;
     type ParentType = gst_base::BaseSink;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -398,42 +358,65 @@ impl ObjectSubclass for S3Sink {
             canceller: Mutex::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Amazon S3 sink",
-            "Source/Network",
-            "Writes an object to Amazon S3",
-            "Marcin Kolny <mkolny@amazon.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for S3Sink {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "bucket",
+                    "S3 Bucket",
+                    "The bucket of the file to write",
+                    None,
+                    glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
+                ),
+                glib::ParamSpec::string(
+                    "key",
+                    "S3 Key",
+                    "The key of the file to write",
+                    None,
+                    glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
+                ),
+                glib::ParamSpec::string(
+                    "region",
+                    "AWS Region",
+                    "An AWS region (e.g. eu-west-2).",
+                    None,
+                    glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
+                ),
+                glib::ParamSpec::uint64(
+                    "part-size",
+                    "Part size",
+                    "A size (in bytes) of an individual part used for multipart upload.",
+                    5 * 1024 * 1024,        // 5 MB
+                    5 * 1024 * 1024 * 1024, // 5 GB
+                    DEFAULT_BUFFER_SIZE,
+                    glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
         let mut settings = self.settings.lock().unwrap();
 
-        match *prop {
-            subclass::Property("bucket", ..) => {
+        match pspec.get_name() {
+            "bucket" => {
                 settings.bucket = value.get::<String>().expect("type checked upstream");
             }
-            subclass::Property("key", ..) => {
+            "key" => {
                 settings.key = value.get::<String>().expect("type checked upstream");
             }
-            subclass::Property("region", ..) => {
+            "region" => {
                 settings.region = Region::from_str(
                     &value
                         .get::<String>()
@@ -442,28 +425,57 @@ impl ObjectImpl for S3Sink {
                 )
                 .unwrap();
             }
-            subclass::Property("part-size", ..) => {
+            "part-size" => {
                 settings.buffer_size = value.get_some::<u64>().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
     }
 
-    fn get_property(&self, _: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id as usize];
+    fn get_property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
 
-        match *prop {
-            subclass::Property("key", ..) => settings.key.to_value(),
-            subclass::Property("bucket", ..) => settings.bucket.to_value(),
-            subclass::Property("region", ..) => settings.region.name().to_value(),
-            subclass::Property("part-size", ..) => settings.buffer_size.to_value(),
+        match pspec.get_name() {
+            "key" => settings.key.to_value(),
+            "bucket" => settings.bucket.to_value(),
+            "region" => settings.region.name().to_value(),
+            "part-size" => settings.buffer_size.to_value(),
             _ => unimplemented!(),
         }
     }
 }
 
-impl ElementImpl for S3Sink {}
+impl ElementImpl for S3Sink {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Amazon S3 sink",
+                "Source/Network",
+                "Writes an object to Amazon S3",
+                "Marcin Kolny <mkolny@amazon.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseSinkImpl for S3Sink {
     fn start(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {

@@ -39,6 +39,7 @@ impl ObjectSubclass for CdgParse {
     const NAME: &'static str = "CdgParse";
     type Type = super::CdgParse;
     type ParentType = gst_base::BaseParse;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -47,48 +48,58 @@ impl ObjectSubclass for CdgParse {
     fn new() -> Self {
         Self
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "CDG parser",
-            "Codec/Parser/Video",
-            "CDG parser",
-            "Guillaume Desmottes <guillaume.desmottes@collabora.com>",
-        );
-
-        let sink_caps = gst::Caps::new_simple("video/x-cdg", &[]);
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &sink_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_caps = gst::Caps::new_simple(
-            "video/x-cdg",
-            &[
-                ("width", &(CDG_WIDTH as i32)),
-                ("height", &(CDG_HEIGHT as i32)),
-                ("framerate", &gst::Fraction::new(0, 1)),
-                ("parsed", &true),
-            ],
-        );
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &src_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-    }
 }
 
 impl ObjectImpl for CdgParse {}
 
-impl ElementImpl for CdgParse {}
+impl ElementImpl for CdgParse {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "CDG parser",
+                "Codec/Parser/Video",
+                "CDG parser",
+                "Guillaume Desmottes <guillaume.desmottes@collabora.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_caps = gst::Caps::new_simple("video/x-cdg", &[]);
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst::Caps::new_simple(
+                "video/x-cdg",
+                &[
+                    ("width", &(CDG_WIDTH as i32)),
+                    ("height", &(CDG_HEIGHT as i32)),
+                    ("framerate", &gst::Fraction::new(0, 1)),
+                    ("parsed", &true),
+                ],
+            );
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 fn bytes_to_time(bytes: Bytes) -> gst::ClockTime {
     match bytes {

@@ -80,49 +80,6 @@ pub struct CsoundFilter {
     compiled: AtomicBool,
 }
 
-static PROPERTIES: [subclass::Property; 4] = [
-    subclass::Property("loop", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Loop",
-            "loop over the score (can be changed in PLAYING or PAUSED state)",
-            DEFAULT_LOOP,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("location", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Location",
-            "Location of the csd file to be used by csound.
-            Use either location or CSD-text but not both at the same time, if so and error would be triggered",
-            None,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("csd-text", |name| {
-        glib::ParamSpec::string(
-            name,
-            "CSD-text",
-            "The content of a csd file passed as a String.
-            Use either location or csd-text but not both at the same time, if so and error would be triggered",
-            None,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("score_offset", |name| {
-        glib::ParamSpec::double(
-            name,
-            "Score Offset",
-            "Score offset in seconds to start the performance",
-            0.0,
-            f64::MAX,
-            SCORE_OFFSET_DEFAULT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 impl State {
     // Considering an input of size: input_size and the user's ksmps,
     // calculates the equivalent output_size
@@ -361,6 +318,7 @@ impl ObjectSubclass for CsoundFilter {
     const NAME: &'static str = "CsoundFilter";
     type Type = super::CsoundFilter;
     type ParentType = gst_base::BaseTransform;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -383,61 +341,63 @@ impl ObjectSubclass for CsoundFilter {
             compiled: AtomicBool::new(false),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Audio filter",
-            "Filter/Effect/Audio",
-            "Implement an audio filter/effects using Csound",
-            "Natanael Mojica <neithanmo@gmail.com>",
-        );
-
-        let caps = gst::Caps::new_simple(
-            "audio/x-raw",
-            &[
-                ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-                ("rate", &gst::IntRange::<i32>::new(1, i32::MAX)),
-                ("channels", &gst::IntRange::<i32>::new(1, i32::MAX)),
-                ("layout", &"interleaved"),
-            ],
-        );
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-
-        klass.configure(
-            gst_base::subclass::BaseTransformMode::NeverInPlace,
-            false,
-            false,
-        );
-    }
 }
 
 impl ObjectImpl for CsoundFilter {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-        match *prop {
-            subclass::Property("loop", ..) => {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::boolean(
+                    "loop",
+                    "Loop",
+                    "loop over the score (can be changed in PLAYING or PAUSED state)",
+                    DEFAULT_LOOP,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "location",
+                    "Location",
+                    "Location of the csd file to be used by csound.
+                    Use either location or CSD-text but not both at the same time, if so and error would be triggered",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "csd-text",
+                    "CSD-text",
+                    "The content of a csd file passed as a String.
+                    Use either location or csd-text but not both at the same time, if so and error would be triggered",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::double(
+                    "score-offset",
+                    "Score Offset",
+                    "Score offset in seconds to start the performance",
+                    0.0,
+                    f64::MAX,
+                    SCORE_OFFSET_DEFAULT,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "loop" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.loop_ = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("location", ..) => {
+            "location" => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
                     settings.location = match value.get::<String>() {
@@ -446,7 +406,7 @@ impl ObjectImpl for CsoundFilter {
                     };
                 }
             }
-            subclass::Property("csd-text", ..) => {
+            "csd-text" => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
                     settings.csd_text = match value.get::<String>() {
@@ -455,7 +415,7 @@ impl ObjectImpl for CsoundFilter {
                     };
                 }
             }
-            subclass::Property("score_offset", ..) => {
+            "score_offset" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.offset = value.get_some().expect("type checked upstream");
             }
@@ -463,23 +423,21 @@ impl ObjectImpl for CsoundFilter {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("loop", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "loop" => {
                 let settings = self.settings.lock().unwrap();
                 settings.loop_.to_value()
             }
-            subclass::Property("location", ..) => {
+            "location" => {
                 let settings = self.settings.lock().unwrap();
                 settings.location.to_value()
             }
-            subclass::Property("csd-text", ..) => {
+            "csd-text" => {
                 let settings = self.settings.lock().unwrap();
                 settings.csd_text.to_value()
             }
-            subclass::Property("score_offset", ..) => {
+            "score_offset" => {
                 let settings = self.settings.lock().unwrap();
                 settings.offset.to_value()
             }
@@ -488,9 +446,60 @@ impl ObjectImpl for CsoundFilter {
     }
 }
 
-impl ElementImpl for CsoundFilter {}
+impl ElementImpl for CsoundFilter {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Audio filter",
+                "Filter/Effect/Audio",
+                "Implement an audio filter/effects using Csound",
+                "Natanael Mojica <neithanmo@gmail.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_simple(
+                "audio/x-raw",
+                &[
+                    ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
+                    ("rate", &gst::IntRange::<i32>::new(1, i32::MAX)),
+                    ("channels", &gst::IntRange::<i32>::new(1, i32::MAX)),
+                    ("layout", &"interleaved"),
+                ],
+            );
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseTransformImpl for CsoundFilter {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::NeverInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+
     fn start(&self, _element: &Self::Type) -> std::result::Result<(), gst::ErrorMessage> {
         self.compile_score()?;
 

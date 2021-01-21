@@ -41,18 +41,6 @@ pub struct ProgressBin {
     output_type: Mutex<ProgressBinOutput>,
 }
 
-// Metadata for the element's properties
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property("output", |name| {
-    glib::ParamSpec::enum_(
-        name,
-        "Output",
-        "Defines the output type of the progressbin",
-        ProgressBinOutput::static_type(),
-        DEFAULT_OUTPUT_TYPE as i32,
-        glib::ParamFlags::READWRITE,
-    )
-})];
-
 // This trait registers our type with the GObject object system and
 // provides the entry points for creating a new instance and setting
 // up the class data
@@ -60,6 +48,7 @@ impl ObjectSubclass for ProgressBin {
     const NAME: &'static str = "RsProgressBin";
     type Type = super::ProgressBin;
     type ParentType = gst::Bin;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -92,64 +81,37 @@ impl ObjectSubclass for ProgressBin {
             output_type: Mutex::new(ProgressBinOutput::Println),
         }
     }
-
-    // Called exactly once when registering the type. Used for
-    // setting up metadata for all instances, e.g. the name and
-    // classification and the pad templates with their caps.
-    //
-    // Actual instances can create pads based on those pad templates
-    // with a subset of the caps given here.
-    fn class_init(klass: &mut Self::Class) {
-        // Set the element specific metadata. This information is what
-        // is visible from gst-inspect-1.0 and can also be programatically
-        // retrieved from the gst::Registry after initial registration
-        // without having to load the plugin in memory.
-        klass.set_metadata(
-            "ProgressBin",
-            "Generic",
-            "Prints progress information to stdout",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        // Create and add pad templates for our sink and source pad. These
-        // are later used for actually creating the pads and beforehand
-        // already provide information to GStreamer about all possible
-        // pads that could exist for this type.
-
-        // Our element can accept any possible caps on both pads
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        // Install all our properties
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 // Implementation of glib::Object virtual methods
 impl ObjectImpl for ProgressBin {
+    // Metadata for the element's properties
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::enum_(
+                "output",
+                "Output",
+                "Defines the output type of the progressbin",
+                ProgressBinOutput::static_type(),
+                DEFAULT_OUTPUT_TYPE as i32,
+                glib::ParamFlags::READWRITE,
+            )]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("output", ..) => {
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "output" => {
                 let mut output_type = self.output_type.lock().unwrap();
                 let new_output_type = value
                     .get_some::<ProgressBinOutput>()
@@ -169,11 +131,9 @@ impl ObjectImpl for ProgressBin {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("output", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "output" => {
                 let output_type = self.output_type.lock().unwrap();
                 output_type.to_value()
             }
@@ -207,7 +167,56 @@ impl ObjectImpl for ProgressBin {
 }
 
 // Implementation of gst::Element virtual methods
-impl ElementImpl for ProgressBin {}
+impl ElementImpl for ProgressBin {
+    // Set the element specific metadata. This information is what
+    // is visible from gst-inspect-1.0 and can also be programatically
+    // retrieved from the gst::Registry after initial registration
+    // without having to load the plugin in memory.
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "ProgressBin",
+                "Generic",
+                "Prints progress information to stdout",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+    // Create and add pad templates for our sink and source pad. These
+    // are later used for actually creating the pads and beforehand
+    // already provide information to GStreamer about all possible
+    // pads that could exist for this type.
+    //
+    // Actual instances can create pads based on those pad templates
+    // with a subset of the caps given here.
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            // Our element can accept any possible caps on both pads
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 // Implementation of gst::Bin virtual methods
 impl BinImpl for ProgressBin {

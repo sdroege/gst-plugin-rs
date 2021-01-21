@@ -375,6 +375,7 @@ impl ObjectSubclass for Cea608ToTt {
     const NAME: &'static str = "Cea608ToTt";
     type Type = super::Cea608ToTt;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -411,56 +412,6 @@ impl ObjectSubclass for Cea608ToTt {
             state: AtomicRefCell::new(State::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "CEA-608 to TT",
-            "Generic",
-            "Converts CEA-608 Closed Captions to SRT/VTT timed text",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let mut caps = gst::Caps::new_empty();
-        {
-            let caps = caps.get_mut().unwrap();
-
-            // WebVTT
-            let s = gst::Structure::builder("application/x-subtitle-vtt").build();
-            caps.append_structure(s);
-
-            // SRT
-            let s = gst::Structure::builder("application/x-subtitle").build();
-            caps.append_structure(s);
-
-            // Raw timed text
-            let s = gst::Structure::builder("text/x-raw")
-                .field("format", &"utf8")
-                .build();
-            caps.append_structure(s);
-        }
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let caps = gst::Caps::builder("closedcaption/x-cea-608")
-            .field("format", &"raw")
-            .build();
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-    }
 }
 
 impl ObjectImpl for Cea608ToTt {
@@ -473,6 +424,66 @@ impl ObjectImpl for Cea608ToTt {
 }
 
 impl ElementImpl for Cea608ToTt {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "CEA-608 to TT",
+                "Generic",
+                "Converts CEA-608 Closed Captions to SRT/VTT timed text",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let mut caps = gst::Caps::new_empty();
+            {
+                let caps = caps.get_mut().unwrap();
+
+                // WebVTT
+                let s = gst::Structure::builder("application/x-subtitle-vtt").build();
+                caps.append_structure(s);
+
+                // SRT
+                let s = gst::Structure::builder("application/x-subtitle").build();
+                caps.append_structure(s);
+
+                // Raw timed text
+                let s = gst::Structure::builder("text/x-raw")
+                    .field("format", &"utf8")
+                    .build();
+                caps.append_structure(s);
+            }
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let caps = gst::Caps::builder("closedcaption/x-cea-608")
+                .field("format", &"raw")
+                .build();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

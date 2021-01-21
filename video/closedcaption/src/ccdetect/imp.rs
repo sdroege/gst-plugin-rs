@@ -77,38 +77,6 @@ pub struct CCDetect {
     state: Mutex<Option<State>>,
 }
 
-static PROPERTIES: [subclass::Property; 3] = [
-    subclass::Property("window", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Window",
-            "Window of time (in ns) to determine if captions exist in the stream",
-            0,
-            u64::MAX,
-            DEFAULT_WINDOW,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("cc608", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "cc608",
-            "Whether CEA608 captions (CC1/CC3) have been detected",
-            DEFAULT_CC608,
-            glib::ParamFlags::READABLE,
-        )
-    }),
-    subclass::Property("cc708", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "cc608",
-            "Whether CEA708 captions (cc_data) have been detected",
-            DEFAULT_CC708,
-            glib::ParamFlags::READABLE,
-        )
-    }),
-];
-
 #[derive(Debug, Clone, Copy)]
 struct CCPacketContents {
     cc608: bool,
@@ -387,6 +355,7 @@ impl ObjectSubclass for CCDetect {
     const NAME: &'static str = "CCDetect";
     type Type = super::CCDetect;
     type ParentType = gst_base::BaseTransform;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -398,58 +367,50 @@ impl ObjectSubclass for CCDetect {
             state: Mutex::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Closed Caption Detect",
-            "Filter/Video/ClosedCaption/Detect",
-            "Detect if valid closed captions are present in a stream",
-            "Matthew Waters <matthew@centricular.com>",
-        );
-
-        let mut caps = gst::Caps::new_empty();
-        {
-            let caps = caps.get_mut().unwrap();
-            let s = gst::Structure::builder("closedcaption/x-cea-708")
-                .field("format", &gst::List::new(&[&"cc_data", &"cdp"]))
-                .build();
-            caps.append_structure(s);
-        }
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-
-        klass.configure(
-            gst_base::subclass::BaseTransformMode::AlwaysInPlace,
-            true,
-            true,
-        );
-    }
 }
 
 impl ObjectImpl for CCDetect {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::uint64(
+                    "window",
+                    "Window",
+                    "Window of time (in ns) to determine if captions exist in the stream",
+                    0,
+                    u64::MAX,
+                    DEFAULT_WINDOW,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "cc608",
+                    "cc608",
+                    "Whether CEA608 captions (CC1/CC3) have been detected",
+                    DEFAULT_CC608,
+                    glib::ParamFlags::READABLE,
+                ),
+                glib::ParamSpec::boolean(
+                    "cc708",
+                    "cc608",
+                    "Whether CEA708 captions (cc_data) have been detected",
+                    DEFAULT_CC708,
+                    glib::ParamFlags::READABLE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("window", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "window" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.window = value.get_some().expect("type checked upstream");
             }
@@ -457,19 +418,17 @@ impl ObjectImpl for CCDetect {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("window", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "window" => {
                 let settings = self.settings.lock().unwrap();
                 settings.window.to_value()
             }
-            subclass::Property("cc608", ..) => {
+            "cc608" => {
                 let settings = self.settings.lock().unwrap();
                 settings.cc608.to_value()
             }
-            subclass::Property("cc708", ..) => {
+            "cc708" => {
                 let settings = self.settings.lock().unwrap();
                 settings.cc708.to_value()
             }
@@ -478,9 +437,60 @@ impl ObjectImpl for CCDetect {
     }
 }
 
-impl ElementImpl for CCDetect {}
+impl ElementImpl for CCDetect {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Closed Caption Detect",
+                "Filter/Video/ClosedCaption/Detect",
+                "Detect if valid closed captions are present in a stream",
+                "Matthew Waters <matthew@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let mut caps = gst::Caps::new_empty();
+            {
+                let caps = caps.get_mut().unwrap();
+                let s = gst::Structure::builder("closedcaption/x-cea-708")
+                    .field("format", &gst::List::new(&[&"cc_data", &"cdp"]))
+                    .build();
+                caps.append_structure(s);
+            }
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseTransformImpl for CCDetect {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::AlwaysInPlace;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = true;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = true;
+
     fn transform_ip_passthrough(
         &self,
         element: &Self::Type,

@@ -69,17 +69,6 @@ struct ItemSender {
 mod imp_src {
     use super::*;
 
-    static SRC_PROPERTIES: [glib::subclass::Property; 1] =
-        [glib::subclass::Property("context", |name| {
-            glib::ParamSpec::string(
-                name,
-                "Context",
-                "Context name to share threads with",
-                Some(DEFAULT_CONTEXT),
-                glib::ParamFlags::READWRITE,
-            )
-        })];
-
     #[derive(Clone, Debug, Default)]
     struct Settings {
         context: String,
@@ -316,31 +305,11 @@ mod imp_src {
         const NAME: &'static str = "TsElementSrcTest";
         type Type = super::ElementSrcTest;
         type ParentType = gst::Element;
+        type Interfaces = ();
         type Instance = gst::subclass::ElementInstanceStruct<Self>;
         type Class = glib::subclass::simple::ClassStruct<Self>;
 
         glib::object_subclass!();
-
-        fn class_init(klass: &mut Self::Class) {
-            klass.set_metadata(
-                "Thread-sharing Test Src Element",
-                "Generic",
-                "Src Element for Pad Src Test",
-                "François Laignel <fengalin@free.fr>",
-            );
-
-            let caps = gst::Caps::new_any();
-            let src_pad_template = gst::PadTemplate::new(
-                "src",
-                gst::PadDirection::Src,
-                gst::PadPresence::Always,
-                &caps,
-            )
-            .unwrap();
-            klass.add_pad_template(src_pad_template);
-
-            klass.install_properties(&SRC_PROPERTIES);
-        }
 
         fn with_class(klass: &Self::Class) -> Self {
             ElementSrcTest {
@@ -356,11 +325,29 @@ mod imp_src {
     }
 
     impl ObjectImpl for ElementSrcTest {
-        fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-            let prop = &SRC_PROPERTIES[id];
+        fn properties() -> &'static [glib::ParamSpec] {
+            static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+                vec![glib::ParamSpec::string(
+                    "context",
+                    "Context",
+                    "Context name to share threads with",
+                    Some(DEFAULT_CONTEXT),
+                    glib::ParamFlags::WRITABLE,
+                )]
+            });
 
-            match *prop {
-                glib::subclass::Property("context", ..) => {
+            PROPERTIES.as_ref()
+        }
+
+        fn set_property(
+            &self,
+            _obj: &Self::Type,
+            _id: usize,
+            value: &glib::Value,
+            pspec: &glib::ParamSpec,
+        ) {
+            match pspec.get_name() {
+                "context" => {
                     let context = value
                         .get()
                         .expect("type checked upstream")
@@ -380,6 +367,36 @@ mod imp_src {
     }
 
     impl ElementImpl for ElementSrcTest {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+                gst::subclass::ElementMetadata::new(
+                    "Thread-sharing Test Src Element",
+                    "Generic",
+                    "Src Element for Pad Src Test",
+                    "François Laignel <fengalin@free.fr>",
+                )
+            });
+
+            Some(&*ELEMENT_METADATA)
+        }
+
+        fn pad_templates() -> &'static [gst::PadTemplate] {
+            static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+                let caps = gst::Caps::new_any();
+                let src_pad_template = gst::PadTemplate::new(
+                    "src",
+                    gst::PadDirection::Src,
+                    gst::PadPresence::Always,
+                    &caps,
+                )
+                .unwrap();
+
+                vec![src_pad_template]
+            });
+
+            PAD_TEMPLATES.as_ref()
+        }
+
         fn change_state(
             &self,
             element: &Self::Type,
@@ -451,17 +468,6 @@ unsafe impl Sync for ElementSrcTest {}
 
 mod imp_sink {
     use super::*;
-
-    static SINK_PROPERTIES: [glib::subclass::Property; 1] =
-        [glib::subclass::Property("sender", |name| {
-            glib::ParamSpec::boxed(
-                name,
-                "Sender",
-                "Channel sender to forward the incoming items to",
-                ItemSender::get_type(),
-                glib::ParamFlags::WRITABLE,
-            )
-        })];
 
     #[derive(Clone, Debug, Default)]
     struct PadSinkTestHandler;
@@ -634,31 +640,11 @@ mod imp_sink {
         const NAME: &'static str = "TsElementSinkTest";
         type Type = super::ElementSinkTest;
         type ParentType = gst::Element;
+        type Interfaces = ();
         type Instance = gst::subclass::ElementInstanceStruct<Self>;
         type Class = glib::subclass::simple::ClassStruct<Self>;
 
         glib::object_subclass!();
-
-        fn class_init(klass: &mut Self::Class) {
-            klass.set_metadata(
-                "Thread-sharing Test Sink Element",
-                "Generic",
-                "Sink Element for Pad Test",
-                "François Laignel <fengalin@free.fr>",
-            );
-
-            let caps = gst::Caps::new_any();
-            let sink_pad_template = gst::PadTemplate::new(
-                "sink",
-                gst::PadDirection::Sink,
-                gst::PadPresence::Always,
-                &caps,
-            )
-            .unwrap();
-            klass.add_pad_template(sink_pad_template);
-
-            klass.install_properties(&SINK_PROPERTIES);
-        }
 
         fn with_class(klass: &Self::Class) -> Self {
             ElementSinkTest {
@@ -673,11 +659,29 @@ mod imp_sink {
     }
 
     impl ObjectImpl for ElementSinkTest {
-        fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-            let prop = &SINK_PROPERTIES[id];
+        fn properties() -> &'static [glib::ParamSpec] {
+            static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+                vec![glib::ParamSpec::boxed(
+                    "sender",
+                    "Sender",
+                    "Channel sender to forward the incoming items to",
+                    ItemSender::get_type(),
+                    glib::ParamFlags::WRITABLE,
+                )]
+            });
 
-            match *prop {
-                glib::subclass::Property("sender", ..) => {
+            PROPERTIES.as_ref()
+        }
+
+        fn set_property(
+            &self,
+            _obj: &Self::Type,
+            _id: usize,
+            value: &glib::Value,
+            pspec: &glib::ParamSpec,
+        ) {
+            match pspec.get_name() {
+                "sender" => {
                     let ItemSender { sender } = value
                         .get::<&ItemSender>()
                         .expect("type checked upstream")
@@ -697,6 +701,36 @@ mod imp_sink {
     }
 
     impl ElementImpl for ElementSinkTest {
+        fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+            static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+                gst::subclass::ElementMetadata::new(
+                    "Thread-sharing Test Sink Element",
+                    "Generic",
+                    "Sink Element for Pad Test",
+                    "François Laignel <fengalin@free.fr>",
+                )
+            });
+
+            Some(&*ELEMENT_METADATA)
+        }
+
+        fn pad_templates() -> &'static [gst::PadTemplate] {
+            static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+                let caps = gst::Caps::new_any();
+                let sink_pad_template = gst::PadTemplate::new(
+                    "sink",
+                    gst::PadDirection::Sink,
+                    gst::PadPresence::Always,
+                    &caps,
+                )
+                .unwrap();
+
+                vec![sink_pad_template]
+            });
+
+            PAD_TEMPLATES.as_ref()
+        }
+
         fn change_state(
             &self,
             element: &Self::Type,

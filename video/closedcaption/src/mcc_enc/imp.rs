@@ -69,27 +69,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 2] = [
-    subclass::Property("uuid", |name| {
-        glib::ParamSpec::string(
-            name,
-            "UUID",
-            "UUID for the output file",
-            None,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("creation-date", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Creation Date",
-            "Creation date for the output file",
-            glib::DateTime::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 pub struct MccEnc {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
@@ -470,6 +449,7 @@ impl ObjectSubclass for MccEnc {
     const NAME: &'static str = "RsMccEnc";
     type Type = super::MccEnc;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -519,74 +499,45 @@ impl ObjectSubclass for MccEnc {
             settings: Mutex::new(Settings::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Mcc Encoder",
-            "Encoder/ClosedCaption",
-            "Encodes MCC Closed Caption Files",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let mut caps = gst::Caps::new_empty();
-        {
-            let caps = caps.get_mut().unwrap();
-
-            let framerates = gst::List::new(&[
-                &gst::Fraction::new(24, 1),
-                &gst::Fraction::new(25, 1),
-                &gst::Fraction::new(30000, 1001),
-                &gst::Fraction::new(30, 1),
-                &gst::Fraction::new(50, 1),
-                &gst::Fraction::new(60000, 1001),
-                &gst::Fraction::new(60, 1),
-            ]);
-
-            let s = gst::Structure::builder("closedcaption/x-cea-708")
-                .field("format", &"cdp")
-                .field("framerate", &framerates)
-                .build();
-            caps.append_structure(s);
-
-            let s = gst::Structure::builder("closedcaption/x-cea-608")
-                .field("format", &"s334-1a")
-                .field("framerate", &framerates)
-                .build();
-            caps.append_structure(s);
-        }
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let caps = gst::Caps::builder("application/x-mcc").build();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for MccEnc {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "uuid",
+                    "UUID",
+                    "UUID for the output file",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boxed(
+                    "creation-date",
+                    "Creation Date",
+                    "Creation date for the output file",
+                    glib::DateTime::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("uuid", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "uuid" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.uuid = value.get().expect("type checked upstream");
             }
-            subclass::Property("creation-date", ..) => {
+            "creation-date" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.creation_date = value.get().expect("type checked upstream");
             }
@@ -594,15 +545,13 @@ impl ObjectImpl for MccEnc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("uuid", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "uuid" => {
                 let settings = self.settings.lock().unwrap();
                 settings.uuid.to_value()
             }
-            subclass::Property("creation-date", ..) => {
+            "creation-date" => {
                 let settings = self.settings.lock().unwrap();
                 settings.creation_date.to_value()
             }
@@ -619,6 +568,70 @@ impl ObjectImpl for MccEnc {
 }
 
 impl ElementImpl for MccEnc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Mcc Encoder",
+                "Encoder/ClosedCaption",
+                "Encodes MCC Closed Caption Files",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let mut caps = gst::Caps::new_empty();
+            {
+                let caps = caps.get_mut().unwrap();
+
+                let framerates = gst::List::new(&[
+                    &gst::Fraction::new(24, 1),
+                    &gst::Fraction::new(25, 1),
+                    &gst::Fraction::new(30000, 1001),
+                    &gst::Fraction::new(30, 1),
+                    &gst::Fraction::new(50, 1),
+                    &gst::Fraction::new(60000, 1001),
+                    &gst::Fraction::new(60, 1),
+                ]);
+
+                let s = gst::Structure::builder("closedcaption/x-cea-708")
+                    .field("format", &"cdp")
+                    .field("framerate", &framerates)
+                    .build();
+                caps.append_structure(s);
+
+                let s = gst::Structure::builder("closedcaption/x-cea-608")
+                    .field("format", &"s334-1a")
+                    .field("framerate", &framerates)
+                    .build();
+                caps.append_structure(s);
+            }
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let caps = gst::Caps::builder("application/x-mcc").build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

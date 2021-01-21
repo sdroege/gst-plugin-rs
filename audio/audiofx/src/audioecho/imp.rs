@@ -65,51 +65,6 @@ pub struct AudioEcho {
     state: Mutex<Option<State>>,
 }
 
-static PROPERTIES: [subclass::Property; 4] = [
-    subclass::Property("max-delay", |name| {
-        glib::ParamSpec::uint64(name,
-        "Maximum Delay",
-        "Maximum delay of the echo in nanoseconds (can't be changed in PLAYING or PAUSED state)",
-        0, u64::MAX,
-        DEFAULT_MAX_DELAY,
-        glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("delay", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Delay",
-            "Delay of the echo in nanoseconds",
-            0,
-            u64::MAX,
-            DEFAULT_DELAY,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("intensity", |name| {
-        glib::ParamSpec::double(
-            name,
-            "Intensity",
-            "Intensity of the echo",
-            0.0,
-            1.0,
-            DEFAULT_INTENSITY,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("feedback", |name| {
-        glib::ParamSpec::double(
-            name,
-            "Feedback",
-            "Amount of feedback",
-            0.0,
-            1.0,
-            DEFAULT_FEEDBACK,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 impl AudioEcho {
     fn process<F: Float + ToPrimitive + FromPrimitive>(
         data: &mut [F],
@@ -134,6 +89,7 @@ impl ObjectSubclass for AudioEcho {
     const NAME: &'static str = "RsAudioEcho";
     type Type = super::AudioEcho;
     type ParentType = gst_base::BaseTransform;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -145,78 +101,75 @@ impl ObjectSubclass for AudioEcho {
             state: Mutex::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Audio echo",
-            "Filter/Effect/Audio",
-            "Adds an echo or reverb effect to an audio stream",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_simple(
-            "audio/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[
-                        &gst_audio::AUDIO_FORMAT_F32.to_str(),
-                        &gst_audio::AUDIO_FORMAT_F64.to_str(),
-                    ]),
-                ),
-                ("rate", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                ("channels", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                ("layout", &"interleaved"),
-            ],
-        );
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-
-        klass.configure(
-            gst_base::subclass::BaseTransformMode::AlwaysInPlace,
-            false,
-            false,
-        );
-    }
 }
 
 impl ObjectImpl for AudioEcho {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::uint64("max-delay",
+                    "Maximum Delay",
+                    "Maximum delay of the echo in nanoseconds (can't be changed in PLAYING or PAUSED state)",
+                    0, u64::MAX,
+                    DEFAULT_MAX_DELAY,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint64(
+                    "delay",
+                    "Delay",
+                    "Delay of the echo in nanoseconds",
+                    0,
+                    u64::MAX,
+                    DEFAULT_DELAY,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::double(
+                    "intensity",
+                    "Intensity",
+                    "Intensity of the echo",
+                    0.0,
+                    1.0,
+                    DEFAULT_INTENSITY,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::double(
+                    "feedback",
+                    "Feedback",
+                    "Amount of feedback",
+                    0.0,
+                    1.0,
+                    DEFAULT_FEEDBACK,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("max-delay", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "max-delay" => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
                     settings.max_delay = value.get_some().expect("type checked upstream");
                 }
             }
-            subclass::Property("delay", ..) => {
+            "delay" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.delay = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("intensity", ..) => {
+            "intensity" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.intensity = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("feedback", ..) => {
+            "feedback" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.feedback = value.get_some().expect("type checked upstream");
             }
@@ -224,23 +177,21 @@ impl ObjectImpl for AudioEcho {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("max-delay", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "max-delay" => {
                 let settings = self.settings.lock().unwrap();
                 settings.max_delay.to_value()
             }
-            subclass::Property("delay", ..) => {
+            "delay" => {
                 let settings = self.settings.lock().unwrap();
                 settings.delay.to_value()
             }
-            subclass::Property("intensity", ..) => {
+            "intensity" => {
                 let settings = self.settings.lock().unwrap();
                 settings.intensity.to_value()
             }
-            subclass::Property("feedback", ..) => {
+            "feedback" => {
                 let settings = self.settings.lock().unwrap();
                 settings.feedback.to_value()
             }
@@ -249,9 +200,65 @@ impl ObjectImpl for AudioEcho {
     }
 }
 
-impl ElementImpl for AudioEcho {}
+impl ElementImpl for AudioEcho {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Audio echo",
+                "Filter/Effect/Audio",
+                "Adds an echo or reverb effect to an audio stream",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_simple(
+                "audio/x-raw",
+                &[
+                    (
+                        "format",
+                        &gst::List::new(&[
+                            &gst_audio::AUDIO_FORMAT_F32.to_str(),
+                            &gst_audio::AUDIO_FORMAT_F64.to_str(),
+                        ]),
+                    ),
+                    ("rate", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    ("channels", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    ("layout", &"interleaved"),
+                ],
+            );
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseTransformImpl for AudioEcho {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::AlwaysInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+
     fn transform_ip(
         &self,
         _element: &Self::Type,

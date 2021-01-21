@@ -210,53 +210,6 @@ pub struct AudioLoudNorm {
     state: Mutex<Option<State>>,
 }
 
-static PROPERTIES: [subclass::Property; 4] = [
-    subclass::Property("loudness-target", |name| {
-        glib::ParamSpec::double(
-            name,
-            "Loudness Target",
-            "Loudness target in LUFS",
-            -70.0,
-            -5.0,
-            DEFAULT_LOUDNESS_TARGET,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("loudness-range-target", |name| {
-        glib::ParamSpec::double(
-            name,
-            "Loudness Range Target",
-            "Loudness range target in LU",
-            1.0,
-            20.0,
-            DEFAULT_LOUDNESS_RANGE_TARGET,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("max-true-peak", |name| {
-        glib::ParamSpec::double(
-            name,
-            "Maximum True Peak",
-            "Maximum True Peak in dbTP",
-            -9.0,
-            0.0,
-            DEFAULT_MAX_TRUE_PEAK,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("offset", |name| {
-        glib::ParamSpec::double(
-            name,
-            "Offset Gain",
-            "Offset Gain in LU",
-            -99.0,
-            99.0,
-            DEFAULT_OFFSET,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 // Gain analysis parameters
 const GAIN_LOOKAHEAD: usize = 3 * 192_000; // 3s
 const FRAME_SIZE: usize = 19_200; // 100ms
@@ -1752,6 +1705,7 @@ impl ObjectSubclass for AudioLoudNorm {
     const NAME: &'static str = "RsAudioLoudNorm";
     type Type = super::AudioLoudNorm;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -1796,47 +1750,54 @@ impl ObjectSubclass for AudioLoudNorm {
             state: Mutex::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Audio loudness normalizer",
-            "Filter/Effect/Audio",
-            "Normalizes perceived loudness of an audio stream",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_simple(
-            "audio/x-raw",
-            &[
-                ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-                ("rate", &192_000i32),
-                ("channels", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                ("layout", &"interleaved"),
-            ],
-        );
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for AudioLoudNorm {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::double(
+                    "loudness-target",
+                    "Loudness Target",
+                    "Loudness target in LUFS",
+                    -70.0,
+                    -5.0,
+                    DEFAULT_LOUDNESS_TARGET,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::double(
+                    "loudness-range-target",
+                    "Loudness Range Target",
+                    "Loudness range target in LU",
+                    1.0,
+                    20.0,
+                    DEFAULT_LOUDNESS_RANGE_TARGET,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::double(
+                    "max-true-peak",
+                    "Maximum True Peak",
+                    "Maximum True Peak in dbTP",
+                    -9.0,
+                    0.0,
+                    DEFAULT_MAX_TRUE_PEAK,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::double(
+                    "offset",
+                    "Offset Gain",
+                    "Offset Gain in LU",
+                    -99.0,
+                    99.0,
+                    DEFAULT_OFFSET,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
@@ -1844,23 +1805,27 @@ impl ObjectImpl for AudioLoudNorm {
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("loudness-target", ..) => {
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "loudness-target" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.loudness_target = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("loudness-range-target", ..) => {
+            "loudness-range-target" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.loudness_range_target = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("max-true-peak", ..) => {
+            "max-true-peak" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_true_peak = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("offset", ..) => {
+            "offset" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.offset = value.get_some().expect("type checked upstream");
             }
@@ -1868,23 +1833,21 @@ impl ObjectImpl for AudioLoudNorm {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("loudness-target", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "loudness-target" => {
                 let settings = self.settings.lock().unwrap();
                 settings.loudness_target.to_value()
             }
-            subclass::Property("loudness-range-target", ..) => {
+            "loudness-range-target" => {
                 let settings = self.settings.lock().unwrap();
                 settings.loudness_range_target.to_value()
             }
-            subclass::Property("max-true-peak", ..) => {
+            "max-true-peak" => {
                 let settings = self.settings.lock().unwrap();
                 settings.max_true_peak.to_value()
             }
-            subclass::Property("offset", ..) => {
+            "offset" => {
                 let settings = self.settings.lock().unwrap();
                 settings.offset.to_value()
             }
@@ -1894,6 +1857,52 @@ impl ObjectImpl for AudioLoudNorm {
 }
 
 impl ElementImpl for AudioLoudNorm {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Audio loudness normalizer",
+                "Filter/Effect/Audio",
+                "Normalizes perceived loudness of an audio stream",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_simple(
+                "audio/x-raw",
+                &[
+                    ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
+                    ("rate", &192_000i32),
+                    ("channels", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
+                    ("layout", &"interleaved"),
+                ],
+            );
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

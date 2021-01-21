@@ -867,6 +867,7 @@ impl ObjectSubclass for JsonGstParse {
     const NAME: &'static str = "RsJsonGstParse";
     type Type = super::JsonGstParse;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -934,35 +935,6 @@ impl ObjectSubclass for JsonGstParse {
             state: Mutex::new(State::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "JSON GStreamer parser",
-            "Parser/JSON",
-            "Parses ndjson as output by jsongstenc",
-            "Mathieu Duponchelle <mathieu@centricular.com>",
-        );
-
-        let caps = gst::Caps::builder("application/x-json").build();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let caps = gst::Caps::new_any();
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-    }
 }
 
 impl ObjectImpl for JsonGstParse {
@@ -975,6 +947,45 @@ impl ObjectImpl for JsonGstParse {
 }
 
 impl ElementImpl for JsonGstParse {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "JSON GStreamer parser",
+                "Parser/JSON",
+                "Parses ndjson as output by jsongstenc",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::builder("application/x-json").build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let caps = gst::Caps::new_any();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

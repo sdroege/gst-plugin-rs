@@ -48,30 +48,6 @@ impl Default for Settings {
     }
 }
 
-// Metadata for the properties
-static PROPERTIES: [subclass::Property; 2] = [
-    subclass::Property("invert", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Invert",
-            "Invert grayscale output",
-            DEFAULT_INVERT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("shift", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Shift",
-            "Shift grayscale output (wrapping around)",
-            0,
-            255,
-            DEFAULT_SHIFT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 // Stream-specific state, i.e. video format configuration
 struct State {
     in_info: gst_video::VideoInfo,
@@ -118,6 +94,7 @@ impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
     type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -132,122 +109,47 @@ impl ObjectSubclass for Rgb2Gray {
             state: Mutex::new(None),
         }
     }
-
-    // Called exactly once when registering the type. Used for
-    // setting up metadata for all instances, e.g. the name and
-    // classification and the pad templates with their caps.
-    //
-    // Actual instances can create pads based on those pad templates
-    // with a subset of the caps given here. In case of basetransform,
-    // a "src" and "sink" pad template are required here and the base class
-    // will automatically instantiate pads for them.
-    //
-    // Our element here can convert BGRx to BGRx or GRAY8, both being grayscale.
-    fn class_init(klass: &mut Self::Class) {
-        // Set the element specific metadata. This information is what
-        // is visible from gst-inspect-1.0 and can also be programatically
-        // retrieved from the gst::Registry after initial registration
-        // without having to load the plugin in memory.
-        klass.set_metadata(
-            "RGB-GRAY Converter",
-            "Filter/Effect/Converter/Video",
-            "Converts RGB to GRAY or grayscale RGB",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        // Create and add pad templates for our sink and source pad. These
-        // are later used for actually creating the pads and beforehand
-        // already provide information to GStreamer about all possible
-        // pads that could exist for this type.
-
-        // On the src pad, we can produce BGRx and GRAY8 of any
-        // width/height and with any framerate
-        let caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[
-                        &gst_video::VideoFormat::Bgrx.to_str(),
-                        &gst_video::VideoFormat::Gray8.to_str(),
-                    ]),
-                ),
-                ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                ),
-            ],
-        );
-        // The src pad template must be named "src" for basetransform
-        // and specific a pad that is always there
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        // On the sink pad, we can accept BGRx of any
-        // width/height and with any framerate
-        let caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                ("format", &gst_video::VideoFormat::Bgrx.to_str()),
-                ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                ),
-            ],
-        );
-        // The sink pad template must be named "sink" for basetransform
-        // and specific a pad that is always there
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        // Install all our properties
-        klass.install_properties(&PROPERTIES);
-
-        // Configure basetransform so that we are never running in-place,
-        // don't passthrough on same caps and also never call transform_ip
-        // in passthrough mode (which does not matter for us here).
-        //
-        // We could work in-place for BGRx->BGRx but don't do here for simplicity
-        // for now.
-        klass.configure(
-            gst_base::subclass::BaseTransformMode::NeverInPlace,
-            false,
-            false,
-        );
-    }
 }
 
 // Implementation of glib::Object virtual methods
 impl ObjectImpl for Rgb2Gray {
+    fn properties() -> &'static [glib::ParamSpec] {
+        // Metadata for the properties
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::boolean(
+                    "invert",
+                    "Invert",
+                    "Invert grayscale output",
+                    DEFAULT_INVERT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "shift",
+                    "Shift",
+                    "Shift grayscale output (wrapping around)",
+                    0,
+                    255,
+                    DEFAULT_SHIFT,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("invert", ..) => {
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "invert" => {
                 let mut settings = self.settings.lock().unwrap();
                 let invert = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -259,7 +161,7 @@ impl ObjectImpl for Rgb2Gray {
                 );
                 settings.invert = invert;
             }
-            subclass::Property("shift", ..) => {
+            "shift" => {
                 let mut settings = self.settings.lock().unwrap();
                 let shift = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -277,15 +179,13 @@ impl ObjectImpl for Rgb2Gray {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("invert", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "invert" => {
                 let settings = self.settings.lock().unwrap();
                 settings.invert.to_value()
             }
-            subclass::Property("shift", ..) => {
+            "shift" => {
                 let settings = self.settings.lock().unwrap();
                 settings.shift.to_value()
             }
@@ -295,10 +195,112 @@ impl ObjectImpl for Rgb2Gray {
 }
 
 // Implementation of gst::Element virtual methods
-impl ElementImpl for Rgb2Gray {}
+impl ElementImpl for Rgb2Gray {
+    // Set the element specific metadata. This information is what
+    // is visible from gst-inspect-1.0 and can also be programatically
+    // retrieved from the gst::Registry after initial registration
+    // without having to load the plugin in memory.
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "RGB-GRAY Converter",
+                "Filter/Effect/Converter/Video",
+                "Converts RGB to GRAY or grayscale RGB",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    // Create and add pad templates for our sink and source pad. These
+    // are later used for actually creating the pads and beforehand
+    // already provide information to GStreamer about all possible
+    // pads that could exist for this type.
+    //
+    // Our element here can convert BGRx to BGRx or GRAY8, both being grayscale.
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            // On the src pad, we can produce BGRx and GRAY8 of any
+            // width/height and with any framerate
+            let caps = gst::Caps::new_simple(
+                "video/x-raw",
+                &[
+                    (
+                        "format",
+                        &gst::List::new(&[
+                            &gst_video::VideoFormat::Bgrx.to_str(),
+                            &gst_video::VideoFormat::Gray8.to_str(),
+                        ]),
+                    ),
+                    ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    (
+                        "framerate",
+                        &gst::FractionRange::new(
+                            gst::Fraction::new(0, 1),
+                            gst::Fraction::new(i32::MAX, 1),
+                        ),
+                    ),
+                ],
+            );
+            // The src pad template must be named "src" for basetransform
+            // and specific a pad that is always there
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            // On the sink pad, we can accept BGRx of any
+            // width/height and with any framerate
+            let caps = gst::Caps::new_simple(
+                "video/x-raw",
+                &[
+                    ("format", &gst_video::VideoFormat::Bgrx.to_str()),
+                    ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    (
+                        "framerate",
+                        &gst::FractionRange::new(
+                            gst::Fraction::new(0, 1),
+                            gst::Fraction::new(i32::MAX, 1),
+                        ),
+                    ),
+                ],
+            );
+            // The sink pad template must be named "sink" for basetransform
+            // and specific a pad that is always there
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 // Implementation of gst_base::BaseTransform virtual methods
 impl BaseTransformImpl for Rgb2Gray {
+    // Configure basetransform so that we are never running in-place,
+    // don't passthrough on same caps and also never call transform_ip
+    // in passthrough mode (which does not matter for us here).
+    //
+    // We could work in-place for BGRx->BGRx but don't do here for simplicity
+    // for now.
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::NeverInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+
     // Called for converting caps from one pad to another to account for any
     // changes in the media format this element is performing.
     //

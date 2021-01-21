@@ -60,117 +60,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 10] = [
-    subclass::Property("speed-preset", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Speed Preset",
-            "Speed preset (10 fastest, 0 slowest)",
-            0,
-            10,
-            DEFAULT_SPEED_PRESET,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("low-latency", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Low Latency",
-            "Low Latency",
-            DEFAULT_LOW_LATENCY,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("min-key-frame-interval", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Min Key Frame Interval",
-            "Min Key Frame Interval",
-            0,
-            std::u64::MAX,
-            DEFAULT_MIN_KEY_FRAME_INTERVAL,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("max-key-frame-interval", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Max Key Frame Interval",
-            "Max Key Frame Interval",
-            0,
-            std::u64::MAX,
-            DEFAULT_MAX_KEY_FRAME_INTERVAL,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("bitrate", |name| {
-        glib::ParamSpec::int(
-            name,
-            "Bitrate",
-            "Bitrate",
-            0,
-            std::i32::MAX,
-            DEFAULT_BITRATE,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("quantizer", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Quantizer",
-            "Quantizer",
-            0,
-            std::u32::MAX,
-            DEFAULT_QUANTIZER as u32,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("tile-cols", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Tile Cols",
-            "Tile Cols",
-            0,
-            std::u32::MAX,
-            DEFAULT_TILE_COLS as u32,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("tile-rows", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Tile Rows",
-            "Tile Rows",
-            0,
-            std::u32::MAX,
-            DEFAULT_TILE_ROWS as u32,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("tiles", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Tiles",
-            "Tiles",
-            0,
-            std::u32::MAX,
-            DEFAULT_TILES as u32,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("threads", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Threads",
-            "Threads",
-            0,
-            std::u32::MAX,
-            DEFAULT_THREADS as u32,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 enum Context {
     Eight(rav1e::Context<u8>),
     Sixteen(rav1e::Context<u16>),
@@ -319,6 +208,7 @@ impl ObjectSubclass for Rav1Enc {
     const NAME: &'static str = "Rav1Enc";
     type Type = super::Rav1Enc;
     type ParentType = gst_video::VideoEncoder;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -330,112 +220,154 @@ impl ObjectSubclass for Rav1Enc {
             settings: Mutex::new(Default::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "rav1e AV1 encoder",
-            "Encoder/Video",
-            "rav1e AV1 encoder",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let sink_caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[
-                        &gst_video::VideoFormat::I420.to_str(),
-                        &gst_video::VideoFormat::Y42b.to_str(),
-                        &gst_video::VideoFormat::Y444.to_str(),
-                        &gst_video::VideoFormat::I42010le.to_str(),
-                        &gst_video::VideoFormat::I42210le.to_str(),
-                        &gst_video::VideoFormat::Y44410le.to_str(),
-                        &gst_video::VideoFormat::I42012le.to_str(),
-                        &gst_video::VideoFormat::I42212le.to_str(),
-                        &gst_video::VideoFormat::Y44412le.to_str(),
-                        // &gst_video::VideoFormat::Gray8.to_str(),
-                    ]),
-                ),
-                ("width", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                ("height", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(std::i32::MAX, 1),
-                    ),
-                ),
-            ],
-        );
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &sink_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_caps = gst::Caps::new_simple("video/x-av1", &[]);
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &src_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for Rav1Enc {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::uint(
+                    "speed-preset",
+                    "Speed Preset",
+                    "Speed preset (10 fastest, 0 slowest)",
+                    0,
+                    10,
+                    DEFAULT_SPEED_PRESET,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "low-latency",
+                    "Low Latency",
+                    "Low Latency",
+                    DEFAULT_LOW_LATENCY,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint64(
+                    "min-key-frame-interval",
+                    "Min Key Frame Interval",
+                    "Min Key Frame Interval",
+                    0,
+                    std::u64::MAX,
+                    DEFAULT_MIN_KEY_FRAME_INTERVAL,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint64(
+                    "max-key-frame-interval",
+                    "Max Key Frame Interval",
+                    "Max Key Frame Interval",
+                    0,
+                    std::u64::MAX,
+                    DEFAULT_MAX_KEY_FRAME_INTERVAL,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::int(
+                    "bitrate",
+                    "Bitrate",
+                    "Bitrate",
+                    0,
+                    std::i32::MAX,
+                    DEFAULT_BITRATE,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "quantizer",
+                    "Quantizer",
+                    "Quantizer",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_QUANTIZER as u32,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "tile-cols",
+                    "Tile Cols",
+                    "Tile Cols",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_TILE_COLS as u32,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "tile-rows",
+                    "Tile Rows",
+                    "Tile Rows",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_TILE_ROWS as u32,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "tiles",
+                    "Tiles",
+                    "Tiles",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_TILES as u32,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "threads",
+                    "Threads",
+                    "Threads",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_THREADS as u32,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("speed-preset", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "speed-preset" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.speed_preset = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("low-latency", ..) => {
+            "low-latency" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.low_latency = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("min-key-frame-interval", ..) => {
+            "min-key-frame-interval" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.min_key_frame_interval = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("max-key-frame-interval", ..) => {
+            "max-key-frame-interval" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_key_frame_interval = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("bitrate", ..) => {
+            "bitrate" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.bitrate = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("quantizer", ..) => {
+            "quantizer" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.quantizer =
                     value.get_some::<u32>().expect("type checked upstream") as usize;
             }
-            subclass::Property("tile-cols", ..) => {
+            "tile-cols" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.tile_cols =
                     value.get_some::<u32>().expect("type checked upstream") as usize;
             }
-            subclass::Property("tile-rows", ..) => {
+            "tile-rows" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.tile_rows =
                     value.get_some::<u32>().expect("type checked upstream") as usize;
             }
-            subclass::Property("tiles", ..) => {
+            "tiles" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.tiles = value.get_some::<u32>().expect("type checked upstream") as usize;
             }
-            subclass::Property("threads", ..) => {
+            "threads" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.threads = value.get_some::<u32>().expect("type checked upstream") as usize;
             }
@@ -443,47 +375,45 @@ impl ObjectImpl for Rav1Enc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("speed-preset", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "speed-preset" => {
                 let settings = self.settings.lock().unwrap();
                 settings.speed_preset.to_value()
             }
-            subclass::Property("low-latency", ..) => {
+            "low-latency" => {
                 let settings = self.settings.lock().unwrap();
                 settings.low_latency.to_value()
             }
-            subclass::Property("min-key-frame-interval", ..) => {
+            "min-key-frame-interval" => {
                 let settings = self.settings.lock().unwrap();
                 settings.min_key_frame_interval.to_value()
             }
-            subclass::Property("max-key-frame-interval", ..) => {
+            "max-key-frame-interval" => {
                 let settings = self.settings.lock().unwrap();
                 settings.max_key_frame_interval.to_value()
             }
-            subclass::Property("bitrate", ..) => {
+            "bitrate" => {
                 let settings = self.settings.lock().unwrap();
                 settings.bitrate.to_value()
             }
-            subclass::Property("quantizer", ..) => {
+            "quantizer" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.quantizer as u32).to_value()
             }
-            subclass::Property("tile-cols", ..) => {
+            "tile-cols" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.tile_cols as u32).to_value()
             }
-            subclass::Property("tile-rows", ..) => {
+            "tile-rows" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.tile_rows as u32).to_value()
             }
-            subclass::Property("tiles", ..) => {
+            "tiles" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.tiles as u32).to_value()
             }
-            subclass::Property("threads", ..) => {
+            "threads" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.threads as u32).to_value()
             }
@@ -492,7 +422,74 @@ impl ObjectImpl for Rav1Enc {
     }
 }
 
-impl ElementImpl for Rav1Enc {}
+impl ElementImpl for Rav1Enc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "rav1e AV1 encoder",
+                "Encoder/Video",
+                "rav1e AV1 encoder",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_caps = gst::Caps::new_simple(
+                "video/x-raw",
+                &[
+                    (
+                        "format",
+                        &gst::List::new(&[
+                            &gst_video::VideoFormat::I420.to_str(),
+                            &gst_video::VideoFormat::Y42b.to_str(),
+                            &gst_video::VideoFormat::Y444.to_str(),
+                            &gst_video::VideoFormat::I42010le.to_str(),
+                            &gst_video::VideoFormat::I42210le.to_str(),
+                            &gst_video::VideoFormat::Y44410le.to_str(),
+                            &gst_video::VideoFormat::I42012le.to_str(),
+                            &gst_video::VideoFormat::I42212le.to_str(),
+                            &gst_video::VideoFormat::Y44412le.to_str(),
+                            // &gst_video::VideoFormat::Gray8.to_str(),
+                        ]),
+                    ),
+                    ("width", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
+                    ("height", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
+                    (
+                        "framerate",
+                        &gst::FractionRange::new(
+                            gst::Fraction::new(0, 1),
+                            gst::Fraction::new(std::i32::MAX, 1),
+                        ),
+                    ),
+                ],
+            );
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst::Caps::new_simple("video/x-av1", &[]);
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl VideoEncoderImpl for Rav1Enc {
     fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {

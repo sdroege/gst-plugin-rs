@@ -177,137 +177,11 @@ pub struct FallbackSrc {
     state: Mutex<Option<State>>,
 }
 
-static PROPERTIES: [subclass::Property; 13] = [
-    subclass::Property("enable-audio", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Enable Audio",
-            "Enable the audio stream, this will output silence if there's no audio in the configured URI",
-            true,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("enable-video", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Enable Video",
-            "Enable the video stream, this will output black or the fallback video if there's no video in the configured URI",
-            true,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("uri", |name| {
-        glib::ParamSpec::string(name, "URI", "URI to use", None, glib::ParamFlags::READWRITE)
-    }),
-    subclass::Property("source", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Source",
-            "Source to use instead of the URI",
-            gst::Element::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("fallback-uri", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Fallback URI",
-            "Fallback URI to use for video in case the main stream doesn't work",
-            None,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("timeout", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Timeout",
-            "Timeout for switching to the fallback URI",
-            0,
-            std::u64::MAX,
-            5 * gst::SECOND_VAL,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("restart-timeout", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Timeout",
-            "Timeout for restarting an active source",
-            0,
-            std::u64::MAX,
-            5 * gst::SECOND_VAL,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("retry-timeout", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Retry Timeout",
-            "Timeout for stopping after repeated failure",
-            0,
-            std::u64::MAX,
-            60 * gst::SECOND_VAL,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("restart-on-eos", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Restart on EOS",
-            "Restart source on EOS",
-            false,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("status", |name| {
-        glib::ParamSpec::enum_(
-            name,
-            "Status",
-            "Current source status",
-            Status::static_type(),
-            Status::Stopped as i32,
-            glib::ParamFlags::READABLE,
-        )
-    }),
-    subclass::Property("min-latency", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Minimum Latency",
-            "When the main source has a higher latency than the fallback source \
-             this allows to configure a minimum latency that would be configured \
-             if initially the fallback is enabled",
-            0,
-            std::u64::MAX,
-            0,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("buffer-duration", |name| {
-        glib::ParamSpec::int64(
-            name,
-            "Buffer Duration",
-            "Buffer duration when buffering streams (-1 default value)",
-            -1,
-            std::i64::MAX,
-            -1,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("statistics", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Statistics",
-            "Various statistics",
-            gst::Structure::static_type(),
-            glib::ParamFlags::READABLE,
-        )
-    }),
-];
-
 impl ObjectSubclass for FallbackSrc {
     const NAME: &'static str = "FallbackSrc";
     type Type = super::FallbackSrc;
     type ParentType = gst::Bin;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -319,58 +193,125 @@ impl ObjectSubclass for FallbackSrc {
             state: Mutex::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Fallback Source",
-            "Generic/Source",
-            "Live source with uridecodebin3 or custom source, and fallback image stream",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let src_pad_template = gst::PadTemplate::new(
-            "audio",
-            gst::PadDirection::Src,
-            gst::PadPresence::Sometimes,
-            &gst::Caps::new_any(),
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let src_pad_template = gst::PadTemplate::new(
-            "video",
-            gst::PadDirection::Src,
-            gst::PadPresence::Sometimes,
-            &gst::Caps::new_any(),
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-
-        klass.add_signal_with_class_handler_and_accumulator(
-            "update-uri",
-            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
-            &[String::static_type()],
-            String::static_type(),
-            |_token, args| {
-                // Simplify return the input by default
-                Some(args[1].clone())
-            },
-            |_hint, ret, value| {
-                *ret = value.clone();
-                false
-            },
-        );
-    }
 }
 
 impl ObjectImpl for FallbackSrc {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::boolean(
+                    "enable-audio",
+                    "Enable Audio",
+                    "Enable the audio stream, this will output silence if there's no audio in the configured URI",
+                    true,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "enable-video",
+                    "Enable Video",
+                    "Enable the video stream, this will output black or the fallback video if there's no video in the configured URI",
+                    true,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string("uri", "URI", "URI to use", None, glib::ParamFlags::READWRITE),
+                glib::ParamSpec::object(
+                    "source",
+                    "Source",
+                    "Source to use instead of the URI",
+                    gst::Element::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "fallback-uri",
+                    "Fallback URI",
+                    "Fallback URI to use for video in case the main stream doesn't work",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint64(
+                    "timeout",
+                    "Timeout",
+                    "Timeout for switching to the fallback URI",
+                    0,
+                    std::u64::MAX,
+                    5 * gst::SECOND_VAL,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint64(
+                    "restart-timeout",
+                    "Timeout",
+                    "Timeout for restarting an active source",
+                    0,
+                    std::u64::MAX,
+                    5 * gst::SECOND_VAL,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint64(
+                    "retry-timeout",
+                    "Retry Timeout",
+                    "Timeout for stopping after repeated failure",
+                    0,
+                    std::u64::MAX,
+                    60 * gst::SECOND_VAL,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "restart-on-eos",
+                    "Restart on EOS",
+                    "Restart source on EOS",
+                    false,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::enum_(
+                    "status",
+                    "Status",
+                    "Current source status",
+                    Status::static_type(),
+                    Status::Stopped as i32,
+                    glib::ParamFlags::READABLE,
+                ),
+                glib::ParamSpec::uint64(
+                    "min-latency",
+                    "Minimum Latency",
+                    "When the main source has a higher latency than the fallback source \
+                     this allows to configure a minimum latency that would be configured \
+                     if initially the fallback is enabled",
+                    0,
+                    std::u64::MAX,
+                    0,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::int64(
+                    "buffer-duration",
+                    "Buffer Duration",
+                    "Buffer duration when buffering streams (-1 default value)",
+                    -1,
+                    std::i64::MAX,
+                    -1,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boxed(
+                    "statistics",
+                    "Statistics",
+                    "Various statistics",
+                    gst::Structure::static_type(),
+                    glib::ParamFlags::READABLE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("enable-audio", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "enable-audio" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -382,7 +323,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.enable_audio = new_value;
             }
-            subclass::Property("enable-video", ..) => {
+            "enable-video" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -394,7 +335,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.enable_video = new_value;
             }
-            subclass::Property("uri", ..) => {
+            "uri" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
                 gst_info!(
@@ -406,7 +347,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.uri = new_value;
             }
-            subclass::Property("source", ..) => {
+            "source" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
                 gst_info!(
@@ -418,7 +359,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.source = new_value;
             }
-            subclass::Property("fallback-uri", ..) => {
+            "fallback-uri" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
                 gst_info!(
@@ -430,7 +371,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.fallback_uri = new_value;
             }
-            subclass::Property("timeout", ..) => {
+            "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -442,7 +383,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.timeout = new_value;
             }
-            subclass::Property("restart-timeout", ..) => {
+            "restart-timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -454,7 +395,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.restart_timeout = new_value;
             }
-            subclass::Property("retry-timeout", ..) => {
+            "retry-timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -466,7 +407,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.retry_timeout = new_value;
             }
-            subclass::Property("restart-on-eos", ..) => {
+            "restart-on-eos" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -478,7 +419,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.restart_on_eos = new_value;
             }
-            subclass::Property("min-latency", ..) => {
+            "min-latency" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -490,7 +431,7 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.min_latency = new_value;
             }
-            subclass::Property("buffer-duration", ..) => {
+            "buffer-duration" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -509,47 +450,45 @@ impl ObjectImpl for FallbackSrc {
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
     #[allow(clippy::blocks_in_if_conditions)]
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("enable-audio", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "enable-audio" => {
                 let settings = self.settings.lock().unwrap();
                 settings.enable_audio.to_value()
             }
-            subclass::Property("enable-video", ..) => {
+            "enable-video" => {
                 let settings = self.settings.lock().unwrap();
                 settings.enable_video.to_value()
             }
-            subclass::Property("uri", ..) => {
+            "uri" => {
                 let settings = self.settings.lock().unwrap();
                 settings.uri.to_value()
             }
-            subclass::Property("source", ..) => {
+            "source" => {
                 let settings = self.settings.lock().unwrap();
                 settings.source.to_value()
             }
-            subclass::Property("fallback-uri", ..) => {
+            "fallback-uri" => {
                 let settings = self.settings.lock().unwrap();
                 settings.fallback_uri.to_value()
             }
-            subclass::Property("timeout", ..) => {
+            "timeout" => {
                 let settings = self.settings.lock().unwrap();
                 settings.timeout.to_value()
             }
-            subclass::Property("restart-timeout", ..) => {
+            "restart-timeout" => {
                 let settings = self.settings.lock().unwrap();
                 settings.restart_timeout.to_value()
             }
-            subclass::Property("retry-timeout", ..) => {
+            "retry-timeout" => {
                 let settings = self.settings.lock().unwrap();
                 settings.retry_timeout.to_value()
             }
-            subclass::Property("restart-on-eos", ..) => {
+            "restart-on-eos" => {
                 let settings = self.settings.lock().unwrap();
                 settings.restart_on_eos.to_value()
             }
-            subclass::Property("status", ..) => {
+            "status" => {
                 let state_guard = self.state.lock().unwrap();
 
                 // If we have no state then we'r stopped
@@ -601,17 +540,40 @@ impl ObjectImpl for FallbackSrc {
                 // Otherwise we're running now
                 Status::Running.to_value()
             }
-            subclass::Property("min-latency", ..) => {
+            "min-latency" => {
                 let settings = self.settings.lock().unwrap();
                 settings.min_latency.to_value()
             }
-            subclass::Property("buffer-duration", ..) => {
+            "buffer-duration" => {
                 let settings = self.settings.lock().unwrap();
                 settings.buffer_duration.to_value()
             }
-            subclass::Property("statistics", ..) => self.get_stats().to_value(),
+            "statistics" => self.get_stats().to_value(),
             _ => unimplemented!(),
         }
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![glib::subclass::Signal::builder(
+                "update-uri",
+                &[String::static_type()],
+                String::static_type(),
+            )
+            .action()
+            .class_handler(|_token, args| {
+                // Simply return the input by default
+                Some(args[1].clone())
+            })
+            .accumulator(|_hint, ret, value| {
+                // First signal handler wins
+                *ret = value.clone();
+                false
+            })
+            .build()]
+        });
+
+        SIGNALS.as_ref()
     }
 
     fn constructed(&self, obj: &Self::Type) {
@@ -624,6 +586,43 @@ impl ObjectImpl for FallbackSrc {
 }
 
 impl ElementImpl for FallbackSrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Fallback Source",
+                "Generic/Source",
+                "Live source with uridecodebin3 or custom source, and fallback image stream",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let audio_src_pad_template = gst::PadTemplate::new(
+                "audio",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &gst::Caps::new_any(),
+            )
+            .unwrap();
+
+            let video_src_pad_template = gst::PadTemplate::new(
+                "video",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &gst::Caps::new_any(),
+            )
+            .unwrap();
+
+            vec![audio_src_pad_template, video_src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     #[allow(clippy::single_match)]
     fn change_state(
         &self,

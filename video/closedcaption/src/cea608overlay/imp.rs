@@ -388,6 +388,7 @@ impl ObjectSubclass for Cea608Overlay {
     const NAME: &'static str = "RsCea608Overlay";
     type Type = super::Cea608Overlay;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -424,38 +425,6 @@ impl ObjectSubclass for Cea608Overlay {
             state: Mutex::new(State::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Cea 608 overlay",
-            "Video/Overlay/Subtitle",
-            "Renders CEA 608 closed caption meta over raw video frames",
-            "Mathieu Duponchelle <mathieu@centricular.com>",
-        );
-
-        let caps = gst_video::VideoFormat::iter_raw()
-            .into_video_caps()
-            .unwrap()
-            .build();
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-    }
 }
 
 impl ObjectImpl for Cea608Overlay {
@@ -468,6 +437,48 @@ impl ObjectImpl for Cea608Overlay {
 }
 
 impl ElementImpl for Cea608Overlay {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Cea 608 overlay",
+                "Video/Overlay/Subtitle",
+                "Renders CEA 608 closed caption meta over raw video frames",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst_video::VideoFormat::iter_raw()
+                .into_video_caps()
+                .unwrap()
+                .build();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

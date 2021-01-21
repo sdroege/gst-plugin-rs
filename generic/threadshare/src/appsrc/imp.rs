@@ -66,58 +66,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 5] = [
-    subclass::Property("context", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Context",
-            "Context name to share threads with",
-            Some(DEFAULT_CONTEXT),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context-wait", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Context Wait",
-            "Throttle poll loop to run at most once every this many ms",
-            0,
-            1000,
-            DEFAULT_CONTEXT_WAIT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("max-buffers", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Max Buffers",
-            "Maximum number of buffers to queue up",
-            1,
-            u32::MAX,
-            DEFAULT_MAX_BUFFERS,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("caps", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Caps",
-            "Caps to use",
-            gst::Caps::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("do-timestamp", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Do Timestamp",
-            "Timestamp buffers with the current running time on arrival",
-            DEFAULT_DO_TIMESTAMP,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "ts-appsrc",
@@ -560,67 +508,11 @@ impl ObjectSubclass for AppSrc {
     const NAME: &'static str = "RsTsAppSrc";
     type Type = super::AppSrc;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib::object_subclass!();
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Thread-sharing app source",
-            "Source/Generic",
-            "Thread-sharing app source",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-
-        klass.add_signal_with_class_handler(
-            "push-buffer",
-            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
-            &[gst::Buffer::static_type()],
-            bool::static_type(),
-            |_, args| {
-                let element = args[0]
-                    .get::<super::AppSrc>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let buffer = args[1]
-                    .get::<gst::Buffer>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let appsrc = Self::from_instance(&element);
-
-                Some(appsrc.push_buffer(&element, buffer).to_value())
-            },
-        );
-
-        klass.add_signal_with_class_handler(
-            "end-of-stream",
-            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
-            &[],
-            bool::static_type(),
-            |_, args| {
-                let element = args[0]
-                    .get::<super::AppSrc>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let appsrc = Self::from_instance(&element);
-                Some(appsrc.end_of_stream(&element).to_value())
-            },
-        );
-    }
 
     fn with_class(klass: &Self::Class) -> Self {
         let src_pad_handler = AppSrcPadHandler::default();
@@ -639,43 +531,134 @@ impl ObjectSubclass for AppSrc {
 }
 
 impl ObjectImpl for AppSrc {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "context",
+                    "Context",
+                    "Context name to share threads with",
+                    Some(DEFAULT_CONTEXT),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "context-wait",
+                    "Context Wait",
+                    "Throttle poll loop to run at most once every this many ms",
+                    0,
+                    1000,
+                    DEFAULT_CONTEXT_WAIT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "max-buffers",
+                    "Max Buffers",
+                    "Maximum number of buffers to queue up",
+                    1,
+                    u32::MAX,
+                    DEFAULT_MAX_BUFFERS,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boxed(
+                    "caps",
+                    "Caps",
+                    "Caps to use",
+                    gst::Caps::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "do-timestamp",
+                    "Do Timestamp",
+                    "Timestamp buffers with the current running time on arrival",
+                    DEFAULT_DO_TIMESTAMP,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
+        PROPERTIES.as_ref()
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![
+                glib::subclass::Signal::builder(
+                    "push-buffer",
+                    &[gst::Buffer::static_type()],
+                    bool::static_type(),
+                )
+                .action()
+                .class_handler(|_, args| {
+                    let element = args[0]
+                        .get::<super::AppSrc>()
+                        .expect("signal arg")
+                        .expect("missing signal arg");
+                    let buffer = args[1]
+                        .get::<gst::Buffer>()
+                        .expect("signal arg")
+                        .expect("missing signal arg");
+                    let appsrc = AppSrc::from_instance(&element);
+
+                    Some(appsrc.push_buffer(&element, buffer).to_value())
+                })
+                .build(),
+                glib::subclass::Signal::builder("end-of-stream", &[], bool::static_type())
+                    .action()
+                    .class_handler(|_, args| {
+                        let element = args[0]
+                            .get::<super::AppSrc>()
+                            .expect("signal arg")
+                            .expect("missing signal arg");
+                        let appsrc = AppSrc::from_instance(&element);
+
+                        Some(appsrc.end_of_stream(&element).to_value())
+                    })
+                    .build(),
+            ]
+        });
+
+        SIGNALS.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
         let mut settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("context", ..) => {
+        match pspec.get_name() {
+            "context" => {
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
-            subclass::Property("context-wait", ..) => {
+            "context-wait" => {
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("caps", ..) => {
+            "caps" => {
                 settings.caps = value.get().expect("type checked upstream");
             }
-            subclass::Property("max-buffers", ..) => {
+            "max-buffers" => {
                 settings.max_buffers = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("do-timestamp", ..) => {
+            "do-timestamp" => {
                 settings.do_timestamp = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("context", ..) => settings.context.to_value(),
-            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
-            subclass::Property("caps", ..) => settings.caps.to_value(),
-            subclass::Property("max-buffers", ..) => settings.max_buffers.to_value(),
-            subclass::Property("do-timestamp", ..) => settings.do_timestamp.to_value(),
+        match pspec.get_name() {
+            "context" => settings.context.to_value(),
+            "context-wait" => settings.context_wait.to_value(),
+            "caps" => settings.caps.to_value(),
+            "max-buffers" => settings.max_buffers.to_value(),
+            "do-timestamp" => settings.do_timestamp.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -690,6 +673,36 @@ impl ObjectImpl for AppSrc {
 }
 
 impl ElementImpl for AppSrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Thread-sharing app source",
+                "Source/Generic",
+                "Thread-sharing app source",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

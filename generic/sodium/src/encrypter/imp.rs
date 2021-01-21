@@ -44,38 +44,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static PROPERTIES: [subclass::Property; 3] = [
-    subclass::Property("receiver-key", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Receiver Key",
-            "The public key of the Receiver",
-            glib::Bytes::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("sender-key", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Sender Key",
-            "The private key of the Sender",
-            glib::Bytes::static_type(),
-            glib::ParamFlags::WRITABLE,
-        )
-    }),
-    subclass::Property("block-size", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Block Size",
-            "The block-size of the chunks",
-            1024,
-            std::u32::MAX,
-            32768,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 #[derive(Debug, Clone)]
 struct Props {
     receiver_key: Option<glib::Bytes>,
@@ -392,6 +360,7 @@ impl ObjectSubclass for Encrypter {
     const NAME: &'static str = "RsSodiumEncrypter";
     type Type = super::Encrypter;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -444,38 +413,41 @@ impl ObjectSubclass for Encrypter {
             state,
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Encrypter",
-            "Generic",
-            "libsodium-based file encrypter",
-            "Jordan Petridis <jordan@centricular.com>",
-        );
-
-        let src_caps = gst::Caps::builder("application/x-sodium-encrypted").build();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &src_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &gst::Caps::new_any(),
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for Encrypter {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::boxed(
+                    "receiver-key",
+                    "Receiver Key",
+                    "The public key of the Receiver",
+                    glib::Bytes::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boxed(
+                    "sender-key",
+                    "Sender Key",
+                    "The private key of the Sender",
+                    glib::Bytes::static_type(),
+                    glib::ParamFlags::WRITABLE,
+                ),
+                glib::ParamSpec::uint(
+                    "block-size",
+                    "Block Size",
+                    "The block-size of the chunks",
+                    1024,
+                    std::u32::MAX,
+                    32768,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
@@ -483,21 +455,25 @@ impl ObjectImpl for Encrypter {
         obj.add_pad(&self.srcpad).unwrap();
     }
 
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("sender-key", ..) => {
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "sender-key" => {
                 let mut props = self.props.lock().unwrap();
                 props.sender_key = value.get().expect("type checked upstream");
             }
 
-            subclass::Property("receiver-key", ..) => {
+            "receiver-key" => {
                 let mut props = self.props.lock().unwrap();
                 props.receiver_key = value.get().expect("type checked upstream");
             }
 
-            subclass::Property("block-size", ..) => {
+            "block-size" => {
                 let mut props = self.props.lock().unwrap();
                 props.block_size = value.get_some().expect("type checked upstream");
             }
@@ -506,16 +482,14 @@ impl ObjectImpl for Encrypter {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("receiver-key", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "receiver-key" => {
                 let props = self.props.lock().unwrap();
                 props.receiver_key.to_value()
             }
 
-            subclass::Property("block-size", ..) => {
+            "block-size" => {
                 let props = self.props.lock().unwrap();
                 props.block_size.to_value()
             }
@@ -526,6 +500,44 @@ impl ObjectImpl for Encrypter {
 }
 
 impl ElementImpl for Encrypter {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Encrypter",
+                "Generic",
+                "libsodium-based file encrypter",
+                "Jordan Petridis <jordan@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let src_caps = gst::Caps::builder("application/x-sodium-encrypted").build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &gst::Caps::new_any(),
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

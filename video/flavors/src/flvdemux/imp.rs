@@ -124,6 +124,7 @@ impl ObjectSubclass for FlvDemux {
     const NAME: &'static str = "RsFlvDemux";
     type Type = super::FlvDemux;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -176,100 +177,6 @@ impl ObjectSubclass for FlvDemux {
             flow_combiner: Mutex::new(gst_base::UniqueFlowCombiner::new()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "FLV Demuxer",
-            "Codec/Demuxer",
-            "Demuxes FLV Streams",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let mut caps = gst::Caps::new_empty();
-        {
-            let caps = caps.get_mut().unwrap();
-
-            caps.append(
-                gst::Caps::builder("audio/mpeg")
-                    .field("mpegversion", &1i32)
-                    .build(),
-            );
-            caps.append(
-                gst::Caps::builder("audio/x-raw")
-                    .field("layout", &"interleaved")
-                    .field("format", &gst::List::new(&[&"U8", &"S16LE"]))
-                    .build(),
-            );
-            caps.append(
-                gst::Caps::builder("audio/x-adpcm")
-                    .field("layout", &"swf")
-                    .build(),
-            );
-            caps.append(gst::Caps::builder("audio/x-nellymoser").build());
-            caps.append(gst::Caps::builder("audio/x-alaw").build());
-            caps.append(gst::Caps::builder("audio/x-mulaw").build());
-            caps.append(
-                gst::Caps::builder("audio/mpeg")
-                    .field("mpegversion", &4i32)
-                    .field("framed", &true)
-                    .field("stream-format", &"raw")
-                    .build(),
-            );
-            caps.append(gst::Caps::builder("audio/x-speex").build());
-        }
-        let audiosrc_pad_template = gst::PadTemplate::new(
-            "audio",
-            gst::PadDirection::Src,
-            gst::PadPresence::Sometimes,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(audiosrc_pad_template);
-
-        let mut caps = gst::Caps::new_empty();
-        {
-            let caps = caps.get_mut().unwrap();
-
-            caps.append(
-                gst::Caps::builder("video/x-flash-video")
-                    .field("flvversion", &1i32)
-                    .build(),
-            );
-            caps.append(gst::Caps::builder("video/x-flash-screen").build());
-            caps.append(gst::Caps::builder("video/x-vp6-flash").build());
-            caps.append(gst::Caps::builder("video/x-vp6-flash-alpha").build());
-            caps.append(gst::Caps::builder("video/x-flash-screen2").build());
-            caps.append(
-                gst::Caps::builder("video/x-h264")
-                    .field("stream-format", &"avc")
-                    .build(),
-            );
-            caps.append(gst::Caps::builder("video/x-h263").build());
-            caps.append(
-                gst::Caps::builder("video/mpeg")
-                    .field("mpegversion", &4i32)
-                    .build(),
-            );
-        }
-        let videosrc_pad_template = gst::PadTemplate::new(
-            "video",
-            gst::PadDirection::Src,
-            gst::PadPresence::Sometimes,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(videosrc_pad_template);
-
-        let caps = gst::Caps::builder("video/x-flv").build();
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-    }
 }
 
 impl ObjectImpl for FlvDemux {
@@ -280,7 +187,114 @@ impl ObjectImpl for FlvDemux {
     }
 }
 
-impl ElementImpl for FlvDemux {}
+impl ElementImpl for FlvDemux {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "FLV Demuxer",
+                "Codec/Demuxer",
+                "Demuxes FLV Streams",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let mut caps = gst::Caps::new_empty();
+            {
+                let caps = caps.get_mut().unwrap();
+
+                caps.append(
+                    gst::Caps::builder("audio/mpeg")
+                        .field("mpegversion", &1i32)
+                        .build(),
+                );
+                caps.append(
+                    gst::Caps::builder("audio/x-raw")
+                        .field("layout", &"interleaved")
+                        .field("format", &gst::List::new(&[&"U8", &"S16LE"]))
+                        .build(),
+                );
+                caps.append(
+                    gst::Caps::builder("audio/x-adpcm")
+                        .field("layout", &"swf")
+                        .build(),
+                );
+                caps.append(gst::Caps::builder("audio/x-nellymoser").build());
+                caps.append(gst::Caps::builder("audio/x-alaw").build());
+                caps.append(gst::Caps::builder("audio/x-mulaw").build());
+                caps.append(
+                    gst::Caps::builder("audio/mpeg")
+                        .field("mpegversion", &4i32)
+                        .field("framed", &true)
+                        .field("stream-format", &"raw")
+                        .build(),
+                );
+                caps.append(gst::Caps::builder("audio/x-speex").build());
+            }
+            let audiosrc_pad_template = gst::PadTemplate::new(
+                "audio",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &caps,
+            )
+            .unwrap();
+
+            let mut caps = gst::Caps::new_empty();
+            {
+                let caps = caps.get_mut().unwrap();
+
+                caps.append(
+                    gst::Caps::builder("video/x-flash-video")
+                        .field("flvversion", &1i32)
+                        .build(),
+                );
+                caps.append(gst::Caps::builder("video/x-flash-screen").build());
+                caps.append(gst::Caps::builder("video/x-vp6-flash").build());
+                caps.append(gst::Caps::builder("video/x-vp6-flash-alpha").build());
+                caps.append(gst::Caps::builder("video/x-flash-screen2").build());
+                caps.append(
+                    gst::Caps::builder("video/x-h264")
+                        .field("stream-format", &"avc")
+                        .build(),
+                );
+                caps.append(gst::Caps::builder("video/x-h263").build());
+                caps.append(
+                    gst::Caps::builder("video/mpeg")
+                        .field("mpegversion", &4i32)
+                        .build(),
+                );
+            }
+            let videosrc_pad_template = gst::PadTemplate::new(
+                "video",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &caps,
+            )
+            .unwrap();
+
+            let caps = gst::Caps::builder("video/x-flv").build();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![
+                audiosrc_pad_template,
+                videosrc_pad_template,
+                sink_pad_template,
+            ]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl FlvDemux {
     fn sink_activate(

@@ -47,27 +47,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 2] = [
-    subclass::Property("record", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Record",
-            "Enable/disable recording",
-            DEFAULT_RECORD,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("recording", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Recording",
-            "Whether recording is currently taking place",
-            DEFAULT_RECORD,
-            glib::ParamFlags::READABLE,
-        )
-    }),
-];
-
 #[derive(Clone)]
 struct Stream {
     sinkpad: gst::Pad,
@@ -1642,6 +1621,7 @@ impl ObjectSubclass for ToggleRecord {
     const NAME: &'static str = "RsToggleRecord";
     type Type = super::ToggleRecord;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -1720,62 +1700,41 @@ impl ObjectSubclass for ToggleRecord {
             pads: Mutex::new(pads),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.install_properties(&PROPERTIES);
-
-        klass.set_metadata(
-            "Toggle Record",
-            "Generic",
-            "Valve that ensures multiple streams start/end at the same time",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src_%u",
-            gst::PadDirection::Src,
-            gst::PadPresence::Sometimes,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink_%u",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Request,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-    }
 }
 
 impl ObjectImpl for ToggleRecord {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::boolean(
+                    "record",
+                    "Record",
+                    "Enable/disable recording",
+                    DEFAULT_RECORD,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "recording",
+                    "Recording",
+                    "Whether recording is currently taking place",
+                    DEFAULT_RECORD,
+                    glib::ParamFlags::READABLE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("record", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "record" => {
                 let mut settings = self.settings.lock();
                 let record = value.get_some().expect("type checked upstream");
                 gst_debug!(
@@ -1792,15 +1751,13 @@ impl ObjectImpl for ToggleRecord {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("record", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "record" => {
                 let settings = self.settings.lock();
                 settings.record.to_value()
             }
-            subclass::Property("recording", ..) => {
+            "recording" => {
                 let rec_state = self.state.lock();
                 (rec_state.recording_state == RecordingState::Recording).to_value()
             }
@@ -1817,6 +1774,65 @@ impl ObjectImpl for ToggleRecord {
 }
 
 impl ElementImpl for ToggleRecord {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Toggle Record",
+                "Generic",
+                "Valve that ensures multiple streams start/end at the same time",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let secondary_src_pad_template = gst::PadTemplate::new(
+                "src_%u",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &caps,
+            )
+            .unwrap();
+
+            let secondary_sink_pad_template = gst::PadTemplate::new(
+                "sink_%u",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Request,
+                &caps,
+            )
+            .unwrap();
+
+            vec![
+                src_pad_template,
+                sink_pad_template,
+                secondary_src_pad_template,
+                secondary_sink_pad_template,
+            ]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

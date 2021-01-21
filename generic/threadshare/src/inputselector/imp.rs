@@ -55,38 +55,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 3] = [
-    subclass::Property("context", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Context",
-            "Context name to share threads with",
-            Some(DEFAULT_CONTEXT),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context-wait", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Context Wait",
-            "Throttle poll loop to run at most once every this many ms",
-            0,
-            1000,
-            DEFAULT_CONTEXT_WAIT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("active-pad", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Active Pad",
-            "Currently active pad",
-            gst::Pad::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 #[derive(Debug)]
 struct InputSelectorPadSinkHandlerInner {
     segment: Option<gst::Segment>,
@@ -429,41 +397,11 @@ impl ObjectSubclass for InputSelector {
     const NAME: &'static str = "RsTsInputSelector";
     type Type = super::InputSelector;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib::object_subclass!();
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Thread-sharing input selector",
-            "Generic",
-            "Simple input selector element",
-            "Mathieu Duponchelle <mathieu@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink_%u",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Request,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {
@@ -479,22 +417,58 @@ impl ObjectSubclass for InputSelector {
 }
 
 impl ObjectImpl for InputSelector {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "context",
+                    "Context",
+                    "Context name to share threads with",
+                    Some(DEFAULT_CONTEXT),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "context-wait",
+                    "Context Wait",
+                    "Throttle poll loop to run at most once every this many ms",
+                    0,
+                    1000,
+                    DEFAULT_CONTEXT_WAIT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::object(
+                    "active-pad",
+                    "Active Pad",
+                    "Currently active pad",
+                    gst::Pad::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("context", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "context" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
-            subclass::Property("context-wait", ..) => {
+            "context-wait" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("active-pad", ..) => {
+            "active-pad" => {
                 let pad = value.get::<gst::Pad>().expect("type checked upstream");
                 let mut state = self.state.lock().unwrap();
                 let pads = self.pads.lock().unwrap();
@@ -526,19 +500,17 @@ impl ObjectImpl for InputSelector {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("context", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "context" => {
                 let settings = self.settings.lock().unwrap();
                 settings.context.to_value()
             }
-            subclass::Property("context-wait", ..) => {
+            "context-wait" => {
                 let settings = self.settings.lock().unwrap();
                 settings.context_wait.to_value()
             }
-            subclass::Property("active-pad", ..) => {
+            "active-pad" => {
                 let state = self.state.lock().unwrap();
                 let active_pad = state.active_sinkpad.clone();
                 active_pad.to_value()
@@ -556,6 +528,44 @@ impl ObjectImpl for InputSelector {
 }
 
 impl ElementImpl for InputSelector {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Thread-sharing input selector",
+                "Generic",
+                "Simple input selector element",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink_%u",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Request,
+                &caps,
+            )
+            .unwrap();
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

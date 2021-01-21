@@ -51,65 +51,6 @@ impl Default for Settings {
     }
 }
 
-// Metadata for the properties
-static PROPERTIES: [subclass::Property; 5] = [
-    subclass::Property("hue-shift", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Hue shift",
-            "Hue shifting in degrees",
-            f32::MIN,
-            f32::MAX,
-            DEFAULT_HUE_SHIFT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("saturation-mul", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Saturation multiplier",
-            "Saturation multiplier to apply to the saturation value (before offset)",
-            f32::MIN,
-            f32::MAX,
-            DEFAULT_SATURATION_MUL,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("saturation-off", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Saturation offset",
-            "Saturation offset to add to the saturation value (after multiplier)",
-            f32::MIN,
-            f32::MAX,
-            DEFAULT_SATURATION_OFF,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("value-mul", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Value multiplier",
-            "Value multiplier to apply to the value (before offset)",
-            f32::MIN,
-            f32::MAX,
-            DEFAULT_VALUE_MUL,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("value-off", |name| {
-        glib::ParamSpec::float(
-            name,
-            "Value offset",
-            "Value offset to add to the value (after multiplier)",
-            f32::MIN,
-            f32::MAX,
-            DEFAULT_VALUE_OFF,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 // Stream-specific state, i.e. video format configuration
 struct State {
     info: gst_video::VideoInfo,
@@ -133,6 +74,7 @@ impl ObjectSubclass for HsvFilter {
     const NAME: &'static str = "HsvFilter";
     type Type = super::HsvFilter;
     type ParentType = gst_base::BaseTransform;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -146,70 +88,72 @@ impl ObjectSubclass for HsvFilter {
             state: AtomicRefCell::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "HSV filter",
-            "Filter/Effect/Converter/Video",
-            "Works within the HSV colorspace to apply tranformations to incoming frames",
-            "Julien Bardagi <julien.bardagi@gmail.com>",
-        );
-
-        // src pad capabilities
-        let caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[&gst_video::VideoFormat::Rgbx.to_str()]),
-                ),
-                ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                ),
-            ],
-        );
-
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        // Install all our properties
-        klass.install_properties(&PROPERTIES);
-
-        klass.configure(
-            gst_base::subclass::BaseTransformMode::AlwaysInPlace,
-            false,
-            false,
-        );
-    }
 }
 
 impl ObjectImpl for HsvFilter {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::float(
+                    "hue-shift",
+                    "Hue shift",
+                    "Hue shifting in degrees",
+                    f32::MIN,
+                    f32::MAX,
+                    DEFAULT_HUE_SHIFT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::float(
+                    "saturation-mul",
+                    "Saturation multiplier",
+                    "Saturation multiplier to apply to the saturation value (before offset)",
+                    f32::MIN,
+                    f32::MAX,
+                    DEFAULT_SATURATION_MUL,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::float(
+                    "saturation-off",
+                    "Saturation offset",
+                    "Saturation offset to add to the saturation value (after multiplier)",
+                    f32::MIN,
+                    f32::MAX,
+                    DEFAULT_SATURATION_OFF,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::float(
+                    "value-mul",
+                    "Value multiplier",
+                    "Value multiplier to apply to the value (before offset)",
+                    f32::MIN,
+                    f32::MAX,
+                    DEFAULT_VALUE_MUL,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::float(
+                    "value-off",
+                    "Value offset",
+                    "Value offset to add to the value (after multiplier)",
+                    f32::MIN,
+                    f32::MAX,
+                    DEFAULT_VALUE_OFF,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
-        match *prop {
-            subclass::Property("hue-shift", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "hue-shift" => {
                 let mut settings = self.settings.lock().unwrap();
                 let hue_shift = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -221,7 +165,7 @@ impl ObjectImpl for HsvFilter {
                 );
                 settings.hue_shift = hue_shift;
             }
-            subclass::Property("saturation-mul", ..) => {
+            "saturation-mul" => {
                 let mut settings = self.settings.lock().unwrap();
                 let saturation_mul = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -233,7 +177,7 @@ impl ObjectImpl for HsvFilter {
                 );
                 settings.saturation_mul = saturation_mul;
             }
-            subclass::Property("saturation-off", ..) => {
+            "saturation-off" => {
                 let mut settings = self.settings.lock().unwrap();
                 let saturation_off = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -245,7 +189,7 @@ impl ObjectImpl for HsvFilter {
                 );
                 settings.saturation_off = saturation_off;
             }
-            subclass::Property("value-mul", ..) => {
+            "value-mul" => {
                 let mut settings = self.settings.lock().unwrap();
                 let value_mul = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -257,7 +201,7 @@ impl ObjectImpl for HsvFilter {
                 );
                 settings.value_mul = value_mul;
             }
-            subclass::Property("value-off", ..) => {
+            "value-off" => {
                 let mut settings = self.settings.lock().unwrap();
                 let value_off = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -275,27 +219,25 @@ impl ObjectImpl for HsvFilter {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("hue-shift", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "hue-shift" => {
                 let settings = self.settings.lock().unwrap();
                 settings.hue_shift.to_value()
             }
-            subclass::Property("saturation-mul", ..) => {
+            "saturation-mul" => {
                 let settings = self.settings.lock().unwrap();
                 settings.saturation_mul.to_value()
             }
-            subclass::Property("saturation-off", ..) => {
+            "saturation-off" => {
                 let settings = self.settings.lock().unwrap();
                 settings.saturation_off.to_value()
             }
-            subclass::Property("value-mul", ..) => {
+            "value-mul" => {
                 let settings = self.settings.lock().unwrap();
                 settings.value_mul.to_value()
             }
-            subclass::Property("value-off", ..) => {
+            "value-off" => {
                 let settings = self.settings.lock().unwrap();
                 settings.value_off.to_value()
             }
@@ -304,9 +246,71 @@ impl ObjectImpl for HsvFilter {
     }
 }
 
-impl ElementImpl for HsvFilter {}
+impl ElementImpl for HsvFilter {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "HSV filter",
+                "Filter/Effect/Converter/Video",
+                "Works within the HSV colorspace to apply tranformations to incoming frames",
+                "Julien Bardagi <julien.bardagi@gmail.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            // src pad capabilities
+            let caps = gst::Caps::new_simple(
+                "video/x-raw",
+                &[
+                    (
+                        "format",
+                        &gst::List::new(&[&gst_video::VideoFormat::Rgbx.to_str()]),
+                    ),
+                    ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
+                    (
+                        "framerate",
+                        &gst::FractionRange::new(
+                            gst::Fraction::new(0, 1),
+                            gst::Fraction::new(i32::MAX, 1),
+                        ),
+                    ),
+                ],
+            );
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl BaseTransformImpl for HsvFilter {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::AlwaysInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+
     fn get_unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
         gst_video::VideoInfo::from_caps(caps)
             .map(|info| info.size())

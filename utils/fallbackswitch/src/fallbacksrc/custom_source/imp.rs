@@ -35,16 +35,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static PROPERTIES: [subclass::Property; 1] = [subclass::Property("source", |name| {
-    glib::ParamSpec::object(
-        name,
-        "Source",
-        "Source",
-        gst::Element::static_type(),
-        glib::ParamFlags::WRITABLE | glib::ParamFlags::CONSTRUCT_ONLY,
-    )
-})];
-
 struct Stream {
     source_pad: gst::Pad,
     ghost_pad: gst::GhostPad,
@@ -67,6 +57,7 @@ impl ObjectSubclass for CustomSource {
     const NAME: &'static str = "FallbackSrcCustomSource";
     type Type = super::CustomSource;
     type ParentType = gst::Bin;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -82,35 +73,32 @@ impl ObjectSubclass for CustomSource {
             }),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        let src_pad_template = gst::PadTemplate::new(
-            "audio_%u",
-            gst::PadDirection::Src,
-            gst::PadPresence::Sometimes,
-            &gst::Caps::new_any(),
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let src_pad_template = gst::PadTemplate::new(
-            "video_%u",
-            gst::PadDirection::Src,
-            gst::PadPresence::Sometimes,
-            &gst::Caps::new_any(),
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for CustomSource {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::object(
+                "source",
+                "Source",
+                "Source",
+                gst::Element::static_type(),
+                glib::ParamFlags::WRITABLE | glib::ParamFlags::CONSTRUCT_ONLY,
+            )]
+        });
 
-        match *prop {
-            subclass::Property("source", ..) => {
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "source" => {
                 let source = value.get::<gst::Element>().unwrap().unwrap();
                 self.source.set(source.clone()).unwrap();
                 obj.add(&source).unwrap();
@@ -129,6 +117,30 @@ impl ObjectImpl for CustomSource {
 }
 
 impl ElementImpl for CustomSource {
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let audio_src_pad_template = gst::PadTemplate::new(
+                "audio_%u",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &gst::Caps::new_any(),
+            )
+            .unwrap();
+
+            let video_src_pad_template = gst::PadTemplate::new(
+                "video_%u",
+                gst::PadDirection::Src,
+                gst::PadPresence::Sometimes,
+                &gst::Caps::new_any(),
+            )
+            .unwrap();
+
+            vec![audio_src_pad_template, video_src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     #[allow(clippy::single_match)]
     fn change_state(
         &self,

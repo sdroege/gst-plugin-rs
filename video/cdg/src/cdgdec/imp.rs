@@ -32,6 +32,7 @@ impl ObjectSubclass for CdgDec {
     const NAME: &'static str = "CdgDec";
     type Type = super::CdgDec;
     type ParentType = gst_video::VideoDecoder;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -43,48 +44,58 @@ impl ObjectSubclass for CdgDec {
             output_info: Mutex::new(None),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "CDG decoder",
-            "Decoder/Video",
-            "CDG decoder",
-            "Guillaume Desmottes <guillaume.desmottes@collabora.com>",
-        );
-
-        let sink_caps = gst::Caps::new_simple("video/x-cdg", &[("parsed", &true)]);
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &sink_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let src_caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                ("format", &gst_video::VideoFormat::Rgba.to_str()),
-                ("width", &(CDG_WIDTH as i32)),
-                ("height", &(CDG_HEIGHT as i32)),
-                ("framerate", &gst::Fraction::new(0, 1)),
-            ],
-        );
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &src_caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-    }
 }
 
 impl ObjectImpl for CdgDec {}
 
-impl ElementImpl for CdgDec {}
+impl ElementImpl for CdgDec {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "CDG decoder",
+                "Decoder/Video",
+                "CDG decoder",
+                "Guillaume Desmottes <guillaume.desmottes@collabora.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_caps = gst::Caps::new_simple("video/x-cdg", &[("parsed", &true)]);
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst::Caps::new_simple(
+                "video/x-raw",
+                &[
+                    ("format", &gst_video::VideoFormat::Rgba.to_str()),
+                    ("width", &(CDG_WIDTH as i32)),
+                    ("height", &(CDG_HEIGHT as i32)),
+                    ("framerate", &gst::Fraction::new(0, 1)),
+                ],
+            );
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
 
 impl VideoDecoderImpl for CdgDec {
     fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {

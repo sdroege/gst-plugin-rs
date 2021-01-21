@@ -118,174 +118,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-static PROPERTIES: [subclass::Property; 17] = [
-    subclass::Property("sync", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Sync",
-            "Sync on the clock",
-            DEFAULT_SYNC,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("bind-address", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Bind Address",
-            "Address to bind the socket to",
-            Some(DEFAULT_BIND_ADDRESS),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("bind-port", |name| {
-        glib::ParamSpec::int(
-            name,
-            "Bind Port",
-            "Port to bind the socket to",
-            0,
-            u16::MAX as i32,
-            DEFAULT_BIND_PORT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("bind-address-v6", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Bind Address V6",
-            "Address to bind the V6 socket to",
-            Some(DEFAULT_BIND_ADDRESS_V6),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("bind-port-v6", |name| {
-        glib::ParamSpec::int(
-            name,
-            "Bind Port",
-            "Port to bind the V6 socket to",
-            0,
-            u16::MAX as i32,
-            DEFAULT_BIND_PORT_V6,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("socket", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Socket",
-            "Socket to use for UDP transmission. (None == allocate)",
-            gio::Socket::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("used-socket", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Used Socket",
-            "Socket currently in use for UDP transmission. (None = no socket)",
-            gio::Socket::static_type(),
-            glib::ParamFlags::READABLE,
-        )
-    }),
-    subclass::Property("socket-v6", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Socket V6",
-            "IPV6 Socket to use for UDP transmission. (None == allocate)",
-            gio::Socket::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("used-socket-v6", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Used Socket V6",
-            "V6 Socket currently in use for UDP transmission. (None = no socket)",
-            gio::Socket::static_type(),
-            glib::ParamFlags::READABLE,
-        )
-    }),
-    subclass::Property("auto-multicast", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Auto multicast",
-            "Automatically join/leave the multicast groups, FALSE means user has to do it himself",
-            DEFAULT_AUTO_MULTICAST,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("loop", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Loop",
-            "Set the multicast loop parameter.",
-            DEFAULT_LOOP,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("ttl", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Time To Live",
-            "Used for setting the unicast TTL parameter",
-            0,
-            u8::MAX as u32,
-            DEFAULT_TTL,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("ttl-mc", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Time To Live Multicast",
-            "Used for setting the multicast TTL parameter",
-            0,
-            u8::MAX as u32,
-            DEFAULT_TTL_MC,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("qos-dscp", |name| {
-        glib::ParamSpec::int(
-            name,
-            "QoS DSCP",
-            "Quality of Service, differentiated services code point (-1 default)",
-            -1,
-            63,
-            DEFAULT_QOS_DSCP,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("clients", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Clients",
-            "A comma separated list of host:port pairs with destinations",
-            Some(DEFAULT_CLIENTS),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Context",
-            "Context name to share threads with",
-            Some(DEFAULT_CONTEXT),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context-wait", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Context Wait",
-            "Throttle poll loop to run at most once every this many ms",
-            0,
-            1000,
-            DEFAULT_CONTEXT_WAIT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 #[derive(Debug)]
 enum TaskItem {
     Buffer(gst::Buffer),
@@ -1127,106 +959,11 @@ impl ObjectSubclass for UdpSink {
     const NAME: &'static str = "RsTsUdpSink";
     type Type = super::UdpSink;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib::object_subclass!();
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Thread-sharing UDP sink",
-            "Sink/Network",
-            "Thread-sharing UDP sink",
-            "Mathieu <mathieu@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-        klass.add_signal_with_class_handler(
-            "add",
-            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
-            &[String::static_type(), i32::static_type()],
-            glib::types::Type::Unit,
-            |_, args| {
-                let element = args[0]
-                    .get::<super::UdpSink>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let host = args[1]
-                    .get::<String>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let port = args[2]
-                    .get::<i32>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-
-                if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
-                    let udpsink = Self::from_instance(&element);
-                    udpsink.add_client(addr);
-                }
-
-                None
-            },
-        );
-
-        klass.add_signal_with_class_handler(
-            "remove",
-            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
-            &[String::static_type(), i32::static_type()],
-            glib::types::Type::Unit,
-            |_, args| {
-                let element = args[0]
-                    .get::<super::UdpSink>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let host = args[1]
-                    .get::<String>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-                let port = args[2]
-                    .get::<i32>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-
-                let udpsink = Self::from_instance(&element);
-
-                if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
-                    udpsink.remove_client(addr);
-                }
-
-                None
-            },
-        );
-
-        klass.add_signal_with_class_handler(
-            "clear",
-            glib::SignalFlags::RUN_LAST | glib::SignalFlags::ACTION,
-            &[],
-            glib::types::Type::Unit,
-            |_, args| {
-                let element = args[0]
-                    .get::<super::UdpSink>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
-
-                let udpsink = Self::from_instance(&element);
-                udpsink.clear_clients(std::iter::empty());
-
-                None
-            },
-        );
-
-        klass.install_properties(&PROPERTIES);
-    }
 
     fn with_class(klass: &Self::Class) -> Self {
         let settings = Arc::new(StdMutex::new(Settings::default()));
@@ -1245,66 +982,289 @@ impl ObjectSubclass for UdpSink {
 }
 
 impl ObjectImpl for UdpSink {
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "context",
+                    "Context",
+                    "Context name to share threads with",
+                    Some(DEFAULT_CONTEXT),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "context-wait",
+                    "Context Wait",
+                    "Throttle poll loop to run at most once every this many ms",
+                    0,
+                    1000,
+                    DEFAULT_CONTEXT_WAIT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "sync",
+                    "Sync",
+                    "Sync on the clock",
+                    DEFAULT_SYNC,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "bind-address",
+                    "Bind Address",
+                    "Address to bind the socket to",
+                    Some(DEFAULT_BIND_ADDRESS),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::int(
+                    "bind-port",
+                    "Bind Port",
+                    "Port to bind the socket to",
+                    0,
+                    u16::MAX as i32,
+                    DEFAULT_BIND_PORT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "bind-address-v6",
+                    "Bind Address V6",
+                    "Address to bind the V6 socket to",
+                    Some(DEFAULT_BIND_ADDRESS_V6),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::int(
+                    "bind-port-v6",
+                    "Bind Port",
+                    "Port to bind the V6 socket to",
+                    0,
+                    u16::MAX as i32,
+                    DEFAULT_BIND_PORT_V6,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::object(
+                    "socket",
+                    "Socket",
+                    "Socket to use for UDP transmission. (None == allocate)",
+                    gio::Socket::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::object(
+                    "used-socket",
+                    "Used Socket",
+                    "Socket currently in use for UDP transmission. (None = no socket)",
+                    gio::Socket::static_type(),
+                    glib::ParamFlags::READABLE,
+                ),
+                glib::ParamSpec::object(
+                    "socket-v6",
+                    "Socket V6",
+                    "IPV6 Socket to use for UDP transmission. (None == allocate)",
+                    gio::Socket::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::object(
+                    "used-socket-v6",
+                    "Used Socket V6",
+                    "V6 Socket currently in use for UDP transmission. (None = no socket)",
+                    gio::Socket::static_type(),
+                    glib::ParamFlags::READABLE,
+                ),
+                glib::ParamSpec::boolean(
+                    "auto-multicast",
+                    "Auto multicast",
+                    "Automatically join/leave the multicast groups, FALSE means user has to do it himself",
+                    DEFAULT_AUTO_MULTICAST,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "loop",
+                    "Loop",
+                    "Set the multicast loop parameter.",
+                    DEFAULT_LOOP,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "ttl",
+                    "Time To Live",
+                    "Used for setting the unicast TTL parameter",
+                    0,
+                    u8::MAX as u32,
+                    DEFAULT_TTL,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "ttl-mc",
+                    "Time To Live Multicast",
+                    "Used for setting the multicast TTL parameter",
+                    0,
+                    u8::MAX as u32,
+                    DEFAULT_TTL_MC,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::int(
+                    "qos-dscp",
+                    "QoS DSCP",
+                    "Quality of Service, differentiated services code point (-1 default)",
+                    -1,
+                    63,
+                    DEFAULT_QOS_DSCP,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "clients",
+                    "Clients",
+                    "A comma separated list of host:port pairs with destinations",
+                    Some(DEFAULT_CLIENTS),
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
+        PROPERTIES.as_ref()
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![
+                glib::subclass::Signal::builder(
+                    "add",
+                    &[String::static_type(), i32::static_type()],
+                    glib::types::Type::Unit,
+                )
+                .action()
+                .class_handler(|_, args| {
+                    let element = args[0]
+                        .get::<super::UdpSink>()
+                        .expect("signal arg")
+                        .expect("missing signal arg");
+                    let host = args[1]
+                        .get::<String>()
+                        .expect("signal arg")
+                        .expect("missing signal arg");
+                    let port = args[2]
+                        .get::<i32>()
+                        .expect("signal arg")
+                        .expect("missing signal arg");
+
+                    if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
+                        let udpsink = UdpSink::from_instance(&element);
+                        udpsink.add_client(addr);
+                    }
+
+                    None
+                })
+                .build(),
+                glib::subclass::Signal::builder(
+                    "remove",
+                    &[String::static_type(), i32::static_type()],
+                    glib::types::Type::Unit,
+                )
+                .action()
+                .class_handler(|_, args| {
+                    let element = args[0]
+                        .get::<super::UdpSink>()
+                        .expect("signal arg")
+                        .expect("missing signal arg");
+                    let host = args[1]
+                        .get::<String>()
+                        .expect("signal arg")
+                        .expect("missing signal arg");
+                    let port = args[2]
+                        .get::<i32>()
+                        .expect("signal arg")
+                        .expect("missing signal arg");
+
+                    if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
+                        let udpsink = UdpSink::from_instance(&element);
+                        udpsink.remove_client(addr);
+                    }
+
+                    None
+                })
+                .build(),
+                glib::subclass::Signal::builder("clear", &[], glib::types::Type::Unit)
+                    .action()
+                    .class_handler(|_, args| {
+                        let element = args[0]
+                            .get::<super::UdpSink>()
+                            .expect("signal arg")
+                            .expect("missing signal arg");
+
+                        let udpsink = UdpSink::from_instance(&element);
+                        udpsink.clear_clients(std::iter::empty());
+
+                        None
+                    })
+                    .build(),
+            ]
+        });
+
+        SIGNALS.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
         let mut settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("sync", ..) => {
+        match pspec.get_name() {
+            "sync" => {
                 settings.sync = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("bind-address", ..) => {
+            "bind-address" => {
                 settings.bind_address = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
-            subclass::Property("bind-port", ..) => {
+            "bind-port" => {
                 settings.bind_port = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("bind-address-v6", ..) => {
+            "bind-address-v6" => {
                 settings.bind_address_v6 = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
-            subclass::Property("bind-port-v6", ..) => {
+            "bind-port-v6" => {
                 settings.bind_port_v6 = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("socket", ..) => {
+            "socket" => {
                 settings.socket = value
                     .get::<gio::Socket>()
                     .expect("type checked upstream")
                     .map(|socket| GioSocketWrapper::new(&socket));
             }
-            subclass::Property("used-socket", ..) => {
+            "used-socket" => {
                 unreachable!();
             }
-            subclass::Property("socket-v6", ..) => {
+            "socket-v6" => {
                 settings.socket_v6 = value
                     .get::<gio::Socket>()
                     .expect("type checked upstream")
                     .map(|socket| GioSocketWrapper::new(&socket));
             }
-            subclass::Property("used-socket-v6", ..) => {
+            "used-socket-v6" => {
                 unreachable!();
             }
-            subclass::Property("auto-multicast", ..) => {
+            "auto-multicast" => {
                 settings.auto_multicast = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("loop", ..) => {
+            "loop" => {
                 settings.multicast_loop = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("ttl", ..) => {
+            "ttl" => {
                 settings.ttl = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("ttl-mc", ..) => {
+            "ttl-mc" => {
                 settings.ttl_mc = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("qos-dscp", ..) => {
+            "qos-dscp" => {
                 settings.qos_dscp = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("clients", ..) => {
+            "clients" => {
                 let clients: String = value
                     .get()
                     .expect("type checked upstream")
@@ -1329,55 +1289,53 @@ impl ObjectImpl for UdpSink {
 
                 self.clear_clients(clients_iter);
             }
-            subclass::Property("context", ..) => {
+            "context" => {
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
-            subclass::Property("context-wait", ..) => {
+            "context-wait" => {
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("sync", ..) => settings.sync.to_value(),
-            subclass::Property("bind-address", ..) => settings.bind_address.to_value(),
-            subclass::Property("bind-port", ..) => settings.bind_port.to_value(),
-            subclass::Property("bind-address-v6", ..) => settings.bind_address_v6.to_value(),
-            subclass::Property("bind-port-v6", ..) => settings.bind_port_v6.to_value(),
-            subclass::Property("socket", ..) => settings
+        match pspec.get_name() {
+            "sync" => settings.sync.to_value(),
+            "bind-address" => settings.bind_address.to_value(),
+            "bind-port" => settings.bind_port.to_value(),
+            "bind-address-v6" => settings.bind_address_v6.to_value(),
+            "bind-port-v6" => settings.bind_port_v6.to_value(),
+            "socket" => settings
                 .socket
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
                 .to_value(),
-            subclass::Property("used-socket", ..) => settings
+            "used-socket" => settings
                 .used_socket
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
                 .to_value(),
-            subclass::Property("socket-v6", ..) => settings
+            "socket-v6" => settings
                 .socket_v6
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
                 .to_value(),
-            subclass::Property("used-socket-v6", ..) => settings
+            "used-socket-v6" => settings
                 .used_socket_v6
                 .as_ref()
                 .map(GioSocketWrapper::as_socket)
                 .to_value(),
-            subclass::Property("auto-multicast", ..) => settings.sync.to_value(),
-            subclass::Property("loop", ..) => settings.multicast_loop.to_value(),
-            subclass::Property("ttl", ..) => settings.ttl.to_value(),
-            subclass::Property("ttl-mc", ..) => settings.ttl_mc.to_value(),
-            subclass::Property("qos-dscp", ..) => settings.qos_dscp.to_value(),
-            subclass::Property("clients", ..) => {
+            "auto-multicast" => settings.sync.to_value(),
+            "loop" => settings.multicast_loop.to_value(),
+            "ttl" => settings.ttl.to_value(),
+            "ttl-mc" => settings.ttl_mc.to_value(),
+            "qos-dscp" => settings.qos_dscp.to_value(),
+            "clients" => {
                 drop(settings);
 
                 let clients: Vec<String> = self
@@ -1389,8 +1347,8 @@ impl ObjectImpl for UdpSink {
 
                 clients.join(",").to_value()
             }
-            subclass::Property("context", ..) => settings.context.to_value(),
-            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
+            "context" => settings.context.to_value(),
+            "context-wait" => settings.context_wait.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -1405,6 +1363,37 @@ impl ObjectImpl for UdpSink {
 }
 
 impl ElementImpl for UdpSink {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Thread-sharing UDP sink",
+                "Sink/Network",
+                "Thread-sharing UDP sink",
+                "Mathieu <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

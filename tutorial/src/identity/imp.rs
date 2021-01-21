@@ -118,6 +118,7 @@ impl ObjectSubclass for Identity {
     const NAME: &'static str = "RsIdentity";
     type Type = super::Identity;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -185,50 +186,6 @@ impl ObjectSubclass for Identity {
         // into the debug logs
         Self { srcpad, sinkpad }
     }
-
-    // Called exactly once when registering the type. Used for
-    // setting up metadata for all instances, e.g. the name and
-    // classification and the pad templates with their caps.
-    //
-    // Actual instances can create pads based on those pad templates
-    // with a subset of the caps given here.
-    fn class_init(klass: &mut Self::Class) {
-        // Set the element specific metadata. This information is what
-        // is visible from gst-inspect-1.0 and can also be programatically
-        // retrieved from the gst::Registry after initial registration
-        // without having to load the plugin in memory.
-        klass.set_metadata(
-            "Identity",
-            "Generic",
-            "Does nothing with the data",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        // Create and add pad templates for our sink and source pad. These
-        // are later used for actually creating the pads and beforehand
-        // already provide information to GStreamer about all possible
-        // pads that could exist for this type.
-
-        // Our element can accept any possible caps on both pads
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::new(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-    }
 }
 
 // Implementation of glib::Object virtual methods
@@ -247,6 +204,55 @@ impl ObjectImpl for Identity {
 
 // Implementation of gst::Element virtual methods
 impl ElementImpl for Identity {
+    // Set the element specific metadata. This information is what
+    // is visible from gst-inspect-1.0 and can also be programatically
+    // retrieved from the gst::Registry after initial registration
+    // without having to load the plugin in memory.
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Identity",
+                "Generic",
+                "Does nothing with the data",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    // Create and add pad templates for our sink and source pad. These
+    // are later used for actually creating the pads and beforehand
+    // already provide information to GStreamer about all possible
+    // pads that could exist for this type.
+    //
+    // Actual instances can create pads based on those pad templates
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            // Our element can accept any possible caps on both pads
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     // Called whenever the state of the element should be changed. This allows for
     // starting up the element, allocating/deallocating resources or shutting down
     // the element again.

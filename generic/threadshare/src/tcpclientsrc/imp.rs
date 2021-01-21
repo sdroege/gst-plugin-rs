@@ -75,69 +75,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 6] = [
-    subclass::Property("host", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Host",
-            "The host IP address to receive packets from",
-            DEFAULT_HOST,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("port", |name| {
-        glib::ParamSpec::int(
-            name,
-            "Port",
-            "Port to receive packets from",
-            0,
-            u16::MAX as i32,
-            DEFAULT_PORT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("caps", |name| {
-        glib::ParamSpec::boxed(
-            name,
-            "Caps",
-            "Caps to use",
-            gst::Caps::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("blocksize", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Blocksize",
-            "Size in bytes to read per buffer (-1 = default)",
-            0,
-            u32::MAX,
-            DEFAULT_BLOCKSIZE,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context", |name| {
-        glib::ParamSpec::string(
-            name,
-            "Context",
-            "Context name to share threads with",
-            Some(DEFAULT_CONTEXT),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("context-wait", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Context Wait",
-            "Throttle poll loop to run at most once every this many ms",
-            0,
-            1000,
-            DEFAULT_CONTEXT_WAIT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
 struct TcpClientReader(tokio::net::TcpStream);
 
 impl TcpClientReader {
@@ -612,31 +549,11 @@ impl ObjectSubclass for TcpClientSrc {
     const NAME: &'static str = "RsTsTcpClientSrc";
     type Type = super::TcpClientSrc;
     type ParentType = gst::Element;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
     glib::object_subclass!();
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Thread-sharing TCP client source",
-            "Source/Network",
-            "Receives data over the network via TCP",
-            "Sebastian Dröge <sebastian@centricular.com>, LEE Dongjun <redongjun@gmail.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::new(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 
     fn with_class(klass: &Self::Class) -> Self {
         let src_pad_handler = TcpClientSrcPadHandler::default();
@@ -654,47 +571,106 @@ impl ObjectSubclass for TcpClientSrc {
 }
 
 impl ObjectImpl for TcpClientSrc {
-    fn set_property(&self, _obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::string(
+                    "context",
+                    "Context",
+                    "Context name to share threads with",
+                    Some(DEFAULT_CONTEXT),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "context-wait",
+                    "Context Wait",
+                    "Throttle poll loop to run at most once every this many ms",
+                    0,
+                    1000,
+                    DEFAULT_CONTEXT_WAIT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::string(
+                    "host",
+                    "Host",
+                    "The host IP address to receive packets from",
+                    DEFAULT_HOST,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::int(
+                    "port",
+                    "Port",
+                    "Port to receive packets from",
+                    0,
+                    u16::MAX as i32,
+                    DEFAULT_PORT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boxed(
+                    "caps",
+                    "Caps",
+                    "Caps to use",
+                    gst::Caps::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::uint(
+                    "blocksize",
+                    "Blocksize",
+                    "Size in bytes to read per buffer (-1 = default)",
+                    0,
+                    u32::MAX,
+                    DEFAULT_BLOCKSIZE,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
+        });
 
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
         let mut settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("host", ..) => {
+        match pspec.get_name() {
+            "host" => {
                 settings.host = value.get().expect("type checked upstream");
             }
-            subclass::Property("port", ..) => {
+            "port" => {
                 settings.port = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("caps", ..) => {
+            "caps" => {
                 settings.caps = value.get().expect("type checked upstream");
             }
-            subclass::Property("blocksize", ..) => {
+            "blocksize" => {
                 settings.blocksize = value.get_some().expect("type checked upstream");
             }
-            subclass::Property("context", ..) => {
+            "context" => {
                 settings.context = value
                     .get()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
-            subclass::Property("context-wait", ..) => {
+            "context-wait" => {
                 settings.context_wait = value.get_some().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match *prop {
-            subclass::Property("host", ..) => settings.host.to_value(),
-            subclass::Property("port", ..) => settings.port.to_value(),
-            subclass::Property("caps", ..) => settings.caps.to_value(),
-            subclass::Property("blocksize", ..) => settings.blocksize.to_value(),
-            subclass::Property("context", ..) => settings.context.to_value(),
-            subclass::Property("context-wait", ..) => settings.context_wait.to_value(),
+        match pspec.get_name() {
+            "host" => settings.host.to_value(),
+            "port" => settings.port.to_value(),
+            "caps" => settings.caps.to_value(),
+            "blocksize" => settings.blocksize.to_value(),
+            "context" => settings.context.to_value(),
+            "context-wait" => settings.context_wait.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -709,6 +685,36 @@ impl ObjectImpl for TcpClientSrc {
 }
 
 impl ElementImpl for TcpClientSrc {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Thread-sharing TCP client source",
+                "Source/Network",
+                "Receives data over the network via TCP",
+                "Sebastian Dröge <sebastian@centricular.com>, LEE Dongjun <redongjun@gmail.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn change_state(
         &self,
         element: &Self::Type,

@@ -123,58 +123,6 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 5] = [
-    subclass::Property("timeout", |name| {
-        glib::ParamSpec::uint64(
-            name,
-            "Timeout",
-            "Timeout in nanoseconds",
-            0,
-            std::u64::MAX,
-            DEFAULT_TIMEOUT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("active-pad", |name| {
-        glib::ParamSpec::object(
-            name,
-            "Active Pad",
-            "Currently active pad. Writes are ignored if auto-switch=true",
-            gst::Pad::static_type(),
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("auto-switch", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Automatically switch pads",
-            "Automatically switch pads (If true, prefer primary sink, otherwise manual selection via the active-pad property)",
-            DEFAULT_AUTO_SWITCH,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("primary-health", |name| {
-        glib::ParamSpec::enum_(
-            name,
-            "Primary stream state",
-            "Reports the health of the primary stream on the sink pad",
-            StreamHealth::static_type(),
-            DEFAULT_STREAM_HEALTH as i32,
-            glib::ParamFlags::READABLE,
-        )
-    }),
-    subclass::Property("fallback-health", |name| {
-        glib::ParamSpec::enum_(
-            name,
-            "Fallback stream state",
-            "Reports the health of the fallback stream on the fallback_sink pad",
-            StreamHealth::static_type(),
-            DEFAULT_STREAM_HEALTH as i32,
-            glib::ParamFlags::READABLE,
-        )
-    }),
-];
-
 impl OutputState {
     fn get_health(
         &self,
@@ -697,6 +645,7 @@ impl ObjectSubclass for FallbackSwitch {
     const NAME: &'static str = "FallbackSwitch";
     type Type = super::FallbackSwitch;
     type ParentType = gst_base::Aggregator;
+    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
     type Class = subclass::simple::ClassStruct<Self>;
 
@@ -717,62 +666,72 @@ impl ObjectSubclass for FallbackSwitch {
             settings: Mutex::new(Settings::default()),
         }
     }
-
-    fn class_init(klass: &mut Self::Class) {
-        klass.set_metadata(
-            "Fallback Switch",
-            "Generic",
-            "Allows switching to a fallback input after a given timeout",
-            "Sebastian Dröge <sebastian@centricular.com>",
-        );
-
-        let caps = gst::Caps::new_any();
-        let src_pad_template = gst::PadTemplate::with_gtype(
-            "src",
-            gst::PadDirection::Src,
-            gst::PadPresence::Always,
-            &caps,
-            gst_base::AggregatorPad::static_type(),
-        )
-        .unwrap();
-        klass.add_pad_template(src_pad_template);
-
-        let sink_pad_template = gst::PadTemplate::with_gtype(
-            "sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Always,
-            &caps,
-            gst_base::AggregatorPad::static_type(),
-        )
-        .unwrap();
-        klass.add_pad_template(sink_pad_template);
-
-        let fallbacksink_pad_template = gst::PadTemplate::with_gtype(
-            "fallback_sink",
-            gst::PadDirection::Sink,
-            gst::PadPresence::Request,
-            &caps,
-            gst_base::AggregatorPad::static_type(),
-        )
-        .unwrap();
-        klass.add_pad_template(fallbacksink_pad_template);
-
-        klass.install_properties(&PROPERTIES);
-    }
 }
 
 impl ObjectImpl for FallbackSwitch {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::uint64(
+                    "timeout",
+                    "Timeout",
+                    "Timeout in nanoseconds",
+                    0,
+                    std::u64::MAX,
+                    DEFAULT_TIMEOUT,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::object(
+                    "active-pad",
+                    "Active Pad",
+                    "Currently active pad. Writes are ignored if auto-switch=true",
+                    gst::Pad::static_type(),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::boolean(
+                    "auto-switch",
+                    "Automatically switch pads",
+                    "Automatically switch pads (If true, prefer primary sink, otherwise manual selection via the active-pad property)",
+                    DEFAULT_AUTO_SWITCH,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::enum_(
+                    "primary-health",
+                    "Primary stream state",
+                    "Reports the health of the primary stream on the sink pad",
+                    StreamHealth::static_type(),
+                    DEFAULT_STREAM_HEALTH as i32,
+                    glib::ParamFlags::READABLE,
+                ),
+                glib::ParamSpec::enum_(
+                    "fallback-health",
+                    "Fallback stream state",
+                    "Reports the health of the fallback stream on the fallback_sink pad",
+                    StreamHealth::static_type(),
+                    DEFAULT_STREAM_HEALTH as i32,
+                    glib::ParamFlags::READABLE,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
         obj.add_pad(&self.primary_sinkpad).unwrap();
     }
 
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("timeout", ..) => {
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let timeout = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -785,7 +744,7 @@ impl ObjectImpl for FallbackSwitch {
                 settings.timeout = timeout;
                 drop(settings);
             }
-            subclass::Property("active-pad", ..) => {
+            "active-pad" => {
                 let settings = self.settings.lock().unwrap();
                 if settings.auto_switch {
                     gst_warning!(
@@ -804,7 +763,7 @@ impl ObjectImpl for FallbackSwitch {
                 }
                 drop(settings);
             }
-            subclass::Property("auto-switch", ..) => {
+            "auto-switch" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.auto_switch = value.get_some().expect("type checked upstream");
             }
@@ -812,27 +771,25 @@ impl ObjectImpl for FallbackSwitch {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("timeout", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "timeout" => {
                 let settings = self.settings.lock().unwrap();
                 settings.timeout.to_value()
             }
-            subclass::Property("active-pad", ..) => {
+            "active-pad" => {
                 let active_pad = self.active_sinkpad.lock().unwrap().clone();
                 active_pad.to_value()
             }
-            subclass::Property("auto-switch", ..) => {
+            "auto-switch" => {
                 let settings = self.settings.lock().unwrap();
                 settings.auto_switch.to_value()
             }
-            subclass::Property("primary-health", ..) => {
+            "primary-health" => {
                 let state = self.output_state.lock().unwrap();
                 state.primary.stream_health.to_value()
             }
-            subclass::Property("fallback-health", ..) => {
+            "fallback-health" => {
                 let state = self.output_state.lock().unwrap();
                 state.fallback.stream_health.to_value()
             }
@@ -842,6 +799,59 @@ impl ObjectImpl for FallbackSwitch {
 }
 
 impl ElementImpl for FallbackSwitch {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Fallback Switch",
+                "Generic",
+                "Allows switching to a fallback input after a given timeout",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::new_any();
+            let src_pad_template = gst::PadTemplate::with_gtype(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+                gst_base::AggregatorPad::static_type(),
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::with_gtype(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+                gst_base::AggregatorPad::static_type(),
+            )
+            .unwrap();
+
+            let fallbacksink_pad_template = gst::PadTemplate::with_gtype(
+                "fallback_sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Request,
+                &caps,
+                gst_base::AggregatorPad::static_type(),
+            )
+            .unwrap();
+
+            vec![
+                src_pad_template,
+                sink_pad_template,
+                fallbacksink_pad_template,
+            ]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
     fn request_new_pad(
         &self,
         element: &Self::Type,
