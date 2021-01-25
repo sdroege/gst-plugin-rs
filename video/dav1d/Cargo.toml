@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 description = "Dav1d Plugin"
 
 [dependencies]
-dav1d = "0.5"
+dav1d = "0.6"
 glib = { git = "https://github.com/gtk-rs/gtk-rs" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
@@ -24,7 +24,6 @@ path = "src/lib.rs"
 gst-plugin-version-helper = { path = "../../version-helper" }
 
 [features]
-build = ["dav1d/build"]
 # GStreamer 1.14 is required for static linking
 static = ["gst/v1_14"]
 
