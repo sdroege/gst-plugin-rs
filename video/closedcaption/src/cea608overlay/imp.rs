@@ -138,7 +138,7 @@ impl Cea608Overlay {
         Ok(gst::FlowSuccess::Ok)
     }
 
-    fn overlay_text(&self, text: &str, state: &mut State) {
+    fn overlay_text(&self, element: &super::Cea608Overlay, text: &str, state: &mut State) {
         let video_info = state.video_info.as_ref().unwrap();
         let layout = state.layout.as_ref().unwrap();
         layout.set_text(text);
@@ -152,30 +152,34 @@ impl Cea608Overlay {
             return;
         }
 
-        let mut buffer = gst::Buffer::with_size((width * height) as usize * 4).unwrap();
+        let render_buffer = || -> Option<gst::Buffer> {
+            let mut buffer = gst::Buffer::with_size((width * height) as usize * 4).ok()?;
 
-        gst_video::VideoMeta::add(
-            buffer.get_mut().unwrap(),
-            gst_video::VideoFrameFlags::empty(),
-            #[cfg(target_endian = "little")]
-            gst_video::VideoFormat::Bgra,
-            #[cfg(target_endian = "big")]
-            gst_video::VideoFormat::Argb,
-            width as u32,
-            height as u32,
-        )
-        .unwrap();
-        let buffer = buffer.into_mapped_buffer_writable().unwrap();
-        let buffer = {
+            gst_video::VideoMeta::add(
+                buffer.get_mut().unwrap(),
+                gst_video::VideoFrameFlags::empty(),
+                #[cfg(target_endian = "little")]
+                gst_video::VideoFormat::Bgra,
+                #[cfg(target_endian = "big")]
+                gst_video::VideoFormat::Argb,
+                width as u32,
+                height as u32,
+            )
+            .ok()?;
+            let buffer = buffer.into_mapped_buffer_writable().unwrap();
+
+            // Pass ownership of the buffer to the cairo surface but keep around
+            // a raw pointer so we can later retrieve it again when the surface
+            // is done
             let buffer_ptr = unsafe { buffer.get_buffer().as_ptr() };
             let surface = cairo::ImageSurface::create_for_data(
                 buffer,
                 cairo::Format::ARgb32,
-                width as i32,
+                width,
                 height,
-                width as i32 * 4,
+                width * 4,
             )
-            .unwrap();
+            .ok()?;
 
             let cr = cairo::Context::new(&surface);
 
@@ -185,22 +189,22 @@ impl Cea608Overlay {
             cr.paint();
 
             // Render text outline
-            cr.save();
+            cr.save().ok()?;
             cr.set_operator(cairo::Operator::Over);
 
             cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
 
             pangocairo::functions::layout_path(&cr, &layout);
             cr.stroke();
-            cr.restore();
+            cr.restore().ok()?;
 
             // Render text
-            cr.save();
+            cr.save().ok()?;
             cr.set_source_rgba(255.0, 255.0, 255.0, 1.0);
 
             pangocairo::functions::show_layout(&cr, &layout);
 
-            cr.restore();
+            cr.restore().ok()?;
             drop(cr);
 
             // Safety: The surface still owns a mutable reference to the buffer but our reference
@@ -216,6 +220,15 @@ impl Cea608Overlay {
                 let buffer = glib::translate::from_glib_none(buffer_ptr);
                 drop(surface);
                 buffer
+            }
+        };
+
+        let buffer = match render_buffer() {
+            Some(buffer) => buffer,
+            None => {
+                gst_error!(CAT, obj: element, "Failed to render buffer");
+                state.composition = None;
+                return;
             }
         };
 
@@ -320,7 +333,7 @@ impl Cea608Overlay {
                                 }
                             };
 
-                            self.overlay_text(&text, &mut state);
+                            self.overlay_text(element, &text, &mut state);
                         }
                         _ => (),
                     }
