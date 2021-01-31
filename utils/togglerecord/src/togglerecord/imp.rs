@@ -1711,7 +1711,7 @@ impl ObjectImpl for ToggleRecord {
                     "Record",
                     "Enable/disable recording",
                     DEFAULT_RECORD,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::boolean(
                     "recording",

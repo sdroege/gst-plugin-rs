@@ -182,7 +182,7 @@ impl ObjectImpl for SineSrc {
                     1,
                     u32::MAX,
                     DEFAULT_SAMPLES_PER_BUFFER,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::uint(
                     "freq",
@@ -191,7 +191,7 @@ impl ObjectImpl for SineSrc {
                     1,
                     u32::MAX,
                     DEFAULT_FREQ,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::double(
                     "volume",
@@ -200,21 +200,21 @@ impl ObjectImpl for SineSrc {
                     0.0,
                     10.0,
                     DEFAULT_VOLUME,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::boolean(
                     "mute",
                     "Mute",
                     "Mute",
                     DEFAULT_MUTE,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::boolean(
                     "is-live",
                     "Is Live",
                     "(Pseudo) live output",
                     DEFAULT_IS_LIVE,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
             ]
         });

@@ -352,7 +352,7 @@ impl ObjectImpl for CsoundFilter {
                     "Loop",
                     "loop over the score (can be changed in PLAYING or PAUSED state)",
                     DEFAULT_LOOP,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::string(
                     "location",
@@ -360,7 +360,7 @@ impl ObjectImpl for CsoundFilter {
                     "Location of the csd file to be used by csound.
                     Use either location or CSD-text but not both at the same time, if so and error would be triggered",
                     None,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::string(
                     "csd-text",
@@ -368,7 +368,7 @@ impl ObjectImpl for CsoundFilter {
                     "The content of a csd file passed as a String.
                     Use either location or csd-text but not both at the same time, if so and error would be triggered",
                     None,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::double(
                     "score-offset",
@@ -377,7 +377,7 @@ impl ObjectImpl for CsoundFilter {
                     0.0,
                     f64::MAX,
                     SCORE_OFFSET_DEFAULT,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
             ]
         });

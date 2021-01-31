@@ -158,7 +158,7 @@ impl ObjectImpl for GifEnc {
                 -1,
                 std::u16::MAX as i32,
                 DEFAULT_REPEAT,
-                glib::ParamFlags::READWRITE,
+                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
             )]
         });
 

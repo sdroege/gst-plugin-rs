@@ -666,7 +666,7 @@ mod imp_sink {
                     "Sender",
                     "Channel sender to forward the incoming items to",
                     ItemSender::get_type(),
-                    glib::ParamFlags::WRITABLE,
+                    glib::ParamFlags::WRITABLE | glib::ParamFlags::CONSTRUCT_ONLY,
                 )]
             });
 
@@ -793,14 +793,11 @@ fn setup(
     }
 
     // Sink
-    let sink_element = glib::Object::new::<ElementSinkTest>(&[]).unwrap();
+    let (sender, receiver) = mpsc::channel::<Item>(10);
+    let sink_element =
+        glib::Object::new::<ElementSinkTest>(&[("sender", &ItemSender { sender })]).unwrap();
     pipeline.add(&sink_element).unwrap();
     last_element.link(&sink_element).unwrap();
-
-    let (sender, receiver) = mpsc::channel::<Item>(10);
-    sink_element
-        .set_property("sender", &ItemSender { sender })
-        .unwrap();
 
     (pipeline, src_element, sink_element, receiver)
 }

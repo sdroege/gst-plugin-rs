@@ -146,7 +146,7 @@ impl ObjectImpl for FileSrc {
                 "File Location",
                 "Location of the file to read from",
                 None,
-                glib::ParamFlags::READWRITE,
+                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
             )]
         });
 

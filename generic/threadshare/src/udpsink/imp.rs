@@ -735,18 +735,7 @@ impl UdpSink {
         let socket_qualified: SocketQualified;
 
         if let Some(ref wrapped_socket) = wrapped_socket {
-            use std::net::UdpSocket;
-
-            let socket: UdpSocket;
-
-            #[cfg(unix)]
-            {
-                socket = wrapped_socket.get()
-            }
-            #[cfg(windows)]
-            {
-                socket = wrapped_socket.get()
-            }
+            let socket = wrapped_socket.get();
 
             let socket = context.enter(|| {
                 tokio::net::UdpSocket::from_std(socket).map_err(|err| {

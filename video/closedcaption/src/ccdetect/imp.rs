@@ -380,7 +380,7 @@ impl ObjectImpl for CCDetect {
                     0,
                     u64::MAX,
                     DEFAULT_WINDOW,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::boolean(
                     "cc608",

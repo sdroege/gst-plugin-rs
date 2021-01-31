@@ -106,7 +106,7 @@ impl ObjectImpl for HsvDetector {
                     f32::MIN,
                     f32::MAX,
                     DEFAULT_HUE_REF,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::float(
                     "hue-var",
@@ -115,7 +115,7 @@ impl ObjectImpl for HsvDetector {
                     0.0,
                     180.0,
                     DEFAULT_HUE_VAR,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::float(
                     "saturation-ref",
@@ -124,7 +124,7 @@ impl ObjectImpl for HsvDetector {
                     0.0,
                     1.0,
                     DEFAULT_SATURATION_REF,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::float(
                     "saturation-var",
@@ -133,7 +133,7 @@ impl ObjectImpl for HsvDetector {
                     0.0,
                     1.0,
                     DEFAULT_SATURATION_VAR,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::float(
                     "value-ref",
@@ -142,7 +142,7 @@ impl ObjectImpl for HsvDetector {
                     0.0,
                     1.0,
                     DEFAULT_VALUE_REF,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::float(
                     "value-var",
@@ -151,7 +151,7 @@ impl ObjectImpl for HsvDetector {
                     0.0,
                     1.0,
                     DEFAULT_VALUE_VAR,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
             ]
         });

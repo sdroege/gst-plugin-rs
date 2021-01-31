@@ -416,7 +416,7 @@ impl ObjectImpl for TextWrap {
                     "Path to a dictionary to load at runtime to perform hyphenation, see \
                         <https://docs.rs/crate/hyphenation/0.7.1> for more information",
                     None,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::uint(
                     "columns",
@@ -425,7 +425,7 @@ impl ObjectImpl for TextWrap {
                     1,
                     std::u32::MAX,
                     DEFAULT_COLUMNS,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::uint(
                     "lines",
@@ -434,7 +434,7 @@ impl ObjectImpl for TextWrap {
                     0,
                     std::u32::MAX,
                     DEFAULT_LINES,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::int64(
                     "accumulate-time",
@@ -443,7 +443,7 @@ impl ObjectImpl for TextWrap {
                     -1,
                     std::i64::MAX,
                     DEFAULT_ACCUMULATE,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
             ]
         });

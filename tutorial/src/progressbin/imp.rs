@@ -94,7 +94,7 @@ impl ObjectImpl for ProgressBin {
                 "Defines the output type of the progressbin",
                 ProgressBinOutput::static_type(),
                 DEFAULT_OUTPUT_TYPE as i32,
-                glib::ParamFlags::READWRITE,
+                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
             )]
         });
 
@@ -237,8 +237,8 @@ impl BinImpl for ProgressBin {
             {
                 let s = msg.get_structure().unwrap();
                 if let Ok(percent) = s.get_some::<f64>("percent-double") {
-                    let output_type = self.output_type.lock().unwrap();
-                    match *output_type {
+                    let output_type = *self.output_type.lock().unwrap();
+                    match output_type {
                         ProgressBinOutput::Println => println!("progress: {:5.1}%", percent),
                         ProgressBinOutput::DebugCategory => {
                             gst_info!(CAT, "progress: {:5.1}%", percent);

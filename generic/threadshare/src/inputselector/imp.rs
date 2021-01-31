@@ -441,7 +441,7 @@ impl ObjectImpl for InputSelector {
                     "Active Pad",
                     "Currently active pad",
                     gst::Pad::static_type(),
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
             ]
         });

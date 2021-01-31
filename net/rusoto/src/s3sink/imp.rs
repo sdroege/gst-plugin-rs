@@ -369,21 +369,21 @@ impl ObjectImpl for S3Sink {
                     "S3 Bucket",
                     "The bucket of the file to write",
                     None,
-                    glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::string(
                     "key",
                     "S3 Key",
                     "The key of the file to write",
                     None,
-                    glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::string(
                     "region",
                     "AWS Region",
                     "An AWS region (e.g. eu-west-2).",
                     None,
-                    glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::uint64(
                     "part-size",
@@ -392,7 +392,7 @@ impl ObjectImpl for S3Sink {
                     5 * 1024 * 1024,        // 5 MB
                     5 * 1024 * 1024 * 1024, // 5 GB
                     DEFAULT_BUFFER_SIZE,
-                    glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
             ]
         });

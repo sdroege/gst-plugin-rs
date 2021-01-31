@@ -237,7 +237,7 @@ impl ObjectImpl for TtToJson {
                 "Which mode to operate in",
                 Cea608Mode::static_type(),
                 DEFAULT_MODE as i32,
-                glib::ParamFlags::READWRITE,
+                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
             )]
         });
 

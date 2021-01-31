@@ -94,7 +94,7 @@ impl ObjectImpl for VideoFallbackSource {
                     "URI",
                     "URI to use for video in case the main stream doesn't work",
                     None,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | glib::ParamFlags::CONSTRUCT_ONLY,
                 ),
                 glib::ParamSpec::uint64(
                     "min-latency",
@@ -103,7 +103,7 @@ impl ObjectImpl for VideoFallbackSource {
                     0,
                     std::u64::MAX,
                     0,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | glib::ParamFlags::CONSTRUCT_ONLY,
                 ),
             ]
         });

@@ -1763,7 +1763,7 @@ impl ObjectImpl for AudioLoudNorm {
                     -70.0,
                     -5.0,
                     DEFAULT_LOUDNESS_TARGET,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::double(
                     "loudness-range-target",
@@ -1772,7 +1772,7 @@ impl ObjectImpl for AudioLoudNorm {
                     1.0,
                     20.0,
                     DEFAULT_LOUDNESS_RANGE_TARGET,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::double(
                     "max-true-peak",
@@ -1781,7 +1781,7 @@ impl ObjectImpl for AudioLoudNorm {
                     -9.0,
                     0.0,
                     DEFAULT_MAX_TRUE_PEAK,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::double(
                     "offset",
@@ -1790,7 +1790,7 @@ impl ObjectImpl for AudioLoudNorm {
                     -99.0,
                     99.0,
                     DEFAULT_OFFSET,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
             ]
         });

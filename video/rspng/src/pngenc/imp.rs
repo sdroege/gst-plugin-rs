@@ -193,7 +193,7 @@ impl ObjectImpl for PngEncoder {
                     "Selects the compression algorithm to use",
                     CompressionLevel::static_type(),
                     DEFAULT_COMPRESSION_LEVEL as i32,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::enum_(
                     "filter",
@@ -201,7 +201,7 @@ impl ObjectImpl for PngEncoder {
                     "Selects the filter type to applied",
                     FilterType::static_type(),
                     DEFAULT_FILTER_TYPE as i32,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
             ]
         });

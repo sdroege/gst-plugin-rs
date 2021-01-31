@@ -122,7 +122,7 @@ impl ObjectImpl for Rgb2Gray {
                     "Invert",
                     "Invert grayscale output",
                     DEFAULT_INVERT,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::uint(
                     "shift",
@@ -131,7 +131,7 @@ impl ObjectImpl for Rgb2Gray {
                     0,
                     255,
                     DEFAULT_SHIFT,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
             ]
         });

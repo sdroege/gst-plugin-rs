@@ -510,14 +510,14 @@ impl ObjectImpl for MccEnc {
                     "UUID",
                     "UUID for the output file",
                     None,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::boxed(
                     "creation-date",
                     "Creation Date",
                     "Creation date for the output file",
                     glib::DateTime::static_type(),
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
             ]
         });

@@ -1043,14 +1043,14 @@ impl ObjectImpl for Transcriber {
                         <https://docs.aws.amazon.com/transcribe/latest/dg/how-streaming-transcription.html> \
                         for an up to date list of allowed languages",
                     Some("en-US"),
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::boolean(
                     "use-partial-results",
                     "Latency",
                     "Whether partial results from AWS should be used",
                     DEFAULT_USE_PARTIAL_RESULTS,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::uint(
                     "latency",
@@ -1059,7 +1059,7 @@ impl ObjectImpl for Transcriber {
                     2 * GRANULARITY_MS,
                     std::u32::MAX,
                     DEFAULT_LATENCY_MS,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
             ]
         });

@@ -112,7 +112,7 @@ impl ObjectImpl for AudioEcho {
                     "Maximum delay of the echo in nanoseconds (can't be changed in PLAYING or PAUSED state)",
                     0, u64::MAX,
                     DEFAULT_MAX_DELAY,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::uint64(
                     "delay",
@@ -121,7 +121,7 @@ impl ObjectImpl for AudioEcho {
                     0,
                     u64::MAX,
                     DEFAULT_DELAY,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::double(
                     "intensity",
@@ -130,7 +130,7 @@ impl ObjectImpl for AudioEcho {
                     0.0,
                     1.0,
                     DEFAULT_INTENSITY,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::double(
                     "feedback",
@@ -139,7 +139,7 @@ impl ObjectImpl for AudioEcho {
                     0.0,
                     1.0,
                     DEFAULT_FEEDBACK,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
             ]
         });

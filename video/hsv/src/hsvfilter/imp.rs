@@ -101,7 +101,7 @@ impl ObjectImpl for HsvFilter {
                     f32::MIN,
                     f32::MAX,
                     DEFAULT_HUE_SHIFT,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::float(
                     "saturation-mul",
@@ -110,7 +110,7 @@ impl ObjectImpl for HsvFilter {
                     f32::MIN,
                     f32::MAX,
                     DEFAULT_SATURATION_MUL,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::float(
                     "saturation-off",
@@ -119,7 +119,7 @@ impl ObjectImpl for HsvFilter {
                     f32::MIN,
                     f32::MAX,
                     DEFAULT_SATURATION_OFF,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::float(
                     "value-mul",
@@ -128,7 +128,7 @@ impl ObjectImpl for HsvFilter {
                     f32::MIN,
                     f32::MAX,
                     DEFAULT_VALUE_MUL,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::float(
                     "value-off",
@@ -137,7 +137,7 @@ impl ObjectImpl for HsvFilter {
                     f32::MIN,
                     f32::MAX,
                     DEFAULT_VALUE_OFF,
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
             ]
         });
