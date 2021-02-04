@@ -205,7 +205,8 @@ impl FallbackSwitch {
         while let Some(buffer) = pad.peek_buffer() {
             let pts = buffer.get_dts_or_pts();
             let new_running_time = segment.to_running_time(pts);
-            if pts.is_none() || running_time <= target_running_time {
+
+            if pts.is_none() || new_running_time <= target_running_time {
                 gst_debug!(CAT, obj: pad, "Dropping trailing buffer {:?}", buffer);
                 pad.drop_buffer();
                 running_time = new_running_time;
@@ -570,13 +571,14 @@ impl FallbackSwitch {
 
         /* If we can't auto-switch, then can't fetch anything from the backup pad */
         if !settings.auto_switch {
-            /* Use a dummy drain_pad_to_time() call to update the last_sinkpad_time */
+            /* Not switching, but backup pad needs draining of late buffers still */
+            gst_log!(
+                CAT,
+                obj: agg,
+                "No primary buffer, but can't autoswitch - draining backup pad"
+            );
             if let Some(backup_pad) = &backup_pad {
-                if let Err(e) = self.drain_pad_to_time(
-                    &mut *state,
-                    &backup_pad,
-                    gst::ClockTime::from_seconds(0),
-                ) {
+                if let Err(e) = self.drain_pad_to_time(&mut *state, &backup_pad, cur_running_time) {
                     return (
                         Err(e),
                         state.check_health_changes(
@@ -1161,9 +1163,21 @@ impl AggregatorImpl for FallbackSwitch {
             self.get_next_buffer(agg, timeout);
 
         if primary_health_change {
+            gst_debug!(
+                CAT,
+                obj: agg,
+                "Primary pad health now {}",
+                &primary_health_change
+            );
             agg.notify("primary-health");
         }
         if fallback_health_change {
+            gst_debug!(
+                CAT,
+                obj: agg,
+                "Fallback pad health now {}",
+                &fallback_health_change
+            );
             agg.notify("fallback-health");
         }
 
