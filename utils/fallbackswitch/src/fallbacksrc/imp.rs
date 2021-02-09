@@ -640,7 +640,7 @@ impl ElementImpl for FallbackSrc {
 
         // Change the source state manually here to be able to catch errors. State changes always
         // happen from sink to source, so we do this after chaining up.
-        self.change_source_state(element, transition)?;
+        self.change_source_state(element, transition);
 
         // Ignore parent state change return to prevent spurious async/no-preroll return values
         // due to core state change bugs
@@ -649,7 +649,7 @@ impl ElementImpl for FallbackSrc {
                 Ok(gst::StateChangeSuccess::NoPreroll)
             }
             gst::StateChange::ReadyToNull => {
-                self.stop(element)?;
+                self.stop(element);
                 Ok(gst::StateChangeSuccess::Success)
             }
             _ => Ok(gst::StateChangeSuccess::Success),
@@ -689,7 +689,7 @@ impl FallbackSrc {
         element: &super::FallbackSrc,
         source: &Source,
         buffer_duration: i64,
-    ) -> Result<gst::Element, gst::StateChangeError> {
+    ) -> gst::Element {
         let source = match source {
             Source::Uri(ref uri) => {
                 let source = gst::ElementFactory::make("uridecodebin3", Some("uridecodebin"))
@@ -741,14 +741,12 @@ impl FallbackSrc {
             };
             let src = FallbackSrc::from_instance(&element);
 
-            if let Err(msg) = src.handle_source_pad_removed(&element, pad) {
-                element.post_error_message(msg);
-            }
+            src.handle_source_pad_removed(&element, pad);
         });
 
         element.add_many(&[&source]).unwrap();
 
-        Ok(source)
+        source
     }
 
     fn create_fallback_video_input(
@@ -756,14 +754,11 @@ impl FallbackSrc {
         _element: &super::FallbackSrc,
         min_latency: u64,
         fallback_uri: Option<&str>,
-    ) -> Result<gst::Element, gst::StateChangeError> {
-        Ok(VideoFallbackSource::new(fallback_uri, min_latency).upcast())
+    ) -> gst::Element {
+        VideoFallbackSource::new(fallback_uri, min_latency).upcast()
     }
 
-    fn create_fallback_audio_input(
-        &self,
-        _element: &super::FallbackSrc,
-    ) -> Result<gst::Element, gst::StateChangeError> {
+    fn create_fallback_audio_input(&self, _element: &super::FallbackSrc) -> gst::Element {
         let input = gst::Bin::new(Some("fallback_audio"));
         let audiotestsrc = gst::ElementFactory::make("audiotestsrc", Some("fallback_audiosrc"))
             .expect("No audiotestsrc found");
@@ -781,7 +776,7 @@ impl FallbackSrc {
             )
             .unwrap();
 
-        Ok(input.upcast())
+        input.upcast()
     }
 
     fn create_stream(
@@ -791,11 +786,11 @@ impl FallbackSrc {
         min_latency: u64,
         is_audio: bool,
         fallback_uri: Option<&str>,
-    ) -> Result<Stream, gst::StateChangeError> {
+    ) -> Stream {
         let fallback_input = if is_audio {
-            self.create_fallback_audio_input(element)?
+            self.create_fallback_audio_input(element)
         } else {
-            self.create_fallback_video_input(element, min_latency, fallback_uri)?
+            self.create_fallback_video_input(element, min_latency, fallback_uri)
         };
 
         let switch =
@@ -865,7 +860,7 @@ impl FallbackSrc {
 
         element.add_pad(&ghostpad).unwrap();
 
-        Ok(Stream {
+        Stream {
             fallback_input,
             source_srcpad: None,
             source_srcpad_block: None,
@@ -874,7 +869,7 @@ impl FallbackSrc {
             clocksync_queue,
             switch,
             srcpad: ghostpad.upcast(),
-        })
+        }
     }
 
     fn start(&self, element: &super::FallbackSrc) -> Result<(), gst::StateChangeError> {
@@ -907,8 +902,7 @@ impl FallbackSrc {
         let fallback_uri = &settings.fallback_uri;
 
         // Create main input
-        let source =
-            self.create_main_input(element, &configured_source, settings.buffer_duration)?;
+        let source = self.create_main_input(element, &configured_source, settings.buffer_duration);
 
         let mut flow_combiner = gst_base::UniqueFlowCombiner::new();
 
@@ -920,7 +914,7 @@ impl FallbackSrc {
                 settings.min_latency,
                 false,
                 fallback_uri.as_deref(),
-            )?;
+            );
             flow_combiner.add_pad(&stream.srcpad);
             Some(stream)
         } else {
@@ -930,7 +924,7 @@ impl FallbackSrc {
         // Create audio stream
         let audio_stream = if settings.enable_audio {
             let stream =
-                self.create_stream(element, settings.timeout, settings.min_latency, true, None)?;
+                self.create_stream(element, settings.timeout, settings.min_latency, true, None);
             flow_combiner.add_pad(&stream.srcpad);
             Some(stream)
         } else {
@@ -964,12 +958,12 @@ impl FallbackSrc {
         Ok(())
     }
 
-    fn stop(&self, element: &super::FallbackSrc) -> Result<(), gst::StateChangeError> {
+    fn stop(&self, element: &super::FallbackSrc) {
         gst_debug!(CAT, obj: element, "Stopping");
         let mut state_guard = self.state.lock().unwrap();
         let mut state = match state_guard.take() {
             Some(state) => state,
-            None => return Ok(()),
+            None => return,
         };
         drop(state_guard);
 
@@ -1018,19 +1012,14 @@ impl FallbackSrc {
         }
 
         gst_debug!(CAT, obj: element, "Stopped");
-        Ok(())
     }
 
-    fn change_source_state(
-        &self,
-        element: &super::FallbackSrc,
-        transition: gst::StateChange,
-    ) -> Result<(), gst::StateChangeError> {
+    fn change_source_state(&self, element: &super::FallbackSrc, transition: gst::StateChange) {
         gst_debug!(CAT, obj: element, "Changing source state: {:?}", transition);
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
             Some(state) => state,
-            None => return Ok(()),
+            None => return,
         };
 
         if transition.current() <= transition.next() && state.source_pending_restart {
@@ -1039,7 +1028,7 @@ impl FallbackSrc {
                 obj: element,
                 "Not starting source because pending restart"
             );
-            return Ok(());
+            return;
         } else if transition.next() <= gst::State::Ready && state.source_pending_restart {
             gst_debug!(
                 CAT,
@@ -1094,8 +1083,6 @@ impl FallbackSrc {
                 }
             }
         }
-
-        Ok(())
     }
 
     fn proxy_pad_chain(
@@ -1610,11 +1597,7 @@ impl FallbackSrc {
         }
     }
 
-    fn handle_source_pad_removed(
-        &self,
-        element: &super::FallbackSrc,
-        pad: &gst::Pad,
-    ) -> Result<(), gst::ErrorMessage> {
+    fn handle_source_pad_removed(&self, element: &super::FallbackSrc, pad: &gst::Pad) {
         gst_debug!(
             CAT,
             obj: element,
@@ -1625,7 +1608,7 @@ impl FallbackSrc {
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
             None => {
-                return Ok(());
+                return;
             }
             Some(state) => state,
         };
@@ -1646,7 +1629,7 @@ impl FallbackSrc {
         {
             stream
         } else {
-            return Ok(());
+            return;
         };
 
         stream.source_srcpad = None;
@@ -1655,8 +1638,6 @@ impl FallbackSrc {
 
         drop(state_guard);
         element.notify("status");
-
-        Ok(())
     }
 
     fn handle_buffering(&self, element: &super::FallbackSrc, m: &gst::message::Buffering) {
@@ -1992,13 +1973,11 @@ impl FallbackSrc {
                             // See https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/-/issues/746
                             element.remove(&state.source).unwrap();
 
-                            let source = src
-                                .create_main_input(
-                                    element,
-                                    &state.configured_source,
-                                    state.settings.buffer_duration,
-                                )
-                                .expect("failed to create new source");
+                            let source = src.create_main_input(
+                                element,
+                                &state.configured_source,
+                                state.settings.buffer_duration,
+                            );
 
                             (
                                 source.clone(),

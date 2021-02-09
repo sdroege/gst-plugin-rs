@@ -214,14 +214,11 @@ impl VideoDecoderImpl for CdgDec {
                 .is_some()
             {
                 let pools = allocation.get_allocation_pools();
-                if let Some((ref pool, _, _, _)) = pools.first() {
-                    if let Some(pool) = pool {
-                        let mut config = pool.get_config();
-                        config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
-                        pool.set_config(config).map_err(|e| {
-                            gst::error_msg!(gst::CoreError::Negotiation, [&e.message])
-                        })?;
-                    }
+                if let Some((Some(ref pool), _, _, _)) = pools.first() {
+                    let mut config = pool.get_config();
+                    config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+                    pool.set_config(config)
+                        .map_err(|e| gst::error_msg!(gst::CoreError::Negotiation, [&e.message]))?;
                 }
             }
         }

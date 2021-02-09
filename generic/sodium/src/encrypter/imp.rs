@@ -139,7 +139,7 @@ impl State {
         gst::Buffer::from_mut_slice(sealed)
     }
 
-    fn encrypt_blocks(&mut self, block_size: usize) -> Result<BufferVec, gst::FlowError> {
+    fn encrypt_blocks(&mut self, block_size: usize) -> BufferVec {
         assert_ne!(block_size, 0);
 
         let mut buffers = BufferVec::new();
@@ -154,7 +154,7 @@ impl State {
             buffers.push(out_buf);
         }
 
-        Ok(buffers)
+        buffers
     }
 }
 
@@ -193,19 +193,7 @@ impl Encrypter {
         state.adapter.push(buffer);
 
         // Encrypt the whole blocks, if any, and push them.
-        buffers.extend(
-            state
-                .encrypt_blocks(state.block_size as usize)
-                .map_err(|err| {
-                    // log the error to the bus
-                    gst::element_error!(
-                        element,
-                        gst::ResourceError::Write,
-                        ["Failed to decrypt buffer"]
-                    );
-                    err
-                })?,
-        );
+        buffers.extend(state.encrypt_blocks(state.block_size as usize));
 
         drop(state_guard);
 
@@ -245,17 +233,8 @@ impl Encrypter {
                 assert!(avail < state.block_size as usize);
 
                 if avail > 0 {
-                    match state.encrypt_blocks(avail) {
-                        Err(_) => {
-                            gst::element_error!(
-                                element,
-                                gst::ResourceError::Write,
-                                ["Failed to encrypt buffers at EOS"]
-                            );
-                            return false;
-                        }
-                        Ok(b) => buffers.extend(b),
-                    }
+                    let b = state.encrypt_blocks(avail);
+                    buffers.extend(b);
                 }
 
                 // drop the lock before pushing into the pad

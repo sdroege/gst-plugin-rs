@@ -204,7 +204,7 @@ impl ElementImpl for VideoFallbackSource {
 
         match transition {
             gst::StateChange::ReadyToNull => {
-                self.stop(element)?;
+                self.stop(element);
             }
             _ => (),
         }
@@ -220,9 +220,10 @@ impl BinImpl for VideoFallbackSource {
 
         match msg.view() {
             MessageView::Error(err) => {
-                if !self
+                if self
                     .got_error
-                    .compare_and_swap(false, true, Ordering::SeqCst)
+                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_err()
                 {
                     gst_warning!(CAT, obj: bin, "Got error {:?}", err);
                     self.parent_handle_message(bin, msg)
@@ -283,7 +284,7 @@ impl VideoFallbackSource {
         element: &super::VideoFallbackSource,
         min_latency: u64,
         uri: Option<&str>,
-    ) -> Result<gst::Element, gst::StateChangeError> {
+    ) -> gst::Element {
         gst_debug!(CAT, obj: element, "Creating source with uri {:?}", uri);
 
         let source = gst::Bin::new(None);
@@ -440,7 +441,7 @@ impl VideoFallbackSource {
             )
             .unwrap();
 
-        Ok(source.upcast())
+        source.upcast()
     }
 
     fn start(
@@ -457,7 +458,7 @@ impl VideoFallbackSource {
 
         let settings = self.settings.lock().unwrap().clone();
         let uri = &settings.uri;
-        let source = self.create_source(element, settings.min_latency, uri.as_deref())?;
+        let source = self.create_source(element, settings.min_latency, uri.as_deref());
 
         element.add(&source).unwrap();
 
@@ -469,16 +470,13 @@ impl VideoFallbackSource {
         Ok(gst::StateChangeSuccess::Success)
     }
 
-    fn stop(
-        &self,
-        element: &super::VideoFallbackSource,
-    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+    fn stop(&self, element: &super::VideoFallbackSource) {
         gst_debug!(CAT, obj: element, "Stopping");
 
         let mut state_guard = self.state.lock().unwrap();
         let state = match state_guard.take() {
             Some(state) => state,
-            None => return Ok(gst::StateChangeSuccess::Success),
+            None => return,
         };
 
         drop(state_guard);
@@ -488,7 +486,5 @@ impl VideoFallbackSource {
         element.remove(&state.source).unwrap();
         self.got_error.store(false, Ordering::Relaxed);
         gst_debug!(CAT, obj: element, "Stopped");
-
-        Ok(gst::StateChangeSuccess::Success)
     }
 }

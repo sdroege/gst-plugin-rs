@@ -149,7 +149,10 @@ impl ObjectSubclass for FlvDemux {
                             "Panic activating sink pad with mode"
                         ))
                     },
-                    |demux, element| demux.sink_activatemode(pad, element, mode, active),
+                    |demux, element| {
+                        demux.sink_activatemode(pad, element, mode, active);
+                        Ok(())
+                    },
                 )
             })
             .chain_function(|pad, parent, buffer| {
@@ -332,12 +335,9 @@ impl FlvDemux {
         element: &super::FlvDemux,
         mode: gst::PadMode,
         active: bool,
-    ) -> Result<(), gst::LoggableError> {
+    ) {
         if active {
-            self.start(element, mode).map_err(|err| {
-                element.post_error_message(err);
-                gst::loggable_error!(CAT, "Failed to start element with mode {:?}", mode)
-            })?;
+            self.start(element, mode);
 
             if mode == gst::PadMode::Pull {
                 // TODO implement pull mode
@@ -349,26 +349,15 @@ impl FlvDemux {
                 let _ = self.sinkpad.stop_task();
             }
 
-            self.stop(element).map_err(|err| {
-                element.post_error_message(err);
-                gst::loggable_error!(CAT, "Failed to stop element")
-            })?;
+            self.stop(element);
         }
-
-        Ok(())
     }
 
-    fn start(
-        &self,
-        _element: &super::FlvDemux,
-        _mode: gst::PadMode,
-    ) -> Result<(), gst::ErrorMessage> {
+    fn start(&self, _element: &super::FlvDemux, _mode: gst::PadMode) {
         *self.state.lock().unwrap() = State::NeedHeader;
-
-        Ok(())
     }
 
-    fn stop(&self, element: &super::FlvDemux) -> Result<(), gst::ErrorMessage> {
+    fn stop(&self, element: &super::FlvDemux) {
         *self.state.lock().unwrap() = State::Stopped;
         self.adapter.lock().unwrap().clear();
 
@@ -384,8 +373,6 @@ impl FlvDemux {
         }
 
         flow_combiner.reset();
-
-        Ok(())
     }
 
     fn sink_event(&self, pad: &gst::Pad, element: &super::FlvDemux, event: gst::Event) -> bool {
@@ -753,7 +740,7 @@ impl StreamingState {
             flavors::TagType::Script => {
                 gst_trace!(CAT, obj: element, "Found script tag");
 
-                self.handle_script_tag(element, &tag_header, adapter)
+                Ok(self.handle_script_tag(element, &tag_header, adapter))
             }
             flavors::TagType::Audio => {
                 gst_trace!(CAT, obj: element, "Found audio tag");
@@ -774,7 +761,7 @@ impl StreamingState {
         element: &super::FlvDemux,
         tag_header: &flavors::TagHeader,
         adapter: &mut gst_base::UniqueAdapter,
-    ) -> Result<SmallVec<[Event; 4]>, gst::ErrorMessage> {
+    ) -> SmallVec<[Event; 4]> {
         assert!(adapter.available() >= tag_header.data_size as usize);
 
         let mut events = SmallVec::new();
@@ -827,14 +814,14 @@ impl StreamingState {
         drop(data);
         adapter.flush(tag_header.data_size as usize);
 
-        Ok(events)
+        events
     }
 
     fn update_audio_stream(
         &mut self,
         element: &super::FlvDemux,
         data_header: &flavors::AudioDataHeader,
-    ) -> Result<SmallVec<[Event; 4]>, gst::ErrorMessage> {
+    ) -> SmallVec<[Event; 4]> {
         let mut events = SmallVec::new();
 
         gst_trace!(
@@ -871,7 +858,7 @@ impl StreamingState {
             events.push(Event::HaveAllStreams);
         }
 
-        Ok(events)
+        events
     }
 
     fn handle_aac_audio_packet_header(
@@ -953,7 +940,7 @@ impl StreamingState {
         drop(data);
         adapter.flush(1);
 
-        let mut events = self.update_audio_stream(element, &data_header)?;
+        let mut events = self.update_audio_stream(element, &data_header);
 
         // AAC special case
         if data_header.sound_format == flavors::SoundFormat::AAC
@@ -1004,7 +991,7 @@ impl StreamingState {
         &mut self,
         element: &super::FlvDemux,
         data_header: &flavors::VideoDataHeader,
-    ) -> Result<SmallVec<[Event; 4]>, gst::ErrorMessage> {
+    ) -> SmallVec<[Event; 4]> {
         let mut events = SmallVec::new();
 
         gst_trace!(
@@ -1041,7 +1028,7 @@ impl StreamingState {
             events.push(Event::HaveAllStreams);
         }
 
-        Ok(events)
+        events
     }
 
     fn handle_avc_video_packet_header(
@@ -1134,7 +1121,7 @@ impl StreamingState {
         drop(data);
         adapter.flush(1);
 
-        let mut events = self.update_video_stream(element, &data_header)?;
+        let mut events = self.update_video_stream(element, &data_header);
 
         // AVC/H264 special case
         let cts = if data_header.codec_id == flavors::CodecId::H264 {

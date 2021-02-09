@@ -655,30 +655,18 @@ impl Transcriber {
             },
             EventView::FlushStart(_) => {
                 gst_info!(CAT, obj: element, "Received flush start, disconnecting");
-                match self.disconnect(element) {
+                self.disconnect(element);
+                let mut ret = pad.event_default(Some(element), event);
+
+                match self.srcpad.stop_task() {
                     Err(err) => {
-                        element.post_error_message(err);
-                        false
+                        gst_error!(CAT, obj: element, "Failed to stop srcpad task: {}", err);
+                        ret = false;
                     }
-                    Ok(_) => {
-                        let mut ret = pad.event_default(Some(element), event);
+                    Ok(_) => (),
+                };
 
-                        match self.srcpad.stop_task() {
-                            Err(err) => {
-                                gst_error!(
-                                    CAT,
-                                    obj: element,
-                                    "Failed to stop srcpad task: {}",
-                                    err
-                                );
-                                ret = false;
-                            }
-                            Ok(_) => (),
-                        };
-
-                        ret
-                    }
-                }
+                ret
             }
             EventView::FlushStop(_) => {
                 gst_info!(CAT, obj: element, "Received flush stop, restarting task");
@@ -946,7 +934,7 @@ impl Transcriber {
         Ok(())
     }
 
-    fn disconnect(&self, element: &super::Transcriber) -> Result<(), gst::ErrorMessage> {
+    fn disconnect(&self, element: &super::Transcriber) {
         let mut state = self.state.lock().unwrap();
 
         gst_info!(CAT, obj: element, "Unpreparing");
@@ -967,8 +955,6 @@ impl Transcriber {
             "Unprepared, connected: {}!",
             state.connected
         );
-
-        Ok(())
     }
 }
 
@@ -1173,10 +1159,7 @@ impl ElementImpl for Transcriber {
 
         match transition {
             gst::StateChange::PausedToReady => {
-                self.disconnect(element).map_err(|err| {
-                    element.post_error_message(err);
-                    gst::StateChangeError
-                })?;
+                self.disconnect(element);
             }
             _ => (),
         }

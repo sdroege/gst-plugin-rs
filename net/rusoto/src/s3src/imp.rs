@@ -60,8 +60,8 @@ impl S3Src {
         };
     }
 
-    fn connect(self: &S3Src, url: &GstS3Url) -> Result<S3Client, gst::ErrorMessage> {
-        Ok(S3Client::new(url.region.clone()))
+    fn connect(self: &S3Src, url: &GstS3Url) -> S3Client {
+        S3Client::new(url.region.clone())
     }
 
     fn set_uri(self: &S3Src, _: &super::S3Src, url_str: Option<&str>) -> Result<(), glib::Error> {
@@ -345,7 +345,7 @@ impl BaseSrcImpl for S3Src {
             }
         };
 
-        let s3client = self.connect(&s3url)?;
+        let s3client = self.connect(&s3url);
         let size = self.head(src, &s3client, &s3url)?;
 
         *state = StreamingState::Started {

@@ -300,7 +300,7 @@ impl JsonGstParse {
 
                         state = self.state.lock().unwrap();
                     } else {
-                        state = self.handle_skipped_line(element, pts, state)?;
+                        state = self.handle_skipped_line(element, pts, state);
                     }
                 }
                 Ok(Some(Line::Header { format })) => {
@@ -343,7 +343,7 @@ impl JsonGstParse {
         element: &super::JsonGstParse,
         pts: gst::ClockTime,
         mut state: MutexGuard<State>,
-    ) -> Result<MutexGuard<State>, gst::FlowError> {
+    ) -> MutexGuard<State> {
         if pts >= state.segment.get_start() {
             state.seeking = false;
             state.discont = true;
@@ -355,7 +355,7 @@ impl JsonGstParse {
 
         drop(state);
 
-        Ok(self.state.lock().unwrap())
+        self.state.lock().unwrap()
     }
 
     fn sink_activate(

@@ -383,13 +383,11 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl InputSelector {
-    fn unprepare(&self, element: &super::InputSelector) -> Result<(), ()> {
+    fn unprepare(&self, element: &super::InputSelector) {
         let mut state = self.state.lock().unwrap();
         gst_debug!(CAT, obj: element, "Unpreparing");
         *state = State::default();
         gst_debug!(CAT, obj: element, "Unprepared");
-
-        Ok(())
     }
 }
 
@@ -574,7 +572,7 @@ impl ElementImpl for InputSelector {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         if let gst::StateChange::ReadyToNull = transition {
-            self.unprepare(element).map_err(|_| gst::StateChangeError)?;
+            self.unprepare(element);
         }
 
         let mut success = self.parent_change_state(element, transition)?;
