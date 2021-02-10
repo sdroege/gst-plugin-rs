@@ -91,6 +91,10 @@ pub struct TextWrap {
     state: Mutex<State>,
 }
 
+fn is_punctuation(word: &str) -> bool {
+    word == "." || word == "," || word == "?" || word == "!" || word == ";" || word == ":"
+}
+
 impl TextWrap {
     fn update_wrapper(&self, element: &super::TextWrap) {
         let settings = self.settings.lock().unwrap();
@@ -205,7 +209,7 @@ impl TextWrap {
             let mut current_text = state.current_text.to_string();
 
             for word in words {
-                if !current_text.is_empty() {
+                if !current_text.is_empty() && !is_punctuation(word) {
                     current_text.push(' ');
                 }
                 current_text.push_str(word);
