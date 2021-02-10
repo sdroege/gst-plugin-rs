@@ -94,15 +94,23 @@ const DEFAULT_FPS_N: i32 = 30;
 const DEFAULT_FPS_D: i32 = 1;
 
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
+const DEFAULT_ORIGIN_ROW: i32 = -1;
+const DEFAULT_ORIGIN_COLUMN: u32 = 0;
 
 #[derive(Debug, Clone)]
 struct Settings {
     mode: Cea608Mode,
+    origin_row: i32,
+    origin_column: u32,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { mode: DEFAULT_MODE }
+        Settings {
+            mode: DEFAULT_MODE,
+            origin_row: DEFAULT_ORIGIN_ROW,
+            origin_column: DEFAULT_ORIGIN_COLUMN,
+        }
     }
 }
 
@@ -455,7 +463,7 @@ impl TtToCea608 {
             Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
                 if let Some(carriage_return) = carriage_return {
                     if carriage_return {
-                        *col = 0;
+                        *col = self.settings.lock().unwrap().origin_column;
                         state.carriage_return(element, bufferlist);
                         true
                     } else {
@@ -572,7 +580,7 @@ impl TtToCea608 {
                     Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
                         state.send_roll_up_preamble = true;
                     }
-                    _ => col = 0,
+                    _ => col = self.settings.lock().unwrap().origin_column,
                 }
             }
         }
@@ -584,7 +592,7 @@ impl TtToCea608 {
                 if state.mode != Cea608Mode::PopOn && state.mode != Cea608Mode::PaintOn {
                     state.send_roll_up_preamble = true;
                 }
-                col = 0;
+                col = self.settings.lock().unwrap().origin_column;
             }
         }
 
@@ -624,7 +632,7 @@ impl TtToCea608 {
                 }
                 col = line_column;
             } else if state.mode == Cea608Mode::PopOn || state.mode == Cea608Mode::PaintOn {
-                col = 0;
+                col = self.settings.lock().unwrap().origin_column;
             }
 
             for (j, chunk) in line.chunks.iter().enumerate() {
@@ -818,7 +826,15 @@ impl TtToCea608 {
                 })?;
 
                 let phrases: Vec<&str> = data.split('\n').collect();
-                let mut row = (std::cmp::max(0, 15 - phrases.len())) as u32;
+                let mut row = match settings.origin_row {
+                    -1 => match settings.mode {
+                        Cea608Mode::PopOn | Cea608Mode::PaintOn => {
+                            15u32.saturating_sub(phrases.len() as u32)
+                        }
+                        Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => 14,
+                    },
+                    _ => settings.origin_row as u32,
+                };
 
                 for phrase in &phrases {
                     lines.lines.push(Line {
@@ -831,7 +847,9 @@ impl TtToCea608 {
                             text: phrase.to_string(),
                         }],
                     });
-                    row += 1;
+                    if settings.mode == Cea608Mode::PopOn || settings.mode == Cea608Mode::PaintOn {
+                        row += 1;
+                    }
                 }
             }
             true => {
@@ -994,14 +1012,34 @@ impl ObjectSubclass for TtToCea608 {
 impl ObjectImpl for TtToCea608 {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::enum_(
-                "mode",
-                "Mode",
-                "Which mode to operate in",
-                Cea608Mode::static_type(),
-                DEFAULT_MODE as i32,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-            )]
+            vec![
+                glib::ParamSpec::enum_(
+                    "mode",
+                    "Mode",
+                    "Which mode to operate in",
+                    Cea608Mode::static_type(),
+                    DEFAULT_MODE as i32,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+                glib::ParamSpec::int(
+                    "origin-row",
+                    "Origin row",
+                    "Origin row, (-1=automatic)",
+                    -1,
+                    14,
+                    DEFAULT_ORIGIN_ROW,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+                glib::ParamSpec::uint(
+                    "origin-column",
+                    "Origin column",
+                    "Origin column",
+                    0,
+                    31,
+                    DEFAULT_ORIGIN_COLUMN,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -1029,6 +1067,18 @@ impl ObjectImpl for TtToCea608 {
                     .expect("type checked upstream");
                 self.state.lock().unwrap().force_clear = true;
             }
+            "origin-row" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.origin_row = value.get_some().expect("type checked upstream");
+                self.state.lock().unwrap().force_clear = true;
+            }
+            "origin-column" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.origin_column = value.get_some().expect("type checked upstream");
+                let mut state = self.state.lock().unwrap();
+                state.force_clear = true;
+                state.column = settings.origin_column;
+            }
             _ => unimplemented!(),
         }
     }
@@ -1038,6 +1088,14 @@ impl ObjectImpl for TtToCea608 {
             "mode" => {
                 let settings = self.settings.lock().unwrap();
                 settings.mode.to_value()
+            }
+            "origin-row" => {
+                let settings = self.settings.lock().unwrap();
+                settings.origin_row.to_value()
+            }
+            "origin-column" => {
+                let settings = self.settings.lock().unwrap();
+                settings.origin_column.to_value()
             }
             _ => unimplemented!(),
         }
@@ -1115,11 +1173,13 @@ impl ElementImpl for TtToCea608 {
         match transition {
             gst::StateChange::ReadyToPaused => {
                 let mut state = self.state.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
                 *state = State::default();
                 state.force_clear = false;
-                state.mode = self.settings.lock().unwrap().mode;
+                state.mode = settings.mode;
                 if state.mode != Cea608Mode::PopOn {
                     state.send_roll_up_preamble = true;
+                    state.column = settings.origin_column;
                 }
             }
             _ => (),
