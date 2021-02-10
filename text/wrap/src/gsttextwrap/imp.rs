@@ -180,6 +180,7 @@ impl TextWrap {
 
         if accumulate_time.is_some() {
             let mut bufferlist = gst::BufferList::new();
+            let n_lines = std::cmp::max(self.settings.lock().unwrap().lines, 1);
 
             if state.end_ts.is_some() && state.end_ts + accumulate_time < buffer.get_pts() {
                 let mut buf = gst::Buffer::from_mut_slice(
@@ -220,14 +221,31 @@ impl TextWrap {
                     .expect("We should have a wrapper by now");
 
                 let lines = textwrap::wrap(&current_text, options);
-                let len = lines.len();
+                let mut chunks = lines.chunks(n_lines as usize).peekable();
                 let mut trailing = "".to_string();
 
-                for (i, line) in lines.iter().enumerate() {
-                    if i + 1 == len {
-                        trailing = line.to_string();
+                while let Some(chunk) = chunks.next() {
+                    if chunks.peek().is_none() {
+                        trailing = chunk
+                            .iter()
+                            .map(|l| l.to_string())
+                            .collect::<Vec<String>>()
+                            .join("\n");
                     } else {
-                        let mut buf = gst::Buffer::from_mut_slice(line.to_string().into_bytes());
+                        let contents = chunk
+                            .iter()
+                            .map(|l| l.to_string())
+                            .collect::<Vec<String>>()
+                            .join("\n");
+                        gst_info!(
+                            CAT,
+                            obj: element,
+                            "Outputting contents {}, ts: {}, duration: {}",
+                            contents.to_string(),
+                            state.start_ts,
+                            state.end_ts - state.start_ts
+                        );
+                        let mut buf = gst::Buffer::from_mut_slice(contents.into_bytes());
                         {
                             let buf_mut = buf.get_mut().unwrap();
                             buf_mut.set_pts(state.start_ts);
@@ -280,6 +298,7 @@ impl TextWrap {
                     let data = chunk.join("\n");
                     let duration: gst::ClockTime =
                         duration_per_word * data.split_whitespace().count() as u64;
+                    gst_info!(CAT, "Pushing lines {}", data);
                     let mut buf = gst::Buffer::from_mut_slice(data.into_bytes());
 
                     {
