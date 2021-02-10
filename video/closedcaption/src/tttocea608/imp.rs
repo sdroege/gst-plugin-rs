@@ -29,6 +29,10 @@ use std::sync::Mutex;
 
 use crate::ttutils::{Cea608Mode, Chunk, Line, Lines, TextStyle};
 
+fn is_punctuation(word: &str) -> bool {
+    word == "." || word == "," || word == "?" || word == "!" || word == ";" || word == ":"
+}
+
 fn is_basicna(cc_data: u16) -> bool {
     0x0000 != (0x6000 & cc_data)
 }
@@ -525,6 +529,8 @@ impl TtToCea608 {
             state.underline = chunk.underline;
             state.send_roll_up_preamble = false;
             ret = false;
+        } else if *col == self.settings.lock().unwrap().origin_column {
+            ret = false;
         }
 
         if self.open_chunk(element, state, chunk, bufferlist, *col) {
@@ -655,6 +661,10 @@ impl TtToCea608 {
                 } else if self.open_chunk(element, &mut state, chunk, mut_list, col) {
                     prepend_space = false;
                     col += 1;
+                }
+
+                if is_punctuation(&chunk.text) {
+                    prepend_space = false;
                 }
 
                 let text = {
