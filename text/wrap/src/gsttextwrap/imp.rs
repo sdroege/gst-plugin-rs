@@ -20,7 +20,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_error, gst_info, gst_log};
+use gst::{gst_debug, gst_error, gst_info, gst_log};
 
 use std::default::Default;
 use std::fs::File;
@@ -182,7 +182,7 @@ impl TextWrap {
             let mut bufferlist = gst::BufferList::new();
             let n_lines = std::cmp::max(self.settings.lock().unwrap().lines, 1);
 
-            if state.end_ts.is_some() && state.end_ts + accumulate_time < buffer.get_pts() {
+            if state.start_ts.is_some() && state.start_ts + accumulate_time < buffer.get_pts() {
                 let mut buf = gst::Buffer::from_mut_slice(
                     mem::replace(&mut state.current_text, String::new()).into_bytes(),
                 );
@@ -380,6 +380,46 @@ impl TextWrap {
             _ => pad.event_default(Some(element), event),
         }
     }
+
+    fn src_query(
+        &self,
+        pad: &gst::Pad,
+        element: &super::TextWrap,
+        query: &mut gst::QueryRef,
+    ) -> bool {
+        use gst::QueryView;
+
+        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+
+        match query.view_mut() {
+            QueryView::Latency(ref mut q) => {
+                let mut peer_query = gst::query::Latency::new();
+
+                let ret = self.sinkpad.peer_query(&mut peer_query);
+
+                if ret {
+                    let (live, min, _) = peer_query.get_result();
+                    let our_latency: gst::ClockTime = self
+                        .settings
+                        .lock()
+                        .unwrap()
+                        .accumulate_time
+                        .unwrap_or(0)
+                        .into();
+                    gst_info!(
+                        CAT,
+                        obj: element,
+                        "Reporting our latency {} + {}",
+                        our_latency,
+                        min
+                    );
+                    q.set(live, our_latency + min, gst::CLOCK_TIME_NONE);
+                }
+                ret
+            }
+            _ => pad.query_default(Some(element), query),
+        }
+    }
 }
 
 impl ObjectSubclass for TextWrap {
@@ -414,6 +454,13 @@ impl ObjectSubclass for TextWrap {
 
         let templ = klass.get_pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .query_function(|pad, parent, query| {
+                TextWrap::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |textwrap, element| textwrap.src_query(pad, element, query),
+                )
+            })
             .flags(gst::PadFlags::PROXY_CAPS | gst::PadFlags::FIXED_CAPS)
             .build();
 
@@ -483,7 +530,7 @@ impl ObjectImpl for TextWrap {
 
     fn set_property(
         &self,
-        _obj: &Self::Type,
+        obj: &Self::Type,
         _id: usize,
         value: &glib::Value,
         pspec: &glib::ParamSpec,
@@ -507,10 +554,21 @@ impl ObjectImpl for TextWrap {
             }
             "accumulate-time" => {
                 let mut settings = self.settings.lock().unwrap();
+                let old_accumulate_time = settings.accumulate_time;
                 settings.accumulate_time = match value.get_some().expect("type checked upstream") {
                     -1i64 => gst::CLOCK_TIME_NONE,
                     time => (time as u64).into(),
                 };
+                if settings.accumulate_time != old_accumulate_time {
+                    gst_debug!(
+                        CAT,
+                        obj: obj,
+                        "Accumulate time changed: {}",
+                        settings.accumulate_time
+                    );
+                    drop(settings);
+                    let _ = obj.post_message(gst::message::Latency::builder().src(obj).build());
+                }
             }
             _ => unimplemented!(),
         }
