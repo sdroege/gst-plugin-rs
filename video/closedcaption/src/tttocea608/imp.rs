@@ -107,7 +107,6 @@ impl Default for Settings {
 }
 
 struct State {
-    settings: Settings,
     framerate: gst::Fraction,
     erase_display_frame_no: Option<u64>,
     last_frame_no: u64,
@@ -118,12 +117,12 @@ struct State {
     underline: bool,
     column: u32,
     mode: Cea608Mode,
+    force_clear: bool,
 }
 
 impl Default for State {
     fn default() -> Self {
         Self {
-            settings: Settings::default(),
             framerate: gst::Fraction::new(DEFAULT_FPS_N, DEFAULT_FPS_D),
             erase_display_frame_no: None,
             last_frame_no: 0,
@@ -134,6 +133,7 @@ impl Default for State {
             style: TextStyle::White,
             underline: false,
             mode: Cea608Mode::PopOn,
+            force_clear: false,
         }
     }
 }
@@ -801,12 +801,14 @@ impl TtToCea608 {
         })?;
 
         let mut state = self.state.lock().unwrap();
+        let settings = self.settings.lock().unwrap();
 
         let mut lines = Lines {
             lines: Vec::new(),
-            mode: None,
-            clear: None,
+            mode: Some(settings.mode),
+            clear: Some(state.force_clear),
         };
+        state.force_clear = false;
         match state.json_input {
             false => {
                 let data = std::str::from_utf8(&data).map_err(|err| {
@@ -840,6 +842,8 @@ impl TtToCea608 {
                 })?;
             }
         }
+
+        drop(settings);
 
         self.generate(&mut state, element, pts, duration, lines)
     }
@@ -929,8 +933,8 @@ impl TtToCea608 {
                 let mut state = self.state.lock().unwrap();
 
                 *state = State::default();
-                state.settings = self.settings.lock().unwrap().clone();
-                state.mode = state.settings.mode;
+
+                state.mode = self.settings.lock().unwrap().mode;
 
                 if state.mode != Cea608Mode::PopOn {
                     state.send_roll_up_preamble = true;
@@ -996,7 +1000,7 @@ impl ObjectImpl for TtToCea608 {
                 "Which mode to operate in",
                 Cea608Mode::static_type(),
                 DEFAULT_MODE as i32,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
             )]
         });
 
@@ -1023,6 +1027,7 @@ impl ObjectImpl for TtToCea608 {
                 settings.mode = value
                     .get_some::<Cea608Mode>()
                     .expect("type checked upstream");
+                self.state.lock().unwrap().force_clear = true;
             }
             _ => unimplemented!(),
         }
@@ -1110,10 +1115,9 @@ impl ElementImpl for TtToCea608 {
         match transition {
             gst::StateChange::ReadyToPaused => {
                 let mut state = self.state.lock().unwrap();
-                let settings = self.settings.lock().unwrap();
                 *state = State::default();
-                state.settings = settings.clone();
-                state.mode = state.settings.mode;
+                state.force_clear = false;
+                state.mode = self.settings.lock().unwrap().mode;
                 if state.mode != Cea608Mode::PopOn {
                     state.send_roll_up_preamble = true;
                 }
