@@ -24,6 +24,7 @@ mod ffi;
 
 mod caption_frame;
 mod ccdetect;
+mod ccutils;
 mod cea608overlay;
 mod cea608tott;
 mod line_reader;

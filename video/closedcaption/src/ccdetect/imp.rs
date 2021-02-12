@@ -22,11 +22,9 @@ use gst::subclass::prelude::*;
 use gst::{gst_trace, gst_warning};
 use gst_base::subclass::prelude::*;
 
-use byteorder::{BigEndian, ByteOrder};
-
+use crate::ccutils::{extract_cdp, ParseError, ParseErrorCode};
 use once_cell::sync::Lazy;
 
-use std::fmt;
 use std::sync::Mutex;
 use std::u64;
 
@@ -82,29 +80,6 @@ struct CCPacketContents {
     cc608: bool,
     cc708: bool,
 }
-
-#[allow(clippy::enum_variant_names)]
-#[derive(Debug, Clone, Copy)]
-enum ParseErrorCode {
-    WrongLength,
-    WrongMagicSequence,
-    WrongLayout,
-}
-
-#[derive(Debug, Clone)]
-struct ParseError {
-    code: ParseErrorCode,
-    byte: usize,
-    msg: String,
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} at byte {}: {}", self.code, self.byte, self.msg)
-    }
-}
-
-impl std::error::Error for ParseError {}
 
 impl CCDetect {
     fn detect_cc_data(data: &[u8]) -> Result<CCPacketContents, ParseError> {
@@ -172,115 +147,10 @@ impl CCDetect {
         })
     }
 
-    fn detect_cdp(mut data: &[u8]) -> Result<CCPacketContents, ParseError> {
-        /* logic from ccconverter */
-        let data_len = data.len();
+    fn detect_cdp(data: &[u8]) -> Result<CCPacketContents, ParseError> {
+        let data = extract_cdp(data)?;
 
-        if data.len() < 11 {
-            return Err(ParseError {
-                code: ParseErrorCode::WrongLength,
-                byte: data_len - data.len(),
-                msg: format!(
-                    "cdp packet too short {}. expected at least {}",
-                    data.len(),
-                    11
-                ),
-            });
-        }
-
-        if 0x9669 != BigEndian::read_u16(&data[..2]) {
-            return Err(ParseError {
-                code: ParseErrorCode::WrongMagicSequence,
-                byte: data_len - data.len(),
-                msg: String::from("cdp packet does not have initial magic bytes of 0x9669"),
-            });
-        }
-        data = &data[2..];
-
-        if (data[0] as usize) != data_len {
-            return Err(ParseError {
-                code: ParseErrorCode::WrongLength,
-                byte: data_len - data.len(),
-                msg: format!(
-                    "advertised cdp packet length {} does not match length of data {}",
-                    data[0], data_len
-                ),
-            });
-        }
-        data = &data[1..];
-
-        /* skip framerate value */
-        data = &data[1..];
-
-        let flags = data[0];
-        data = &data[1..];
-
-        if flags & 0x40 == 0 {
-            /* no cc_data */
-            return Ok(CCPacketContents {
-                cc608: false,
-                cc708: false,
-            });
-        }
-
-        /* skip sequence counter */
-        data = &data[2..];
-
-        /* timecode present? */
-        if flags & 0x80 == 0x80 {
-            if data.len() < 5 {
-                return Err(ParseError {
-                    code: ParseErrorCode::WrongLength,
-                    byte: data_len - data.len(),
-                    msg: String::from("cdp packet signals a timecode but is not large enough to contain a timecode")
-                });
-            }
-            data = &data[5..];
-        }
-
-        /* cc_data */
-        if data.len() < 2 {
-            return Err(ParseError {
-                code: ParseErrorCode::WrongLength,
-                byte: data_len - data.len(),
-                msg: String::from(
-                    "cdp packet signals cc_data but is not large enough to contain cc_data",
-                ),
-            });
-        }
-
-        if data[0] != 0x72 {
-            return Err(ParseError {
-                code: ParseErrorCode::WrongMagicSequence,
-                byte: data_len - data.len(),
-                msg: String::from("ccp is missing start code 0x72"),
-            });
-        }
-        data = &data[1..];
-
-        let cc_count = data[0];
-        data = &data[1..];
-        if cc_count & 0xe0 != 0xe0 {
-            return Err(ParseError {
-                code: ParseErrorCode::WrongMagicSequence,
-                byte: data_len - data.len(),
-                msg: format!("reserved bits are not 0xe0, found {:02x}", cc_count & 0xe0),
-            });
-        }
-        let cc_count = cc_count & 0x1f;
-        let len = 3 * cc_count as usize;
-
-        if len > data.len() {
-            return Err(ParseError {
-                code: ParseErrorCode::WrongLength,
-                byte: data_len - data.len(),
-                msg: String::from("cc_data length extends past the end of the cdp packet"),
-            });
-        }
-
-        /* TODO: validate checksum */
-
-        Self::detect_cc_data(&data[..len])
+        Self::detect_cc_data(data)
     }
 
     fn detect(format: CCFormat, data: &[u8]) -> Result<CCPacketContents, ParseError> {
