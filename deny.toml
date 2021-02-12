@@ -28,18 +28,6 @@ multiple-versions = "deny"
 highlight = "all"
 wildcards = "allow"
 
-# ignore duplicated deps because of dav1d-sys via metadeps depending on old
-# error-chain and toml
-# https://github.com/rust-av/dav1d-rs/issues/26
-# https://github.com/joshtriplett/metadeps/pull/12
-# https://github.com/joshtriplett/metadeps/pull/4
-[[bans.skip]]
-name = "error-chain"
-version = "0.10"
-[[bans.skip]]
-name = "toml"
-version = "0.2"
-
 # ignore duplicated deps because of mio-named-pipes via mio depending on old
 # miow
 # https://github.com/alexcrichton/mio-named-pipes/issues/7
@@ -101,12 +89,6 @@ version = "0.4"
 name = "pin-project-internal"
 version = "0.4"
 
-# ignore duplicated tinyvec dependency because lewton depends on an old version
-# https://github.com/RustAudio/lewton/commit/b8d72804db89db358b99784e1ad9d7a22534743c
-[[bans.skip]]
-name = "tinyvec"
-version = "0.3"
-
 # ignore duplicated pin-project-lite dependency because many crates depend on an old version
 [[bans.skip]]
 name = "pin-project-lite"
@@ -131,12 +113,6 @@ version = "0.6"
 name = "redox_syscall"
 version = "0.1"
 
-# ignore duplicated itertools dependency because glib-macros depends on an old version
-# https://github.com/gtk-rs/gtk-rs/pull/264
-[[bans.skip]]
-name = "itertools"
-version = "0.9"
-
 # ignore duplicated rustc_version dependency because various crates depend on an old version
 [[bans.skip]]
 name = "rustc_version"
@@ -147,6 +123,11 @@ version = "0.9"
 [[bans.skip]]
 name = "semver-parser"
 version = "0.7"
+
+# ignore duplicated system-deps dependency because dav1d depends on an old version
+[[bans.skip]]
+name = "system-deps"
+version = "2.0"
 
 [sources]
 unknown-registry = "deny"
