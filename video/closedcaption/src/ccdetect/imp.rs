@@ -108,18 +108,11 @@ impl CCDetect {
                 cc_type
             );
 
-            if !started_ccp && cc_valid {
-                if cc_type == 0x00 {
-                    if triple[1] != 0x80 || triple[2] != 0x80 {
-                        have_cc608 = true;
-                    }
-                    continue;
-                } else if cc_type == 0x01 {
-                    if triple[1] != 0x80 || triple[2] != 0x80 {
-                        have_cc708 = true;
-                    }
-                    continue;
+            if !started_ccp && cc_valid && (cc_type == 0x00 || cc_type == 0x01) {
+                if triple[1] != 0x80 || triple[2] != 0x80 {
+                    have_cc608 = true;
                 }
+                continue;
             }
 
             if cc_type & 0b10 == 0b10 {
