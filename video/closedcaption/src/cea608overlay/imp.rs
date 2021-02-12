@@ -19,7 +19,7 @@ use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_error, gst_log, gst_trace};
+use gst::{gst_error, gst_info, gst_log, gst_trace, gst_warning};
 use gst_video::prelude::*;
 
 use once_cell::sync::Lazy;
@@ -29,6 +29,7 @@ use std::sync::Mutex;
 use pango::prelude::*;
 
 use crate::caption_frame::{CaptionFrame, Status};
+use crate::ccutils::extract_cdp;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -38,6 +39,21 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+const DEFAULT_FIELD: i32 = -1;
+
+#[derive(Debug)]
+struct Settings {
+    field: i32,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            field: DEFAULT_FIELD,
+        }
+    }
+}
+
 struct State {
     video_info: Option<gst_video::VideoInfo>,
     layout: Option<pango::Layout>,
@@ -45,6 +61,7 @@ struct State {
     composition: Option<gst_video::VideoOverlayComposition>,
     left_alignment: i32,
     attach: bool,
+    selected_field: Option<u8>,
 }
 
 impl Default for State {
@@ -56,6 +73,7 @@ impl Default for State {
             composition: None,
             left_alignment: 0,
             attach: false,
+            selected_field: None,
         }
     }
 }
@@ -66,6 +84,7 @@ pub struct Cea608Overlay {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     state: Mutex<State>,
+    settings: Mutex<Settings>,
 }
 
 impl Cea608Overlay {
@@ -297,6 +316,112 @@ impl Cea608Overlay {
         }
     }
 
+    fn decode_cc_data(
+        &self,
+        pad: &gst::Pad,
+        element: &super::Cea608Overlay,
+        state: &mut State,
+        data: &[u8],
+    ) {
+        if data.len() % 3 != 0 {
+            gst_warning!(CAT, "cc_data length is not a multiple of 3, truncating");
+        }
+
+        for triple in data.chunks_exact(3) {
+            let cc_valid = (triple[0] & 0x04) == 0x04;
+            let cc_type = triple[0] & 0x03;
+
+            if cc_valid {
+                if cc_type == 0x00 || cc_type == 0x01 {
+                    if state.selected_field.is_none() {
+                        state.selected_field = Some(cc_type);
+                        gst_info!(
+                            CAT,
+                            obj: element,
+                            "Selected field {} automatically",
+                            cc_type
+                        );
+                    }
+
+                    if Some(cc_type) == state.selected_field {
+                        match state
+                            .caption_frame
+                            .decode((triple[1] as u16) << 8 | triple[2] as u16, 0.0)
+                        {
+                            Ok(Status::Ready) => {
+                                let text = match state.caption_frame.to_text(true) {
+                                    Ok(text) => text,
+                                    Err(_) => {
+                                        gst_error!(
+                                            CAT,
+                                            obj: pad,
+                                            "Failed to convert caption frame to text"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                self.overlay_text(element, &text, state);
+                            }
+                            _ => (),
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    fn decode_s334_1a(
+        &self,
+        pad: &gst::Pad,
+        element: &super::Cea608Overlay,
+        state: &mut State,
+        data: &[u8],
+    ) {
+        if data.len() % 3 != 0 {
+            gst_warning!(CAT, "cc_data length is not a multiple of 3, truncating");
+        }
+
+        for triple in data.chunks_exact(3) {
+            let cc_type = triple[0] & 0x01;
+            if state.selected_field.is_none() {
+                state.selected_field = Some(cc_type);
+                gst_info!(
+                    CAT,
+                    obj: element,
+                    "Selected field {} automatically",
+                    cc_type
+                );
+            }
+
+            if Some(cc_type) == state.selected_field {
+                match state
+                    .caption_frame
+                    .decode((triple[1] as u16) << 8 | triple[2] as u16, 0.0)
+                {
+                    Ok(Status::Ready) => {
+                        let text = match state.caption_frame.to_text(true) {
+                            Ok(text) => text,
+                            Err(_) => {
+                                gst_error!(
+                                    CAT,
+                                    obj: pad,
+                                    "Failed to convert caption frame to text"
+                                );
+                                continue;
+                            }
+                        };
+
+                        self.overlay_text(element, &text, state);
+                    }
+                    _ => (),
+                }
+            }
+        }
+    }
+
     fn sink_chain(
         &self,
         pad: &gst::Pad,
@@ -312,7 +437,21 @@ impl Cea608Overlay {
         }
 
         for meta in buffer.iter_meta::<gst_video::VideoCaptionMeta>() {
-            if meta.get_caption_type() == gst_video::VideoCaptionType::Cea608Raw {
+            if meta.get_caption_type() == gst_video::VideoCaptionType::Cea708Cdp {
+                match extract_cdp(meta.get_data()) {
+                    Ok(data) => {
+                        self.decode_cc_data(pad, element, &mut state, data);
+                    }
+                    Err(e) => {
+                        gst_warning!(CAT, "{}", &e.to_string());
+                        gst::element_warning!(element, gst::StreamError::Decode, [&e.to_string()]);
+                    }
+                }
+            } else if meta.get_caption_type() == gst_video::VideoCaptionType::Cea708Raw {
+                self.decode_cc_data(pad, element, &mut state, meta.get_data());
+            } else if meta.get_caption_type() == gst_video::VideoCaptionType::Cea608S3341a {
+                self.decode_s334_1a(pad, element, &mut state, meta.get_data());
+            } else if meta.get_caption_type() == gst_video::VideoCaptionType::Cea608Raw {
                 let data = meta.get_data();
                 assert!(data.len() % 2 == 0);
                 for i in 0..data.len() / 2 {
@@ -436,11 +575,59 @@ impl ObjectSubclass for Cea608Overlay {
             srcpad,
             sinkpad,
             state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
         }
     }
 }
 
 impl ObjectImpl for Cea608Overlay {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpec::int(
+                "field",
+                "Field",
+                "The field to render the caption for when available, (-1=automatic)",
+                -1,
+                1,
+                DEFAULT_FIELD,
+                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+            )]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "field" => {
+                let mut settings = self.settings.lock().unwrap();
+                let mut state = self.state.lock().unwrap();
+
+                settings.field = value.get_some().expect("type checked upstream");
+                state.selected_field = match settings.field {
+                    -1 => None,
+                    val => Some(val as u8),
+                };
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "field" => {
+                let settings = self.settings.lock().unwrap();
+                settings.field.to_value()
+            }
+            _ => unimplemented!(),
+        }
+    }
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
@@ -504,6 +691,11 @@ impl ElementImpl for Cea608Overlay {
                 // Reset the whole state
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
+                let settings = self.settings.lock().unwrap();
+                state.selected_field = match settings.field {
+                    -1 => None,
+                    val => Some(val as u8),
+                };
             }
             _ => (),
         }
