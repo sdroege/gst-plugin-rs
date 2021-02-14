@@ -18,6 +18,9 @@ muldiv = "1.0"
 byteorder = "1.0"
 once_cell = "1.0"
 smallvec = "1.0"
+# FIXME: Temporary fix for breakage in funty 1.2
+# See https://github.com/myrrlyn/funty/issues/3
+funty="=1.1.0"
 
 [lib]
 name = "gstrsflv"

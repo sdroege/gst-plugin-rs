@@ -21,6 +21,9 @@ pangocairo = { git = "https://github.com/gtk-rs/gtk-rs" }
 byteorder = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
+# FIXME: Temporary fix for breakage in funty 1.2
+# See https://github.com/myrrlyn/funty/issues/3
+funty="=1.1.0"
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
