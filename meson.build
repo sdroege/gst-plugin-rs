@@ -49,6 +49,7 @@ plugins_rep = {
   'utils/togglerecord': 'libgsttogglerecord',
   'video/hsv': 'libgsthsv',
   'text/json': 'libgstrsjson',
+  'text/regex': 'libgstrsregex',
 }
 
 exclude = []

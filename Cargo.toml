@@ -24,6 +24,7 @@ members = [
     "video/hsv",
     "text/wrap",
     "text/json",
+    "text/regex",
 ]
 
 [profile.release]
