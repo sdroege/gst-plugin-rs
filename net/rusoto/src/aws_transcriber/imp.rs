@@ -121,6 +121,7 @@ struct Settings {
     latency_ms: u32,
     language_code: Option<String>,
     use_partial_results: bool,
+    vocabulary: Option<String>,
 }
 
 impl Default for Settings {
@@ -129,6 +130,7 @@ impl Default for Settings {
             latency_ms: DEFAULT_LATENCY_MS,
             language_code: Some("en-US".to_string()),
             use_partial_results: DEFAULT_USE_PARTIAL_RESULTS,
+            vocabulary: None,
         }
     }
 }
@@ -869,6 +871,11 @@ impl Transcriber {
         signed.add_param("language-code", language_code);
         signed.add_param("media-encoding", "pcm");
         signed.add_param("sample-rate", &sample_rate.to_string());
+
+        if let Some(ref vocabulary) = settings.vocabulary {
+            signed.add_param("vocabulary-name", vocabulary);
+        }
+
         let url = signed.generate_presigned_url(&creds, &std::time::Duration::from_secs(60), true);
 
         let (ws, _) = {
@@ -1047,6 +1054,15 @@ impl ObjectImpl for Transcriber {
                     DEFAULT_LATENCY_MS,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpec::string(
+                    "vocabulary-name",
+                    "Vocabulary Name",
+                    "The name of a custom vocabulary, see \
+                        <https://docs.aws.amazon.com/transcribe/latest/dg/how-vocabulary.html> \
+                        for more information",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -1081,6 +1097,10 @@ impl ObjectImpl for Transcriber {
                 let mut settings = self.settings.lock().unwrap();
                 settings.use_partial_results = value.get_some().expect("type checked upstream");
             }
+            "vocabulary-name" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.vocabulary = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1098,6 +1118,10 @@ impl ObjectImpl for Transcriber {
             "use-partial-results" => {
                 let settings = self.settings.lock().unwrap();
                 settings.use_partial_results.to_value()
+            }
+            "vocabulary-name" => {
+                let settings = self.settings.lock().unwrap();
+                settings.vocabulary.to_value()
             }
             _ => unimplemented!(),
         }
