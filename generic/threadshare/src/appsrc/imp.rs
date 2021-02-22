@@ -584,8 +584,8 @@ impl ObjectImpl for AppSrc {
             vec![
                 glib::subclass::Signal::builder(
                     "push-buffer",
-                    &[gst::Buffer::static_type()],
-                    bool::static_type(),
+                    &[gst::Buffer::static_type().into()],
+                    bool::static_type().into(),
                 )
                 .action()
                 .class_handler(|_, args| {
@@ -602,7 +602,7 @@ impl ObjectImpl for AppSrc {
                     Some(appsrc.push_buffer(&element, buffer).to_value())
                 })
                 .build(),
-                glib::subclass::Signal::builder("end-of-stream", &[], bool::static_type())
+                glib::subclass::Signal::builder("end-of-stream", &[], bool::static_type().into())
                     .action()
                     .class_handler(|_, args| {
                         let element = args[0]

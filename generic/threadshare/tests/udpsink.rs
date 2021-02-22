@@ -45,7 +45,9 @@ fn test_client_management() {
 
     assert_eq!(clients, "127.0.0.1:5004");
 
-    udpsink.emit("add", &[&"192.168.1.1", &57i32]).unwrap();
+    udpsink
+        .emit_by_name("add", &[&"192.168.1.1", &57i32])
+        .unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
@@ -55,7 +57,9 @@ fn test_client_management() {
     assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
     /* Adding a client twice is not supported */
-    udpsink.emit("add", &[&"192.168.1.1", &57i32]).unwrap();
+    udpsink
+        .emit_by_name("add", &[&"192.168.1.1", &57i32])
+        .unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
@@ -64,7 +68,9 @@ fn test_client_management() {
         .unwrap();
     assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
-    udpsink.emit("remove", &[&"192.168.1.1", &57i32]).unwrap();
+    udpsink
+        .emit_by_name("remove", &[&"192.168.1.1", &57i32])
+        .unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
@@ -74,7 +80,9 @@ fn test_client_management() {
     assert_eq!(clients, "127.0.0.1:5004");
 
     /* Removing a non-existing client should not be a problem */
-    udpsink.emit("remove", &[&"192.168.1.1", &57i32]).unwrap();
+    udpsink
+        .emit_by_name("remove", &[&"192.168.1.1", &57i32])
+        .unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
@@ -84,7 +92,9 @@ fn test_client_management() {
     assert_eq!(clients, "127.0.0.1:5004");
 
     /* Removing the default client is possible */
-    udpsink.emit("remove", &[&"127.0.0.1", &5004i32]).unwrap();
+    udpsink
+        .emit_by_name("remove", &[&"127.0.0.1", &5004i32])
+        .unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()
@@ -105,7 +115,7 @@ fn test_client_management() {
         .unwrap();
     assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
-    udpsink.emit("clear", &[]).unwrap();
+    udpsink.emit_by_name("clear", &[]).unwrap();
     let clients = udpsink
         .get_property("clients")
         .unwrap()

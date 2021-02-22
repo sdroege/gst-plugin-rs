@@ -88,7 +88,7 @@ fn multiple_contexts_queue() {
         let sender_clone = sender.clone();
         appsink.connect_new_sample(move |appsink| {
             let _sample = appsink
-                .emit("pull-sample", &[])
+                .emit_by_name("pull-sample", &[])
                 .unwrap()
                 .unwrap()
                 .get::<gst::Sample>()
@@ -247,7 +247,7 @@ fn multiple_contexts_proxy() {
         let sender_clone = sender.clone();
         appsink.connect_new_sample(move |appsink| {
             let _sample = appsink
-                .emit("pull-sample", &[])
+                .emit_by_name("pull-sample", &[])
                 .unwrap()
                 .unwrap()
                 .get::<gst::Sample>()
@@ -366,7 +366,7 @@ fn eos() {
     appsink.connect_new_sample(move |appsink| {
         gst_debug!(CAT, obj: appsink, "eos: pulling sample");
         let _ = appsink
-            .emit("pull-sample", &[])
+            .emit_by_name("pull-sample", &[])
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()
@@ -382,7 +382,7 @@ fn eos() {
 
     fn push_buffer(src: &gst::Element) -> bool {
         gst_debug!(CAT, obj: src, "eos: pushing buffer");
-        src.emit("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
+        src.emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
             .unwrap()
             .unwrap()
             .get_some::<bool>()
@@ -398,7 +398,7 @@ fn eos() {
         sample_notif_rcv.recv().unwrap();
 
         assert!(src
-            .emit("end-of-stream", &[])
+            .emit_by_name("end-of-stream", &[])
             .unwrap()
             .unwrap()
             .get_some::<bool>()
@@ -510,7 +510,7 @@ fn premature_shutdown() {
     appsink.connect_new_sample(move |appsink| {
         gst_debug!(CAT, obj: appsink, "premature_shutdown: pulling sample");
         let _sample = appsink
-            .emit("pull-sample", &[])
+            .emit_by_name("pull-sample", &[])
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()
@@ -529,7 +529,7 @@ fn premature_shutdown() {
             "premature_shutdown: pushing buffer {}",
             intent
         );
-        src.emit("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
+        src.emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
             .unwrap()
             .unwrap()
             .get_some::<bool>()

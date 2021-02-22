@@ -53,7 +53,7 @@ fn test_push() {
     let samples_clone = samples.clone();
     appsink.connect_new_sample(move |appsink| {
         let sample = appsink
-            .emit("pull-sample", &[])
+            .emit_by_name("pull-sample", &[])
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()

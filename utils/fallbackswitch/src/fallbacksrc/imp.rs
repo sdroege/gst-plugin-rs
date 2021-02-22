@@ -557,8 +557,8 @@ impl ObjectImpl for FallbackSrc {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![glib::subclass::Signal::builder(
                 "update-uri",
-                &[String::static_type()],
-                String::static_type(),
+                &[String::static_type().into()],
+                String::static_type().into(),
             )
             .action()
             .class_handler(|_token, args| {
@@ -696,7 +696,7 @@ impl FallbackSrc {
                     .expect("No uridecodebin3 found");
 
                 let uri = element
-                    .emit("update-uri", &[uri])
+                    .emit_by_name("update-uri", &[uri])
                     .expect("Failed to emit update-uri signal")
                     .expect("No value returned");
                 let uri = uri

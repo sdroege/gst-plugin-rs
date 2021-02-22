@@ -79,7 +79,7 @@ fn jb_pipeline() {
     let (sender, receiver) = mpsc::channel();
     appsink.connect_new_sample(move |appsink| {
         let _sample = appsink
-            .emit("pull-sample", &[])
+            .emit_by_name("pull-sample", &[])
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()
@@ -146,7 +146,7 @@ fn jb_ts_pipeline() {
     let (sender, receiver) = mpsc::channel();
     appsink.connect_new_sample(move |appsink| {
         let _sample = appsink
-            .emit("pull-sample", &[])
+            .emit_by_name("pull-sample", &[])
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()

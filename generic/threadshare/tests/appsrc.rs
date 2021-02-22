@@ -48,7 +48,7 @@ fn push() {
         let appsrc = h.get_element().unwrap();
         for _ in 0..3 {
             assert!(appsrc
-                .emit("push-buffer", &[&gst::Buffer::new()])
+                .emit_by_name("push-buffer", &[&gst::Buffer::new()])
                 .unwrap()
                 .unwrap()
                 .get_some::<bool>()
@@ -56,7 +56,7 @@ fn push() {
         }
 
         assert!(appsrc
-            .emit("end-of-stream", &[])
+            .emit_by_name("end-of-stream", &[])
             .unwrap()
             .unwrap()
             .get_some::<bool>()
@@ -114,7 +114,7 @@ fn pause_regular() {
 
     // Initial buffer
     assert!(appsrc
-        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
+        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
         .unwrap()
         .unwrap()
         .get_some::<bool>()
@@ -124,7 +124,7 @@ fn pause_regular() {
 
     // Pre-pause buffer
     assert!(appsrc
-        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![5, 6, 7])])
+        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![5, 6, 7])])
         .unwrap()
         .unwrap()
         .get_some::<bool>()
@@ -136,7 +136,7 @@ fn pause_regular() {
 
     // Buffer is queued during Paused
     assert!(appsrc
-        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![8, 9])])
+        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![8, 9])])
         .unwrap()
         .unwrap()
         .get_some::<bool>()
@@ -154,7 +154,7 @@ fn pause_regular() {
 
     // Can push again
     assert!(appsrc
-        .emit("push-buffer", &[&gst::Buffer::new()])
+        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
         .get_some::<bool>()
@@ -184,7 +184,7 @@ fn flush_regular() {
 
     // Initial buffer
     assert!(appsrc
-        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
+        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
         .unwrap()
         .unwrap()
         .get_some::<bool>()
@@ -197,7 +197,7 @@ fn flush_regular() {
 
     // Can't push buffer while flushing
     assert!(!appsrc
-        .emit("push-buffer", &[&gst::Buffer::new()])
+        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
         .get_some::<bool>()
@@ -213,7 +213,7 @@ fn flush_regular() {
 
     // Can push again
     assert!(appsrc
-        .emit("push-buffer", &[&gst::Buffer::new()])
+        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
         .get_some::<bool>()
@@ -245,7 +245,7 @@ fn pause_flush() {
 
     // Initial buffer
     assert!(appsrc
-        .emit("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
+        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
         .unwrap()
         .unwrap()
         .get_some::<bool>()
@@ -262,7 +262,7 @@ fn pause_flush() {
 
     // Can't push buffers while flushing
     assert!(!appsrc
-        .emit("push-buffer", &[&gst::Buffer::new()])
+        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
         .get_some::<bool>()
@@ -282,7 +282,7 @@ fn pause_flush() {
 
     // Can push again
     assert!(appsrc
-        .emit("push-buffer", &[&gst::Buffer::new()])
+        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
         .get_some::<bool>()

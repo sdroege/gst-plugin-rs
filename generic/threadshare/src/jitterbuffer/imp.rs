@@ -374,7 +374,7 @@ impl SinkHandler {
             if state.clock_rate.is_none() {
                 drop(state);
                 let caps = element
-                    .emit("request-pt-map", &[&(pt as u32)])
+                    .emit_by_name("request-pt-map", &[&(pt as u32)])
                     .map_err(|_| gst::FlowError::Error)?
                     .ok_or(gst::FlowError::Error)?
                     .get::<gst::Caps>()
@@ -1436,20 +1436,22 @@ impl ObjectImpl for JitterBuffer {
 
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
-            vec![
-                glib::subclass::Signal::builder("clear-pt-map", &[], glib::types::Type::Unit)
-                    .action()
-                    .class_handler(|_, args| {
-                        let element = args[0]
-                            .get::<super::JitterBuffer>()
-                            .expect("signal arg")
-                            .expect("missing signal arg");
-                        let jb = JitterBuffer::from_instance(&element);
-                        jb.clear_pt_map(&element);
-                        None
-                    })
-                    .build(),
-            ]
+            vec![glib::subclass::Signal::builder(
+                "clear-pt-map",
+                &[],
+                glib::types::Type::Unit.into(),
+            )
+            .action()
+            .class_handler(|_, args| {
+                let element = args[0]
+                    .get::<super::JitterBuffer>()
+                    .expect("signal arg")
+                    .expect("missing signal arg");
+                let jb = JitterBuffer::from_instance(&element);
+                jb.clear_pt_map(&element);
+                None
+            })
+            .build()]
         });
 
         SIGNALS.as_ref()
