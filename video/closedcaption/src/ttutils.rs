@@ -42,6 +42,23 @@ pub enum TextStyle {
     ItalicWhite,
 }
 
+impl From<u32> for TextStyle {
+    fn from(val: u32) -> Self {
+        match val {
+            0 => TextStyle::White,
+            1 => TextStyle::Green,
+            2 => TextStyle::Blue,
+            3 => TextStyle::Cyan,
+            4 => TextStyle::Red,
+            5 => TextStyle::Yellow,
+            6 => TextStyle::Magenta,
+            7 => TextStyle::ItalicWhite,
+            _ => TextStyle::White,
+        }
+    }
+}
+
+// TODO allow indenting chunks
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Chunk {
     pub style: TextStyle,
@@ -64,4 +81,10 @@ pub struct Lines {
     pub lines: Vec<Line>,
     pub mode: Option<Cea608Mode>,
     pub clear: Option<bool>,
+}
+
+impl Cea608Mode {
+    pub fn is_rollup(&self) -> bool {
+        *self == Cea608Mode::RollUp2 || *self == Cea608Mode::RollUp3 || *self == Cea608Mode::RollUp4
+    }
 }

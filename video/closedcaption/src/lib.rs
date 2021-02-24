@@ -26,6 +26,7 @@ mod caption_frame;
 mod ccdetect;
 mod ccutils;
 mod cea608overlay;
+mod cea608tojson;
 mod cea608tott;
 mod line_reader;
 mod mcc_enc;
@@ -47,6 +48,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     cea608overlay::register(plugin)?;
     ccdetect::register(plugin)?;
     tttojson::register(plugin)?;
+    cea608tojson::register(plugin)?;
     Ok(())
 }
 
