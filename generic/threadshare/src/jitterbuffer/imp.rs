@@ -1439,7 +1439,7 @@ impl ObjectImpl for JitterBuffer {
             vec![glib::subclass::Signal::builder(
                 "clear-pt-map",
                 &[],
-                glib::types::Type::Unit.into(),
+                glib::types::Type::UNIT.into(),
             )
             .action()
             .class_handler(|_, args| {

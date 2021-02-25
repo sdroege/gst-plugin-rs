@@ -1117,7 +1117,7 @@ impl ObjectImpl for UdpSink {
                 glib::subclass::Signal::builder(
                     "add",
                     &[String::static_type().into(), i32::static_type().into()],
-                    glib::types::Type::Unit.into(),
+                    glib::types::Type::UNIT.into(),
                 )
                 .action()
                 .class_handler(|_, args| {
@@ -1145,7 +1145,7 @@ impl ObjectImpl for UdpSink {
                 glib::subclass::Signal::builder(
                     "remove",
                     &[String::static_type().into(), i32::static_type().into()],
-                    glib::types::Type::Unit.into(),
+                    glib::types::Type::UNIT.into(),
                 )
                 .action()
                 .class_handler(|_, args| {
@@ -1170,7 +1170,7 @@ impl ObjectImpl for UdpSink {
                     None
                 })
                 .build(),
-                glib::subclass::Signal::builder("clear", &[], glib::types::Type::Unit.into())
+                glib::subclass::Signal::builder("clear", &[], glib::types::Type::UNIT.into())
                     .action()
                     .class_handler(|_, args| {
                         let element = args[0]
