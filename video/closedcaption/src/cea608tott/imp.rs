@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -371,15 +370,12 @@ impl Cea608ToTt {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for Cea608ToTt {
     const NAME: &'static str = "Cea608ToTt";
     type Type = super::Cea608ToTt;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

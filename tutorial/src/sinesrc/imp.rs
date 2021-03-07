@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -89,7 +88,17 @@ struct ClockWait {
     flushing: bool,
 }
 
+impl Default for ClockWait {
+    fn default() -> ClockWait {
+        ClockWait {
+            clock_id: None,
+            flushing: true,
+        }
+    }
+}
+
 // Struct containing all the element data
+#[derive(Default)]
 pub struct SineSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
@@ -144,29 +153,12 @@ impl SineSrc {
 // This trait registers our type with the GObject object system and
 // provides the entry points for creating a new instance and setting
 // up the class data
+#[glib::object_subclass]
 impl ObjectSubclass for SineSrc {
     const NAME: &'static str = "RsSineSrc";
     type Type = super::SineSrc;
     type ParentType = gst_base::PushSrc;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    // This macro provides some boilerplate.
-    glib::object_subclass!();
-
-    // Called when a new instance is to be created. We need to return an instance
-    // of our struct here.
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(Default::default()),
-            clock_wait: Mutex::new(ClockWait {
-                clock_id: None,
-                flushing: true,
-            }),
-        }
-    }
 }
 
 // Implementation of glib::Object virtual methods

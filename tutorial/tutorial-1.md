@@ -163,27 +163,17 @@ GStreamer is based on the GLib object system ([GObject](https://developer.gnome.
 So, as a next step we need to register a new type for our RGB to Grayscale converter GStreamer element with the GObject type system, and then register that type with GStreamer to be able to create new instances of it. We do this with the following code
 
 ```rust
-pub struct Rgb2Gray{}
+#[derive(Default)]
+pub struct Rgb2Gray {}
 
-impl Rgb2Gray{}
+impl Rgb2Gray {}
 
+#[glib::object_subclass]
 impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
     type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    // This macro provides some boilerplate
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {}
-    }
-
-    fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
-
-    }
 }
 ```
 
@@ -231,18 +221,14 @@ In addition, we also define a `register` function (the one that is already calle
 As a next step we implement the `new` funtion and `class_init` functions. In the first version, this struct is empty for now but we will later use it to store all state of our element.
 
 ```rust
-pub struct Rgb2Gray {
-}
+#[derive(Default)]
+pub struct Rgb2Gray {}
 
-impl Rgb2Gray{}
+impl Rgb2Gray {}
 
+#[glib::object_subclass]
 impl ObjectSubclass for Rgb2Gray {
     [...]
-
-    fn new() -> Self {
-        Self {
-        }
-    }
 
     fn class_init(klass: &mut Self::Class) {
         klass.set_metadata(
@@ -281,18 +267,17 @@ With all this defined, `gst-inspect-1.0` should be able to show some more inform
 ```rust
 // all imports...
 
+#[derive(Default)]
 pub struct Rgb2Gray {}
 
 impl Rgb2Gray {}
 
+#[glib::object_subclass]
 impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
     type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 }
 
 impl ObjectImpl for Rgb2Gray {}
@@ -424,20 +409,16 @@ struct State {
     out_info: gst_video::VideoInfo,
 }
 
+#[derive(Default)]
 pub struct Rgb2Gray {
     state: Mutex<Option<State>>
 }
 
 impl Rgb2Gray{}
 
+#[glib::object_subclass]
 impl ObjectSubclass for Rgb2Gray {
     [...]
-
-    fn new() -> Self {
-        Self {
-            state: Mutex::new(None),
-        }
-    }
 }
 ```
 
@@ -752,29 +733,7 @@ impl Default for Settings {
     }
 }
 
-static PROPERTIES: [subclass::Property; 2] = [
-    subclass::Property("invert", |name| {
-        glib::ParamSpec::boolean(
-            name,
-            "Invert",
-            "Invert grayscale output",
-            DEFAULT_INVERT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-    subclass::Property("shift", |name| {
-        glib::ParamSpec::uint(
-            name,
-            "Shift",
-            "Shift grayscale output (wrapping around)",
-            0,
-            255,
-            DEFAULT_SHIFT,
-            glib::ParamFlags::READWRITE,
-        )
-    }),
-];
-
+#[derive(Default)]
 pub struct Rgb2Gray {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
@@ -782,39 +741,46 @@ pub struct Rgb2Gray {
 
 impl Rgb2Gray{...}
 
-impl ObjectSubclass for Rgb2Gray {
-    [...]
+impl ObjectImpl for Rgb2Gray {
+    fn properties() -> &'static [glib::ParamSpec] {
+        // Metadata for the properties
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::boolean(
+                    "invert",
+                    "Invert",
+                    "Invert grayscale output",
+                    DEFAULT_INVERT,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+                glib::ParamSpec::uint(
+                    "shift",
+                    "Shift",
+                    "Shift grayscale output (wrapping around)",
+                    0,
+                    255,
+                    DEFAULT_SHIFT,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+            ]
+        });
 
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(None),
-        }
+        PROPERTIES.as_ref()
     }
 }
 ```
 
 This should all be rather straightforward: we define a `Settings` struct that stores the two values, implement the [`Default`](https://doc.rust-lang.org/nightly/std/default/trait.Default.html) trait for it, then define a two-element array with property metadata (names, description, ranges, default value, writability), and then store the default value of our `Settings` struct inside another `Mutex` inside the element struct.
 
-In the next step we have to make use of these: we need to tell the GObject type system about the properties, and we need to implement functions that are called whenever a property value is set or get.
+In the next step we have to implement functions that are called whenever a property value is set or get.
 
 ```rust
-impl ObjectSubclass for Rgb2Gray {
-    fn class_init(klass: &mut Self::Class) {
-        [...]
-        klass.install_properties(&PROPERTIES);
-        [...]
-    }
-}
-
 impl ObjectImpl for Rgb2Gray {
     [...]
 
-    fn set_property(&self, obj: &Self::Type, id: usize, value: &glib::Value) {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("invert", ..) => {
+    fn set_property(&self, obj: &Self::Type, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.get_name() {
+            "invert" => {
                 let mut settings = self.settings.lock().unwrap();
                 let invert = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -826,7 +792,7 @@ impl ObjectImpl for Rgb2Gray {
                 );
                 settings.invert = invert;
             }
-            subclass::Property("shift", ..) => {
+            "shift" => {
                 let mut settings = self.settings.lock().unwrap();
                 let shift = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -842,15 +808,13 @@ impl ObjectImpl for Rgb2Gray {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, id: usize) -> glib::Value {
-        let prop = &PROPERTIES[id];
-
-        match *prop {
-            subclass::Property("invert", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "invert" => {
                 let settings = self.settings.lock().unwrap();
                 settings.invert.to_value()
             }
-            subclass::Property("shift", ..) => {
+            "shift" => {
                 let settings = self.settings.lock().unwrap();
                 settings.shift.to_value()
             }
@@ -860,7 +824,7 @@ impl ObjectImpl for Rgb2Gray {
 }
 ```
 
-`Property` values can be changed from any thread at any time, that’s why the `Mutex` is needed here to protect our struct. And we’re using a new mutex to be able to have it locked only for the shorted possible amount of time: we don’t want to keep it locked for the whole time of the `transform` function, otherwise applications trying to set/get values would block for up to the processing time of one frame.
+Property values can be changed from any thread at any time, that’s why the `Mutex` is needed here to protect our struct. And we’re using a new mutex to be able to have it locked only for the shorted possible amount of time: we don’t want to keep it locked for the whole time of the `transform` function, otherwise applications trying to set/get values would block for up to the processing time of one frame.
 
 In the property setter/getter functions we are working with a `glib::Value`. This is a dynamically typed value type that can contain values of any type, together with the type information of the contained value. Here we’re using it to handle an unsigned integer (`u32`) and a boolean for our two properties. To know which property is currently set/get, we get an identifier passed which is the index into our `PROPERTIES` array. We then simply match on the name of that to decide which property was meant
 

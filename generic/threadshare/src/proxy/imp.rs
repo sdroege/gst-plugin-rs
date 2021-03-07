@@ -20,7 +20,6 @@ use futures::future::BoxFuture;
 use futures::prelude::*;
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::prelude::*;
@@ -572,15 +571,12 @@ impl ProxySink {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for ProxySink {
     const NAME: &'static str = "RsTsProxySink";
     type Type = super::ProxySink;
-    type Interfaces = ();
     type ParentType = gst::Element;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {
@@ -1113,19 +1109,12 @@ impl ProxySrc {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for ProxySrc {
     const NAME: &'static str = "RsTsProxySrc";
     type Type = super::ProxySrc;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        unreachable!()
-    }
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {

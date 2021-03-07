@@ -15,7 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -201,15 +200,12 @@ impl JsonGstEnc {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for JsonGstEnc {
     const NAME: &'static str = "RsJsonGstEnc";
     type Type = super::JsonGstEnc;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

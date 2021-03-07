@@ -8,7 +8,6 @@
 
 use std::{io, io::Write, sync::Arc};
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::prelude::*;
@@ -160,27 +159,18 @@ impl State {
     }
 }
 
+#[derive(Default)]
 pub struct PngEncoder {
     state: Mutex<Option<State>>,
     settings: Mutex<Settings>,
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for PngEncoder {
     const NAME: &'static str = "PngEncoder";
     type Type = super::PngEncoder;
     type ParentType = gst_video::VideoEncoder;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            state: Mutex::new(None),
-            settings: Mutex::new(Default::default()),
-        }
-    }
 }
 
 impl ObjectImpl for PngEncoder {

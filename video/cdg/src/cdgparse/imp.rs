@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::format::Bytes;
 use gst::gst_debug;
@@ -25,6 +24,7 @@ const CDG_CMD_MEMORY_PRESET: u8 = 1;
 const CDG_CMD_MEMORY_LOAD_COLOR_TABLE_1: u8 = 30;
 const CDG_CMD_MEMORY_LOAD_COLOR_TABLE_2: u8 = 31;
 
+#[derive(Default)]
 pub struct CdgParse;
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -35,19 +35,12 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+#[glib::object_subclass]
 impl ObjectSubclass for CdgParse {
     const NAME: &'static str = "CdgParse";
     type Type = super::CdgParse;
     type ParentType = gst_base::BaseParse;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self
-    }
 }
 
 impl ObjectImpl for CdgParse {}

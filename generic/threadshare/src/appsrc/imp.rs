@@ -22,7 +22,6 @@ use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::prelude::*;
@@ -504,15 +503,12 @@ impl AppSrc {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for AppSrc {
     const NAME: &'static str = "RsTsAppSrc";
     type Type = super::AppSrc;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let src_pad_handler = AppSrcPadHandler::default();

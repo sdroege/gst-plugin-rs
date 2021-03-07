@@ -16,7 +16,6 @@
 // Boston, MA 02110-1335, USA.
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -1617,15 +1616,12 @@ impl ToggleRecord {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for ToggleRecord {
     const NAME: &'static str = "RsToggleRecord";
     type Type = super::ToggleRecord;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

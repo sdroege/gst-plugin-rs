@@ -17,7 +17,6 @@ use url::Url;
 
 use once_cell::sync::Lazy;
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -103,7 +102,7 @@ impl Default for State {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ReqwestHttpSrc {
     client: Mutex<Option<ClientContext>>,
     external_client: Mutex<Option<ClientContext>>,
@@ -1112,23 +1111,11 @@ impl URIHandlerImpl for ReqwestHttpSrc {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for ReqwestHttpSrc {
     const NAME: &'static str = "ReqwestHttpSrc";
     type Type = super::ReqwestHttpSrc;
     type ParentType = gst_base::PushSrc;
     type Interfaces = (gst::URIHandler,);
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            client: Mutex::new(None),
-            external_client: Mutex::new(None),
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(Default::default()),
-            canceller: Mutex::new(None),
-        }
-    }
 }

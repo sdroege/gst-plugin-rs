@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::gst_debug;
 use gst::subclass::prelude::*;
@@ -191,6 +190,7 @@ struct State {
     video_info: gst_video::VideoInfo,
 }
 
+#[derive(Default)]
 pub struct Rav1Enc {
     state: Mutex<Option<State>>,
     settings: Mutex<Settings>,
@@ -204,22 +204,12 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+#[glib::object_subclass]
 impl ObjectSubclass for Rav1Enc {
     const NAME: &'static str = "Rav1Enc";
     type Type = super::Rav1Enc;
     type ParentType = gst_video::VideoEncoder;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            state: Mutex::new(None),
-            settings: Mutex::new(Default::default()),
-        }
-    }
 }
 
 impl ObjectImpl for Rav1Enc {

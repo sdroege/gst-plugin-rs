@@ -20,7 +20,6 @@ use futures::future::{abortable, AbortHandle};
 use futures::prelude::*;
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::prelude::*;
@@ -391,15 +390,12 @@ impl InputSelector {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for InputSelector {
     const NAME: &'static str = "RsTsInputSelector";
     type Type = super::InputSelector;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {

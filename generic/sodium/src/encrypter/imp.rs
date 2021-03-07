@@ -23,7 +23,6 @@
 // SPDX-License-Identifier: MIT
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -335,15 +334,12 @@ impl Encrypter {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for Encrypter {
     const NAME: &'static str = "RsSodiumEncrypter";
     type Type = super::Encrypter;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

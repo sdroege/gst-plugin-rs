@@ -7,7 +7,6 @@
 // except according to those terms.
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::gst_info;
 use gst::prelude::*;
@@ -44,16 +43,12 @@ pub struct ProgressBin {
 // This trait registers our type with the GObject object system and
 // provides the entry points for creating a new instance and setting
 // up the class data
+#[glib::object_subclass]
 impl ObjectSubclass for ProgressBin {
     const NAME: &'static str = "RsProgressBin";
     type Type = super::ProgressBin;
     type ParentType = gst::Bin;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    // This macro provides some boilerplate.
-    glib::object_subclass!();
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here and also get the class struct passed in case it's needed

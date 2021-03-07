@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -49,6 +48,7 @@ impl Default for State {
     }
 }
 
+#[derive(Default)]
 pub struct FileSink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
@@ -106,22 +106,13 @@ impl FileSink {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for FileSink {
     const NAME: &'static str = "RsFileSink";
     type Type = super::FileSink;
     type ParentType = gst_base::BaseSink;
     type Interfaces = (gst::URIHandler,);
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(Default::default()),
-        }
-    }
 }
 
 impl ObjectImpl for FileSink {

@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error};
@@ -34,25 +33,17 @@ struct State {
     audio_info: Option<gst_audio::AudioInfo>,
 }
 
+#[derive(Default)]
 pub struct ClaxonDec {
     state: AtomicRefCell<Option<State>>,
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for ClaxonDec {
     const NAME: &'static str = "ClaxonDec";
     type Type = super::ClaxonDec;
     type ParentType = gst_audio::AudioDecoder;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            state: AtomicRefCell::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for ClaxonDec {}

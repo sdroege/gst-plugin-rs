@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -62,6 +61,7 @@ struct State {
 }
 
 // Struct containing all the element data
+#[derive(Default)]
 pub struct HsvDetector {
     settings: Mutex<Settings>,
     state: AtomicRefCell<Option<State>>,
@@ -75,24 +75,12 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+#[glib::object_subclass]
 impl ObjectSubclass for HsvDetector {
     const NAME: &'static str = "HsvDetector";
     type Type = super::HsvDetector;
     type ParentType = gst_base::BaseTransform;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    // Boilerplate macro
-    glib::object_subclass!();
-
-    // Creates a new instance.
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Default::default()),
-            state: AtomicRefCell::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for HsvDetector {

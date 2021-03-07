@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -21,6 +20,7 @@ use std::i32;
 use std::str::FromStr;
 use std::sync::Mutex;
 
+#[derive(Default)]
 struct NegotiationInfos {
     input_state:
         Option<gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>>,
@@ -28,6 +28,7 @@ struct NegotiationInfos {
     video_meta_supported: bool,
 }
 
+#[derive(Default)]
 pub struct Dav1dDec {
     decoder: Mutex<dav1d::Decoder>,
     negotiation_infos: Mutex<NegotiationInfos>,
@@ -345,26 +346,12 @@ fn video_output_formats() -> Vec<glib::SendValue> {
     values.iter().map(|i| i.to_str().to_send_value()).collect()
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for Dav1dDec {
     const NAME: &'static str = "RsDav1dDec";
     type Type = super::Dav1dDec;
     type ParentType = gst_video::VideoDecoder;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            decoder: Mutex::new(dav1d::Decoder::new()),
-            negotiation_infos: Mutex::new(NegotiationInfos {
-                input_state: None,
-                output_info: None,
-                video_meta_supported: false,
-            }),
-        }
-    }
 }
 
 impl ObjectImpl for Dav1dDec {}

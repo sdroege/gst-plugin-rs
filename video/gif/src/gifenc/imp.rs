@@ -7,7 +7,6 @@
 // except according to those terms.
 
 use atomic_refcell::AtomicRefCell;
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::gst_debug;
 use gst::subclass::prelude::*;
@@ -121,6 +120,7 @@ impl State {
     }
 }
 
+#[derive(Default)]
 pub struct GifEnc {
     state: AtomicRefCell<Option<State>>,
     settings: Mutex<Settings>,
@@ -130,22 +130,12 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new("gifenc", gst::DebugColorFlags::empty(), Some("GIF encoder"))
 });
 
+#[glib::object_subclass]
 impl ObjectSubclass for GifEnc {
     const NAME: &'static str = "GifEnc";
     type Type = super::GifEnc;
     type ParentType = gst_video::VideoEncoder;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            state: AtomicRefCell::new(None),
-            settings: Mutex::new(Default::default()),
-        }
-    }
 }
 
 impl ObjectImpl for GifEnc {

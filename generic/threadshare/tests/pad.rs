@@ -301,15 +301,12 @@ mod imp_src {
         }
     }
 
+    #[glib::object_subclass]
     impl ObjectSubclass for ElementSrcTest {
         const NAME: &'static str = "TsElementSrcTest";
         type Type = super::ElementSrcTest;
         type ParentType = gst::Element;
-        type Interfaces = ();
         type Instance = gst::subclass::ElementInstanceStruct<Self>;
-        type Class = glib::subclass::simple::ClassStruct<Self>;
-
-        glib::object_subclass!();
 
         fn with_class(klass: &Self::Class) -> Self {
             ElementSrcTest {
@@ -636,15 +633,12 @@ mod imp_sink {
         )
     });
 
+    #[glib::object_subclass]
     impl ObjectSubclass for ElementSinkTest {
         const NAME: &'static str = "TsElementSinkTest";
         type Type = super::ElementSinkTest;
         type ParentType = gst::Element;
-        type Interfaces = ();
         type Instance = gst::subclass::ElementInstanceStruct<Self>;
-        type Class = glib::subclass::simple::ClassStruct<Self>;
-
-        glib::object_subclass!();
 
         fn with_class(klass: &Self::Class) -> Self {
             ElementSinkTest {

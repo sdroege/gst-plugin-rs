@@ -21,7 +21,6 @@ use futures::lock::Mutex;
 use futures::prelude::*;
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::prelude::*;
@@ -944,15 +943,12 @@ fn try_into_socket_addr(element: &super::UdpSink, host: &str, port: i32) -> Resu
     Ok(SocketAddr::new(addr, port))
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for UdpSink {
     const NAME: &'static str = "RsTsUdpSink";
     type Type = super::UdpSink;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let settings = Arc::new(StdMutex::new(Settings::default()));

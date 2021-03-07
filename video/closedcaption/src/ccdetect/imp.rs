@@ -15,7 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -70,6 +69,7 @@ struct State {
     last_cc708_change: gst::ClockTime,
 }
 
+#[derive(Default)]
 pub struct CCDetect {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
@@ -214,22 +214,12 @@ impl CCDetect {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for CCDetect {
     const NAME: &'static str = "CCDetect";
     type Type = super::CCDetect;
     type ParentType = gst_base::BaseTransform;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for CCDetect {

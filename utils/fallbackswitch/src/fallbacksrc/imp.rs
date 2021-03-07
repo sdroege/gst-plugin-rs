@@ -16,7 +16,6 @@
 // Boston, MA 02110-1335, USA.
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -172,27 +171,18 @@ struct State {
     stats: Stats,
 }
 
+#[derive(Default)]
 pub struct FallbackSrc {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for FallbackSrc {
     const NAME: &'static str = "FallbackSrc";
     type Type = super::FallbackSrc;
     type ParentType = gst::Bin;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Settings::default()),
-            state: Mutex::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for FallbackSrc {

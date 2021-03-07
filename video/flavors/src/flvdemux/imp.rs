@@ -13,7 +13,6 @@ use std::sync::Mutex;
 #[rustfmt::skip]
 use ::flavors::parser as flavors;
 
-use glib::subclass;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};
@@ -120,15 +119,12 @@ struct Metadata {
     video_bitrate: Option<u32>,
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for FlvDemux {
     const NAME: &'static str = "RsFlvDemux";
     type Type = super::FlvDemux;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

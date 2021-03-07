@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_warning};
@@ -17,6 +16,8 @@ use gst_audio::subclass::prelude::*;
 use atomic_refcell::AtomicRefCell;
 
 use byte_slice_cast::*;
+
+use once_cell::sync::Lazy;
 
 struct State {
     header_bufs: (
@@ -30,11 +31,11 @@ struct State {
     reorder_map: Option<[usize; 8]>,
 }
 
+#[derive(Default)]
 pub struct LewtonDec {
     state: AtomicRefCell<Option<State>>,
 }
 
-use once_cell::sync::Lazy;
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "lewtondec",
@@ -43,21 +44,12 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+#[glib::object_subclass]
 impl ObjectSubclass for LewtonDec {
     const NAME: &'static str = "LewtonDec";
     type Type = super::LewtonDec;
     type ParentType = gst_audio::AudioDecoder;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            state: AtomicRefCell::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for LewtonDec {}

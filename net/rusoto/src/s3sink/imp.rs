@@ -7,7 +7,6 @@
 // except according to those terms.
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::prelude::*;
@@ -90,6 +89,7 @@ struct Settings {
     buffer_size: u64,
 }
 
+#[derive(Default)]
 pub struct S3Sink {
     settings: Mutex<Settings>,
     state: Mutex<State>,
@@ -341,23 +341,12 @@ impl S3Sink {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for S3Sink {
     const NAME: &'static str = "RusotoS3Sink";
     type Type = super::S3Sink;
     type ParentType = gst_base::BaseSink;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(Default::default()),
-            canceller: Mutex::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for S3Sink {

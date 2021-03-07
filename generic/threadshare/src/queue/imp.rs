@@ -20,7 +20,6 @@ use futures::future::BoxFuture;
 use futures::prelude::*;
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::prelude::*;
@@ -692,15 +691,12 @@ impl Queue {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for Queue {
     const NAME: &'static str = "RsTsQueue";
     type Type = super::Queue;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {

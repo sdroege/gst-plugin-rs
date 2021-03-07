@@ -15,7 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -436,10 +435,15 @@ impl Cea608Overlay {
             self.negotiate(element, &mut state)?;
         }
 
+        for meta in buffer.iter_meta::<gst_video::VideoTimeCodeMeta>() {
+            println!("timecode {}", meta.get_tc());
+        }
+
         for meta in buffer.iter_meta::<gst_video::VideoCaptionMeta>() {
             if meta.get_caption_type() == gst_video::VideoCaptionType::Cea708Cdp {
                 match extract_cdp(meta.get_data()) {
                     Ok(data) => {
+                        println!("meh {:?}", meta.get_data());
                         self.decode_cc_data(pad, element, &mut state, data);
                     }
                     Err(e) => {
@@ -536,15 +540,12 @@ impl Cea608Overlay {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for Cea608Overlay {
     const NAME: &'static str = "RsCea608Overlay";
     type Type = super::Cea608Overlay;
     type ParentType = gst::Element;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

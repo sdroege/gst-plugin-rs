@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -60,6 +59,7 @@ struct State {
     buffer: RingBuffer,
 }
 
+#[derive(Default)]
 pub struct AudioEcho {
     settings: Mutex<Settings>,
     state: Mutex<Option<State>>,
@@ -85,22 +85,12 @@ impl AudioEcho {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for AudioEcho {
     const NAME: &'static str = "RsAudioEcho";
     type Type = super::AudioEcho;
     type ParentType = gst_base::BaseTransform;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for AudioEcho {

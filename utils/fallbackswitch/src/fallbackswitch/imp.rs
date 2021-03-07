@@ -27,7 +27,6 @@ use gst_base::prelude::*;
 #[cfg(feature = "v1_18")]
 use gst_base::subclass::prelude::*;
 
-use glib::subclass;
 #[cfg(not(feature = "v1_18"))]
 use glib::subclass::prelude::*;
 #[cfg(not(feature = "v1_18"))]
@@ -643,15 +642,12 @@ impl FallbackSwitch {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for FallbackSwitch {
     const NAME: &'static str = "FallbackSwitch";
     type Type = super::FallbackSwitch;
     type ParentType = gst_base::Aggregator;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

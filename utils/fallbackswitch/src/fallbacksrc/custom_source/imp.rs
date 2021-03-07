@@ -16,7 +16,6 @@
 // Boston, MA 02110-1335, USA.
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -42,37 +41,25 @@ struct Stream {
     stream: gst::Stream,
 }
 
+#[derive(Default)]
 struct State {
     pads: Vec<Stream>,
     num_audio: usize,
     num_video: usize,
 }
 
+#[derive(Default)]
 pub struct CustomSource {
     source: OnceCell<gst::Element>,
     state: Mutex<State>,
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for CustomSource {
     const NAME: &'static str = "FallbackSrcCustomSource";
     type Type = super::CustomSource;
     type ParentType = gst::Bin;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            source: OnceCell::default(),
-            state: Mutex::new(State {
-                pads: vec![],
-                num_audio: 0,
-                num_video: 0,
-            }),
-        }
-    }
 }
 
 impl ObjectImpl for CustomSource {

@@ -8,7 +8,6 @@
 // except according to those terms.
 
 use byte_slice_cast::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -42,6 +41,7 @@ struct State {
     adapter: gst_base::UniqueAdapter,
 }
 
+#[derive(Default)]
 pub struct AudioRNNoise {
     state: Mutex<Option<State>>,
 }
@@ -189,21 +189,12 @@ impl AudioRNNoise {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for AudioRNNoise {
     const NAME: &'static str = "AudioRNNoise";
     type Type = super::AudioRNNoise;
     type ParentType = gst_base::BaseTransform;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            state: Mutex::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for AudioRNNoise {}

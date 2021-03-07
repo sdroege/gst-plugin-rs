@@ -7,7 +7,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -49,6 +48,7 @@ impl Default for State {
     }
 }
 
+#[derive(Default)]
 pub struct FileSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
@@ -120,22 +120,13 @@ impl FileSrc {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for FileSrc {
     const NAME: &'static str = "RsFileSrc";
     type Type = super::FileSrc;
     type ParentType = gst_base::BaseSrc;
     type Interfaces = (gst::URIHandler,);
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(Default::default()),
-        }
-    }
 }
 
 impl ObjectImpl for FileSrc {

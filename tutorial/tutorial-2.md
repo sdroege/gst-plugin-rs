@@ -70,48 +70,6 @@ impl Default for Settings {
     }
 }
 
-// Metadata for the properties
-static PROPERTIES: [Property; 5] = [
-    Property::UInt(
-        "samples-per-buffer",
-        "Samples Per Buffer",
-        "Number of samples per output buffer",
-        (1, u32::MAX),
-        DEFAULT_SAMPLES_PER_BUFFER,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::UInt(
-        "freq",
-        "Frequency",
-        "Frequency",
-        (1, u32::MAX),
-        DEFAULT_FREQ,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Double(
-        "volume",
-        "Volume",
-        "Output volume",
-        (0.0, 10.0),
-        DEFAULT_VOLUME,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boolean(
-        "mute",
-        "Mute",
-        "Mute",
-        DEFAULT_MUTE,
-        PropertyMutability::ReadWrite,
-    ),
-    Property::Boolean(
-        "is-live",
-        "Is Live",
-        "(Pseudo) live output",
-        DEFAULT_IS_LIVE,
-        PropertyMutability::ReadWrite,
-    ),
-];
-
 // Stream-specific state, i.e. audio format configuration
 // and sample offset
 struct State {
@@ -133,6 +91,7 @@ impl Default for State {
 }
 
 // Struct containing all the element data
+#[derive(Default)]
 pub struct SineSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
@@ -146,28 +105,12 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+#[glib::object_subclass]
 impl ObjectSubclass for SineSrc {
     const NAME: &'static str = "RsSineSrc";
     type Type = super::SineSrc;
     type ParentType = gst_base::PushSrc;
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    // This macro provides some boilerplate.
-    glib::object_subclass!();
-
-    // Called when a new instance is to be created. We need to return an instance
-    // of our struct here.
-    fn new() -> Self {
-        Self {
-            settings: Mutex::new(Default::default()),
-            state: Mutex::new(Default::default()),
-            clock_wait: Mutex::new(ClockWait {
-                clock_id: None,
-                flushing: true,
-            }),
-        }
-    }
 
     // Called exactly once when registering the type. Used for
     // setting up metadata for all instances, e.g. the name and
@@ -223,13 +166,61 @@ impl ObjectSubclass for SineSrc {
         )
         .unwrap();
         klass.add_pad_template(src_pad_template);
-
-        // Install all our properties
-        klass.install_properties(&PROPERTIES);
     }
 }
 
 impl ObjectImpl for SineSrc {
+    // Metadata for the properties
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpec::uint(
+                    "samples-per-buffer",
+                    "Samples Per Buffer",
+                    "Number of samples per output buffer",
+                    1,
+                    u32::MAX,
+                    DEFAULT_SAMPLES_PER_BUFFER,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpec::uint(
+                    "freq",
+                    "Frequency",
+                    "Frequency",
+                    1,
+                    u32::MAX,
+                    DEFAULT_FREQ,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+                glib::ParamSpec::double(
+                    "volume",
+                    "Volume",
+                    "Output volume",
+                    0.0,
+                    10.0,
+                    DEFAULT_VOLUME,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+                glib::ParamSpec::boolean(
+                    "mute",
+                    "Mute",
+                    "Mute",
+                    DEFAULT_MUTE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+                glib::ParamSpec::boolean(
+                    "is-live",
+                    "Is Live",
+                    "(Pseudo) live output",
+                    DEFAULT_IS_LIVE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
     // Called right after construction of a new instance
     fn constructed(&self, obj: &Self::Type) {
         // Call the parent class' ::constructed() implementation first
@@ -243,11 +234,15 @@ impl ObjectImpl for SineSrc {
 
     // Called whenever a value of a property is changed. It can be called
     // at any time from any thread.
-    fn set_property(&self, obj: &Self::Type, id: u32, value: &glib::Value) {
-        let prop = &PROPERTIES[id as usize];
-
-        match *prop {
-            Property::UInt("samples-per-buffer", ..) => {
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.get_name() {
+            "samples-per-buffer" => {
                 let mut settings = self.settings.lock().unwrap();
                 let samples_per_buffer = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -260,10 +255,9 @@ impl ObjectImpl for SineSrc {
                 settings.samples_per_buffer = samples_per_buffer;
                 drop(settings);
 
-                let _ =
-                    obj.post_message(&gst::Message::new_latency().src(Some(obj)).build());
+                let _ = obj.post_message(gst::message::Latency::builder().src(obj).build());
             }
-            Property::UInt("freq", ..) => {
+            "freq" => {
                 let mut settings = self.settings.lock().unwrap();
                 let freq = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -275,7 +269,7 @@ impl ObjectImpl for SineSrc {
                 );
                 settings.freq = freq;
             }
-            Property::Double("volume", ..) => {
+            "volume" => {
                 let mut settings = self.settings.lock().unwrap();
                 let volume = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -287,7 +281,7 @@ impl ObjectImpl for SineSrc {
                 );
                 settings.volume = volume;
             }
-            Property::Boolean("mute", ..) => {
+            "mute" => {
                 let mut settings = self.settings.lock().unwrap();
                 let mute = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -299,7 +293,7 @@ impl ObjectImpl for SineSrc {
                 );
                 settings.mute = mute;
             }
-            Property::Boolean("is-live", ..) => {
+            "is-live" => {
                 let mut settings = self.settings.lock().unwrap();
                 let is_live = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -317,27 +311,25 @@ impl ObjectImpl for SineSrc {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &Self::Type, id: u32) -> glib::Value {
-        let prop = &PROPERTIES[id as usize];
-
-        match *prop {
-            Property::UInt("samples-per-buffer", ..) => {
+    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.get_name() {
+            "samples-per-buffer" => {
                 let settings = self.settings.lock().unwrap();
                 settings.samples_per_buffer.to_value()
             }
-            Property::UInt("freq", ..) => {
+            "freq" => {
                 let settings = self.settings.lock().unwrap();
                 settings.freq.to_value()
             }
-            Property::Double("volume", ..) => {
+            "volume" => {
                 let settings = self.settings.lock().unwrap();
                 settings.volume.to_value()
             }
-            Property::Boolean("mute", ..) => {
+            "mute" => {
                 let settings = self.settings.lock().unwrap();
                 settings.mute.to_value()
             }
-            Property::Boolean("is-live", ..) => {
+            "is-live" => {
                 let settings = self.settings.lock().unwrap();
                 settings.is_live.to_value()
             }
@@ -827,6 +819,16 @@ struct ClockWait {
     flushing: bool,
 }
 
+impl Default for ClockWait {
+    fn default() -> Self {
+        ClockWait {
+            clock_id: None,
+            flushing: true,
+        }
+    }
+}
+
+#[derive(Default)]
 struct SineSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,

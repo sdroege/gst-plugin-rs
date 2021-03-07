@@ -17,7 +17,6 @@
 // Boston, MA 02110-1335, USA.
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -62,15 +61,12 @@ pub struct VideoFallbackSource {
     settings: Mutex<Settings>,
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for VideoFallbackSource {
     const NAME: &'static str = "FallbackSrcVideoFallbackSource";
     type Type = super::VideoFallbackSource;
     type ParentType = gst::Bin;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("src").unwrap();

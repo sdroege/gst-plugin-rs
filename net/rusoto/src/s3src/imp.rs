@@ -14,7 +14,6 @@ use once_cell::sync::Lazy;
 use rusoto_s3::*;
 
 use glib::prelude::*;
-use glib::subclass;
 use glib::subclass::prelude::*;
 
 use gst::subclass::prelude::*;
@@ -37,6 +36,13 @@ enum StreamingState {
     },
 }
 
+impl Default for StreamingState {
+    fn default() -> StreamingState {
+        StreamingState::Stopped
+    }
+}
+
+#[derive(Default)]
 pub struct S3Src {
     url: Mutex<Option<GstS3Url>>,
     state: Mutex<StreamingState>,
@@ -196,23 +202,13 @@ impl S3Src {
     }
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for S3Src {
     const NAME: &'static str = "RusotoS3Src";
     type Type = super::S3Src;
     type ParentType = gst_base::BaseSrc;
     type Interfaces = (gst::URIHandler,);
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            url: Mutex::new(None),
-            state: Mutex::new(StreamingState::Stopped),
-            canceller: Mutex::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for S3Src {

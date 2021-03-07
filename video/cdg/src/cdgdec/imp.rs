@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass;
 use glib::subclass::prelude::*;
 use gst::gst_debug;
 use gst::subclass::prelude::*;
@@ -23,27 +22,18 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new("cdgdec", gst::DebugColorFlags::empty(), Some("CDG decoder"))
 });
 
+#[derive(Default)]
 pub struct CdgDec {
     cdg_inter: Mutex<Box<cdg_renderer::CdgInterpreter>>,
     output_info: Mutex<Option<gst_video::VideoInfo>>,
 }
 
+#[glib::object_subclass]
 impl ObjectSubclass for CdgDec {
     const NAME: &'static str = "CdgDec";
     type Type = super::CdgDec;
     type ParentType = gst_video::VideoDecoder;
-    type Interfaces = ();
     type Instance = gst::subclass::ElementInstanceStruct<Self>;
-    type Class = subclass::simple::ClassStruct<Self>;
-
-    glib::object_subclass!();
-
-    fn new() -> Self {
-        Self {
-            cdg_inter: Mutex::new(Box::new(cdg_renderer::CdgInterpreter::new())),
-            output_info: Mutex::new(None),
-        }
-    }
 }
 
 impl ObjectImpl for CdgDec {}
