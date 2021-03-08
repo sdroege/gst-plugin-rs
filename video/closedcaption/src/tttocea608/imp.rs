@@ -778,6 +778,8 @@ impl TtToCea608 {
             );
         }
 
+        state.pad(element, mut_list, state.max_frame_no);
+
         self.srcpad.push_list(bufferlist)
     }
 

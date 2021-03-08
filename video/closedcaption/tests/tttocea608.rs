@@ -107,7 +107,7 @@ fn test_one_timed_buffer_and_eos() {
         assert_eq!(e.2, &*data);
     }
 
-    assert_eq!(h.buffers_in_queue(), 0);
+    assert_eq!(h.buffers_in_queue(), 23);
 
     h.push_event(gst::event::Eos::new());
 
