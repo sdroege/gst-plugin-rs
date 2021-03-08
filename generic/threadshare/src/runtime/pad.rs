@@ -881,7 +881,7 @@ impl PadSink {
                                 let element =
                                     element.clone().dynamic_cast::<gst::Element>().unwrap();
                                 let delayed_fut = async move {
-                                    let imp = <H::ElementImpl as ObjectSubclass>::from_instance(
+                                    let imp = <H::ElementImpl as ObjectSubclassExt>::from_instance(
                                         element.unsafe_cast_ref(),
                                     );
                                     let this_ref =
@@ -921,7 +921,7 @@ impl PadSink {
                                 let element =
                                     element.clone().dynamic_cast::<gst::Element>().unwrap();
                                 let delayed_fut = async move {
-                                    let imp = <H::ElementImpl as ObjectSubclass>::from_instance(
+                                    let imp = <H::ElementImpl as ObjectSubclassExt>::from_instance(
                                         element.unsafe_cast_ref(),
                                     );
                                     let this_ref =
@@ -966,9 +966,10 @@ impl PadSink {
                                     let element =
                                         element.clone().dynamic_cast::<gst::Element>().unwrap();
                                     let delayed_fut = async move {
-                                        let imp = <H::ElementImpl as ObjectSubclass>::from_instance(
-                                            element.unsafe_cast_ref(),
-                                        );
+                                        let imp =
+                                            <H::ElementImpl as ObjectSubclassExt>::from_instance(
+                                                element.unsafe_cast_ref(),
+                                            );
                                         let this_ref =
                                             this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
 
