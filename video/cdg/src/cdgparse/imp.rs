@@ -40,7 +40,6 @@ impl ObjectSubclass for CdgParse {
     const NAME: &'static str = "CdgParse";
     type Type = super::CdgParse;
     type ParentType = gst_base::BaseParse;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for CdgParse {}

@@ -948,7 +948,6 @@ impl ObjectSubclass for UdpSink {
     const NAME: &'static str = "RsTsUdpSink";
     type Type = super::UdpSink;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let settings = Arc::new(StdMutex::new(Settings::default()));

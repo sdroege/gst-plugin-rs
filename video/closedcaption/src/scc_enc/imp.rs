@@ -337,7 +337,6 @@ impl ObjectSubclass for SccEnc {
     const NAME: &'static str = "RsSccEnc";
     type Type = super::SccEnc;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

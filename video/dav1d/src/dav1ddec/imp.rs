@@ -351,7 +351,6 @@ impl ObjectSubclass for Dav1dDec {
     const NAME: &'static str = "RsDav1dDec";
     type Type = super::Dav1dDec;
     type ParentType = gst_video::VideoDecoder;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for Dav1dDec {}

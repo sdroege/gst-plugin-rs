@@ -80,7 +80,6 @@ impl ObjectSubclass for HsvDetector {
     const NAME: &'static str = "HsvDetector";
     type Type = super::HsvDetector;
     type ParentType = gst_base::BaseTransform;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for HsvDetector {

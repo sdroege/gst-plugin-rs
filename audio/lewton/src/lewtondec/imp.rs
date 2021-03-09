@@ -49,7 +49,6 @@ impl ObjectSubclass for LewtonDec {
     const NAME: &'static str = "LewtonDec";
     type Type = super::LewtonDec;
     type ParentType = gst_audio::AudioDecoder;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for LewtonDec {}

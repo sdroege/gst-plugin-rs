@@ -549,7 +549,6 @@ impl ObjectSubclass for TcpClientSrc {
     const NAME: &'static str = "RsTsTcpClientSrc";
     type Type = super::TcpClientSrc;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let src_pad_handler = TcpClientSrcPadHandler::default();

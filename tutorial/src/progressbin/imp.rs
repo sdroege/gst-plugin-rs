@@ -48,7 +48,6 @@ impl ObjectSubclass for ProgressBin {
     const NAME: &'static str = "RsProgressBin";
     type Type = super::ProgressBin;
     type ParentType = gst::Bin;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     // Called when a new instance is to be created. We need to return an instance
     // of our struct here and also get the class struct passed in case it's needed

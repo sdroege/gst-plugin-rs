@@ -194,7 +194,6 @@ impl ObjectSubclass for AudioRNNoise {
     const NAME: &'static str = "AudioRNNoise";
     type Type = super::AudioRNNoise;
     type ParentType = gst_base::BaseTransform;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for AudioRNNoise {}

@@ -209,7 +209,6 @@ impl ObjectSubclass for Rav1Enc {
     const NAME: &'static str = "Rav1Enc";
     type Type = super::Rav1Enc;
     type ParentType = gst_video::VideoEncoder;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for Rav1Enc {

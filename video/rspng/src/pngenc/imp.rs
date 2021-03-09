@@ -170,7 +170,6 @@ impl ObjectSubclass for PngEncoder {
     const NAME: &'static str = "PngEncoder";
     type Type = super::PngEncoder;
     type ParentType = gst_video::VideoEncoder;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for PngEncoder {

@@ -90,7 +90,6 @@ impl ObjectSubclass for AudioEcho {
     const NAME: &'static str = "RsAudioEcho";
     type Type = super::AudioEcho;
     type ParentType = gst_base::BaseTransform;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for AudioEcho {

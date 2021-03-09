@@ -346,7 +346,6 @@ impl ObjectSubclass for S3Sink {
     const NAME: &'static str = "RusotoS3Sink";
     type Type = super::S3Sink;
     type ParentType = gst_base::BaseSink;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for S3Sink {

@@ -306,7 +306,6 @@ mod imp_src {
         const NAME: &'static str = "TsElementSrcTest";
         type Type = super::ElementSrcTest;
         type ParentType = gst::Element;
-        type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
         fn with_class(klass: &Self::Class) -> Self {
             ElementSrcTest {
@@ -638,7 +637,6 @@ mod imp_sink {
         const NAME: &'static str = "TsElementSinkTest";
         type Type = super::ElementSinkTest;
         type ParentType = gst::Element;
-        type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
         fn with_class(klass: &Self::Class) -> Self {
             ElementSinkTest {

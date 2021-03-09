@@ -126,7 +126,6 @@ impl ObjectSubclass for FileSrc {
     type Type = super::FileSrc;
     type ParentType = gst_base::BaseSrc;
     type Interfaces = (gst::URIHandler,);
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for FileSrc {

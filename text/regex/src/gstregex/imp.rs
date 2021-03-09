@@ -123,7 +123,6 @@ impl ObjectSubclass for RegEx {
     const NAME: &'static str = "RsRegEx";
     type Type = super::RegEx;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

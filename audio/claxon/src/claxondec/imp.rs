@@ -43,7 +43,6 @@ impl ObjectSubclass for ClaxonDec {
     const NAME: &'static str = "ClaxonDec";
     type Type = super::ClaxonDec;
     type ParentType = gst_audio::AudioDecoder;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for ClaxonDec {}

@@ -135,7 +135,6 @@ impl ObjectSubclass for GifEnc {
     const NAME: &'static str = "GifEnc";
     type Type = super::GifEnc;
     type ParentType = gst_video::VideoEncoder;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for GifEnc {

@@ -173,7 +173,6 @@ impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
     type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 ```
 
@@ -277,7 +276,6 @@ impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
     type Type = super::Rgb2Gray;
     type ParentType = gst_base::BaseTransform;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for Rgb2Gray {}

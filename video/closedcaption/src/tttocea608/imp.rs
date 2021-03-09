@@ -979,7 +979,6 @@ impl ObjectSubclass for TtToCea608 {
     const NAME: &'static str = "TtToCea608";
     type Type = super::TtToCea608;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

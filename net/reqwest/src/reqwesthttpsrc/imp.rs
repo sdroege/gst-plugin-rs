@@ -1117,5 +1117,4 @@ impl ObjectSubclass for ReqwestHttpSrc {
     type Type = super::ReqwestHttpSrc;
     type ParentType = gst_base::PushSrc;
     type Interfaces = (gst::URIHandler,);
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }

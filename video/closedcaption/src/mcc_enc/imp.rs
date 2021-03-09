@@ -449,7 +449,6 @@ impl ObjectSubclass for MccEnc {
     const NAME: &'static str = "RsMccEnc";
     type Type = super::MccEnc;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("sink").unwrap();

@@ -696,7 +696,6 @@ impl ObjectSubclass for Queue {
     const NAME: &'static str = "RsTsQueue";
     type Type = super::Queue;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {

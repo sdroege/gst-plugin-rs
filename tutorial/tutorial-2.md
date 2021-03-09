@@ -110,7 +110,6 @@ impl ObjectSubclass for SineSrc {
     const NAME: &'static str = "RsSineSrc";
     type Type = super::SineSrc;
     type ParentType = gst_base::PushSrc;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     // Called exactly once when registering the type. Used for
     // setting up metadata for all instances, e.g. the name and

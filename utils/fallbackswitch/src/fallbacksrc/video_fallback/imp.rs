@@ -66,7 +66,6 @@ impl ObjectSubclass for VideoFallbackSource {
     const NAME: &'static str = "FallbackSrcVideoFallbackSource";
     type Type = super::VideoFallbackSource;
     type ParentType = gst::Bin;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("src").unwrap();

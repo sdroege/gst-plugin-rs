@@ -158,7 +158,6 @@ impl ObjectSubclass for SineSrc {
     const NAME: &'static str = "RsSineSrc";
     type Type = super::SineSrc;
     type ParentType = gst_base::PushSrc;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 // Implementation of glib::Object virtual methods

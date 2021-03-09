@@ -219,7 +219,6 @@ impl ObjectSubclass for CCDetect {
     const NAME: &'static str = "CCDetect";
     type Type = super::CCDetect;
     type ParentType = gst_base::BaseTransform;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for CCDetect {

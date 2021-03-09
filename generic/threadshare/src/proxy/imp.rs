@@ -576,7 +576,6 @@ impl ObjectSubclass for ProxySink {
     const NAME: &'static str = "RsTsProxySink";
     type Type = super::ProxySink;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {
@@ -1114,7 +1113,6 @@ impl ObjectSubclass for ProxySrc {
     const NAME: &'static str = "RsTsProxySrc";
     type Type = super::ProxySrc;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {

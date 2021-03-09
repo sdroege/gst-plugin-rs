@@ -208,7 +208,6 @@ impl ObjectSubclass for S3Src {
     type Type = super::S3Src;
     type ParentType = gst_base::BaseSrc;
     type Interfaces = (gst::URIHandler,);
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for S3Src {

@@ -59,7 +59,6 @@ impl ObjectSubclass for CustomSource {
     const NAME: &'static str = "FallbackSrcCustomSource";
     type Type = super::CustomSource;
     type ParentType = gst::Bin;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for CustomSource {

@@ -508,7 +508,6 @@ impl ObjectSubclass for AppSrc {
     const NAME: &'static str = "RsTsAppSrc";
     type Type = super::AppSrc;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let src_pad_handler = AppSrcPadHandler::default();

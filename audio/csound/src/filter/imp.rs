@@ -318,7 +318,6 @@ impl ObjectSubclass for CsoundFilter {
     const NAME: &'static str = "CsoundFilter";
     type Type = super::CsoundFilter;
     type ParentType = gst_base::BaseTransform;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn new() -> Self {
         let csound = Csound::new();

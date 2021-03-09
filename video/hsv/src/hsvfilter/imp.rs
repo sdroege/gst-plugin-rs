@@ -75,7 +75,6 @@ impl ObjectSubclass for HsvFilter {
     const NAME: &'static str = "HsvFilter";
     type Type = super::HsvFilter;
     type ParentType = gst_base::BaseTransform;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for HsvFilter {

@@ -690,7 +690,6 @@ impl ObjectSubclass for UdpSrc {
     const NAME: &'static str = "RsTsUdpSrc";
     type Type = super::UdpSrc;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let src_pad_handler = UdpSrcPadHandler::default();

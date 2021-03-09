@@ -1339,7 +1339,6 @@ impl ObjectSubclass for JitterBuffer {
     const NAME: &'static str = "RsTsJitterBuffer";
     type Type = super::JitterBuffer;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         let sink_pad_handler = SinkHandler::default();

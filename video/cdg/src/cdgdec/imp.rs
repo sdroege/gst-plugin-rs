@@ -33,7 +33,6 @@ impl ObjectSubclass for CdgDec {
     const NAME: &'static str = "CdgDec";
     type Type = super::CdgDec;
     type ParentType = gst_video::VideoDecoder;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for CdgDec {}

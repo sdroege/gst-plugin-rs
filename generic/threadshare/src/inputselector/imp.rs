@@ -395,7 +395,6 @@ impl ObjectSubclass for InputSelector {
     const NAME: &'static str = "RsTsInputSelector";
     type Type = super::InputSelector;
     type ParentType = gst::Element;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 
     fn with_class(klass: &Self::Class) -> Self {
         Self {

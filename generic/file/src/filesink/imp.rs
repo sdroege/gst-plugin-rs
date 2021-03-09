@@ -112,7 +112,6 @@ impl ObjectSubclass for FileSink {
     type Type = super::FileSink;
     type ParentType = gst_base::BaseSink;
     type Interfaces = (gst::URIHandler,);
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for FileSink {

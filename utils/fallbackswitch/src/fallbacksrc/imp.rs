@@ -182,7 +182,6 @@ impl ObjectSubclass for FallbackSrc {
     const NAME: &'static str = "FallbackSrc";
     type Type = super::FallbackSrc;
     type ParentType = gst::Bin;
-    type Instance = gst::subclass::ElementInstanceStruct<Self>;
 }
 
 impl ObjectImpl for FallbackSrc {
