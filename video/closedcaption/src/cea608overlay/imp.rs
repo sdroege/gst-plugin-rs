@@ -435,15 +435,10 @@ impl Cea608Overlay {
             self.negotiate(element, &mut state)?;
         }
 
-        for meta in buffer.iter_meta::<gst_video::VideoTimeCodeMeta>() {
-            println!("timecode {}", meta.get_tc());
-        }
-
         for meta in buffer.iter_meta::<gst_video::VideoCaptionMeta>() {
             if meta.get_caption_type() == gst_video::VideoCaptionType::Cea708Cdp {
                 match extract_cdp(meta.get_data()) {
                     Ok(data) => {
-                        println!("meh {:?}", meta.get_data());
                         self.decode_cc_data(pad, element, &mut state, data);
                     }
                     Err(e) => {
