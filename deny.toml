@@ -77,18 +77,6 @@ version = "0.3"
 name = "cfg-if"
 version = "0.1"
 
-# ignore duplicated pin-project dependency because a futures, hyper and rusoto
-# still depend on the old version
-# https://github.com/rust-lang/futures-rs/commit/8a65340675fdf0ba16997cf507ee6bb27d1dcd15
-# https://github.com/hyperium/hyper/commit/02732bef0c1accb441b9b14c07cb2c494234a682
-# https://github.com/rusoto/rusoto/pull/1847
-[[bans.skip]]
-name = "pin-project"
-version = "0.4"
-[[bans.skip]]
-name = "pin-project-internal"
-version = "0.4"
-
 # ignore duplicated pin-project-lite dependency because many crates depend on an old version
 [[bans.skip]]
 name = "pin-project-lite"
@@ -108,11 +96,6 @@ version = "0.5"
 name = "mio"
 version = "0.6"
 
-# ignore duplicated redox_syscall dependency because parking_lot/dirs-next depends on an old version
-[[bans.skip]]
-name = "redox_syscall"
-version = "0.1"
-
 # ignore duplicated rustc_version dependency because various crates depend on an old version
 [[bans.skip]]
 name = "rustc_version"
@@ -128,6 +111,18 @@ version = "0.7"
 [[bans.skip]]
 name = "system-deps"
 version = "2.0"
+
+# ignore duplicated num-rational dependency because image depends on an old version
+# https://github.com/image-rs/image/pull/1451
+[[bans.skip]]
+name = "num-rational"
+version = "0.3"
+
+# ignore duplicated ansi_term dependency because clap depends on an old version
+# https://github.com/clap-rs/clap/pull/2402
+[[bans.skip]]
+name = "ansi_term"
+version = "0.11"
 
 [sources]
 unknown-registry = "deny"
