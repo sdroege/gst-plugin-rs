@@ -1,0 +1,55 @@
+[package]
+name = "gst-plugin-webp"
+version = "0.6.0"
+authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
+license = "LGPL-2.1-or-later"
+edition = "2018"
+description = "WebP Plugin"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+
+[dependencies]
+glib = { git = "https://github.com/gtk-rs/gtk-rs" }
+once_cell = "1.0"
+libwebp-sys2 = { version = "0.1.2", features = ["demux", "0_5"] }
+
+[dependencies.gst]
+git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+features = ["v1_16"]
+package="gstreamer"
+
+[dependencies.gst-video]
+git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+features = ["v1_16"]
+package="gstreamer-video"
+
+[dev-dependencies]
+pretty_assertions = "0.7"
+
+[dev-dependencies.gst-check]
+git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+package="gstreamer-check"
+
+[lib]
+name = "gstrswebp"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../version-helper" }
+
+[features]
+# We already use 1.16 which is new enough for static build
+static = []
+
+[package.metadata.capi]
+min_version = "0.7.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-video-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

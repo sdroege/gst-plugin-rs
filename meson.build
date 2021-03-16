@@ -50,6 +50,9 @@ plugins_rep = {
   'video/hsv': 'libgsthsv',
   'text/json': 'libgstrsjson',
   'text/regex': 'libgstrsregex',
+  # FIXME: libwebp-sys2 will build its bundled version on msvc and apple platforms
+  # https://github.com/qnighy/libwebp-sys2-rs/issues/4
+  'video/webp': 'libgstrswebp',
 }
 
 exclude = []

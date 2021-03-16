@@ -1,0 +1,397 @@
+// Copyright (C) 2021 Mathieu Duponchelle <mathieu@centricular.com>
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Library General Public
+// License as published by the Free Software Foundation; either
+// version 2 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Library General Public License for more details.
+//
+// You should have received a copy of the GNU Library General Public
+// License along with this library; if not, write to the
+// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
+// Boston, MA 02110-1335, USA.
+
+use glib::subclass::prelude::*;
+use gst::prelude::*;
+use gst::subclass::prelude::*;
+use gst::{gst_log, gst_trace};
+
+use libwebp_sys as ffi;
+use once_cell::sync::Lazy;
+
+use std::sync::Mutex;
+
+use std::marker::PhantomData;
+
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "webpdec-rs",
+        gst::DebugColorFlags::empty(),
+        Some("WebP decoder"),
+    )
+});
+
+struct State {
+    buffers: Vec<gst::Buffer>,
+    total_size: usize,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            buffers: vec![],
+            total_size: 0,
+        }
+    }
+}
+
+struct Decoder<'a> {
+    decoder: *mut ffi::WebPAnimDecoder,
+    phantom: PhantomData<&'a [u8]>,
+}
+
+struct Frame<'a> {
+    buf: &'a [u8],
+    timestamp: i32,
+}
+
+struct Info {
+    width: u32,
+    height: u32,
+    frame_count: u32,
+}
+
+impl<'a> Decoder<'_> {
+    fn from_data(data: &'a [u8]) -> Option<Self> {
+        unsafe {
+            let mut options = std::mem::MaybeUninit::zeroed();
+            if ffi::WebPAnimDecoderOptionsInit(options.as_mut_ptr()) == 0 {
+                return None;
+            }
+            let mut options = options.assume_init();
+
+            options.use_threads = 1;
+            // TODO: negotiate this with downstream, bearing in mind that
+            // we should be able to tell whether an image contains alpha
+            // using WebPDemuxGetI
+            options.color_mode = ffi::MODE_RGBA;
+
+            let ptr = ffi::WebPAnimDecoderNew(
+                &ffi::WebPData {
+                    bytes: data.as_ptr(),
+                    size: data.len(),
+                },
+                &options,
+            );
+
+            Some(Self {
+                decoder: ptr,
+                phantom: PhantomData,
+            })
+        }
+    }
+
+    fn has_more_frames(&self) -> bool {
+        unsafe { ffi::WebPAnimDecoderHasMoreFrames(self.decoder) != 0 }
+    }
+
+    fn get_info(&self) -> Option<Info> {
+        let mut info = std::mem::MaybeUninit::zeroed();
+        unsafe {
+            if ffi::WebPAnimDecoderGetInfo(self.decoder, info.as_mut_ptr()) == 0 {
+                return None;
+            }
+            let info = info.assume_init();
+            Some(Info {
+                width: info.canvas_width,
+                height: info.canvas_height,
+                frame_count: info.frame_count,
+            })
+        }
+    }
+
+    fn get_next(&mut self) -> Option<Frame> {
+        let mut buf = std::ptr::null_mut();
+        let buf_ptr: *mut *mut u8 = &mut buf;
+        let mut timestamp: i32 = 0;
+
+        if let Some(info) = self.get_info() {
+            unsafe {
+                if ffi::WebPAnimDecoderGetNext(self.decoder, buf_ptr, &mut timestamp) == 0 {
+                    return None;
+                }
+
+                assert!(!buf.is_null());
+
+                Some(Frame {
+                    buf: std::slice::from_raw_parts(buf, (info.width * info.height * 4) as usize),
+                    timestamp,
+                })
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl Drop for Decoder<'_> {
+    fn drop(&mut self) {
+        unsafe { ffi::WebPAnimDecoderDelete(self.decoder) }
+    }
+}
+
+pub struct WebPDec {
+    srcpad: gst::Pad,
+    sinkpad: gst::Pad,
+    state: Mutex<State>,
+}
+
+impl WebPDec {
+    #![allow(clippy::unnecessary_wraps)]
+    fn sink_chain(
+        &self,
+        pad: &gst::Pad,
+        _element: &super::WebPDec,
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+
+        let mut state = self.state.lock().unwrap();
+
+        state.total_size += buffer.get_size();
+        state.buffers.push(buffer);
+
+        Ok(gst::FlowSuccess::Ok)
+    }
+
+    fn decode(&self, _element: &super::WebPDec) -> Result<(), gst::ErrorMessage> {
+        let mut prev_timestamp: gst::ClockTime = 0.into();
+        let mut state = self.state.lock().unwrap();
+
+        if state.buffers.is_empty() {
+            return Err(gst::error_msg!(
+                gst::StreamError::Decode,
+                ["No valid frames decoded before end of stream"]
+            ));
+        }
+
+        let mut buf = Vec::with_capacity(state.total_size);
+
+        for buffer in state.buffers.drain(..) {
+            buf.extend_from_slice(&buffer.map_readable().expect("Failed to map buffer"));
+        }
+
+        drop(state);
+
+        let mut decoder = Decoder::from_data(&buf).ok_or_else(|| {
+            gst::error_msg!(gst::StreamError::Decode, ["Failed to decode picture"])
+        })?;
+
+        let info = decoder.get_info().ok_or_else(|| {
+            gst::error_msg!(gst::StreamError::Decode, ["Failed to get animation info"])
+        })?;
+
+        if info.frame_count == 0 {
+            return Err(gst::error_msg!(
+                gst::StreamError::Decode,
+                ["No valid frames decoded before end of stream"]
+            ));
+        }
+
+        let caps =
+            gst_video::VideoInfo::builder(gst_video::VideoFormat::Rgba, info.width, info.height)
+                .fps((0, 1))
+                .build()
+                .unwrap()
+                .to_caps()
+                .unwrap();
+
+        // We push our own time segment, regardless of what the
+        // input Segment may have contained. WebP is self-contained,
+        // and its timestamps are our only time source
+        let segment = gst::FormattedSegment::<gst::ClockTime>::new();
+
+        let _ = self.srcpad.push_event(gst::event::Caps::new(&caps));
+        let _ = self.srcpad.push_event(gst::event::Segment::new(&segment));
+
+        while decoder.has_more_frames() {
+            let frame = decoder.get_next().ok_or_else(|| {
+                gst::error_msg!(gst::StreamError::Decode, ["Failed to get next frame"])
+            })?;
+
+            let timestamp = frame.timestamp as u64 * gst::MSECOND;
+            let duration = timestamp - prev_timestamp;
+
+            let mut out_buf =
+                gst::Buffer::with_size((info.width * info.height * 4) as usize).unwrap();
+            {
+                let out_buf_mut = out_buf.get_mut().unwrap();
+                out_buf_mut.copy_from_slice(0, frame.buf).unwrap();
+                out_buf_mut.set_pts(prev_timestamp);
+                out_buf_mut.set_duration(duration);
+            }
+
+            prev_timestamp = timestamp;
+
+            match self.srcpad.push(out_buf) {
+                Ok(_) => (),
+                Err(gst::FlowError::Flushing) | Err(gst::FlowError::Eos) => break,
+                Err(flow) => {
+                    return Err(gst::error_msg!(
+                        gst::StreamError::Failed,
+                        ["Failed to push buffers: {:?}", flow]
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn sink_event(&self, pad: &gst::Pad, element: &super::WebPDec, event: gst::Event) -> bool {
+        use gst::EventView;
+
+        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        match event.view() {
+            EventView::FlushStop(..) => {
+                let mut state = self.state.lock().unwrap();
+                *state = State::default();
+                pad.event_default(Some(element), event)
+            }
+            EventView::Eos(..) => {
+                if let Err(err) = self.decode(element) {
+                    element.post_error_message(err);
+                }
+                pad.event_default(Some(element), event)
+            }
+            EventView::Segment(..) => true,
+            _ => pad.event_default(Some(element), event),
+        }
+    }
+
+    fn src_event(&self, pad: &gst::Pad, element: &super::WebPDec, event: gst::Event) -> bool {
+        use gst::EventView;
+
+        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        match event.view() {
+            EventView::Seek(..) => false,
+            _ => pad.event_default(Some(element), event),
+        }
+    }
+}
+
+#[glib::object_subclass]
+impl ObjectSubclass for WebPDec {
+    const NAME: &'static str = "RsWebPDec";
+    type Type = super::WebPDec;
+    type ParentType = gst::Element;
+
+    fn with_class(klass: &Self::Class) -> Self {
+        let templ = klass.get_pad_template("sink").unwrap();
+        let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
+            .chain_function(|pad, parent, buffer| {
+                WebPDec::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |dec, element| dec.sink_chain(pad, element, buffer),
+                )
+            })
+            .event_function(|pad, parent, event| {
+                WebPDec::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |dec, element| dec.sink_event(pad, element, event),
+                )
+            })
+            .build();
+
+        let templ = klass.get_pad_template("src").unwrap();
+        let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
+            .event_function(|pad, parent, event| {
+                WebPDec::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |dec, element| dec.src_event(pad, element, event),
+                )
+            })
+            .build();
+
+        Self {
+            srcpad,
+            sinkpad,
+            state: Mutex::new(State::default()),
+        }
+    }
+}
+
+impl ObjectImpl for WebPDec {
+    fn constructed(&self, obj: &Self::Type) {
+        self.parent_constructed(obj);
+
+        obj.add_pad(&self.sinkpad).unwrap();
+        obj.add_pad(&self.srcpad).unwrap();
+    }
+}
+
+impl ElementImpl for WebPDec {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "WebP decoder",
+                "Codec/Decoder/Video",
+                "Decodes potentially animated WebP images",
+                "Mathieu Duponchelle <mathieu@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::builder("image/webp").build();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let caps = gst::Caps::builder("video/x-raw")
+                .field("format", &"RGBA")
+                .build();
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+
+    fn change_state(
+        &self,
+        element: &Self::Type,
+        transition: gst::StateChange,
+    ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
+        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+
+        if transition == gst::StateChange::PausedToReady {
+            *self.state.lock().unwrap() = State::default();
+        }
+
+        self.parent_change_state(element, transition)
+    }
+}
