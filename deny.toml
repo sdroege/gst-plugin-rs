@@ -124,6 +124,13 @@ version = "0.3"
 name = "ansi_term"
 version = "0.11"
 
+# ignore duplicated socket2 dependency because hyper and miow depend on an old version
+# https://github.com/yoshuawuyts/miow/pull/44
+# https://github.com/hyperium/hyper/pull/2472
+[[bans.skip]]
+name = "socket2"
+version = "0.3"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"

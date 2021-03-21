@@ -511,15 +511,15 @@ impl UdpSrc {
 
             let socket = if addr.is_ipv4() {
                 socket2::Socket::new(
-                    socket2::Domain::ipv4(),
-                    socket2::Type::dgram(),
-                    Some(socket2::Protocol::udp()),
+                    socket2::Domain::IPV4,
+                    socket2::Type::DGRAM,
+                    Some(socket2::Protocol::UDP),
                 )
             } else {
                 socket2::Socket::new(
-                    socket2::Domain::ipv6(),
-                    socket2::Type::dgram(),
-                    Some(socket2::Protocol::udp()),
+                    socket2::Domain::IPV6,
+                    socket2::Type::DGRAM,
+                    Some(socket2::Protocol::UDP),
                 )
             }
             .map_err(|err| {
