@@ -198,7 +198,7 @@ clippy:
   rules:
     - when: 'always'
   script:
-    - cargo clippy --locked --color=always --all --all-features --all-targets -- -A clippy::single_match -A clippy::manual_range_contains -D warnings
+    - cargo clippy --locked --color=always --all --all-features --all-targets -- -A clippy::single_match -A clippy::manual_range_contains -A clippy::upper_case_acronyms -D warnings
 
 deny:
   extends: .img-stable
