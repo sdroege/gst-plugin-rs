@@ -144,7 +144,7 @@ fn test_encode_multiple_packets() {
     let mut buffers = input2
         .chunks(2)
         .map(move |bytes| {
-            let mut buf = gst::Buffer::from_mut_slice(Vec::from(&bytes[..]));
+            let mut buf = gst::Buffer::from_mut_slice(Vec::from(bytes));
             let buf_ref = buf.get_mut().unwrap();
             gst_video::VideoTimeCodeMeta::add(buf_ref, &t);
             t.increment_frame();

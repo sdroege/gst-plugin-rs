@@ -118,7 +118,7 @@ Time Code Rate=30DF\r\n\
     .unwrap();
 
     let buf = {
-        let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input[..]));
+        let mut buf = gst::Buffer::from_mut_slice(Vec::from(input));
         let buf_ref = buf.get_mut().unwrap();
         gst_video::VideoTimeCodeMeta::add(buf_ref, &tc);
         buf_ref.set_pts(gst::ClockTime::from_seconds(0));

@@ -157,7 +157,7 @@ fn test_timecodes() {
     let mut checksum = 0u32;
     let mut expected_timecode = valid_timecodes.pop_front().unwrap();
 
-    let buf = gst::Buffer::from_mut_slice(Vec::from(&data[..]));
+    let buf = gst::Buffer::from_mut_slice(Vec::from(data));
     assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
     while let Some(buf) = h.try_pull() {
         output_len += buf.get_size();
