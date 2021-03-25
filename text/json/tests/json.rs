@@ -38,7 +38,7 @@ fn test_enc() {
     h.set_src_caps_str("application/x-json, format=test");
 
     let buf = {
-        let mut buf = gst::Buffer::from_mut_slice(Vec::from(&input[..]));
+        let mut buf = gst::Buffer::from_mut_slice(Vec::from(input));
         let buf_ref = buf.get_mut().unwrap();
         buf_ref.set_pts(gst::ClockTime::from_seconds(0));
         buf_ref.set_duration(gst::ClockTime::from_seconds(2));
