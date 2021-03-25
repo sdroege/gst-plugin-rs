@@ -28,7 +28,7 @@ use sodiumoxide::crypto::box_;
 
 use std::error::Error;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::{App, Arg};
 use serde::{Deserialize, Serialize};
@@ -40,7 +40,7 @@ struct Keys {
 }
 
 impl Keys {
-    fn from_file(file: &PathBuf) -> Result<Self, Box<dyn Error>> {
+    fn from_file(file: &Path) -> Result<Self, Box<dyn Error>> {
         let f = File::open(&file)?;
         serde_json::from_reader(f).map_err(From::from)
     }
