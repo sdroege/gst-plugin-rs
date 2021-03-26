@@ -30,6 +30,9 @@ use std::{i32, u64};
 use byte_slice_cast::*;
 
 use once_cell::sync::Lazy;
+
+use atomic_refcell::AtomicRefCell;
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "rsaudioloudnorm",
@@ -206,7 +209,7 @@ pub struct AudioLoudNorm {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     settings: Mutex<Settings>,
-    state: Mutex<Option<State>>,
+    state: AtomicRefCell<Option<State>>,
 }
 
 // Gain analysis parameters
@@ -1547,7 +1550,7 @@ impl AudioLoudNorm {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: element, "Handling buffer {:?}", buffer);
 
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.borrow_mut();
         let state = match *state_guard {
             None => {
                 gst_error!(CAT, obj: element, "Not negotiated yet");
@@ -1606,7 +1609,7 @@ impl AudioLoudNorm {
                     }
                 };
 
-                let mut state = self.state.lock().unwrap();
+                let mut state = self.state.borrow_mut();
                 let mut outbuf = None;
                 if let Some(ref mut state) = &mut *state {
                     outbuf = match state.drain(&element) {
@@ -1628,7 +1631,7 @@ impl AudioLoudNorm {
                 }
             }
             EventView::Eos(_) => {
-                let mut state = self.state.lock().unwrap();
+                let mut state = self.state.borrow_mut();
                 let mut outbuf = None;
                 if let Some(ref mut state) = &mut *state {
                     outbuf = match state.drain(&element) {
@@ -1656,7 +1659,7 @@ impl AudioLoudNorm {
             }
             EventView::FlushStop(_) => {
                 // Resetting our whole state
-                let mut state = self.state.lock().unwrap();
+                let mut state = self.state.borrow_mut();
 
                 if let Some(info) = state.as_ref().map(|s| s.info.clone()) {
                     let settings = *self.settings.lock().unwrap();
@@ -1742,7 +1745,7 @@ impl ObjectSubclass for AudioLoudNorm {
             sinkpad,
             srcpad,
             settings: Mutex::new(Default::default()),
-            state: Mutex::new(None),
+            state: AtomicRefCell::new(None),
         }
     }
 }
@@ -1908,7 +1911,7 @@ impl ElementImpl for AudioLoudNorm {
         match transition {
             gst::StateChange::PausedToReady => {
                 // Drop state
-                *self.state.lock().unwrap() = None;
+                *self.state.borrow_mut() = None;
             }
             _ => (),
         }

@@ -22,6 +22,8 @@ use byte_slice_cast::*;
 
 use smallvec::SmallVec;
 
+use atomic_refcell::AtomicRefCell;
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "ebur128level",
@@ -110,7 +112,7 @@ struct State {
 #[derive(Default)]
 pub struct EbuR128Level {
     settings: Mutex<Settings>,
-    state: Mutex<Option<State>>,
+    state: AtomicRefCell<Option<State>>,
 }
 
 #[glib::object_subclass]
@@ -397,7 +399,7 @@ impl BaseTransformImpl for EbuR128Level {
             .mul_div_floor(info.rate() as u64, gst::SECOND_VAL)
             .unwrap();
 
-        *self.state.lock().unwrap() = Some(State {
+        *self.state.borrow_mut() = Some(State {
             info,
             ebur128,
             num_frames: 0,
@@ -410,7 +412,7 @@ impl BaseTransformImpl for EbuR128Level {
 
     fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         // Drop state
-        let _ = self.state.lock().unwrap().take();
+        let _ = self.state.borrow_mut().take();
 
         gst_info!(CAT, obj: element, "Stopped");
 
@@ -424,7 +426,7 @@ impl BaseTransformImpl for EbuR128Level {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let settings = *self.settings.lock().unwrap();
 
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.borrow_mut();
         let mut state = state_guard.as_mut().ok_or_else(|| {
             gst::element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
             gst::FlowError::NotNegotiated
@@ -586,7 +588,7 @@ impl BaseTransformImpl for EbuR128Level {
 
                     let _ = element.post_message(msg);
 
-                    state_guard = self.state.lock().unwrap();
+                    state_guard = self.state.borrow_mut();
                     state = state_guard.as_mut().ok_or_else(|| {
                         gst::element_error!(
                             element,

@@ -7,7 +7,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use byte_slice_cast::*;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -15,10 +14,15 @@ use gst::{gst_debug, gst_error};
 use gst_base::subclass::base_transform::BaseTransformImplExt;
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
+
 use nnnoiseless::DenoiseState;
-use std::sync::Mutex;
+
+use byte_slice_cast::*;
 
 use once_cell::sync::Lazy;
+
+use atomic_refcell::AtomicRefCell;
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "audiornnoise",
@@ -43,7 +47,7 @@ struct State {
 
 #[derive(Default)]
 pub struct AudioRNNoise {
-    state: Mutex<Option<State>>,
+    state: AtomicRefCell<Option<State>>,
 }
 
 impl State {
@@ -114,7 +118,7 @@ impl State {
 
 impl AudioRNNoise {
     fn drain(&self, element: &super::AudioRNNoise) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state_lock = self.state.lock().unwrap();
+        let mut state_lock = self.state.borrow_mut();
         let state = state_lock.as_mut().unwrap();
 
         let available = state.adapter.available();
@@ -259,7 +263,7 @@ impl BaseTransformImpl for AudioRNNoise {
         outcaps: &gst::Caps,
     ) -> Result<(), gst::LoggableError> {
         // Flush previous state
-        if self.state.lock().unwrap().is_some() {
+        if self.state.borrow_mut().is_some() {
             self.drain(element).map_err(|e| {
                 gst::loggable_error!(CAT, "Error flusing previous state data {:?}", e)
             })?;
@@ -285,7 +289,7 @@ impl BaseTransformImpl for AudioRNNoise {
             })
         }
 
-        let mut state_lock = self.state.lock().unwrap();
+        let mut state_lock = self.state.borrow_mut();
         *state_lock = Some(State {
             in_info,
             denoisers,
@@ -307,7 +311,7 @@ impl BaseTransformImpl for AudioRNNoise {
                 self.drain(element)?;
             }
 
-            let mut state_guard = self.state.lock().unwrap();
+            let mut state_guard = self.state.borrow_mut();
             let state = state_guard.as_mut().ok_or_else(|| {
                 gst::element_error!(
                     element,
@@ -370,7 +374,7 @@ impl BaseTransformImpl for AudioRNNoise {
 
     fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         // Drop state
-        let _ = self.state.lock().unwrap().take();
+        let _ = self.state.borrow_mut().take();
 
         Ok(())
     }
