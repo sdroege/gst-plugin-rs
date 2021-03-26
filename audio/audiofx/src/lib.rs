@@ -9,11 +9,13 @@
 mod audioecho;
 mod audioloudnorm;
 mod audiornnoise;
+mod ebur128level;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     audioecho::register(plugin)?;
     audioloudnorm::register(plugin)?;
     audiornnoise::register(plugin)?;
+    ebur128level::register(plugin)?;
     Ok(())
 }
 
