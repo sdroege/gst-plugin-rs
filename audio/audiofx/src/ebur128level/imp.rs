@@ -14,6 +14,7 @@ use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use std::i32;
+use std::sync::atomic;
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
@@ -87,7 +88,6 @@ struct Settings {
     mode: Mode,
     post_messages: bool,
     interval: u64,
-    reset: bool,
 }
 
 impl Default for Settings {
@@ -96,7 +96,6 @@ impl Default for Settings {
             mode: DEFAULT_MODE,
             post_messages: DEFAULT_POST_MESSAGES,
             interval: DEFAULT_INTERVAL,
-            reset: false,
         }
     }
 }
@@ -113,6 +112,7 @@ struct State {
 pub struct EbuR128Level {
     settings: Mutex<Settings>,
     state: AtomicRefCell<Option<State>>,
+    reset: atomic::AtomicBool,
 }
 
 #[glib::object_subclass]
@@ -133,7 +133,7 @@ impl ObjectImpl for EbuR128Level {
                         let imp = EbuR128Level::from_instance(&this);
 
                         gst_info!(CAT, obj: &this, "Resetting measurements",);
-                        imp.settings.lock().unwrap().reset = true;
+                        imp.reset.store(true, atomic::Ordering::SeqCst);
 
                         None
                     })
@@ -432,13 +432,6 @@ impl BaseTransformImpl for EbuR128Level {
             gst::FlowError::NotNegotiated
         })?;
 
-        if settings.reset {
-            self.settings.lock().unwrap().reset = false;
-            state.ebur128.reset();
-            state.interval_frames_remaining = state.interval_frames;
-            state.num_frames = 0;
-        }
-
         let mut timestamp = buf.get_pts();
         let segment = element.get_segment().downcast::<gst::ClockTime>().ok();
 
@@ -451,6 +444,21 @@ impl BaseTransformImpl for EbuR128Level {
 
         let mut frames = Frames::from_audio_buffer(element, &buf)?;
         while frames.num_frames() > 0 {
+            if self
+                .reset
+                .compare_exchange(
+                    true,
+                    false,
+                    atomic::Ordering::SeqCst,
+                    atomic::Ordering::SeqCst,
+                )
+                .is_ok()
+            {
+                state.ebur128.reset();
+                state.interval_frames_remaining = state.interval_frames;
+                state.num_frames = 0;
+            }
+
             let to_process = u64::min(state.interval_frames_remaining, frames.num_frames() as u64);
 
             frames
