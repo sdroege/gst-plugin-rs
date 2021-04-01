@@ -44,6 +44,12 @@ extern const char* eia608_style_map[];
 #ifndef inline
 #define inline __inline
 #endif
+// ssize_t is POSIX and does not exist on Windows
+#if defined(_WIN64)
+typedef signed long ssize_t;
+#else
+typedef signed int ssize_t;
+#endif
 #endif
 
 /*! \brief

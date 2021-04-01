@@ -31,15 +31,6 @@ extern "C" {
 #include "utf8.h"
 #include "xds.h"
 
-// ssize_t is POSIX and does not exist on Windows
-#if defined(_MSC_VER)
-#if defined(_WIN64)
-typedef signed long ssize_t;
-#else
-typedef signed int ssize_t;
-#endif
-#endif
-
 typedef enum {
     LIBCAPTION_ERROR = 0,
     LIBCAPTION_OK = 1,
