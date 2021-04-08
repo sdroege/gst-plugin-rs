@@ -22,7 +22,6 @@ use gst::prelude::*;
 use gtk::prelude::*;
 
 use std::cell::RefCell;
-use std::env;
 
 const MAIN_PIPELINE: &str = "videotestsrc is-live=true pattern=ball";
 const FALLBACK_PIPELINE: &str = "videotestsrc is-live=true pattern=snow";
@@ -224,6 +223,5 @@ fn main() {
     let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE).unwrap();
 
     app.connect_activate(create_ui);
-    let args = env::args().collect::<Vec<_>>();
-    app.run(&args);
+    app.run();
 }
