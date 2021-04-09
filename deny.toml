@@ -107,11 +107,6 @@ version = "0.9"
 name = "semver-parser"
 version = "0.7"
 
-# ignore duplicated system-deps dependency because dav1d depends on an old version
-[[bans.skip]]
-name = "system-deps"
-version = "2.0"
-
 # ignore duplicated num-rational dependency because image depends on an old version
 # https://github.com/image-rs/image/pull/1451
 [[bans.skip]]
@@ -124,12 +119,11 @@ version = "0.3"
 name = "ansi_term"
 version = "0.11"
 
-# ignore duplicated socket2 dependency because hyper and miow depend on an old version
-# https://github.com/yoshuawuyts/miow/pull/44
-# https://github.com/hyperium/hyper/pull/2472
+# ignore duplicated shlex dependency because rusoto_credentials depends on an old version
+# https://github.com/rusoto/rusoto/pull/1915
 [[bans.skip]]
-name = "socket2"
-version = "0.3"
+name = "shlex"
+version = "0.1"
 
 [sources]
 unknown-registry = "deny"
