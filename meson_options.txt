@@ -4,3 +4,4 @@ option('sodium', type : 'combo',
     choices : ['system', 'built-in', 'disabled'], value : 'built-in',
     description : 'Weither to use libsodium from the system or the built-in version from the sodiumoxide crate')
 option('csound', type : 'feature', value : 'auto', description : 'Build csound plugin')
+option('gtk4', type : 'feature', value : 'auto', description : 'Build GTK4 plugin')

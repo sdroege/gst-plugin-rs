@@ -20,6 +20,7 @@ members = [
     "video/ffv1",
     "video/flavors",
     "video/gif",
+    "video/gtk4",
     "video/rav1e",
     "video/rspng",
     "video/hsv",

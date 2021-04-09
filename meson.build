@@ -108,6 +108,12 @@ else
   exclude += ['audio/csound']
 endif
 
+if dependency('gtk4', required : get_option('gtk4')).found()
+  plugins_rep += {'video/gtk4' : 'libgstgtk4',}
+else
+  exclude += ['video/gtk4']
+endif
+
 output = []
 
 extensions = []
