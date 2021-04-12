@@ -455,10 +455,10 @@ impl ProxySink {
 
                     let pending_queue = shared_ctx.pending_queue.as_mut().unwrap();
 
-                    let schedule_now = match item {
-                        DataQueueItem::Event(ref ev) if ev.type_() != gst::EventType::Eos => false,
-                        _ => true,
-                    };
+                    let schedule_now = !matches!(
+                        item,
+                        DataQueueItem::Event(ref ev) if ev.type_() != gst::EventType::Eos,
+                    );
 
                     pending_queue.items.push_back(item);
 
