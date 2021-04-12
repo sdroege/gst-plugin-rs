@@ -21,9 +21,9 @@ pub trait AggregatorExtManual: 'static {
     fn allocator(&self) -> (Option<gst::Allocator>, gst::AllocationParams);
 
     fn finish_buffer(&self, buffer: gst::Buffer) -> Result<gst::FlowSuccess, gst::FlowError>;
-    fn property_min_upstream_latency(&self) -> gst::ClockTime;
+    fn min_upstream_latency(&self) -> gst::ClockTime;
 
-    fn set_property_min_upstream_latency(&self, min_upstream_latency: gst::ClockTime);
+    fn set_min_upstream_latency(&self, min_upstream_latency: gst::ClockTime);
 
     fn connect_property_min_upstream_latency_notify<F: Fn(&Self) + Send + Sync + 'static>(
         &self,
@@ -55,7 +55,7 @@ impl<O: IsA<Aggregator>> AggregatorExtManual for O {
         ret.into_result()
     }
 
-    fn property_min_upstream_latency(&self) -> gst::ClockTime {
+    fn min_upstream_latency(&self) -> gst::ClockTime {
         unsafe {
             let mut value = Value::from_type(<gst::ClockTime as StaticType>::static_type());
             glib::gobject_ffi::g_object_get_property(
@@ -65,12 +65,12 @@ impl<O: IsA<Aggregator>> AggregatorExtManual for O {
             );
             value
                 .get()
-                .expect("AggregatorExtManual::get_property_min_upstream_latency")
+                .expect("AggregatorExtManual::min_upstream_latency")
                 .unwrap()
         }
     }
 
-    fn set_property_min_upstream_latency(&self, min_upstream_latency: gst::ClockTime) {
+    fn set_min_upstream_latency(&self, min_upstream_latency: gst::ClockTime) {
         unsafe {
             glib::gobject_ffi::g_object_set_property(
                 self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,

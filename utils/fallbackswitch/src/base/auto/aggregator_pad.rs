@@ -9,7 +9,6 @@ use glib::signal::connect_raw;
 use glib::signal::SignalHandlerId;
 use glib::translate::*;
 use glib::StaticType;
-use glib::Value;
 use std::boxed::Box as Box_;
 use std::mem::transmute;
 
@@ -37,9 +36,9 @@ pub trait AggregatorPadExt: 'static {
 
     fn pop_buffer(&self) -> Option<gst::Buffer>;
 
-    fn get_property_emit_signals(&self) -> bool;
+    fn emits_signals(&self) -> bool;
 
-    fn set_property_emit_signals(&self, emit_signals: bool);
+    fn set_emit_signals(&self, emit_signals: bool);
 
     fn connect_buffer_consumed<F: Fn(&Self, &gst::Buffer) + Send + Sync + 'static>(
         &self,
@@ -93,9 +92,9 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
         }
     }
 
-    fn get_property_emit_signals(&self) -> bool {
+    fn emits_signals(&self) -> bool {
         unsafe {
-            let mut value = Value::from_type(<bool as StaticType>::static_type());
+            let mut value = glib::Value::from_type(<bool as StaticType>::static_type());
             glib::gobject_ffi::g_object_get_property(
                 self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"emit-signals\0".as_ptr() as *const _,
@@ -108,12 +107,12 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
         }
     }
 
-    fn set_property_emit_signals(&self, emit_signals: bool) {
+    fn set_emit_signals(&self, emit_signals: bool) {
         unsafe {
             glib::gobject_ffi::g_object_set_property(
                 self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"emit-signals\0".as_ptr() as *const _,
-                Value::from(&emit_signals).to_glib_none().0,
+                glib::Value::from(&emit_signals).to_glib_none().0,
             );
         }
     }
@@ -143,7 +142,9 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"buffer-consumed\0".as_ptr() as *const _,
-                Some(transmute(buffer_consumed_trampoline::<Self, F> as usize)),
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    buffer_consumed_trampoline::<Self, F> as *const (),
+                )),
                 Box_::into_raw(f),
             )
         }
@@ -168,8 +169,8 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
             connect_raw(
                 self.as_ptr() as *mut _,
                 b"notify::emit-signals\0".as_ptr() as *const _,
-                Some(transmute(
-                    notify_emit_signals_trampoline::<Self, F> as usize,
+                Some(transmute::<_, unsafe extern "C" fn()>(
+                    notify_emit_signals_trampoline::<Self, F> as *const (),
                 )),
                 Box_::into_raw(f),
             )
