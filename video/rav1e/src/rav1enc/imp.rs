@@ -215,7 +215,7 @@ impl ObjectImpl for Rav1Enc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "speed-preset",
                     "Speed Preset",
                     "Speed preset (10 fastest, 0 slowest)",
@@ -224,14 +224,14 @@ impl ObjectImpl for Rav1Enc {
                     DEFAULT_SPEED_PRESET,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "low-latency",
                     "Low Latency",
                     "Low Latency",
                     DEFAULT_LOW_LATENCY,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "min-key-frame-interval",
                     "Min Key Frame Interval",
                     "Min Key Frame Interval",
@@ -240,7 +240,7 @@ impl ObjectImpl for Rav1Enc {
                     DEFAULT_MIN_KEY_FRAME_INTERVAL,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "max-key-frame-interval",
                     "Max Key Frame Interval",
                     "Max Key Frame Interval",
@@ -249,7 +249,7 @@ impl ObjectImpl for Rav1Enc {
                     DEFAULT_MAX_KEY_FRAME_INTERVAL,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::int(
+                glib::ParamSpec::new_int(
                     "bitrate",
                     "Bitrate",
                     "Bitrate",
@@ -258,7 +258,7 @@ impl ObjectImpl for Rav1Enc {
                     DEFAULT_BITRATE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "quantizer",
                     "Quantizer",
                     "Quantizer",
@@ -267,7 +267,7 @@ impl ObjectImpl for Rav1Enc {
                     DEFAULT_QUANTIZER as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "tile-cols",
                     "Tile Cols",
                     "Tile Cols",
@@ -276,7 +276,7 @@ impl ObjectImpl for Rav1Enc {
                     DEFAULT_TILE_COLS as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "tile-rows",
                     "Tile Rows",
                     "Tile Rows",
@@ -285,7 +285,7 @@ impl ObjectImpl for Rav1Enc {
                     DEFAULT_TILE_ROWS as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "tiles",
                     "Tiles",
                     "Tiles",
@@ -294,7 +294,7 @@ impl ObjectImpl for Rav1Enc {
                     DEFAULT_TILES as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "threads",
                     "Threads",
                     "Threads",

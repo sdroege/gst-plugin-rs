@@ -225,7 +225,7 @@ impl ObjectImpl for CCDetect {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "window",
                     "Window",
                     "Window of time (in ns) to determine if captions exist in the stream",
@@ -234,14 +234,14 @@ impl ObjectImpl for CCDetect {
                     DEFAULT_WINDOW,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "cc608",
                     "cc608",
                     "Whether CEA608 captions (CC1/CC3) have been detected",
                     DEFAULT_CC608,
                     glib::ParamFlags::READABLE,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "cc708",
                     "cc608",
                     "Whether CEA708 captions (cc_data) have been detected",

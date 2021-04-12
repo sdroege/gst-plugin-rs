@@ -413,14 +413,14 @@ impl ObjectImpl for InputSelector {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "context",
                     "Context",
                     "Context name to share threads with",
                     Some(DEFAULT_CONTEXT),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "context-wait",
                     "Context Wait",
                     "Throttle poll loop to run at most once every this many ms",
@@ -429,7 +429,7 @@ impl ObjectImpl for InputSelector {
                     DEFAULT_CONTEXT_WAIT,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::object(
+                glib::ParamSpec::new_object(
                     "active-pad",
                     "Active Pad",
                     "Currently active pad",

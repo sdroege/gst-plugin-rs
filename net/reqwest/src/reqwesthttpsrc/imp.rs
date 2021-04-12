@@ -579,42 +579,42 @@ impl ObjectImpl for ReqwestHttpSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "location",
                     "Location",
                     "URL to read from",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "user-agent",
                     "User-Agent",
                     "Value of the User-Agent HTTP request header field",
                     DEFAULT_USER_AGENT.into(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "is-live",
                     "Is Live",
                     "Act like a live source",
                     DEFAULT_IS_LIVE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "user-id",
                     "User-id",
                     "HTTP location URI user id for authentication",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "user-pw",
                     "User-pw",
                     "HTTP location URI user password for authentication",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "timeout",
                     "Timeout",
                     "Value in seconds to timeout a blocking I/O (0 = No timeout).",
@@ -623,35 +623,35 @@ impl ObjectImpl for ReqwestHttpSrc {
                     DEFAULT_TIMEOUT,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "compress",
                     "Compress",
                     "Allow compressed content encodings",
                     DEFAULT_COMPRESS,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boxed(
+                glib::ParamSpec::new_boxed(
                     "extra-headers",
                     "Extra Headers",
                     "Extra headers to append to the HTTP request",
                     gst::Structure::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boxed(
+                glib::ParamSpec::new_boxed(
                     "cookies",
                     "Cookies",
                     "HTTP request cookies",
                     Vec::<String>::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "iradio-mode",
                     "I-Radio Mode",
                     "Enable internet radio mode (ask server to send shoutcast/icecast metadata interleaved with the actual stream data",
                     DEFAULT_IRADIO_MODE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "keep-alive",
                     "Keep Alive",
                     "Use HTTP persistent connections",

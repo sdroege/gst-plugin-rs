@@ -147,7 +147,7 @@ impl ObjectImpl for EbuR128Level {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::flags(
+                glib::ParamSpec::new_flags(
                     "mode",
                     "Mode",
                     "Selection of metrics to calculate",
@@ -155,14 +155,14 @@ impl ObjectImpl for EbuR128Level {
                     DEFAULT_MODE.bits() as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "post-messages",
                     "Post Messages",
                     "Whether to post messages on the bus for each interval",
                     DEFAULT_POST_MESSAGES,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "interval",
                     "Interval",
                     "Interval in nanoseconds for posting messages",

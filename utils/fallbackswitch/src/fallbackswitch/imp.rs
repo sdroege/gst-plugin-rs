@@ -670,7 +670,7 @@ impl ObjectImpl for FallbackSwitch {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "timeout",
                     "Timeout",
                     "Timeout in nanoseconds",
@@ -679,21 +679,21 @@ impl ObjectImpl for FallbackSwitch {
                     DEFAULT_TIMEOUT,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::object(
+                glib::ParamSpec::new_object(
                     "active-pad",
                     "Active Pad",
                     "Currently active pad. Writes are ignored if auto-switch=true",
                     gst::Pad::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "auto-switch",
                     "Automatically switch pads",
                     "Automatically switch pads (If true, prefer primary sink, otherwise manual selection via the active-pad property)",
                     DEFAULT_AUTO_SWITCH,
                     glib::ParamFlags::READWRITE| gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::enum_(
+                glib::ParamSpec::new_enum(
                     "primary-health",
                     "Primary stream state",
                     "Reports the health of the primary stream on the sink pad",
@@ -701,7 +701,7 @@ impl ObjectImpl for FallbackSwitch {
                     DEFAULT_STREAM_HEALTH as i32,
                     glib::ParamFlags::READABLE,
                 ),
-                glib::ParamSpec::enum_(
+                glib::ParamSpec::new_enum(
                     "fallback-health",
                     "Fallback stream state",
                     "Reports the health of the fallback stream on the fallback_sink pad",

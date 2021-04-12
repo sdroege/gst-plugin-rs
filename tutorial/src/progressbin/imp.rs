@@ -82,7 +82,7 @@ impl ObjectImpl for ProgressBin {
     // Metadata for the element's properties
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::enum_(
+            vec![glib::ParamSpec::new_enum(
                 "output",
                 "Output",
                 "Defines the output type of the progressbin",

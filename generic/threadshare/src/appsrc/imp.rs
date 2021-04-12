@@ -529,14 +529,14 @@ impl ObjectImpl for AppSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "context",
                     "Context",
                     "Context name to share threads with",
                     Some(DEFAULT_CONTEXT),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "context-wait",
                     "Context Wait",
                     "Throttle poll loop to run at most once every this many ms",
@@ -545,7 +545,7 @@ impl ObjectImpl for AppSrc {
                     DEFAULT_CONTEXT_WAIT,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "max-buffers",
                     "Max Buffers",
                     "Maximum number of buffers to queue up",
@@ -554,14 +554,14 @@ impl ObjectImpl for AppSrc {
                     DEFAULT_MAX_BUFFERS,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::boxed(
+                glib::ParamSpec::new_boxed(
                     "caps",
                     "Caps",
                     "Caps to use",
                     gst::Caps::static_type(),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "do-timestamp",
                     "Do Timestamp",
                     "Timestamp buffers with the current running time on arrival",

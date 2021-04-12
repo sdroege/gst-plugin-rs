@@ -1362,14 +1362,14 @@ impl ObjectImpl for JitterBuffer {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "context",
                     "Context",
                     "Context name to share threads with",
                     Some(DEFAULT_CONTEXT),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "context-wait",
                     "Context Wait",
                     "Throttle poll loop to run at most once every this many ms",
@@ -1378,7 +1378,7 @@ impl ObjectImpl for JitterBuffer {
                     DEFAULT_CONTEXT_WAIT,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "latency",
                     "Buffer latency in ms",
                     "Amount of ms to buffer",
@@ -1387,14 +1387,14 @@ impl ObjectImpl for JitterBuffer {
                     DEFAULT_LATENCY_MS,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "do-lost",
                     "Do Lost",
                     "Send an event downstream when a packet is lost",
                     DEFAULT_DO_LOST,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "max-dropout-time",
                     "Max dropout time",
                     "The maximum time (milliseconds) of missing packets tolerated.",
@@ -1403,7 +1403,7 @@ impl ObjectImpl for JitterBuffer {
                     DEFAULT_MAX_DROPOUT_TIME,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "max-misorder-time",
                     "Max misorder time",
                     "The maximum time (milliseconds) of misordered packets tolerated.",
@@ -1412,7 +1412,7 @@ impl ObjectImpl for JitterBuffer {
                     DEFAULT_MAX_MISORDER_TIME,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::boxed(
+                glib::ParamSpec::new_boxed(
                     "stats",
                     "Statistics",
                     "Various statistics",

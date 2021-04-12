@@ -1754,7 +1754,7 @@ impl ObjectImpl for AudioLoudNorm {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::double(
+                glib::ParamSpec::new_double(
                     "loudness-target",
                     "Loudness Target",
                     "Loudness target in LUFS",
@@ -1763,7 +1763,7 @@ impl ObjectImpl for AudioLoudNorm {
                     DEFAULT_LOUDNESS_TARGET,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::double(
+                glib::ParamSpec::new_double(
                     "loudness-range-target",
                     "Loudness Range Target",
                     "Loudness range target in LU",
@@ -1772,7 +1772,7 @@ impl ObjectImpl for AudioLoudNorm {
                     DEFAULT_LOUDNESS_RANGE_TARGET,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::double(
+                glib::ParamSpec::new_double(
                     "max-true-peak",
                     "Maximum True Peak",
                     "Maximum True Peak in dbTP",
@@ -1781,7 +1781,7 @@ impl ObjectImpl for AudioLoudNorm {
                     DEFAULT_MAX_TRUE_PEAK,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::double(
+                glib::ParamSpec::new_double(
                     "offset",
                     "Offset Gain",
                     "Offset Gain in LU",

@@ -213,7 +213,7 @@ impl ObjectSubclass for S3Src {
 impl ObjectImpl for S3Src {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::string(
+            vec![glib::ParamSpec::new_string(
                 "uri",
                 "URI",
                 "The S3 object URI",

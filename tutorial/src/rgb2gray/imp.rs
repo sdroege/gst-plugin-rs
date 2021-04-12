@@ -103,14 +103,14 @@ impl ObjectImpl for Rgb2Gray {
         // Metadata for the properties
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "invert",
                     "Invert",
                     "Invert grayscale output",
                     DEFAULT_INVERT,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "shift",
                     "Shift",
                     "Shift grayscale output (wrapping around)",

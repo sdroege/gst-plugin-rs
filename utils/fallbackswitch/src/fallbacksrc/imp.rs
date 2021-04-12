@@ -188,36 +188,36 @@ impl ObjectImpl for FallbackSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "enable-audio",
                     "Enable Audio",
                     "Enable the audio stream, this will output silence if there's no audio in the configured URI",
                     true,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "enable-video",
                     "Enable Video",
                     "Enable the video stream, this will output black or the fallback video if there's no video in the configured URI",
                     true,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::string("uri", "URI", "URI to use", None, glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY),
-                glib::ParamSpec::object(
+                glib::ParamSpec::new_string("uri", "URI", "URI to use", None, glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY),
+                glib::ParamSpec::new_object(
                     "source",
                     "Source",
                     "Source to use instead of the URI",
                     gst::Element::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "fallback-uri",
                     "Fallback URI",
                     "Fallback URI to use for video in case the main stream doesn't work",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "timeout",
                     "Timeout",
                     "Timeout for switching to the fallback URI",
@@ -226,7 +226,7 @@ impl ObjectImpl for FallbackSrc {
                     5 * gst::SECOND_VAL,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "restart-timeout",
                     "Timeout",
                     "Timeout for restarting an active source",
@@ -235,7 +235,7 @@ impl ObjectImpl for FallbackSrc {
                     5 * gst::SECOND_VAL,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "retry-timeout",
                     "Retry Timeout",
                     "Timeout for stopping after repeated failure",
@@ -244,14 +244,14 @@ impl ObjectImpl for FallbackSrc {
                     60 * gst::SECOND_VAL,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "restart-on-eos",
                     "Restart on EOS",
                     "Restart source on EOS",
                     false,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::enum_(
+                glib::ParamSpec::new_enum(
                     "status",
                     "Status",
                     "Current source status",
@@ -259,7 +259,7 @@ impl ObjectImpl for FallbackSrc {
                     Status::Stopped as i32,
                     glib::ParamFlags::READABLE,
                 ),
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "min-latency",
                     "Minimum Latency",
                     "When the main source has a higher latency than the fallback source \
@@ -270,7 +270,7 @@ impl ObjectImpl for FallbackSrc {
                     0,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::int64(
+                glib::ParamSpec::new_int64(
                     "buffer-duration",
                     "Buffer Duration",
                     "Buffer duration when buffering streams (-1 default value)",
@@ -279,7 +279,7 @@ impl ObjectImpl for FallbackSrc {
                     -1,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boxed(
+                glib::ParamSpec::new_boxed(
                     "statistics",
                     "Statistics",
                     "Various statistics",

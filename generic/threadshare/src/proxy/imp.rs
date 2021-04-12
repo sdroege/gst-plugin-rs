@@ -590,7 +590,7 @@ impl ObjectSubclass for ProxySink {
 impl ObjectImpl for ProxySink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::string(
+            vec![glib::ParamSpec::new_string(
                 "proxy-context",
                 "Proxy Context",
                 "Context name of the proxy to share with",
@@ -1130,14 +1130,14 @@ impl ObjectImpl for ProxySrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "context",
                     "Context",
                     "Context name to share threads with",
                     Some(DEFAULT_CONTEXT),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "context-wait",
                     "Context Wait",
                     "Throttle poll loop to run at most once every this many ms",
@@ -1146,14 +1146,14 @@ impl ObjectImpl for ProxySrc {
                     DEFAULT_CONTEXT_WAIT,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "proxy-context",
                     "Proxy Context",
                     "Context name of the proxy to share with",
                     Some(DEFAULT_PROXY_CONTEXT),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "max-size-buffers",
                     "Max Size Buffers",
                     "Maximum number of buffers to queue (0=unlimited)",
@@ -1162,7 +1162,7 @@ impl ObjectImpl for ProxySrc {
                     DEFAULT_MAX_SIZE_BUFFERS,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "max-size-bytes",
                     "Max Size Bytes",
                     "Maximum number of bytes to queue (0=unlimited)",
@@ -1171,7 +1171,7 @@ impl ObjectImpl for ProxySrc {
                     DEFAULT_MAX_SIZE_BYTES,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "max-size-time",
                     "Max Size Time",
                     "Maximum number of nanoseconds to queue (0=unlimited)",

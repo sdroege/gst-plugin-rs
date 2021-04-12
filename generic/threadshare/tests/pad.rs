@@ -323,7 +323,7 @@ mod imp_src {
     impl ObjectImpl for ElementSrcTest {
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-                vec![glib::ParamSpec::string(
+                vec![glib::ParamSpec::new_string(
                     "context",
                     "Context",
                     "Context name to share threads with",
@@ -653,7 +653,7 @@ mod imp_sink {
     impl ObjectImpl for ElementSinkTest {
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-                vec![glib::ParamSpec::boxed(
+                vec![glib::ParamSpec::new_boxed(
                     "sender",
                     "Sender",
                     "Channel sender to forward the incoming items to",

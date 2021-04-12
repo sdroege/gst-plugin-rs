@@ -159,7 +159,7 @@ impl ObjectImpl for RegEx {
                 "commands",
                 "Commands",
                 "A set of commands to apply on input text",
-                &glib::ParamSpec::boxed(
+                &glib::ParamSpec::new_boxed(
                     "command",
                     "Command",
                     "A command to apply on input text",

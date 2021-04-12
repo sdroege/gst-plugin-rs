@@ -140,7 +140,7 @@ impl ObjectSubclass for GifEnc {
 impl ObjectImpl for GifEnc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::int(
+            vec![glib::ParamSpec::new_int(
                 "repeat",
                 "Repeat",
                 "Repeat (-1 to loop forever, 0 .. n finite repetitions)",

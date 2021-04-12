@@ -64,7 +64,7 @@ impl ObjectSubclass for CustomSource {
 impl ObjectImpl for CustomSource {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::object(
+            vec![glib::ParamSpec::new_object(
                 "source",
                 "Source",
                 "Source",
@@ -182,7 +182,7 @@ impl CustomSource {
 
         if templates
             .iter()
-            .any(|templ| templ.property_presence() == gst::PadPresence::Request)
+            .any(|templ| templ.presence() == gst::PadPresence::Request)
         {
             gst_error!(CAT, obj: element, "Request pads not supported");
             gst::element_error!(
@@ -195,7 +195,7 @@ impl CustomSource {
 
         let has_sometimes_pads = templates
             .iter()
-            .any(|templ| templ.property_presence() == gst::PadPresence::Sometimes);
+            .any(|templ| templ.presence() == gst::PadPresence::Sometimes);
 
         // Handle all source pads that already exist
         for pad in source.src_pads() {

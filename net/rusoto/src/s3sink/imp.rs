@@ -352,28 +352,28 @@ impl ObjectImpl for S3Sink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "bucket",
                     "S3 Bucket",
                     "The bucket of the file to write",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "key",
                     "S3 Key",
                     "The key of the file to write",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "region",
                     "AWS Region",
                     "An AWS region (e.g. eu-west-2).",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint64(
+                glib::ParamSpec::new_uint64(
                     "part-size",
                     "Part size",
                     "A size (in bytes) of an individual part used for multipart upload.",

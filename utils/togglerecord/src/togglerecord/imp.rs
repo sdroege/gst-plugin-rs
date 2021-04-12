@@ -218,15 +218,15 @@ impl HandleData for (gst::ClockTime, gst::ClockTime) {
 
 impl HandleData for gst::Buffer {
     fn pts(&self) -> gst::ClockTime {
-        gst::BufferRef::get_pts(self)
+        gst::BufferRef::pts(self)
     }
 
     fn dts(&self) -> gst::ClockTime {
-        gst::BufferRef::get_dts(self)
+        gst::BufferRef::dts(self)
     }
 
     fn get_duration(&self, state: &StreamState) -> gst::ClockTime {
-        let duration = gst::BufferRef::get_duration(self);
+        let duration = gst::BufferRef::duration(self);
 
         if duration.is_some() {
             duration
@@ -257,7 +257,7 @@ impl HandleData for gst::Buffer {
     }
 
     fn is_keyframe(&self) -> bool {
-        !gst::BufferRef::get_flags(self).contains(gst::BufferFlags::DELTA_UNIT)
+        !gst::BufferRef::flags(self).contains(gst::BufferFlags::DELTA_UNIT)
     }
 
     fn can_clip(&self, state: &StreamState) -> bool {
@@ -294,7 +294,7 @@ impl HandleData for gst::Buffer {
             return Some(self);
         }
 
-        let pts = HandleData::get_pts(&self);
+        let pts = HandleData::pts(&self);
         let duration = HandleData::get_duration(&self, state);
         let stop = if duration.is_some() {
             pts + duration
@@ -1698,14 +1698,14 @@ impl ObjectImpl for ToggleRecord {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "record",
                     "Record",
                     "Enable/disable recording",
                     DEFAULT_RECORD,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "recording",
                     "Recording",
                     "Whether recording is currently taking place",

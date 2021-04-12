@@ -1015,7 +1015,7 @@ impl ObjectImpl for Transcriber {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "language-code",
                     "Language Code",
                     "The Language of the Stream, see \
@@ -1024,14 +1024,14 @@ impl ObjectImpl for Transcriber {
                     Some("en-US"),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "use-partial-results",
                     "Latency",
                     "Whether partial results from AWS should be used",
                     DEFAULT_USE_PARTIAL_RESULTS,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "latency",
                     "Latency",
                     "Amount of milliseconds to allow AWS transcribe",
@@ -1040,7 +1040,7 @@ impl ObjectImpl for Transcriber {
                     DEFAULT_LATENCY_MS,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::string(
+                glib::ParamSpec::new_string(
                     "vocabulary-name",
                     "Vocabulary Name",
                     "The name of a custom vocabulary, see \

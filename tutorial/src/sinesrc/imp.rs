@@ -166,7 +166,7 @@ impl ObjectImpl for SineSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "samples-per-buffer",
                     "Samples Per Buffer",
                     "Number of samples per output buffer",
@@ -175,7 +175,7 @@ impl ObjectImpl for SineSrc {
                     DEFAULT_SAMPLES_PER_BUFFER,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::uint(
+                glib::ParamSpec::new_uint(
                     "freq",
                     "Frequency",
                     "Frequency",
@@ -184,7 +184,7 @@ impl ObjectImpl for SineSrc {
                     DEFAULT_FREQ,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::double(
+                glib::ParamSpec::new_double(
                     "volume",
                     "Volume",
                     "Output volume",
@@ -193,14 +193,14 @@ impl ObjectImpl for SineSrc {
                     DEFAULT_VOLUME,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "mute",
                     "Mute",
                     "Mute",
                     DEFAULT_MUTE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::boolean(
+                glib::ParamSpec::new_boolean(
                     "is-live",
                     "Is Live",
                     "(Pseudo) live output",

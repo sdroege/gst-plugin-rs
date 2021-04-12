@@ -147,7 +147,7 @@ fn create_ui(app: &gtk::Application) {
             None => return,
         };
 
-        let drop = drop_button.active();
+        let drop = drop_button.is_active();
         if drop {
             let mut drop_id = drop_id.borrow_mut();
             if drop_id.is_none() {

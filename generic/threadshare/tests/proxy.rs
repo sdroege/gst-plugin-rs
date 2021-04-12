@@ -121,8 +121,8 @@ fn test_from_pipeline_to_pipeline() {
     pipe_1.set_state(gst::State::Paused).unwrap();
     pipe_2.set_state(gst::State::Paused).unwrap();
 
-    let _ = pipe_1.state(gst::CLOCK_TIME_NONE);
-    let _ = pipe_2.state(gst::CLOCK_TIME_NONE);
+    let _ = pipe_1.get_state(gst::CLOCK_TIME_NONE);
+    let _ = pipe_2.get_state(gst::CLOCK_TIME_NONE);
 
     pipe_1.set_state(gst::State::Null).unwrap();
 

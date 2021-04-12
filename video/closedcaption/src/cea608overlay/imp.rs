@@ -578,7 +578,7 @@ impl ObjectSubclass for Cea608Overlay {
 impl ObjectImpl for Cea608Overlay {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::int(
+            vec![glib::ParamSpec::new_int(
                 "field",
                 "Field",
                 "The field to render the caption for when available, (-1=automatic)",

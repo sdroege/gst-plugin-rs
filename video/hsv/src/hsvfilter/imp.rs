@@ -81,7 +81,7 @@ impl ObjectImpl for HsvFilter {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::float(
+                glib::ParamSpec::new_float(
                     "hue-shift",
                     "Hue shift",
                     "Hue shifting in degrees",
@@ -90,7 +90,7 @@ impl ObjectImpl for HsvFilter {
                     DEFAULT_HUE_SHIFT,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::float(
+                glib::ParamSpec::new_float(
                     "saturation-mul",
                     "Saturation multiplier",
                     "Saturation multiplier to apply to the saturation value (before offset)",
@@ -99,7 +99,7 @@ impl ObjectImpl for HsvFilter {
                     DEFAULT_SATURATION_MUL,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::float(
+                glib::ParamSpec::new_float(
                     "saturation-off",
                     "Saturation offset",
                     "Saturation offset to add to the saturation value (after multiplier)",
@@ -108,7 +108,7 @@ impl ObjectImpl for HsvFilter {
                     DEFAULT_SATURATION_OFF,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::float(
+                glib::ParamSpec::new_float(
                     "value-mul",
                     "Value multiplier",
                     "Value multiplier to apply to the value (before offset)",
@@ -117,7 +117,7 @@ impl ObjectImpl for HsvFilter {
                     DEFAULT_VALUE_MUL,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::float(
+                glib::ParamSpec::new_float(
                     "value-off",
                     "Value offset",
                     "Value offset to add to the value (after multiplier)",
