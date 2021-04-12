@@ -161,7 +161,7 @@ impl ObjectImpl for GifEnc {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "repeat" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.repeat = value.get_some().expect("type checked upstream");
@@ -171,7 +171,7 @@ impl ObjectImpl for GifEnc {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "repeat" => {
                 let settings = self.settings.lock().unwrap();
                 settings.repeat.to_value()
@@ -260,7 +260,7 @@ impl VideoEncoderImpl for GifEnc {
         self.flush_encoder(element)
             .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
 
-        let video_info = state.get_info();
+        let video_info = state.info();
         gst_debug!(CAT, obj: element, "Setting format {:?}", video_info);
 
         {
@@ -296,12 +296,10 @@ impl VideoEncoderImpl for GifEnc {
             CAT,
             obj: element,
             "Sending frame {}",
-            frame.get_system_frame_number()
+            frame.system_frame_number()
         );
 
-        let input_buffer = frame
-            .get_input_buffer()
-            .expect("frame without input buffer");
+        let input_buffer = frame.input_buffer().expect("frame without input buffer");
 
         {
             let in_frame = gst_video::VideoFrameRef::from_buffer_ref_readable(
@@ -323,12 +321,12 @@ impl VideoEncoderImpl for GifEnc {
             // Calculate delay to new frame by calculating the difference between the current actual
             // presentation timestamp of the last frame within the gif, and the pts of the new frame.
             // This results in variable frame delays in the gif - but an overall constant fps.
-            state.last_actual_pts = in_frame.buffer().get_pts();
+            state.last_actual_pts = in_frame.buffer().pts();
             if state.gif_pts.is_none() {
                 // First frame: use pts of first input frame as origin
-                state.gif_pts = Some(in_frame.buffer().get_pts());
+                state.gif_pts = Some(in_frame.buffer().pts());
             }
-            let frame_delay = in_frame.buffer().get_pts() - state.gif_pts.unwrap();
+            let frame_delay = in_frame.buffer().pts() - state.gif_pts.unwrap();
             if frame_delay.is_none() {
                 gst::element_error!(
                     element,

@@ -261,7 +261,7 @@ impl ObjectImpl for CCDetect {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "window" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.window = value.get_some().expect("type checked upstream");
@@ -271,7 +271,7 @@ impl ObjectImpl for CCDetect {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "window" => {
                 let settings = self.settings.lock().unwrap();
                 settings.window.to_value()
@@ -350,7 +350,7 @@ impl BaseTransformImpl for CCDetect {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let map = buf.map_readable().map_err(|_| gst::FlowError::Error)?;
 
-        if buf.get_pts().is_none() {
+        if buf.pts().is_none() {
             gst::element_error!(
                 element,
                 gst::ResourceError::Read,
@@ -377,7 +377,7 @@ impl BaseTransformImpl for CCDetect {
             }
         };
 
-        self.maybe_update_properties(element, buf.get_pts(), cc_packet)
+        self.maybe_update_properties(element, buf.pts(), cc_packet)
             .map_err(|_| gst::FlowError::Error)?;
 
         Ok(gst::FlowSuccess::Ok)

@@ -34,7 +34,7 @@ fn test_client_management() {
     init();
 
     let h = gst_check::Harness::new("ts-udpsink");
-    let udpsink = h.get_element().unwrap();
+    let udpsink = h.element().unwrap();
 
     let clients = udpsink
         .get_property("clients")
@@ -132,7 +132,7 @@ fn test_chain() {
     let mut h = gst_check::Harness::new("ts-udpsink");
     h.set_src_caps_str(&"foo/bar");
     {
-        let udpsink = h.get_element().unwrap();
+        let udpsink = h.element().unwrap();
         udpsink.set_property("clients", &"127.0.0.1:5005").unwrap();
     }
 

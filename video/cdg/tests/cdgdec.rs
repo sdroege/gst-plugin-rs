@@ -66,7 +66,7 @@ fn test_cdgdec() {
             .new_sample(move |appsink| {
                 // Pull the sample in question out of the appsink's buffer.
                 let sample = appsink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
-                let buffer = sample.get_buffer().ok_or(gst::FlowError::Error)?;
+                let buffer = sample.buffer().ok_or(gst::FlowError::Error)?;
                 let map = buffer.map_readable().map_err(|_| gst::FlowError::Error)?;
 
                 // First frame fully blue
@@ -83,17 +83,17 @@ fn test_cdgdec() {
         .set_state(gst::State::Playing)
         .expect("Unable to set the pipeline to the `Playing` state");
 
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     for msg in bus.iter_timed(gst::CLOCK_TIME_NONE) {
         use gst::MessageView;
         match msg.view() {
             MessageView::Error(err) => {
                 eprintln!(
                     "Error received from element {:?}: {}",
-                    err.get_src().map(|s| s.get_path_string()),
-                    err.get_error()
+                    err.src().map(|s| s.path_string()),
+                    err.error()
                 );
-                eprintln!("Debugging information: {:?}", err.get_debug());
+                eprintln!("Debugging information: {:?}", err.debug());
                 unreachable!();
             }
             MessageView::Eos(..) => break,

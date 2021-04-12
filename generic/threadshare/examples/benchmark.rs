@@ -167,7 +167,7 @@ fn main() {
         source.link(&sink).unwrap();
     }
 
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     let l_clone = l.clone();
     bus.add_watch(move |_, msg| {
         use gst::MessageView;
@@ -177,9 +177,9 @@ fn main() {
             MessageView::Error(err) => {
                 println!(
                     "Error from {:?}: {} ({:?})",
-                    err.get_src().map(|s| s.get_path_string()),
-                    err.get_error(),
-                    err.get_debug()
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
                 );
                 l_clone.quit();
             }

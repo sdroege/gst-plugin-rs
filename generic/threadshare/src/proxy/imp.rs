@@ -456,9 +456,7 @@ impl ProxySink {
                     let pending_queue = shared_ctx.pending_queue.as_mut().unwrap();
 
                     let schedule_now = match item {
-                        DataQueueItem::Event(ref ev) if ev.get_type() != gst::EventType::Eos => {
-                            false
-                        }
+                        DataQueueItem::Event(ref ev) if ev.type_() != gst::EventType::Eos => false,
                         _ => true,
                     };
 
@@ -612,7 +610,7 @@ impl ObjectImpl for ProxySink {
         pspec: &glib::ParamSpec,
     ) {
         let mut settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "proxy-context" => {
                 settings.proxy_context = value
                     .get()
@@ -625,7 +623,7 @@ impl ObjectImpl for ProxySink {
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "proxy-context" => settings.proxy_context.to_value(),
             _ => unimplemented!(),
         }
@@ -823,12 +821,12 @@ impl PadSrcHandler for ProxySrcPadHandler {
                 true
             }
             QueryView::Caps(ref mut q) => {
-                let caps = if let Some(ref caps) = pad.gst_pad().get_current_caps() {
-                    q.get_filter()
+                let caps = if let Some(ref caps) = pad.gst_pad().current_caps() {
+                    q.filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
                 } else {
-                    q.get_filter()
+                    q.filter()
                         .map(|f| f.to_owned())
                         .unwrap_or_else(gst::Caps::new_any)
                 };
@@ -1196,7 +1194,7 @@ impl ObjectImpl for ProxySrc {
         pspec: &glib::ParamSpec,
     ) {
         let mut settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "max-size-buffers" => {
                 settings.max_size_buffers = value.get_some().expect("type checked upstream");
             }
@@ -1227,7 +1225,7 @@ impl ObjectImpl for ProxySrc {
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "max-size-buffers" => settings.max_size_buffers.to_value(),
             "max-size-bytes" => settings.max_size_bytes.to_value(),
             "max-size-time" => settings.max_size_time.to_value(),

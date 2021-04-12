@@ -38,7 +38,7 @@ fn test_columns() {
     let mut h = gst_check::Harness::new("textwrap");
 
     {
-        let wrap = h.get_element().expect("Could not create textwrap");
+        let wrap = h.element().expect("Could not create textwrap");
         wrap.set_property("columns", &5u32).unwrap();
     }
 
@@ -56,8 +56,8 @@ fn test_columns() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
 
-    assert_eq!(buf.get_pts(), 0.into());
-    assert_eq!(buf.get_duration(), 2 * gst::SECOND);
+    assert_eq!(buf.pts(), 0.into());
+    assert_eq!(buf.duration(), 2 * gst::SECOND);
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
 
@@ -76,7 +76,7 @@ fn test_lines() {
     let mut h = gst_check::Harness::new("textwrap");
 
     {
-        let wrap = h.get_element().expect("Could not create textwrap");
+        let wrap = h.element().expect("Could not create textwrap");
         wrap.set_property("columns", &5u32).unwrap();
         wrap.set_property("lines", &2u32).unwrap();
     }
@@ -95,8 +95,8 @@ fn test_lines() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
 
-    assert_eq!(buf.get_pts(), 0.into());
-    assert_eq!(buf.get_duration(), gst::SECOND);
+    assert_eq!(buf.pts(), 0.into());
+    assert_eq!(buf.duration(), gst::SECOND);
 
     let expected_output = "Split\nthis";
 
@@ -109,8 +109,8 @@ fn test_lines() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
 
-    assert_eq!(buf.get_pts(), gst::SECOND);
-    assert_eq!(buf.get_duration(), gst::SECOND);
+    assert_eq!(buf.pts(), gst::SECOND);
+    assert_eq!(buf.duration(), gst::SECOND);
 
     let expected_output = "text\nup";
 

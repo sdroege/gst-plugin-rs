@@ -112,7 +112,7 @@ impl RTPJitterBufferItem {
         }
     }
 
-    pub fn get_dts(&self) -> gst::ClockTime {
+    pub fn dts(&self) -> gst::ClockTime {
         unsafe {
             let item = self.0.as_ref().expect("Invalid wrapper");
             if item.as_ref().dts == gst::ffi::GST_CLOCK_TIME_NONE {
@@ -123,7 +123,7 @@ impl RTPJitterBufferItem {
         }
     }
 
-    pub fn get_pts(&self) -> gst::ClockTime {
+    pub fn pts(&self) -> gst::ClockTime {
         unsafe {
             let item = self.0.as_ref().expect("Invalid wrapper");
             if item.as_ref().pts == gst::ffi::GST_CLOCK_TIME_NONE {
@@ -134,7 +134,7 @@ impl RTPJitterBufferItem {
         }
     }
 
-    pub fn get_seqnum(&self) -> Option<u16> {
+    pub fn seqnum(&self) -> Option<u16> {
         unsafe {
             let item = self.0.as_ref().expect("Invalid wrapper");
             if item.as_ref().seqnum == std::u32::MAX {
@@ -146,7 +146,7 @@ impl RTPJitterBufferItem {
     }
 
     #[allow(dead_code)]
-    pub fn get_rtptime(&self) -> u32 {
+    pub fn rtptime(&self) -> u32 {
         unsafe {
             let item = self.0.as_ref().expect("Invalid wrapper");
             item.as_ref().rtptime
@@ -223,7 +223,7 @@ impl RTPJitterBuffer {
     }
 
     #[allow(dead_code)]
-    pub fn get_mode(&self) -> RTPJitterBufferMode {
+    pub fn mode(&self) -> RTPJitterBufferMode {
         unsafe { from_glib(ffi::rtp_jitter_buffer_get_mode(self.to_glib_none().0)) }
     }
 
@@ -233,7 +233,7 @@ impl RTPJitterBuffer {
     }
 
     #[allow(dead_code)]
-    pub fn get_delay(&self) -> gst::ClockTime {
+    pub fn delay(&self) -> gst::ClockTime {
         unsafe { from_glib(ffi::rtp_jitter_buffer_get_delay(self.to_glib_none().0)) }
     }
 
@@ -246,7 +246,7 @@ impl RTPJitterBuffer {
     }
 
     #[allow(dead_code)]
-    pub fn get_clock_rate(&self) -> u32 {
+    pub fn clock_rate(&self) -> u32 {
         unsafe { ffi::rtp_jitter_buffer_get_clock_rate(self.to_glib_none().0) }
     }
 

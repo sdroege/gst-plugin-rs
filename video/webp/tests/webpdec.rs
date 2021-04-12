@@ -45,8 +45,8 @@ fn test_decode() {
     let expected_duration: gst::ClockTime = 40_000_000.into();
 
     while let Some(buf) = h.try_pull() {
-        assert_eq!(buf.get_pts(), expected_timestamp);
-        assert_eq!(buf.get_duration(), expected_duration);
+        assert_eq!(buf.pts(), expected_timestamp);
+        assert_eq!(buf.duration(), expected_duration);
 
         expected_timestamp += expected_duration;
         count += 1;
@@ -55,9 +55,9 @@ fn test_decode() {
     assert_eq!(count, 10);
 
     let caps = h
-        .get_sinkpad()
+        .sinkpad()
         .expect("harness has no sinkpad")
-        .get_current_caps()
+        .current_caps()
         .expect("pad has no caps");
     assert_eq!(
         caps,

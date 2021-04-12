@@ -212,7 +212,7 @@ impl Transcriber {
             let latency: gst::ClockTime = (self.settings.lock().unwrap().latency_ms as u64
                 - (2 * GRANULARITY_MS) as u64)
                 * gst::MSECOND;
-            let now = element.get_current_running_time();
+            let now = element.current_running_time();
 
             if let Some(alternative) = state.partial_alternative.take() {
                 self.enqueue(element, &mut state, &alternative, true, latency, now);
@@ -221,7 +221,7 @@ impl Transcriber {
             let send_eos = state.send_eos && state.buffers.is_empty();
 
             while let Some(buf) = state.buffers.front() {
-                if now - buf.get_pts() > latency {
+                if now - buf.pts() > latency {
                     /* Safe unwrap, we know we have an item */
                     let buf = state.buffers.pop_front().unwrap();
                     items.push(buf);
@@ -233,7 +233,7 @@ impl Transcriber {
             (
                 latency,
                 now,
-                state.out_segment.get_position(),
+                state.out_segment.position(),
                 send_eos,
                 state.seqnum,
             )
@@ -249,31 +249,25 @@ impl Transcriber {
         }
 
         for mut buf in items.drain(..) {
-            if buf.get_pts() > last_position {
-                let gap_event =
-                    gst::event::Gap::builder(last_position, buf.get_pts() - last_position)
-                        .seqnum(seqnum)
-                        .build();
-                gst_debug!(
-                    CAT,
-                    "Pushing gap:    {} -> {}",
-                    last_position,
-                    buf.get_pts()
-                );
+            if buf.pts() > last_position {
+                let gap_event = gst::event::Gap::builder(last_position, buf.pts() - last_position)
+                    .seqnum(seqnum)
+                    .build();
+                gst_debug!(CAT, "Pushing gap:    {} -> {}", last_position, buf.pts());
                 if !self.srcpad.push_event(gap_event) {
                     return false;
                 }
             }
-            last_position = buf.get_pts() + buf.get_duration();
+            last_position = buf.pts() + buf.duration();
             {
                 let buf = buf.get_mut().unwrap();
-                buf.set_pts(buf.get_pts());
+                buf.set_pts(buf.pts());
             }
             gst_debug!(
                 CAT,
                 "Pushing buffer: {} -> {}",
-                buf.get_pts(),
-                buf.get_pts() + buf.get_duration()
+                buf.pts(),
+                buf.pts() + buf.duration()
             );
             if self.srcpad.push(buf).is_err() {
                 return false;
@@ -341,15 +335,15 @@ impl Transcriber {
                         state.discont = false;
                     }
 
-                    if start_time < state.out_segment.get_position() {
+                    if start_time < state.out_segment.position() {
                         gst_debug!(
                             CAT,
                             obj: element,
                             "Adjusting item timing({:?} < {:?})",
                             start_time,
-                            state.out_segment.get_position()
+                            state.out_segment.position()
                         );
-                        start_time = state.out_segment.get_position();
+                        start_time = state.out_segment.position();
                         if end_time < start_time {
                             end_time = start_time;
                         }
@@ -449,7 +443,7 @@ impl Transcriber {
                                     ((result.end_time as f64 * 1_000_000_000.0) as u64).into();
 
                                 let mut state = self.state.lock().unwrap();
-                                let position = state.out_segment.get_position();
+                                let position = state.out_segment.position();
 
                                 if end_time < position {
                                     gst_warning!(CAT, obj: element,
@@ -617,7 +611,7 @@ impl Transcriber {
                 let ret = self.sinkpad.peer_query(&mut peer_query);
 
                 if ret {
-                    let (_, min, _) = peer_query.get_result();
+                    let (_, min, _) = peer_query.result();
                     let our_latency: gst::ClockTime =
                         self.settings.lock().unwrap().latency_ms as u64 * gst::MSECOND;
                     q.set(true, our_latency + min, gst::CLOCK_TIME_NONE);
@@ -625,12 +619,12 @@ impl Transcriber {
                 ret
             }
             QueryView::Position(ref mut q) => {
-                if q.get_format() == gst::Format::Time {
+                if q.format() == gst::Format::Time {
                     let state = self.state.lock().unwrap();
                     q.set(
                         state
                             .out_segment
-                            .to_stream_time(state.out_segment.get_position()),
+                            .to_stream_time(state.out_segment.position()),
                     );
                     true
                 } else {
@@ -685,15 +679,12 @@ impl Transcriber {
                 }
             }
             EventView::Segment(e) => {
-                let segment = match e.get_segment().clone().downcast::<gst::ClockTime>() {
+                let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
                     Err(segment) => {
                         element_error!(
                             element,
                             gst::StreamError::Format,
-                            [
-                                "Only Time segments supported, got {:?}",
-                                segment.get_format(),
-                            ]
+                            ["Only Time segments supported, got {:?}", segment.format(),]
                         );
                         return false;
                     }
@@ -703,13 +694,13 @@ impl Transcriber {
                 let event = {
                     let mut state = self.state.lock().unwrap();
 
-                    state.out_segment.set_time(segment.get_time());
+                    state.out_segment.set_time(segment.time());
                     state
                         .out_segment
                         .set_position(gst::ClockTime::from_nseconds(0));
 
                     state.in_segment = segment;
-                    state.seqnum = e.get_seqnum();
+                    state.seqnum = e.seqnum();
                     gst::event::Segment::builder(&state.out_segment)
                         .seqnum(state.seqnum)
                         .build()
@@ -745,8 +736,8 @@ impl Transcriber {
             let state = self.state.lock().unwrap();
 
             if let Some(buffer) = &buffer {
-                let running_time = state.in_segment.to_running_time(buffer.get_pts());
-                let now = element.get_current_running_time();
+                let running_time = state.in_segment.to_running_time(buffer.pts());
+                let now = element.current_running_time();
 
                 if now.is_some() && now < running_time {
                     delay = Some(running_time - now);
@@ -829,7 +820,7 @@ impl Transcriber {
             return Ok(());
         }
 
-        let in_caps = self.sinkpad.get_current_caps().unwrap();
+        let in_caps = self.sinkpad.current_caps().unwrap();
         let s = in_caps.get_structure(0).unwrap();
         let sample_rate: i32 = s.get("rate").unwrap().unwrap();
 
@@ -1079,7 +1070,7 @@ impl ObjectImpl for Transcriber {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "language_code" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.language_code = value.get().expect("type checked upstream");
@@ -1101,7 +1092,7 @@ impl ObjectImpl for Transcriber {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "language-code" => {
                 let settings = self.settings.lock().unwrap();
                 settings.language_code.to_value()

@@ -181,7 +181,7 @@ impl ReqwestHttpSrc {
         let srcpad = src.get_static_pad("src").unwrap();
         let mut q = gst::query::Context::new(REQWEST_CLIENT_CONTEXT);
         if srcpad.peer_query(&mut q) {
-            if let Some(context) = q.get_context_owned() {
+            if let Some(context) = q.context_owned() {
                 src.set_context(&context);
             }
         } else {
@@ -224,7 +224,7 @@ impl ReqwestHttpSrc {
         let mut context = gst::Context::new(REQWEST_CLIENT_CONTEXT, true);
         {
             let context = context.get_mut().unwrap();
-            let s = context.get_mut_structure();
+            let s = context.structure_mut();
             s.set("client", &client);
         }
         src.set_context(&context);
@@ -671,7 +671,7 @@ impl ObjectImpl for ReqwestHttpSrc {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "location" => {
                 let location = value.get::<&str>().expect("type checked upstream");
                 if let Err(err) = self.set_location(obj, location) {
@@ -740,7 +740,7 @@ impl ObjectImpl for ReqwestHttpSrc {
     }
 
     fn get_property(&self, obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "location" => {
                 let settings = self.settings.lock().unwrap();
                 let location = settings.location.as_ref().map(Url::to_string);
@@ -827,9 +827,9 @@ impl ElementImpl for ReqwestHttpSrc {
     }
 
     fn set_context(&self, element: &Self::Type, context: &gst::Context) {
-        if context.get_context_type() == REQWEST_CLIENT_CONTEXT {
+        if context.context_type() == REQWEST_CLIENT_CONTEXT {
             let mut external_client = self.external_client.lock().unwrap();
-            let s = context.get_structure();
+            let s = context.structure();
             *external_client = s
                 .get_some::<&ClientContext>("client")
                 .map(|c| Some(c.clone()))
@@ -946,8 +946,8 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             }
         };
 
-        let start = segment.get_start().expect("No start position given");
-        let stop = segment.get_stop();
+        let start = segment.start().expect("No start position given");
+        let stop = segment.stop();
 
         gst_debug!(CAT, obj: src, "Seeking to {}-{:?}", start, stop);
 

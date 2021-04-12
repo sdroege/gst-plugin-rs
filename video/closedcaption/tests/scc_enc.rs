@@ -66,10 +66,10 @@ fn test_encode_single_packet() {
     let timecode = buf
         .get_meta::<gst_video::VideoTimeCodeMeta>()
         .expect("No timecode for buffer")
-        .get_tc();
+        .tc();
     assert_eq!(timecode, tc);
 
-    let pts = buf.get_pts();
+    let pts = buf.pts();
     assert_eq!(pts, gst::ClockTime::from_seconds(0));
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
@@ -165,10 +165,10 @@ fn test_encode_multiple_packets() {
     let timecode = buf
         .get_meta::<gst_video::VideoTimeCodeMeta>()
         .expect("No timecode for buffer")
-        .get_tc();
+        .tc();
     assert_eq!(timecode, tc1);
 
-    let pts = buf.get_pts();
+    let pts = buf.pts();
     assert_eq!(pts, gst::ClockTime::from_seconds(0));
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
@@ -183,7 +183,7 @@ fn test_encode_multiple_packets() {
     let timecode = buf
         .get_meta::<gst_video::VideoTimeCodeMeta>()
         .expect("No timecode for buffer")
-        .get_tc();
+        .tc();
     assert_eq!(timecode, tc2);
 
     // let pts = buf.get_pts();
@@ -212,7 +212,7 @@ fn test_encode_multiple_packets() {
     let timecode = buf
         .get_meta::<gst_video::VideoTimeCodeMeta>()
         .expect("No timecode for buffer")
-        .get_tc();
+        .tc();
     assert_eq!(timecode, tc3);
 
     // let pts = buf.get_pts();

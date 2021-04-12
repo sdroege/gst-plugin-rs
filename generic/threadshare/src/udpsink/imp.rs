@@ -256,7 +256,7 @@ impl UdpSinkPadHandler {
         self.0.write().unwrap().add_client(gst_pad, addr);
     }
 
-    fn get_clients(&self) -> Vec<SocketAddr> {
+    fn clients(&self) -> Vec<SocketAddr> {
         (*self.0.read().unwrap().clients).clone()
     }
 
@@ -411,7 +411,7 @@ impl UdpSinkPadHandler {
 
             if let Some(segment) = &inner.segment {
                 if let Some(segment) = segment.downcast_ref::<gst::format::Time>() {
-                    rtime = segment.to_running_time(buffer.get_pts());
+                    rtime = segment.to_running_time(buffer.pts());
                     if inner.latency.is_some() {
                         rtime += inner.latency;
                     }
@@ -522,7 +522,7 @@ impl UdpSinkPadHandler {
 
     /* Wait until specified time */
     async fn sync(&self, element: &super::UdpSink, running_time: gst::ClockTime) {
-        let now = element.get_current_running_time();
+        let now = element.current_running_time();
 
         if let Some(delay) = running_time
             .saturating_sub(now)
@@ -538,10 +538,10 @@ impl UdpSinkPadHandler {
                 let _ = element.post_message(gst::message::Eos::builder().src(element).build());
             }
             EventView::Segment(e) => {
-                self.0.write().unwrap().segment = Some(e.get_segment().clone());
+                self.0.write().unwrap().segment = Some(e.segment().clone());
             }
             EventView::SinkMessage(e) => {
-                let _ = element.post_message(e.get_message());
+                let _ = element.post_message(e.message());
             }
             _ => (),
         }
@@ -1193,7 +1193,7 @@ impl ObjectImpl for UdpSink {
         pspec: &glib::ParamSpec,
     ) {
         let mut settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "sync" => {
                 settings.sync = value.get_some().expect("type checked upstream");
             }
@@ -1288,7 +1288,7 @@ impl ObjectImpl for UdpSink {
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "sync" => settings.sync.to_value(),
             "bind-address" => settings.bind_address.to_value(),
             "bind-port" => settings.bind_port.to_value(),
@@ -1324,7 +1324,7 @@ impl ObjectImpl for UdpSink {
 
                 let clients: Vec<String> = self
                     .sink_pad_handler
-                    .get_clients()
+                    .clients()
                     .iter()
                     .map(ToString::to_string)
                     .collect();
@@ -1410,7 +1410,7 @@ impl ElementImpl for UdpSink {
     fn send_event(&self, _element: &Self::Type, event: gst::Event) -> bool {
         match event.view() {
             EventView::Latency(ev) => {
-                self.sink_pad_handler.set_latency(ev.get_latency());
+                self.sink_pad_handler.set_latency(ev.latency());
                 self.sink_pad.gst_pad().push_event(event)
             }
             EventView::Step(..) => false,

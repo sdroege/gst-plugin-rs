@@ -118,10 +118,10 @@ impl Dav1dDec {
             element.set_output_state(format, pic.width(), pic.height(), input_state)
         }?;
         element.negotiate(output_state)?;
-        let out_state = element.get_output_state().unwrap();
+        let out_state = element.output_state().unwrap();
         {
             let mut negotiation_infos = self.negotiation_infos.lock().unwrap();
-            negotiation_infos.output_info = Some(out_state.get_info());
+            negotiation_infos.output_info = Some(out_state.info());
         }
 
         Ok(())
@@ -138,16 +138,16 @@ impl Dav1dDec {
         frame: &gst_video::VideoCodecFrame,
     ) -> Result<Vec<(dav1d::Picture, gst_video::VideoFormat)>, gst::FlowError> {
         let mut decoder = self.decoder.lock().unwrap();
-        let timestamp = match frame.get_dts().0 {
+        let timestamp = match frame.dts().0 {
             Some(ts) => Some(ts as i64),
             None => None,
         };
-        let duration = match frame.get_duration().0 {
+        let duration = match frame.duration().0 {
             Some(d) => Some(d as i64),
             None => None,
         };
 
-        let frame_number = Some(frame.get_system_frame_number() as i64);
+        let frame_number = Some(frame.system_frame_number() as i64);
         let input_data = input_buffer
             .map_readable()
             .map_err(|_| gst::FlowError::Error)?;
@@ -181,7 +181,7 @@ impl Dav1dDec {
 
         let video_meta_supported = self.negotiation_infos.lock().unwrap().video_meta_supported;
 
-        let info = output_state.get_info();
+        let info = output_state.info();
         let mut out_buffer = gst::Buffer::new();
         let mut_buffer = out_buffer.get_mut().unwrap();
 
@@ -222,7 +222,7 @@ impl Dav1dDec {
                 }
                 writable_mem.into_memory()
             };
-            let mem_size = mem.get_size();
+            let mem_size = mem.size();
             mut_buffer.append_memory(mem);
 
             strides.push(src_stride as i32);
@@ -262,7 +262,7 @@ impl Dav1dDec {
         self.handle_resolution_change(element, &pic, format)?;
 
         let output_state = element
-            .get_output_state()
+            .output_state()
             .expect("Output state not set. Shouldn't happen!");
         let offset = pic.offset() as i32;
         if let Some(mut frame) = element.get_frame(offset) {
@@ -278,18 +278,18 @@ impl Dav1dDec {
 
     fn drop_decoded_pictures(&self) {
         let mut decoder = self.decoder.lock().unwrap();
-        while let Ok(pic) = decoder.get_picture() {
+        while let Ok(pic) = decoder.picture() {
             gst_debug!(CAT, "Dropping picture");
             drop(pic);
         }
     }
 
-    fn get_pending_pictures(
+    fn pending_pictures(
         &self,
     ) -> Result<Vec<(dav1d::Picture, gst_video::VideoFormat)>, gst::FlowError> {
         let mut decoder = self.decoder.lock().unwrap();
         let mut pictures = vec![];
-        while let Ok(pic) = decoder.get_picture() {
+        while let Ok(pic) = decoder.picture() {
             let format = self.gst_video_format_from_dav1d_picture(&pic);
             if format == gst_video::VideoFormat::Unknown {
                 return Err(gst::FlowError::NotNegotiated);
@@ -303,7 +303,7 @@ impl Dav1dDec {
         &self,
         element: &super::Dav1dDec,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        for (pic, format) in self.get_pending_pictures()? {
+        for (pic, format) in self.pending_pictures()? {
             self.handle_picture(element, &pic, format)?;
         }
         Ok(gst::FlowSuccess::Ok)
@@ -438,9 +438,7 @@ impl VideoDecoderImpl for Dav1dDec {
         element: &Self::Type,
         frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let input_buffer = frame
-            .get_input_buffer()
-            .expect("frame without input buffer");
+        let input_buffer = frame.input_buffer().expect("frame without input buffer");
         for (pic, format) in self.decode(input_buffer, &frame)? {
             self.handle_picture(element, &pic, format)?;
         }
@@ -479,9 +477,9 @@ impl VideoDecoderImpl for Dav1dDec {
                 .find_allocation_meta::<gst_video::VideoMeta>()
                 .is_some()
             {
-                let pools = allocation.get_allocation_pools();
+                let pools = allocation.allocation_pools();
                 if let Some((Some(ref pool), _, _, _)) = pools.first() {
-                    let mut config = pool.get_config();
+                    let mut config = pool.config();
                     config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
                     pool.set_config(config)
                         .map_err(|e| gst::error_msg!(gst::CoreError::Negotiation, [&e.message]))?;

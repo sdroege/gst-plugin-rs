@@ -60,8 +60,8 @@ impl TtToJson {
         element: &super::TtToJson,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let pts = buffer.get_pts();
-        let duration = buffer.get_duration();
+        let pts = buffer.pts();
+        let duration = buffer.duration();
 
         let buffer = buffer.into_mapped_buffer_readable().map_err(|_| {
             gst::element_error!(
@@ -253,7 +253,7 @@ impl ObjectImpl for TtToJson {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "mode" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.mode = value
@@ -265,7 +265,7 @@ impl ObjectImpl for TtToJson {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "mode" => {
                 let settings = self.settings.lock().unwrap();
                 settings.mode.to_value()

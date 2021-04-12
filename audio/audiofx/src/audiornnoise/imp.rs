@@ -61,7 +61,7 @@ impl State {
         gst::ClockTime(samples.mul_div_round(gst::SECOND_VAL, self.in_info.rate() as u64))
     }
 
-    fn get_current_pts(&self) -> gst::ClockTime {
+    fn current_pts(&self) -> gst::ClockTime {
         // get the last seen pts and the amount of bytes
         // since then
         let (prev_pts, distance) = self.adapter.prev_pts();
@@ -137,7 +137,7 @@ impl AudioRNNoise {
         })?;
 
         let duration = state.buffer_duration(available as _);
-        let pts = state.get_current_pts();
+        let pts = state.current_pts();
 
         {
             let ibuffer = state.adapter.take_buffer(available).unwrap();
@@ -167,7 +167,7 @@ impl AudioRNNoise {
         let bpf = state.in_info.bpf() as usize;
         let output_size = available - (available % (FRAME_SIZE * bpf));
         let duration = state.buffer_duration(output_size as _);
-        let pts = state.get_current_pts();
+        let pts = state.current_pts();
 
         let mut buffer = gst::Buffer::with_size(output_size).map_err(|_| gst::FlowError::Error)?;
 
@@ -307,7 +307,7 @@ impl BaseTransformImpl for AudioRNNoise {
         // if it is not the case, just notify the parent class to not generate
         // an output
         if let Some(buffer) = self.take_queued_buffer() {
-            if buffer.get_flags() == gst::BufferFlags::DISCONT {
+            if buffer.flags() == gst::BufferFlags::DISCONT {
                 self.drain(element)?;
             }
 
@@ -352,7 +352,7 @@ impl BaseTransformImpl for AudioRNNoise {
                 let sink_pad = element.get_static_pad("sink").expect("Sink pad not found");
                 let mut upstream_query = gst::query::Latency::new();
                 if sink_pad.peer_query(&mut upstream_query) {
-                    let (live, mut min, mut max) = upstream_query.get_result();
+                    let (live, mut min, mut max) = upstream_query.result();
                     gst_debug!(
                         CAT,
                         obj: element,

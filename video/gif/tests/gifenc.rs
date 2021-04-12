@@ -63,6 +63,6 @@ fn test_encode(video_info: &gst_video::VideoInfo) {
         // last frame is the GIF trailer
         let buffer = h.pull().unwrap();
         // Currently, every frame should be a full frame
-        assert!(!buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT))
+        assert!(!buffer.flags().contains(gst::BufferFlags::DELTA_UNIT))
     }
 }

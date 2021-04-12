@@ -69,7 +69,7 @@ fn test_one_timed_buffer_and_eos() {
 
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.get_pts() + outbuf.get_duration() >= gst::SECOND {
+        if outbuf.pts() + outbuf.duration() >= gst::SECOND {
             break;
         }
 
@@ -90,15 +90,10 @@ fn test_one_timed_buffer_and_eos() {
     for (i, e) in expected.iter().enumerate() {
         let outbuf = h.try_pull().unwrap();
 
-        assert_eq!(
-            e.0,
-            outbuf.get_pts(),
-            "Unexpected PTS for {}th buffer",
-            i + 1
-        );
+        assert_eq!(e.0, outbuf.pts(), "Unexpected PTS for {}th buffer", i + 1);
         assert_eq!(
             e.1,
-            outbuf.get_duration(),
+            outbuf.duration(),
             "Unexpected duration for {}th buffer",
             i + 1
         );
@@ -115,7 +110,7 @@ fn test_one_timed_buffer_and_eos() {
     loop {
         let outbuf = h.try_pull().unwrap();
         let data = outbuf.map_readable().unwrap();
-        if outbuf.get_pts() == 2_200_000_000.into() {
+        if outbuf.pts() == 2_200_000_000.into() {
             assert_eq!(&*data, &[0x94, 0x2c]);
             break;
         } else {
@@ -126,7 +121,7 @@ fn test_one_timed_buffer_and_eos() {
     assert_eq!(h.events_in_queue() == 1, true);
 
     let event = h.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::Eos);
+    assert_eq!(event.type_(), gst::EventType::Eos);
 }
 
 /* Here we test that the erase_display_memory control code
@@ -155,7 +150,7 @@ fn test_erase_display_memory_non_spliced() {
     while h.buffers_in_queue() > 0 {
         let outbuf = h.pull().unwrap();
 
-        if outbuf.get_pts() == 2_200_000_000.into() {
+        if outbuf.pts() == 2_200_000_000.into() {
             let data = outbuf.map_readable().unwrap();
             assert_eq!(&*data, &[0x94, 0x2c]);
             erase_display_buffers += 1;
@@ -193,15 +188,15 @@ fn test_erase_display_memory_spliced() {
         let outbuf = h.pull().unwrap();
 
         /* Check that our timestamps are strictly ascending */
-        assert!(outbuf.get_pts() >= prev_pts);
+        assert!(outbuf.pts() >= prev_pts);
 
-        if outbuf.get_pts() == 2_000_000_000.into() {
+        if outbuf.pts() == 2_000_000_000.into() {
             let data = outbuf.map_readable().unwrap();
             assert_eq!(&*data, &[0x94, 0x2c]);
             erase_display_buffers += 1;
         }
 
-        prev_pts = outbuf.get_pts();
+        prev_pts = outbuf.pts();
     }
 
     assert_eq!(erase_display_buffers, 1);
@@ -232,7 +227,7 @@ fn test_output_gaps() {
     /* Padding */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.get_pts() + outbuf.get_duration() >= gst::SECOND {
+        if outbuf.pts() + outbuf.duration() >= gst::SECOND {
             break;
         }
 
@@ -243,7 +238,7 @@ fn test_output_gaps() {
     /* Hello */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.get_pts() + outbuf.get_duration() >= 1_233_333_333.into() {
+        if outbuf.pts() + outbuf.duration() >= 1_233_333_333.into() {
             break;
         }
 
@@ -254,12 +249,12 @@ fn test_output_gaps() {
     /* Padding */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.get_pts() + outbuf.get_duration() >= 3_000_000_000.into() {
+        if outbuf.pts() + outbuf.duration() >= 3_000_000_000.into() {
             break;
         }
 
         let data = outbuf.map_readable().unwrap();
-        if outbuf.get_pts() == 2_200_000_000.into() {
+        if outbuf.pts() == 2_200_000_000.into() {
             /* Erase display one second after Hello */
             assert_eq!(&*data, &[0x94, 0x2C]);
         } else {
@@ -270,7 +265,7 @@ fn test_output_gaps() {
     /* World */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.get_pts() + outbuf.get_duration() >= 3_233_333_333.into() {
+        if outbuf.pts() + outbuf.duration() >= 3_233_333_333.into() {
             break;
         }
 
@@ -281,7 +276,7 @@ fn test_output_gaps() {
     assert_eq!(h.events_in_queue(), 1);
 
     let event = h.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::Eos);
+    assert_eq!(event.type_(), gst::EventType::Eos);
 }
 
 #[test]
@@ -304,7 +299,7 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     /* Padding */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.get_pts() + outbuf.get_duration() >= gst::SECOND {
+        if outbuf.pts() + outbuf.duration() >= gst::SECOND {
             break;
         }
 
@@ -323,15 +318,10 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     for (i, e) in expected.iter().enumerate() {
         let outbuf = h.try_pull().unwrap();
 
-        assert_eq!(
-            e.0,
-            outbuf.get_pts(),
-            "Unexpected PTS for {}th buffer",
-            i + 1
-        );
+        assert_eq!(e.0, outbuf.pts(), "Unexpected PTS for {}th buffer", i + 1);
         assert_eq!(
             e.1,
-            outbuf.get_duration(),
+            outbuf.duration(),
             "Unexpected duration for {}th buffer",
             i + 1
         );
@@ -343,7 +333,7 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     /* Padding */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.get_pts() + outbuf.get_duration() >= 2 * gst::SECOND {
+        if outbuf.pts() + outbuf.duration() >= 2 * gst::SECOND {
             break;
         }
 
@@ -360,15 +350,10 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     for (i, e) in expected.iter().enumerate() {
         let outbuf = h.try_pull().unwrap();
 
-        assert_eq!(
-            e.0,
-            outbuf.get_pts(),
-            "Unexpected PTS for {}th buffer",
-            i + 1
-        );
+        assert_eq!(e.0, outbuf.pts(), "Unexpected PTS for {}th buffer", i + 1);
         assert_eq!(
             e.1,
-            outbuf.get_duration(),
+            outbuf.duration(),
             "Unexpected duration for {}th buffer",
             i + 1
         );
@@ -384,5 +369,5 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     assert_eq!(h.events_in_queue(), 1);
 
     let event = h.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::Eos);
+    assert_eq!(event.type_(), gst::EventType::Eos);
 }

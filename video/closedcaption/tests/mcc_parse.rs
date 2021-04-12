@@ -64,10 +64,10 @@ fn test_parse() {
             rnd.gen_range(1..=data.len())
         };
         let buf = gst::Buffer::from_mut_slice(Vec::from(&data[0..l]));
-        input_len += buf.get_size();
+        input_len += buf.size();
         assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
         while let Some(buf) = h.try_pull() {
-            output_len += buf.get_size();
+            output_len += buf.size();
             checksum = checksum.wrapping_add(
                 buf.map_readable()
                     .unwrap()
@@ -79,9 +79,9 @@ fn test_parse() {
                 .get_meta::<gst_video::VideoTimeCodeMeta>()
                 .expect("No timecode meta");
             if let Some(ref timecode) = expected_timecode {
-                assert_eq!(&tc_meta.get_tc(), timecode);
+                assert_eq!(&tc_meta.tc(), timecode);
             } else {
-                expected_timecode = Some(tc_meta.get_tc());
+                expected_timecode = Some(tc_meta.tc());
             }
             if let Some(ref mut tc) = expected_timecode {
                 tc.increment_frame();
@@ -92,7 +92,7 @@ fn test_parse() {
 
     h.push_event(gst::event::Eos::new());
     while let Some(buf) = h.try_pull() {
-        output_len += buf.get_size();
+        output_len += buf.size();
         checksum = checksum.wrapping_add(
             buf.map_readable()
                 .unwrap()
@@ -104,9 +104,9 @@ fn test_parse() {
             .get_meta::<gst_video::VideoTimeCodeMeta>()
             .expect("No timecode meta");
         if let Some(ref timecode) = expected_timecode {
-            assert_eq!(&tc_meta.get_tc(), timecode);
+            assert_eq!(&tc_meta.tc(), timecode);
         } else {
-            expected_timecode = Some(tc_meta.get_tc());
+            expected_timecode = Some(tc_meta.tc());
         }
         if let Some(ref mut tc) = expected_timecode {
             tc.increment_frame();
@@ -119,9 +119,9 @@ fn test_parse() {
     assert_eq!(checksum, 3_988_480);
 
     let caps = h
-        .get_sinkpad()
+        .sinkpad()
         .expect("harness has no sinkpad")
-        .get_current_caps()
+        .current_caps()
         .expect("pad has no caps");
     assert_eq!(
         caps,
@@ -185,7 +185,7 @@ fn test_pull() {
 
         while h.buffers_in_queue() != 0 {
             if let Ok(buffer) = h.pull() {
-                let pts = buffer.get_pts();
+                let pts = buffer.pts();
                 assert!(pts > gst::SECOND && pts < 2 * gst::SECOND);
             }
         }

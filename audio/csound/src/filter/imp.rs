@@ -107,7 +107,7 @@ impl State {
         gst::ClockTime(samples.mul_div_round(gst::SECOND_VAL, self.in_info.rate() as u64))
     }
 
-    fn get_current_pts(&self) -> gst::ClockTime {
+    fn current_pts(&self) -> gst::ClockTime {
         // get the last seen pts and the amount of bytes
         // since then
         let (prev_pts, distance) = self.adapter.prev_pts();
@@ -128,8 +128,8 @@ impl State {
 
 impl CsoundFilter {
     fn process(&self, csound: &mut Csound, idata: &[f64], odata: &mut [f64]) -> bool {
-        let spin = csound.get_spin().unwrap();
-        let spout = csound.get_spout().unwrap();
+        let spin = csound.spin().unwrap();
+        let spout = csound.spout().unwrap();
 
         let in_chunks = idata.chunks_exact(spin.len());
         let out_chuncks = odata.chunks_exact_mut(spout.len());
@@ -190,8 +190,8 @@ impl CsoundFilter {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        let mut spin = csound.get_spin().unwrap();
-        let spout = csound.get_spout().unwrap();
+        let mut spin = csound.spin().unwrap();
+        let spout = csound.spout().unwrap();
 
         let out_bytes =
             (avail / state.in_info.channels() as usize) * state.out_info.channels() as usize;
@@ -208,7 +208,7 @@ impl CsoundFilter {
 
         let buffer_mut = buffer.get_mut().ok_or(gst::FlowError::NotSupported)?;
 
-        let pts = state.get_current_pts();
+        let pts = state.current_pts();
         let duration = state.buffer_duration(out_bytes as _);
 
         buffer_mut.set_pts(pts);
@@ -255,7 +255,7 @@ impl CsoundFilter {
         let mut output = gst::Buffer::with_size(output_size).map_err(|_| gst::FlowError::Error)?;
         let outbuf = output.get_mut().ok_or(gst::FlowError::Error)?;
 
-        let pts = state.get_current_pts();
+        let pts = state.current_pts();
         let duration = state.buffer_duration(output_size as _);
 
         outbuf.set_pts(pts);
@@ -387,7 +387,7 @@ impl ObjectImpl for CsoundFilter {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "loop" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.loop_ = value.get_some().expect("type checked upstream");
@@ -419,7 +419,7 @@ impl ObjectImpl for CsoundFilter {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "loop" => {
                 let settings = self.settings.lock().unwrap();
                 settings.loop_.to_value()
@@ -547,7 +547,7 @@ impl BaseTransformImpl for CsoundFilter {
             if compiled {
                 let csound = self.csound.lock().unwrap();
                 // Use the sample rate and channels configured in the csound score
-                let sr = csound.get_sample_rate() as i32;
+                let sr = csound.sample_rate() as i32;
                 let ichannels = csound.input_channels() as i32;
                 let ochannels = csound.output_channels() as i32;
                 for s in new_caps.make_mut().iter_mut() {
@@ -608,7 +608,7 @@ impl BaseTransformImpl for CsoundFilter {
         let rate = in_info.rate();
 
         // Check if the negotiated caps are the right ones
-        if rate != out_info.rate() || rate != csound.get_sample_rate() as _ {
+        if rate != out_info.rate() || rate != csound.sample_rate() as _ {
             return Err(loggable_error!(
                 CAT,
                 "Failed to negotiate caps: invalid sample rate {}",
@@ -628,7 +628,7 @@ impl BaseTransformImpl for CsoundFilter {
             ));
         }
 
-        let ksmps = csound.get_ksmps();
+        let ksmps = csound.ksmps();
 
         let adapter = gst_base::UniqueAdapter::new();
 
@@ -651,7 +651,7 @@ impl BaseTransformImpl for CsoundFilter {
         // if it is not the case, just notify the parent class to not generate
         // an output
         if let Some(buffer) = self.take_queued_buffer() {
-            if buffer.get_flags() == gst::BufferFlags::DISCONT {
+            if buffer.flags() == gst::BufferFlags::DISCONT {
                 self.drain(element)?;
             }
 

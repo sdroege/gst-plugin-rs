@@ -104,7 +104,7 @@ fn main_loop(pipeline: gst::Pipeline) -> Result<(), Box<dyn Error>> {
     pipeline.set_state(gst::State::Playing)?;
 
     let bus = pipeline
-        .get_bus()
+        .bus()
         .expect("Pipeline without bus. Shouldn't happen!");
 
     for msg in bus.iter_timed(gst::CLOCK_TIME_NONE) {
@@ -115,9 +115,9 @@ fn main_loop(pipeline: gst::Pipeline) -> Result<(), Box<dyn Error>> {
             MessageView::Error(err) => {
                 println!(
                     "Error from {:?}: {} ({:?})",
-                    msg.get_src().map(|s| s.get_path_string()),
-                    err.get_error(),
-                    err.get_debug()
+                    msg.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
                 );
                 break;
             }

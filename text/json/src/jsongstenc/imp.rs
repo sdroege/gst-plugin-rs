@@ -79,8 +79,8 @@ impl JsonGstEnc {
         element: &super::JsonGstEnc,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let pts = buffer.get_pts();
-        let duration = buffer.get_duration();
+        let pts = buffer.pts();
+        let duration = buffer.duration();
 
         let mut state = self.state.lock().unwrap();
 
@@ -182,7 +182,7 @@ impl JsonGstEnc {
             EventView::Caps(e) => {
                 {
                     let mut state = self.state.lock().unwrap();
-                    let caps = e.get_caps();
+                    let caps = e.caps();
                     let s = caps.get_structure(0).unwrap();
                     state.format = match s.get::<String>("format") {
                         Err(_) => None,

@@ -120,7 +120,7 @@ fn test_encode_i444_12() {
 fn test_encode(video_info: &gst_video::VideoInfo) {
     let mut h = gst_check::Harness::new("rav1enc");
     {
-        let rav1enc = h.get_element().unwrap();
+        let rav1enc = h.element().unwrap();
         rav1enc.set_property("speed-preset", &10u32).unwrap();
     }
     h.play();
@@ -180,7 +180,7 @@ fn test_encode(video_info: &gst_video::VideoInfo) {
     for i in 0..5 {
         let buffer = h.pull().unwrap();
         if i == 0 {
-            assert!(!buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT))
+            assert!(!buffer.flags().contains(gst::BufferFlags::DELTA_UNIT))
         }
     }
 }

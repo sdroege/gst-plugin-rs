@@ -526,7 +526,7 @@ impl MccParse {
 
         state.last_timecode = Some(timecode);
 
-        if nsecs >= state.segment.get_start() {
+        if nsecs >= state.segment.start() {
             state.seeking = false;
             state.discont = true;
             state.replay_last_line = true;
@@ -562,8 +562,8 @@ impl MccParse {
         // Update the last_timecode to the current one
         state.last_timecode = Some(timecode);
 
-        let send_eos = state.segment.get_stop().is_some()
-            && buffer.get_pts() + buffer.get_duration() >= state.segment.get_stop();
+        let send_eos = state.segment.stop().is_some()
+            && buffer.pts() + buffer.duration() >= state.segment.stop();
 
         // Drop our state mutex while we push out buffers or events
         drop(state);
@@ -673,7 +673,7 @@ impl MccParse {
             return Err(loggable_error!(CAT, "Failed to query upstream duration"));
         }
 
-        let size = match q.get_result().try_into().unwrap() {
+        let size = match q.result().try_into().unwrap() {
             gst::format::Bytes(Some(size)) => size,
             gst::format::Bytes(None) => {
                 return Err(loggable_error!(CAT, "Failed to query upstream duration"));
@@ -937,7 +937,7 @@ impl MccParse {
             _ => {
                 if event.is_sticky()
                     && !self.srcpad.has_current_caps()
-                    && event.get_type() > gst::EventType::Caps
+                    && event.type_() > gst::EventType::Caps
                 {
                     gst_log!(CAT, obj: pad, "Deferring sticky event until we have caps");
                     let mut state = self.state.lock().unwrap();
@@ -984,7 +984,7 @@ impl MccParse {
             return false;
         }
 
-        let seek_seqnum = event.get_seqnum();
+        let seek_seqnum = event.seqnum();
 
         let event = gst::event::FlushStart::builder()
             .seqnum(seek_seqnum)
@@ -1067,7 +1067,7 @@ impl MccParse {
             QueryView::Seeking(mut q) => {
                 let state = self.state.lock().unwrap();
 
-                let fmt = q.get_format();
+                let fmt = q.format();
 
                 if fmt == gst::Format::Time {
                     if let Some(pull) = state.pull.as_ref() {
@@ -1086,7 +1086,7 @@ impl MccParse {
             }
             QueryView::Position(ref mut q) => {
                 // For Time answer ourselfs, otherwise forward
-                if q.get_format() == gst::Format::Time {
+                if q.format() == gst::Format::Time {
                     let state = self.state.lock().unwrap();
                     q.set(state.last_position);
                     true
@@ -1097,7 +1097,7 @@ impl MccParse {
             QueryView::Duration(ref mut q) => {
                 // For Time answer ourselfs, otherwise forward
                 let state = self.state.lock().unwrap();
-                if q.get_format() == gst::Format::Time {
+                if q.format() == gst::Format::Time {
                     if let Some(pull) = state.pull.as_ref() {
                         if pull.duration.is_some() {
                             q.set(state.pull.as_ref().unwrap().duration);

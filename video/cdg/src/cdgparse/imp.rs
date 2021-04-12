@@ -119,9 +119,9 @@ impl BaseParseImpl for CdgParse {
 
         /* Set duration */
         let mut query = gst::query::Duration::new(gst::Format::Bytes);
-        let pad = element.get_src_pad();
+        let pad = element.src_pad();
         if pad.query(&mut query) {
-            let size = query.get_result();
+            let size = query.result();
             let duration = bytes_to_time(size.try_into().unwrap());
             element.set_duration(duration, 0);
         }
@@ -134,8 +134,8 @@ impl BaseParseImpl for CdgParse {
         element: &Self::Type,
         mut frame: gst_base::BaseParseFrame,
     ) -> Result<(gst::FlowSuccess, u32), gst::FlowError> {
-        let pad = element.get_src_pad();
-        if pad.get_current_caps().is_none() {
+        let pad = element.src_pad();
+        if pad.current_caps().is_none() {
             // Set src pad caps
             let src_caps = gst::Caps::new_simple(
                 "video/x-cdg",
@@ -151,7 +151,7 @@ impl BaseParseImpl for CdgParse {
         }
 
         // Scan for CDG instruction
-        let input = frame.get_buffer().unwrap();
+        let input = frame.buffer().unwrap();
         let skip = {
             let map = input.map_readable().map_err(|_| {
                 gst::element_error!(
@@ -167,7 +167,7 @@ impl BaseParseImpl for CdgParse {
                 .enumerate()
                 .find(|(_, byte)| (*byte & CDG_MASK == CDG_COMMAND))
                 .map(|(i, _)| i)
-                .unwrap_or_else(|| input.get_size()) // skip the whole buffer
+                .unwrap_or_else(|| input.size()) // skip the whole buffer
                 as u32
         };
 
@@ -198,8 +198,8 @@ impl BaseParseImpl for CdgParse {
             }
         };
 
-        let pts = bytes_to_time(Bytes(Some(frame.get_offset())));
-        let buffer = frame.get_buffer_mut().unwrap();
+        let pts = bytes_to_time(Bytes(Some(frame.offset())));
+        let buffer = frame.buffer_mut().unwrap();
         buffer.set_pts(pts);
 
         if !keyframe {

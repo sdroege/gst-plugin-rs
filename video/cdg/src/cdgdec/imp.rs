@@ -119,13 +119,13 @@ impl VideoDecoderImpl for CdgDec {
 
                 element.negotiate(output_state)?;
 
-                let out_state = element.get_output_state().unwrap();
-                *out_info = Some(out_state.get_info());
+                let out_state = element.output_state().unwrap();
+                *out_info = Some(out_state.info());
             }
         }
 
         let cmd = {
-            let input = frame.get_input_buffer().unwrap();
+            let input = frame.input_buffer().unwrap();
             let map = input.map_readable().map_err(|_| {
                 gst::element_error!(
                     element,
@@ -153,7 +153,7 @@ impl VideoDecoderImpl for CdgDec {
 
         element.allocate_output_frame(&mut frame, None)?;
         {
-            let output = frame.get_output_buffer_mut().unwrap();
+            let output = frame.output_buffer_mut().unwrap();
             let info = self.output_info.lock().unwrap();
 
             let mut out_frame =
@@ -187,7 +187,7 @@ impl VideoDecoderImpl for CdgDec {
             }
         }
 
-        gst_debug!(CAT, obj: element, "Finish frame pts={}", frame.get_pts());
+        gst_debug!(CAT, obj: element, "Finish frame pts={}", frame.pts());
 
         element.finish_frame(frame)
     }
@@ -202,9 +202,9 @@ impl VideoDecoderImpl for CdgDec {
                 .find_allocation_meta::<gst_video::VideoMeta>()
                 .is_some()
             {
-                let pools = allocation.get_allocation_pools();
+                let pools = allocation.allocation_pools();
                 if let Some((Some(ref pool), _, _, _)) = pools.first() {
-                    let mut config = pool.get_config();
+                    let mut config = pool.config();
                     config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
                     pool.set_config(config)
                         .map_err(|e| gst::error_msg!(gst::CoreError::Negotiation, [&e.message]))?;

@@ -42,16 +42,16 @@ fn test_active_pad() {
         .unwrap()
         .get::<gst::Pad>()
         .unwrap();
-    assert_eq!(active_pad, h1.get_srcpad().unwrap().get_peer());
+    assert_eq!(active_pad, h1.srcpad().unwrap().peer());
 
-    is.set_property("active-pad", &h2.get_srcpad().unwrap().get_peer())
+    is.set_property("active-pad", &h2.srcpad().unwrap().peer())
         .unwrap();
     let active_pad = is
         .get_property("active-pad")
         .unwrap()
         .get::<gst::Pad>()
         .unwrap();
-    assert_eq!(active_pad, h2.get_srcpad().unwrap().get_peer());
+    assert_eq!(active_pad, h2.srcpad().unwrap().peer());
 
     h1.set_src_caps_str("foo/bar");
     h2.set_src_caps_str("foo/bar");
@@ -71,11 +71,11 @@ fn test_active_pad() {
     assert_eq!(h1.events_received(), 3);
 
     let event = h1.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::StreamStart);
+    assert_eq!(event.type_(), gst::EventType::StreamStart);
     let event = h1.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::Caps);
+    assert_eq!(event.type_(), gst::EventType::Caps);
     let event = h1.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::Segment);
+    assert_eq!(event.type_(), gst::EventType::Segment);
 
     /* Push another buffer on the active pad, there should be no new events */
     let buf = gst::Buffer::new();
@@ -86,17 +86,17 @@ fn test_active_pad() {
     /* Switch the active pad and push a buffer, we should receive stream-start, segment and caps
      * again */
     let buf = gst::Buffer::new();
-    is.set_property("active-pad", &h1.get_srcpad().unwrap().get_peer())
+    is.set_property("active-pad", &h1.srcpad().unwrap().peer())
         .unwrap();
     assert_eq!(h1.push(buf), Ok(gst::FlowSuccess::Ok));
     assert_eq!(h1.buffers_received(), 3);
     assert_eq!(h1.events_received(), 6);
     let event = h1.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::StreamStart);
+    assert_eq!(event.type_(), gst::EventType::StreamStart);
     let event = h1.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::Caps);
+    assert_eq!(event.type_(), gst::EventType::Caps);
     let event = h1.pull_event().unwrap();
-    assert_eq!(event.get_type(), gst::EventType::Segment);
+    assert_eq!(event.type_(), gst::EventType::Segment);
 
     let _ = is.set_state(gst::State::Null);
 }

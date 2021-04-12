@@ -147,10 +147,10 @@ fn csound_filter_eos() {
 
         // Checks output buffer timestamp and duration
         assert_eq!(
-            buffer.as_ref().get_duration(),
+            buffer.as_ref().duration(),
             duration_from_samples(in_process_samples, sr as _)
         );
-        assert_eq!(buffer.as_ref().get_pts(), expected_pts);
+        assert_eq!(buffer.as_ref().pts(), expected_pts);
 
         // Get the number of samples that were not processed
         samples_offset = in_samples % ksmps as u64;
@@ -177,7 +177,7 @@ fn csound_filter_eos() {
 
     let samples_at_eos = (EOS_NUM_BUFFERS * EOS_NUM_SAMPLES) % ksmps;
     assert_eq!(
-        buffer.as_ref().get_pts(),
+        buffer.as_ref().pts(),
         in_pts - duration_from_samples(samples_at_eos as _, sr as _)
     );
 
@@ -254,10 +254,10 @@ fn csound_filter_underflow() {
 
     for _ in 0..expected_buffers {
         let buffer = h.pull().unwrap();
-        let samples = buffer.get_size() / std::mem::size_of::<f64>();
+        let samples = buffer.size() / std::mem::size_of::<f64>();
 
-        assert_eq!(buffer.as_ref().get_pts(), expected_pts);
-        assert_eq!(buffer.as_ref().get_duration(), expected_duration);
+        assert_eq!(buffer.as_ref().pts(), expected_pts);
+        assert_eq!(buffer.as_ref().duration(), expected_duration);
         assert_eq!(samples, UNDERFLOW_NUM_SAMPLES * 2);
         // Output data is produced after 2 input buffers
         // so that, the next output buffer's PTS should be
@@ -329,18 +329,18 @@ fn csound_filter_caps_negotiation() {
     let buffer = h.pull().unwrap();
 
     // Pushing a buffer without a timestamp should produce a no timestamp output
-    assert!(buffer.as_ref().get_pts().is_none());
+    assert!(buffer.as_ref().pts().is_none());
     // But It should have a duration
     assert_eq!(
-        buffer.as_ref().get_duration(),
+        buffer.as_ref().duration(),
         duration_from_samples(1024 / std::mem::size_of::<f64>() as u64, sr as u64)
     );
 
     // get the negotiated harness sink caps
     let harness_sink_caps = h
-        .get_sinkpad()
+        .sinkpad()
         .expect("harness has no sinkpad")
-        .get_current_caps()
+        .current_caps()
         .expect("pad has no caps");
 
     // our expected caps at the harness sinkpad
@@ -407,10 +407,7 @@ fn csound_filter_caps_negotiation_fail() {
 
     // The harness sinkpad end up not having defined caps
     // so, the get_current_caps should be None
-    let current_caps = h
-        .get_sinkpad()
-        .expect("harness has no sinkpad")
-        .get_current_caps();
+    let current_caps = h.sinkpad().expect("harness has no sinkpad").current_caps();
 
     assert!(current_caps.is_none());
 }

@@ -37,7 +37,7 @@ fn test_push() {
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
     {
-        let udpsrc = h.get_element().unwrap();
+        let udpsrc = h.element().unwrap();
         udpsrc.set_property("caps", &caps).unwrap();
         udpsrc.set_property("port", &5000i32).unwrap();
         udpsrc.set_property("context", &"test-push").unwrap();
@@ -66,7 +66,7 @@ fn test_push() {
 
     for _ in 0..3 {
         let buffer = h.pull().unwrap();
-        assert_eq!(buffer.get_size(), 160);
+        assert_eq!(buffer.size(), 160);
     }
 
     let mut n_events = 0;
@@ -80,7 +80,7 @@ fn test_push() {
             }
             EventView::Caps(ev) => {
                 assert_eq!(n_events, 1);
-                let event_caps = ev.get_caps();
+                let event_caps = ev.caps();
                 assert_eq!(caps.as_ref(), event_caps);
             }
             EventView::Segment(..) => {
@@ -104,7 +104,7 @@ fn test_socket_reuse() {
     let mut ts_src_h2 = gst_check::Harness::new("ts-udpsrc");
 
     {
-        let udpsrc = ts_src_h.get_element().unwrap();
+        let udpsrc = ts_src_h.element().unwrap();
         udpsrc.set_property("port", &6000i32).unwrap();
         udpsrc
             .set_property("context", &"test-socket-reuse")
@@ -113,14 +113,14 @@ fn test_socket_reuse() {
     ts_src_h.play();
 
     {
-        let udpsrc = ts_src_h.get_element().unwrap();
+        let udpsrc = ts_src_h.element().unwrap();
         let socket = udpsrc
             .get_property("used-socket")
             .unwrap()
             .get::<gio::Socket>()
             .unwrap();
 
-        let udpsink = sink_h.get_element().unwrap();
+        let udpsink = sink_h.element().unwrap();
         udpsink.set_property("socket", &socket).unwrap();
         udpsink.set_property("host", &"127.0.0.1").unwrap();
         udpsink.set_property("port", &6001i32).unwrap();
@@ -129,7 +129,7 @@ fn test_socket_reuse() {
     sink_h.set_src_caps_str("application/test");
 
     {
-        let udpsrc = ts_src_h2.get_element().unwrap();
+        let udpsrc = ts_src_h2.element().unwrap();
         udpsrc.set_property("port", &6001i32).unwrap();
         udpsrc
             .set_property("context", &"test-socket-reuse")
@@ -161,6 +161,6 @@ fn test_socket_reuse() {
         sink_h.push(buffer).unwrap();
         let buffer = ts_src_h2.pull().unwrap();
 
-        assert_eq!(buffer.get_size(), 160);
+        assert_eq!(buffer.size(), 160);
     }
 }

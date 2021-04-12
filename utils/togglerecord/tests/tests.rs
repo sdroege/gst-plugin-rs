@@ -214,9 +214,9 @@ fn recv_buffers(
         match val {
             Left(buffer) => {
                 res.push((
-                    segment.to_running_time(buffer.get_pts()),
-                    buffer.get_pts(),
-                    buffer.get_duration(),
+                    segment.to_running_time(buffer.pts()),
+                    buffer.pts(),
+                    buffer.duration(),
                 ));
                 n_buffers += 1;
                 if wait_buffers > 0 && n_buffers == wait_buffers {
@@ -241,7 +241,7 @@ fn recv_buffers(
                         return (res, saw_eos);
                     }
                     EventView::Segment(ref e) => {
-                        *segment = e.get_segment().clone().downcast().unwrap();
+                        *segment = e.segment().clone().downcast().unwrap();
                     }
                     _ => (),
                 }
@@ -266,12 +266,12 @@ fn test_create_pads() {
     let sinkpad = togglerecord.get_request_pad("sink_%u").unwrap();
     let srcpad = sinkpad.iterate_internal_links().next().unwrap().unwrap();
 
-    assert_eq!(sinkpad.get_name(), "sink_0");
-    assert_eq!(srcpad.get_name(), "src_0");
+    assert_eq!(sinkpad.name(), "sink_0");
+    assert_eq!(srcpad.name(), "src_0");
 
     togglerecord.release_request_pad(&sinkpad);
-    assert!(sinkpad.get_parent().is_none());
-    assert!(srcpad.get_parent().is_none());
+    assert!(sinkpad.parent().is_none());
+    assert!(srcpad.parent().is_none());
 }
 
 #[test]

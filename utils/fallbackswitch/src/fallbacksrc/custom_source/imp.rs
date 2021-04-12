@@ -83,7 +83,7 @@ impl ObjectImpl for CustomSource {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "source" => {
                 let source = value.get::<gst::Element>().unwrap().unwrap();
                 self.source.set(source.clone()).unwrap();
@@ -178,11 +178,11 @@ impl CustomSource {
         gst_debug!(CAT, obj: element, "Starting");
         let source = self.source.get().unwrap();
 
-        let templates = source.get_pad_template_list();
+        let templates = source.pad_template_list();
 
         if templates
             .iter()
-            .any(|templ| templ.get_property_presence() == gst::PadPresence::Request)
+            .any(|templ| templ.property_presence() == gst::PadPresence::Request)
         {
             gst_error!(CAT, obj: element, "Request pads not supported");
             gst::element_error!(
@@ -195,10 +195,10 @@ impl CustomSource {
 
         let has_sometimes_pads = templates
             .iter()
-            .any(|templ| templ.get_property_presence() == gst::PadPresence::Sometimes);
+            .any(|templ| templ.property_presence() == gst::PadPresence::Sometimes);
 
         // Handle all source pads that already exist
-        for pad in source.get_src_pads() {
+        for pad in source.src_pads() {
             if let Err(msg) = self.handle_source_pad_added(&element, &pad) {
                 element.post_error_message(msg);
                 return Err(gst::StateChangeError);
@@ -253,7 +253,7 @@ impl CustomSource {
         element: &super::CustomSource,
         pad: &gst::Pad,
     ) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Source added pad {}", pad.get_name());
+        gst_debug!(CAT, obj: element, "Source added pad {}", pad.name());
 
         let mut state = self.state.lock().unwrap();
 
@@ -262,19 +262,16 @@ impl CustomSource {
         // Take stream type from stream-start event if we can
         if let Some(event) = pad.get_sticky_event(gst::EventType::StreamStart, 0) {
             if let gst::EventView::StreamStart(ev) = event.view() {
-                stream_type = ev.get_stream().map(|s| s.get_stream_type());
+                stream_type = ev.stream().map(|s| s.stream_type());
             }
         }
 
         // Otherwise from the caps
         if stream_type.is_none() {
-            let caps = match pad
-                .get_current_caps()
-                .unwrap_or_else(|| pad.query_caps(None))
-            {
+            let caps = match pad.current_caps().unwrap_or_else(|| pad.query_caps(None)) {
                 caps if !caps.is_any() && !caps.is_empty() => caps,
                 _ => {
-                    gst_error!(CAT, obj: element, "Pad {} had no caps", pad.get_name());
+                    gst_error!(CAT, obj: element, "Pad {} had no caps", pad.name());
                     return Err(gst::error_msg!(
                         gst::CoreError::Negotiation,
                         ["Pad had no caps"]
@@ -284,9 +281,9 @@ impl CustomSource {
 
             let s = caps.get_structure(0).unwrap();
 
-            if s.get_name().starts_with("audio/") {
+            if s.name().starts_with("audio/") {
                 stream_type = Some(gst::StreamType::AUDIO);
-            } else if s.get_name().starts_with("video/") {
+            } else if s.name().starts_with("video/") {
                 stream_type = Some(gst::StreamType::VIDEO);
             } else {
                 return Ok(());
@@ -325,7 +322,7 @@ impl CustomSource {
     }
 
     fn handle_source_pad_removed(&self, element: &super::CustomSource, pad: &gst::Pad) {
-        gst_debug!(CAT, obj: element, "Source removed pad {}", pad.get_name());
+        gst_debug!(CAT, obj: element, "Source removed pad {}", pad.name());
 
         let mut state = self.state.lock().unwrap();
         let (i, stream) = match state

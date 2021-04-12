@@ -249,11 +249,11 @@ impl PadSrcHandler for UdpSrcPadHandler {
             }
             QueryView::Caps(ref mut q) => {
                 let caps = if let Some(caps) = self.0.configured_caps.lock().unwrap().as_ref() {
-                    q.get_filter()
+                    q.filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
                 } else {
-                    q.get_filter()
+                    q.filter()
                         .map(|f| f.to_owned())
                         .unwrap_or_else(gst::Caps::new_any)
                 };
@@ -303,7 +303,7 @@ impl TaskImpl for UdpSrcTask {
         async move {
             gst_log!(CAT, obj: &self.element, "Starting task");
             self.socket
-                .set_clock(self.element.get_clock(), Some(self.element.get_base_time()));
+                .set_clock(self.element.clock(), Some(self.element.base_time()));
             gst_log!(CAT, obj: &self.element, "Task started");
             Ok(())
         }
@@ -609,7 +609,7 @@ impl UdpSrc {
         };
 
         let buffer_pool = gst::BufferPool::new();
-        let mut config = buffer_pool.get_config();
+        let mut config = buffer_pool.config();
         config.set_params(None, settings.mtu, 0, 0);
         buffer_pool.set_config(config).map_err(|err| {
             gst::error_msg!(
@@ -806,7 +806,7 @@ impl ObjectImpl for UdpSrc {
         pspec: &glib::ParamSpec,
     ) {
         let mut settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "address" => {
                 settings.address = value.get().expect("type checked upstream");
             }
@@ -849,7 +849,7 @@ impl ObjectImpl for UdpSrc {
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "address" => settings.address.to_value(),
             "port" => settings.port.to_value(),
             "reuse" => settings.reuse.to_value(),

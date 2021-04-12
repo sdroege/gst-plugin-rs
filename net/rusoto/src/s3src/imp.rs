@@ -232,7 +232,7 @@ impl ObjectImpl for S3Src {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "uri" => {
                 let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
             }
@@ -241,7 +241,7 @@ impl ObjectImpl for S3Src {
     }
 
     fn get_property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "uri" => {
                 let url = match *self.url.lock().unwrap() {
                     Some(ref url) => url.to_string(),

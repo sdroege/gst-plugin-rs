@@ -301,16 +301,16 @@ impl Decrypter {
 
                 gst_log!(CAT, obj: pad, "Upstream returned {:?}", peer_query);
 
-                let (flags, min, max, align) = peer_query.get_result();
+                let (flags, min, max, align) = peer_query.result();
                 q.set(flags, min, max, align);
                 q.add_scheduling_modes(&[gst::PadMode::Pull]);
-                gst_log!(CAT, obj: pad, "Returning {:?}", q.get_mut_query());
+                gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
             QueryView::Duration(ref mut q) => {
                 use std::convert::TryInto;
 
-                if q.get_format() != gst::Format::Bytes {
+                if q.format() != gst::Format::Bytes {
                     return pad.query_default(Some(element), query);
                 }
 
@@ -322,7 +322,7 @@ impl Decrypter {
                     return false;
                 }
 
-                let size = match peer_query.get_result().try_into().unwrap() {
+                let size = match peer_query.result().try_into().unwrap() {
                     gst::format::Bytes(Some(size)) => size,
                     gst::format::Bytes(None) => {
                         gst_error!(CAT, "Failed to query upstream duration");
@@ -381,7 +381,7 @@ impl Decrypter {
                 err
             })?;
 
-        if buffer.get_size() != crate::HEADERS_SIZE {
+        if buffer.size() != crate::HEADERS_SIZE {
             let err = gst::loggable_error!(CAT, "Headers buffer has wrong size");
             err.log_with_object(element);
             return Err(err);
@@ -636,7 +636,7 @@ impl ObjectImpl for Decrypter {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "sender-key" => {
                 let mut props = self.props.lock().unwrap();
                 props.sender_key = value.get().expect("type checked upstream");
@@ -652,7 +652,7 @@ impl ObjectImpl for Decrypter {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "receiver-key" => {
                 let props = self.props.lock().unwrap();
                 props.receiver_key.to_value()

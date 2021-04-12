@@ -342,7 +342,7 @@ mod imp_src {
             value: &glib::Value,
             pspec: &glib::ParamSpec,
         ) {
-            match pspec.get_name() {
+            match pspec.name() {
                 "context" => {
                     let context = value
                         .get()
@@ -672,7 +672,7 @@ mod imp_sink {
             value: &glib::Value,
             pspec: &glib::ParamSpec,
         ) {
-            match pspec.get_name() {
+            match pspec.name() {
                 "sender" => {
                     let ItemSender { sender } = value
                         .get::<&ItemSender>()

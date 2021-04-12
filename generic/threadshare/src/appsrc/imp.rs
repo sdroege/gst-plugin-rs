@@ -235,11 +235,11 @@ impl PadSrcHandler for AppSrcPadHandler {
             }
             QueryView::Caps(ref mut q) => {
                 let caps = if let Some(caps) = self.0.configured_caps.lock().unwrap().as_ref() {
-                    q.get_filter()
+                    q.filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
                 } else {
-                    q.get_filter()
+                    q.filter()
                         .map(|f| f.to_owned())
                         .unwrap_or_else(gst::Caps::new_any)
                 };
@@ -386,9 +386,9 @@ impl AppSrc {
 
         let do_timestamp = self.settings.lock().unwrap().do_timestamp;
         if do_timestamp {
-            if let Some(clock) = element.get_clock() {
-                let base_time = element.get_base_time();
-                let now = clock.get_time();
+            if let Some(clock) = element.clock() {
+                let base_time = element.base_time();
+                let now = clock.time();
 
                 let buffer = buffer.make_mut();
                 buffer.set_dts(now - base_time);
@@ -623,7 +623,7 @@ impl ObjectImpl for AppSrc {
         pspec: &glib::ParamSpec,
     ) {
         let mut settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "context" => {
                 settings.context = value
                     .get()
@@ -648,7 +648,7 @@ impl ObjectImpl for AppSrc {
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "context" => settings.context.to_value(),
             "context-wait" => settings.context_wait.to_value(),
             "caps" => settings.caps.to_value(),

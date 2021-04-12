@@ -138,7 +138,7 @@ impl Cea608Overlay {
             layout.set_text(
                 &"12345678901234567890123456789012\n2\n3\n4\n5\n6\n7\n8\n9\n0\n1\n2\n3\n4\n5",
             );
-            let (_ink_rect, logical_rect) = layout.get_extents();
+            let (_ink_rect, logical_rect) = layout.extents();
             if logical_rect.width > video_info.width() as i32 * pango::SCALE
                 || logical_rect.height > video_info.height() as i32 * pango::SCALE
             {
@@ -160,7 +160,7 @@ impl Cea608Overlay {
         let video_info = state.video_info.as_ref().unwrap();
         let layout = state.layout.as_ref().unwrap();
         layout.set_text(text);
-        let (_ink_rect, logical_rect) = layout.get_extents();
+        let (_ink_rect, logical_rect) = layout.extents();
         let height = logical_rect.height / pango::SCALE;
         let width = logical_rect.width / pango::SCALE;
 
@@ -189,7 +189,7 @@ impl Cea608Overlay {
             // Pass ownership of the buffer to the cairo surface but keep around
             // a raw pointer so we can later retrieve it again when the surface
             // is done
-            let buffer_ptr = unsafe { buffer.get_buffer().as_ptr() };
+            let buffer_ptr = unsafe { buffer.buffer().as_ptr() };
             let surface = cairo::ImageSurface::create_for_data(
                 buffer,
                 cairo::Format::ARgb32,
@@ -436,8 +436,8 @@ impl Cea608Overlay {
         }
 
         for meta in buffer.iter_meta::<gst_video::VideoCaptionMeta>() {
-            if meta.get_caption_type() == gst_video::VideoCaptionType::Cea708Cdp {
-                match extract_cdp(meta.get_data()) {
+            if meta.caption_type() == gst_video::VideoCaptionType::Cea708Cdp {
+                match extract_cdp(meta.data()) {
                     Ok(data) => {
                         self.decode_cc_data(pad, element, &mut state, data);
                     }
@@ -446,12 +446,12 @@ impl Cea608Overlay {
                         gst::element_warning!(element, gst::StreamError::Decode, [&e.to_string()]);
                     }
                 }
-            } else if meta.get_caption_type() == gst_video::VideoCaptionType::Cea708Raw {
-                self.decode_cc_data(pad, element, &mut state, meta.get_data());
-            } else if meta.get_caption_type() == gst_video::VideoCaptionType::Cea608S3341a {
-                self.decode_s334_1a(pad, element, &mut state, meta.get_data());
-            } else if meta.get_caption_type() == gst_video::VideoCaptionType::Cea608Raw {
-                let data = meta.get_data();
+            } else if meta.caption_type() == gst_video::VideoCaptionType::Cea708Raw {
+                self.decode_cc_data(pad, element, &mut state, meta.data());
+            } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608S3341a {
+                self.decode_s334_1a(pad, element, &mut state, meta.data());
+            } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608Raw {
+                let data = meta.data();
                 assert!(data.len() % 2 == 0);
                 for i in 0..data.len() / 2 {
                     match state
@@ -514,7 +514,7 @@ impl Cea608Overlay {
         match event.view() {
             EventView::Caps(c) => {
                 let mut state = self.state.lock().unwrap();
-                state.video_info = gst_video::VideoInfo::from_caps(c.get_caps()).ok();
+                state.video_info = gst_video::VideoInfo::from_caps(c.caps()).ok();
                 self.srcpad.check_reconfigure();
                 match self.negotiate(element, &mut state) {
                     Ok(_) => true,
@@ -599,7 +599,7 @@ impl ObjectImpl for Cea608Overlay {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "field" => {
                 let mut settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
@@ -615,7 +615,7 @@ impl ObjectImpl for Cea608Overlay {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "field" => {
                 let settings = self.settings.lock().unwrap();
                 settings.field.to_value()

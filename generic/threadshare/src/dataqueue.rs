@@ -45,10 +45,10 @@ pub enum DataQueueItem {
 impl DataQueueItem {
     fn size(&self) -> (u32, u32) {
         match *self {
-            DataQueueItem::Buffer(ref buffer) => (1, buffer.get_size() as u32),
+            DataQueueItem::Buffer(ref buffer) => (1, buffer.size() as u32),
             DataQueueItem::BufferList(ref list) => (
                 list.len() as u32,
-                list.iter().map(|b| b.get_size() as u32).sum::<u32>(),
+                list.iter().map(|b| b.size() as u32).sum::<u32>(),
             ),
             DataQueueItem::Event(_) => (0, 0),
         }
@@ -56,9 +56,9 @@ impl DataQueueItem {
 
     fn timestamp(&self) -> Option<u64> {
         match *self {
-            DataQueueItem::Buffer(ref buffer) => buffer.get_dts_or_pts().0,
+            DataQueueItem::Buffer(ref buffer) => buffer.dts_or_pts().0,
             DataQueueItem::BufferList(ref list) => {
-                list.iter().filter_map(|b| b.get_dts_or_pts().0).next()
+                list.iter().filter_map(|b| b.dts_or_pts().0).next()
             }
             DataQueueItem::Event(_) => None,
         }
@@ -156,8 +156,8 @@ impl DataQueue {
         for item in inner.queue.drain(..) {
             if let DataQueueItem::Event(event) = item {
                 if event.is_sticky()
-                    && event.get_type() != gst::EventType::Segment
-                    && event.get_type() != gst::EventType::Eos
+                    && event.type_() != gst::EventType::Segment
+                    && event.type_() != gst::EventType::Eos
                 {
                     let _ = src_pad.store_sticky_event(&event);
                 }

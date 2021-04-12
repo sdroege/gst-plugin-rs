@@ -131,7 +131,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
                 RUNTIME_CAT,
                 obj: gst_pad,
                 "Already activated in {:?} mode ",
-                gst_pad.get_mode()
+                gst_pad.mode()
             );
             return Ok(());
         }
@@ -180,7 +180,7 @@ pub trait PadSrcHandler: Clone + Send + Sync + 'static {
     ) -> Result<FlowSuccess, FlowError> {
         // default is to dispatch to `src_event`
         // (as implemented in `gst_pad_send_event_unchecked`)
-        let event_type = event.get_type();
+        let event_type = event.type_();
         event_to_event_full(self.src_event(pad, imp, element, event), event_type)
     }
 
@@ -209,7 +209,7 @@ pub struct PadSrcInner {
 
 impl PadSrcInner {
     fn new(gst_pad: gst::Pad) -> Self {
-        if gst_pad.get_direction() != gst::PadDirection::Src {
+        if gst_pad.direction() != gst::PadDirection::Src {
             panic!("Wrong pad direction for PadSrc");
         }
 
@@ -542,7 +542,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
                 RUNTIME_CAT,
                 obj: gst_pad,
                 "Already activated in {:?} mode ",
-                gst_pad.get_mode()
+                gst_pad.mode()
             );
             return Ok(());
         }
@@ -633,7 +633,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         assert!(!event.is_serialized());
         // default is to dispatch to `sink_event`
         // (as implemented in `gst_pad_send_event_unchecked`)
-        let event_type = event.get_type();
+        let event_type = event.type_();
         event_to_event_full(self.sink_event(pad, imp, element, event), event_type)
     }
 
@@ -647,7 +647,7 @@ pub trait PadSinkHandler: Clone + Send + Sync + 'static {
         assert!(event.is_serialized());
         // default is to dispatch to `sink_event`
         // (as implemented in `gst_pad_send_event_unchecked`)
-        let event_type = event.get_type();
+        let event_type = event.type_();
         event_to_event_full_serialized(
             self.sink_event_serialized(pad, imp, element, event),
             event_type,
@@ -680,7 +680,7 @@ pub struct PadSinkInner {
 
 impl PadSinkInner {
     fn new(gst_pad: gst::Pad) -> Self {
-        if gst_pad.get_direction() != gst::PadDirection::Sink {
+        if gst_pad.direction() != gst::PadDirection::Sink {
             panic!("Wrong pad direction for PadSink");
         }
 

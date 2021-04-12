@@ -70,14 +70,14 @@ fn test_have_cc_data_notify() {
     let mut h = gst_check::Harness::new("ccdetect");
     h.set_src_caps_str("closedcaption/x-cea-708,format=cc_data");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data");
-    h.get_element()
+    h.element()
         .unwrap()
         .set_property("window", &(500_000_000u64))
         .unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc608"), move |o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
@@ -85,7 +85,7 @@ fn test_have_cc_data_notify() {
             o.get_property("cc608").unwrap();
         });
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc708"), move |o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
@@ -115,21 +115,21 @@ fn test_cc_data_window() {
     let mut h = gst_check::Harness::new("ccdetect");
     h.set_src_caps_str("closedcaption/x-cea-708,format=cc_data");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data");
-    h.get_element()
+    h.element()
         .unwrap()
         .set_property("window", &500_000_000u64)
         .unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc608"), move |_o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
             state_guard.cc608_count += 1;
         });
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc708"), move |_o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
@@ -193,21 +193,21 @@ fn test_have_cdp_notify() {
     let mut h = gst_check::Harness::new("ccdetect");
     h.set_src_caps_str("closedcaption/x-cea-708,format=cdp");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cdp");
-    h.get_element()
+    h.element()
         .unwrap()
         .set_property("window", &500_000_000u64)
         .unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc608"), move |_o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
             state_guard.cc608_count += 1;
         });
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc708"), move |_o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
@@ -257,21 +257,18 @@ fn test_malformed_cdp_notify() {
     let mut h = gst_check::Harness::new("ccdetect");
     h.set_src_caps_str("closedcaption/x-cea-708,format=cdp");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cdp");
-    h.get_element()
-        .unwrap()
-        .set_property("window", &0u64)
-        .unwrap();
+    h.element().unwrap().set_property("window", &0u64).unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc608"), move |_o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
             state_guard.cc608_count += 1;
         });
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc708"), move |_o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
@@ -297,21 +294,21 @@ fn test_gap_events() {
     let mut h = gst_check::Harness::new("ccdetect");
     h.set_src_caps_str("closedcaption/x-cea-708,format=cc_data");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data");
-    h.get_element()
+    h.element()
         .unwrap()
         .set_property("window", &500_000_000u64)
         .unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc608"), move |_o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
             state_guard.cc608_count += 1;
         });
     let state_c = state.clone();
-    h.get_element()
+    h.element()
         .unwrap()
         .connect_notify(Some("cc708"), move |_o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();

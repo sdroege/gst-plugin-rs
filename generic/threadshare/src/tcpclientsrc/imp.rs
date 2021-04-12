@@ -174,7 +174,7 @@ impl TcpClientSrcPadHandler {
 
         self.push_prelude(pad, element).await;
 
-        if buffer.get_size() == 0 {
+        if buffer.size() == 0 {
             pad.push_event(gst::event::Eos::new()).await;
             return Ok(gst::FlowSuccess::Ok);
         }
@@ -236,11 +236,11 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
             }
             QueryView::Caps(ref mut q) => {
                 let caps = if let Some(caps) = self.0.configured_caps.lock().unwrap().as_ref() {
-                    q.get_filter()
+                    q.filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))
                         .unwrap_or_else(|| caps.clone())
                 } else {
-                    q.get_filter()
+                    q.filter()
                         .map(|f| f.to_owned())
                         .unwrap_or_else(gst::Caps::new_any)
                 };
@@ -480,7 +480,7 @@ impl TcpClientSrc {
         let port = settings.port;
 
         let buffer_pool = gst::BufferPool::new();
-        let mut config = buffer_pool.get_config();
+        let mut config = buffer_pool.config();
         config.set_params(None, settings.blocksize, 0, 0);
         buffer_pool.set_config(config).map_err(|_| {
             gst::error_msg!(
@@ -631,7 +631,7 @@ impl ObjectImpl for TcpClientSrc {
         pspec: &glib::ParamSpec,
     ) {
         let mut settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "host" => {
                 settings.host = value.get().expect("type checked upstream");
             }
@@ -659,7 +659,7 @@ impl ObjectImpl for TcpClientSrc {
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "host" => settings.host.to_value(),
             "port" => settings.port.to_value(),
             "caps" => settings.caps.to_value(),

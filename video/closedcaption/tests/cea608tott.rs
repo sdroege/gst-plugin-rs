@@ -68,10 +68,10 @@ fn test_parse() {
     for (i, e) in expected.iter().enumerate() {
         let buf = h.try_pull().unwrap();
 
-        assert_eq!(e.0, buf.get_pts(), "Unexpected PTS for {}th buffer", i + 1);
+        assert_eq!(e.0, buf.pts(), "Unexpected PTS for {}th buffer", i + 1);
         assert_eq!(
             e.1,
-            buf.get_duration(),
+            buf.duration(),
             "Unexpected duration for {}th buffer",
             i + 1
         );
@@ -83,9 +83,9 @@ fn test_parse() {
     }
 
     let caps = h
-        .get_sinkpad()
+        .sinkpad()
         .expect("harness has no sinkpad")
-        .get_current_caps()
+        .current_caps()
         .expect("pad has no caps");
     assert_eq!(
         caps,

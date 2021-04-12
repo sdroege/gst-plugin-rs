@@ -187,10 +187,10 @@ impl FallbackSwitch {
         pad: &gst_base::AggregatorPad,
         target_running_time: gst::ClockTime,
     ) -> Result<(), gst::FlowError> {
-        let segment = pad.get_segment();
+        let segment = pad.segment();
 
         /* No segment yet - no data */
-        if segment.get_format() == gst::Format::Undefined {
+        if segment.format() == gst::Format::Undefined {
             return Ok(());
         }
 
@@ -202,7 +202,7 @@ impl FallbackSwitch {
         let mut running_time = gst::ClockTime::none();
 
         while let Some(buffer) = pad.peek_buffer() {
-            let pts = buffer.get_dts_or_pts();
+            let pts = buffer.dts_or_pts();
             let new_running_time = segment.to_running_time(pts);
 
             if pts.is_none() || new_running_time <= target_running_time {
@@ -239,30 +239,30 @@ impl FallbackSwitch {
             CAT,
             obj: preferred_pad,
             "Got buffer on pad {} - {:?}",
-            preferred_pad.get_name(),
+            preferred_pad.name(),
             buffer
         );
 
-        if buffer.get_pts().is_none() {
+        if buffer.pts().is_none() {
             gst_error!(CAT, obj: preferred_pad, "Only buffers with PTS supported");
             return Err(gst::FlowError::Error);
         }
 
         let segment = preferred_pad
-            .get_segment()
+            .segment()
             .downcast::<gst::ClockTime>()
             .map_err(|_| {
                 gst_error!(CAT, obj: preferred_pad, "Only TIME segments supported");
                 gst::FlowError::Error
             })?;
 
-        let running_time = segment.to_running_time(buffer.get_dts_or_pts());
+        let running_time = segment.to_running_time(buffer.dts_or_pts());
 
         {
             // FIXME: This will not work correctly for negative DTS
             let buffer = buffer.make_mut();
-            buffer.set_pts(segment.to_running_time(buffer.get_pts()));
-            buffer.set_dts(segment.to_running_time(buffer.get_dts()));
+            buffer.set_pts(segment.to_running_time(buffer.pts()));
+            buffer.set_dts(segment.to_running_time(buffer.dts()));
         }
 
         if preferred_pad == &self.primary_sinkpad {
@@ -273,7 +273,7 @@ impl FallbackSwitch {
 
         let is_late = {
             if cur_running_time != gst::ClockTime::none() {
-                let latency = agg.get_latency();
+                let latency = agg.latency();
                 if latency.is_some() {
                     let deadline = running_time + latency + 40 * gst::MSECOND;
 
@@ -320,12 +320,12 @@ impl FallbackSwitch {
             && active_sinkpad.as_ref() != Some(preferred_pad.upcast_ref::<gst::Pad>());
 
         if pad_change {
-            if buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT) {
+            if buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
                 gst_info!(
                     CAT,
                     obj: preferred_pad,
                     "Can't change back to sinkpad {}, waiting for keyframe",
-                    preferred_pad.get_name()
+                    preferred_pad.name()
                 );
                 preferred_pad.push_event(
                     gst_video::UpstreamForceKeyUnitEvent::builder()
@@ -380,25 +380,26 @@ impl FallbackSwitch {
                 buffer
             );
 
-            if buffer.get_pts().is_none() {
+            if buffer.pts().is_none() {
                 gst_error!(CAT, obj: backup_pad, "Only buffers with PTS supported");
                 return Err(gst::FlowError::Error);
             }
 
-            let backup_segment = backup_pad
-                .get_segment()
-                .downcast::<gst::ClockTime>()
-                .map_err(|_| {
-                    gst_error!(CAT, obj: backup_pad, "Only TIME segments supported");
-                    gst::FlowError::Error
-                })?;
-            let running_time = backup_segment.to_running_time(buffer.get_dts_or_pts());
+            let backup_segment =
+                backup_pad
+                    .segment()
+                    .downcast::<gst::ClockTime>()
+                    .map_err(|_| {
+                        gst_error!(CAT, obj: backup_pad, "Only TIME segments supported");
+                        gst::FlowError::Error
+                    })?;
+            let running_time = backup_segment.to_running_time(buffer.dts_or_pts());
 
             {
                 // FIXME: This will not work correctly for negative DTS
                 let buffer = buffer.make_mut();
-                buffer.set_pts(backup_segment.to_running_time(buffer.get_pts()));
-                buffer.set_dts(backup_segment.to_running_time(buffer.get_dts()));
+                buffer.set_pts(backup_segment.to_running_time(buffer.pts()));
+                buffer.set_dts(backup_segment.to_running_time(buffer.dts()));
             }
 
             // If we never had a real buffer, initialize with the running time of the fallback
@@ -439,12 +440,12 @@ impl FallbackSwitch {
             let pad_change = settings.auto_switch
                 && active_sinkpad.as_ref() != Some(backup_pad.upcast_ref::<gst::Pad>());
             if pad_change {
-                if buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT) {
+                if buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
                     gst_info!(
                         CAT,
                         obj: backup_pad,
                         "Can't change to sinkpad {} yet, waiting for keyframe",
-                        backup_pad.get_name()
+                        backup_pad.name()
                     );
                     backup_pad.push_event(
                         gst_video::UpstreamForceKeyUnitEvent::builder()
@@ -522,11 +523,11 @@ impl FallbackSwitch {
             )
         };
 
-        let clock = agg.get_clock();
-        let base_time = agg.get_base_time();
+        let clock = agg.clock();
+        let base_time = agg.base_time();
 
         let cur_running_time = if let Some(clock) = clock {
-            clock.get_time() - base_time
+            clock.time() - base_time
         } else {
             gst::ClockTime::none()
         };
@@ -727,7 +728,7 @@ impl ObjectImpl for FallbackSwitch {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let timeout = value.get_some().expect("type checked upstream");
@@ -769,7 +770,7 @@ impl ObjectImpl for FallbackSwitch {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "timeout" => {
                 let settings = self.settings.lock().unwrap();
                 settings.timeout.to_value()
@@ -945,15 +946,15 @@ impl AggregatorImpl for FallbackSwitch {
 
         match event.view() {
             EventView::Caps(caps) => {
-                let caps = caps.get_caps_owned();
+                let caps = caps.caps_owned();
                 gst_debug!(CAT, obj: agg_pad, "Received caps {}", caps);
 
                 let audio_info;
                 let video_info;
-                if caps.get_structure(0).unwrap().get_name() == "audio/x-raw" {
+                if caps.get_structure(0).unwrap().name() == "audio/x-raw" {
                     audio_info = gst_audio::AudioInfo::from_caps(&caps).ok();
                     video_info = None;
-                } else if caps.get_structure(0).unwrap().get_name() == "video/x-raw" {
+                } else if caps.get_structure(0).unwrap().name() == "video/x-raw" {
                     audio_info = None;
                     video_info = gst_video::VideoInfo::from_caps(&caps).ok();
                 } else {
@@ -1013,7 +1014,7 @@ impl AggregatorImpl for FallbackSwitch {
                 CAT,
                 obj: agg,
                 "Have buffer on sinkpad {}, immediate timeout",
-                preferred_pad.get_name()
+                preferred_pad.name()
             );
             0.into()
         } else if self.primary_sinkpad.is_eos() {
@@ -1023,13 +1024,13 @@ impl AggregatorImpl for FallbackSwitch {
             .as_ref()
             .and_then(|p| p.peek_buffer().map(|buffer| (buffer, p)))
         {
-            if buffer.get_pts().is_none() {
+            if buffer.pts().is_none() {
                 gst_error!(CAT, obj: agg, "Only buffers with PTS supported");
                 // Trigger aggregate immediately to error out immediately
                 return 0.into();
             }
 
-            let segment = match backup_sinkpad.get_segment().downcast::<gst::ClockTime>() {
+            let segment = match backup_sinkpad.segment().downcast::<gst::ClockTime>() {
                 Ok(segment) => segment,
                 Err(_) => {
                     gst_error!(CAT, obj: agg, "Only TIME segments supported");
@@ -1038,12 +1039,12 @@ impl AggregatorImpl for FallbackSwitch {
                 }
             };
 
-            let running_time = segment.to_running_time(buffer.get_dts_or_pts());
+            let running_time = segment.to_running_time(buffer.dts_or_pts());
             gst_debug!(
                 CAT,
                 obj: agg,
                 "Have buffer on {} pad, timeout at {}",
-                backup_sinkpad.get_name(),
+                backup_sinkpad.name(),
                 running_time
             );
             running_time
@@ -1061,7 +1062,7 @@ impl AggregatorImpl for FallbackSwitch {
         agg_pad: &gst_base::AggregatorPad,
         mut buffer: gst::Buffer,
     ) -> Option<gst::Buffer> {
-        let segment = match agg_pad.get_segment().downcast::<gst::ClockTime>() {
+        let segment = match agg_pad.segment().downcast::<gst::ClockTime>() {
             Ok(segment) => segment,
             Err(_) => {
                 gst_error!(CAT, obj: agg, "Only TIME segments supported");
@@ -1069,7 +1070,7 @@ impl AggregatorImpl for FallbackSwitch {
             }
         };
 
-        let pts = buffer.get_pts();
+        let pts = buffer.pts();
         if pts.is_none() {
             gst_error!(CAT, obj: agg, "Only buffers with PTS supported");
             return Some(buffer);
@@ -1091,12 +1092,12 @@ impl AggregatorImpl for FallbackSwitch {
             return Some(buffer);
         }
 
-        let duration = if buffer.get_duration().is_some() {
-            buffer.get_duration()
+        let duration = if buffer.duration().is_some() {
+            buffer.duration()
         } else if let Some(ref audio_info) = pad_state.audio_info {
             gst::SECOND
                 .mul_div_floor(
-                    buffer.get_size() as u64,
+                    buffer.size() as u64,
                     audio_info.rate() as u64 * audio_info.bpf() as u64,
                 )
                 .unwrap()
@@ -1178,7 +1179,7 @@ impl AggregatorImpl for FallbackSwitch {
 
         let (mut buffer, active_caps, pad_change) = res?;
 
-        let current_src_caps = agg.get_static_pad("src").unwrap().get_current_caps();
+        let current_src_caps = agg.get_static_pad("src").unwrap().current_caps();
         if Some(&active_caps) != current_src_caps.as_ref() {
             gst_info!(
                 CAT,

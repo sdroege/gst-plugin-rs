@@ -748,13 +748,13 @@ impl Cea608ToJson {
 
         let mut state = self.state.borrow_mut();
 
-        let pts = buffer.get_pts();
+        let pts = buffer.pts();
         if pts.is_none() {
             gst_error!(CAT, obj: pad, "Require timestamped buffers");
             return Err(gst::FlowError::Error);
         }
 
-        let duration = buffer.get_duration();
+        let duration = buffer.duration();
         if duration.is_none() {
             gst_error!(CAT, obj: pad, "Require buffers with duration");
             return Err(gst::FlowError::Error);

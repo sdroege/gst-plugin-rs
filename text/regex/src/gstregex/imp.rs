@@ -187,7 +187,7 @@ impl ObjectImpl for RegEx {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "commands" => {
                 let mut state = self.state.lock().unwrap();
                 state.commands = vec![];
@@ -202,7 +202,7 @@ impl ObjectImpl for RegEx {
                             continue;
                         }
                     };
-                    let operation = s.get_name();
+                    let operation = s.name();
 
                     let pattern = match s.get::<String>("pattern") {
                         Ok(Some(pattern)) => pattern,
@@ -249,7 +249,7 @@ impl ObjectImpl for RegEx {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "commands" => {
                 let state = self.state.lock().unwrap();
                 let mut commands = vec![];

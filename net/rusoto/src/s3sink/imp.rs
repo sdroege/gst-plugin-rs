@@ -397,7 +397,7 @@ impl ObjectImpl for S3Sink {
     ) {
         let mut settings = self.settings.lock().unwrap();
 
-        match pspec.get_name() {
+        match pspec.name() {
             "bucket" => {
                 settings.bucket = value.get::<String>().expect("type checked upstream");
             }
@@ -423,7 +423,7 @@ impl ObjectImpl for S3Sink {
     fn get_property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
 
-        match pspec.get_name() {
+        match pspec.name() {
             "key" => settings.key.to_value(),
             "bucket" => settings.bucket.to_value(),
             "region" => settings.region.name().to_value(),

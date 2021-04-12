@@ -405,9 +405,9 @@ impl FlvDemux {
 
         match query.view_mut() {
             QueryView::Position(ref mut q) => {
-                let fmt = q.get_format();
+                let fmt = q.format();
                 if fmt == gst::Format::Time {
-                    if self.sinkpad.peer_query(q.get_mut_query()) {
+                    if self.sinkpad.peer_query(q.query_mut()) {
                         return true;
                     }
 
@@ -424,9 +424,9 @@ impl FlvDemux {
                 }
             }
             QueryView::Duration(ref mut q) => {
-                let fmt = q.get_format();
+                let fmt = q.format();
                 if fmt == gst::Format::Time {
-                    if self.sinkpad.peer_query(q.get_mut_query()) {
+                    if self.sinkpad.peer_query(q.query_mut()) {
                         return true;
                     }
 
@@ -637,7 +637,7 @@ impl FlvDemux {
     }
 
     fn create_srcpad(&self, element: &super::FlvDemux, name: &str, caps: &gst::Caps) -> gst::Pad {
-        let templ = element.get_element_class().get_pad_template(name).unwrap();
+        let templ = element.element_class().get_pad_template(name).unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some(name))
             .event_function(|pad, parent, event| {
                 FlvDemux::catch_panic_pad_function(
@@ -1196,11 +1196,11 @@ impl StreamingState {
     }
 
     fn update_position(&mut self, buffer: &gst::Buffer) {
-        if buffer.get_pts().is_some() {
-            let pts = buffer.get_pts();
+        if buffer.pts().is_some() {
+            let pts = buffer.pts();
             self.last_position = self.last_position.max(pts).unwrap_or(pts);
-        } else if buffer.get_dts().is_some() {
-            let dts = buffer.get_dts();
+        } else if buffer.dts().is_some() {
+            let dts = buffer.dts();
             self.last_position = self.last_position.max(dts).unwrap_or(dts);
         }
     }

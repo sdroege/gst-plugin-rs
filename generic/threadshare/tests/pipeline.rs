@@ -131,17 +131,17 @@ fn multiple_contexts_queue() {
         l_clone.quit();
     });
 
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     let l_clone = l.clone();
     bus.add_watch(move |_, msg| {
         use gst::MessageView;
 
         match msg.view() {
             MessageView::StateChanged(state_changed) => {
-                if let Some(source) = state_changed.get_src() {
-                    if source.get_type() == gst::Pipeline::static_type()
-                        && state_changed.get_old() == gst::State::Paused
-                        && state_changed.get_current() == gst::State::Playing
+                if let Some(source) = state_changed.src() {
+                    if source.type_() == gst::Pipeline::static_type()
+                        && state_changed.old() == gst::State::Paused
+                        && state_changed.current() == gst::State::Playing
                     {
                         if let Some(test_scenario) = test_scenario.take() {
                             std::thread::spawn(test_scenario);
@@ -153,9 +153,9 @@ fn multiple_contexts_queue() {
                 gst_error!(
                     CAT,
                     "multiple_contexts_queue: Error from {:?}: {} ({:?})",
-                    err.get_src().map(|s| s.get_path_string()),
-                    err.get_error(),
-                    err.get_debug()
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
                 );
                 l_clone.quit();
             }
@@ -290,17 +290,17 @@ fn multiple_contexts_proxy() {
         l_clone.quit();
     });
 
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     let l_clone = l.clone();
     bus.add_watch(move |_, msg| {
         use gst::MessageView;
 
         match msg.view() {
             MessageView::StateChanged(state_changed) => {
-                if let Some(source) = state_changed.get_src() {
-                    if source.get_type() == gst::Pipeline::static_type()
-                        && state_changed.get_old() == gst::State::Paused
-                        && state_changed.get_current() == gst::State::Playing
+                if let Some(source) = state_changed.src() {
+                    if source.type_() == gst::Pipeline::static_type()
+                        && state_changed.old() == gst::State::Paused
+                        && state_changed.current() == gst::State::Playing
                     {
                         if let Some(test_scenario) = test_scenario.take() {
                             std::thread::spawn(test_scenario);
@@ -312,9 +312,9 @@ fn multiple_contexts_proxy() {
                 gst_error!(
                     CAT,
                     "multiple_contexts_proxy: Error from {:?}: {} ({:?})",
-                    err.get_src().map(|s| s.get_path_string()),
-                    err.get_error(),
-                    err.get_debug()
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
                 );
                 l_clone.quit();
             }
@@ -422,19 +422,19 @@ fn eos() {
 
     let l_clone = l.clone();
     pipeline
-        .get_bus()
+        .bus()
         .unwrap()
         .add_watch(move |_, msg| {
             use gst::MessageView;
 
             match msg.view() {
                 MessageView::StateChanged(state_changed) => {
-                    if let Some(source) = state_changed.get_src() {
-                        if source.get_type() != gst::Pipeline::static_type() {
+                    if let Some(source) = state_changed.src() {
+                        if source.type_() != gst::Pipeline::static_type() {
                             return glib::Continue(true);
                         }
-                        if state_changed.get_old() == gst::State::Paused
-                            && state_changed.get_current() == gst::State::Playing
+                        if state_changed.old() == gst::State::Paused
+                            && state_changed.current() == gst::State::Playing
                         {
                             if let Some(scenario) = scenario.take() {
                                 std::thread::spawn(scenario);
@@ -446,9 +446,9 @@ fn eos() {
                     gst_error!(
                         CAT,
                         "eos: Error from {:?}: {} ({:?})",
-                        err.get_src().map(|s| s.get_path_string()),
-                        err.get_error(),
-                        err.get_debug()
+                        err.src().map(|s| s.path_string()),
+                        err.error(),
+                        err.debug()
                     );
                     l_clone.quit();
                 }
@@ -582,19 +582,19 @@ fn premature_shutdown() {
 
     let l_clone = l.clone();
     pipeline
-        .get_bus()
+        .bus()
         .unwrap()
         .add_watch(move |_, msg| {
             use gst::MessageView;
 
             match msg.view() {
                 MessageView::StateChanged(state_changed) => {
-                    if let Some(source) = state_changed.get_src() {
-                        if source.get_type() != gst::Pipeline::static_type() {
+                    if let Some(source) = state_changed.src() {
+                        if source.type_() != gst::Pipeline::static_type() {
                             return glib::Continue(true);
                         }
-                        if state_changed.get_old() == gst::State::Paused
-                            && state_changed.get_current() == gst::State::Playing
+                        if state_changed.old() == gst::State::Paused
+                            && state_changed.current() == gst::State::Playing
                         {
                             if let Some(scenario) = scenario.take() {
                                 std::thread::spawn(scenario);
@@ -606,9 +606,9 @@ fn premature_shutdown() {
                     gst_error!(
                         CAT,
                         "premature_shutdown: Error from {:?}: {} ({:?})",
-                        err.get_src().map(|s| s.get_path_string()),
-                        err.get_error(),
-                        err.get_debug()
+                        err.src().map(|s| s.path_string()),
+                        err.error(),
+                        err.debug()
                     );
                     l_clone.quit();
                 }

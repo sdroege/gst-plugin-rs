@@ -300,17 +300,17 @@ impl PadSrcHandler for QueuePadSrcHandler {
 
             gst_log!(CAT, obj: pad.gst_pad(), "Upstream returned {:?}", new_query);
 
-            let (flags, min, max, align) = new_query.get_result();
+            let (flags, min, max, align) = new_query.result();
             q.set(flags, min, max, align);
             q.add_scheduling_modes(
                 &new_query
-                    .get_scheduling_modes()
+                    .scheduling_modes()
                     .iter()
                     .cloned()
                     .filter(|m| m != &gst::PadMode::Pull)
                     .collect::<Vec<_>>(),
             );
-            gst_log!(CAT, obj: pad.gst_pad(), "Returning {:?}", q.get_mut_query());
+            gst_log!(CAT, obj: pad.gst_pad(), "Returning {:?}", q.query_mut());
             return true;
         }
 
@@ -573,9 +573,7 @@ impl Queue {
                     }
 
                     let schedule_now = match item {
-                        DataQueueItem::Event(ref ev) if ev.get_type() != gst::EventType::Eos => {
-                            false
-                        }
+                        DataQueueItem::Event(ref ev) if ev.type_() != gst::EventType::Eos => false,
                         _ => true,
                     };
 
@@ -777,7 +775,7 @@ impl ObjectImpl for Queue {
         pspec: &glib::ParamSpec,
     ) {
         let mut settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "max-size-buffers" => {
                 settings.max_size_buffers = value.get_some().expect("type checked upstream");
             }
@@ -802,7 +800,7 @@ impl ObjectImpl for Queue {
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "max-size-buffers" => settings.max_size_buffers.to_value(),
             "max-size-bytes" => settings.max_size_bytes.to_value(),
             "max-size-time" => settings.max_size_time.to_value(),

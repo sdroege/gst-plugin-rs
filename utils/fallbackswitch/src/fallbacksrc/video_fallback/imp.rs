@@ -69,7 +69,7 @@ impl ObjectSubclass for VideoFallbackSource {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.get_pad_template("src").unwrap();
-        let srcpad = gst::GhostPad::builder_with_template(&templ, Some(&templ.get_name())).build();
+        let srcpad = gst::GhostPad::builder_with_template(&templ, Some(&templ.name())).build();
 
         Self {
             srcpad,
@@ -113,7 +113,7 @@ impl ObjectImpl for VideoFallbackSource {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "uri" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
@@ -143,7 +143,7 @@ impl ObjectImpl for VideoFallbackSource {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "uri" => {
                 let settings = self.settings.lock().unwrap();
                 settings.uri.to_value()
@@ -379,10 +379,10 @@ impl VideoFallbackSource {
 
                         let s = caps.get_structure(0).unwrap();
                         let decoder;
-                        if s.get_name() == "image/jpeg" {
+                        if s.name() == "image/jpeg" {
                             decoder = gst::ElementFactory::make("jpegdec", Some("decoder"))
                                 .expect("jpegdec not found");
-                        } else if s.get_name() == "image/png" {
+                        } else if s.name() == "image/png" {
                             decoder = gst::ElementFactory::make("pngdec", Some("decoder"))
                                 .expect("pngdec not found");
                         } else {

@@ -153,7 +153,7 @@ impl ObjectImpl for HsvDetector {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "hue-ref" => {
                 let mut settings = self.settings.lock().unwrap();
                 let hue_ref = value.get_some().expect("type checked upstream");
@@ -233,7 +233,7 @@ impl ObjectImpl for HsvDetector {
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "hue-ref" => {
                 let settings = self.settings.lock().unwrap();
                 settings.hue_ref.to_value()

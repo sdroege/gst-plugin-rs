@@ -76,7 +76,7 @@ impl Cea608ToTt {
             }
         };
 
-        let buffer_pts = buffer.get_pts();
+        let buffer_pts = buffer.pts();
         if buffer_pts.is_none() {
             gst_error!(CAT, obj: pad, "Require timestamped buffers");
             return Err(gst::FlowError::Error);
@@ -284,8 +284,8 @@ impl Cea608ToTt {
                     return true;
                 }
 
-                let mut downstream_caps = match self.srcpad.get_allowed_caps() {
-                    None => self.srcpad.get_pad_template_caps(),
+                let mut downstream_caps = match self.srcpad.allowed_caps() {
+                    None => self.srcpad.pad_template_caps(),
                     Some(caps) => caps,
                 };
 
@@ -304,13 +304,13 @@ impl Cea608ToTt {
                 );
 
                 let s = downstream_caps.get_structure(0).unwrap();
-                let new_caps = if s.get_name() == "application/x-subtitle-vtt" {
+                let new_caps = if s.name() == "application/x-subtitle-vtt" {
                     state.format = Some(Format::Vtt);
                     gst::Caps::builder("application/x-subtitle-vtt").build()
-                } else if s.get_name() == "application/x-subtitle" {
+                } else if s.name() == "application/x-subtitle" {
                     state.format = Some(Format::Srt);
                     gst::Caps::builder("application/x-subtitle").build()
-                } else if s.get_name() == "text/x-raw" {
+                } else if s.name() == "text/x-raw" {
                     state.format = Some(Format::Raw);
                     gst::Caps::builder("text/x-raw")
                         .field("format", &"utf8")

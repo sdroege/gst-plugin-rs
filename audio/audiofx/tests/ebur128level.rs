@@ -104,7 +104,7 @@ fn run_test(layout: gst_audio::AudioLayout, format: gst_audio::AudioFormat) {
         format.to_str()
     ));
     let bus = gst::Bus::new();
-    h.get_element().unwrap().set_bus(Some(&bus));
+    h.element().unwrap().set_bus(Some(&bus));
     h.play();
 
     // Pull all buffers until EOS
@@ -118,8 +118,8 @@ fn run_test(layout: gst_audio::AudioLayout, format: gst_audio::AudioFormat) {
     while let Some(msg) = bus.pop() {
         match msg.view() {
             gst::MessageView::Element(msg) => {
-                let s = msg.get_structure().unwrap();
-                if s.get_name() == "ebur128-level" {
+                let s = msg.structure().unwrap();
+                if s.name() == "ebur128-level" {
                     num_msgs += 1;
                     let timestamp = s.get_some::<u64>("timestamp").unwrap();
                     let running_time = s.get_some::<u64>("running-time").unwrap();

@@ -136,7 +136,7 @@ impl ObjectImpl for FileSink {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "location" => {
                 let res = match value.get::<String>() {
                     Ok(Some(location)) => FileLocation::try_from_path_str(location)
@@ -154,7 +154,7 @@ impl ObjectImpl for FileSink {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "location" => {
                 let settings = self.settings.lock().unwrap();
                 let location = settings

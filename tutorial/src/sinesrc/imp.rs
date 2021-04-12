@@ -233,7 +233,7 @@ impl ObjectImpl for SineSrc {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "samples-per-buffer" => {
                 let mut settings = self.settings.lock().unwrap();
                 let samples_per_buffer = value.get_some().expect("type checked upstream");
@@ -304,7 +304,7 @@ impl ObjectImpl for SineSrc {
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "samples-per-buffer" => {
                 let settings = self.settings.lock().unwrap();
                 settings.samples_per_buffer.to_value()
@@ -544,7 +544,7 @@ impl BaseSrcImpl for SineSrc {
         // reverse playback is requested. These values will all be used during buffer creation
         // and for calculating the timestamps, etc.
 
-        if segment.get_rate() < 0.0 {
+        if segment.rate() < 0.0 {
             gst_error!(CAT, obj: element, "Reverse playback not supported");
             return false;
         }
@@ -564,13 +564,13 @@ impl BaseSrcImpl for SineSrc {
             use std::f64::consts::PI;
 
             let sample_offset = segment
-                .get_start()
+                .start()
                 .unwrap()
                 .mul_div_floor(rate, gst::SECOND_VAL)
                 .unwrap();
 
             let sample_stop = segment
-                .get_stop()
+                .stop()
                 .map(|v| v.mul_div_floor(rate, gst::SECOND_VAL).unwrap());
 
             let accumulator =
@@ -606,8 +606,8 @@ impl BaseSrcImpl for SineSrc {
                 return false;
             }
 
-            let sample_offset = segment.get_start().unwrap();
-            let sample_stop = segment.get_stop().0;
+            let sample_offset = segment.start().unwrap();
+            let sample_stop = segment.stop().0;
 
             let accumulator =
                 (sample_offset as f64).rem(2.0 * PI * (settings.freq as f64) / (rate as f64));
@@ -635,7 +635,7 @@ impl BaseSrcImpl for SineSrc {
                 CAT,
                 obj: element,
                 "Can't seek in format {:?}",
-                segment.get_format()
+                segment.format()
             );
 
             false
@@ -757,17 +757,14 @@ impl PushSrcImpl for SineSrc {
         // with its own clock would require various translations between the two clocks.
         // This is out of scope for the tutorial though.
         if element.is_live() {
-            let clock = match element.get_clock() {
+            let clock = match element.clock() {
                 None => return Ok(buffer),
                 Some(clock) => clock,
             };
 
-            let segment = element
-                .get_segment()
-                .downcast::<gst::format::Time>()
-                .unwrap();
-            let base_time = element.get_base_time();
-            let running_time = segment.to_running_time(buffer.get_pts() + buffer.get_duration());
+            let segment = element.segment().downcast::<gst::format::Time>().unwrap();
+            let base_time = element.base_time();
+            let running_time = segment.to_running_time(buffer.pts() + buffer.duration());
 
             // The last sample's clock time is the base time of the element plus the
             // running time of the last sample
@@ -794,7 +791,7 @@ impl PushSrcImpl for SineSrc {
                 obj: element,
                 "Waiting until {}, now {}",
                 wait_until,
-                clock.get_time()
+                clock.time()
             );
             let (res, jitter) = id.wait();
             gst_log!(CAT, obj: element, "Waited res {:?} jitter {}", res, jitter);

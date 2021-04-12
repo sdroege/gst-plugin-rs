@@ -789,7 +789,7 @@ impl TtToCea608 {
         element: &super::TtToCea608,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let pts = match buffer.get_pts() {
+        let pts = match buffer.pts() {
             gst::CLOCK_TIME_NONE => {
                 gst::element_error!(
                     element,
@@ -801,7 +801,7 @@ impl TtToCea608 {
             pts => Ok(pts),
         }?;
 
-        let duration = match buffer.get_duration() {
+        let duration = match buffer.duration() {
             gst::CLOCK_TIME_NONE => {
                 gst::element_error!(
                     element,
@@ -884,8 +884,8 @@ impl TtToCea608 {
 
         match event.view() {
             EventView::Caps(e) => {
-                let mut downstream_caps = match self.srcpad.get_allowed_caps() {
-                    None => self.srcpad.get_pad_template_caps(),
+                let mut downstream_caps = match self.srcpad.allowed_caps() {
+                    None => self.srcpad.pad_template_caps(),
                     Some(caps) => caps,
                 };
 
@@ -906,9 +906,9 @@ impl TtToCea608 {
                 let mut state = self.state.lock().unwrap();
                 state.framerate = s.get_some::<gst::Fraction>("framerate").unwrap();
 
-                let upstream_caps = e.get_caps();
+                let upstream_caps = e.caps();
                 let s = upstream_caps.get_structure(0).unwrap();
-                state.json_input = s.get_name() == "application/x-json";
+                state.json_input = s.name() == "application/x-json";
 
                 gst_debug!(CAT, obj: pad, "Pushing caps {}", caps);
 
@@ -1066,7 +1066,7 @@ impl ObjectImpl for TtToCea608 {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "mode" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.mode = value
@@ -1091,7 +1091,7 @@ impl ObjectImpl for TtToCea608 {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "mode" => {
                 let settings = self.settings.lock().unwrap();
                 settings.mode.to_value()

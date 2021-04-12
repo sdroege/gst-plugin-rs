@@ -147,7 +147,7 @@ impl TextWrap {
         self.update_wrapper(element);
 
         let mut pts: gst::ClockTime = buffer
-            .get_pts()
+            .pts()
             .ok_or_else(|| {
                 gst_error!(CAT, obj: element, "Need timestamped buffers");
                 gst::FlowError::Error
@@ -155,7 +155,7 @@ impl TextWrap {
             .into();
 
         let duration: gst::ClockTime = buffer
-            .get_duration()
+            .duration()
             .ok_or_else(|| {
                 gst_error!(CAT, obj: element, "Need buffers with duration");
                 gst::FlowError::Error
@@ -181,7 +181,7 @@ impl TextWrap {
             let mut bufferlist = gst::BufferList::new();
             let n_lines = std::cmp::max(self.settings.lock().unwrap().lines, 1);
 
-            if state.start_ts.is_some() && state.start_ts + accumulate_time < buffer.get_pts() {
+            if state.start_ts.is_some() && state.start_ts + accumulate_time < buffer.pts() {
                 let mut buf = gst::Buffer::from_mut_slice(
                     mem::replace(&mut state.current_text, String::new()).into_bytes(),
                 );
@@ -200,10 +200,10 @@ impl TextWrap {
                 duration / data.split_whitespace().count() as u64;
 
             if state.start_ts.is_none() {
-                state.start_ts = buffer.get_pts();
+                state.start_ts = buffer.pts();
             }
 
-            state.end_ts = buffer.get_pts();
+            state.end_ts = buffer.pts();
 
             let words = data.split_whitespace();
             let mut current_text = state.current_text.to_string();
@@ -397,7 +397,7 @@ impl TextWrap {
                 let ret = self.sinkpad.peer_query(&mut peer_query);
 
                 if ret {
-                    let (live, min, _) = peer_query.get_result();
+                    let (live, min, _) = peer_query.result();
                     let our_latency: gst::ClockTime = self
                         .settings
                         .lock()
@@ -530,7 +530,7 @@ impl ObjectImpl for TextWrap {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "dictionary" => {
                 let mut settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
@@ -570,7 +570,7 @@ impl ObjectImpl for TextWrap {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "dictionary" => {
                 let settings = self.settings.lock().unwrap();
                 settings.dictionary.to_value()

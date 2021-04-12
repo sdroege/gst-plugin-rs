@@ -85,6 +85,6 @@ fn test_png_encode(video_info: &gst_video::VideoInfo) {
 
     (0..5).for_each(|_| {
         let buffer = h.pull().unwrap();
-        assert!(!buffer.get_flags().contains(gst::BufferFlags::DELTA_UNIT))
+        assert!(!buffer.flags().contains(gst::BufferFlags::DELTA_UNIT))
     });
 }

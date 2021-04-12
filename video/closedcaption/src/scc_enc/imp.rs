@@ -78,11 +78,11 @@ impl State {
 
         assert!(self.internal_buffer.len() < MAXIMUM_PACKETES_PER_LINE);
 
-        if buffer.get_size() != 2 {
+        if buffer.size() != 2 {
             gst::element_error!(
                 element,
                 gst::StreamError::Format,
-                ["Wrongly sized CEA608 packet: {}", buffer.get_size()]
+                ["Wrongly sized CEA608 packet: {}", buffer.size()]
             );
 
             return Err(gst::FlowError::Error);
@@ -105,7 +105,7 @@ impl State {
 
                 gst::FlowError::Error
             })?
-            .get_tc();
+            .tc();
 
         if self.expected_timecode.is_none() {
             self.expected_timecode = Some(timecode.clone());
@@ -173,7 +173,7 @@ impl State {
                     // Checked already before the buffer has been pushed to the
                     // internal_buffer
                     .expect("Buffer without timecode")
-                    .get_tc();
+                    .tc();
 
                 let _ = write!(outbuf, "{}\t", timecode);
                 line_start = false;
@@ -206,7 +206,7 @@ impl State {
             first_buf
                 .copy_into(buf_mut, gst::BUFFER_COPY_METADATA, 0, None)
                 .expect("Failed to copy buffer metadata");
-            buf_mut.set_pts(first_buf.get_pts());
+            buf_mut.set_pts(first_buf.pts());
             buffer
         };
 
@@ -252,7 +252,7 @@ impl SccEnc {
 
         match event.view() {
             EventView::Caps(ev) => {
-                let caps = ev.get_caps();
+                let caps = ev.caps();
                 let s = caps.get_structure(0).unwrap();
                 let framerate = match s.get_some::<gst::Fraction>("framerate") {
                     Ok(framerate) => Some(framerate),
@@ -319,7 +319,7 @@ impl SccEnc {
         match query.view_mut() {
             QueryView::Seeking(mut q) => {
                 // We don't support any seeking at all
-                let fmt = q.get_format();
+                let fmt = q.format();
                 q.set(
                     false,
                     gst::GenericFormattedValue::Other(fmt, -1),

@@ -143,7 +143,7 @@ impl ObjectImpl for AudioEcho {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "max-delay" => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
@@ -167,7 +167,7 @@ impl ObjectImpl for AudioEcho {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "max-delay" => {
                 let settings = self.settings.lock().unwrap();
                 settings.max_delay.to_value()

@@ -43,7 +43,7 @@ fn compute_probability(typefind: &mut TypeFind) -> TypeFindProbability {
     let mut best = TypeFindProbability::None;
     // Try looking at the start of the file if its length isn't available
     let len = typefind
-        .get_length()
+        .length()
         .unwrap_or(TYPEFIND_SEARCH_WINDOW as u64 * NB_WINDOWS);
     let step = len / NB_WINDOWS;
 

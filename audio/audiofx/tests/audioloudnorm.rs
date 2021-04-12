@@ -101,7 +101,7 @@ fn run_test(
     pipeline.set_state(gst::State::Playing).unwrap();
 
     let mut eos = false;
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     while let Some(msg) = bus.timed_pop(gst::CLOCK_TIME_NONE) {
         use gst::MessageView;
         match msg.view() {
@@ -131,9 +131,9 @@ fn run_test(
     for sample in samples.iter() {
         use std::cmp::Ordering;
 
-        let buf = sample.get_buffer().unwrap();
+        let buf = sample.buffer().unwrap();
 
-        let ts = buf.get_pts();
+        let ts = buf.pts();
         match ts.cmp(&expected_ts) {
             Ordering::Greater => {
                 assert!(

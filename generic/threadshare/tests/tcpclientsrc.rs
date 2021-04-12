@@ -92,7 +92,7 @@ fn test_push() {
     pipeline.set_state(gst::State::Playing).unwrap();
 
     let mut eos = false;
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     while let Some(msg) = bus.timed_pop(5 * gst::SECOND) {
         use gst::MessageView;
         match msg.view() {
@@ -108,12 +108,12 @@ fn test_push() {
     assert!(eos);
     let samples = samples.lock().unwrap();
     for sample in samples.iter() {
-        assert_eq!(Some(caps.as_ref()), sample.get_caps());
+        assert_eq!(Some(caps.as_ref()), sample.caps());
     }
 
-    let total_received_size = samples.iter().fold(0, |acc, sample| {
-        acc + sample.get_buffer().unwrap().get_size()
-    });
+    let total_received_size = samples
+        .iter()
+        .fold(0, |acc, sample| acc + sample.buffer().unwrap().size());
     assert_eq!(total_received_size, 3 * 160);
 
     pipeline.set_state(gst::State::Null).unwrap();

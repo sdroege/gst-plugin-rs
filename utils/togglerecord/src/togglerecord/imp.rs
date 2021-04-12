@@ -158,14 +158,14 @@ enum HandleResult<T> {
 }
 
 trait HandleData: Sized {
-    fn get_pts(&self) -> gst::ClockTime;
-    fn get_dts(&self) -> gst::ClockTime;
-    fn get_dts_or_pts(&self) -> gst::ClockTime {
-        let dts = self.get_dts();
+    fn pts(&self) -> gst::ClockTime;
+    fn dts(&self) -> gst::ClockTime;
+    fn dts_or_pts(&self) -> gst::ClockTime {
+        let dts = self.dts();
         if dts.is_some() {
             dts
         } else {
-            self.get_pts()
+            self.pts()
         }
     }
     fn get_duration(&self, state: &StreamState) -> gst::ClockTime;
@@ -179,11 +179,11 @@ trait HandleData: Sized {
 }
 
 impl HandleData for (gst::ClockTime, gst::ClockTime) {
-    fn get_pts(&self) -> gst::ClockTime {
+    fn pts(&self) -> gst::ClockTime {
         self.0
     }
 
-    fn get_dts(&self) -> gst::ClockTime {
+    fn dts(&self) -> gst::ClockTime {
         self.0
     }
 
@@ -217,11 +217,11 @@ impl HandleData for (gst::ClockTime, gst::ClockTime) {
 }
 
 impl HandleData for gst::Buffer {
-    fn get_pts(&self) -> gst::ClockTime {
+    fn pts(&self) -> gst::ClockTime {
         gst::BufferRef::get_pts(self)
     }
 
-    fn get_dts(&self) -> gst::ClockTime {
+    fn dts(&self) -> gst::ClockTime {
         gst::BufferRef::get_dts(self)
     }
 
@@ -246,7 +246,7 @@ impl HandleData for gst::Buffer {
                 return gst::CLOCK_TIME_NONE;
             }
 
-            let size = self.get_size() as u64;
+            let size = self.size() as u64;
             let num_samples = size / audio_info.bpf() as u64;
             gst::SECOND
                 .mul_div_floor(num_samples, audio_info.rate() as u64)
@@ -273,7 +273,7 @@ impl HandleData for gst::Buffer {
         } else if let Some(ref video_info) = state.video_info {
             if video_info.format() == gst_video::VideoFormat::Unknown
                 || video_info.format() == gst_video::VideoFormat::Encoded
-                || self.get_dts_or_pts() != self.get_pts()
+                || self.dts_or_pts() != self.pts()
             {
                 return false;
             }
@@ -355,7 +355,7 @@ impl ToggleRecord {
     ) -> Result<HandleResult<T>, gst::FlowError> {
         let mut state = stream.state.lock();
 
-        let mut dts_or_pts = data.get_dts_or_pts();
+        let mut dts_or_pts = data.dts_or_pts();
         let duration = data.get_duration(&state);
 
         if !dts_or_pts.is_some() {
@@ -382,11 +382,11 @@ impl ToggleRecord {
         };
 
         // This will only do anything for non-raw data
-        dts_or_pts = state.in_segment.get_start().max(dts_or_pts).unwrap();
-        dts_or_pts_end = state.in_segment.get_start().max(dts_or_pts_end).unwrap();
-        if state.in_segment.get_stop().is_some() {
-            dts_or_pts = state.in_segment.get_stop().min(dts_or_pts).unwrap();
-            dts_or_pts_end = state.in_segment.get_stop().min(dts_or_pts_end).unwrap();
+        dts_or_pts = state.in_segment.start().max(dts_or_pts).unwrap();
+        dts_or_pts_end = state.in_segment.start().max(dts_or_pts_end).unwrap();
+        if state.in_segment.stop().is_some() {
+            dts_or_pts = state.in_segment.stop().min(dts_or_pts).unwrap();
+            dts_or_pts_end = state.in_segment.stop().min(dts_or_pts_end).unwrap();
         }
 
         let current_running_time = state.in_segment.to_running_time(dts_or_pts);
@@ -609,7 +609,7 @@ impl ToggleRecord {
         // Calculate end pts & current running time and make sure we stay in the segment
         let mut state = stream.state.lock();
 
-        let mut pts = data.get_pts();
+        let mut pts = data.pts();
         let duration = data.get_duration(&state);
 
         if pts.is_none() {
@@ -617,7 +617,7 @@ impl ToggleRecord {
             return Err(gst::FlowError::Error);
         }
 
-        let dts = data.get_dts();
+        let dts = data.dts();
         if dts.is_some() && pts.is_some() && dts != pts {
             gst::element_error!(
                 element,
@@ -651,11 +651,11 @@ impl ToggleRecord {
         };
 
         // This will only do anything for non-raw data
-        pts = state.in_segment.get_start().max(pts).unwrap();
-        pts_end = state.in_segment.get_start().max(pts_end).unwrap();
-        if state.in_segment.get_stop().is_some() {
-            pts = state.in_segment.get_stop().min(pts).unwrap();
-            pts_end = state.in_segment.get_stop().min(pts_end).unwrap();
+        pts = state.in_segment.start().max(pts).unwrap();
+        pts_end = state.in_segment.start().max(pts_end).unwrap();
+        if state.in_segment.stop().is_some() {
+            pts = state.in_segment.stop().min(pts).unwrap();
+            pts_end = state.in_segment.stop().min(pts_end).unwrap();
         }
 
         let current_running_time = state.in_segment.to_running_time(pts);
@@ -762,13 +762,13 @@ impl ToggleRecord {
                     .in_segment
                     .position_from_running_time(rec_state.last_recording_start);
                 if clip_start.is_none() {
-                    clip_start = state.in_segment.get_start();
+                    clip_start = state.in_segment.start();
                 }
                 let mut clip_stop = state
                     .in_segment
                     .position_from_running_time(rec_state.last_recording_stop);
                 if clip_stop.is_none() {
-                    clip_stop = state.in_segment.get_stop();
+                    clip_stop = state.in_segment.stop();
                 }
                 let mut segment = state.in_segment.clone();
                 segment.set_start(clip_start);
@@ -813,13 +813,13 @@ impl ToggleRecord {
                     .in_segment
                     .position_from_running_time(rec_state.last_recording_start);
                 if clip_start.is_none() {
-                    clip_start = state.in_segment.get_start();
+                    clip_start = state.in_segment.start();
                 }
                 let mut clip_stop = state
                     .in_segment
                     .position_from_running_time(rec_state.last_recording_stop);
                 if clip_stop.is_none() {
-                    clip_stop = state.in_segment.get_stop();
+                    clip_stop = state.in_segment.stop();
                 }
                 let mut segment = state.in_segment.clone();
                 segment.set_start(clip_start);
@@ -928,7 +928,7 @@ impl ToggleRecord {
                         .in_segment
                         .position_from_running_time(rec_state.last_recording_stop);
                     if clip_stop.is_none() {
-                        clip_stop = state.in_segment.get_stop();
+                        clip_stop = state.in_segment.stop();
                     }
                     let mut segment = state.in_segment.clone();
                     segment.set_stop(clip_stop);
@@ -1004,7 +1004,7 @@ impl ToggleRecord {
                         .in_segment
                         .position_from_running_time(rec_state.last_recording_start);
                     if clip_start.is_none() {
-                        clip_start = state.in_segment.get_start();
+                        clip_start = state.in_segment.start();
                     }
                     let mut segment = state.in_segment.clone();
                     segment.set_start(clip_start);
@@ -1084,7 +1084,7 @@ impl ToggleRecord {
             gst::element_error!(
                 element,
                 gst::CoreError::Pad,
-                ["Unknown pad {:?}", pad.get_name()]
+                ["Unknown pad {:?}", pad.name()]
             );
             gst::FlowError::Error
         })?;
@@ -1172,7 +1172,7 @@ impl ToggleRecord {
 
             events.append(&mut state.pending_events);
 
-            let out_running_time = state.out_segment.to_running_time(buffer.get_pts());
+            let out_running_time = state.out_segment.to_running_time(buffer.pts());
 
             // Unlock before pushing
             drop(state);
@@ -1207,7 +1207,7 @@ impl ToggleRecord {
                 gst::element_error!(
                     element,
                     gst::CoreError::Pad,
-                    ["Unknown pad {:?}", pad.get_name()]
+                    ["Unknown pad {:?}", pad.name()]
                 );
                 return false;
             }
@@ -1244,13 +1244,13 @@ impl ToggleRecord {
             }
             EventView::Caps(c) => {
                 let mut state = stream.state.lock();
-                let caps = c.get_caps();
+                let caps = c.caps();
                 let s = caps.get_structure(0).unwrap();
-                if s.get_name().starts_with("audio/") {
+                if s.name().starts_with("audio/") {
                     state.audio_info = gst_audio::AudioInfo::from_caps(caps).ok();
                     gst_log!(CAT, obj: pad, "Got audio caps {:?}", state.audio_info);
                     state.video_info = None;
-                } else if s.get_name().starts_with("video/") {
+                } else if s.name().starts_with("video/") {
                     state.audio_info = None;
                     state.video_info = gst_video::VideoInfo::from_caps(caps).ok();
                     gst_log!(CAT, obj: pad, "Got video caps {:?}", state.video_info);
@@ -1262,35 +1262,32 @@ impl ToggleRecord {
             EventView::Segment(e) => {
                 let mut state = stream.state.lock();
 
-                let segment = match e.get_segment().clone().downcast::<gst::ClockTime>() {
+                let segment = match e.segment().clone().downcast::<gst::ClockTime>() {
                     Err(segment) => {
                         gst::element_error!(
                             element,
                             gst::StreamError::Format,
-                            [
-                                "Only Time segments supported, got {:?}",
-                                segment.get_format(),
-                            ]
+                            ["Only Time segments supported, got {:?}", segment.format(),]
                         );
                         return false;
                     }
                     Ok(segment) => segment,
                 };
 
-                if (segment.get_rate() - 1.0).abs() > f64::EPSILON {
+                if (segment.rate() - 1.0).abs() > f64::EPSILON {
                     gst::element_error!(
                         element,
                         gst::StreamError::Format,
                         [
                             "Only rate==1.0 segments supported, got {:?}",
-                            segment.get_rate(),
+                            segment.rate(),
                         ]
                     );
                     return false;
                 }
 
                 state.in_segment = segment;
-                state.segment_seqnum = event.get_seqnum();
+                state.segment_seqnum = event.seqnum();
                 state.segment_pending = true;
                 state.current_running_time = gst::CLOCK_TIME_NONE;
                 state.current_running_time_end = gst::CLOCK_TIME_NONE;
@@ -1358,7 +1355,7 @@ impl ToggleRecord {
 
         // If a serialized event and coming after Segment and a new Segment is pending,
         // queue up and send at a later time (buffer/gap) after we sent the Segment
-        let type_ = event.get_type();
+        let type_ = event.type_();
         if forward
             && type_ != gst::EventType::Eos
             && type_.is_serialized()
@@ -1413,7 +1410,7 @@ impl ToggleRecord {
                 gst::element_error!(
                     element,
                     gst::CoreError::Pad,
-                    ["Unknown pad {:?}", pad.get_name()]
+                    ["Unknown pad {:?}", pad.name()]
                 );
                 return false;
             }
@@ -1441,7 +1438,7 @@ impl ToggleRecord {
                 gst::element_error!(
                     element,
                     gst::CoreError::Pad,
-                    ["Unknown pad {:?}", pad.get_name()]
+                    ["Unknown pad {:?}", pad.name()]
                 );
                 return false;
             }
@@ -1454,7 +1451,7 @@ impl ToggleRecord {
 
         let rec_state = self.state.lock();
         let running_time_offset = rec_state.running_time_offset.unwrap_or(0) as i64;
-        let offset = event.get_running_time_offset();
+        let offset = event.running_time_offset();
         event
             .make_mut()
             .set_running_time_offset(offset + running_time_offset);
@@ -1482,7 +1479,7 @@ impl ToggleRecord {
                 gst::element_error!(
                     element,
                     gst::CoreError::Pad,
-                    ["Unknown pad {:?}", pad.get_name()]
+                    ["Unknown pad {:?}", pad.name()]
                 );
                 return false;
             }
@@ -1500,34 +1497,34 @@ impl ToggleRecord {
 
                 gst_log!(CAT, obj: pad, "Downstream returned {:?}", new_query);
 
-                let (flags, min, max, align) = new_query.get_result();
+                let (flags, min, max, align) = new_query.result();
                 q.set(flags, min, max, align);
                 q.add_scheduling_modes(
                     &new_query
-                        .get_scheduling_modes()
+                        .scheduling_modes()
                         .iter()
                         .cloned()
                         .filter(|m| m != &gst::PadMode::Pull)
                         .collect::<Vec<_>>(),
                 );
-                gst_log!(CAT, obj: pad, "Returning {:?}", q.get_mut_query());
+                gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
             QueryView::Seeking(ref mut q) => {
                 // Seeking is not possible here
-                let format = q.get_format();
+                let format = q.format();
                 q.set(
                     false,
                     gst::GenericFormattedValue::new(format, -1),
                     gst::GenericFormattedValue::new(format, -1),
                 );
 
-                gst_log!(CAT, obj: pad, "Returning {:?}", q.get_mut_query());
+                gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
             // Position and duration is always the current recording position
             QueryView::Position(ref mut q) => {
-                if q.get_format() == gst::Format::Time {
+                if q.format() == gst::Format::Time {
                     let state = stream.state.lock();
                     let rec_state = self.state.lock();
                     let mut recording_duration = rec_state.recording_duration;
@@ -1556,7 +1553,7 @@ impl ToggleRecord {
                 }
             }
             QueryView::Duration(ref mut q) => {
-                if q.get_format() == gst::Format::Time {
+                if q.format() == gst::Format::Time {
                     let state = stream.state.lock();
                     let rec_state = self.state.lock();
                     let mut recording_duration = rec_state.recording_duration;
@@ -1601,7 +1598,7 @@ impl ToggleRecord {
                 gst::element_error!(
                     element,
                     gst::CoreError::Pad,
-                    ["Unknown pad {:?}", pad.get_name()]
+                    ["Unknown pad {:?}", pad.name()]
                 );
                 return gst::Iterator::from_vec(vec![]);
             }
@@ -1728,7 +1725,7 @@ impl ObjectImpl for ToggleRecord {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "record" => {
                 let mut settings = self.settings.lock();
                 let record = value.get_some().expect("type checked upstream");
@@ -1747,7 +1744,7 @@ impl ObjectImpl for ToggleRecord {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "record" => {
                 let settings = self.settings.lock();
                 settings.record.to_value()

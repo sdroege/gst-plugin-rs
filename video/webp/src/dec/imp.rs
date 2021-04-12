@@ -99,7 +99,7 @@ impl<'a> Decoder<'_> {
         unsafe { ffi::WebPAnimDecoderHasMoreFrames(self.decoder) != 0 }
     }
 
-    fn get_info(&self) -> Option<Info> {
+    fn info(&self) -> Option<Info> {
         let mut info = std::mem::MaybeUninit::zeroed();
         unsafe {
             if ffi::WebPAnimDecoderGetInfo(self.decoder, info.as_mut_ptr()) == 0 {
@@ -114,12 +114,12 @@ impl<'a> Decoder<'_> {
         }
     }
 
-    fn get_next(&mut self) -> Option<Frame> {
+    fn next(&mut self) -> Option<Frame> {
         let mut buf = std::ptr::null_mut();
         let buf_ptr: *mut *mut u8 = &mut buf;
         let mut timestamp: i32 = 0;
 
-        if let Some(info) = self.get_info() {
+        if let Some(info) = self.info() {
             unsafe {
                 if ffi::WebPAnimDecoderGetNext(self.decoder, buf_ptr, &mut timestamp) == 0 {
                     return None;
@@ -162,7 +162,7 @@ impl WebPDec {
 
         let mut state = self.state.lock().unwrap();
 
-        state.total_size += buffer.get_size();
+        state.total_size += buffer.size();
         state.buffers.push(buffer);
 
         Ok(gst::FlowSuccess::Ok)
@@ -191,7 +191,7 @@ impl WebPDec {
             gst::error_msg!(gst::StreamError::Decode, ["Failed to decode picture"])
         })?;
 
-        let info = decoder.get_info().ok_or_else(|| {
+        let info = decoder.info().ok_or_else(|| {
             gst::error_msg!(gst::StreamError::Decode, ["Failed to get animation info"])
         })?;
 
@@ -219,7 +219,7 @@ impl WebPDec {
         let _ = self.srcpad.push_event(gst::event::Segment::new(&segment));
 
         while decoder.has_more_frames() {
-            let frame = decoder.get_next().ok_or_else(|| {
+            let frame = decoder.next().ok_or_else(|| {
                 gst::error_msg!(gst::StreamError::Decode, ["Failed to get next frame"])
             })?;
 

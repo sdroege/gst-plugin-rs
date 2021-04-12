@@ -375,7 +375,7 @@ impl SccParse {
 
         let mut timecode = state.handle_timecode(&tc, framerate, element)?;
         let start_time = gst::ClockTime::from(timecode.nsec_since_daily_jam());
-        let segment_start = state.segment.get_start();
+        let segment_start = state.segment.start();
         let clip_buffers = if state.seeking {
             // If we are in the middle of seeking, check whether this line
             // contains start frame, and if so, unset seeking flag
@@ -430,7 +430,7 @@ impl SccParse {
             timecode.increment_frame();
 
             if clip_buffers {
-                let end_time = buffer.get_pts() + buffer.get_duration();
+                let end_time = buffer.pts() + buffer.duration();
                 if end_time < segment_start {
                     gst_trace!(
                         CAT,
@@ -443,8 +443,8 @@ impl SccParse {
                 }
             }
 
-            send_eos = state.segment.get_stop().is_some()
-                && buffer.get_pts() + buffer.get_duration() >= state.segment.get_stop();
+            send_eos = state.segment.stop().is_some()
+                && buffer.pts() + buffer.duration() >= state.segment.stop();
 
             let buffers = buffers.get_mut().unwrap();
             buffers.add(buffer);
@@ -566,7 +566,7 @@ impl SccParse {
             return Err(loggable_error!(CAT, "Failed to query upstream duration"));
         }
 
-        let size = match q.get_result().try_into().unwrap() {
+        let size = match q.result().try_into().unwrap() {
             gst::format::Bytes(Some(size)) => size,
             gst::format::Bytes(None) => {
                 return Err(loggable_error!(CAT, "Failed to query upstream duration"));
@@ -817,7 +817,7 @@ impl SccParse {
             _ => {
                 if event.is_sticky()
                     && !self.srcpad.has_current_caps()
-                    && event.get_type() > gst::EventType::Caps
+                    && event.type_() > gst::EventType::Caps
                 {
                     gst_log!(CAT, obj: pad, "Deferring sticky event until we have caps");
                     let mut state = self.state.lock().unwrap();
@@ -864,7 +864,7 @@ impl SccParse {
             return false;
         }
 
-        let seek_seqnum = event.get_seqnum();
+        let seek_seqnum = event.seqnum();
 
         let event = gst::event::FlushStart::builder()
             .seqnum(seek_seqnum)
@@ -947,7 +947,7 @@ impl SccParse {
             QueryView::Seeking(mut q) => {
                 let state = self.state.lock().unwrap();
 
-                let fmt = q.get_format();
+                let fmt = q.format();
 
                 if fmt == gst::Format::Time {
                     if let Some(pull) = state.pull.as_ref() {
@@ -966,7 +966,7 @@ impl SccParse {
             }
             QueryView::Position(ref mut q) => {
                 // For Time answer ourselfs, otherwise forward
-                if q.get_format() == gst::Format::Time {
+                if q.format() == gst::Format::Time {
                     let state = self.state.lock().unwrap();
                     q.set(state.last_position);
                     true
@@ -977,7 +977,7 @@ impl SccParse {
             QueryView::Duration(ref mut q) => {
                 // For Time answer ourselfs, otherwise forward
                 let state = self.state.lock().unwrap();
-                if q.get_format() == gst::Format::Time {
+                if q.format() == gst::Format::Time {
                     if let Some(pull) = state.pull.as_ref() {
                         if pull.duration.is_some() {
                             q.set(state.pull.as_ref().unwrap().duration);

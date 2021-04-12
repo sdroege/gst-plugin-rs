@@ -185,7 +185,7 @@ impl ObjectImpl for EbuR128Level {
         pspec: &glib::ParamSpec,
     ) {
         let mut settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "mode" => {
                 let mode = value.get_some().expect("type checked upstream");
                 gst_info!(
@@ -225,7 +225,7 @@ impl ObjectImpl for EbuR128Level {
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         let settings = self.settings.lock().unwrap();
-        match pspec.get_name() {
+        match pspec.name() {
             "mode" => settings.mode.to_value(),
             "post-messages" => settings.post_messages.to_value(),
             "interval" => settings.interval.to_value(),
@@ -432,8 +432,8 @@ impl BaseTransformImpl for EbuR128Level {
             gst::FlowError::NotNegotiated
         })?;
 
-        let mut timestamp = buf.get_pts();
-        let segment = element.get_segment().downcast::<gst::ClockTime>().ok();
+        let mut timestamp = buf.pts();
+        let segment = element.segment().downcast::<gst::ClockTime>().ok();
 
         let buf = gst_audio::AudioBufferRef::from_buffer_ref_readable(&buf, &state.info).map_err(
             |_| {

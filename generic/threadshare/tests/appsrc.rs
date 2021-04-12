@@ -36,7 +36,7 @@ fn push() {
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
     {
-        let appsrc = h.get_element().unwrap();
+        let appsrc = h.element().unwrap();
         appsrc.set_property("caps", &caps).unwrap();
         appsrc.set_property("do-timestamp", &true).unwrap();
         appsrc.set_property("context", &"appsrc-push").unwrap();
@@ -45,7 +45,7 @@ fn push() {
     h.play();
 
     {
-        let appsrc = h.get_element().unwrap();
+        let appsrc = h.element().unwrap();
         for _ in 0..3 {
             assert!(appsrc
                 .emit_by_name("push-buffer", &[&gst::Buffer::new()])
@@ -78,7 +78,7 @@ fn push() {
             }
             EventView::Caps(ev) => {
                 assert_eq!(n_events, 1);
-                let event_caps = ev.get_caps();
+                let event_caps = ev.caps();
                 assert_eq!(caps.as_ref(), event_caps);
             }
             EventView::Segment(..) => {
@@ -102,7 +102,7 @@ fn pause_regular() {
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
     {
-        let appsrc = h.get_element().unwrap();
+        let appsrc = h.element().unwrap();
         appsrc.set_property("caps", &caps).unwrap();
         appsrc.set_property("do-timestamp", &true).unwrap();
         appsrc.set_property("context", &"appsrc-pause").unwrap();
@@ -110,7 +110,7 @@ fn pause_regular() {
 
     h.play();
 
-    let appsrc = h.get_element().unwrap();
+    let appsrc = h.element().unwrap();
 
     // Initial buffer
     assert!(appsrc
@@ -172,7 +172,7 @@ fn flush_regular() {
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
     {
-        let appsrc = h.get_element().unwrap();
+        let appsrc = h.element().unwrap();
         appsrc.set_property("caps", &caps).unwrap();
         appsrc.set_property("do-timestamp", &true).unwrap();
         appsrc.set_property("context", &"appsrc-flush").unwrap();
@@ -180,7 +180,7 @@ fn flush_regular() {
 
     h.play();
 
-    let appsrc = h.get_element().unwrap();
+    let appsrc = h.element().unwrap();
 
     // Initial buffer
     assert!(appsrc
@@ -231,7 +231,7 @@ fn pause_flush() {
 
     let caps = gst::Caps::new_simple("foo/bar", &[]);
     {
-        let appsrc = h.get_element().unwrap();
+        let appsrc = h.element().unwrap();
         appsrc.set_property("caps", &caps).unwrap();
         appsrc.set_property("do-timestamp", &true).unwrap();
         appsrc
@@ -241,7 +241,7 @@ fn pause_flush() {
 
     h.play();
 
-    let appsrc = h.get_element().unwrap();
+    let appsrc = h.element().unwrap();
 
     // Initial buffer
     assert!(appsrc

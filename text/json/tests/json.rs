@@ -55,8 +55,8 @@ fn test_enc() {
     );
 
     let buf = h.pull().expect("Couldn't pull buffer");
-    assert_eq!(buf.get_pts(), 0.into());
-    assert_eq!(buf.get_duration(), 2 * gst::SECOND);
+    assert_eq!(buf.pts(), 0.into());
+    assert_eq!(buf.duration(), 2 * gst::SECOND);
     let map = buf.map_readable().expect("Couldn't map buffer readable");
     assert_eq!(
         std::str::from_utf8(map.as_ref()),
@@ -87,7 +87,7 @@ fn test_parse() {
 
         match ev.view() {
             EventView::Caps(ev) => {
-                assert!(ev.get_caps().is_strictly_equal(&gst::Caps::new_simple(
+                assert!(ev.caps().is_strictly_equal(&gst::Caps::new_simple(
                     &"application/x-json",
                     &[(&"format", &"test")]
                 )));
@@ -98,7 +98,7 @@ fn test_parse() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
     let map = buf.map_readable().expect("Couldn't map buffer readable");
-    assert_eq!(buf.get_pts(), 0.into());
-    assert_eq!(buf.get_duration(), 2 * gst::SECOND);
+    assert_eq!(buf.pts(), 0.into());
+    assert_eq!(buf.duration(), 2 * gst::SECOND);
     assert_eq!(std::str::from_utf8(map.as_ref()), Ok("{\"foo\":42}"));
 }

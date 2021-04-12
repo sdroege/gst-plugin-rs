@@ -49,12 +49,12 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
 
     let videoconvert_clone = videoconvert.clone();
     decodebin.connect_pad_added(move |_, pad| {
-        let caps = pad.get_current_caps().unwrap();
+        let caps = pad.current_caps().unwrap();
         let s = caps.get_structure(0).unwrap();
 
         let sinkpad = videoconvert_clone.get_static_pad("sink").unwrap();
 
-        if s.get_name() == "video/x-raw" && !sinkpad.is_linked() {
+        if s.name() == "video/x-raw" && !sinkpad.is_linked() {
             pad.link(&sinkpad).unwrap();
         }
     });
@@ -147,7 +147,7 @@ fn create_ui(app: &gtk::Application) {
             None => return,
         };
 
-        let drop = drop_button.get_active();
+        let drop = drop_button.active();
         if drop {
             let mut drop_id = drop_id.borrow_mut();
             if drop_id.is_none() {
@@ -170,7 +170,7 @@ fn create_ui(app: &gtk::Application) {
         Inhibit(false)
     });
 
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     let app_weak = app.downgrade();
     bus.add_watch_local(move |_, msg| {
         use gst::MessageView;
@@ -185,9 +185,9 @@ fn create_ui(app: &gtk::Application) {
             MessageView::Error(err) => {
                 println!(
                     "Error from {:?}: {} ({:?})",
-                    msg.get_src().map(|s| s.get_path_string()),
-                    err.get_error(),
-                    err.get_debug()
+                    msg.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
                 );
                 app.quit();
             }

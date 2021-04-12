@@ -81,8 +81,8 @@ struct GapPacket {
 impl GapPacket {
     fn new(buffer: gst::Buffer) -> Self {
         let rtp_buffer = RTPBuffer::from_buffer_readable(&buffer).unwrap();
-        let seq = rtp_buffer.get_seq();
-        let pt = rtp_buffer.get_payload_type();
+        let seq = rtp_buffer.seq();
+        let pt = rtp_buffer.payload_type();
         drop(rtp_buffer);
 
         Self { buffer, seq, pt }
@@ -318,14 +318,14 @@ impl SinkHandler {
             let rtp_buffer =
                 RTPBuffer::from_buffer_readable(&buffer).map_err(|_| gst::FlowError::Error)?;
             (
-                rtp_buffer.get_seq(),
-                rtp_buffer.get_timestamp(),
-                rtp_buffer.get_payload_type(),
+                rtp_buffer.seq(),
+                rtp_buffer.timestamp(),
+                rtp_buffer.payload_type(),
             )
         };
 
-        let mut pts = buffer.get_pts();
-        let mut dts = buffer.get_dts();
+        let mut pts = buffer.pts();
+        let mut dts = buffer.dts();
         let mut estimated_dts = false;
 
         gst_log!(
@@ -344,7 +344,7 @@ impl SinkHandler {
         }
 
         if dts.is_none() {
-            dts = element.get_current_running_time();
+            dts = element.current_running_time();
             pts = dts;
 
             estimated_dts = state.clock_rate.is_some();
@@ -363,7 +363,7 @@ impl SinkHandler {
 
             gst_debug!(CAT, obj: pad, "New payload type: {}", pt);
 
-            if let Some(caps) = pad.get_current_caps() {
+            if let Some(caps) = pad.current_caps() {
                 /* Ignore errors at this point, as we want to emit request-pt-map */
                 let _ = self.parse_caps(inner, &mut state, element, &caps, pt);
             }
@@ -400,7 +400,7 @@ impl SinkHandler {
             dts,
             estimated_dts,
             rtptime,
-            element.get_base_time(),
+            element.base_time(),
             0,
             false,
         );
@@ -626,11 +626,7 @@ impl PadSinkHandler for SinkHandler {
             match event.view() {
                 EventView::Segment(e) => {
                     let mut state = jb.state.lock().unwrap();
-                    state.segment = e
-                        .get_segment()
-                        .clone()
-                        .downcast::<gst::format::Time>()
-                        .unwrap();
+                    state.segment = e.segment().clone().downcast::<gst::format::Time>().unwrap();
                 }
                 EventView::FlushStop(..) => {
                     if let Err(err) = jb.task.flush_stop() {
@@ -797,9 +793,9 @@ impl SrcHandler {
                 Some(item) => item,
             };
 
-            let dts = jb_item.get_dts();
-            let pts = jb_item.get_pts();
-            let seq = jb_item.get_seqnum();
+            let dts = jb_item.dts();
+            let pts = jb_item.pts();
+            let seq = jb_item.seqnum();
             let mut buffer = jb_item.into_buffer();
 
             let lost_events = {
@@ -808,7 +804,7 @@ impl SrcHandler {
                 buffer.set_dts(state.segment.to_running_time(dts));
                 buffer.set_pts(state.segment.to_running_time(pts));
 
-                if state.last_popped_pts.is_some() && buffer.get_pts() < state.last_popped_pts {
+                if state.last_popped_pts.is_some() && buffer.pts() < state.last_popped_pts {
                     buffer.set_pts(state.last_popped_pts)
                 }
 
@@ -830,7 +826,7 @@ impl SrcHandler {
                 lost_events
             };
 
-            state.last_popped_pts = buffer.get_pts();
+            state.last_popped_pts = buffer.pts();
             if let Some(pts) = state.last_popped_pts.nseconds() {
                 state.position = pts.into();
             }
@@ -858,7 +854,7 @@ impl SrcHandler {
         latency: gst::ClockTime,
         context_wait: gst::ClockTime,
     ) -> (gst::ClockTime, Option<(gst::ClockTime, Duration)>) {
-        let now = element.get_current_running_time();
+        let now = element.current_running_time();
 
         gst_debug!(
             CAT,
@@ -965,7 +961,7 @@ impl PadSrcHandler for SrcHandler {
 
                 if ret {
                     let settings = jb.settings.lock().unwrap();
-                    let (_, mut min_latency, _) = peer_query.get_result();
+                    let (_, mut min_latency, _) = peer_query.result();
                     min_latency += (settings.latency_ms as u64) * gst::SECOND;
                     let max_latency = gst::CLOCK_TIME_NONE;
 
@@ -975,7 +971,7 @@ impl PadSrcHandler for SrcHandler {
                 ret
             }
             QueryView::Position(ref mut q) => {
-                if q.get_format() != gst::Format::Time {
+                if q.format() != gst::Format::Time {
                     jb.sink_pad.gst_pad().peer_query(query)
                 } else {
                     let state = jb.state.lock().unwrap();
@@ -1459,7 +1455,7 @@ impl ObjectImpl for JitterBuffer {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "latency" => {
                 let latency_ms = {
                     let mut settings = self.settings.lock().unwrap();
@@ -1500,7 +1496,7 @@ impl ObjectImpl for JitterBuffer {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "latency" => {
                 let settings = self.settings.lock().unwrap();
                 settings.latency_ms.to_value()

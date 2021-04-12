@@ -252,7 +252,7 @@ impl State {
                 let outbuf = outbuf.get_mut().unwrap();
                 outbuf.set_pts(pts);
                 outbuf.set_duration(
-                    (outbuf.get_size() as u64)
+                    (outbuf.size() as u64)
                         .mul_div_floor(gst::SECOND_VAL, (self.info.bpf() * self.info.rate()) as u64)
                         .into(),
                 );
@@ -309,7 +309,7 @@ impl State {
             let outbuf = outbuf.get_mut().unwrap();
             outbuf.set_pts(pts);
             outbuf.set_duration(
-                (outbuf.get_size() as u64)
+                (outbuf.size() as u64)
                     .mul_div_floor(gst::SECOND_VAL, (self.info.bpf() * self.info.rate()) as u64)
                     .into(),
             );
@@ -1560,7 +1560,7 @@ impl AudioLoudNorm {
         };
 
         let mut outbufs = vec![];
-        if buffer.get_flags().contains(gst::BufferFlags::DISCONT) {
+        if buffer.flags().contains(gst::BufferFlags::DISCONT) {
             gst_debug!(CAT, obj: element, "Draining on discontinuity");
             match state.drain(element) {
                 Ok(outbuf) => {
@@ -1598,7 +1598,7 @@ impl AudioLoudNorm {
 
         match event.view() {
             EventView::Caps(c) => {
-                let caps = c.get_caps();
+                let caps = c.caps();
                 gst_info!(CAT, obj: pad, "Got caps {:?}", caps);
 
                 let info = match gst_audio::AudioInfo::from_caps(caps) {
@@ -1687,7 +1687,7 @@ impl AudioLoudNorm {
             QueryView::Latency(ref mut q) => {
                 let mut peer_query = gst::query::Latency::new();
                 if self.sinkpad.peer_query(&mut peer_query) {
-                    let (live, min_latency, max_latency) = peer_query.get_result();
+                    let (live, min_latency, max_latency) = peer_query.result();
                     q.set(
                         live,
                         min_latency + 3 * gst::SECOND,
@@ -1810,7 +1810,7 @@ impl ObjectImpl for AudioLoudNorm {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "loudness-target" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.loudness_target = value.get_some().expect("type checked upstream");
@@ -1832,7 +1832,7 @@ impl ObjectImpl for AudioLoudNorm {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "loudness-target" => {
                 let settings = self.settings.lock().unwrap();
                 settings.loudness_target.to_value()

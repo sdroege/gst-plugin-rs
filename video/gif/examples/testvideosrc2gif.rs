@@ -24,7 +24,7 @@ fn main() {
     gstgif::plugin_register_static().expect("Failed to register gif plugin");
 
     let pipeline = gst::parse_launch(ENCODE_PIPELINE).unwrap();
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
 
     pipeline
         .set_state(gst::State::Playing)
@@ -38,9 +38,9 @@ fn main() {
             MessageView::Error(err) => {
                 println!(
                     "Error from {:?}: {} ({:?})",
-                    err.get_src().map(|s| s.get_path_string()),
-                    err.get_error(),
-                    err.get_debug()
+                    err.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
                 );
                 break;
             }

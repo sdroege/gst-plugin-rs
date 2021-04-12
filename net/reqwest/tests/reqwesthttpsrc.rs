@@ -172,7 +172,7 @@ impl Harness {
 
                     match msg.view() {
                         MessageView::Error(err) => {
-                            return err.get_error();
+                            return err.error();
                         }
                         _ => (),
                     }
@@ -205,13 +205,13 @@ impl Harness {
 
                     match msg.view() {
                         MessageView::StateChanged(state) => {
-                            return state.get_current();
+                            return state.current();
                         }
                         MessageView::Error(err) => {
                             panic!(
                                 "Got error: {} ({})",
-                                err.get_error(),
-                                err.get_debug().unwrap_or_else(|| String::from("None"))
+                                err.error(),
+                                err.debug().unwrap_or_else(|| String::from("None"))
                             );
                         }
                         _ => (),
@@ -239,7 +239,7 @@ impl Harness {
                     match ev.view() {
                         EventView::Segment(seg) => {
                             return seg
-                                .get_segment()
+                                .segment()
                                 .clone()
                                 .downcast::<gst::format::Bytes>()
                                 .unwrap();
@@ -254,8 +254,8 @@ impl Harness {
                         MessageView::Error(err) => {
                             panic!(
                                 "Got error: {} ({})",
-                                err.get_error(),
-                                err.get_debug().unwrap_or_else(|| String::from("None"))
+                                err.error(),
+                                err.debug().unwrap_or_else(|| String::from("None"))
                             );
                         }
                         _ => (),
@@ -294,8 +294,8 @@ impl Harness {
                         MessageView::Error(err) => {
                             panic!(
                                 "Got error: {} ({})",
-                                err.get_error(),
-                                err.get_debug().unwrap_or_else(|| String::from("None"))
+                                err.error(),
+                                err.debug().unwrap_or_else(|| String::from("None"))
                             );
                         }
                         _ => (),
@@ -316,7 +316,7 @@ impl Drop for Harness {
     fn drop(&mut self) {
         // Shut down everything that was set up for this test harness
         // and wait until the tokio runtime exited
-        let bus = self.src.get_bus().unwrap();
+        let bus = self.src.bus().unwrap();
         bus.set_flushing(true);
 
         // Drop the receiver first before setting the state so that
@@ -376,8 +376,8 @@ fn test_basic_request() {
         // Map the buffer readable and check if it contains exactly the data we would expect at
         // this point after reading everything else we read in previous runs
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        let mut read_buf = vec![0; map.size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 
@@ -434,8 +434,8 @@ fn test_basic_request_inverted_defaults() {
         // Map the buffer readable and check if it contains exactly the data we would expect at
         // this point after reading everything else we read in previous runs
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        let mut read_buf = vec![0; map.size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 
@@ -512,8 +512,8 @@ fn test_extra_headers() {
         // Map the buffer readable and check if it contains exactly the data we would expect at
         // this point after reading everything else we read in previous runs
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        let mut read_buf = vec![0; map.size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 
@@ -572,8 +572,8 @@ fn test_cookies_property() {
         // Map the buffer readable and check if it contains exactly the data we would expect at
         // this point after reading everything else we read in previous runs
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        let mut read_buf = vec![0; map.size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 
@@ -632,8 +632,8 @@ fn test_iradio_mode() {
         // Map the buffer readable and check if it contains exactly the data we would expect at
         // this point after reading everything else we read in previous runs
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        let mut read_buf = vec![0; map.size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 
@@ -641,7 +641,7 @@ fn test_iradio_mode() {
     assert_eq!(cursor.position(), 11);
 
     let srcpad = h.src.get_static_pad("src").unwrap();
-    let caps = srcpad.get_current_caps().unwrap();
+    let caps = srcpad.current_caps().unwrap();
     assert_eq!(
         caps,
         gst::Caps::builder("application/x-icy")
@@ -654,7 +654,7 @@ fn test_iradio_mode() {
         use gst::EventView;
         let tag_event = srcpad.get_sticky_event(gst::EventType::Tag, 0).unwrap();
         if let EventView::Tag(tags) = tag_event.view() {
-            let tags = tags.get_tag();
+            let tags = tags.tag();
             assert_eq!(
                 tags.get::<gst::tags::Organization>().unwrap().get(),
                 Some("Name")
@@ -713,8 +713,8 @@ fn test_audio_l16() {
         // Map the buffer readable and check if it contains exactly the data we would expect at
         // this point after reading everything else we read in previous runs
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        let mut read_buf = vec![0; map.size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 
@@ -722,7 +722,7 @@ fn test_audio_l16() {
     assert_eq!(cursor.position(), 11);
 
     let srcpad = h.src.get_static_pad("src").unwrap();
-    let caps = srcpad.get_current_caps().unwrap();
+    let caps = srcpad.current_caps().unwrap();
     assert_eq!(
         caps,
         gst::Caps::builder("audio/x-unaligned-raw")
@@ -787,8 +787,8 @@ fn test_authorization() {
         // Map the buffer readable and check if it contains exactly the data we would expect at
         // this point after reading everything else we read in previous runs
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        let mut read_buf = vec![0; map.size()];
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 
@@ -936,7 +936,7 @@ fn test_seek_after_ready() {
     });
 
     let segment = h.wait_for_segment(false);
-    assert_eq!(segment.get_start(), gst::format::Bytes::from(123));
+    assert_eq!(segment.start(), gst::format::Bytes::from(123));
 
     let mut expected_output = vec![0; 8192 - 123];
     for (i, d) in expected_output.iter_mut().enumerate() {
@@ -945,12 +945,12 @@ fn test_seek_after_ready() {
     let mut cursor = Cursor::new(expected_output);
 
     while let Some(buffer) = h.wait_buffer_or_eos() {
-        assert_eq!(buffer.get_offset(), 123 + cursor.position());
+        assert_eq!(buffer.offset(), 123 + cursor.position());
 
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
+        let mut read_buf = vec![0; map.size()];
 
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 }
@@ -1005,7 +1005,7 @@ fn test_seek_after_buffer_received() {
 
     //wait for a buffer
     let buffer = h.wait_buffer_or_eos().unwrap();
-    assert_eq!(buffer.get_offset(), 0);
+    assert_eq!(buffer.offset(), 0);
 
     //seek to a position after a buffer is Received
     h.run(|src| {
@@ -1014,7 +1014,7 @@ fn test_seek_after_buffer_received() {
     });
 
     let segment = h.wait_for_segment(true);
-    assert_eq!(segment.get_start(), gst::format::Bytes::from(123));
+    assert_eq!(segment.start(), gst::format::Bytes::from(123));
 
     let mut expected_output = vec![0; 8192 - 123];
     for (i, d) in expected_output.iter_mut().enumerate() {
@@ -1023,12 +1023,12 @@ fn test_seek_after_buffer_received() {
     let mut cursor = Cursor::new(expected_output);
 
     while let Some(buffer) = h.wait_buffer_or_eos() {
-        assert_eq!(buffer.get_offset(), 123 + cursor.position());
+        assert_eq!(buffer.offset(), 123 + cursor.position());
 
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
+        let mut read_buf = vec![0; map.size()];
 
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 }
@@ -1083,7 +1083,7 @@ fn test_seek_with_stop_position() {
 
     //wait for a buffer
     let buffer = h.wait_buffer_or_eos().unwrap();
-    assert_eq!(buffer.get_offset(), 0);
+    assert_eq!(buffer.offset(), 0);
 
     //seek to a position after a buffer is Received
     h.run(|src| {
@@ -1099,8 +1099,8 @@ fn test_seek_with_stop_position() {
     });
 
     let segment = h.wait_for_segment(true);
-    assert_eq!(segment.get_start(), gst::format::Bytes::from(123));
-    assert_eq!(segment.get_stop(), gst::format::Bytes::from(131));
+    assert_eq!(segment.start(), gst::format::Bytes::from(123));
+    assert_eq!(segment.stop(), gst::format::Bytes::from(131));
 
     let mut expected_output = vec![0; 8];
     for (i, d) in expected_output.iter_mut().enumerate() {
@@ -1109,12 +1109,12 @@ fn test_seek_with_stop_position() {
     let mut cursor = Cursor::new(expected_output);
 
     while let Some(buffer) = h.wait_buffer_or_eos() {
-        assert_eq!(buffer.get_offset(), 123 + cursor.position());
+        assert_eq!(buffer.offset(), 123 + cursor.position());
 
         let map = buffer.map_readable().unwrap();
-        let mut read_buf = vec![0; map.get_size()];
+        let mut read_buf = vec![0; map.size()];
 
-        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.get_size());
+        assert_eq!(cursor.read(&mut read_buf).unwrap(), map.size());
         assert_eq!(&*map, &*read_buf);
     }
 }
@@ -1146,7 +1146,7 @@ fn test_cookies() {
 
     let mut num_bytes = 0;
     while let Some(buffer) = h.wait_buffer_or_eos() {
-        num_bytes += buffer.get_size();
+        num_bytes += buffer.size();
     }
     assert_eq!(num_bytes, 11);
 
@@ -1182,7 +1182,7 @@ fn test_cookies() {
 
     let mut num_bytes = 0;
     while let Some(buffer) = h2.wait_buffer_or_eos() {
-        num_bytes += buffer.get_size();
+        num_bytes += buffer.size();
     }
     assert_eq!(num_bytes, 12);
 }

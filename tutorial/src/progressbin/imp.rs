@@ -104,7 +104,7 @@ impl ObjectImpl for ProgressBin {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "output" => {
                 let mut output_type = self.output_type.lock().unwrap();
                 let new_output_type = value
@@ -126,7 +126,7 @@ impl ObjectImpl for ProgressBin {
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "output" => {
                 let output_type = self.output_type.lock().unwrap();
                 output_type.to_value()
@@ -223,13 +223,13 @@ impl BinImpl for ProgressBin {
             // handling of the parent class, i.e. forwarding to the parent
             // bins and the application.
             MessageView::Element(ref msg)
-                if msg.get_src().as_ref() == Some(self.progress.upcast_ref())
+                if msg.src().as_ref() == Some(self.progress.upcast_ref())
                     && msg
-                        .get_structure()
-                        .map(|s| s.get_name() == "progress")
+                        .structure()
+                        .map(|s| s.name() == "progress")
                         .unwrap_or(false) =>
             {
-                let s = msg.get_structure().unwrap();
+                let s = msg.structure().unwrap();
                 if let Ok(percent) = s.get_some::<f64>("percent-double") {
                     let output_type = *self.output_type.lock().unwrap();
                     match output_type {

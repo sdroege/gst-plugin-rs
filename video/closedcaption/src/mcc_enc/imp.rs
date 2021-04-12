@@ -90,7 +90,7 @@ impl MccEnc {
 
         let caps = self
             .sinkpad
-            .get_current_caps()
+            .current_caps()
             .ok_or(gst::FlowError::NotNegotiated)?;
         let framerate = match caps
             .get_structure(0)
@@ -125,17 +125,17 @@ impl MccEnc {
         if let Some(ref creation_date) = settings.creation_date {
             let creation_date = Utc
                 .ymd(
-                    creation_date.get_year() as i32,
-                    creation_date.get_month() as u32,
-                    creation_date.get_day_of_month() as u32,
+                    creation_date.year() as i32,
+                    creation_date.month() as u32,
+                    creation_date.day_of_month() as u32,
                 )
                 .and_hms(
-                    creation_date.get_hour() as u32,
-                    creation_date.get_minute() as u32,
-                    creation_date.get_seconds() as u32,
+                    creation_date.hour() as u32,
+                    creation_date.minute() as u32,
+                    creation_date.seconds() as u32,
                 )
                 .with_timezone(&FixedOffset::east(
-                    (creation_date.get_utc_offset() / 1_000_000) as i32,
+                    (creation_date.utc_offset() / 1_000_000) as i32,
                 ));
 
             let _ = write!(
@@ -287,7 +287,7 @@ impl MccEnc {
                 gst::FlowError::Error
             })?;
 
-        let _ = write!(outbuf, "{}\t", meta.get_tc());
+        let _ = write!(outbuf, "{}\t", meta.tc());
 
         let map = buffer.map_readable().map_err(|_| {
             gst::element_error!(
@@ -369,7 +369,7 @@ impl MccEnc {
 
         match event.view() {
             EventView::Caps(ev) => {
-                let caps = ev.get_caps();
+                let caps = ev.caps();
                 let s = caps.get_structure(0).unwrap();
                 let framerate = match s.get_some::<gst::Fraction>("framerate") {
                     Ok(framerate) => framerate,
@@ -381,7 +381,7 @@ impl MccEnc {
                 };
 
                 let mut state = self.state.lock().unwrap();
-                if s.get_name() == "closedcaption/x-cea-608" {
+                if s.name() == "closedcaption/x-cea-608" {
                     state.format = Some(Format::Cea608);
                 } else {
                     state.format = Some(Format::Cea708Cdp);
@@ -431,7 +431,7 @@ impl MccEnc {
         match query.view_mut() {
             QueryView::Seeking(mut q) => {
                 // We don't support any seeking at all
-                let fmt = q.get_format();
+                let fmt = q.format();
                 q.set(
                     false,
                     gst::GenericFormattedValue::Other(fmt, -1),
@@ -527,7 +527,7 @@ impl ObjectImpl for MccEnc {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "uuid" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.uuid = value.get().expect("type checked upstream");
@@ -541,7 +541,7 @@ impl ObjectImpl for MccEnc {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "uuid" => {
                 let settings = self.settings.lock().unwrap();
                 settings.uuid.to_value()

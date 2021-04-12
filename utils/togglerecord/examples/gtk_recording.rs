@@ -291,7 +291,7 @@ fn create_ui(app: &gtk::Application) {
         Inhibit(false)
     });
 
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     let app_weak = app.downgrade();
     bus.add_watch_local(move |_, msg| {
         use gst::MessageView;
@@ -306,9 +306,9 @@ fn create_ui(app: &gtk::Application) {
             MessageView::Error(err) => {
                 println!(
                     "Error from {:?}: {} ({:?})",
-                    msg.get_src().map(|s| s.get_path_string()),
-                    err.get_error(),
-                    err.get_debug()
+                    msg.src().map(|s| s.path_string()),
+                    err.error(),
+                    err.debug()
                 );
                 app.quit();
             }

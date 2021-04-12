@@ -316,7 +316,7 @@ impl ObjectImpl for Rav1Enc {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "speed-preset" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.speed_preset = value.get_some().expect("type checked upstream");
@@ -365,7 +365,7 @@ impl ObjectImpl for Rav1Enc {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "speed-preset" => {
                 let settings = self.settings.lock().unwrap();
                 settings.speed_preset.to_value()
@@ -497,7 +497,7 @@ impl VideoEncoderImpl for Rav1Enc {
         self.finish(element)
             .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
 
-        let video_info = state.get_info();
+        let video_info = state.info();
         gst_debug!(CAT, obj: element, "Setting format {:?}", video_info);
 
         let settings = self.settings.lock().unwrap();
@@ -680,12 +680,10 @@ impl VideoEncoderImpl for Rav1Enc {
             CAT,
             obj: element,
             "Sending frame {}",
-            frame.get_system_frame_number()
+            frame.system_frame_number()
         );
 
-        let input_buffer = frame
-            .get_input_buffer()
-            .expect("frame without input buffer");
+        let input_buffer = frame.input_buffer().expect("frame without input buffer");
 
         let in_frame =
             gst_video::VideoFrameRef::from_buffer_ref_readable(&*input_buffer, &state.video_info)
@@ -699,9 +697,9 @@ impl VideoEncoderImpl for Rav1Enc {
             })?;
 
         match state.context.send_frame(
-            Some((frame.get_system_frame_number(), &in_frame)),
+            Some((frame.system_frame_number(), &in_frame)),
             frame
-                .get_flags()
+                .flags()
                 .contains(gst_video::VideoCodecFrameFlags::FORCE_KEYFRAME),
         ) {
             Ok(_) => {
@@ -709,7 +707,7 @@ impl VideoEncoderImpl for Rav1Enc {
                     CAT,
                     obj: element,
                     "Sent frame {}",
-                    frame.get_system_frame_number()
+                    frame.system_frame_number()
                 );
             }
             Err(data::EncoderStatus::Failure) => {

@@ -205,7 +205,7 @@ impl ObjectImpl for PngEncoder {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "compression-level" => {
                 let mut settings = self.settings.lock();
                 settings.compression = value
@@ -223,7 +223,7 @@ impl ObjectImpl for PngEncoder {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "compression-level" => {
                 let settings = self.settings.lock();
                 settings.compression.to_value()
@@ -311,7 +311,7 @@ impl VideoEncoderImpl for PngEncoder {
         element: &Self::Type,
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
-        let video_info = state.get_info();
+        let video_info = state.info();
         gst_debug!(CAT, obj: element, "Setting format {:?}", video_info);
         {
             let settings = self.settings.lock();
@@ -340,12 +340,10 @@ impl VideoEncoderImpl for PngEncoder {
             CAT,
             obj: element,
             "Sending frame {}",
-            frame.get_system_frame_number()
+            frame.system_frame_number()
         );
         {
-            let input_buffer = frame
-                .get_input_buffer()
-                .expect("frame without input buffer");
+            let input_buffer = frame.input_buffer().expect("frame without input buffer");
 
             let input_map = input_buffer.map_readable().unwrap();
             let data = input_map.as_slice();

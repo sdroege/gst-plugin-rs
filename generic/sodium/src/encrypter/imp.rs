@@ -275,19 +275,19 @@ impl Encrypter {
 
         match query.view_mut() {
             QueryView::Seeking(mut q) => {
-                let format = q.get_format();
+                let format = q.format();
                 q.set(
                     false,
                     gst::GenericFormattedValue::Other(format, -1),
                     gst::GenericFormattedValue::Other(format, -1),
                 );
-                gst_log!(CAT, obj: pad, "Returning {:?}", q.get_mut_query());
+                gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
             QueryView::Duration(ref mut q) => {
                 use std::convert::TryInto;
 
-                if q.get_format() != gst::Format::Bytes {
+                if q.format() != gst::Format::Bytes {
                     return pad.query_default(Some(element), query);
                 }
 
@@ -299,7 +299,7 @@ impl Encrypter {
                     return false;
                 }
 
-                let size = match peer_query.get_result().try_into().unwrap() {
+                let size = match peer_query.result().try_into().unwrap() {
                     gst::format::Bytes(Some(size)) => size,
                     gst::format::Bytes(None) => {
                         gst_error!(CAT, "Failed to query upstream duration");
@@ -436,7 +436,7 @@ impl ObjectImpl for Encrypter {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "sender-key" => {
                 let mut props = self.props.lock().unwrap();
                 props.sender_key = value.get().expect("type checked upstream");
@@ -457,7 +457,7 @@ impl ObjectImpl for Encrypter {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "receiver-key" => {
                 let props = self.props.lock().unwrap();
                 props.receiver_key.to_value()

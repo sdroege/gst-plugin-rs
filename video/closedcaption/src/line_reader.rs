@@ -61,12 +61,12 @@ impl<T: AsRef<[u8]>> LineReader<T> {
     }
 
     #[allow(unused)]
-    pub fn get_line_or_drain(&mut self) -> Option<&[u8]> {
+    pub fn line_or_drain(&mut self) -> Option<&[u8]> {
         self.get_line_with_drain(true)
     }
 
     #[allow(unused)]
-    pub fn get_line(&mut self) -> Option<&[u8]> {
+    pub fn line(&mut self) -> Option<&[u8]> {
         self.get_line_with_drain(false)
     }
 
@@ -247,10 +247,10 @@ mod tests {
         let mut r = LineReader::new();
         r.push(Vec::from(b"abcd\nefgh\nijkl\n".as_ref()));
 
-        assert_eq!(r.get_line(), Some(b"abcd\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"efgh\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"ijkl\n".as_ref()));
-        assert_eq!(r.get_line(), None);
+        assert_eq!(r.line(), Some(b"abcd\n".as_ref()));
+        assert_eq!(r.line(), Some(b"efgh\n".as_ref()));
+        assert_eq!(r.line(), Some(b"ijkl\n".as_ref()));
+        assert_eq!(r.line(), None);
     }
 
     #[test]
@@ -258,11 +258,11 @@ mod tests {
         let mut r = LineReader::new();
         r.push(Vec::from(b"abcd\nefgh\n\nijkl\n".as_ref()));
 
-        assert_eq!(r.get_line(), Some(b"abcd\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"efgh\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"ijkl\n".as_ref()));
-        assert_eq!(r.get_line(), None);
+        assert_eq!(r.line(), Some(b"abcd\n".as_ref()));
+        assert_eq!(r.line(), Some(b"efgh\n".as_ref()));
+        assert_eq!(r.line(), Some(b"\n".as_ref()));
+        assert_eq!(r.line(), Some(b"ijkl\n".as_ref()));
+        assert_eq!(r.line(), None);
     }
 
     #[test]
@@ -271,10 +271,10 @@ mod tests {
         r.push(Vec::from(b"abcd\nef".as_ref()));
         r.push(Vec::from(b"gh\nijkl\n".as_ref()));
 
-        assert_eq!(r.get_line(), Some(b"abcd\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"efgh\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"ijkl\n".as_ref()));
-        assert_eq!(r.get_line(), None);
+        assert_eq!(r.line(), Some(b"abcd\n".as_ref()));
+        assert_eq!(r.line(), Some(b"efgh\n".as_ref()));
+        assert_eq!(r.line(), Some(b"ijkl\n".as_ref()));
+        assert_eq!(r.line(), None);
     }
 
     #[test]
@@ -285,10 +285,10 @@ mod tests {
         r.push(Vec::from(b"g".as_ref()));
         r.push(Vec::from(b"h\nijkl\n".as_ref()));
 
-        assert_eq!(r.get_line(), Some(b"abcd\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"efgh\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"ijkl\n".as_ref()));
-        assert_eq!(r.get_line(), None);
+        assert_eq!(r.line(), Some(b"abcd\n".as_ref()));
+        assert_eq!(r.line(), Some(b"efgh\n".as_ref()));
+        assert_eq!(r.line(), Some(b"ijkl\n".as_ref()));
+        assert_eq!(r.line(), None);
     }
 
     #[test]
@@ -296,11 +296,11 @@ mod tests {
         let mut r = LineReader::new();
         r.push(Vec::from(b"abcd\nefgh\nijkl".as_ref()));
 
-        assert_eq!(r.get_line(), Some(b"abcd\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"efgh\n".as_ref()));
-        assert_eq!(r.get_line(), None);
-        assert_eq!(r.get_line_or_drain(), Some(b"ijkl".as_ref()));
-        assert_eq!(r.get_line_or_drain(), None);
+        assert_eq!(r.line(), Some(b"abcd\n".as_ref()));
+        assert_eq!(r.line(), Some(b"efgh\n".as_ref()));
+        assert_eq!(r.line(), None);
+        assert_eq!(r.line_or_drain(), Some(b"ijkl".as_ref()));
+        assert_eq!(r.line_or_drain(), None);
     }
 
     #[test]
@@ -309,11 +309,11 @@ mod tests {
         r.push(Vec::from(b"abcd\nefgh\n".as_ref()));
         r.push(Vec::from(b"ijkl".as_ref()));
 
-        assert_eq!(r.get_line(), Some(b"abcd\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"efgh\n".as_ref()));
-        assert_eq!(r.get_line(), None);
-        assert_eq!(r.get_line_or_drain(), Some(b"ijkl".as_ref()));
-        assert_eq!(r.get_line_or_drain(), None);
+        assert_eq!(r.line(), Some(b"abcd\n".as_ref()));
+        assert_eq!(r.line(), Some(b"efgh\n".as_ref()));
+        assert_eq!(r.line(), None);
+        assert_eq!(r.line_or_drain(), Some(b"ijkl".as_ref()));
+        assert_eq!(r.line_or_drain(), None);
     }
 
     #[test]
@@ -324,10 +324,10 @@ mod tests {
         r.push(Vec::from(b"k".as_ref()));
         r.push(Vec::from(b"l".as_ref()));
 
-        assert_eq!(r.get_line(), Some(b"abcd\n".as_ref()));
-        assert_eq!(r.get_line(), Some(b"efgh\n".as_ref()));
-        assert_eq!(r.get_line(), None);
-        assert_eq!(r.get_line_or_drain(), Some(b"ijkl".as_ref()));
-        assert_eq!(r.get_line_or_drain(), None);
+        assert_eq!(r.line(), Some(b"abcd\n".as_ref()));
+        assert_eq!(r.line(), Some(b"efgh\n".as_ref()));
+        assert_eq!(r.line(), None);
+        assert_eq!(r.line_or_drain(), Some(b"ijkl".as_ref()));
+        assert_eq!(r.line_or_drain(), None);
     }
 }

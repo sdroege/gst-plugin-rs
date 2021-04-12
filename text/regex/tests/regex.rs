@@ -38,7 +38,7 @@ fn test_replace_all() {
     let mut h = gst_check::Harness::new("regex");
 
     {
-        let regex = h.get_element().expect("Could not create regex");
+        let regex = h.element().expect("Could not create regex");
 
         let command = gst::Structure::new(
             "replace-all",
@@ -64,8 +64,8 @@ fn test_replace_all() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
 
-    assert_eq!(buf.get_pts(), 0.into());
-    assert_eq!(buf.get_duration(), 2 * gst::SECOND);
+    assert_eq!(buf.pts(), 0.into());
+    assert_eq!(buf.duration(), 2 * gst::SECOND);
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
 

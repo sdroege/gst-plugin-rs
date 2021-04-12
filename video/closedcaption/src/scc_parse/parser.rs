@@ -346,7 +346,7 @@ mod tests {
 
         reader.push(Vec::from(scc_file.as_ref()));
 
-        while let Some(line) = reader.get_line() {
+        while let Some(line) = reader.line() {
             let res = match parser.parse_line(line) {
                 Ok(res) => res,
                 Err(err) => panic!("Couldn't parse line {}: {:?}", line_cnt, err),

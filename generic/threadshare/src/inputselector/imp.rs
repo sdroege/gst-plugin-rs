@@ -77,7 +77,7 @@ struct InputSelectorPadSinkHandler(Arc<Mutex<InputSelectorPadSinkHandlerInner>>)
 impl InputSelectorPadSinkHandler {
     /* Wait until specified time */
     async fn sync(&self, element: &super::InputSelector, running_time: gst::ClockTime) {
-        let now = element.get_current_running_time();
+        let now = element.current_running_time();
 
         if let Some(delay) = running_time
             .saturating_sub(now)
@@ -104,7 +104,7 @@ impl InputSelectorPadSinkHandler {
 
             if let Some(segment) = &inner.segment {
                 if let Some(segment) = segment.downcast_ref::<gst::format::Time>() {
-                    let rtime = segment.to_running_time(buffer.get_pts());
+                    let rtime = segment.to_running_time(buffer.pts());
                     let (sync_fut, abort_handle) = abortable(self.sync(&element, rtime));
                     inner.abort_handle = Some(abort_handle);
                     sync_future = Some(sync_fut.map_err(|_| gst::FlowError::Flushing));
@@ -142,7 +142,7 @@ impl InputSelectorPadSinkHandler {
         if is_active {
             gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
 
-            if switched_pad && !buffer.get_flags().contains(gst::BufferFlags::DISCONT) {
+            if switched_pad && !buffer.flags().contains(gst::BufferFlags::DISCONT) {
                 let buffer = buffer.make_mut();
                 buffer.set_flags(gst::BufferFlags::DISCONT);
             }
@@ -211,7 +211,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
 
             // Remember the segment for later use
             if let gst::EventView::Segment(e) = event.view() {
-                inner.segment = Some(e.get_segment().clone());
+                inner.segment = Some(e.segment().clone());
             }
 
             // We sent sticky events together with the next buffer once it becomes
@@ -307,7 +307,7 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
                     ret = pad.peer_query(&mut peer_query);
 
                     if ret {
-                        let (live, min, max) = peer_query.get_result();
+                        let (live, min, max) = peer_query.result();
                         if live {
                             min_latency = min.max(min_latency).unwrap_or(min_latency);
                             max_latency = max.min(max_latency).unwrap_or(max);
@@ -449,7 +449,7 @@ impl ObjectImpl for InputSelector {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "context" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value
@@ -494,7 +494,7 @@ impl ObjectImpl for InputSelector {
     }
 
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "context" => {
                 let settings = self.settings.lock().unwrap();
                 settings.context.to_value()

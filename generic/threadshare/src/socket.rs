@@ -141,7 +141,7 @@ impl<T: SocketRead> Socket<T> {
         {
             Ok((len, saddr)) => {
                 let dts = if T::DO_TIMESTAMP {
-                    let time = self.clock.as_ref().unwrap().get_time();
+                    let time = self.clock.as_ref().unwrap().time();
                     let running_time = time - self.base_time.unwrap();
                     gst_debug!(
                         SOCKET_CAT,
@@ -160,7 +160,7 @@ impl<T: SocketRead> Socket<T> {
                 let mut buffer = self.mapped_buffer.take().unwrap().into_buffer();
                 {
                     let buffer = buffer.get_mut().unwrap();
-                    if len < buffer.get_size() {
+                    if len < buffer.size() {
                         buffer.set_size(len);
                     }
                     buffer.set_dts(dts);
@@ -226,7 +226,7 @@ impl GioSocketWrapper {
 
         socket.set_option(IPPROTO_IP, IP_TOS, tos)?;
 
-        if socket.get_family() == gio::SocketFamily::Ipv6 {
+        if socket.family() == gio::SocketFamily::Ipv6 {
             socket.set_option(IPPROTO_IPV6, IPV6_TCLASS, tos)?;
         }
 

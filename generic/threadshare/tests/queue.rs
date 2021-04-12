@@ -68,7 +68,7 @@ fn test_push() {
     pipeline.set_state(gst::State::Playing).unwrap();
 
     let mut eos = false;
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     while let Some(msg) = bus.timed_pop(5 * gst::SECOND) {
         use gst::MessageView;
         match msg.view() {
@@ -86,7 +86,7 @@ fn test_push() {
     assert_eq!(samples.len(), 3);
 
     for sample in samples.iter() {
-        assert!(sample.get_buffer().is_some());
+        assert!(sample.buffer().is_some());
     }
 
     pipeline.set_state(gst::State::Null).unwrap();

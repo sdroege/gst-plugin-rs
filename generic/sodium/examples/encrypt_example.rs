@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .required(true)
                 .takes_value(true),
         )
-        .get_matches();
+        .matches();
 
     gst::init()?;
     gstsodium::plugin_register_static().expect("Failed to register sodium plugin");
@@ -120,17 +120,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     pipeline.set_state(gst::State::Playing)?;
 
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     for msg in bus.iter_timed(gst::CLOCK_TIME_NONE) {
         use gst::MessageView;
         match msg.view() {
             MessageView::Error(err) => {
                 eprintln!(
                     "Error received from element {:?}: {}",
-                    err.get_src().map(|s| s.get_path_string()),
-                    err.get_error()
+                    err.src().map(|s| s.path_string()),
+                    err.error()
                 );
-                eprintln!("Debugging information: {:?}", err.get_debug());
+                eprintln!("Debugging information: {:?}", err.debug());
                 break;
             }
             MessageView::Eos(..) => break,

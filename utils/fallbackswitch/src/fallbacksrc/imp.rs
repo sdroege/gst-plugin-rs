@@ -299,7 +299,7 @@ impl ObjectImpl for FallbackSrc {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
-        match pspec.get_name() {
+        match pspec.name() {
             "enable-audio" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get_some().expect("type checked upstream");
@@ -440,7 +440,7 @@ impl ObjectImpl for FallbackSrc {
     // at any time from any thread.
     #[allow(clippy::blocks_in_if_conditions)]
     fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.get_name() {
+        match pspec.name() {
             "enable-audio" => {
                 let settings = self.settings.lock().unwrap();
                 settings.enable_audio.to_value()
@@ -501,9 +501,9 @@ impl ObjectImpl for FallbackSrc {
                 if let Some(ref streams) = state.streams {
                     for stream in streams.iter() {
                         have_audio =
-                            have_audio || stream.get_stream_type().contains(gst::StreamType::AUDIO);
+                            have_audio || stream.stream_type().contains(gst::StreamType::AUDIO);
                         have_video =
-                            have_video || stream.get_stream_type().contains(gst::StreamType::VIDEO);
+                            have_video || stream.stream_type().contains(gst::StreamType::VIDEO);
                     }
                 }
 
@@ -537,7 +537,7 @@ impl ObjectImpl for FallbackSrc {
                 let settings = self.settings.lock().unwrap();
                 settings.buffer_duration.to_value()
             }
-            "statistics" => self.get_stats().to_value(),
+            "statistics" => self.stats().to_value(),
             _ => unimplemented!(),
         }
     }
@@ -831,7 +831,7 @@ impl FallbackSrc {
         let templ = element
             .get_pad_template(if is_audio { "audio" } else { "video" })
             .unwrap();
-        let ghostpad = gst::GhostPad::builder_with_template(&templ, Some(&templ.get_name()))
+        let ghostpad = gst::GhostPad::builder_with_template(&templ, Some(&templ.name()))
             .proxy_pad_chain_function({
                 let element_weak = element.downgrade();
                 move |pad, _parent, buffer| {
@@ -1096,7 +1096,7 @@ impl FallbackSrc {
         element: &super::FallbackSrc,
         pad: &gst::Pad,
     ) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Pad {} added to source", pad.get_name(),);
+        gst_debug!(CAT, obj: element, "Pad {} added to source", pad.name(),);
 
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
@@ -1106,23 +1106,20 @@ impl FallbackSrc {
             Some(state) => state,
         };
 
-        let (type_, stream) = match pad.get_name() {
+        let (type_, stream) = match pad.name() {
             x if x.starts_with("audio_") => ("audio", &mut state.audio_stream),
             x if x.starts_with("video_") => ("video", &mut state.video_stream),
             _ => {
-                let caps = match pad
-                    .get_current_caps()
-                    .unwrap_or_else(|| pad.query_caps(None))
-                {
+                let caps = match pad.current_caps().unwrap_or_else(|| pad.query_caps(None)) {
                     caps if !caps.is_any() && !caps.is_empty() => caps,
                     _ => return Ok(()),
                 };
 
                 let s = caps.get_structure(0).unwrap();
 
-                if s.get_name().starts_with("audio/") {
+                if s.name().starts_with("audio/") {
                     ("audio", &mut state.audio_stream)
-                } else if s.get_name().starts_with("video/") {
+                } else if s.name().starts_with("video/") {
                     ("video", &mut state.video_stream)
                 } else {
                     // TODO: handle subtitles etc
@@ -1171,14 +1168,12 @@ impl FallbackSrc {
                 let src = FallbackSrc::from_instance(&element);
 
                 match info.data {
-                    Some(gst::PadProbeData::Event(ref ev))
-                        if ev.get_type() == gst::EventType::Eos =>
-                    {
+                    Some(gst::PadProbeData::Event(ref ev)) if ev.type_() == gst::EventType::Eos => {
                         gst_debug!(
                             CAT,
                             obj: &element,
                             "Received EOS from source on pad {}, restarting",
-                            pad.get_name()
+                            pad.name()
                         );
 
                         let mut state_guard = src.state.lock().unwrap();
@@ -1218,7 +1213,7 @@ impl FallbackSrc {
             CAT,
             obj: element,
             "Adding probe to pad {}",
-            stream.source_srcpad.as_ref().unwrap().get_name()
+            stream.source_srcpad.as_ref().unwrap().name()
         );
 
         let element_weak = element.downgrade();
@@ -1234,7 +1229,7 @@ impl FallbackSrc {
                         Some(element) => element,
                     };
                     let pts = match info.data {
-                        Some(gst::PadProbeData::Buffer(ref buffer)) => buffer.get_pts(),
+                        Some(gst::PadProbeData::Buffer(ref buffer)) => buffer.pts(),
                         Some(gst::PadProbeData::Event(ref ev)) => match ev.view() {
                             gst::EventView::Gap(ref ev) => ev.get().0,
                             _ => return gst::PadProbeReturn::Pass,
@@ -1288,7 +1283,7 @@ impl FallbackSrc {
                 CAT,
                 obj: element,
                 "Called probe on pad {}",
-                stream.source_srcpad.as_ref().unwrap().get_name()
+                stream.source_srcpad.as_ref().unwrap().name()
             );
             stream
         } else if let Some(stream) = state
@@ -1300,7 +1295,7 @@ impl FallbackSrc {
                 CAT,
                 obj: element,
                 "Called probe on pad {}",
-                stream.source_srcpad.as_ref().unwrap().get_name()
+                stream.source_srcpad.as_ref().unwrap().name()
             );
             stream
         } else {
@@ -1324,7 +1319,7 @@ impl FallbackSrc {
                     CAT,
                     obj: element,
                     "Removing pad probe for pad {}",
-                    source_srcpad.get_name()
+                    source_srcpad.name()
                 );
                 block.pad.remove_probe(block.probe_id);
             }
@@ -1352,7 +1347,7 @@ impl FallbackSrc {
         };
 
         let segment = match ev.view() {
-            gst::EventView::Segment(s) => s.get_segment(),
+            gst::EventView::Segment(s) => s.segment(),
             _ => unreachable!(),
         };
         let segment = segment.downcast_ref::<gst::ClockTime>().ok_or_else(|| {
@@ -1360,10 +1355,10 @@ impl FallbackSrc {
             gst::error_msg!(gst::CoreError::Clock, ["Have no time segment"])
         })?;
 
-        let running_time = if pts < segment.get_start() {
-            segment.get_start()
-        } else if segment.get_stop().is_some() && pts >= segment.get_stop() {
-            segment.get_stop()
+        let running_time = if pts < segment.start() {
+            segment.start()
+        } else if segment.stop().is_some() && pts >= segment.stop() {
+            segment.stop()
         } else {
             segment.to_running_time(pts)
         };
@@ -1410,8 +1405,8 @@ impl FallbackSrc {
         let mut have_audio = false;
         let mut have_video = false;
         for stream in streams.iter() {
-            have_audio = have_audio || stream.get_stream_type().contains(gst::StreamType::AUDIO);
-            have_video = have_video || stream.get_stream_type().contains(gst::StreamType::VIDEO);
+            have_audio = have_audio || stream.stream_type().contains(gst::StreamType::AUDIO);
+            have_video = have_video || stream.stream_type().contains(gst::StreamType::VIDEO);
         }
 
         let want_audio = state.settings.enable_audio;
@@ -1439,18 +1434,18 @@ impl FallbackSrc {
 
         let audio_is_eos = audio_srcpad
             .as_ref()
-            .map(|p| p.get_pad_flags().contains(gst::PadFlags::EOS))
+            .map(|p| p.pad_flags().contains(gst::PadFlags::EOS))
             .unwrap_or(false);
         let video_is_eos = video_srcpad
             .as_ref()
-            .map(|p| p.get_pad_flags().contains(gst::PadFlags::EOS))
+            .map(|p| p.pad_flags().contains(gst::PadFlags::EOS))
             .unwrap_or(false);
 
         // If we need both, wait for both and take the minimum, otherwise take the one we need.
         // Also consider EOS, we'd never get a new running time after EOS so don't need to wait.
         // FIXME: All this surely can be simplified somehow
 
-        let current_running_time = element.get_current_running_time();
+        let current_running_time = element.current_running_time();
 
         if have_audio && want_audio && have_video && want_video {
             if audio_running_time.is_none()
@@ -1587,12 +1582,7 @@ impl FallbackSrc {
     }
 
     fn handle_source_pad_removed(&self, element: &super::FallbackSrc, pad: &gst::Pad) {
-        gst_debug!(
-            CAT,
-            obj: element,
-            "Pad {} removed from source",
-            pad.get_name()
-        );
+        gst_debug!(CAT, obj: element, "Pad {} removed from source", pad.name());
 
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
@@ -1643,9 +1633,9 @@ impl FallbackSrc {
             return;
         }
 
-        gst_debug!(CAT, obj: element, "Got buffering {}%", m.get_percent());
+        gst_debug!(CAT, obj: element, "Got buffering {}%", m.percent());
 
-        state.stats.buffering_percent = m.get_percent();
+        state.stats.buffering_percent = m.percent();
         if state.stats.buffering_percent < 100 {
             state.last_buffering_update = Some(Instant::now());
             // Block source pads if needed to pause
@@ -1682,7 +1672,7 @@ impl FallbackSrc {
             Some(state) => state,
         };
 
-        let streams = m.get_stream_collection();
+        let streams = m.stream_collection();
 
         gst_debug!(
             CAT,
@@ -1694,8 +1684,8 @@ impl FallbackSrc {
         let mut have_audio = false;
         let mut have_video = false;
         for stream in streams.iter() {
-            have_audio = have_audio || stream.get_stream_type().contains(gst::StreamType::AUDIO);
-            have_video = have_video || stream.get_stream_type().contains(gst::StreamType::VIDEO);
+            have_audio = have_audio || stream.stream_type().contains(gst::StreamType::AUDIO);
+            have_video = have_video || stream.stream_type().contains(gst::StreamType::VIDEO);
         }
 
         if !have_audio && state.settings.enable_audio {
@@ -1742,7 +1732,7 @@ impl FallbackSrc {
             Some(state) => state,
         };
 
-        let src = match m.get_src().and_then(|s| s.downcast::<gst::Element>().ok()) {
+        let src = match m.src().and_then(|s| s.downcast::<gst::Element>().ok()) {
             None => return false,
             Some(src) => src,
         };
@@ -1751,7 +1741,7 @@ impl FallbackSrc {
             CAT,
             obj: element,
             "Got error message from {}",
-            src.get_path_string()
+            src.path_string()
         );
 
         if src == state.source || src.has_as_ancestor(&state.source) {
@@ -1799,7 +1789,7 @@ impl FallbackSrc {
             CAT,
             obj: element,
             "Give up for error message from {}",
-            src.get_path_string()
+            src.path_string()
         );
 
         false
@@ -1833,12 +1823,12 @@ impl FallbackSrc {
         // Drop any EOS events from any source pads of the source that might happen because of the
         // error. We don't need to remove these pad probes because restarting the source will also
         // remove/add the pads again.
-        for pad in state.source.get_src_pads() {
+        for pad in state.source.src_pads() {
             pad.add_probe(
                 gst::PadProbeType::EVENT_DOWNSTREAM,
                 |_pad, info| match info.data {
                     Some(gst::PadProbeData::Event(ref event)) => {
-                        if event.get_type() == gst::EventType::Eos {
+                        if event.type_() == gst::EventType::Eos {
                             gst::PadProbeReturn::Drop
                         } else {
                             gst::PadProbeReturn::Ok
@@ -1888,7 +1878,7 @@ impl FallbackSrc {
                     CAT,
                     obj: element,
                     "Removing pad probe for pad {}",
-                    source_srcpad.get_name()
+                    source_srcpad.name()
                 );
                 block.pad.remove_probe(block.probe_id);
             }
@@ -1922,7 +1912,7 @@ impl FallbackSrc {
 
             gst_debug!(CAT, obj: element, "Waiting for 1s before retrying");
             let clock = gst::SystemClock::obtain();
-            let wait_time = clock.get_time() + gst::SECOND;
+            let wait_time = clock.time() + gst::SECOND;
             assert!(wait_time.is_some());
             assert!(state.source_pending_restart_timeout.is_none());
 
@@ -2035,9 +2025,8 @@ impl FallbackSrc {
         }
 
         let clock = gst::SystemClock::obtain();
-        let wait_time = clock.get_time()
-            + gst::ClockTime::from_nseconds(state.settings.restart_timeout)
-            - elapsed;
+        let wait_time =
+            clock.time() + gst::ClockTime::from_nseconds(state.settings.restart_timeout) - elapsed;
         assert!(wait_time.is_some());
         gst_debug!(
             CAT,
@@ -2110,10 +2099,8 @@ impl FallbackSrc {
         let mut have_video = false;
         if let Some(ref streams) = state.streams {
             for stream in streams.iter() {
-                have_audio =
-                    have_audio || stream.get_stream_type().contains(gst::StreamType::AUDIO);
-                have_video =
-                    have_video || stream.get_stream_type().contains(gst::StreamType::VIDEO);
+                have_audio = have_audio || stream.stream_type().contains(gst::StreamType::AUDIO);
+                have_video = have_video || stream.stream_type().contains(gst::StreamType::VIDEO);
             }
         }
 
@@ -2132,7 +2119,7 @@ impl FallbackSrc {
                             .get::<gst::Pad>()
                             .unwrap()
                     })
-                    .map(|p| p.get_name() == "fallback_sink")
+                    .map(|p| p.name() == "fallback_sink")
                     .unwrap_or(true))
             || (have_video
                 && state.video_stream.is_some()
@@ -2146,7 +2133,7 @@ impl FallbackSrc {
                             .get::<gst::Pad>()
                             .unwrap()
                     })
-                    .map(|p| p.get_name() == "fallback_sink")
+                    .map(|p| p.name() == "fallback_sink")
                     .unwrap_or(true))
     }
 
@@ -2186,7 +2173,7 @@ impl FallbackSrc {
         }
     }
 
-    fn get_stats(&self) -> gst::Structure {
+    fn stats(&self) -> gst::Structure {
         let state_guard = self.state.lock().unwrap();
 
         let state = match &*state_guard {

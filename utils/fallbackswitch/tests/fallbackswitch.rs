@@ -41,15 +41,15 @@ fn init() {
 
 macro_rules! assert_fallback_buffer {
     ($buffer:expr, $ts:expr) => {
-        assert_eq!($buffer.get_pts(), $ts);
-        assert_eq!($buffer.get_size(), 160 * 120 * 4);
+        assert_eq!($buffer.pts(), $ts);
+        assert_eq!($buffer.size(), 160 * 120 * 4);
     };
 }
 
 macro_rules! assert_buffer {
     ($buffer:expr, $ts:expr) => {
-        assert_eq!($buffer.get_pts(), $ts);
-        assert_eq!($buffer.get_size(), 320 * 240 * 4);
+        assert_eq!($buffer.pts(), $ts);
+        assert_eq!($buffer.size(), 320 * 240 * 4);
     };
 }
 
@@ -412,16 +412,16 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
         loop {
             while let Some(clock_id) = clock.peek_next_pending_id().and_then(|clock_id| {
                 // Process if the clock ID is in the past or now
-                if clock.get_time() >= clock_id.get_time() {
+                if clock.time() >= clock_id.time() {
                     Some(clock_id)
                 } else {
                     None
                 }
             }) {
-                gst_debug!(TEST_CAT, "Processing clock ID at {}", clock_id.get_time());
+                gst_debug!(TEST_CAT, "Processing clock ID at {}", clock_id.time());
                 if let Some(clock_id) = clock.process_next_clock_id() {
-                    gst_debug!(TEST_CAT, "Processed clock ID at {}", clock_id.get_time());
-                    if clock_id.get_time() == 0.into() {
+                    gst_debug!(TEST_CAT, "Processed clock ID at {}", clock_id.time());
+                    if clock_id.time() == 0.into() {
                         gst_debug!(TEST_CAT, "Stopping clock thread");
                         return;
                     }
@@ -432,7 +432,7 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
             // at the top of the queue. We don't want to do a busy loop here.
             while clock.peek_next_pending_id().iter().any(|clock_id| {
                 // Sleep if the clock ID is in the future
-                clock.get_time() < clock_id.get_time()
+                clock.time() < clock_id.time()
             }) {
                 use std::{thread, time};
 
@@ -504,12 +504,12 @@ fn pull_buffer(pipeline: &Pipeline) -> gst::Buffer {
         .downcast::<gst_app::AppSink>()
         .unwrap();
     let sample = sink.pull_sample().unwrap();
-    sample.get_buffer_owned().unwrap()
+    sample.buffer_owned().unwrap()
 }
 
 fn set_time(pipeline: &Pipeline, time: gst::ClockTime) {
     let clock = pipeline
-        .get_clock()
+        .clock()
         .unwrap()
         .downcast::<gst_check::TestClock>()
         .unwrap();
@@ -540,7 +540,7 @@ fn stop_pipeline(mut pipeline: Pipeline) {
     pipeline.set_state(gst::State::Null).unwrap();
 
     let clock = pipeline
-        .get_clock()
+        .clock()
         .unwrap()
         .downcast::<gst_check::TestClock>()
         .unwrap();

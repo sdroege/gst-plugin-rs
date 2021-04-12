@@ -104,7 +104,7 @@ fn test_pipeline() {
             .new_sample(move |appsink| {
                 // Pull the sample in question out of the appsink's buffer.
                 let sample = appsink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
-                let buffer = sample.get_buffer().ok_or(gst::FlowError::Error)?;
+                let buffer = sample.buffer().ok_or(gst::FlowError::Error)?;
 
                 let mut adapter = adapter_clone.lock().unwrap();
                 adapter.push(buffer.to_owned());
@@ -118,17 +118,17 @@ fn test_pipeline() {
         .set_state(gst::State::Playing)
         .expect("Unable to set the pipeline to the `Playing` state");
 
-    let bus = pipeline.get_bus().unwrap();
+    let bus = pipeline.bus().unwrap();
     for msg in bus.iter_timed(gst::CLOCK_TIME_NONE) {
         use gst::MessageView;
         match msg.view() {
             MessageView::Error(err) => {
                 eprintln!(
                     "Error received from element {:?}: {}",
-                    err.get_src().map(|s| s.get_path_string()),
-                    err.get_error()
+                    err.src().map(|s| s.path_string()),
+                    err.error()
                 );
-                eprintln!("Debugging information: {:?}", err.get_debug());
+                eprintln!("Debugging information: {:?}", err.debug());
                 unreachable!();
             }
             MessageView::Eos(..) => break,
@@ -196,7 +196,7 @@ fn test_pull_range() {
     srcpad.query(&mut q);
 
     // get the seeking capabilities
-    let (seekable, start, stop) = q.get_result();
+    let (seekable, start, stop) = q.result();
     assert_eq!(seekable, true);
     assert_eq!(
         start,
@@ -214,7 +214,7 @@ fn test_pull_range() {
         61, 70, 175, 103, 127, 28, 0,
     ];
     let buf1 = srcpad.get_range(0, 50).unwrap();
-    assert_eq!(buf1.get_size(), 50);
+    assert_eq!(buf1.size(), 50);
     let map1 = buf1.map_readable().unwrap();
     assert_eq!(&map1[..], &expected_array_1[..]);
 
@@ -226,7 +226,7 @@ fn test_pull_range() {
         120, 121, 232, 0, 0, 12, 252, 195, 195, 199, 128, 0, 0, 0,
     ];
     let buf2 = srcpad.get_range(0, 100).unwrap();
-    assert_eq!(buf2.get_size(), 100);
+    assert_eq!(buf2.size(), 100);
     let map2 = buf2.map_readable().unwrap();
     assert_eq!(&map2[..], &expected_array_2[..]);
 
@@ -237,20 +237,20 @@ fn test_pull_range() {
     // request in the middle of a block
     let buf = srcpad.get_range(853, 100).unwrap();
     // result size doesn't include the block macs,
-    assert_eq!(buf.get_size(), 100);
+    assert_eq!(buf.size(), 100);
 
     // read till eos, this also will pull multiple blocks
     let buf = srcpad.get_range(853, 42000).unwrap();
     // 6031 (size of file) - 883 (requersted offset) - headers size - (numbler of blcks * block mac)
-    assert_eq!(buf.get_size(), 5054);
+    assert_eq!(buf.size(), 5054);
 
     // read 0 bytes from the start
     let buf = srcpad.get_range(0, 0).unwrap();
-    assert_eq!(buf.get_size(), 0);
+    assert_eq!(buf.size(), 0);
 
     // read 0 bytes somewhere in the middle
     let buf = srcpad.get_range(4242, 0).unwrap();
-    assert_eq!(buf.get_size(), 0);
+    assert_eq!(buf.size(), 0);
 
     // read 0 bytes to eos
     let res = srcpad.get_range(6003, 0);
@@ -266,7 +266,7 @@ fn test_pull_range() {
 
     // read 10 bytes at eos -1, should return a single byte
     let buf = srcpad.get_range(5906, 10).unwrap();
-    assert_eq!(buf.get_size(), 1);
+    assert_eq!(buf.size(), 1);
 
     pipeline
         .set_state(gst::State::Null)

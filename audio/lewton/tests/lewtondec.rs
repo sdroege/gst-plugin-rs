@@ -81,13 +81,13 @@ fn run_test(inline_headers: bool) {
             continue;
         }
         let buffer = h.pull().unwrap();
-        assert_eq!(buffer.get_size(), 4 * samples);
+        assert_eq!(buffer.size(), 4 * samples);
     }
 
     let caps = h
-        .get_sinkpad()
+        .sinkpad()
         .expect("harness has no sinkpad")
-        .get_current_caps()
+        .current_caps()
         .expect("pad has no caps");
     assert_eq!(
         caps,
