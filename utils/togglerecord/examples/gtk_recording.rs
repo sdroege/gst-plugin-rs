@@ -341,7 +341,7 @@ fn main() {
 
     gsttogglerecord::plugin_register_static().expect("Failed to register togglerecord plugin");
 
-    let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE).unwrap();
+    let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE);
 
     app.connect_activate(create_ui);
     app.run();
