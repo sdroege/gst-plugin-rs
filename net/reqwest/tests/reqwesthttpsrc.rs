@@ -15,6 +15,8 @@ fn init() {
     static INIT: Once = Once::new();
 
     INIT.call_once(|| {
+        // clear this environment because it affects the default settings
+        std::env::remove_var("http_proxy");
         gst::init().unwrap();
         gstreqwest::plugin_register_static().expect("reqwesthttpsrc tests");
     });
@@ -1182,4 +1184,112 @@ fn test_cookies() {
         num_bytes += buffer.size();
     }
     assert_eq!(num_bytes, 12);
+}
+
+#[test]
+fn test_proxy_prop_souphttpsrc_compatibility() {
+    init();
+
+    fn assert_proxy_set(set_to: Option<&str>, expected: Option<&str>) {
+        // The same assertions should hold for "souphttpsrc".
+        let src = gst::ElementFactory::make("reqwesthttpsrc", None).unwrap();
+        src.set_property("proxy", set_to).unwrap();
+        assert_eq!(
+            src.property("proxy")
+                .unwrap()
+                .get::<Option<&str>>()
+                .unwrap(),
+            expected
+        );
+    }
+
+    // Test env var proxy.
+    assert_proxy_set(Some("http://mydomain/"), Some("http://mydomain/"));
+
+    // It should prepend http if no protocol specified and add /.
+    assert_proxy_set(Some("myotherdomain"), Some("http://myotherdomain/"));
+
+    // Empty env var should result in "" proxy (meaning None) for compatibility.
+    assert_proxy_set(Some(""), Some(""));
+
+    // It should allow setting this value for proxy for compatibility.
+    assert_proxy_set(Some("&$"), Some("http://&$/"));
+
+    // No env var should result in "" proxy (meaning None) for compatibility.
+    assert_proxy_set(None, Some(""));
+}
+
+#[test]
+fn test_proxy() {
+    init();
+
+    // Simplest possible implementation of naive oneshot proxy server?
+    // Listen on socket before spawning thread (we won't error out with connection refused).
+    let incoming = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let proxy_addr = incoming.local_addr().unwrap();
+    println!("listening on {}, starting proxy server", proxy_addr);
+    let proxy_server = std::thread::spawn(move || {
+        use std::io::*;
+        println!("awaiting connection to proxy server");
+        let (mut conn, _addr) = incoming.accept().unwrap();
+
+        println!("client connected, reading request line");
+        let mut reader = BufReader::new(conn.try_clone().unwrap());
+        let mut buf = String::new();
+        reader.read_line(&mut buf).unwrap();
+        let parts: Vec<&str> = buf.split(' ').collect();
+        let url = reqwest::Url::parse(parts[1]).unwrap();
+        let host = format!(
+            "{}:{}",
+            url.host_str().unwrap(),
+            url.port_or_known_default().unwrap()
+        );
+
+        println!("connecting to target server {}", host);
+        let mut server_connection = std::net::TcpStream::connect(host).unwrap();
+
+        println!("connected to target server, sending modified request line");
+        server_connection
+            .write_all(format!("{} {} {}\r\n", parts[0], url.path(), parts[2]).as_bytes())
+            .unwrap();
+
+        println!("sent modified request line, forwarding data in both directions");
+        let send_join_handle = {
+            let mut server_connection = server_connection.try_clone().unwrap();
+            std::thread::spawn(move || {
+                copy(&mut reader, &mut server_connection).unwrap();
+            })
+        };
+        copy(&mut server_connection, &mut conn).unwrap();
+        send_join_handle.join().unwrap();
+        println!("shutting down proxy server");
+    });
+
+    let mut h = Harness::new(
+        |_req| {
+            use hyper::{Body, Response};
+
+            Response::builder()
+                .body(Body::from("Hello Proxy World"))
+                .unwrap()
+        },
+        |src| {
+            src.set_property("proxy", proxy_addr.to_string()).unwrap();
+        },
+    );
+
+    // Set the HTTP source to Playing so that everything can start.
+    h.run(|src| {
+        src.set_state(gst::State::Playing).unwrap();
+    });
+
+    // Wait for a buffer.
+    let mut num_bytes = 0;
+    while let Some(buffer) = h.wait_buffer_or_eos() {
+        num_bytes += buffer.size();
+    }
+    assert_eq!(num_bytes, "Hello Proxy World".len());
+
+    // Don't leave threads hanging around.
+    proxy_server.join().unwrap();
 }
