@@ -1,20 +1,20 @@
 # gst-plugin-s3
 
 This is a [GStreamer](https://gstreamer.freedesktop.org/) plugin to interact
-with the [Amazon Simple Storage Service (S3)](https://aws.amazon.com/s3/).
-
-Currently, a simple source element exists. The eventual plan is to also add a
-sink, to allow writing out objects directly to S3.
+with [Amazon Web Services](https://aws.amazon.com/). We currently have elements
+to interact with [S3](https://aws.amazon.com/s3) and
+[Transcribe](https://aws.amazon.com/transcribe/).
 
 ## AWS Credentials
 
 AWS credentials are picked up using the mechanism that
-[rusoto's ChainProvider](http://rusoto.github.io/rusoto/rusoto/struct.ChainProvider.html)
+[rusoto's ChainProvider](https://rusoto.github.io/rusoto/rusoto_credential/struct.ChainProvider.html)
 uses. At the moment, that is:
 
- 1. Environment variables: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
- 2. AWS credentials file. Usually located at ~/.aws/credentials.
- 3. IAM instance profile. Will only work if running on an EC2 instance with an instance profile/role.
+1.  Environment variables: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+2.  AWS credentials file. Usually located at ~/.aws/credentials.
+3.  IAM instance profile. Will only work if running on an EC2 instance with an
+    instance profile/role.
 
 An example credentials file might look like:
 
@@ -38,7 +38,8 @@ $ gst-launch-1.0 \
 
 ## s3sink
 
-Writes data to a specified S3 bucket. The `region` parameter is optional, and if not specified, the default parameter will be used (from `.aws/config` file).
+Writes data to a specified S3 bucket. The `region` parameter is optional, and
+if not specified, the default parameter will be used (from `.aws/config` file).
 
 ```
 $ gst-launch-1.0 \
@@ -47,3 +48,7 @@ $ gst-launch-1.0 \
     oggmux ! \
     s3sink bucket=example-bucket key=my/file.ogv region=us-west-1
 ```
+
+## awstranscriber
+
+Transcribes audio to text.
