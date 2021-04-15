@@ -64,6 +64,22 @@ frame_buffer_cell (caption_frame_buffer_t * buff, int row, int col)
   return &buff->cell[row][col];
 }
 
+int caption_frame_clear_char (caption_frame_t * frame, int row, int col)
+{
+  if (!frame->write) {
+    return 0;
+  }
+
+  caption_frame_cell_t *cell = frame_buffer_cell (frame->write, row, col);
+
+  if (cell) {
+    memset (cell, 0, sizeof (caption_frame_cell_t));
+    return 1;
+  }
+
+  return 0;
+}
+
 uint16_t _eia608_from_utf8 (const char *s);     // function is in eia608.c.re2c
 int
 caption_frame_write_char (caption_frame_t * frame, int row, int col,
@@ -201,8 +217,7 @@ caption_frame_backspace (caption_frame_t * frame)
 {
   // do not reverse wrap (tw 28:20)
   frame->state.col = (0 < frame->state.col) ? (frame->state.col - 1) : 0;
-  caption_frame_write_char (frame, frame->state.row, frame->state.col,
-      eia608_style_white, 0, EIA608_CHAR_NULL);
+  caption_frame_clear_char (frame, frame->state.row, frame->state.col);
   return LIBCAPTION_READY;
 }
 
@@ -212,8 +227,7 @@ caption_frame_delete_to_end_of_row (caption_frame_t * frame)
   int c;
   if (frame->write) {
     for (c = frame->state.col; c < SCREEN_COLS; ++c) {
-      caption_frame_write_char (frame, frame->state.row, c, eia608_style_white,
-          0, EIA608_CHAR_NULL);
+      caption_frame_clear_char (frame, frame->state.row, c);
     }
   }
   // TODO test this and replace loop
