@@ -540,6 +540,10 @@ impl TtToCea608 {
         ret
     }
 
+    fn peek_word_length(&self, chars: std::iter::Peekable<std::str::Chars>) -> u32 {
+        chars.take_while(|c| !c.is_ascii_whitespace()).count() as u32
+    }
+
     fn generate(
         &self,
         mut state: &mut State,
@@ -548,6 +552,7 @@ impl TtToCea608 {
         duration: gst::ClockTime,
         lines: Lines,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let origin_column = self.settings.lock().unwrap().origin_column;
         let mut row = 13;
         let mut bufferlist = gst::BufferList::new();
         let mut_list = bufferlist.get_mut().unwrap();
@@ -585,7 +590,7 @@ impl TtToCea608 {
                     Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
                         state.send_roll_up_preamble = true;
                     }
-                    _ => col = self.settings.lock().unwrap().origin_column,
+                    _ => col = origin_column,
                 }
             }
         }
@@ -597,7 +602,7 @@ impl TtToCea608 {
                 if state.mode != Cea608Mode::PopOn && state.mode != Cea608Mode::PaintOn {
                     state.send_roll_up_preamble = true;
                 }
-                col = self.settings.lock().unwrap().origin_column;
+                col = origin_column;
             }
         }
 
@@ -637,7 +642,7 @@ impl TtToCea608 {
                 }
                 col = line_column;
             } else if state.mode == Cea608Mode::PopOn || state.mode == Cea608Mode::PaintOn {
-                col = self.settings.lock().unwrap().origin_column;
+                col = origin_column;
             }
 
             for (j, chunk) in line.chunks.iter().enumerate() {
@@ -722,36 +727,48 @@ impl TtToCea608 {
 
                     col += 1;
 
-                    if col > 31 {
-                        match state.mode {
-                            Cea608Mode::PaintOn | Cea608Mode::PopOn => {
-                                if chars.peek().is_some() {
-                                    gst_warning!(
-                                        CAT,
-                                        obj: element,
-                                        "Dropping characters after 32nd column: {}",
-                                        c
-                                    );
-                                }
-                                break;
-                            }
-                            Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
-                                if prev_char != 0 {
-                                    state.cc_data(element, mut_list, prev_char);
-                                    prev_char = 0;
-                                }
+                    if state.mode.is_rollup() {
+                        /* In roll-up mode, we introduce carriage returns automatically.
+                         * Instead of always wrapping once the last column is reached, we
+                         * want to look ahead and check whether the following word will fit
+                         * on the current row. If it won't, we insert a carriage return,
+                         * unless it won't fit on a full row either, in which case it will need
+                         * to be broken up.
+                         */
+                        let next_word_length = if c.is_ascii_whitespace() {
+                            self.peek_word_length(chars.clone())
+                        } else {
+                            0
+                        };
 
-                                self.open_line(
-                                    element,
-                                    &mut state,
-                                    chunk,
-                                    mut_list,
-                                    &mut col,
-                                    row as i32,
-                                    Some(true),
-                                );
+                        if (next_word_length <= 32 - origin_column && col + next_word_length > 31)
+                            || col > 31
+                        {
+                            if prev_char != 0 {
+                                state.cc_data(element, mut_list, prev_char);
+                                prev_char = 0;
                             }
+
+                            self.open_line(
+                                element,
+                                &mut state,
+                                chunk,
+                                mut_list,
+                                &mut col,
+                                row as i32,
+                                Some(true),
+                            );
                         }
+                    } else if col > 31 {
+                        if chars.peek().is_some() {
+                            gst_warning!(
+                                CAT,
+                                obj: element,
+                                "Dropping characters after 32nd column: {}",
+                                c
+                            );
+                        }
+                        break;
                     }
                 }
             }

@@ -371,3 +371,62 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     let event = h.pull_event().unwrap();
     assert_eq!(event.type_(), gst::EventType::Eos);
 }
+
+/* Here we test that tttocea608 introduces carriage returns in
+ * judicious places and avoids to break words without rhyme or
+ * reason.
+ */
+#[test]
+fn test_word_wrap_roll_up() {
+    init();
+
+    let mut h = gst_check::Harness::new_parse("tttocea608 mode=roll-up2 origin-column=24");
+    h.set_src_caps_str("text/x-raw");
+
+    while h.events_in_queue() != 0 {
+        let _event = h.pull_event().unwrap();
+    }
+
+    let inbuf = new_timed_buffer(&"Hello World", gst::SECOND, gst::SECOND);
+    assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
+
+    /* Padding */
+    loop {
+        let outbuf = h.pull().unwrap();
+        if outbuf.pts() + outbuf.duration() >= gst::SECOND {
+            break;
+        }
+
+        let data = outbuf.map_readable().unwrap();
+        assert_eq!(&*data, &[0x80, 0x80]);
+    }
+
+    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 11] = [
+        (1_000_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
+        (1_033_333_333.into(), 33_333_334.into(), [0x94, 0x7c]), /* preamble */
+        (1_066_666_667.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
+        (1_100_000_000.into(), 33_333_333.into(), [0xec, 0xec]), /* l l */
+        (1_133_333_333.into(), 33_333_334.into(), [0xef, 0x20]), /* o SPACE */
+        (1_166_666_667.into(), 33_333_333.into(), [0x94, 0xad]), /* carriage return */
+        (1_200_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
+        (1_233_333_333.into(), 33_333_334.into(), [0x94, 0x7c]), /* preamble */
+        (1_266_666_667.into(), 33_333_333.into(), [0x57, 0xef]), /* W o */
+        (1_300_000_000.into(), 33_333_333.into(), [0xf2, 0xec]), /* r l */
+        (1_333_333_333.into(), 33_333_334.into(), [0x64, 0x80]), /* d nil */
+    ];
+
+    for (i, e) in expected.iter().enumerate() {
+        let outbuf = h.try_pull().unwrap();
+
+        assert_eq!(e.0, outbuf.pts(), "Unexpected PTS for {}th buffer", i + 1);
+        assert_eq!(
+            e.1,
+            outbuf.duration(),
+            "Unexpected duration for {}th buffer",
+            i + 1
+        );
+
+        let data = outbuf.map_readable().unwrap();
+        assert_eq!(e.2, &*data);
+    }
+}
