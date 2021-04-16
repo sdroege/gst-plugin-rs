@@ -68,14 +68,15 @@ for d in PLUGIN_DIRS:
         run(cmd, env)
 
 if command == 'build':
+    target_dir = os.path.join(cargo_target_dir, '**', target)
     # Copy so files to build dir
-    for f in glob.glob(os.path.join(cargo_target_dir, target, '*.' + ext)):
+    for f in glob.glob(os.path.join(target_dir, '*.' + ext), recursive=True):
         shutil.copy(f, meson_build_dir)
     if ext2:
-        for f in glob.glob(os.path.join(cargo_target_dir, target, '*.' + ext2)):
+        for f in glob.glob(os.path.join(target_dir, '*.' + ext2), recursive=True):
             shutil.copy(f, meson_build_dir)
     # Copy generated pkg-config files
-    for f in glob.glob(os.path.join(cargo_target_dir, target, '*.pc')):
+    for f in glob.glob(os.path.join(target_dir, '*.pc'), recursive=True):
         shutil.copy(f, meson_build_dir)
 
     # Move -uninstalled.pc to meson-uninstalled
