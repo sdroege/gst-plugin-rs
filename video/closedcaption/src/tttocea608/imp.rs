@@ -676,7 +676,9 @@ impl TtToCea608 {
                     }
                 };
 
-                for c in text.chars() {
+                let mut chars = text.chars().peekable();
+
+                while let Some(c) = chars.next() {
                     if c == '\r' {
                         continue;
                     }
@@ -723,12 +725,14 @@ impl TtToCea608 {
                     if col > 31 {
                         match state.mode {
                             Cea608Mode::PaintOn | Cea608Mode::PopOn => {
-                                gst_warning!(
-                                    CAT,
-                                    obj: element,
-                                    "Dropping characters after 32nd column: {}",
-                                    c
-                                );
+                                if chars.peek().is_some() {
+                                    gst_warning!(
+                                        CAT,
+                                        obj: element,
+                                        "Dropping characters after 32nd column: {}",
+                                        c
+                                    );
+                                }
                                 break;
                             }
                             Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
