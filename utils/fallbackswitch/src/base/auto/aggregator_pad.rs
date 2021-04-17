@@ -16,7 +16,7 @@ glib::wrapper! {
     pub struct AggregatorPad(Object<ffi::GstAggregatorPad, ffi::GstAggregatorPadClass>) @extends gst::Pad, gst::Object;
 
     match fn {
-        get_type => || ffi::gst_aggregator_pad_get_type(),
+        type_ => || ffi::gst_aggregator_pad_get_type(),
     }
 }
 
@@ -26,18 +26,25 @@ unsafe impl Sync for AggregatorPad {}
 pub const NONE_AGGREGATOR_PAD: Option<&AggregatorPad> = None;
 
 pub trait AggregatorPadExt: 'static {
+    #[doc(alias = "gst_aggregator_pad_drop_buffer")]
     fn drop_buffer(&self) -> bool;
 
+    #[doc(alias = "gst_aggregator_pad_has_buffer")]
     fn has_buffer(&self) -> bool;
 
+    #[doc(alias = "gst_aggregator_pad_is_eos")]
     fn is_eos(&self) -> bool;
 
+    #[doc(alias = "gst_aggregator_pad_peek_buffer")]
     fn peek_buffer(&self) -> Option<gst::Buffer>;
 
+    #[doc(alias = "gst_aggregator_pad_pop_buffer")]
     fn pop_buffer(&self) -> Option<gst::Buffer>;
 
+    #[doc(alias = "get_property_emit_signals")]
     fn emits_signals(&self) -> bool;
 
+    #[doc(alias = "set_property_emit_signals")]
     fn set_emit_signals(&self, emit_signals: bool);
 
     fn connect_buffer_consumed<F: Fn(&Self, &gst::Buffer) + Send + Sync + 'static>(

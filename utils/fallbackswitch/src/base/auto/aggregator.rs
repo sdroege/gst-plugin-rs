@@ -17,7 +17,7 @@ glib::wrapper! {
     pub struct Aggregator(Object<ffi::GstAggregator, ffi::GstAggregatorClass>) @extends gst::Element, gst::Object;
 
     match fn {
-        get_type => || ffi::gst_aggregator_get_type(),
+        type_ => || ffi::gst_aggregator_get_type(),
     }
 }
 
@@ -36,14 +36,22 @@ pub trait AggregatorExt: 'static {
     #[doc(alias = "gst_aggregator_get_latency")]
     fn latency(&self) -> gst::ClockTime;
 
+    #[doc(alias = "gst_aggregator_negotiate")]
+    fn negotiate(&self) -> bool;
+
+    #[doc(alias = "gst_aggregator_set_latency")]
     fn set_latency(&self, min_latency: gst::ClockTime, max_latency: gst::ClockTime);
 
+    #[doc(alias = "gst_aggregator_set_src_caps")]
     fn set_src_caps(&self, caps: &gst::Caps);
 
+    #[doc(alias = "gst_aggregator_simple_get_next_time")]
     fn simple_get_next_time(&self) -> gst::ClockTime;
 
+    #[doc(alias = "get_property_start_time")]
     fn start_time(&self) -> u64;
 
+    #[doc(alias = "set_property_start_time")]
     fn set_start_time(&self, start_time: u64);
 
     fn connect_property_latency_notify<F: Fn(&Self) + Send + Sync + 'static>(
@@ -55,8 +63,6 @@ pub trait AggregatorExt: 'static {
         &self,
         f: F,
     ) -> SignalHandlerId;
-
-    fn negotiate(&self) -> bool;
 }
 
 impl<O: IsA<Aggregator>> AggregatorExt for O {
@@ -75,6 +81,14 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
     fn latency(&self) -> gst::ClockTime {
         unsafe {
             from_glib(ffi::gst_aggregator_get_latency(
+                self.as_ref().to_glib_none().0,
+            ))
+        }
+    }
+
+    fn negotiate(&self) -> bool {
+        unsafe {
+            from_glib(ffi::gst_aggregator_negotiate(
                 self.as_ref().to_glib_none().0,
             ))
         }
@@ -180,14 +194,6 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
                 )),
                 Box_::into_raw(f),
             )
-        }
-    }
-
-    fn negotiate(&self) -> bool {
-        unsafe {
-            from_glib(ffi::gst_aggregator_negotiate(
-                self.as_ref().to_glib_none().0,
-            ))
         }
     }
 }
