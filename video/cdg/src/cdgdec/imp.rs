@@ -181,7 +181,7 @@ impl VideoDecoderImpl for CdgDec {
                     .take(CDG_WIDTH as usize)
                     .enumerate()
                 {
-                    let p = cdg_inter.pixel(x as u32, y as u32);
+                    let p = cdg_inter.get_pixel(x as u32, y as u32);
                     pixel.copy_from_slice(&p.0);
                 }
             }

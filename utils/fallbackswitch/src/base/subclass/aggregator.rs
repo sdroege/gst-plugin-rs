@@ -111,7 +111,7 @@ pub trait AggregatorImpl: AggregatorImplExt + ElementImpl {
     }
 
     fn next_time(&self, aggregator: &Self::Type) -> gst::ClockTime {
-        self.parent_get_next_time(aggregator)
+        self.parent_next_time(aggregator)
     }
 
     fn create_new_pad(
@@ -214,7 +214,7 @@ pub trait AggregatorImplExt: ObjectSubclass {
 
     fn parent_stop(&self, aggregator: &Self::Type) -> Result<(), gst::ErrorMessage>;
 
-    fn parent_get_next_time(&self, aggregator: &Self::Type) -> gst::ClockTime;
+    fn parent_next_time(&self, aggregator: &Self::Type) -> gst::ClockTime;
 
     fn parent_create_new_pad(
         &self,
@@ -498,7 +498,7 @@ impl<T: AggregatorImpl> AggregatorImplExt for T {
         }
     }
 
-    fn parent_get_next_time(&self, aggregator: &Self::Type) -> gst::ClockTime {
+    fn parent_next_time(&self, aggregator: &Self::Type) -> gst::ClockTime {
         unsafe {
             let data = T::type_data();
             let parent_class = data.as_ref().parent_class() as *mut ffi::GstAggregatorClass;

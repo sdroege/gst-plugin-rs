@@ -475,11 +475,11 @@ impl ReqwestHttpSrc {
                 s.set("content-type", &content_type.as_ref());
             } else if content_type.type_() == "audio" && content_type.subtype() == "L16" {
                 let channels = content_type
-                    .param("channels")
+                    .get_param("channels")
                     .and_then(|s| s.as_ref().parse::<i32>().ok())
                     .unwrap_or(2);
                 let rate = content_type
-                    .param("rate")
+                    .get_param("rate")
                     .and_then(|s| s.as_ref().parse::<i32>().ok())
                     .unwrap_or(44_100);
 

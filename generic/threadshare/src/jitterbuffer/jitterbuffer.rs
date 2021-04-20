@@ -28,7 +28,7 @@ glib::wrapper! {
     pub struct RTPJitterBuffer(Object<ffi::RTPJitterBuffer>);
 
     match fn {
-        get_type => || ffi::rtp_jitter_buffer_get_type(),
+        type_ => || ffi::rtp_jitter_buffer_get_type(),
     }
 }
 

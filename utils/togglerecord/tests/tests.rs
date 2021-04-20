@@ -66,7 +66,7 @@ fn setup_sender_receiver(
             togglerecord.static_pad("sink").unwrap(),
         )
     } else {
-        let sinkpad = togglerecord.request_pad("sink_%u").unwrap();
+        let sinkpad = togglerecord.request_pad_simple("sink_%u").unwrap();
         let srcpad = sinkpad.iterate_internal_links().next().unwrap().unwrap();
         (srcpad, sinkpad)
     };
@@ -263,7 +263,7 @@ fn test_create_pads() {
     init();
     let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
 
-    let sinkpad = togglerecord.request_pad("sink_%u").unwrap();
+    let sinkpad = togglerecord.request_pad_simple("sink_%u").unwrap();
     let srcpad = sinkpad.iterate_internal_links().next().unwrap().unwrap();
 
     assert_eq!(sinkpad.name(), "sink_0");

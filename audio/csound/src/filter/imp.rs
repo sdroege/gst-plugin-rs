@@ -128,8 +128,8 @@ impl State {
 
 impl CsoundFilter {
     fn process(&self, csound: &mut Csound, idata: &[f64], odata: &mut [f64]) -> bool {
-        let spin = csound.spin().unwrap();
-        let spout = csound.spout().unwrap();
+        let spin = csound.get_spin().unwrap();
+        let spout = csound.get_spout().unwrap();
 
         let in_chunks = idata.chunks_exact(spin.len());
         let out_chuncks = odata.chunks_exact_mut(spout.len());
@@ -190,8 +190,8 @@ impl CsoundFilter {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        let mut spin = csound.spin().unwrap();
-        let spout = csound.spout().unwrap();
+        let mut spin = csound.get_spin().unwrap();
+        let spout = csound.get_spout().unwrap();
 
         let out_bytes =
             (avail / state.in_info.channels() as usize) * state.out_info.channels() as usize;
@@ -547,7 +547,7 @@ impl BaseTransformImpl for CsoundFilter {
             if compiled {
                 let csound = self.csound.lock().unwrap();
                 // Use the sample rate and channels configured in the csound score
-                let sr = csound.sample_rate() as i32;
+                let sr = csound.get_sample_rate() as i32;
                 let ichannels = csound.input_channels() as i32;
                 let ochannels = csound.output_channels() as i32;
                 for s in new_caps.make_mut().iter_mut() {
@@ -608,7 +608,7 @@ impl BaseTransformImpl for CsoundFilter {
         let rate = in_info.rate();
 
         // Check if the negotiated caps are the right ones
-        if rate != out_info.rate() || rate != csound.sample_rate() as u32 {
+        if rate != out_info.rate() || rate != csound.get_sample_rate() as u32 {
             return Err(loggable_error!(
                 CAT,
                 "Failed to negotiate caps: invalid sample rate {}",
@@ -628,7 +628,7 @@ impl BaseTransformImpl for CsoundFilter {
             ));
         }
 
-        let ksmps = csound.ksmps();
+        let ksmps = csound.get_ksmps();
 
         let adapter = gst_base::UniqueAdapter::new();
 

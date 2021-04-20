@@ -459,7 +459,7 @@ fn test_extra_headers() {
             assert_eq!(headers.get("baz").unwrap(), "1");
             assert_eq!(
                 headers
-                    .all("list")
+                    .get_all("list")
                     .iter()
                     .map(|v| v.to_str().unwrap())
                     .collect::<Vec<&str>>(),
@@ -467,7 +467,7 @@ fn test_extra_headers() {
             );
             assert_eq!(
                 headers
-                    .all("array")
+                    .get_all("array")
                     .iter()
                     .map(|v| v.to_str().unwrap())
                     .collect::<Vec<&str>>(),
