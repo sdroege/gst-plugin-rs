@@ -110,7 +110,7 @@ pub trait AggregatorImpl: AggregatorImplExt + ElementImpl {
         self.parent_stop(aggregator)
     }
 
-    fn get_next_time(&self, aggregator: &Self::Type) -> gst::ClockTime {
+    fn next_time(&self, aggregator: &Self::Type) -> gst::ClockTime {
         self.parent_get_next_time(aggregator)
     }
 

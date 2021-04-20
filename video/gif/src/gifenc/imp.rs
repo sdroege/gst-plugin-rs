@@ -170,7 +170,7 @@ impl ObjectImpl for GifEnc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "repeat" => {
                 let settings = self.settings.lock().unwrap();
@@ -424,7 +424,7 @@ impl GifEnc {
 
 /// Helper method that takes a gstreamer video-frame and copies it into a
 /// tightly packed rgb(a) buffer, ready for consumption by the gif encoder.
-fn get_tightly_packed_framebuffer(frame: &gst_video::VideoFrameRef<&gst::BufferRef>) -> Vec<u8> {
+fn tightly_packed_framebuffer(frame: &gst_video::VideoFrameRef<&gst::BufferRef>) -> Vec<u8> {
     assert_eq!(frame.n_planes(), 1); // RGB and RGBA are tightly packed
     let line_size = (frame.info().width() * frame.n_components()) as usize;
     let line_stride = frame.info().stride()[0] as usize;

@@ -88,7 +88,7 @@ impl State {
         in_process_samples * self.out_info.bpf() as usize
     }
 
-    fn get_bytes_to_read(&mut self, output_size: usize) -> usize {
+    fn bytes_to_read(&mut self, output_size: usize) -> usize {
         // The max amount of bytes at the input that We would need
         // for filling an output buffer of size *output_size*
         (output_size / self.out_info.bpf() as usize) * self.in_info.bpf() as usize
@@ -418,7 +418,7 @@ impl ObjectImpl for CsoundFilter {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "loop" => {
                 let settings = self.settings.lock().unwrap();

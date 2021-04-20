@@ -847,7 +847,7 @@ impl SrcHandler {
         jb.src_pad.push(buffer).await
     }
 
-    fn get_next_wakeup(
+    fn next_wakeup(
         &self,
         element: &super::JitterBuffer,
         state: &State,
@@ -1495,7 +1495,7 @@ impl ObjectImpl for JitterBuffer {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "latency" => {
                 let settings = self.settings.lock().unwrap();

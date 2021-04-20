@@ -142,7 +142,7 @@ impl ObjectImpl for VideoFallbackSource {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "uri" => {
                 let settings = self.settings.lock().unwrap();
@@ -235,7 +235,7 @@ impl BinImpl for VideoFallbackSource {
 }
 
 impl VideoFallbackSource {
-    fn get_file_src_for_uri(
+    fn file_src_for_uri(
         &self,
         element: &super::VideoFallbackSource,
         uri: Option<&str>,

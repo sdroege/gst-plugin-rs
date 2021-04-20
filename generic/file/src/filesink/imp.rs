@@ -153,7 +153,7 @@ impl ObjectImpl for FileSink {
         };
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "location" => {
                 let settings = self.settings.lock().unwrap();
@@ -292,11 +292,11 @@ impl BaseSinkImpl for FileSink {
 impl URIHandlerImpl for FileSink {
     const URI_TYPE: gst::URIType = gst::URIType::Sink;
 
-    fn get_protocols() -> &'static [&'static str] {
+    fn protocols() -> &'static [&'static str] {
         &["file"]
     }
 
-    fn get_uri(&self, _element: &Self::Type) -> Option<String> {
+    fn uri(&self, _element: &Self::Type) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
         // Conversion to Url already checked while building the `FileLocation`

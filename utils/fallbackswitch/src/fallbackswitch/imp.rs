@@ -123,7 +123,7 @@ impl Default for Settings {
 }
 
 impl OutputState {
-    fn get_health(
+    fn health(
         &self,
         settings: &Settings,
         check_primary_pad: bool,
@@ -360,7 +360,7 @@ impl FallbackSwitch {
         Ok(Some((buffer, active_caps, pad_change)))
     }
 
-    fn get_backup_buffer(
+    fn backup_buffer(
         &self,
         state: &mut OutputState,
         settings: &Settings,
@@ -477,7 +477,7 @@ impl FallbackSwitch {
     }
 
     #[allow(clippy::type_complexity)]
-    fn get_next_buffer(
+    fn next_buffer(
         &self,
         agg: &super::FallbackSwitch,
         timeout: bool,
@@ -769,7 +769,7 @@ impl ObjectImpl for FallbackSwitch {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "timeout" => {
                 let settings = self.settings.lock().unwrap();
@@ -980,7 +980,7 @@ impl AggregatorImpl for FallbackSwitch {
         }
     }
 
-    fn get_next_time(&self, agg: &Self::Type) -> gst::ClockTime {
+    fn next_time(&self, agg: &Self::Type) -> gst::ClockTime {
         /* At each iteration, we have a preferred pad and a backup pad. If autoswitch is true,
          * the sinkpad is always preferred, otherwise it's the active sinkpad as set by the app.
          * The backup pad is the other one (may be None if there's no fallback pad yet).

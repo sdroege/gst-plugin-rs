@@ -167,7 +167,7 @@ impl ObjectImpl for FileSrc {
         };
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "location" => {
                 let settings = self.settings.lock().unwrap();
@@ -226,7 +226,7 @@ impl BaseSrcImpl for FileSrc {
         true
     }
 
-    fn get_size(&self, _src: &Self::Type) -> Option<u64> {
+    fn size(&self, _src: &Self::Type) -> Option<u64> {
         let state = self.state.lock().unwrap();
         if let State::Started { ref file, .. } = *state {
             file.metadata().ok().map(|m| m.len())
@@ -345,11 +345,11 @@ impl BaseSrcImpl for FileSrc {
 impl URIHandlerImpl for FileSrc {
     const URI_TYPE: gst::URIType = gst::URIType::Src;
 
-    fn get_protocols() -> &'static [&'static str] {
+    fn protocols() -> &'static [&'static str] {
         &["file"]
     }
 
-    fn get_uri(&self, _element: &Self::Type) -> Option<String> {
+    fn uri(&self, _element: &Self::Type) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
         // Conversion to Url already checked while building the `FileLocation`

@@ -364,7 +364,7 @@ impl ObjectImpl for Rav1Enc {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "speed-preset" => {
                 let settings = self.settings.lock().unwrap();

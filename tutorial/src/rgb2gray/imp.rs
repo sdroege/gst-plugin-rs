@@ -165,7 +165,7 @@ impl ObjectImpl for Rgb2Gray {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "invert" => {
                 let settings = self.settings.lock().unwrap();
@@ -351,7 +351,7 @@ impl BaseTransformImpl for Rgb2Gray {
     // Returns the size of one processing unit (i.e. a frame in our case) corresponding
     // to the given caps. This is used for allocating a big enough output buffer and
     // sanity checking the input buffer size, among other things.
-    fn get_unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
+    fn unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
         gst_video::VideoInfo::from_caps(caps)
             .map(|info| info.size())
             .ok()

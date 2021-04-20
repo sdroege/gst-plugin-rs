@@ -240,7 +240,7 @@ impl ObjectImpl for S3Src {
         }
     }
 
-    fn get_property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "uri" => {
                 let url = match *self.url.lock().unwrap() {
@@ -298,11 +298,11 @@ impl ElementImpl for S3Src {
 impl URIHandlerImpl for S3Src {
     const URI_TYPE: gst::URIType = gst::URIType::Src;
 
-    fn get_protocols() -> &'static [&'static str] {
+    fn protocols() -> &'static [&'static str] {
         &["s3"]
     }
 
-    fn get_uri(&self, _: &Self::Type) -> Option<String> {
+    fn uri(&self, _: &Self::Type) -> Option<String> {
         self.url.lock().unwrap().as_ref().map(|s| s.to_string())
     }
 
@@ -316,7 +316,7 @@ impl BaseSrcImpl for S3Src {
         true
     }
 
-    fn get_size(&self, _: &Self::Type) -> Option<u64> {
+    fn size(&self, _: &Self::Type) -> Option<u64> {
         match *self.state.lock().unwrap() {
             StreamingState::Stopped => None,
             StreamingState::Started { size, .. } => Some(size),

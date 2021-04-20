@@ -264,7 +264,7 @@ impl ObjectImpl for TtToJson {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "mode" => {
                 let settings = self.settings.lock().unwrap();

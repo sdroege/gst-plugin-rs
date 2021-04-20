@@ -53,7 +53,7 @@ use std::{env, fs, path};
 /// - If neither is possible, `COMMIT_ID` is set to the string `UNKNOWN` and `BUILD_REL_DATE` to the
 ///   current date.
 ///
-pub fn get_info() {
+pub fn info() {
     let crate_dir =
         path::PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set"));
     let mut repo_dir = crate_dir.clone();

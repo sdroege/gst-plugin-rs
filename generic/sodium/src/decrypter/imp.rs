@@ -141,7 +141,7 @@ impl State {
     }
 
     // Retrieve the requested buffer out of the adapter.
-    fn get_requested_buffer(
+    fn requested_buffer(
         &mut self,
         pad: &gst::Pad,
         buffer: Option<&mut gst::BufferRef>,
@@ -496,7 +496,7 @@ impl Decrypter {
         })
     }
 
-    fn get_range(
+    fn range(
         &self,
         pad: &gst::Pad,
         element: &super::Decrypter,
@@ -651,7 +651,7 @@ impl ObjectImpl for Decrypter {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "receiver-key" => {
                 let props = self.props.lock().unwrap();

@@ -168,7 +168,7 @@ trait HandleData: Sized {
             self.pts()
         }
     }
-    fn get_duration(&self, state: &StreamState) -> gst::ClockTime;
+    fn duration(&self, state: &StreamState) -> gst::ClockTime;
     fn is_keyframe(&self) -> bool;
     fn can_clip(&self, state: &StreamState) -> bool;
     fn clip(
@@ -187,7 +187,7 @@ impl HandleData for (gst::ClockTime, gst::ClockTime) {
         self.0
     }
 
-    fn get_duration(&self, _state: &StreamState) -> gst::ClockTime {
+    fn duration(&self, _state: &StreamState) -> gst::ClockTime {
         self.1
     }
 
@@ -225,7 +225,7 @@ impl HandleData for gst::Buffer {
         gst::BufferRef::dts(self)
     }
 
-    fn get_duration(&self, state: &StreamState) -> gst::ClockTime {
+    fn duration(&self, state: &StreamState) -> gst::ClockTime {
         let duration = gst::BufferRef::duration(self);
 
         if duration.is_some() {
@@ -1743,7 +1743,7 @@ impl ObjectImpl for ToggleRecord {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "record" => {
                 let settings = self.settings.lock();

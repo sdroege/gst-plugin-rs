@@ -206,7 +206,7 @@ impl ObjectImpl for HsvFilter {
 
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "hue-shift" => {
                 let settings = self.settings.lock().unwrap();
@@ -298,7 +298,7 @@ impl BaseTransformImpl for HsvFilter {
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
 
-    fn get_unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
+    fn unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
         gst_video::VideoInfo::from_caps(caps)
             .map(|info| info.size())
             .ok()

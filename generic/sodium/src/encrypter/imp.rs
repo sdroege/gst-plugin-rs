@@ -456,7 +456,7 @@ impl ObjectImpl for Encrypter {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "receiver-key" => {
                 let props = self.props.lock().unwrap();

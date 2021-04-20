@@ -139,10 +139,7 @@ fn parse_timecode(
 
 impl State {
     #[allow(clippy::type_complexity)]
-    fn get_line(
-        &mut self,
-        drain: bool,
-    ) -> Result<Option<SccLine>, (&[u8], nom::error::Error<&[u8]>)> {
+    fn line(&mut self, drain: bool) -> Result<Option<SccLine>, (&[u8], nom::error::Error<&[u8]>)> {
         let line = match self.reader.get_line_with_drain(drain) {
             None => {
                 return Ok(None);

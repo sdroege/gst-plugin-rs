@@ -375,7 +375,7 @@ impl AudioDepth {
     }
 }
 
-fn get_claxon_streaminfo(indata: &[u8]) -> Result<claxon::metadata::StreamInfo, &'static str> {
+fn claxon_streaminfo(indata: &[u8]) -> Result<claxon::metadata::StreamInfo, &'static str> {
     let mut cursor = Cursor::new(indata);
     let mut metadata_iter = claxon::metadata::MetadataBlockReader::new(&mut cursor);
     let streaminfo = match metadata_iter.next() {
@@ -388,9 +388,7 @@ fn get_claxon_streaminfo(indata: &[u8]) -> Result<claxon::metadata::StreamInfo, 
     Ok(streaminfo)
 }
 
-fn get_gstaudioinfo(
-    streaminfo: claxon::metadata::StreamInfo,
-) -> Result<gst_audio::AudioInfo, String> {
+fn gstaudioinfo(streaminfo: claxon::metadata::StreamInfo) -> Result<gst_audio::AudioInfo, String> {
     let format = match streaminfo.bits_per_sample {
         8 => gst_audio::AudioFormat::S8,
         16 => gst_audio::AUDIO_FORMAT_S16,

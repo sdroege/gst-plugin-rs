@@ -739,7 +739,7 @@ impl ObjectImpl for ReqwestHttpSrc {
         };
     }
 
-    fn get_property(&self, obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "location" => {
                 let settings = self.settings.lock().unwrap();
@@ -860,7 +860,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
         }
     }
 
-    fn get_size(&self, _src: &Self::Type) -> Option<u64> {
+    fn size(&self, _src: &Self::Type) -> Option<u64> {
         match *self.state.lock().unwrap() {
             State::Started { size, .. } => size,
             _ => None,
@@ -1096,11 +1096,11 @@ impl PushSrcImpl for ReqwestHttpSrc {
 impl URIHandlerImpl for ReqwestHttpSrc {
     const URI_TYPE: gst::URIType = gst::URIType::Src;
 
-    fn get_protocols() -> &'static [&'static str] {
+    fn protocols() -> &'static [&'static str] {
         &["http", "https"]
     }
 
-    fn get_uri(&self, _element: &Self::Type) -> Option<String> {
+    fn uri(&self, _element: &Self::Type) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
         settings.location.as_ref().map(Url::to_string)

@@ -192,12 +192,12 @@ impl RTPPacketRateCtx {
         unsafe { ffi::gst_rtp_packet_rate_ctx_update(&mut *self.0, seqnum, ts) }
     }
 
-    pub fn get_max_dropout(&mut self, time_ms: i32) -> u32 {
+    pub fn max_dropout(&mut self, time_ms: i32) -> u32 {
         unsafe { ffi::gst_rtp_packet_rate_ctx_get_max_dropout(&mut *self.0, time_ms) }
     }
 
     #[allow(dead_code)]
-    pub fn get_max_disorder(&mut self, time_ms: i32) -> u32 {
+    pub fn max_disorder(&mut self, time_ms: i32) -> u32 {
         unsafe { ffi::gst_rtp_packet_rate_ctx_get_max_disorder(&mut *self.0, time_ms) }
     }
 }

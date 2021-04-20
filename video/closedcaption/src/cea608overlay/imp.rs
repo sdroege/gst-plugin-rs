@@ -614,7 +614,7 @@ impl ObjectImpl for Cea608Overlay {
         }
     }
 
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "field" => {
                 let settings = self.settings.lock().unwrap();

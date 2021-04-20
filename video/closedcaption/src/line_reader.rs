@@ -152,7 +152,7 @@ impl<T: AsRef<[u8]>> LineReader<T> {
         assert_eq!(self.buf.len(), len);
     }
 
-    pub fn get_line_with_drain(&mut self, drain: bool) -> Option<&[u8]> {
+    pub fn line_with_drain(&mut self, drain: bool) -> Option<&[u8]> {
         // Drop all data from the previous line
         self.drop_previous_line();
 

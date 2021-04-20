@@ -439,7 +439,7 @@ impl ObjectImpl for FallbackSrc {
     // Called whenever a value of a property is read. It can be called
     // at any time from any thread.
     #[allow(clippy::blocks_in_if_conditions)]
-    fn get_property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "enable-audio" => {
                 let settings = self.settings.lock().unwrap();

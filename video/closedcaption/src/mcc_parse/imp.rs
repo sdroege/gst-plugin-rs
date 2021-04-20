@@ -156,10 +156,7 @@ fn parse_timecode_rate(
 
 impl State {
     #[allow(clippy::type_complexity)]
-    fn get_line(
-        &mut self,
-        drain: bool,
-    ) -> Result<Option<MccLine>, (&[u8], nom::error::Error<&[u8]>)> {
+    fn line(&mut self, drain: bool) -> Result<Option<MccLine>, (&[u8], nom::error::Error<&[u8]>)> {
         let line = if self.replay_last_line {
             self.replay_last_line = false;
             &self.last_raw_line
