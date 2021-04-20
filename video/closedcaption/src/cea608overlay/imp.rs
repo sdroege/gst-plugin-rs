@@ -286,7 +286,7 @@ impl Cea608Overlay {
         let mut downstream_accepts_meta = false;
 
         let upstream_has_meta = caps
-            .get_features(0)
+            .features(0)
             .map(|f| f.contains(&gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION))
             .unwrap_or(false);
 
@@ -294,7 +294,7 @@ impl Cea608Overlay {
             let mut caps_clone = caps.clone();
             let overlay_caps = caps_clone.make_mut();
 
-            if let Some(features) = overlay_caps.get_mut_features(0) {
+            if let Some(features) = overlay_caps.features_mut(0) {
                 features.add(&gst_video::CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);
                 let peercaps = self.srcpad.peer_query_caps(Some(&caps_clone));
                 downstream_accepts_meta = !peercaps.is_empty();
@@ -542,7 +542,7 @@ impl ObjectSubclass for Cea608Overlay {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 Cea608Overlay::catch_panic_pad_function(
@@ -561,7 +561,7 @@ impl ObjectSubclass for Cea608Overlay {
             .flags(gst::PadFlags::PROXY_CAPS)
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .flags(gst::PadFlags::PROXY_CAPS)
             .build();

@@ -136,7 +136,7 @@ impl AudioDecoderImpl for LewtonDec {
 
         let mut state = state_guard.as_mut().unwrap();
 
-        let s = caps.get_structure(0).unwrap();
+        let s = caps.structure(0).unwrap();
         if let Ok(Some(streamheaders)) = s.get_optional::<gst::Array>("streamheader") {
             let streamheaders = streamheaders.as_slice();
             if streamheaders.len() < 3 {
@@ -336,7 +336,7 @@ impl LewtonDec {
             audio_info = audio_info.positions(to);
 
             let mut map = [0; 8];
-            if gst_audio::get_channel_reorder_map(from, to, &mut map[..channels]).is_err() {
+            if gst_audio::channel_reorder_map(from, to, &mut map[..channels]).is_err() {
                 gst_error!(
                     CAT,
                     obj: element,

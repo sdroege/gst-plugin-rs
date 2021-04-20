@@ -57,9 +57,9 @@ impl ObjectSubclass for ProgressBin {
         // do so after the progressreport element was added to the bin.
         //
         // We do that and adding the pads inside glib::Object::constructed() later.
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::GhostPad::from_template(&templ, Some("sink"));
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::GhostPad::from_template(&templ, Some("src"));
 
         // Create the progressreport element.
@@ -148,10 +148,10 @@ impl ObjectImpl for ProgressBin {
 
         // Then set the ghost pad targets to the corresponding pads of the progressreport element.
         self.sinkpad
-            .set_target(Some(&self.progress.get_static_pad("sink").unwrap()))
+            .set_target(Some(&self.progress.static_pad("sink").unwrap()))
             .unwrap();
         self.srcpad
-            .set_target(Some(&self.progress.get_static_pad("src").unwrap()))
+            .set_target(Some(&self.progress.static_pad("src").unwrap()))
             .unwrap();
 
         // And finally add the two ghostpads to the bin.

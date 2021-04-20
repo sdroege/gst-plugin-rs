@@ -82,7 +82,7 @@ fn test_have_cc_data_notify() {
         .connect_notify(Some("cc608"), move |o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
             state_guard.cc608_count += 1;
-            o.get_property("cc608").unwrap();
+            o.property("cc608").unwrap();
         });
     let state_c = state.clone();
     h.element()
@@ -90,7 +90,7 @@ fn test_have_cc_data_notify() {
         .connect_notify(Some("cc708"), move |o, _pspec| {
             let mut state_guard = state_c.lock().unwrap();
             state_guard.cc708_count += 1;
-            o.get_property("cc708").unwrap();
+            o.property("cc708").unwrap();
         });
 
     /* valid cc608 data moves cc608 property to true */

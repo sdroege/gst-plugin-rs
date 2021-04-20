@@ -881,7 +881,7 @@ unsafe extern "C" fn aggregator_get_next_time<T: AggregatorImpl>(
     let wrap: Borrowed<Aggregator> = from_glib_borrow(ptr);
 
     gst::panic_to_error!(&wrap, &imp.panicked(), gst::CLOCK_TIME_NONE, {
-        imp.get_next_time(wrap.unsafe_cast_ref())
+        imp.next_time(wrap.unsafe_cast_ref())
     })
     .to_glib()
 }

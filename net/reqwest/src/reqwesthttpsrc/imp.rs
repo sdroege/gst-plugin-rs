@@ -178,7 +178,7 @@ impl ReqwestHttpSrc {
             return Ok(client.clone());
         }
 
-        let srcpad = src.get_static_pad("src").unwrap();
+        let srcpad = src.static_pad("src").unwrap();
         let mut q = gst::query::Context::new(REQWEST_CLIENT_CONTEXT);
         if srcpad.peer_query(&mut q) {
             if let Some(context) = q.context_owned() {
@@ -471,15 +471,15 @@ impl ReqwestHttpSrc {
             gst_debug!(CAT, obj: src, "Got content type {}", content_type);
             if let Some(ref mut caps) = caps {
                 let caps = caps.get_mut().unwrap();
-                let s = caps.get_mut_structure(0).unwrap();
+                let s = caps.structure_mut(0).unwrap();
                 s.set("content-type", &content_type.as_ref());
             } else if content_type.type_() == "audio" && content_type.subtype() == "L16" {
                 let channels = content_type
-                    .get_param("channels")
+                    .param("channels")
                     .and_then(|s| s.as_ref().parse::<i32>().ok())
                     .unwrap_or(2);
                 let rate = content_type
-                    .get_param("rate")
+                    .param("rate")
                     .and_then(|s| s.as_ref().parse::<i32>().ok())
                     .unwrap_or(44_100);
 
@@ -1014,7 +1014,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
 
         if let Some(tags) = tags {
             gst_debug!(CAT, obj: src, "Sending iradio tags {:?}", tags);
-            let pad = src.get_static_pad("src").unwrap();
+            let pad = src.static_pad("src").unwrap();
             pad.push_event(gst::event::Tag::new(tags));
         }
 

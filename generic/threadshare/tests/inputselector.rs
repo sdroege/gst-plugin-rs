@@ -38,7 +38,7 @@ fn test_active_pad() {
     let mut h2 = gst_check::Harness::with_element(&is, Some("sink_%u"), None);
 
     let active_pad = is
-        .get_property("active-pad")
+        .property("active-pad")
         .unwrap()
         .get::<gst::Pad>()
         .unwrap();
@@ -47,7 +47,7 @@ fn test_active_pad() {
     is.set_property("active-pad", &h2.srcpad().unwrap().peer())
         .unwrap();
     let active_pad = is
-        .get_property("active-pad")
+        .property("active-pad")
         .unwrap()
         .get::<gst::Pad>()
         .unwrap();

@@ -52,11 +52,11 @@ fn create_pipeline() -> (
             let glsinkbin = gst::ElementFactory::make("glsinkbin", None).unwrap();
             glsinkbin.set_property("sink", &gtkglsink).unwrap();
 
-            let widget = gtkglsink.get_property("widget").unwrap();
+            let widget = gtkglsink.property("widget").unwrap();
             (glsinkbin, widget.get::<gtk::Widget>().unwrap().unwrap())
         } else {
             let sink = gst::ElementFactory::make("gtksink", None).unwrap();
-            let widget = sink.get_property("widget").unwrap();
+            let widget = sink.property("widget").unwrap();
             (sink, widget.get::<gtk::Widget>().unwrap().unwrap())
         };
 
@@ -185,8 +185,8 @@ fn create_pipeline() -> (
 
     (
         pipeline,
-        video_queue2.get_static_pad("sink").unwrap(),
-        audio_queue2.get_static_pad("sink").unwrap(),
+        video_queue2.static_pad("sink").unwrap(),
+        audio_queue2.static_pad("sink").unwrap(),
         togglerecord,
         video_sink,
         video_widget,
@@ -240,7 +240,7 @@ fn create_ui(app: &gtk::Application) {
         position_label.set_text(&format!("Position: {:.1}", position));
 
         let recording_duration = togglerecord
-            .get_static_pad("src")
+            .static_pad("src")
             .unwrap()
             .query_position::<gst::ClockTime>()
             .unwrap_or_else(|| 0.into());
@@ -257,7 +257,7 @@ fn create_ui(app: &gtk::Application) {
         };
 
         let recording = !togglerecord
-            .get_property("record")
+            .property("record")
             .unwrap()
             .get_some::<bool>()
             .unwrap();

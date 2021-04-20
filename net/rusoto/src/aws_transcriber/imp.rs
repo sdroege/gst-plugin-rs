@@ -821,7 +821,7 @@ impl Transcriber {
         }
 
         let in_caps = self.sinkpad.current_caps().unwrap();
-        let s = in_caps.get_structure(0).unwrap();
+        let s = in_caps.structure(0).unwrap();
         let sample_rate: i32 = s.get("rate").unwrap().unwrap();
 
         let settings = self.settings.lock().unwrap();
@@ -962,7 +962,7 @@ impl ObjectSubclass for Transcriber {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 Transcriber::catch_panic_pad_function(
@@ -980,7 +980,7 @@ impl ObjectSubclass for Transcriber {
             })
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .activatemode_function(|pad, parent, mode, active| {
                 Transcriber::catch_panic_pad_function(

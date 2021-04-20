@@ -336,7 +336,7 @@ impl VideoEncoderImpl for GifEnc {
                 return Err(gst::FlowError::Error);
             }
 
-            let mut raw_frame = get_tightly_packed_framebuffer(&in_frame);
+            let mut raw_frame = tightly_packed_framebuffer(&in_frame);
             let mut gif_frame = match in_frame.info().format() {
                 gst_video::VideoFormat::Rgb => {
                     gif::Frame::from_rgb_speed(
@@ -414,7 +414,7 @@ impl GifEnc {
         });
         if let Some(trailer_buffer) = trailer_buffer {
             // manually push GIF trailer to the encoder's src pad
-            let srcpad = element.get_static_pad("src").unwrap();
+            let srcpad = element.static_pad("src").unwrap();
             srcpad.push(trailer_buffer)?;
         }
 

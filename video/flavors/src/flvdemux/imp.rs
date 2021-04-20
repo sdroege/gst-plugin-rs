@@ -126,7 +126,7 @@ impl ObjectSubclass for FlvDemux {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .activate_function(|pad, parent| {
                 FlvDemux::catch_panic_pad_function(
@@ -637,7 +637,7 @@ impl FlvDemux {
     }
 
     fn create_srcpad(&self, element: &super::FlvDemux, name: &str, caps: &gst::Caps) -> gst::Pad {
-        let templ = element.element_class().get_pad_template(name).unwrap();
+        let templ = element.element_class().pad_template(name).unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some(name))
             .event_function(|pad, parent, event| {
                 FlvDemux::catch_panic_pad_function(

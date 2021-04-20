@@ -183,7 +183,7 @@ impl JsonGstEnc {
                 {
                     let mut state = self.state.lock().unwrap();
                     let caps = e.caps();
-                    let s = caps.get_structure(0).unwrap();
+                    let s = caps.structure(0).unwrap();
                     state.format = match s.get::<String>("format") {
                         Err(_) => None,
                         Ok(format) => format,
@@ -207,7 +207,7 @@ impl ObjectSubclass for JsonGstEnc {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 JsonGstEnc::catch_panic_pad_function(
@@ -225,7 +225,7 @@ impl ObjectSubclass for JsonGstEnc {
             })
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src")).build();
 
         Self {

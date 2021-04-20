@@ -955,7 +955,7 @@ impl ObjectSubclass for UdpSink {
 
         Self {
             sink_pad: PadSink::new(
-                gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                gst::Pad::from_template(&klass.pad_template("sink").unwrap(), Some("sink")),
                 sink_pad_handler.clone(),
             ),
             sink_pad_handler,

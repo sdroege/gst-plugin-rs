@@ -414,7 +414,7 @@ impl BaseTransformImpl for CCDetect {
         }
 
         let s = incaps
-            .get_structure(0)
+            .structure(0)
             .ok_or_else(|| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
         let format_str = s
             .get::<&str>("format")

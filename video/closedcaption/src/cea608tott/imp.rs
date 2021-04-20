@@ -303,7 +303,7 @@ impl Cea608ToTt {
                     downstream_caps
                 );
 
-                let s = downstream_caps.get_structure(0).unwrap();
+                let s = downstream_caps.structure(0).unwrap();
                 let new_caps = if s.name() == "application/x-subtitle-vtt" {
                     state.format = Some(Format::Vtt);
                     gst::Caps::builder("application/x-subtitle-vtt").build()
@@ -377,7 +377,7 @@ impl ObjectSubclass for Cea608ToTt {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 Cea608ToTt::catch_panic_pad_function(
@@ -396,7 +396,7 @@ impl ObjectSubclass for Cea608ToTt {
             .flags(gst::PadFlags::FIXED_CAPS)
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .flags(gst::PadFlags::FIXED_CAPS)
             .build();

@@ -37,7 +37,7 @@ fn test_client_management() {
     let udpsink = h.element().unwrap();
 
     let clients = udpsink
-        .get_property("clients")
+        .property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
@@ -49,7 +49,7 @@ fn test_client_management() {
         .emit_by_name("add", &[&"192.168.1.1", &57i32])
         .unwrap();
     let clients = udpsink
-        .get_property("clients")
+        .property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
@@ -61,7 +61,7 @@ fn test_client_management() {
         .emit_by_name("add", &[&"192.168.1.1", &57i32])
         .unwrap();
     let clients = udpsink
-        .get_property("clients")
+        .property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
@@ -72,7 +72,7 @@ fn test_client_management() {
         .emit_by_name("remove", &[&"192.168.1.1", &57i32])
         .unwrap();
     let clients = udpsink
-        .get_property("clients")
+        .property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
@@ -84,7 +84,7 @@ fn test_client_management() {
         .emit_by_name("remove", &[&"192.168.1.1", &57i32])
         .unwrap();
     let clients = udpsink
-        .get_property("clients")
+        .property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
@@ -96,7 +96,7 @@ fn test_client_management() {
         .emit_by_name("remove", &[&"127.0.0.1", &5004i32])
         .unwrap();
     let clients = udpsink
-        .get_property("clients")
+        .property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
@@ -108,7 +108,7 @@ fn test_client_management() {
         .set_property("clients", &"127.0.0.1:5004,192.168.1.1:57")
         .unwrap();
     let clients = udpsink
-        .get_property("clients")
+        .property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()
@@ -117,7 +117,7 @@ fn test_client_management() {
 
     udpsink.emit_by_name("clear", &[]).unwrap();
     let clients = udpsink
-        .get_property("clients")
+        .property("clients")
         .unwrap()
         .get::<String>()
         .unwrap()

@@ -81,7 +81,7 @@ impl Harness {
             })
             .build();
 
-        let srcpad = src.get_static_pad("src").unwrap();
+        let srcpad = src.static_pad("src").unwrap();
         srcpad.link(&pad).unwrap();
 
         let bus = gst::Bus::new();
@@ -459,7 +459,7 @@ fn test_extra_headers() {
             assert_eq!(headers.get("baz").unwrap(), "1");
             assert_eq!(
                 headers
-                    .get_all("list")
+                    .all("list")
                     .iter()
                     .map(|v| v.to_str().unwrap())
                     .collect::<Vec<&str>>(),
@@ -467,7 +467,7 @@ fn test_extra_headers() {
             );
             assert_eq!(
                 headers
-                    .get_all("array")
+                    .all("array")
                     .iter()
                     .map(|v| v.to_str().unwrap())
                     .collect::<Vec<&str>>(),
@@ -640,7 +640,7 @@ fn test_iradio_mode() {
     // Check if everything was read
     assert_eq!(cursor.position(), 11);
 
-    let srcpad = h.src.get_static_pad("src").unwrap();
+    let srcpad = h.src.static_pad("src").unwrap();
     let caps = srcpad.current_caps().unwrap();
     assert_eq!(
         caps,
@@ -652,7 +652,7 @@ fn test_iradio_mode() {
 
     {
         use gst::EventView;
-        let tag_event = srcpad.get_sticky_event(gst::EventType::Tag, 0).unwrap();
+        let tag_event = srcpad.sticky_event(gst::EventType::Tag, 0).unwrap();
         if let EventView::Tag(tags) = tag_event.view() {
             let tags = tags.tag();
             assert_eq!(
@@ -721,7 +721,7 @@ fn test_audio_l16() {
     // Check if everything was read
     assert_eq!(cursor.position(), 11);
 
-    let srcpad = h.src.get_static_pad("src").unwrap();
+    let srcpad = h.src.static_pad("src").unwrap();
     let caps = srcpad.current_caps().unwrap();
     assert_eq!(
         caps,
@@ -1172,7 +1172,7 @@ fn test_cookies() {
         },
     );
 
-    let context = h.src.get_context("gst.reqwest.client").expect("No context");
+    let context = h.src.context("gst.reqwest.client").expect("No context");
     h2.src.set_context(&context);
 
     // Set the HTTP source to Playing so that everything can start

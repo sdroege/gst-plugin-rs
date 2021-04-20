@@ -265,7 +265,7 @@ impl Dav1dDec {
             .output_state()
             .expect("Output state not set. Shouldn't happen!");
         let offset = pic.offset() as i32;
-        if let Some(mut frame) = element.get_frame(offset) {
+        if let Some(mut frame) = element.frame(offset) {
             let output_buffer = self.decoded_picture_as_buffer(&pic, output_state)?;
             frame.set_output_buffer(output_buffer);
             element.finish_frame(frame)?;
@@ -278,7 +278,7 @@ impl Dav1dDec {
 
     fn drop_decoded_pictures(&self) {
         let mut decoder = self.decoder.lock().unwrap();
-        while let Ok(pic) = decoder.get_picture() {
+        while let Ok(pic) = decoder.picture() {
             gst_debug!(CAT, "Dropping picture");
             drop(pic);
         }
@@ -289,7 +289,7 @@ impl Dav1dDec {
     ) -> Result<Vec<(dav1d::Picture, gst_video::VideoFormat)>, gst::FlowError> {
         let mut decoder = self.decoder.lock().unwrap();
         let mut pictures = vec![];
-        while let Ok(pic) = decoder.get_picture() {
+        while let Ok(pic) = decoder.picture() {
             let format = self.gst_video_format_from_dav1d_picture(&pic);
             if format == gst_video::VideoFormat::Unknown {
                 return Err(gst::FlowError::NotNegotiated);

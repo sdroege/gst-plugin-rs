@@ -522,7 +522,7 @@ impl BaseSrcImpl for SineSrc {
         caps.truncate();
         {
             let caps = caps.make_mut();
-            let s = caps.get_mut_structure(0).unwrap();
+            let s = caps.structure_mut(0).unwrap();
             s.fixate_field_nearest_int("rate", 48_000);
             s.fixate_field_nearest_int("channels", 1);
         }

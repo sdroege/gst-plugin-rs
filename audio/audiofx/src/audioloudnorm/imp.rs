@@ -1710,7 +1710,7 @@ impl ObjectSubclass for AudioLoudNorm {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 Self::catch_panic_pad_function(
@@ -1729,7 +1729,7 @@ impl ObjectSubclass for AudioLoudNorm {
             .flags(gst::PadFlags::PROXY_CAPS)
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .query_function(|pad, parent, query| {
                 Self::catch_panic_pad_function(

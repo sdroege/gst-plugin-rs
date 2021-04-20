@@ -899,7 +899,7 @@ impl TtToCea608 {
                 }
 
                 let caps = downstream_caps.make_mut();
-                let s = caps.get_mut_structure(0).unwrap();
+                let s = caps.structure_mut(0).unwrap();
 
                 s.fixate_field_nearest_fraction(
                     "framerate",
@@ -911,7 +911,7 @@ impl TtToCea608 {
                 state.framerate = s.get_some::<gst::Fraction>("framerate").unwrap();
 
                 let upstream_caps = e.caps();
-                let s = upstream_caps.get_structure(0).unwrap();
+                let s = upstream_caps.structure(0).unwrap();
                 state.json_input = s.name() == "application/x-json";
 
                 gst_debug!(CAT, obj: pad, "Pushing caps {}", caps);
@@ -987,7 +987,7 @@ impl ObjectSubclass for TtToCea608 {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 TtToCea608::catch_panic_pad_function(
@@ -1006,7 +1006,7 @@ impl ObjectSubclass for TtToCea608 {
             .flags(gst::PadFlags::FIXED_CAPS)
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .flags(gst::PadFlags::FIXED_CAPS)
             .build();

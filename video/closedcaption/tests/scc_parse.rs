@@ -170,7 +170,7 @@ fn test_timecodes() {
 
         // get the timecode of the buffer
         let tc = buf
-            .get_meta::<gst_video::VideoTimeCodeMeta>()
+            .meta::<gst_video::VideoTimeCodeMeta>()
             .expect("No timecode meta")
             .tc();
 

@@ -93,7 +93,7 @@ impl MccEnc {
             .current_caps()
             .ok_or(gst::FlowError::NotNegotiated)?;
         let framerate = match caps
-            .get_structure(0)
+            .structure(0)
             .unwrap()
             .get_some::<gst::Fraction>("framerate")
         {
@@ -276,7 +276,7 @@ impl MccEnc {
         outbuf: &mut Vec<u8>,
     ) -> Result<(), gst::FlowError> {
         let meta = buffer
-            .get_meta::<gst_video::VideoTimeCodeMeta>()
+            .meta::<gst_video::VideoTimeCodeMeta>()
             .ok_or_else(|| {
                 gst::element_error!(
                     element,
@@ -370,7 +370,7 @@ impl MccEnc {
         match event.view() {
             EventView::Caps(ev) => {
                 let caps = ev.caps();
-                let s = caps.get_structure(0).unwrap();
+                let s = caps.structure(0).unwrap();
                 let framerate = match s.get_some::<gst::Fraction>("framerate") {
                     Ok(framerate) => framerate,
                     Err(structure::GetError::FieldNotFound { .. }) => {
@@ -451,7 +451,7 @@ impl ObjectSubclass for MccEnc {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 MccEnc::catch_panic_pad_function(
@@ -469,7 +469,7 @@ impl ObjectSubclass for MccEnc {
             })
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
                 MccEnc::catch_panic_pad_function(

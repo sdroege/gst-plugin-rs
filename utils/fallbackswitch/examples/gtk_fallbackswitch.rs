@@ -50,9 +50,9 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
     let videoconvert_clone = videoconvert.clone();
     decodebin.connect_pad_added(move |_, pad| {
         let caps = pad.current_caps().unwrap();
-        let s = caps.get_structure(0).unwrap();
+        let s = caps.structure(0).unwrap();
 
-        let sinkpad = videoconvert_clone.get_static_pad("sink").unwrap();
+        let sinkpad = videoconvert_clone.static_pad("sink").unwrap();
 
         if s.name() == "video/x-raw" && !sinkpad.is_linked() {
             pad.link(&sinkpad).unwrap();
@@ -69,7 +69,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
         //} else
         {
             let sink = gst::ElementFactory::make("gtksink", None).unwrap();
-            let widget = sink.get_property("widget").unwrap();
+            let widget = sink.property("widget").unwrap();
             (sink, widget.get::<gtk::Widget>().unwrap().unwrap())
         };
 
@@ -99,7 +99,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
 
     (
         pipeline,
-        video_src.get_static_pad("src").unwrap(),
+        video_src.static_pad("src").unwrap(),
         video_sink,
         video_widget,
     )

@@ -130,7 +130,7 @@ Time Code Rate=30DF\r\n\
 
     let buf = h.pull().expect("Couldn't pull buffer");
     let timecode = buf
-        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .meta::<gst_video::VideoTimeCodeMeta>()
         .expect("No timecode for buffer")
         .tc();
     assert_eq!(timecode, tc);

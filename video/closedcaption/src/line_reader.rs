@@ -62,12 +62,12 @@ impl<T: AsRef<[u8]>> LineReader<T> {
 
     #[allow(unused)]
     pub fn line_or_drain(&mut self) -> Option<&[u8]> {
-        self.get_line_with_drain(true)
+        self.line_with_drain(true)
     }
 
     #[allow(unused)]
     pub fn line(&mut self) -> Option<&[u8]> {
-        self.get_line_with_drain(false)
+        self.line_with_drain(false)
     }
 
     /// Searches the first '\n' in the currently queued buffers and returns the index in buffers

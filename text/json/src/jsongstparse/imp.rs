@@ -120,7 +120,7 @@ impl State {
             self.replay_last_line = false;
             &self.last_raw_line
         } else {
-            match self.reader.get_line_with_drain(drain) {
+            match self.reader.line_with_drain(drain) {
                 None => {
                     return Ok(None);
                 }
@@ -242,7 +242,7 @@ impl JsonGstParse {
 
         loop {
             let seeking = state.seeking;
-            let line = state.get_line(drain);
+            let line = state.line(drain);
             match line {
                 Ok(Some(Line::Buffer {
                     pts,
@@ -489,7 +489,7 @@ impl JsonGstParse {
                 reader.push(buf);
             }
 
-            while let Some(line) = reader.get_line_with_drain(true) {
+            while let Some(line) = reader.line_with_drain(true) {
                 if let Ok(Line::Buffer {
                     pts,
                     duration,
@@ -869,7 +869,7 @@ impl ObjectSubclass for JsonGstParse {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .activate_function(|pad, parent| {
                 JsonGstParse::catch_panic_pad_function(
@@ -906,7 +906,7 @@ impl ObjectSubclass for JsonGstParse {
             })
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
                 JsonGstParse::catch_panic_pad_function(

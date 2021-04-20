@@ -154,7 +154,7 @@ impl AudioRNNoise {
             state.process(in_data, &mut out_data);
         }
 
-        let srcpad = element.get_static_pad("src").unwrap();
+        let srcpad = element.static_pad("src").unwrap();
         srcpad.push(buffer)
     }
 
@@ -349,7 +349,7 @@ impl BaseTransformImpl for AudioRNNoise {
     ) -> bool {
         if direction == gst::PadDirection::Src {
             if let gst::QueryView::Latency(ref mut q) = query.view_mut() {
-                let sink_pad = element.get_static_pad("sink").expect("Sink pad not found");
+                let sink_pad = element.static_pad("sink").expect("Sink pad not found");
                 let mut upstream_query = gst::query::Latency::new();
                 if sink_pad.peer_query(&mut upstream_query) {
                     let (live, mut min, mut max) = upstream_query.result();

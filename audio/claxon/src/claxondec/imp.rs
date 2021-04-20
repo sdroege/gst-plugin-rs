@@ -126,7 +126,7 @@ impl AudioDecoderImpl for ClaxonDec {
         let mut streaminfo: Option<claxon::metadata::StreamInfo> = None;
         let mut audio_info: Option<gst_audio::AudioInfo> = None;
 
-        let s = caps.get_structure(0).unwrap();
+        let s = caps.structure(0).unwrap();
         if let Ok(Some(streamheaders)) = s.get_optional::<gst::Array>("streamheader") {
             let streamheaders = streamheaders.as_slice();
 
@@ -144,8 +144,8 @@ impl AudioDecoderImpl for ClaxonDec {
 
                     if inmap[0..7] != [0x7f, b'F', b'L', b'A', b'C', 0x01, 0x00] {
                         gst_debug!(CAT, obj: element, "Unknown streamheader format");
-                    } else if let Ok(tstreaminfo) = get_claxon_streaminfo(&inmap[13..]) {
-                        if let Ok(taudio_info) = get_gstaudioinfo(tstreaminfo) {
+                    } else if let Ok(tstreaminfo) = claxon_streaminfo(&inmap[13..]) {
+                        if let Ok(taudio_info) = gstaudioinfo(tstreaminfo) {
                             // To speed up negotiation
                             if element.set_output_format(&taudio_info).is_err()
                                 || element.negotiate().is_err()
@@ -224,12 +224,12 @@ impl ClaxonDec {
         state: &mut State,
         indata: &[u8],
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let streaminfo = get_claxon_streaminfo(indata).map_err(|e| {
+        let streaminfo = claxon_streaminfo(indata).map_err(|e| {
             gst::element_error!(element, gst::StreamError::Decode, [e]);
             gst::FlowError::Error
         })?;
 
-        let audio_info = get_gstaudioinfo(streaminfo).map_err(|e| {
+        let audio_info = gstaudioinfo(streaminfo).map_err(|e| {
             gst::element_error!(element, gst::StreamError::Decode, [&e]);
             gst::FlowError::Error
         })?;

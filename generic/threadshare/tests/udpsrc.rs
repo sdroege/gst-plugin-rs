@@ -115,7 +115,7 @@ fn test_socket_reuse() {
     {
         let udpsrc = ts_src_h.element().unwrap();
         let socket = udpsrc
-            .get_property("used-socket")
+            .property("used-socket")
             .unwrap()
             .get::<gio::Socket>()
             .unwrap();

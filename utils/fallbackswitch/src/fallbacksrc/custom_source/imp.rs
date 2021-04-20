@@ -260,7 +260,7 @@ impl CustomSource {
         let mut stream_type = None;
 
         // Take stream type from stream-start event if we can
-        if let Some(event) = pad.get_sticky_event(gst::EventType::StreamStart, 0) {
+        if let Some(event) = pad.sticky_event(gst::EventType::StreamStart, 0) {
             if let gst::EventView::StreamStart(ev) = event.view() {
                 stream_type = ev.stream().map(|s| s.stream_type());
             }
@@ -279,7 +279,7 @@ impl CustomSource {
                 }
             };
 
-            let s = caps.get_structure(0).unwrap();
+            let s = caps.structure(0).unwrap();
 
             if s.name().starts_with("audio/") {
                 stream_type = Some(gst::StreamType::AUDIO);
@@ -295,11 +295,11 @@ impl CustomSource {
         let (templ, name) = if stream_type.contains(gst::StreamType::AUDIO) {
             let name = format!("audio_{}", state.num_audio);
             state.num_audio += 1;
-            (element.get_pad_template("audio_%u").unwrap(), name)
+            (element.pad_template("audio_%u").unwrap(), name)
         } else {
             let name = format!("video_{}", state.num_video);
             state.num_video += 1;
-            (element.get_pad_template("video_%u").unwrap(), name)
+            (element.pad_template("video_%u").unwrap(), name)
         };
 
         let ghost_pad = gst::GhostPad::builder_with_template(&templ, Some(&name))

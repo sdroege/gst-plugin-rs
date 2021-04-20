@@ -295,7 +295,7 @@ impl HandleData for gst::Buffer {
         }
 
         let pts = HandleData::pts(&self);
-        let duration = HandleData::get_duration(&self, state);
+        let duration = HandleData::duration(&self, state);
         let stop = if duration.is_some() {
             pts + duration
         } else {
@@ -356,7 +356,7 @@ impl ToggleRecord {
         let mut state = stream.state.lock();
 
         let mut dts_or_pts = data.dts_or_pts();
-        let duration = data.get_duration(&state);
+        let duration = data.duration(&state);
 
         if !dts_or_pts.is_some() {
             gst::element_error!(
@@ -610,7 +610,7 @@ impl ToggleRecord {
         let mut state = stream.state.lock();
 
         let mut pts = data.pts();
-        let duration = data.get_duration(&state);
+        let duration = data.duration(&state);
 
         if pts.is_none() {
             gst::element_error!(element, gst::StreamError::Format, ["Buffer without PTS"]);
@@ -1245,7 +1245,7 @@ impl ToggleRecord {
             EventView::Caps(c) => {
                 let mut state = stream.state.lock();
                 let caps = c.caps();
-                let s = caps.get_structure(0).unwrap();
+                let s = caps.structure(0).unwrap();
                 if s.name().starts_with("audio/") {
                     state.audio_info = gst_audio::AudioInfo::from_caps(caps).ok();
                     gst_log!(CAT, obj: pad, "Got audio caps {:?}", state.audio_info);
@@ -1620,7 +1620,7 @@ impl ObjectSubclass for ToggleRecord {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 ToggleRecord::catch_panic_pad_function(
@@ -1652,7 +1652,7 @@ impl ObjectSubclass for ToggleRecord {
             })
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
                 ToggleRecord::catch_panic_pad_function(
@@ -1899,7 +1899,7 @@ impl ElementImpl for ToggleRecord {
         let id = *pad_count;
         *pad_count += 1;
 
-        let templ = element.get_pad_template("sink_%u").unwrap();
+        let templ = element.pad_template("sink_%u").unwrap();
         let sinkpad =
             gst::Pad::builder_with_template(&templ, Some(format!("sink_{}", id).as_str()))
                 .chain_function(|pad, parent, buffer| {
@@ -1932,7 +1932,7 @@ impl ElementImpl for ToggleRecord {
                 })
                 .build();
 
-        let templ = element.get_pad_template("src_%u").unwrap();
+        let templ = element.pad_template("src_%u").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some(format!("src_{}", id).as_str()))
             .event_function(|pad, parent, event| {
                 ToggleRecord::catch_panic_pad_function(

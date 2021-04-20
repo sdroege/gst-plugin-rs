@@ -756,7 +756,7 @@ impl FallbackSrc {
         audiotestsrc.set_property_from_str("wave", "silence");
         audiotestsrc.set_property("is-live", &true).unwrap();
 
-        let srcpad = audiotestsrc.get_static_pad("src").unwrap();
+        let srcpad = audiotestsrc.static_pad("src").unwrap();
         input
             .add_pad(
                 &gst::GhostPad::builder(Some("src"), gst::PadDirection::Src)
@@ -827,9 +827,9 @@ impl FallbackSrc {
         gst::Element::link_pads(&clocksync, Some("src"), &switch, Some("sink")).unwrap();
         // clocksync_queue sink pad is not connected to anything yet at this point!
 
-        let srcpad = switch.get_static_pad("src").unwrap();
+        let srcpad = switch.static_pad("src").unwrap();
         let templ = element
-            .get_pad_template(if is_audio { "audio" } else { "video" })
+            .pad_template(if is_audio { "audio" } else { "video" })
             .unwrap();
         let ghostpad = gst::GhostPad::builder_with_template(&templ, Some(&templ.name()))
             .proxy_pad_chain_function({
@@ -854,7 +854,7 @@ impl FallbackSrc {
             source_srcpad: None,
             source_srcpad_block: None,
             clocksync,
-            clocksync_queue_srcpad: clocksync_queue.get_static_pad("src").unwrap(),
+            clocksync_queue_srcpad: clocksync_queue.static_pad("src").unwrap(),
             clocksync_queue,
             switch,
             srcpad: ghostpad.upcast(),
@@ -1115,7 +1115,7 @@ impl FallbackSrc {
                     _ => return Ok(()),
                 };
 
-                let s = caps.get_structure(0).unwrap();
+                let s = caps.structure(0).unwrap();
 
                 if s.name().starts_with("audio/") {
                     ("audio", &mut state.audio_stream)
@@ -1143,7 +1143,7 @@ impl FallbackSrc {
             Some(ref mut stream) => stream,
         };
 
-        let sinkpad = stream.clocksync_queue.get_static_pad("sink").unwrap();
+        let sinkpad = stream.clocksync_queue.static_pad("sink").unwrap();
         pad.link(&sinkpad).map_err(|err| {
             gst_error!(
                 CAT,
@@ -1338,7 +1338,7 @@ impl FallbackSrc {
             None => return Ok(()),
         };
 
-        let ev = match pad.get_sticky_event(gst::EventType::Segment, 0) {
+        let ev = match pad.sticky_event(gst::EventType::Segment, 0) {
             Some(ev) => ev,
             None => {
                 gst_warning!(CAT, obj: element, "Have no segment event yet");
@@ -1762,7 +1762,7 @@ impl FallbackSrc {
 
                 let prev_fallback_uri = video_stream
                     .fallback_input
-                    .get_property("uri")
+                    .property("uri")
                     .unwrap()
                     .get::<String>()
                     .unwrap();
@@ -2114,7 +2114,7 @@ impl FallbackSrc {
                     .as_ref()
                     .and_then(|s| {
                         s.switch
-                            .get_property("active-pad")
+                            .property("active-pad")
                             .unwrap()
                             .get::<gst::Pad>()
                             .unwrap()
@@ -2128,7 +2128,7 @@ impl FallbackSrc {
                     .as_ref()
                     .and_then(|s| {
                         s.switch
-                            .get_property("active-pad")
+                            .property("active-pad")
                             .unwrap()
                             .get::<gst::Pad>()
                             .unwrap()

@@ -62,16 +62,16 @@ fn setup_sender_receiver(
 
     let (srcpad, sinkpad) = if main_stream {
         (
-            togglerecord.get_static_pad("src").unwrap(),
-            togglerecord.get_static_pad("sink").unwrap(),
+            togglerecord.static_pad("src").unwrap(),
+            togglerecord.static_pad("sink").unwrap(),
         )
     } else {
-        let sinkpad = togglerecord.get_request_pad("sink_%u").unwrap();
+        let sinkpad = togglerecord.request_pad("sink_%u").unwrap();
         let srcpad = sinkpad.iterate_internal_links().next().unwrap().unwrap();
         (srcpad, sinkpad)
     };
 
-    let fakesink_sinkpad = fakesink.get_static_pad("sink").unwrap();
+    let fakesink_sinkpad = fakesink.static_pad("sink").unwrap();
     srcpad.link(&fakesink_sinkpad).unwrap();
 
     let (sender_output, receiver_output) = mpsc::channel::<Either<gst::Buffer, gst::Event>>();
@@ -263,7 +263,7 @@ fn test_create_pads() {
     init();
     let togglerecord = gst::ElementFactory::make("togglerecord", None).unwrap();
 
-    let sinkpad = togglerecord.get_request_pad("sink_%u").unwrap();
+    let sinkpad = togglerecord.request_pad("sink_%u").unwrap();
     let srcpad = sinkpad.iterate_internal_links().next().unwrap().unwrap();
 
     assert_eq!(sinkpad.name(), "sink_0");
@@ -1201,7 +1201,7 @@ fn test_two_stream_main_eos() {
     receiver_input_done_1.recv().unwrap();
 
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1220,7 +1220,7 @@ fn test_two_stream_main_eos() {
     // At this moment, all streams should be in eos state. So togglerecord
     // must be in stopped state
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1284,7 +1284,7 @@ fn test_two_stream_secondary_eos_first() {
 
     // Since main stream is not yet EOS state, we should be in recording state
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1295,7 +1295,7 @@ fn test_two_stream_secondary_eos_first() {
     receiver_input_done_1.recv().unwrap();
 
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1363,7 +1363,7 @@ fn test_three_stream_main_eos() {
     receiver_input_done_1.recv().unwrap();
 
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1382,7 +1382,7 @@ fn test_three_stream_main_eos() {
 
     // The third stream is not in EOS state yet, so still recording == true
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1397,7 +1397,7 @@ fn test_three_stream_main_eos() {
     // At this moment, all streams should be in eos state. So togglerecord
     // must be in stopped state
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1476,7 +1476,7 @@ fn test_three_stream_main_and_second_eos() {
     receiver_input_done_1.recv().unwrap();
 
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1488,7 +1488,7 @@ fn test_three_stream_main_and_second_eos() {
     receiver_input_done_2.recv().unwrap();
 
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1509,7 +1509,7 @@ fn test_three_stream_main_and_second_eos() {
     // At this moment, all streams should be in eos state. So togglerecord
     // must be in stopped state
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1592,7 +1592,7 @@ fn test_three_stream_secondary_eos_first() {
 
     // Since main stream is not yet EOS state, we should be in recording state
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();
@@ -1604,7 +1604,7 @@ fn test_three_stream_secondary_eos_first() {
     receiver_input_done_1.recv().unwrap();
 
     let recording = togglerecord
-        .get_property("recording")
+        .property("recording")
         .unwrap()
         .get_some::<bool>()
         .unwrap();

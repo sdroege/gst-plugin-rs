@@ -140,7 +140,7 @@ fn parse_timecode(
 impl State {
     #[allow(clippy::type_complexity)]
     fn line(&mut self, drain: bool) -> Result<Option<SccLine>, (&[u8], nom::error::Error<&[u8]>)> {
-        let line = match self.reader.get_line_with_drain(drain) {
+        let line = match self.reader.line_with_drain(drain) {
             None => {
                 return Ok(None);
             }
@@ -320,7 +320,7 @@ impl SccParse {
         }
 
         loop {
-            let line = state.get_line(drain);
+            let line = state.line(drain);
             match line {
                 Ok(Some(SccLine::Caption(tc, data))) => {
                     state = self.handle_line(tc, data, element, state)?;
@@ -604,7 +604,7 @@ impl SccParse {
                 reader.push(buf);
             }
 
-            while let Some(line) = reader.get_line_with_drain(true) {
+            while let Some(line) = reader.line_with_drain(true) {
                 if let Ok(SccLine::Caption(tc, data)) =
                     parser.parse_line(line).map_err(|err| (line, err))
                 {
@@ -1001,7 +1001,7 @@ impl ObjectSubclass for SccParse {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .activate_function(|pad, parent| {
                 SccParse::catch_panic_pad_function(
@@ -1033,7 +1033,7 @@ impl ObjectSubclass for SccParse {
             })
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
                 SccParse::catch_panic_pad_function(

@@ -540,7 +540,7 @@ impl Decrypter {
         state.decrypt_into_adapter(element, &self.srcpad, &pulled_buffer, chunk_index)?;
 
         let adapter_offset = pull_offset as usize;
-        state.get_requested_buffer(&self.srcpad, buffer, requested_size, adapter_offset)
+        state.requested_buffer(&self.srcpad, buffer, requested_size, adapter_offset)
     }
 }
 
@@ -551,16 +551,16 @@ impl ObjectSubclass for Decrypter {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::from_template(&templ, Some("sink"));
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .getrange_function(|pad, parent, offset, buffer, size| {
                 Decrypter::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |decrypter, element| decrypter.get_range(pad, element, offset, buffer, size),
+                    |decrypter, element| decrypter.range(pad, element, offset, buffer, size),
                 )
             })
             .activatemode_function(|pad, parent, mode, active| {

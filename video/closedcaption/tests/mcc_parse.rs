@@ -76,7 +76,7 @@ fn test_parse() {
             );
 
             let tc_meta = buf
-                .get_meta::<gst_video::VideoTimeCodeMeta>()
+                .meta::<gst_video::VideoTimeCodeMeta>()
                 .expect("No timecode meta");
             if let Some(ref timecode) = expected_timecode {
                 assert_eq!(&tc_meta.tc(), timecode);
@@ -101,7 +101,7 @@ fn test_parse() {
         );
 
         let tc_meta = buf
-            .get_meta::<gst_video::VideoTimeCodeMeta>()
+            .meta::<gst_video::VideoTimeCodeMeta>()
             .expect("No timecode meta");
         if let Some(ref timecode) = expected_timecode {
             assert_eq!(&tc_meta.tc(), timecode);

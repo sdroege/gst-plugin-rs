@@ -310,7 +310,7 @@ mod imp_src {
         fn with_class(klass: &Self::Class) -> Self {
             ElementSrcTest {
                 src_pad: PadSrc::new(
-                    gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                    gst::Pad::from_template(&klass.pad_template("src").unwrap(), Some("src")),
                     PadSrcTestHandler,
                 ),
                 task: Task::default(),
@@ -641,7 +641,7 @@ mod imp_sink {
         fn with_class(klass: &Self::Class) -> Self {
             ElementSinkTest {
                 sink_pad: PadSink::new(
-                    gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                    gst::Pad::from_template(&klass.pad_template("sink").unwrap(), Some("sink")),
                     PadSinkTestHandler,
                 ),
                 flushing: AtomicBool::new(true),
@@ -657,7 +657,7 @@ mod imp_sink {
                     "sender",
                     "Sender",
                     "Channel sender to forward the incoming items to",
-                    ItemSender::get_type(),
+                    ItemSender::type_(),
                     glib::ParamFlags::WRITABLE | glib::ParamFlags::CONSTRUCT_ONLY,
                 )]
             });

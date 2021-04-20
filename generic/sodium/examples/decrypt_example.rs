@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .required(true)
                 .takes_value(true),
         )
-        .get_matches();
+        .matches();
 
     gst::init()?;
     gstsodium::plugin_register_static().expect("Failed to register sodium plugin");

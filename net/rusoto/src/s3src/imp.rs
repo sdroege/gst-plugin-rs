@@ -175,7 +175,7 @@ impl S3Src {
             offset + length - 1
         );
 
-        let response = client.get_object(request);
+        let response = client.object(request);
 
         let output = s3utils::wait(&self.canceller, response).map_err(|err| match err {
             WaitError::FutureError(err) => Some(gst::error_msg!(

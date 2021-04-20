@@ -132,7 +132,7 @@ impl ObjectSubclass for Identity {
         // - Extract our Identity struct from the object instance and pass it to us
         //
         // Details about what each function is good for is next to each function definition
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 Identity::catch_panic_pad_function(
@@ -157,7 +157,7 @@ impl ObjectSubclass for Identity {
             })
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
                 Identity::catch_panic_pad_function(

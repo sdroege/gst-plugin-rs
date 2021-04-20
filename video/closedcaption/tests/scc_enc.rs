@@ -64,7 +64,7 @@ fn test_encode_single_packet() {
     let buf = h.pull().expect("Couldn't pull buffer");
 
     let timecode = buf
-        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .meta::<gst_video::VideoTimeCodeMeta>()
         .expect("No timecode for buffer")
         .tc();
     assert_eq!(timecode, tc);
@@ -163,7 +163,7 @@ fn test_encode_multiple_packets() {
     let buf = h.pull().expect("Couldn't pull buffer");
 
     let timecode = buf
-        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .meta::<gst_video::VideoTimeCodeMeta>()
         .expect("No timecode for buffer")
         .tc();
     assert_eq!(timecode, tc1);
@@ -181,7 +181,7 @@ fn test_encode_multiple_packets() {
     // Pull 2
     let buf = h.pull().expect("Couldn't pull buffer");
     let timecode = buf
-        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .meta::<gst_video::VideoTimeCodeMeta>()
         .expect("No timecode for buffer")
         .tc();
     assert_eq!(timecode, tc2);
@@ -210,7 +210,7 @@ fn test_encode_multiple_packets() {
     // Pull 3
     let buf = h.pull().expect("Couldn't pull buffer");
     let timecode = buf
-        .get_meta::<gst_video::VideoTimeCodeMeta>()
+        .meta::<gst_video::VideoTimeCodeMeta>()
         .expect("No timecode for buffer")
         .tc();
     assert_eq!(timecode, tc3);

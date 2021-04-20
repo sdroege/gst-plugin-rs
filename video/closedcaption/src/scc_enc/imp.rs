@@ -89,7 +89,7 @@ impl State {
         };
 
         let mut timecode = buffer
-            .get_meta::<gst_video::VideoTimeCodeMeta>()
+            .meta::<gst_video::VideoTimeCodeMeta>()
             .ok_or_else(|| {
                 gst::element_error!(
                     element,
@@ -169,7 +169,7 @@ impl State {
             // else, separate the packets with a space
             if line_start {
                 let timecode = buffer
-                    .get_meta::<gst_video::VideoTimeCodeMeta>()
+                    .meta::<gst_video::VideoTimeCodeMeta>()
                     // Checked already before the buffer has been pushed to the
                     // internal_buffer
                     .expect("Buffer without timecode")
@@ -253,7 +253,7 @@ impl SccEnc {
         match event.view() {
             EventView::Caps(ev) => {
                 let caps = ev.caps();
-                let s = caps.get_structure(0).unwrap();
+                let s = caps.structure(0).unwrap();
                 let framerate = match s.get_some::<gst::Fraction>("framerate") {
                     Ok(framerate) => Some(framerate),
                     Err(structure::GetError::FieldNotFound { .. }) => {
@@ -339,7 +339,7 @@ impl ObjectSubclass for SccEnc {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .chain_function(|pad, parent, buffer| {
                 SccEnc::catch_panic_pad_function(
@@ -357,7 +357,7 @@ impl ObjectSubclass for SccEnc {
             })
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
                 SccEnc::catch_panic_pad_function(

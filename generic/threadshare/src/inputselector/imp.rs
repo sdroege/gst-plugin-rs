@@ -399,7 +399,7 @@ impl ObjectSubclass for InputSelector {
     fn with_class(klass: &Self::Class) -> Self {
         Self {
             src_pad: PadSrc::new(
-                gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                gst::Pad::from_template(&klass.pad_template("src").unwrap(), Some("src")),
                 InputSelectorPadSrcHandler,
             ),
             state: Mutex::new(State::default()),

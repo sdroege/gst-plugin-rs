@@ -70,7 +70,7 @@ fn run_test(
     .downcast::<gst::Pipeline>()
     .unwrap();
     let sink = pipeline
-        .get_by_name("sink")
+        .by_name("sink")
         .unwrap()
         .downcast::<gst_app::AppSink>()
         .unwrap();

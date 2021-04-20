@@ -153,9 +153,9 @@ impl OutputState {
         preferred_is_primary: bool,
         cur_running_time: gst::ClockTime,
     ) -> (bool, bool) {
-        let preferred_health = self.get_health(settings, preferred_is_primary, cur_running_time);
+        let preferred_health = self.health(settings, preferred_is_primary, cur_running_time);
         let backup_health = if backup_pad.is_some() {
-            self.get_health(settings, !preferred_is_primary, cur_running_time)
+            self.health(settings, !preferred_is_primary, cur_running_time)
         } else {
             StreamHealth::Inactive
         };
@@ -615,7 +615,7 @@ impl FallbackSwitch {
             )
         } else if let (true, Some(backup_pad)) = (timeout, &backup_pad) {
             (
-                self.get_backup_buffer(&mut *state, &settings, backup_pad),
+                self.backup_buffer(&mut *state, &settings, backup_pad),
                 state.check_health_changes(
                     &settings,
                     &Some(backup_pad),
@@ -650,7 +650,7 @@ impl ObjectSubclass for FallbackSwitch {
     type ParentType = gst_base::Aggregator;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad =
             gst::PadBuilder::<gst_base::AggregatorPad>::from_template(&templ, Some("sink")).build();
 
@@ -857,7 +857,7 @@ impl ElementImpl for FallbackSwitch {
         name: Option<String>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
-        let fallback_sink_templ = element.get_pad_template("fallback_sink").unwrap();
+        let fallback_sink_templ = element.pad_template("fallback_sink").unwrap();
         if templ != &fallback_sink_templ
             || (name.is_some() && name.as_deref() != Some("fallback_sink"))
         {
@@ -951,10 +951,10 @@ impl AggregatorImpl for FallbackSwitch {
 
                 let audio_info;
                 let video_info;
-                if caps.get_structure(0).unwrap().name() == "audio/x-raw" {
+                if caps.structure(0).unwrap().name() == "audio/x-raw" {
                     audio_info = gst_audio::AudioInfo::from_caps(&caps).ok();
                     video_info = None;
-                } else if caps.get_structure(0).unwrap().name() == "video/x-raw" {
+                } else if caps.structure(0).unwrap().name() == "video/x-raw" {
                     audio_info = None;
                     video_info = gst_video::VideoInfo::from_caps(&caps).ok();
                 } else {
@@ -1155,8 +1155,7 @@ impl AggregatorImpl for FallbackSwitch {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(CAT, obj: agg, "Aggregate called: timeout {}", timeout);
 
-        let (res, (primary_health_change, fallback_health_change)) =
-            self.get_next_buffer(agg, timeout);
+        let (res, (primary_health_change, fallback_health_change)) = self.next_buffer(agg, timeout);
 
         if primary_health_change {
             gst_debug!(
@@ -1179,7 +1178,7 @@ impl AggregatorImpl for FallbackSwitch {
 
         let (mut buffer, active_caps, pad_change) = res?;
 
-        let current_src_caps = agg.get_static_pad("src").unwrap().current_caps();
+        let current_src_caps = agg.static_pad("src").unwrap().current_caps();
         if Some(&active_caps) != current_src_caps.as_ref() {
             gst_info!(
                 CAT,

@@ -453,7 +453,7 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
 
 fn push_buffer(pipeline: &Pipeline, time: gst::ClockTime) {
     let src = pipeline
-        .get_by_name("src")
+        .by_name("src")
         .unwrap()
         .downcast::<gst_app::AppSrc>()
         .unwrap();
@@ -467,7 +467,7 @@ fn push_buffer(pipeline: &Pipeline, time: gst::ClockTime) {
 
 fn push_fallback_buffer(pipeline: &Pipeline, time: gst::ClockTime) {
     let src = pipeline
-        .get_by_name("fallback-src")
+        .by_name("fallback-src")
         .unwrap()
         .downcast::<gst_app::AppSrc>()
         .unwrap();
@@ -481,7 +481,7 @@ fn push_fallback_buffer(pipeline: &Pipeline, time: gst::ClockTime) {
 
 fn push_eos(pipeline: &Pipeline) {
     let src = pipeline
-        .get_by_name("src")
+        .by_name("src")
         .unwrap()
         .downcast::<gst_app::AppSrc>()
         .unwrap();
@@ -490,7 +490,7 @@ fn push_eos(pipeline: &Pipeline) {
 
 fn push_fallback_eos(pipeline: &Pipeline) {
     let src = pipeline
-        .get_by_name("fallback-src")
+        .by_name("fallback-src")
         .unwrap()
         .downcast::<gst_app::AppSrc>()
         .unwrap();
@@ -499,7 +499,7 @@ fn push_fallback_eos(pipeline: &Pipeline) {
 
 fn pull_buffer(pipeline: &Pipeline) -> gst::Buffer {
     let sink = pipeline
-        .get_by_name("sink")
+        .by_name("sink")
         .unwrap()
         .downcast::<gst_app::AppSink>()
         .unwrap();
@@ -520,7 +520,7 @@ fn set_time(pipeline: &Pipeline, time: gst::ClockTime) {
 
 fn wait_eos(pipeline: &Pipeline) {
     let sink = pipeline
-        .get_by_name("sink")
+        .by_name("sink")
         .unwrap()
         .downcast::<gst_app::AppSink>()
         .unwrap();
@@ -549,7 +549,7 @@ fn stop_pipeline(mut pipeline: Pipeline) {
     let clock_id = clock.new_single_shot_id(0.into());
     let _ = clock_id.wait();
 
-    let switch = pipeline.get_by_name("switch").unwrap();
+    let switch = pipeline.by_name("switch").unwrap();
     let switch_weak = switch.downgrade();
     drop(switch);
     let pipeline_weak = pipeline.downgrade();

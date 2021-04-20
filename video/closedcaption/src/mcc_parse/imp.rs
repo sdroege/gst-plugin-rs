@@ -161,7 +161,7 @@ impl State {
             self.replay_last_line = false;
             &self.last_raw_line
         } else {
-            match self.reader.get_line_with_drain(drain) {
+            match self.reader.line_with_drain(drain) {
                 None => {
                     return Ok(None);
                 }
@@ -394,7 +394,7 @@ impl MccParse {
         }
 
         loop {
-            let line = state.get_line(drain);
+            let line = state.line(drain);
             match line {
                 Ok(Some(MccLine::Caption(tc, Some(data)))) => {
                     assert!(!state.seeking);
@@ -711,7 +711,7 @@ impl MccParse {
                 reader.push(buf);
             }
 
-            while let Some(line) = reader.get_line_with_drain(true) {
+            while let Some(line) = reader.line_with_drain(true) {
                 if let Ok(MccLine::Caption(tc, None)) =
                     parser.parse_line(line, false).map_err(|err| (line, err))
                 {
@@ -1121,7 +1121,7 @@ impl ObjectSubclass for MccParse {
     type ParentType = gst::Element;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("sink").unwrap();
+        let templ = klass.pad_template("sink").unwrap();
         let sinkpad = gst::Pad::builder_with_template(&templ, Some("sink"))
             .activate_function(|pad, parent| {
                 MccParse::catch_panic_pad_function(
@@ -1153,7 +1153,7 @@ impl ObjectSubclass for MccParse {
             })
             .build();
 
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .event_function(|pad, parent, event| {
                 MccParse::catch_panic_pad_function(

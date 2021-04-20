@@ -578,7 +578,7 @@ impl ObjectSubclass for ProxySink {
     fn with_class(klass: &Self::Class) -> Self {
         Self {
             sink_pad: PadSink::new(
-                gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                gst::Pad::from_template(&klass.pad_template("sink").unwrap(), Some("sink")),
                 ProxySinkPadHandler,
             ),
             proxy_ctx: StdMutex::new(None),
@@ -1115,7 +1115,7 @@ impl ObjectSubclass for ProxySrc {
     fn with_class(klass: &Self::Class) -> Self {
         Self {
             src_pad: PadSrc::new(
-                gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                gst::Pad::from_template(&klass.pad_template("src").unwrap(), Some("src")),
                 ProxySrcPadHandler,
             ),
             task: Task::default(),

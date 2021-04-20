@@ -70,7 +70,7 @@ fn main() {
         sink.set_property("async", &false).unwrap();
 
         let counter_clone = Arc::clone(&counter);
-        sink.get_static_pad("sink").unwrap().add_probe(
+        sink.static_pad("sink").unwrap().add_probe(
             gst::PadProbeType::BUFFER,
             move |_pad, _probe_info| {
                 let _ = counter_clone.fetch_add(1, Ordering::SeqCst);

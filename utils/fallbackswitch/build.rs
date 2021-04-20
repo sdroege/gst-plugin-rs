@@ -1,5 +1,5 @@
 fn main() {
-    gst_plugin_version_helper::get_info();
+    gst_plugin_version_helper::info();
 
     if cfg!(feature = "v1_18") {
         return;

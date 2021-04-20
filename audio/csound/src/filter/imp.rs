@@ -128,8 +128,8 @@ impl State {
 
 impl CsoundFilter {
     fn process(&self, csound: &mut Csound, idata: &[f64], odata: &mut [f64]) -> bool {
-        let spin = csound.get_spin().unwrap();
-        let spout = csound.get_spout().unwrap();
+        let spin = csound.spin().unwrap();
+        let spout = csound.spout().unwrap();
 
         let in_chunks = idata.chunks_exact(spin.len());
         let out_chuncks = odata.chunks_exact_mut(spout.len());
@@ -190,8 +190,8 @@ impl CsoundFilter {
             return Ok(gst::FlowSuccess::Ok);
         }
 
-        let mut spin = csound.get_spin().unwrap();
-        let spout = csound.get_spout().unwrap();
+        let mut spin = csound.spin().unwrap();
+        let spout = csound.spout().unwrap();
 
         let out_bytes =
             (avail / state.in_info.channels() as usize) * state.out_info.channels() as usize;
@@ -214,7 +214,7 @@ impl CsoundFilter {
         buffer_mut.set_pts(pts);
         buffer_mut.set_duration(duration);
 
-        let srcpad = element.get_static_pad("src").unwrap();
+        let srcpad = element.static_pad("src").unwrap();
 
         let adapter_map = state.adapter.map(avail).unwrap();
         let data = adapter_map
@@ -271,7 +271,7 @@ impl CsoundFilter {
 
         // Get the required amount of bytes to be read from
         // the adapter to fill an ouput buffer of size output_size
-        let bytes_to_read = state.get_bytes_to_read(output_size);
+        let bytes_to_read = state.bytes_to_read(output_size);
 
         let indata = state
             .adapter
@@ -547,7 +547,7 @@ impl BaseTransformImpl for CsoundFilter {
             if compiled {
                 let csound = self.csound.lock().unwrap();
                 // Use the sample rate and channels configured in the csound score
-                let sr = csound.get_sample_rate() as i32;
+                let sr = csound.sample_rate() as i32;
                 let ichannels = csound.input_channels() as i32;
                 let ochannels = csound.output_channels() as i32;
                 for s in new_caps.make_mut().iter_mut() {
@@ -608,7 +608,7 @@ impl BaseTransformImpl for CsoundFilter {
         let rate = in_info.rate();
 
         // Check if the negotiated caps are the right ones
-        if rate != out_info.rate() || rate != csound.get_sample_rate() as u32 {
+        if rate != out_info.rate() || rate != csound.sample_rate() as u32 {
             return Err(loggable_error!(
                 CAT,
                 "Failed to negotiate caps: invalid sample rate {}",
@@ -628,7 +628,7 @@ impl BaseTransformImpl for CsoundFilter {
             ));
         }
 
-        let ksmps = csound.get_ksmps();
+        let ksmps = csound.ksmps();
 
         let adapter = gst_base::UniqueAdapter::new();
 

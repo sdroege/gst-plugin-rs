@@ -184,7 +184,7 @@ fn test_pull_range() {
     pipeline
         .set_state(gst::State::Ready)
         .expect("Unable to set the pipeline to the `Playing` state");
-    let srcpad = dec.get_static_pad("src").unwrap();
+    let srcpad = dec.static_pad("src").unwrap();
     srcpad.activate_mode(gst::PadMode::Pull, true).unwrap();
 
     pipeline
@@ -213,7 +213,7 @@ fn test_pull_range() {
         53, 37, 220, 28, 225, 35, 16, 243, 140, 220, 4, 192, 2, 64, 14, 3, 144, 203, 67, 208, 244,
         61, 70, 175, 103, 127, 28, 0,
     ];
-    let buf1 = srcpad.get_range(0, 50).unwrap();
+    let buf1 = srcpad.range(0, 50).unwrap();
     assert_eq!(buf1.size(), 50);
     let map1 = buf1.map_readable().unwrap();
     assert_eq!(&map1[..], &expected_array_1[..]);
@@ -225,7 +225,7 @@ fn test_pull_range() {
         207, 192, 0, 0, 3, 113, 195, 199, 255, 255, 254, 97, 225, 225, 231, 160, 0, 0, 49, 24, 120,
         120, 121, 232, 0, 0, 12, 252, 195, 195, 199, 128, 0, 0, 0,
     ];
-    let buf2 = srcpad.get_range(0, 100).unwrap();
+    let buf2 = srcpad.range(0, 100).unwrap();
     assert_eq!(buf2.size(), 100);
     let map2 = buf2.map_readable().unwrap();
     assert_eq!(&map2[..], &expected_array_2[..]);
@@ -235,37 +235,37 @@ fn test_pull_range() {
     assert_eq!(&map1[..], &map2[..map1.len()]);
 
     // request in the middle of a block
-    let buf = srcpad.get_range(853, 100).unwrap();
+    let buf = srcpad.range(853, 100).unwrap();
     // result size doesn't include the block macs,
     assert_eq!(buf.size(), 100);
 
     // read till eos, this also will pull multiple blocks
-    let buf = srcpad.get_range(853, 42000).unwrap();
+    let buf = srcpad.range(853, 42000).unwrap();
     // 6031 (size of file) - 883 (requersted offset) - headers size - (numbler of blcks * block mac)
     assert_eq!(buf.size(), 5054);
 
     // read 0 bytes from the start
-    let buf = srcpad.get_range(0, 0).unwrap();
+    let buf = srcpad.range(0, 0).unwrap();
     assert_eq!(buf.size(), 0);
 
     // read 0 bytes somewhere in the middle
-    let buf = srcpad.get_range(4242, 0).unwrap();
+    let buf = srcpad.range(4242, 0).unwrap();
     assert_eq!(buf.size(), 0);
 
     // read 0 bytes to eos
-    let res = srcpad.get_range(6003, 0);
+    let res = srcpad.range(6003, 0);
     assert_eq!(res, Err(gst::FlowError::Eos));
 
     // read 100 bytes at eos
-    let res = srcpad.get_range(6003, 100);
+    let res = srcpad.range(6003, 100);
     assert_eq!(res, Err(gst::FlowError::Eos));
 
     // read 100 bytes way past eos
-    let res = srcpad.get_range(424_242, 100);
+    let res = srcpad.range(424_242, 100);
     assert_eq!(res, Err(gst::FlowError::Eos));
 
     // read 10 bytes at eos -1, should return a single byte
-    let buf = srcpad.get_range(5906, 10).unwrap();
+    let buf = srcpad.range(5906, 10).unwrap();
     assert_eq!(buf.size(), 1);
 
     pipeline

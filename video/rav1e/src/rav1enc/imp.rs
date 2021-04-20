@@ -739,9 +739,7 @@ impl Rav1Enc {
                         packet_type
                     );
 
-                    let mut frame = element
-                        .get_frame(frame_number as i32)
-                        .expect("frame not found");
+                    let mut frame = element.frame(frame_number as i32).expect("frame not found");
 
                     if packet_type == data::FrameType::KEY {
                         frame.set_flags(gst_video::VideoCodecFrameFlags::SYNC_POINT);

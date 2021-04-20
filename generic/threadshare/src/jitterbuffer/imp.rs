@@ -179,7 +179,7 @@ impl SinkHandler {
         caps: &gst::Caps,
         pt: u8,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let s = caps.get_structure(0).ok_or(gst::FlowError::Error)?;
+        let s = caps.structure(0).ok_or(gst::FlowError::Error)?;
 
         gst_info!(CAT, obj: element, "Parsing {:?}", caps);
 
@@ -389,12 +389,8 @@ impl SinkHandler {
 
         inner.packet_rate_ctx.update(seq, rtptime);
 
-        let max_dropout = inner
-            .packet_rate_ctx
-            .get_max_dropout(max_dropout_time as i32);
-        let max_misorder = inner
-            .packet_rate_ctx
-            .get_max_dropout(max_misorder_time as i32);
+        let max_dropout = inner.packet_rate_ctx.max_dropout(max_dropout_time as i32);
+        let max_misorder = inner.packet_rate_ctx.max_dropout(max_misorder_time as i32);
 
         pts = state.jbuf.borrow().calculate_pts(
             dts,
@@ -532,7 +528,7 @@ impl SinkHandler {
         // Reschedule if needed
         let (_, next_wakeup) =
             jb.src_pad_handler
-                .get_next_wakeup(&element, &state, latency, context_wait);
+                .next_wakeup(&element, &state, latency, context_wait);
         if let Some((next_wakeup, _)) = next_wakeup {
             if let Some((previous_next_wakeup, ref abort_handle)) = state.wait_handle {
                 if previous_next_wakeup.is_none() || previous_next_wakeup > next_wakeup {
@@ -1110,7 +1106,7 @@ impl TaskImpl for JitterBufferTask {
             loop {
                 let delay_fut = {
                     let mut state = jb.state.lock().unwrap();
-                    let (_, next_wakeup) = self.src_pad_handler.get_next_wakeup(
+                    let (_, next_wakeup) = self.src_pad_handler.next_wakeup(
                         &self.element,
                         &state,
                         latency,
@@ -1155,7 +1151,7 @@ impl TaskImpl for JitterBufferTask {
                     let state = jb.state.lock().unwrap();
                     //
                     // Check earliest PTS as we have just taken the lock
-                    let (now, next_wakeup) = self.src_pad_handler.get_next_wakeup(
+                    let (now, next_wakeup) = self.src_pad_handler.next_wakeup(
                         &self.element,
                         &state,
                         latency,
@@ -1200,7 +1196,7 @@ impl TaskImpl for JitterBufferTask {
                     if res.is_ok() {
                         // Return and reschedule if the next packet would be in the future
                         // Check earliest PTS as we have just taken the lock
-                        let (now, next_wakeup) = self.src_pad_handler.get_next_wakeup(
+                        let (now, next_wakeup) = self.src_pad_handler.next_wakeup(
                             &self.element,
                             &state,
                             latency,
@@ -1342,11 +1338,11 @@ impl ObjectSubclass for JitterBuffer {
 
         Self {
             sink_pad: PadSink::new(
-                gst::Pad::from_template(&klass.get_pad_template("sink").unwrap(), Some("sink")),
+                gst::Pad::from_template(&klass.pad_template("sink").unwrap(), Some("sink")),
                 sink_pad_handler.clone(),
             ),
             src_pad: PadSrc::new(
-                gst::Pad::from_template(&klass.get_pad_template("src").unwrap(), Some("src")),
+                gst::Pad::from_template(&klass.pad_template("src").unwrap(), Some("src")),
                 src_pad_handler.clone(),
             ),
             sink_pad_handler,

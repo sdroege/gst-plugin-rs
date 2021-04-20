@@ -92,7 +92,7 @@ fn main() {
                 .short("j")
                 .help("Write a JSON file instead of a key.prv/key.pub pair"),
         )
-        .get_matches();
+        .matches();
 
     let keys = Keys::new();
 

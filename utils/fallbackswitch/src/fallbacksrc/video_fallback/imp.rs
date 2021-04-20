@@ -68,7 +68,7 @@ impl ObjectSubclass for VideoFallbackSource {
     type ParentType = gst::Bin;
 
     fn with_class(klass: &Self::Class) -> Self {
-        let templ = klass.get_pad_template("src").unwrap();
+        let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::GhostPad::builder_with_template(&templ, Some(&templ.name())).build();
 
         Self {
@@ -264,7 +264,7 @@ impl VideoFallbackSource {
         // To invoke GstBaseSrc::start() method, activate pad manually.
         // filesrc will check whether given file is readable or not
         // via open() and fstat() in there.
-        let pad = filesrc.get_static_pad("src").unwrap();
+        let pad = filesrc.static_pad("src").unwrap();
         if pad.set_active(true).is_err() {
             gst_warning!(CAT, obj: element, "Couldn't active pad");
             let _ = filesrc.set_state(gst::State::Null);
@@ -283,7 +283,7 @@ impl VideoFallbackSource {
         gst_debug!(CAT, obj: element, "Creating source with uri {:?}", uri);
 
         let source = gst::Bin::new(None);
-        let filesrc = self.get_file_src_for_uri(element, uri);
+        let filesrc = self.file_src_for_uri(element, uri);
 
         let srcpad = match filesrc {
             Some(filesrc) => {
@@ -377,7 +377,7 @@ impl VideoFallbackSource {
                             None => return None,
                         };
 
-                        let s = caps.get_structure(0).unwrap();
+                        let s = caps.structure(0).unwrap();
                         let decoder;
                         if s.name() == "image/jpeg" {
                             decoder = gst::ElementFactory::make("jpegdec", Some("decoder"))
@@ -413,7 +413,7 @@ impl VideoFallbackSource {
                     })
                     .unwrap();
 
-                queue.get_static_pad("src").unwrap()
+                queue.static_pad("src").unwrap()
             }
             None => {
                 let videotestsrc =
@@ -424,7 +424,7 @@ impl VideoFallbackSource {
                 videotestsrc.set_property_from_str("pattern", "black");
                 videotestsrc.set_property("is-live", &true).unwrap();
 
-                videotestsrc.get_static_pad("src").unwrap()
+                videotestsrc.static_pad("src").unwrap()
             }
         };
 
@@ -457,7 +457,7 @@ impl VideoFallbackSource {
 
         element.add(&source).unwrap();
 
-        let srcpad = source.get_static_pad("src").unwrap();
+        let srcpad = source.static_pad("src").unwrap();
         let _ = self.srcpad.set_target(Some(&srcpad));
 
         *state_guard = Some(State { source });
