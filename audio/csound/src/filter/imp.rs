@@ -608,7 +608,7 @@ impl BaseTransformImpl for CsoundFilter {
         let rate = in_info.rate();
 
         // Check if the negotiated caps are the right ones
-        if rate != out_info.rate() || rate != csound.get_sample_rate() as _ {
+        if rate != out_info.rate() || rate != csound.get_sample_rate() as u32 {
             return Err(loggable_error!(
                 CAT,
                 "Failed to negotiate caps: invalid sample rate {}",
