@@ -26,7 +26,7 @@ use gst::{
 use std::default::Default;
 
 use rusoto_core::Region;
-use rusoto_credential::{EnvironmentProvider, ProvideAwsCredentials};
+use rusoto_credential::{ChainProvider, ProvideAwsCredentials};
 
 use rusoto_signature::signature::SignedRequest;
 
@@ -830,15 +830,13 @@ impl Transcriber {
 
         let creds = {
             let _enter = RUNTIME.enter();
-            futures::executor::block_on(EnvironmentProvider::default().credentials()).map_err(
-                |err| {
-                    gst_error!(CAT, obj: element, "Failed to generate credentials: {}", err);
-                    error_msg!(
-                        gst::CoreError::Failed,
-                        ["Failed to generate credentials: {}", err]
-                    )
-                },
-            )?
+            futures::executor::block_on(ChainProvider::new().credentials()).map_err(|err| {
+                gst_error!(CAT, obj: element, "Failed to generate credentials: {}", err);
+                error_msg!(
+                    gst::CoreError::Failed,
+                    ["Failed to generate credentials: {}", err]
+                )
+            })?
         };
 
         let language_code = settings
