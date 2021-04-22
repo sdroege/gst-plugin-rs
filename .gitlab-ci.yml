@@ -218,6 +218,7 @@ outdated:
     - cargo outdated --root-deps-only --exit-code 1 -v
 
 coverage:
+  allow_failure: true
   extends:
     - .img-nightly
   stage: 'extras'
