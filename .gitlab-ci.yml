@@ -230,13 +230,12 @@ coverage:
   script:
     - cargo test --locked --color=always --all-features
     # generate html report
-    - grcov . --binary-path ./target/debug/ -s . -t html --branch --ignore-not-existing --ignore "*target*" -o ./coverage/
+    - grcov . --binary-path ./target/debug/ -s . -t html --branch --ignore-not-existing --ignore "*target*" --ignore "*/build.rs" -o ./coverage/
     # generate cobertura report for gitlab integration
-    - grcov . --binary-path ./target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "*target*" -o lcov
-    - python3 /usr/local/lib/python3.7/dist-packages/lcov_cobertura.py lcov
-    # output coverage summary for gitlab parsing
-    - lcov -r lcov "/*" 2&> out
-    - grep lines out
+    - grcov . --binary-path ./target/debug/ -s . -t cobertura --branch --ignore-not-existing --ignore "*target*" --ignore "*/build.rs" -o coverage.xml
+    # output coverage summary for gitlab parsing.
+    # TODO: use grcov once https://github.com/mozilla/grcov/issues/556 is fixed
+    - grep "%" coverage/index.html | head -1 || true
   artifacts:
     paths:
       - 'coverage'
