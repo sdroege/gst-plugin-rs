@@ -636,22 +636,22 @@ impl ObjectImpl for TcpClientSrc {
                 settings.host = value.get().expect("type checked upstream");
             }
             "port" => {
-                settings.port = value.get_some().expect("type checked upstream");
+                settings.port = value.get().expect("type checked upstream");
             }
             "caps" => {
                 settings.caps = value.get().expect("type checked upstream");
             }
             "blocksize" => {
-                settings.blocksize = value.get_some().expect("type checked upstream");
+                settings.blocksize = value.get().expect("type checked upstream");
             }
             "context" => {
                 settings.context = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get_some().expect("type checked upstream");
+                settings.context_wait = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

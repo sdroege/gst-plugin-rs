@@ -1813,19 +1813,19 @@ impl ObjectImpl for AudioLoudNorm {
         match pspec.name() {
             "loudness-target" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.loudness_target = value.get_some().expect("type checked upstream");
+                settings.loudness_target = value.get().expect("type checked upstream");
             }
             "loudness-range-target" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.loudness_range_target = value.get_some().expect("type checked upstream");
+                settings.loudness_range_target = value.get().expect("type checked upstream");
             }
             "max-true-peak" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_true_peak = value.get_some().expect("type checked upstream");
+                settings.max_true_peak = value.get().expect("type checked upstream");
             }
             "offset" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.offset = value.get_some().expect("type checked upstream");
+                settings.offset = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

@@ -142,7 +142,7 @@ impl ObjectImpl for HsvFilter {
         match pspec.name() {
             "hue-shift" => {
                 let mut settings = self.settings.lock().unwrap();
-                let hue_shift = value.get_some().expect("type checked upstream");
+                let hue_shift = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -154,7 +154,7 @@ impl ObjectImpl for HsvFilter {
             }
             "saturation-mul" => {
                 let mut settings = self.settings.lock().unwrap();
-                let saturation_mul = value.get_some().expect("type checked upstream");
+                let saturation_mul = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -166,7 +166,7 @@ impl ObjectImpl for HsvFilter {
             }
             "saturation-off" => {
                 let mut settings = self.settings.lock().unwrap();
-                let saturation_off = value.get_some().expect("type checked upstream");
+                let saturation_off = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -178,7 +178,7 @@ impl ObjectImpl for HsvFilter {
             }
             "value-mul" => {
                 let mut settings = self.settings.lock().unwrap();
-                let value_mul = value.get_some().expect("type checked upstream");
+                let value_mul = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -190,7 +190,7 @@ impl ObjectImpl for HsvFilter {
             }
             "value-off" => {
                 let mut settings = self.settings.lock().unwrap();
-                let value_off = value.get_some().expect("type checked upstream");
+                let value_off = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,

@@ -540,17 +540,17 @@ impl ObjectImpl for TextWrap {
             "columns" => {
                 let mut settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
-                settings.columns = value.get_some().expect("type checked upstream");
+                settings.columns = value.get().expect("type checked upstream");
                 state.options = None;
             }
             "lines" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.lines = value.get_some().expect("type checked upstream");
+                settings.lines = value.get().expect("type checked upstream");
             }
             "accumulate-time" => {
                 let mut settings = self.settings.lock().unwrap();
                 let old_accumulate_time = settings.accumulate_time;
-                settings.accumulate_time = match value.get_some().expect("type checked upstream") {
+                settings.accumulate_time = match value.get().expect("type checked upstream") {
                     -1i64 => gst::CLOCK_TIME_NONE,
                     time => (time as u64).into(),
                 };

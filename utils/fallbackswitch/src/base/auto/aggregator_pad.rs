@@ -110,7 +110,6 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
             value
                 .get()
                 .expect("Return Value for property `emit-signals` getter")
-                .unwrap()
         }
     }
 

@@ -345,7 +345,7 @@ mod imp_src {
             match pspec.name() {
                 "context" => {
                     let context = value
-                        .get()
+                        .get::<Option<String>>()
                         .expect("type checked upstream")
                         .unwrap_or_else(|| "".into());
 
@@ -677,7 +677,6 @@ mod imp_sink {
                     let ItemSender { sender } = value
                         .get::<&ItemSender>()
                         .expect("type checked upstream")
-                        .expect("ItemSender not found")
                         .clone();
                     *futures::executor::block_on(self.sender.lock()) = Some(sender);
                 }

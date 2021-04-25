@@ -453,16 +453,18 @@ impl ObjectImpl for InputSelector {
             "context" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context_wait = value.get_some().expect("type checked upstream");
+                settings.context_wait = value.get().expect("type checked upstream");
             }
             "active-pad" => {
-                let pad = value.get::<gst::Pad>().expect("type checked upstream");
+                let pad = value
+                    .get::<Option<gst::Pad>>()
+                    .expect("type checked upstream");
                 let mut state = self.state.lock().unwrap();
                 let pads = self.pads.lock().unwrap();
                 let mut old_pad = None;

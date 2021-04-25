@@ -319,46 +319,43 @@ impl ObjectImpl for Rav1Enc {
         match pspec.name() {
             "speed-preset" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.speed_preset = value.get_some().expect("type checked upstream");
+                settings.speed_preset = value.get().expect("type checked upstream");
             }
             "low-latency" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.low_latency = value.get_some().expect("type checked upstream");
+                settings.low_latency = value.get().expect("type checked upstream");
             }
             "min-key-frame-interval" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.min_key_frame_interval = value.get_some().expect("type checked upstream");
+                settings.min_key_frame_interval = value.get().expect("type checked upstream");
             }
             "max-key-frame-interval" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_key_frame_interval = value.get_some().expect("type checked upstream");
+                settings.max_key_frame_interval = value.get().expect("type checked upstream");
             }
             "bitrate" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.bitrate = value.get_some().expect("type checked upstream");
+                settings.bitrate = value.get().expect("type checked upstream");
             }
             "quantizer" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.quantizer =
-                    value.get_some::<u32>().expect("type checked upstream") as usize;
+                settings.quantizer = value.get::<u32>().expect("type checked upstream") as usize;
             }
             "tile-cols" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.tile_cols =
-                    value.get_some::<u32>().expect("type checked upstream") as usize;
+                settings.tile_cols = value.get::<u32>().expect("type checked upstream") as usize;
             }
             "tile-rows" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.tile_rows =
-                    value.get_some::<u32>().expect("type checked upstream") as usize;
+                settings.tile_rows = value.get::<u32>().expect("type checked upstream") as usize;
             }
             "tiles" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.tiles = value.get_some::<u32>().expect("type checked upstream") as usize;
+                settings.tiles = value.get::<u32>().expect("type checked upstream") as usize;
             }
             "threads" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.threads = value.get_some::<u32>().expect("type checked upstream") as usize;
+                settings.threads = value.get::<u32>().expect("type checked upstream") as usize;
             }
             _ => unimplemented!(),
         }

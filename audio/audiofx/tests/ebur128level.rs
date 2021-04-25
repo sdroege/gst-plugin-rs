@@ -121,23 +121,23 @@ fn run_test(layout: gst_audio::AudioLayout, format: gst_audio::AudioFormat) {
                 let s = msg.structure().unwrap();
                 if s.name() == "ebur128-level" {
                     num_msgs += 1;
-                    let timestamp = s.get_some::<u64>("timestamp").unwrap();
-                    let running_time = s.get_some::<u64>("running-time").unwrap();
-                    let stream_time = s.get_some::<u64>("stream-time").unwrap();
+                    let timestamp = s.get::<u64>("timestamp").unwrap();
+                    let running_time = s.get::<u64>("running-time").unwrap();
+                    let stream_time = s.get::<u64>("stream-time").unwrap();
                     assert_eq!(timestamp, num_msgs * 500 * gst::MSECOND_VAL);
                     assert_eq!(running_time, num_msgs * 500 * gst::MSECOND_VAL);
                     assert_eq!(stream_time, num_msgs * 500 * gst::MSECOND_VAL);
 
                     // Check if all these exist
-                    let _momentary_loudness = s.get_some::<f64>("momentary-loudness").unwrap();
-                    let _shortterm_loudness = s.get_some::<f64>("shortterm-loudness").unwrap();
-                    let _global_loudness = s.get_some::<f64>("global-loudness").unwrap();
-                    let _relative_threshold = s.get_some::<f64>("relative-threshold").unwrap();
-                    let _loudness_range = s.get_some::<f64>("loudness-range").unwrap();
-                    let sample_peak = s.get::<gst::Array>("sample-peak").unwrap().unwrap();
+                    let _momentary_loudness = s.get::<f64>("momentary-loudness").unwrap();
+                    let _shortterm_loudness = s.get::<f64>("shortterm-loudness").unwrap();
+                    let _global_loudness = s.get::<f64>("global-loudness").unwrap();
+                    let _relative_threshold = s.get::<f64>("relative-threshold").unwrap();
+                    let _loudness_range = s.get::<f64>("loudness-range").unwrap();
+                    let sample_peak = s.get::<gst::Array>("sample-peak").unwrap();
                     assert_eq!(sample_peak.as_slice().len(), 2);
                     assert_eq!(sample_peak.as_slice()[0].type_(), glib::Type::F64);
-                    let true_peak = s.get::<gst::Array>("true-peak").unwrap().unwrap();
+                    let true_peak = s.get::<gst::Array>("true-peak").unwrap();
                     assert_eq!(true_peak.as_slice().len(), 2);
                     assert_eq!(true_peak.as_slice()[0].type_(), glib::Type::F64);
                 }

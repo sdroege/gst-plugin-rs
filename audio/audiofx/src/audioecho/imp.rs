@@ -147,20 +147,20 @@ impl ObjectImpl for AudioEcho {
             "max-delay" => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
-                    settings.max_delay = value.get_some().expect("type checked upstream");
+                    settings.max_delay = value.get().expect("type checked upstream");
                 }
             }
             "delay" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.delay = value.get_some().expect("type checked upstream");
+                settings.delay = value.get().expect("type checked upstream");
             }
             "intensity" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.intensity = value.get_some().expect("type checked upstream");
+                settings.intensity = value.get().expect("type checked upstream");
             }
             "feedback" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.feedback = value.get_some().expect("type checked upstream");
+                settings.feedback = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

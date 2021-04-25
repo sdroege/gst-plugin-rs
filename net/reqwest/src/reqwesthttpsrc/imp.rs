@@ -304,8 +304,8 @@ impl ReqwestHttpSrc {
 
                 let mut append_header = |field: &HeaderName, value: &glib::Value| {
                     let value = match value.transform::<String>() {
-                        Some(value) => value,
-                        None => {
+                        Ok(value) => value,
+                        Err(_) => {
                             gst_warning!(
                                 CAT,
                                 obj: src,
@@ -316,7 +316,7 @@ impl ReqwestHttpSrc {
                         }
                     };
 
-                    let value = value.get::<&str>().unwrap().unwrap_or("");
+                    let value = value.get::<Option<&str>>().unwrap().unwrap_or("");
 
                     let value = match HeaderValue::from_str(value) {
                         Ok(value) => value,
@@ -334,11 +334,11 @@ impl ReqwestHttpSrc {
                     headers.append(field.clone(), value);
                 };
 
-                if let Ok(Some(values)) = value.get::<gst::Array>() {
+                if let Ok(values) = value.get::<gst::Array>() {
                     for value in values.as_slice() {
                         append_header(&field, value);
                     }
-                } else if let Ok(Some(values)) = value.get::<gst::List>() {
+                } else if let Ok(values) = value.get::<gst::List>() {
                     for value in values.as_slice() {
                         append_header(&field, value);
                     }
@@ -673,7 +673,7 @@ impl ObjectImpl for ReqwestHttpSrc {
     ) {
         match pspec.name() {
             "location" => {
-                let location = value.get::<&str>().expect("type checked upstream");
+                let location = value.get::<Option<&str>>().expect("type checked upstream");
                 if let Err(err) = self.set_location(obj, location) {
                     gst_error!(
                         CAT,
@@ -686,13 +686,13 @@ impl ObjectImpl for ReqwestHttpSrc {
             "user-agent" => {
                 let mut settings = self.settings.lock().unwrap();
                 let user_agent = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| DEFAULT_USER_AGENT.into());
                 settings.user_agent = user_agent;
             }
             "is-live" => {
-                let is_live = value.get_some().expect("type checked upstream");
+                let is_live = value.get().expect("type checked upstream");
                 obj.set_live(is_live);
             }
             "user-id" => {
@@ -707,12 +707,12 @@ impl ObjectImpl for ReqwestHttpSrc {
             }
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
-                let timeout = value.get_some().expect("type checked upstream");
+                let timeout = value.get().expect("type checked upstream");
                 settings.timeout = timeout;
             }
             "compress" => {
                 let mut settings = self.settings.lock().unwrap();
-                let compress = value.get_some().expect("type checked upstream");
+                let compress = value.get().expect("type checked upstream");
                 settings.compress = compress;
             }
             "extra-headers" => {
@@ -722,17 +722,16 @@ impl ObjectImpl for ReqwestHttpSrc {
             }
             "cookies" => {
                 let mut settings = self.settings.lock().unwrap();
-                let cookies = value.get().expect("type checked upstream");
-                settings.cookies = cookies.unwrap_or_else(Vec::new);
+                settings.cookies = value.get::<Vec<String>>().expect("type checked upstream");
             }
             "iradio-mode" => {
                 let mut settings = self.settings.lock().unwrap();
-                let iradio_mode = value.get_some().expect("type checked upstream");
+                let iradio_mode = value.get().expect("type checked upstream");
                 settings.iradio_mode = iradio_mode;
             }
             "keep-alive" => {
                 let mut settings = self.settings.lock().unwrap();
-                let keep_alive = value.get_some().expect("type checked upstream");
+                let keep_alive = value.get().expect("type checked upstream");
                 settings.keep_alive = keep_alive;
             }
             _ => unimplemented!(),
@@ -831,7 +830,7 @@ impl ElementImpl for ReqwestHttpSrc {
             let mut external_client = self.external_client.lock().unwrap();
             let s = context.structure();
             *external_client = s
-                .get_some::<&ClientContext>("client")
+                .get::<&ClientContext>("client")
                 .map(|c| Some(c.clone()))
                 .unwrap_or(None);
         }

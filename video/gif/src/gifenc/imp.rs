@@ -164,7 +164,7 @@ impl ObjectImpl for GifEnc {
         match pspec.name() {
             "repeat" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.repeat = value.get_some().expect("type checked upstream");
+                settings.repeat = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

@@ -156,7 +156,7 @@ impl ObjectImpl for HsvDetector {
         match pspec.name() {
             "hue-ref" => {
                 let mut settings = self.settings.lock().unwrap();
-                let hue_ref = value.get_some().expect("type checked upstream");
+                let hue_ref = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -168,7 +168,7 @@ impl ObjectImpl for HsvDetector {
             }
             "hue-var" => {
                 let mut settings = self.settings.lock().unwrap();
-                let hue_var = value.get_some().expect("type checked upstream");
+                let hue_var = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -180,7 +180,7 @@ impl ObjectImpl for HsvDetector {
             }
             "saturation-ref" => {
                 let mut settings = self.settings.lock().unwrap();
-                let saturation_ref = value.get_some().expect("type checked upstream");
+                let saturation_ref = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -192,7 +192,7 @@ impl ObjectImpl for HsvDetector {
             }
             "saturation-var" => {
                 let mut settings = self.settings.lock().unwrap();
-                let saturation_var = value.get_some().expect("type checked upstream");
+                let saturation_var = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -204,7 +204,7 @@ impl ObjectImpl for HsvDetector {
             }
             "value-ref" => {
                 let mut settings = self.settings.lock().unwrap();
-                let value_ref = value.get_some().expect("type checked upstream");
+                let value_ref = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -216,7 +216,7 @@ impl ObjectImpl for HsvDetector {
             }
             "value-var" => {
                 let mut settings = self.settings.lock().unwrap();
-                let value_var = value.get_some().expect("type checked upstream");
+                let value_var = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,

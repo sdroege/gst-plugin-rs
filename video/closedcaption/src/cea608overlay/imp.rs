@@ -604,7 +604,7 @@ impl ObjectImpl for Cea608Overlay {
                 let mut settings = self.settings.lock().unwrap();
                 let mut state = self.state.lock().unwrap();
 
-                settings.field = value.get_some().expect("type checked upstream");
+                settings.field = value.get().expect("type checked upstream");
                 state.selected_field = match settings.field {
                     -1 => None,
                     val => Some(val as u8),

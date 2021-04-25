@@ -399,22 +399,22 @@ impl ObjectImpl for S3Sink {
 
         match pspec.name() {
             "bucket" => {
-                settings.bucket = value.get::<String>().expect("type checked upstream");
+                settings.bucket = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
             }
             "key" => {
-                settings.key = value.get::<String>().expect("type checked upstream");
+                settings.key = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
             }
             "region" => {
-                settings.region = Region::from_str(
-                    &value
-                        .get::<String>()
-                        .expect("type checked upstream")
-                        .expect("set_property(\"region\"): no value provided"),
-                )
-                .unwrap();
+                settings.region =
+                    Region::from_str(&value.get::<String>().expect("type checked upstream"))
+                        .unwrap();
             }
             "part-size" => {
-                settings.buffer_size = value.get_some::<u64>().expect("type checked upstream");
+                settings.buffer_size = value.get::<u64>().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

@@ -811,20 +811,20 @@ impl ObjectImpl for UdpSrc {
                 settings.address = value.get().expect("type checked upstream");
             }
             "port" => {
-                settings.port = value.get_some().expect("type checked upstream");
+                settings.port = value.get().expect("type checked upstream");
             }
             "reuse" => {
-                settings.reuse = value.get_some().expect("type checked upstream");
+                settings.reuse = value.get().expect("type checked upstream");
             }
             "caps" => {
                 settings.caps = value.get().expect("type checked upstream");
             }
             "mtu" => {
-                settings.mtu = value.get_some().expect("type checked upstream");
+                settings.mtu = value.get().expect("type checked upstream");
             }
             "socket" => {
                 settings.socket = value
-                    .get::<gio::Socket>()
+                    .get::<Option<gio::Socket>>()
                     .expect("type checked upstream")
                     .map(|socket| GioSocketWrapper::new(&socket));
             }
@@ -833,15 +833,15 @@ impl ObjectImpl for UdpSrc {
             }
             "context" => {
                 settings.context = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get_some().expect("type checked upstream");
+                settings.context_wait = value.get().expect("type checked upstream");
             }
             "retrieve-sender-address" => {
-                settings.retrieve_sender_address = value.get_some().expect("type checked upstream");
+                settings.retrieve_sender_address = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

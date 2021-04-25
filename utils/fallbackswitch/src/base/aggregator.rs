@@ -66,7 +66,6 @@ impl<O: IsA<Aggregator>> AggregatorExtManual for O {
             value
                 .get()
                 .expect("AggregatorExtManual::min_upstream_latency")
-                .unwrap()
         }
     }
 

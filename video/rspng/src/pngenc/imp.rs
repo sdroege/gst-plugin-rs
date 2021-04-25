@@ -209,14 +209,12 @@ impl ObjectImpl for PngEncoder {
             "compression-level" => {
                 let mut settings = self.settings.lock();
                 settings.compression = value
-                    .get_some::<CompressionLevel>()
+                    .get::<CompressionLevel>()
                     .expect("type checked upstream");
             }
             "filter" => {
                 let mut settings = self.settings.lock();
-                settings.filter = value
-                    .get_some::<FilterType>()
-                    .expect("type checked upstream");
+                settings.filter = value.get::<FilterType>().expect("type checked upstream");
             }
             _ => unreachable!(),
         }

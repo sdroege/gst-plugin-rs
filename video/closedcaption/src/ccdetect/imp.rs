@@ -264,7 +264,7 @@ impl ObjectImpl for CCDetect {
         match pspec.name() {
             "window" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.window = value.get_some().expect("type checked upstream");
+                settings.window = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
@@ -417,7 +417,7 @@ impl BaseTransformImpl for CCDetect {
             .structure(0)
             .ok_or_else(|| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
         let format_str = s
-            .get::<&str>("format")
+            .get::<Option<&str>>("format")
             .map_err(|_| gst::loggable_error!(CAT, "Failed to parse input caps"))?
             .ok_or_else(|| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
         let cc_format = match format_str {

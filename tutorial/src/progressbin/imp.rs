@@ -108,7 +108,7 @@ impl ObjectImpl for ProgressBin {
             "output" => {
                 let mut output_type = self.output_type.lock().unwrap();
                 let new_output_type = value
-                    .get_some::<ProgressBinOutput>()
+                    .get::<ProgressBinOutput>()
                     .expect("type checked upstream");
                 gst_info!(
                     CAT,
@@ -230,7 +230,7 @@ impl BinImpl for ProgressBin {
                         .unwrap_or(false) =>
             {
                 let s = msg.structure().unwrap();
-                if let Ok(percent) = s.get_some::<f64>("percent-double") {
+                if let Ok(percent) = s.get::<f64>("percent-double") {
                     let output_type = *self.output_type.lock().unwrap();
                     match output_type {
                         ProgressBinOutput::Println => println!("progress: {:5.1}%", percent),

@@ -1203,7 +1203,7 @@ fn test_two_stream_main_eos() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, true);
 
@@ -1222,7 +1222,7 @@ fn test_two_stream_main_eos() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, false);
 
@@ -1286,7 +1286,7 @@ fn test_two_stream_secondary_eos_first() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, true);
 
@@ -1297,7 +1297,7 @@ fn test_two_stream_secondary_eos_first() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, false);
 
@@ -1365,7 +1365,7 @@ fn test_three_stream_main_eos() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, true);
 
@@ -1384,7 +1384,7 @@ fn test_three_stream_main_eos() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, true);
 
@@ -1399,7 +1399,7 @@ fn test_three_stream_main_eos() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, false);
 
@@ -1478,7 +1478,7 @@ fn test_three_stream_main_and_second_eos() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, true);
 
@@ -1490,7 +1490,7 @@ fn test_three_stream_main_and_second_eos() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, true);
 
@@ -1511,7 +1511,7 @@ fn test_three_stream_main_and_second_eos() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, false);
 
@@ -1594,7 +1594,7 @@ fn test_three_stream_secondary_eos_first() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, true);
 
@@ -1606,7 +1606,7 @@ fn test_three_stream_secondary_eos_first() {
     let recording = togglerecord
         .property("recording")
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap();
     assert_eq!(recording, false);
 

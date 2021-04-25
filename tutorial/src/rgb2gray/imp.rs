@@ -137,7 +137,7 @@ impl ObjectImpl for Rgb2Gray {
         match pspec.name() {
             "invert" => {
                 let mut settings = self.settings.lock().unwrap();
-                let invert = value.get_some().expect("type checked upstream");
+                let invert = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -149,7 +149,7 @@ impl ObjectImpl for Rgb2Gray {
             }
             "shift" => {
                 let mut settings = self.settings.lock().unwrap();
-                let shift = value.get_some().expect("type checked upstream");
+                let shift = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,

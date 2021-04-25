@@ -822,7 +822,7 @@ impl Transcriber {
 
         let in_caps = self.sinkpad.current_caps().unwrap();
         let s = in_caps.structure(0).unwrap();
-        let sample_rate: i32 = s.get("rate").unwrap().unwrap();
+        let sample_rate = s.get::<i32>("rate").unwrap();
 
         let settings = self.settings.lock().unwrap();
 
@@ -1075,11 +1075,11 @@ impl ObjectImpl for Transcriber {
             }
             "latency" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.latency_ms = value.get_some().expect("type checked upstream");
+                settings.latency_ms = value.get().expect("type checked upstream");
             }
             "use-partial-results" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.use_partial_results = value.get_some().expect("type checked upstream");
+                settings.use_partial_results = value.get().expect("type checked upstream");
             }
             "vocabulary-name" => {
                 let mut settings = self.settings.lock().unwrap();

@@ -191,10 +191,10 @@ impl ObjectImpl for RegEx {
             "commands" => {
                 let mut state = self.state.lock().unwrap();
                 state.commands = vec![];
-                let commands: gst::Array = value.get_some().expect("type checked upstream");
+                let commands: gst::Array = value.get().expect("type checked upstream");
                 for command in commands.as_slice() {
                     let s = match command
-                        .get::<gst::Structure>()
+                        .get::<Option<gst::Structure>>()
                         .expect("type checked upstream")
                     {
                         Some(s) => s,
@@ -204,7 +204,7 @@ impl ObjectImpl for RegEx {
                     };
                     let operation = s.name();
 
-                    let pattern = match s.get::<String>("pattern") {
+                    let pattern = match s.get::<Option<String>>("pattern") {
                         Ok(Some(pattern)) => pattern,
                         Ok(None) | Err(_) => {
                             gst_error!(CAT, "All commands require a pattern field as a string");
@@ -222,7 +222,7 @@ impl ObjectImpl for RegEx {
 
                     match operation {
                         "replace-all" | "replace_all" => {
-                            let replacement = match s.get::<String>("replacement") {
+                            let replacement = match s.get::<Option<String>>("replacement") {
                                 Ok(Some(pattern)) => pattern,
                                 Ok(None) | Err(_) => {
                                     gst_error!(

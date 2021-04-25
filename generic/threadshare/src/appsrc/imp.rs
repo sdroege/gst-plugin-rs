@@ -584,14 +584,8 @@ impl ObjectImpl for AppSrc {
                 )
                 .action()
                 .class_handler(|_, args| {
-                    let element = args[0]
-                        .get::<super::AppSrc>()
-                        .expect("signal arg")
-                        .expect("missing signal arg");
-                    let buffer = args[1]
-                        .get::<gst::Buffer>()
-                        .expect("signal arg")
-                        .expect("missing signal arg");
+                    let element = args[0].get::<super::AppSrc>().expect("signal arg");
+                    let buffer = args[1].get::<gst::Buffer>().expect("signal arg");
                     let appsrc = AppSrc::from_instance(&element);
 
                     Some(appsrc.push_buffer(&element, buffer).to_value())
@@ -600,10 +594,7 @@ impl ObjectImpl for AppSrc {
                 glib::subclass::Signal::builder("end-of-stream", &[], bool::static_type().into())
                     .action()
                     .class_handler(|_, args| {
-                        let element = args[0]
-                            .get::<super::AppSrc>()
-                            .expect("signal arg")
-                            .expect("missing signal arg");
+                        let element = args[0].get::<super::AppSrc>().expect("signal arg");
                         let appsrc = AppSrc::from_instance(&element);
 
                         Some(appsrc.end_of_stream(&element).to_value())
@@ -626,21 +617,21 @@ impl ObjectImpl for AppSrc {
         match pspec.name() {
             "context" => {
                 settings.context = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get_some().expect("type checked upstream");
+                settings.context_wait = value.get().expect("type checked upstream");
             }
             "caps" => {
                 settings.caps = value.get().expect("type checked upstream");
             }
             "max-buffers" => {
-                settings.max_buffers = value.get_some().expect("type checked upstream");
+                settings.max_buffers = value.get().expect("type checked upstream");
             }
             "do-timestamp" => {
-                settings.do_timestamp = value.get_some().expect("type checked upstream");
+                settings.do_timestamp = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

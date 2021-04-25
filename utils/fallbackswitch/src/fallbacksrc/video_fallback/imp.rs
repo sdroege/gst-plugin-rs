@@ -128,7 +128,7 @@ impl ObjectImpl for VideoFallbackSource {
             }
             "min-latency" => {
                 let mut settings = self.settings.lock().unwrap();
-                let new_value = value.get_some().expect("type checked upstream");
+                let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -358,9 +358,9 @@ impl VideoFallbackSource {
                 let videoconvert_weak = videoconvert.downgrade();
                 typefind
                     .connect("have-type", false, move |args| {
-                        let typefind = args[0].get::<gst::Element>().unwrap().unwrap();
-                        let _probability = args[1].get_some::<u32>().unwrap();
-                        let caps = args[2].get::<gst::Caps>().unwrap().unwrap();
+                        let typefind = args[0].get::<gst::Element>().unwrap();
+                        let _probability = args[1].get::<u32>().unwrap();
+                        let caps = args[2].get::<gst::Caps>().unwrap();
 
                         let element = match element_weak.upgrade() {
                             Some(element) => element,

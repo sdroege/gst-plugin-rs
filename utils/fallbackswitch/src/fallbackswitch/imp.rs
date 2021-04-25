@@ -731,7 +731,7 @@ impl ObjectImpl for FallbackSwitch {
         match pspec.name() {
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
-                let timeout = value.get_some().expect("type checked upstream");
+                let timeout = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -751,7 +751,9 @@ impl ObjectImpl for FallbackSwitch {
                         "active-pad property setting ignored, because auto-switch=true"
                     );
                 } else {
-                    let active_pad = value.get::<gst::Pad>().expect("type checked upstream");
+                    let active_pad = value
+                        .get::<Option<gst::Pad>>()
+                        .expect("type checked upstream");
                     /* Trigger a pad switch if needed */
                     let mut cur_active_pad = self.active_sinkpad.lock().unwrap();
                     if *cur_active_pad != active_pad {
@@ -763,7 +765,7 @@ impl ObjectImpl for FallbackSwitch {
             }
             "auto-switch" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.auto_switch = value.get_some().expect("type checked upstream");
+                settings.auto_switch = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

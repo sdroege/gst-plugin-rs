@@ -70,7 +70,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
         {
             let sink = gst::ElementFactory::make("gtksink", None).unwrap();
             let widget = sink.property("widget").unwrap();
-            (sink, widget.get::<gtk::Widget>().unwrap().unwrap())
+            (sink, widget.get::<gtk::Widget>().unwrap())
         };
 
     pipeline

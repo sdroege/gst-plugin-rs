@@ -129,7 +129,7 @@ impl ObjectImpl for EbuR128Level {
                 glib::subclass::Signal::builder("reset", &[], glib::Type::UNIT.into())
                     .action()
                     .class_handler(|_token, args| {
-                        let this = args[0].get::<super::EbuR128Level>().unwrap().unwrap();
+                        let this = args[0].get::<super::EbuR128Level>().unwrap();
                         let imp = EbuR128Level::from_instance(&this);
 
                         gst_info!(CAT, obj: &this, "Resetting measurements",);
@@ -187,7 +187,7 @@ impl ObjectImpl for EbuR128Level {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "mode" => {
-                let mode = value.get_some().expect("type checked upstream");
+                let mode = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -198,7 +198,7 @@ impl ObjectImpl for EbuR128Level {
                 settings.mode = mode;
             }
             "post-messages" => {
-                let post_messages = value.get_some().expect("type checked upstream");
+                let post_messages = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -209,7 +209,7 @@ impl ObjectImpl for EbuR128Level {
                 settings.post_messages = post_messages;
             }
             "interval" => {
-                let interval = value.get_some().expect("type checked upstream");
+                let interval = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,

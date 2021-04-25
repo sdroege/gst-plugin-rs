@@ -254,7 +254,7 @@ impl SccEnc {
             EventView::Caps(ev) => {
                 let caps = ev.caps();
                 let s = caps.structure(0).unwrap();
-                let framerate = match s.get_some::<gst::Fraction>("framerate") {
+                let framerate = match s.get::<gst::Fraction>("framerate") {
                     Ok(framerate) => Some(framerate),
                     Err(structure::GetError::FieldNotFound { .. }) => {
                         gst_error!(CAT, obj: pad, "Caps without framerate");

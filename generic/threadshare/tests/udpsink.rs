@@ -40,7 +40,6 @@ fn test_client_management() {
         .property("clients")
         .unwrap()
         .get::<String>()
-        .unwrap()
         .unwrap();
 
     assert_eq!(clients, "127.0.0.1:5004");
@@ -52,7 +51,6 @@ fn test_client_management() {
         .property("clients")
         .unwrap()
         .get::<String>()
-        .unwrap()
         .unwrap();
     assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
@@ -64,7 +62,6 @@ fn test_client_management() {
         .property("clients")
         .unwrap()
         .get::<String>()
-        .unwrap()
         .unwrap();
     assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
@@ -75,7 +72,6 @@ fn test_client_management() {
         .property("clients")
         .unwrap()
         .get::<String>()
-        .unwrap()
         .unwrap();
     assert_eq!(clients, "127.0.0.1:5004");
 
@@ -87,7 +83,6 @@ fn test_client_management() {
         .property("clients")
         .unwrap()
         .get::<String>()
-        .unwrap()
         .unwrap();
     assert_eq!(clients, "127.0.0.1:5004");
 
@@ -99,7 +94,6 @@ fn test_client_management() {
         .property("clients")
         .unwrap()
         .get::<String>()
-        .unwrap()
         .unwrap();
     assert_eq!(clients, "");
 
@@ -111,7 +105,6 @@ fn test_client_management() {
         .property("clients")
         .unwrap()
         .get::<String>()
-        .unwrap()
         .unwrap();
     assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
@@ -120,7 +113,6 @@ fn test_client_management() {
         .property("clients")
         .unwrap()
         .get::<String>()
-        .unwrap()
         .unwrap();
     assert_eq!(clients, "");
 }

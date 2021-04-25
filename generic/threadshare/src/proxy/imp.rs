@@ -613,7 +613,7 @@ impl ObjectImpl for ProxySink {
         match pspec.name() {
             "proxy-context" => {
                 settings.proxy_context = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
@@ -1196,26 +1196,26 @@ impl ObjectImpl for ProxySrc {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "max-size-buffers" => {
-                settings.max_size_buffers = value.get_some().expect("type checked upstream");
+                settings.max_size_buffers = value.get().expect("type checked upstream");
             }
             "max-size-bytes" => {
-                settings.max_size_bytes = value.get_some().expect("type checked upstream");
+                settings.max_size_bytes = value.get().expect("type checked upstream");
             }
             "max-size-time" => {
-                settings.max_size_time = value.get_some().expect("type checked upstream");
+                settings.max_size_time = value.get().expect("type checked upstream");
             }
             "context" => {
                 settings.context = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get_some().expect("type checked upstream");
+                settings.context_wait = value.get().expect("type checked upstream");
             }
             "proxy-context" => {
                 settings.proxy_context = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }

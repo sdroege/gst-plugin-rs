@@ -183,9 +183,7 @@ impl SinkHandler {
 
         gst_info!(CAT, obj: element, "Parsing {:?}", caps);
 
-        let payload = s
-            .get_some::<i32>("payload")
-            .map_err(|_| gst::FlowError::Error)?;
+        let payload = s.get::<i32>("payload").map_err(|_| gst::FlowError::Error)?;
 
         if pt != 0 && payload as u8 != pt {
             return Err(gst::FlowError::Error);
@@ -193,7 +191,7 @@ impl SinkHandler {
 
         inner.last_pt = Some(pt);
         let clock_rate = s
-            .get_some::<i32>("clock-rate")
+            .get::<i32>("clock-rate")
             .map_err(|_| gst::FlowError::Error)?;
 
         if clock_rate <= 0 {
@@ -376,7 +374,7 @@ impl SinkHandler {
                     .emit_by_name("request-pt-map", &[&(pt as u32)])
                     .map_err(|_| gst::FlowError::Error)?
                     .ok_or(gst::FlowError::Error)?
-                    .get::<gst::Caps>()
+                    .get::<Option<gst::Caps>>()
                     .map_err(|_| gst::FlowError::Error)?
                     .ok_or(gst::FlowError::Error)?;
                 let mut state = jb.state.lock().unwrap();
@@ -1430,10 +1428,7 @@ impl ObjectImpl for JitterBuffer {
             )
             .action()
             .class_handler(|_, args| {
-                let element = args[0]
-                    .get::<super::JitterBuffer>()
-                    .expect("signal arg")
-                    .expect("missing signal arg");
+                let element = args[0].get::<super::JitterBuffer>().expect("signal arg");
                 let jb = JitterBuffer::from_instance(&element);
                 jb.clear_pt_map(&element);
                 None
@@ -1455,7 +1450,7 @@ impl ObjectImpl for JitterBuffer {
             "latency" => {
                 let latency_ms = {
                     let mut settings = self.settings.lock().unwrap();
-                    settings.latency_ms = value.get_some().expect("type checked upstream");
+                    settings.latency_ms = value.get().expect("type checked upstream");
                     settings.latency_ms as u64
                 };
 
@@ -1466,26 +1461,26 @@ impl ObjectImpl for JitterBuffer {
             }
             "do-lost" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.do_lost = value.get_some().expect("type checked upstream");
+                settings.do_lost = value.get().expect("type checked upstream");
             }
             "max-dropout-time" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_dropout_time = value.get_some().expect("type checked upstream");
+                settings.max_dropout_time = value.get().expect("type checked upstream");
             }
             "max-misorder-time" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.max_misorder_time = value.get_some().expect("type checked upstream");
+                settings.max_misorder_time = value.get().expect("type checked upstream");
             }
             "context" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.context = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context_wait = value.get_some().expect("type checked upstream");
+                settings.context_wait = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

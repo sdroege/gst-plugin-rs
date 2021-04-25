@@ -51,7 +51,7 @@ fn push() {
                 .emit_by_name("push-buffer", &[&gst::Buffer::new()])
                 .unwrap()
                 .unwrap()
-                .get_some::<bool>()
+                .get::<bool>()
                 .unwrap());
         }
 
@@ -59,7 +59,7 @@ fn push() {
             .emit_by_name("end-of-stream", &[])
             .unwrap()
             .unwrap()
-            .get_some::<bool>()
+            .get::<bool>()
             .unwrap());
     }
 
@@ -117,7 +117,7 @@ fn pause_regular() {
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     let _ = h.pull().unwrap();
@@ -127,7 +127,7 @@ fn pause_regular() {
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![5, 6, 7])])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     appsrc
@@ -139,7 +139,7 @@ fn pause_regular() {
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![8, 9])])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     appsrc
@@ -157,7 +157,7 @@ fn pause_regular() {
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     let _ = h.pull().unwrap();
@@ -187,7 +187,7 @@ fn flush_regular() {
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     let _ = h.pull().unwrap();
@@ -200,7 +200,7 @@ fn flush_regular() {
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     assert!(h.try_pull().is_none());
@@ -216,7 +216,7 @@ fn flush_regular() {
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     let _ = h.pull().unwrap();
@@ -248,7 +248,7 @@ fn pause_flush() {
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     let _ = h.pull().unwrap();
@@ -265,7 +265,7 @@ fn pause_flush() {
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     assert!(h.try_pull().is_none());
@@ -285,7 +285,7 @@ fn pause_flush() {
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
         .unwrap()
-        .get_some::<bool>()
+        .get::<bool>()
         .unwrap());
 
     let _ = h.pull().unwrap();

@@ -449,7 +449,7 @@ impl ObjectImpl for Encrypter {
 
             "block-size" => {
                 let mut props = self.props.lock().unwrap();
-                props.block_size = value.get_some().expect("type checked upstream");
+                props.block_size = value.get().expect("type checked upstream");
             }
 
             _ => unimplemented!(),

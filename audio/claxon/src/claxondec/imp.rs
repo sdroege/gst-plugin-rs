@@ -137,7 +137,7 @@ impl AudioDecoderImpl for ClaxonDec {
                     "Not enough streamheaders, trying in-band"
                 );
             } else {
-                let ident_buf = streamheaders[0].get::<gst::Buffer>();
+                let ident_buf = streamheaders[0].get::<Option<gst::Buffer>>();
                 if let Ok(Some(ident_buf)) = ident_buf {
                     gst_debug!(CAT, obj: element, "Got streamheader buffers");
                     let inmap = ident_buf.map_readable().unwrap();

@@ -655,14 +655,11 @@ fn test_iradio_mode() {
         let tag_event = srcpad.sticky_event(gst::EventType::Tag, 0).unwrap();
         if let EventView::Tag(tags) = tag_event.view() {
             let tags = tags.tag();
-            assert_eq!(
-                tags.get::<gst::tags::Organization>().unwrap().get(),
-                Some("Name")
-            );
-            assert_eq!(tags.get::<gst::tags::Genre>().unwrap().get(), Some("Genre"));
+            assert_eq!(tags.get::<gst::tags::Organization>().unwrap().get(), "Name");
+            assert_eq!(tags.get::<gst::tags::Genre>().unwrap().get(), "Genre");
             assert_eq!(
                 tags.get::<gst::tags::Location>().unwrap().get(),
-                Some("http://www.example.com"),
+                "http://www.example.com",
             );
         } else {
             unreachable!();

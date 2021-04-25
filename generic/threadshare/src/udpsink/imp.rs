@@ -1116,18 +1116,9 @@ impl ObjectImpl for UdpSink {
                 )
                 .action()
                 .class_handler(|_, args| {
-                    let element = args[0]
-                        .get::<super::UdpSink>()
-                        .expect("signal arg")
-                        .expect("missing signal arg");
-                    let host = args[1]
-                        .get::<String>()
-                        .expect("signal arg")
-                        .expect("missing signal arg");
-                    let port = args[2]
-                        .get::<i32>()
-                        .expect("signal arg")
-                        .expect("missing signal arg");
+                    let element = args[0].get::<super::UdpSink>().expect("signal arg");
+                    let host = args[1].get::<String>().expect("signal arg");
+                    let port = args[2].get::<i32>().expect("signal arg");
 
                     if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
                         let udpsink = UdpSink::from_instance(&element);
@@ -1144,18 +1135,9 @@ impl ObjectImpl for UdpSink {
                 )
                 .action()
                 .class_handler(|_, args| {
-                    let element = args[0]
-                        .get::<super::UdpSink>()
-                        .expect("signal arg")
-                        .expect("missing signal arg");
-                    let host = args[1]
-                        .get::<String>()
-                        .expect("signal arg")
-                        .expect("missing signal arg");
-                    let port = args[2]
-                        .get::<i32>()
-                        .expect("signal arg")
-                        .expect("missing signal arg");
+                    let element = args[0].get::<super::UdpSink>().expect("signal arg");
+                    let host = args[1].get::<String>().expect("signal arg");
+                    let port = args[2].get::<i32>().expect("signal arg");
 
                     if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
                         let udpsink = UdpSink::from_instance(&element);
@@ -1168,10 +1150,7 @@ impl ObjectImpl for UdpSink {
                 glib::subclass::Signal::builder("clear", &[], glib::types::Type::UNIT.into())
                     .action()
                     .class_handler(|_, args| {
-                        let element = args[0]
-                            .get::<super::UdpSink>()
-                            .expect("signal arg")
-                            .expect("missing signal arg");
+                        let element = args[0].get::<super::UdpSink>().expect("signal arg");
 
                         let udpsink = UdpSink::from_instance(&element);
                         udpsink.clear_clients(std::iter::empty());
@@ -1195,29 +1174,29 @@ impl ObjectImpl for UdpSink {
         let mut settings = self.settings.lock().unwrap();
         match pspec.name() {
             "sync" => {
-                settings.sync = value.get_some().expect("type checked upstream");
+                settings.sync = value.get().expect("type checked upstream");
             }
             "bind-address" => {
                 settings.bind_address = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "bind-port" => {
-                settings.bind_port = value.get_some().expect("type checked upstream");
+                settings.bind_port = value.get().expect("type checked upstream");
             }
             "bind-address-v6" => {
                 settings.bind_address_v6 = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "bind-port-v6" => {
-                settings.bind_port_v6 = value.get_some().expect("type checked upstream");
+                settings.bind_port_v6 = value.get().expect("type checked upstream");
             }
             "socket" => {
                 settings.socket = value
-                    .get::<gio::Socket>()
+                    .get::<Option<gio::Socket>>()
                     .expect("type checked upstream")
                     .map(|socket| GioSocketWrapper::new(&socket));
             }
@@ -1226,7 +1205,7 @@ impl ObjectImpl for UdpSink {
             }
             "socket-v6" => {
                 settings.socket_v6 = value
-                    .get::<gio::Socket>()
+                    .get::<Option<gio::Socket>>()
                     .expect("type checked upstream")
                     .map(|socket| GioSocketWrapper::new(&socket));
             }
@@ -1234,23 +1213,23 @@ impl ObjectImpl for UdpSink {
                 unreachable!();
             }
             "auto-multicast" => {
-                settings.auto_multicast = value.get_some().expect("type checked upstream");
+                settings.auto_multicast = value.get().expect("type checked upstream");
             }
             "loop" => {
-                settings.multicast_loop = value.get_some().expect("type checked upstream");
+                settings.multicast_loop = value.get().expect("type checked upstream");
             }
             "ttl" => {
-                settings.ttl = value.get_some().expect("type checked upstream");
+                settings.ttl = value.get().expect("type checked upstream");
             }
             "ttl-mc" => {
-                settings.ttl_mc = value.get_some().expect("type checked upstream");
+                settings.ttl_mc = value.get().expect("type checked upstream");
             }
             "qos-dscp" => {
-                settings.qos_dscp = value.get_some().expect("type checked upstream");
+                settings.qos_dscp = value.get().expect("type checked upstream");
             }
             "clients" => {
-                let clients: String = value
-                    .get()
+                let clients = value
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
 
@@ -1275,12 +1254,12 @@ impl ObjectImpl for UdpSink {
             }
             "context" => {
                 settings.context = value
-                    .get()
+                    .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get_some().expect("type checked upstream");
+                settings.context_wait = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

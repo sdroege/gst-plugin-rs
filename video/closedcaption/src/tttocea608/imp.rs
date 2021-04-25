@@ -925,7 +925,7 @@ impl TtToCea608 {
                 s.fixate();
 
                 let mut state = self.state.lock().unwrap();
-                state.framerate = s.get_some::<gst::Fraction>("framerate").unwrap();
+                state.framerate = s.get::<gst::Fraction>("framerate").unwrap();
 
                 let upstream_caps = e.caps();
                 let s = upstream_caps.structure(0).unwrap();
@@ -1090,19 +1090,17 @@ impl ObjectImpl for TtToCea608 {
         match pspec.name() {
             "mode" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.mode = value
-                    .get_some::<Cea608Mode>()
-                    .expect("type checked upstream");
+                settings.mode = value.get::<Cea608Mode>().expect("type checked upstream");
                 self.state.lock().unwrap().force_clear = true;
             }
             "origin-row" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.origin_row = value.get_some().expect("type checked upstream");
+                settings.origin_row = value.get().expect("type checked upstream");
                 self.state.lock().unwrap().force_clear = true;
             }
             "origin-column" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.origin_column = value.get_some().expect("type checked upstream");
+                settings.origin_column = value.get().expect("type checked upstream");
                 let mut state = self.state.lock().unwrap();
                 state.force_clear = true;
                 state.column = settings.origin_column;

@@ -129,7 +129,6 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
             value
                 .get()
                 .expect("Return Value for property `start-time` getter")
-                .unwrap()
         }
     }
 

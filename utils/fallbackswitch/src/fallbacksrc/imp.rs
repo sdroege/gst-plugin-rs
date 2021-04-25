@@ -302,7 +302,7 @@ impl ObjectImpl for FallbackSrc {
         match pspec.name() {
             "enable-audio" => {
                 let mut settings = self.settings.lock().unwrap();
-                let new_value = value.get_some().expect("type checked upstream");
+                let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -314,7 +314,7 @@ impl ObjectImpl for FallbackSrc {
             }
             "enable-video" => {
                 let mut settings = self.settings.lock().unwrap();
-                let new_value = value.get_some().expect("type checked upstream");
+                let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -362,7 +362,7 @@ impl ObjectImpl for FallbackSrc {
             }
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
-                let new_value = value.get_some().expect("type checked upstream");
+                let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -374,7 +374,7 @@ impl ObjectImpl for FallbackSrc {
             }
             "restart-timeout" => {
                 let mut settings = self.settings.lock().unwrap();
-                let new_value = value.get_some().expect("type checked upstream");
+                let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -386,7 +386,7 @@ impl ObjectImpl for FallbackSrc {
             }
             "retry-timeout" => {
                 let mut settings = self.settings.lock().unwrap();
-                let new_value = value.get_some().expect("type checked upstream");
+                let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -398,7 +398,7 @@ impl ObjectImpl for FallbackSrc {
             }
             "restart-on-eos" => {
                 let mut settings = self.settings.lock().unwrap();
-                let new_value = value.get_some().expect("type checked upstream");
+                let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -410,7 +410,7 @@ impl ObjectImpl for FallbackSrc {
             }
             "min-latency" => {
                 let mut settings = self.settings.lock().unwrap();
-                let new_value = value.get_some().expect("type checked upstream");
+                let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -422,7 +422,7 @@ impl ObjectImpl for FallbackSrc {
             }
             "buffer-duration" => {
                 let mut settings = self.settings.lock().unwrap();
-                let new_value = value.get_some().expect("type checked upstream");
+                let new_value = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -1764,7 +1764,7 @@ impl FallbackSrc {
                     .fallback_input
                     .property("uri")
                     .unwrap()
-                    .get::<String>()
+                    .get::<Option<String>>()
                     .unwrap();
 
                 // This means previously videotestsrc was configured
@@ -1777,7 +1777,7 @@ impl FallbackSrc {
                 fallback_input.call_async(|fallback_input| {
                     // Re-run video fallback input with videotestsrc
                     let _ = fallback_input.set_state(gst::State::Null);
-                    let _ = fallback_input.set_property("uri", &None::<&str>);
+                    let _ = fallback_input.set_property("uri", None::<&str>);
                     let _ = fallback_input.sync_state_with_parent();
                 });
 
@@ -2116,7 +2116,7 @@ impl FallbackSrc {
                         s.switch
                             .property("active-pad")
                             .unwrap()
-                            .get::<gst::Pad>()
+                            .get::<Option<gst::Pad>>()
                             .unwrap()
                     })
                     .map(|p| p.name() == "fallback_sink")
@@ -2130,7 +2130,7 @@ impl FallbackSrc {
                         s.switch
                             .property("active-pad")
                             .unwrap()
-                            .get::<gst::Pad>()
+                            .get::<Option<gst::Pad>>()
                             .unwrap()
                     })
                     .map(|p| p.name() == "fallback_sink")

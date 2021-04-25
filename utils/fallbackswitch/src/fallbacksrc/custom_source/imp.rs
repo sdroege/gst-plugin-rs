@@ -85,7 +85,7 @@ impl ObjectImpl for CustomSource {
     ) {
         match pspec.name() {
             "source" => {
-                let source = value.get::<gst::Element>().unwrap().unwrap();
+                let source = value.get::<gst::Element>().unwrap();
                 self.source.set(source.clone()).unwrap();
                 obj.add(&source).unwrap();
             }

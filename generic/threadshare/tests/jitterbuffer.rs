@@ -83,7 +83,6 @@ fn jb_pipeline() {
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()
-            .unwrap()
             .unwrap();
 
         sender.send(()).unwrap();
@@ -150,7 +149,6 @@ fn jb_ts_pipeline() {
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()
-            .unwrap()
             .unwrap();
 
         sender.send(()).unwrap();

@@ -1728,7 +1728,7 @@ impl ObjectImpl for ToggleRecord {
         match pspec.name() {
             "record" => {
                 let mut settings = self.settings.lock();
-                let record = value.get_some().expect("type checked upstream");
+                let record = value.get().expect("type checked upstream");
                 gst_debug!(
                     CAT,
                     obj: obj,

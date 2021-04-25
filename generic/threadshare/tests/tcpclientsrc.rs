@@ -79,7 +79,6 @@ fn test_push() {
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()
-            .unwrap()
             .unwrap();
 
         let mut samples = samples_clone.lock().unwrap();

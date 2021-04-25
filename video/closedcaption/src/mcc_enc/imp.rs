@@ -92,11 +92,7 @@ impl MccEnc {
             .sinkpad
             .current_caps()
             .ok_or(gst::FlowError::NotNegotiated)?;
-        let framerate = match caps
-            .structure(0)
-            .unwrap()
-            .get_some::<gst::Fraction>("framerate")
-        {
+        let framerate = match caps.structure(0).unwrap().get::<gst::Fraction>("framerate") {
             Ok(framerate) => framerate,
             Err(structure::GetError::FieldNotFound { .. }) => {
                 return Err(gst::FlowError::NotNegotiated);
@@ -371,7 +367,7 @@ impl MccEnc {
             EventView::Caps(ev) => {
                 let caps = ev.caps();
                 let s = caps.structure(0).unwrap();
-                let framerate = match s.get_some::<gst::Fraction>("framerate") {
+                let framerate = match s.get::<gst::Fraction>("framerate") {
                     Ok(framerate) => framerate,
                     Err(structure::GetError::FieldNotFound { .. }) => {
                         gst_error!(CAT, obj: pad, "Caps without framerate");

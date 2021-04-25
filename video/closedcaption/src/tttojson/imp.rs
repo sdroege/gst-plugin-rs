@@ -256,9 +256,7 @@ impl ObjectImpl for TtToJson {
         match pspec.name() {
             "mode" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.mode = value
-                    .get_some::<Cea608Mode>()
-                    .expect("type checked upstream");
+                settings.mode = value.get::<Cea608Mode>().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }

@@ -138,7 +138,7 @@ impl ObjectImpl for FileSink {
     ) {
         match pspec.name() {
             "location" => {
-                let res = match value.get::<String>() {
+                let res = match value.get::<Option<String>>() {
                     Ok(Some(location)) => FileLocation::try_from_path_str(location)
                         .and_then(|file_location| self.set_location(obj, Some(file_location))),
                     Ok(None) => self.set_location(obj, None),

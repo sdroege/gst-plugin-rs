@@ -148,9 +148,9 @@ impl AudioDecoderImpl for LewtonDec {
                 return Ok(());
             }
 
-            let ident_buf = streamheaders[0].get::<gst::Buffer>();
-            let comment_buf = streamheaders[1].get::<gst::Buffer>();
-            let setup_buf = streamheaders[2].get::<gst::Buffer>();
+            let ident_buf = streamheaders[0].get::<Option<gst::Buffer>>();
+            let comment_buf = streamheaders[1].get::<Option<gst::Buffer>>();
+            let setup_buf = streamheaders[2].get::<Option<gst::Buffer>>();
             if let (Ok(Some(ident_buf)), Ok(Some(comment_buf)), Ok(Some(setup_buf))) =
                 (ident_buf, comment_buf, setup_buf)
             {

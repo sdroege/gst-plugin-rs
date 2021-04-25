@@ -92,7 +92,6 @@ fn multiple_contexts_queue() {
                 .unwrap()
                 .unwrap()
                 .get::<gst::Sample>()
-                .unwrap()
                 .unwrap();
 
             sender_clone.send(()).unwrap();
@@ -251,7 +250,6 @@ fn multiple_contexts_proxy() {
                 .unwrap()
                 .unwrap()
                 .get::<gst::Sample>()
-                .unwrap()
                 .unwrap();
 
             sender_clone.send(()).unwrap();
@@ -370,7 +368,6 @@ fn eos() {
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()
-            .unwrap()
             .unwrap();
 
         sample_notifier.send(()).unwrap();
@@ -385,7 +382,7 @@ fn eos() {
         src.emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
             .unwrap()
             .unwrap()
-            .get_some::<bool>()
+            .get::<bool>()
             .unwrap()
     }
 
@@ -401,7 +398,7 @@ fn eos() {
             .emit_by_name("end-of-stream", &[])
             .unwrap()
             .unwrap()
-            .get_some::<bool>()
+            .get::<bool>()
             .unwrap());
 
         eos_notif_rcv.recv().unwrap();
@@ -514,7 +511,6 @@ fn premature_shutdown() {
             .unwrap()
             .unwrap()
             .get::<gst::Sample>()
-            .unwrap()
             .unwrap();
 
         appsink_sender.send(()).unwrap();
@@ -532,7 +528,7 @@ fn premature_shutdown() {
         src.emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
             .unwrap()
             .unwrap()
-            .get_some::<bool>()
+            .get::<bool>()
             .unwrap()
     }
 

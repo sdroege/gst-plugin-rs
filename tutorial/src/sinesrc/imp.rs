@@ -236,7 +236,7 @@ impl ObjectImpl for SineSrc {
         match pspec.name() {
             "samples-per-buffer" => {
                 let mut settings = self.settings.lock().unwrap();
-                let samples_per_buffer = value.get_some().expect("type checked upstream");
+                let samples_per_buffer = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -251,7 +251,7 @@ impl ObjectImpl for SineSrc {
             }
             "freq" => {
                 let mut settings = self.settings.lock().unwrap();
-                let freq = value.get_some().expect("type checked upstream");
+                let freq = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -263,7 +263,7 @@ impl ObjectImpl for SineSrc {
             }
             "volume" => {
                 let mut settings = self.settings.lock().unwrap();
-                let volume = value.get_some().expect("type checked upstream");
+                let volume = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -275,7 +275,7 @@ impl ObjectImpl for SineSrc {
             }
             "mute" => {
                 let mut settings = self.settings.lock().unwrap();
-                let mute = value.get_some().expect("type checked upstream");
+                let mute = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,
@@ -287,7 +287,7 @@ impl ObjectImpl for SineSrc {
             }
             "is-live" => {
                 let mut settings = self.settings.lock().unwrap();
-                let is_live = value.get_some().expect("type checked upstream");
+                let is_live = value.get().expect("type checked upstream");
                 gst_info!(
                     CAT,
                     obj: obj,

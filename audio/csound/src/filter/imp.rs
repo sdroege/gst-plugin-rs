@@ -390,12 +390,12 @@ impl ObjectImpl for CsoundFilter {
         match pspec.name() {
             "loop" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.loop_ = value.get_some().expect("type checked upstream");
+                settings.loop_ = value.get().expect("type checked upstream");
             }
             "location" => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
-                    settings.location = match value.get::<String>() {
+                    settings.location = match value.get::<Option<String>>() {
                         Ok(location) => location,
                         _ => unreachable!("type checked upstream"),
                     };
@@ -404,7 +404,7 @@ impl ObjectImpl for CsoundFilter {
             "csd-text" => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
-                    settings.csd_text = match value.get::<String>() {
+                    settings.csd_text = match value.get::<Option<String>>() {
                         Ok(text) => text,
                         _ => unreachable!("type checked upstream"),
                     };
@@ -412,7 +412,7 @@ impl ObjectImpl for CsoundFilter {
             }
             "score_offset" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.offset = value.get_some().expect("type checked upstream");
+                settings.offset = value.get().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
