@@ -9,7 +9,6 @@
 use glib::subclass::prelude::*;
 use gst::gst_debug;
 use gst::subclass::prelude::*;
-use gst_video::prelude::VideoDecoderExtManual;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use image::GenericImageView;
