@@ -421,8 +421,8 @@ impl<T: AggregatorImpl> AggregatorImplExt for T {
                 Some(f) => gst::result_from_gboolean!(
                     f(
                         aggregator.unsafe_cast_ref::<Aggregator>().to_glib_none().0,
-                        mode.to_glib(),
-                        active.to_glib()
+                        mode.into_glib(),
+                        active.into_glib()
                     ),
                     gst::CAT_RUST,
                     "Parent function `src_activate` failed"
@@ -444,7 +444,7 @@ impl<T: AggregatorImpl> AggregatorImplExt for T {
                 .expect("Missing parent function `aggregate`");
             gst::FlowReturn::from_glib(f(
                 aggregator.unsafe_cast_ref::<Aggregator>().to_glib_none().0,
-                timeout.to_glib(),
+                timeout.into_glib(),
             ))
             .into_result()
         }
@@ -656,7 +656,7 @@ unsafe extern "C" fn aggregator_flush<T: AggregatorImpl>(
     gst::panic_to_error!(&wrap, &imp.panicked(), gst::FlowReturn::Error, {
         imp.flush(wrap.unsafe_cast_ref()).into()
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_clip<T: AggregatorImpl>(
@@ -691,7 +691,7 @@ unsafe extern "C" fn aggregator_finish_buffer<T: AggregatorImpl>(
         imp.finish_buffer(wrap.unsafe_cast_ref(), from_glib_full(buffer))
             .into()
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_sink_event<T: AggregatorImpl>(
@@ -710,7 +710,7 @@ unsafe extern "C" fn aggregator_sink_event<T: AggregatorImpl>(
             from_glib_full(event),
         )
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_sink_event_pre_queue<T: AggregatorImpl>(
@@ -730,7 +730,7 @@ unsafe extern "C" fn aggregator_sink_event_pre_queue<T: AggregatorImpl>(
         )
         .into()
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_sink_query<T: AggregatorImpl>(
@@ -749,7 +749,7 @@ unsafe extern "C" fn aggregator_sink_query<T: AggregatorImpl>(
             gst::QueryRef::from_mut_ptr(query),
         )
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_sink_query_pre_queue<T: AggregatorImpl>(
@@ -768,7 +768,7 @@ unsafe extern "C" fn aggregator_sink_query_pre_queue<T: AggregatorImpl>(
             gst::QueryRef::from_mut_ptr(query),
         )
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_src_event<T: AggregatorImpl>(
@@ -782,7 +782,7 @@ unsafe extern "C" fn aggregator_src_event<T: AggregatorImpl>(
     gst::panic_to_error!(&wrap, &imp.panicked(), false, {
         imp.src_event(wrap.unsafe_cast_ref(), from_glib_full(event))
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_src_query<T: AggregatorImpl>(
@@ -796,7 +796,7 @@ unsafe extern "C" fn aggregator_src_query<T: AggregatorImpl>(
     gst::panic_to_error!(&wrap, &imp.panicked(), false, {
         imp.src_query(wrap.unsafe_cast_ref(), gst::QueryRef::from_mut_ptr(query))
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_src_activate<T: AggregatorImpl>(
@@ -817,7 +817,7 @@ unsafe extern "C" fn aggregator_src_activate<T: AggregatorImpl>(
             }
         }
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_aggregate<T: AggregatorImpl>(
@@ -832,7 +832,7 @@ unsafe extern "C" fn aggregator_aggregate<T: AggregatorImpl>(
         imp.aggregate(wrap.unsafe_cast_ref(), from_glib(timeout))
             .into()
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_start<T: AggregatorImpl>(
@@ -851,7 +851,7 @@ unsafe extern "C" fn aggregator_start<T: AggregatorImpl>(
             }
         }
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_stop<T: AggregatorImpl>(
@@ -870,7 +870,7 @@ unsafe extern "C" fn aggregator_stop<T: AggregatorImpl>(
             }
         }
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_get_next_time<T: AggregatorImpl>(
@@ -883,7 +883,7 @@ unsafe extern "C" fn aggregator_get_next_time<T: AggregatorImpl>(
     gst::panic_to_error!(&wrap, &imp.panicked(), gst::CLOCK_TIME_NONE, {
         imp.next_time(wrap.unsafe_cast_ref())
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_create_new_pad<T: AggregatorImpl>(
@@ -931,7 +931,7 @@ unsafe extern "C" fn aggregator_update_src_caps<T: AggregatorImpl>(
             Err(err) => err.into(),
         }
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_fixate_src_caps<T: AggregatorImpl>(
@@ -965,7 +965,7 @@ unsafe extern "C" fn aggregator_negotiated_src_caps<T: AggregatorImpl>(
             }
         }
     })
-    .to_glib()
+    .into_glib()
 }
 
 unsafe extern "C" fn aggregator_negotiate<T: AggregatorImpl>(
@@ -978,5 +978,5 @@ unsafe extern "C" fn aggregator_negotiate<T: AggregatorImpl>(
     gst::panic_to_error!(&wrap, &imp.panicked(), false, {
         imp.negotiate(wrap.unsafe_cast_ref())
     })
-    .to_glib()
+    .into_glib()
 }

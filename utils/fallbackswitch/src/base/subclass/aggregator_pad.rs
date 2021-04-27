@@ -125,7 +125,7 @@ unsafe extern "C" fn aggregator_pad_flush<T: AggregatorPadImpl>(
     let res: gst::FlowReturn = imp
         .flush(wrap.unsafe_cast_ref(), &from_glib_borrow(aggregator))
         .into();
-    res.to_glib()
+    res.into_glib()
 }
 
 unsafe extern "C" fn aggregator_pad_skip_buffer<T: AggregatorPadImpl>(
@@ -142,5 +142,5 @@ unsafe extern "C" fn aggregator_pad_skip_buffer<T: AggregatorPadImpl>(
         &from_glib_borrow(aggregator),
         &from_glib_borrow(buffer),
     )
-    .to_glib()
+    .into_glib()
 }

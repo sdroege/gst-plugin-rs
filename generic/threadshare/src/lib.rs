@@ -74,7 +74,7 @@ pub fn set_element_flags<T: glib::IsA<gst::Object> + glib::IsA<gst::Element>>(
     unsafe {
         let ptr: *mut gst::ffi::GstObject = element.as_ptr() as *mut _;
         let _guard = MutexGuard::lock(&(*ptr).lock);
-        (*ptr).flags |= flags.to_glib();
+        (*ptr).flags |= flags.into_glib();
     }
 }
 

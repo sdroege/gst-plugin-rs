@@ -38,11 +38,11 @@ unsafe impl glib::SendUnique for RTPJitterBuffer {
     }
 }
 
-impl ToGlib for RTPJitterBufferMode {
+impl IntoGlib for RTPJitterBufferMode {
     type GlibType = ffi::RTPJitterBufferMode;
 
-    fn to_glib(&self) -> ffi::RTPJitterBufferMode {
-        match *self {
+    fn into_glib(self) -> ffi::RTPJitterBufferMode {
+        match self {
             RTPJitterBufferMode::None => ffi::RTP_JITTER_BUFFER_MODE_NONE,
             RTPJitterBufferMode::Slave => ffi::RTP_JITTER_BUFFER_MODE_SLAVE,
             RTPJitterBufferMode::Buffer => ffi::RTP_JITTER_BUFFER_MODE_BUFFER,
@@ -88,8 +88,8 @@ impl RTPJitterBufferItem {
                     next: ptr::null_mut(),
                     prev: ptr::null_mut(),
                     r#type: 0,
-                    dts: dts.to_glib(),
-                    pts: pts.to_glib(),
+                    dts: dts.into_glib(),
+                    pts: pts.into_glib(),
                     seqnum: seqnum.map(|s| s as u32).unwrap_or(std::u32::MAX),
                     count: 1,
                     rtptime,
@@ -229,7 +229,7 @@ impl RTPJitterBuffer {
 
     #[allow(dead_code)]
     pub fn set_mode(&self, mode: RTPJitterBufferMode) {
-        unsafe { ffi::rtp_jitter_buffer_set_mode(self.to_glib_none().0, mode.to_glib()) }
+        unsafe { ffi::rtp_jitter_buffer_set_mode(self.to_glib_none().0, mode.into_glib()) }
     }
 
     #[allow(dead_code)]
@@ -238,7 +238,7 @@ impl RTPJitterBuffer {
     }
 
     pub fn set_delay(&self, delay: gst::ClockTime) {
-        unsafe { ffi::rtp_jitter_buffer_set_delay(self.to_glib_none().0, delay.to_glib()) }
+        unsafe { ffi::rtp_jitter_buffer_set_delay(self.to_glib_none().0, delay.into_glib()) }
     }
 
     pub fn set_clock_rate(&self, clock_rate: u32) {
@@ -262,12 +262,12 @@ impl RTPJitterBuffer {
         unsafe {
             let pts = ffi::rtp_jitter_buffer_calculate_pts(
                 self.to_glib_none().0,
-                dts.to_glib(),
-                estimated_dts.to_glib(),
+                dts.into_glib(),
+                estimated_dts.into_glib(),
                 rtptime,
-                base_time.to_glib(),
+                base_time.into_glib(),
                 gap,
-                is_rtx.to_glib(),
+                is_rtx.into_glib(),
             );
 
             if pts == gst::ffi::GST_CLOCK_TIME_NONE {
