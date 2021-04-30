@@ -38,15 +38,15 @@ $ gst-launch-1.0 \
 
 ## s3sink
 
-Writes data to a specified S3 bucket. The `region` parameter is optional, and
-if not specified, the default parameter will be used (from `.aws/config` file).
+Writes data to a specified S3 (region, bucket, object, version?) tuple. The
+version may be omitted.
 
 ```
 $ gst-launch-1.0 \
     videotestsrc ! \
     theoraenc ! \
     oggmux ! \
-    s3sink bucket=example-bucket key=my/file.ogv region=us-west-1
+    s3sink uri=s3://us-west-1/example-bucket/my/file.ogv?version=my-optional-version
 ```
 
 ## awstranscriber
