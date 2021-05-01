@@ -524,7 +524,7 @@ impl VideoEncoderImpl for Rav1Enc {
                     _ => color::ChromaSamplePosition::Unknown,
                 },
                 pixel_range: match video_info.colorimetry().range() {
-                    gst_video::VideoColorRange::Range0255 => color::PixelRange::Full,
+                    gst_video::VideoColorRange::Range0_255 => color::PixelRange::Full,
                     _ => color::PixelRange::Limited,
                 },
                 color_description: {
