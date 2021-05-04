@@ -199,12 +199,12 @@ impl Cea608Overlay {
             )
             .ok()?;
 
-            let cr = cairo::Context::new(&surface);
+            let cr = cairo::Context::new(&surface).ok()?;
 
             // Clear background
             cr.set_operator(cairo::Operator::Source);
             cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
-            cr.paint();
+            cr.paint().ok()?;
 
             // Render text outline
             cr.save().ok()?;
@@ -213,7 +213,7 @@ impl Cea608Overlay {
             cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
 
             pangocairo::functions::layout_path(&cr, &layout);
-            cr.stroke();
+            cr.stroke().ok()?;
             cr.restore().ok()?;
 
             // Render text
