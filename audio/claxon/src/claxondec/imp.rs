@@ -29,7 +29,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 struct State {
-    streaminfo: Option<claxon::metadata::StreamInfo>,
     audio_info: Option<gst_audio::AudioInfo>,
 }
 
@@ -112,10 +111,7 @@ impl AudioDecoderImpl for ClaxonDec {
     }
 
     fn start(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        *self.state.borrow_mut() = Some(State {
-            streaminfo: None,
-            audio_info: None,
-        });
+        *self.state.borrow_mut() = Some(State { audio_info: None });
 
         Ok(())
     }
@@ -123,7 +119,6 @@ impl AudioDecoderImpl for ClaxonDec {
     fn set_format(&self, element: &Self::Type, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
         gst_debug!(CAT, obj: element, "Setting format {:?}", caps);
 
-        let mut streaminfo: Option<claxon::metadata::StreamInfo> = None;
         let mut audio_info: Option<gst_audio::AudioInfo> = None;
 
         let s = caps.structure(0).unwrap();
@@ -145,7 +140,7 @@ impl AudioDecoderImpl for ClaxonDec {
                     if inmap[0..7] != [0x7f, b'F', b'L', b'A', b'C', 0x01, 0x00] {
                         gst_debug!(CAT, obj: element, "Unknown streamheader format");
                     } else if let Ok(tstreaminfo) = claxon_streaminfo(&inmap[13..]) {
-                        if let Ok(taudio_info) = gstaudioinfo(tstreaminfo) {
+                        if let Ok(taudio_info) = gstaudioinfo(&tstreaminfo) {
                             // To speed up negotiation
                             if element.set_output_format(&taudio_info).is_err()
                                 || element.negotiate().is_err()
@@ -158,7 +153,6 @@ impl AudioDecoderImpl for ClaxonDec {
                             }
 
                             audio_info = Some(taudio_info);
-                            streaminfo = Some(tstreaminfo);
                         }
                     }
                 }
@@ -166,10 +160,7 @@ impl AudioDecoderImpl for ClaxonDec {
         }
 
         let mut state_guard = self.state.borrow_mut();
-        *state_guard = Some(State {
-            streaminfo,
-            audio_info,
-        });
+        *state_guard = Some(State { audio_info });
 
         Ok(())
     }
@@ -229,7 +220,7 @@ impl ClaxonDec {
             gst::FlowError::Error
         })?;
 
-        let audio_info = gstaudioinfo(streaminfo).map_err(|e| {
+        let audio_info = gstaudioinfo(&streaminfo).map_err(|e| {
             gst::element_error!(element, gst::StreamError::Decode, [&e]);
             gst::FlowError::Error
         })?;
@@ -244,7 +235,6 @@ impl ClaxonDec {
         element.set_output_format(&audio_info)?;
         element.negotiate()?;
 
-        state.streaminfo = Some(streaminfo);
         state.audio_info = Some(audio_info);
 
         element.finish_frame(None, 1)
@@ -388,7 +378,7 @@ fn claxon_streaminfo(indata: &[u8]) -> Result<claxon::metadata::StreamInfo, &'st
     Ok(streaminfo)
 }
 
-fn gstaudioinfo(streaminfo: claxon::metadata::StreamInfo) -> Result<gst_audio::AudioInfo, String> {
+fn gstaudioinfo(streaminfo: &claxon::metadata::StreamInfo) -> Result<gst_audio::AudioInfo, String> {
     let format = match streaminfo.bits_per_sample {
         8 => gst_audio::AudioFormat::S8,
         16 => gst_audio::AUDIO_FORMAT_S16,
