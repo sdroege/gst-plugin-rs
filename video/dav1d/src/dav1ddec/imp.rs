@@ -138,14 +138,8 @@ impl Dav1dDec {
         frame: &gst_video::VideoCodecFrame,
     ) -> Result<Vec<(dav1d::Picture, gst_video::VideoFormat)>, gst::FlowError> {
         let mut decoder = self.decoder.lock().unwrap();
-        let timestamp = match frame.dts().0 {
-            Some(ts) => Some(ts as i64),
-            None => None,
-        };
-        let duration = match frame.duration().0 {
-            Some(d) => Some(d as i64),
-            None => None,
-        };
+        let timestamp = frame.dts().0.map(|ts| ts as i64);
+        let duration = frame.duration().0.map(|d| d as i64);
 
         let frame_number = Some(frame.system_frame_number() as i64);
         let input_data = input_buffer
