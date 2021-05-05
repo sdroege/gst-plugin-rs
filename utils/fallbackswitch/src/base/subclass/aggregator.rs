@@ -549,12 +549,12 @@ impl<T: AggregatorImpl> AggregatorImplExt for T {
                 .expect("Missing parent function `update_src_caps`");
 
             let mut out_caps = ptr::null_mut();
-            gst::FlowReturn::from_glib(f(
+            gst::FlowSuccess::try_from_glib(f(
                 aggregator.unsafe_cast_ref::<Aggregator>().to_glib_none().0,
                 caps.as_mut_ptr(),
                 &mut out_caps,
             ))
-            .into_result_value(|| from_glib_full(out_caps))
+            .map(|_| from_glib_full(out_caps))
         }
     }
 
