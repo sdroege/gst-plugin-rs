@@ -657,7 +657,7 @@ mod imp_sink {
                     "sender",
                     "Sender",
                     "Channel sender to forward the incoming items to",
-                    ItemSender::type_(),
+                    ItemSender::static_type(),
                     glib::ParamFlags::WRITABLE | glib::ParamFlags::CONSTRUCT_ONLY,
                 )]
             });
