@@ -155,7 +155,7 @@ impl ObjectSubclass for RegEx {
 impl ObjectImpl for RegEx {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::array(
+            vec![glib::ParamSpec::new_array(
                 "commands",
                 "Commands",
                 "A set of commands to apply on input text",
