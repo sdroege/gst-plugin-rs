@@ -356,7 +356,7 @@ impl URIHandlerImpl for FileSrc {
         settings.location.as_ref().map(|location| {
             Url::from_file_path(location)
                 .expect("FileSrc::get_uri couldn't build `Url` from `location`")
-                .into_string()
+                .into()
         })
     }
 
