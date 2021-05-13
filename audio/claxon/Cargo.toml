@@ -8,7 +8,7 @@ description = "Claxon FLAC Decoder Plugin"
 edition = "2018"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/gtk-rs" }
+glib = { git = "https://github.com/gtk-rs/gtk-rs-core" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 claxon = { version = "0.4" }

@@ -8,7 +8,7 @@ description = "rav1e AV1 Encoder Plugin"
 edition = "2018"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/gtk-rs" }
+glib = { git = "https://github.com/gtk-rs/gtk-rs-core" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
 rav1e = { version = "0.4", default-features = false }
