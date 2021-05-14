@@ -130,7 +130,7 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-git = [
   "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",
-  "https://github.com/gtk-rs/gtk-rs",
+  "https://github.com/gtk-rs/gtk-rs-core",
   "https://github.com/fengalin/tokio",
   "https://github.com/rust-av/flavors",
 ]
