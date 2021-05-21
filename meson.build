@@ -44,6 +44,7 @@ plugins = {
   'gst-plugin-lewton': 'libgstlewton',
   'gst-plugin-rav1e': 'libgstrav1e',
   'gst-plugin-reqwest': 'libgstreqwest',
+  'gst-plugin-hlssink3': 'libgsthlssink3',
   'gst-plugin-rspng': 'libgstrspng',
   'gst-plugin-rusoto': 'libgstrusoto',
   'gst-plugin-textwrap': 'libgstrstextwrap',

@@ -11,6 +11,7 @@ members = [
     "generic/file",
     "generic/sodium",
     "generic/threadshare",
+    "net/hlssink3",
     "net/reqwest",
     "net/rusoto",
     "utils/fallbackswitch",
