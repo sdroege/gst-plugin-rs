@@ -79,6 +79,7 @@ struct Settings {
     restart_on_eos: bool,
     min_latency: gst::ClockTime,
     buffer_duration: i64,
+    immediate_fallback: bool,
 }
 
 impl Default for Settings {
@@ -95,6 +96,7 @@ impl Default for Settings {
             restart_on_eos: false,
             min_latency: gst::ClockTime::ZERO,
             buffer_duration: -1,
+            immediate_fallback: false,
         }
     }
 }
@@ -286,6 +288,13 @@ impl ObjectImpl for FallbackSrc {
                     gst::Structure::static_type(),
                     glib::ParamFlags::READABLE,
                 ),
+                glib::ParamSpec::new_boolean(
+                    "immediate-fallback",
+                    "Immediate fallback",
+                    "Forward the fallback streams immediately at startup, when the primary streams are slow to start up and immediate output is required",
+                    false,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -432,6 +441,18 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.buffer_duration = new_value;
             }
+            "immediate-fallback" => {
+                let mut settings = self.settings.lock().unwrap();
+                let new_value = value.get().expect("type checked upstream");
+                gst_info!(
+                    CAT,
+                    obj: obj,
+                    "Changing immediate-fallback from {:?} to {:?}",
+                    settings.immediate_fallback,
+                    new_value,
+                );
+                settings.immediate_fallback = new_value;
+            }
             _ => unimplemented!(),
         }
     }
@@ -538,6 +559,10 @@ impl ObjectImpl for FallbackSrc {
                 settings.buffer_duration.to_value()
             }
             "statistics" => self.stats().to_value(),
+            "immediate-fallback" => {
+                let settings = self.settings.lock().unwrap();
+                settings.immediate_fallback.to_value()
+            }
             _ => unimplemented!(),
         }
     }
@@ -775,6 +800,7 @@ impl FallbackSrc {
         min_latency: gst::ClockTime,
         is_audio: bool,
         fallback_uri: Option<&str>,
+        immediate_fallback: bool,
     ) -> Stream {
         let fallback_input = if is_audio {
             self.create_fallback_audio_input(element)
@@ -819,6 +845,9 @@ impl FallbackSrc {
         switch.set_property("timeout", &timeout.nseconds()).unwrap();
         switch
             .set_property("min-upstream-latency", &min_latency.nseconds())
+            .unwrap();
+        switch
+            .set_property("immediate-fallback", &immediate_fallback)
             .unwrap();
 
         gst::Element::link_pads(&fallback_input, Some("src"), &switch, Some("fallback_sink"))
@@ -903,6 +932,7 @@ impl FallbackSrc {
                 settings.min_latency,
                 false,
                 fallback_uri.as_deref(),
+                settings.immediate_fallback,
             );
             flow_combiner.add_pad(&stream.srcpad);
             Some(stream)
@@ -912,8 +942,14 @@ impl FallbackSrc {
 
         // Create audio stream
         let audio_stream = if settings.enable_audio {
-            let stream =
-                self.create_stream(element, settings.timeout, settings.min_latency, true, None);
+            let stream = self.create_stream(
+                element,
+                settings.timeout,
+                settings.min_latency,
+                true,
+                None,
+                settings.immediate_fallback,
+            );
             flow_combiner.add_pad(&stream.srcpad);
             Some(stream)
         } else {

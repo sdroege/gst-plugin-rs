@@ -92,11 +92,13 @@ struct PadInputState {
 const DEFAULT_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(5);
 const DEFAULT_AUTO_SWITCH: bool = true;
 const DEFAULT_STREAM_HEALTH: StreamHealth = StreamHealth::Inactive;
+const DEFAULT_IMMEDIATE_FALLBACK: bool = false;
 
 #[derive(Debug, Clone)]
 struct Settings {
     timeout: gst::ClockTime,
     auto_switch: bool,
+    immediate_fallback: bool,
 }
 
 impl Default for StreamHealth {
@@ -120,6 +122,7 @@ impl Default for Settings {
         Settings {
             timeout: DEFAULT_TIMEOUT,
             auto_switch: DEFAULT_AUTO_SWITCH,
+            immediate_fallback: DEFAULT_IMMEDIATE_FALLBACK,
         }
     }
 }
@@ -411,39 +414,53 @@ impl FallbackSwitch {
             if state.last_output_time.is_none() {
                 state.last_output_time = running_time;
             }
-            if backup_pad == &self.primary_sinkpad {
-                state.primary.last_sinkpad_time = running_time;
-            } else {
-                state.fallback.last_sinkpad_time = running_time;
-            }
 
-            // Get the next one if this one is before the timeout
-            if state.last_output_time.zip(running_time).map_or(
-                false,
-                |(last_output_time, running_time)| {
-                    last_output_time + settings.timeout > running_time
-                },
-            ) {
+            // If the other pad never received a buffer, we want to start consuming
+            // buffers on this pad in order to provide an output at start up
+            // (for example with a slow primary)
+            let ignore_timeout = settings.immediate_fallback && {
+                if backup_pad == &self.primary_sinkpad {
+                    state.primary.last_sinkpad_time = running_time;
+                    state.fallback.last_sinkpad_time.is_none()
+                } else {
+                    state.fallback.last_sinkpad_time = running_time;
+                    state.primary.last_sinkpad_time.is_none()
+                }
+            };
+
+            if !ignore_timeout {
+                // Get the next one if this one is before the timeout
+                if state.last_output_time.zip(running_time).map_or(
+                    false,
+                    |(last_output_time, running_time)| {
+                        last_output_time + settings.timeout > running_time
+                    },
+                ) {
+                    gst_debug!(
+                        CAT,
+                        obj: backup_pad,
+                        "Timeout not reached yet: {} + {} > {}",
+                        state.last_output_time.display(),
+                        settings.timeout,
+                        running_time.display(),
+                    );
+                    continue;
+                }
                 gst_debug!(
                     CAT,
                     obj: backup_pad,
-                    "Timeout not reached yet: {} + {} > {}",
+                    "Timeout reached: {} + {} <= {}",
                     state.last_output_time.display(),
                     settings.timeout,
                     running_time.display(),
                 );
-
-                continue;
+            } else {
+                gst_debug!(
+                    CAT,
+                    obj: backup_pad,
+                    "Consuming buffer as we haven't yet received a buffer on the other pad",
+                );
             }
-
-            gst_debug!(
-                CAT,
-                obj: backup_pad,
-                "Timeout reached: {} + {} <= {}",
-                state.last_output_time.display(),
-                settings.timeout,
-                running_time.display(),
-            );
 
             let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
             let pad_change = settings.auto_switch
@@ -721,6 +738,13 @@ impl ObjectImpl for FallbackSwitch {
                     DEFAULT_STREAM_HEALTH as i32,
                     glib::ParamFlags::READABLE,
                 ),
+                glib::ParamSpec::new_boolean(
+                    "immediate-fallback",
+                    "Immediate fallback",
+                    "Forward the fallback stream immediately at startup, when the primary stream is slow to start up and immediate output is required",
+                    DEFAULT_AUTO_SWITCH,
+                    glib::ParamFlags::READWRITE| gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -779,6 +803,10 @@ impl ObjectImpl for FallbackSwitch {
                 let mut settings = self.settings.lock().unwrap();
                 settings.auto_switch = value.get().expect("type checked upstream");
             }
+            "immediate-fallback" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.immediate_fallback = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -804,6 +832,10 @@ impl ObjectImpl for FallbackSwitch {
             "fallback-health" => {
                 let state = self.output_state.lock().unwrap();
                 state.fallback.stream_health.to_value()
+            }
+            "immediate-fallback" => {
+                let settings = self.settings.lock().unwrap();
+                settings.immediate_fallback.to_value()
             }
             _ => unimplemented!(),
         }
