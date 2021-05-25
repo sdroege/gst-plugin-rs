@@ -30,15 +30,15 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 use super::ring_buffer::RingBuffer;
 
-const DEFAULT_MAX_DELAY: u64 = gst::SECOND_VAL;
-const DEFAULT_DELAY: u64 = 500 * gst::MSECOND_VAL;
+const DEFAULT_MAX_DELAY: gst::ClockTime = gst::ClockTime::SECOND;
+const DEFAULT_DELAY: gst::ClockTime = gst::ClockTime::from_seconds(500);
 const DEFAULT_INTENSITY: f64 = 0.5;
 const DEFAULT_FEEDBACK: f64 = 0.0;
 
 #[derive(Debug, Clone, Copy)]
 struct Settings {
-    pub max_delay: u64,
-    pub delay: u64,
+    pub max_delay: gst::ClockTime,
+    pub delay: gst::ClockTime,
     pub intensity: f64,
     pub feedback: f64,
 }
@@ -71,10 +71,10 @@ impl AudioEcho {
         state: &mut State,
         settings: &Settings,
     ) {
-        let delay_frames = (settings.delay as usize)
-            * (state.info.channels() as usize)
-            * (state.info.rate() as usize)
-            / (gst::SECOND_VAL as usize);
+        let delay_frames = (settings.delay
+            * (state.info.channels() as u64)
+            * (state.info.rate() as u64))
+            .seconds() as usize;
 
         for (i, (o, e)) in data.iter_mut().zip(state.buffer.iter(delay_frames)) {
             let inp = (*i).to_f64().unwrap();
@@ -99,8 +99,8 @@ impl ObjectImpl for AudioEcho {
                 glib::ParamSpec::new_uint64("max-delay",
                     "Maximum Delay",
                     "Maximum delay of the echo in nanoseconds (can't be changed in PLAYING or PAUSED state)",
-                    0, u64::MAX,
-                    DEFAULT_MAX_DELAY,
+                    0, u64::MAX - 1,
+                    DEFAULT_MAX_DELAY.nseconds(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::new_uint64(
@@ -108,8 +108,8 @@ impl ObjectImpl for AudioEcho {
                     "Delay",
                     "Delay of the echo in nanoseconds",
                     0,
-                    u64::MAX,
-                    DEFAULT_DELAY,
+                    u64::MAX - 1,
+                    DEFAULT_DELAY.nseconds(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::new_double(
@@ -147,12 +147,14 @@ impl ObjectImpl for AudioEcho {
             "max-delay" => {
                 let mut settings = self.settings.lock().unwrap();
                 if self.state.lock().unwrap().is_none() {
-                    settings.max_delay = value.get().expect("type checked upstream");
+                    settings.max_delay =
+                        gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
                 }
             }
             "delay" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.delay = value.get().expect("type checked upstream");
+                settings.delay =
+                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
             }
             "intensity" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -292,12 +294,12 @@ impl BaseTransformImpl for AudioEcho {
         let info = gst_audio::AudioInfo::from_caps(incaps)
             .map_err(|_| gst::loggable_error!(CAT, "Failed to parse input caps"))?;
         let max_delay = self.settings.lock().unwrap().max_delay;
-        let size = max_delay * (info.rate() as u64) / gst::SECOND_VAL;
-        let buffer_size = size * (info.channels() as u64);
+        let size = (max_delay * (info.rate() as u64)).seconds() as usize;
+        let buffer_size = size * (info.channels() as usize);
 
         *self.state.lock().unwrap() = Some(State {
             info,
-            buffer: RingBuffer::new(buffer_size as usize),
+            buffer: RingBuffer::new(buffer_size),
         });
 
         Ok(())

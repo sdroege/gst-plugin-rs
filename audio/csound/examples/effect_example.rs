@@ -106,7 +106,7 @@ fn main_loop(pipeline: gst::Pipeline) -> Result<(), Box<dyn Error>> {
         .bus()
         .expect("Pipeline without bus. Shouldn't happen!");
 
-    for msg in bus.iter_timed(gst::CLOCK_TIME_NONE) {
+    for msg in bus.iter_timed(gst::ClockTime::NONE) {
         use gst::MessageView;
 
         match msg.view() {

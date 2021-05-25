@@ -125,9 +125,9 @@ fn run_test(layout: gst_audio::AudioLayout, format: gst_audio::AudioFormat) {
                     let timestamp = s.get::<u64>("timestamp").unwrap();
                     let running_time = s.get::<u64>("running-time").unwrap();
                     let stream_time = s.get::<u64>("stream-time").unwrap();
-                    assert_eq!(timestamp, num_msgs * 500 * gst::MSECOND_VAL);
-                    assert_eq!(running_time, num_msgs * 500 * gst::MSECOND_VAL);
-                    assert_eq!(stream_time, num_msgs * 500 * gst::MSECOND_VAL);
+                    assert_eq!(timestamp, num_msgs * 500 * *gst::ClockTime::MSECOND);
+                    assert_eq!(running_time, num_msgs * 500 * *gst::ClockTime::MSECOND);
+                    assert_eq!(stream_time, num_msgs * 500 * *gst::ClockTime::MSECOND);
 
                     // Check if all these exist
                     let _momentary_loudness = s.get::<f64>("momentary-loudness").unwrap();

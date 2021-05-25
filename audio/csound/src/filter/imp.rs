@@ -103,11 +103,13 @@ impl State {
         self.adapter.available() < self.spin_capacity()
     }
 
-    fn samples_to_time(&self, samples: u64) -> gst::ClockTime {
-        gst::ClockTime(samples.mul_div_round(gst::SECOND_VAL, self.in_info.rate() as u64))
+    fn samples_to_time(&self, samples: u64) -> Option<gst::ClockTime> {
+        samples
+            .mul_div_round(*gst::ClockTime::SECOND, self.in_info.rate() as u64)
+            .map(gst::ClockTime::from_nseconds)
     }
 
-    fn current_pts(&self) -> gst::ClockTime {
+    fn current_pts(&self) -> Option<gst::ClockTime> {
         // get the last seen pts and the amount of bytes
         // since then
         let (prev_pts, distance) = self.adapter.prev_pts();
@@ -117,10 +119,12 @@ impl State {
         // can be added to the prev_pts to get the
         // pts at the beginning of the adapter.
         let samples = distance / self.in_info.bpf() as u64;
-        prev_pts + self.samples_to_time(samples)
+        prev_pts
+            .zip(self.samples_to_time(samples))
+            .map(|(prev_pts, time_offset)| prev_pts + time_offset)
     }
 
-    fn buffer_duration(&self, buffer_size: u64) -> gst::ClockTime {
+    fn buffer_duration(&self, buffer_size: u64) -> Option<gst::ClockTime> {
         let samples = buffer_size / self.out_info.bpf() as u64;
         self.samples_to_time(samples)
     }
@@ -265,8 +269,8 @@ impl CsoundFilter {
             CAT,
             obj: element,
             "Generating output at: {} - duration: {}",
-            pts,
-            duration
+            pts.display(),
+            duration.display(),
         );
 
         // Get the required amount of bytes to be read from

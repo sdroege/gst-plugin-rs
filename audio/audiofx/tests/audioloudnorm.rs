@@ -54,7 +54,7 @@ fn run_test(
         second_input = second_input,
         num_buffers = num_buffers,
         samples_per_buffer = samples_per_buffer,
-        output_buffer_duration = samples_per_buffer as u64 * gst::SECOND_VAL / 192_000,
+        output_buffer_duration = samples_per_buffer as u64 * *gst::ClockTime::SECOND / 192_000,
         format = format,
         ))
     } else {
@@ -102,7 +102,7 @@ fn run_test(
 
     let mut eos = false;
     let bus = pipeline.bus().unwrap();
-    while let Some(msg) = bus.timed_pop(gst::CLOCK_TIME_NONE) {
+    while let Some(msg) = bus.timed_pop(gst::ClockTime::NONE) {
         use gst::MessageView;
         match msg.view() {
             MessageView::Eos(..) => {
@@ -127,17 +127,17 @@ fn run_test(
     .unwrap();
 
     let mut num_samples = 0;
-    let mut expected_ts = gst::ClockTime::from(0);
+    let mut expected_ts = gst::ClockTime::ZERO;
     for sample in samples.iter() {
         use std::cmp::Ordering;
 
         let buf = sample.buffer().unwrap();
 
-        let ts = buf.pts();
+        let ts = buf.pts().expect("undefined pts");
         match ts.cmp(&expected_ts) {
             Ordering::Greater => {
                 assert!(
-                    ts - expected_ts <= gst::ClockTime::from(1),
+                    ts - expected_ts <= gst::ClockTime::NSECOND,
                     "TS is {} instead of {}",
                     ts,
                     expected_ts
@@ -145,7 +145,7 @@ fn run_test(
             }
             Ordering::Less => {
                 assert!(
-                    expected_ts - ts <= gst::ClockTime::from(1),
+                    expected_ts - ts <= gst::ClockTime::NSECOND,
                     "TS is {} instead of {}",
                     ts,
                     expected_ts
@@ -160,8 +160,7 @@ fn run_test(
         num_samples += data.len() / channels as usize;
         r128.add_frames_f64(data).unwrap();
 
-        expected_ts +=
-            gst::ClockTime::from((data.len() as u64 / channels as u64) * gst::SECOND_VAL / 192_000);
+        expected_ts += gst::ClockTime::from_seconds(data.len() as u64 / channels as u64) / 192_000;
     }
 
     assert_eq!(

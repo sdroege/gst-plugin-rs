@@ -52,16 +52,18 @@ pub struct AudioRNNoise {
 
 impl State {
     // The following three functions are copied from the csound filter.
-    fn buffer_duration(&self, buffer_size: u64) -> gst::ClockTime {
+    fn buffer_duration(&self, buffer_size: u64) -> Option<gst::ClockTime> {
         let samples = buffer_size / self.in_info.bpf() as u64;
         self.samples_to_time(samples)
     }
 
-    fn samples_to_time(&self, samples: u64) -> gst::ClockTime {
-        gst::ClockTime(samples.mul_div_round(gst::SECOND_VAL, self.in_info.rate() as u64))
+    fn samples_to_time(&self, samples: u64) -> Option<gst::ClockTime> {
+        samples
+            .mul_div_round(*gst::ClockTime::SECOND, self.in_info.rate() as u64)
+            .map(gst::ClockTime::from_nseconds)
     }
 
-    fn current_pts(&self) -> gst::ClockTime {
+    fn current_pts(&self) -> Option<gst::ClockTime> {
         // get the last seen pts and the amount of bytes
         // since then
         let (prev_pts, distance) = self.adapter.prev_pts();
@@ -71,7 +73,9 @@ impl State {
         // can be added to the prev_pts to get the
         // pts at the beginning of the adapter.
         let samples = distance / self.in_info.bpf() as u64;
-        prev_pts + self.samples_to_time(samples)
+        prev_pts
+            .zip(self.samples_to_time(samples))
+            .map(|(prev_pts, time_offset)| prev_pts + time_offset)
     }
 
     fn needs_more_data(&self) -> bool {
@@ -359,11 +363,12 @@ impl BaseTransformImpl for AudioRNNoise {
                         "Peer latency: live {} min {} max {}",
                         live,
                         min,
-                        max
+                        max.display(),
                     );
 
                     min += gst::ClockTime::from_seconds((FRAME_SIZE / 48000) as u64);
-                    max += gst::ClockTime::from_seconds((FRAME_SIZE / 48000) as u64);
+                    max = max
+                        .map(|max| max + gst::ClockTime::from_seconds((FRAME_SIZE / 48000) as u64));
                     q.set(live, min, max);
                     return true;
                 }

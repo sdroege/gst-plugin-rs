@@ -81,13 +81,13 @@ impl From<Mode> for ebur128::Mode {
 
 const DEFAULT_MODE: Mode = Mode::all();
 const DEFAULT_POST_MESSAGES: bool = true;
-const DEFAULT_INTERVAL: u64 = gst::SECOND_VAL;
+const DEFAULT_INTERVAL: gst::ClockTime = gst::ClockTime::SECOND;
 
 #[derive(Debug, Clone, Copy)]
 struct Settings {
     mode: Mode,
     post_messages: bool,
-    interval: u64,
+    interval: gst::ClockTime,
 }
 
 impl Default for Settings {
@@ -104,8 +104,8 @@ struct State {
     info: gst_audio::AudioInfo,
     ebur128: ebur128::EbuR128,
     num_frames: u64,
-    interval_frames: u64,
-    interval_frames_remaining: u64,
+    interval_frames: gst::ClockTime,
+    interval_frames_remaining: gst::ClockTime,
 }
 
 #[derive(Default)]
@@ -167,8 +167,8 @@ impl ObjectImpl for EbuR128Level {
                     "Interval",
                     "Interval in nanoseconds for posting messages",
                     0,
-                    u64::MAX,
-                    DEFAULT_INTERVAL,
+                    u64::MAX - 1,
+                    DEFAULT_INTERVAL.nseconds(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
             ]
@@ -209,13 +209,14 @@ impl ObjectImpl for EbuR128Level {
                 settings.post_messages = post_messages;
             }
             "interval" => {
-                let interval = value.get().expect("type checked upstream");
+                let interval =
+                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
                 gst_info!(
                     CAT,
                     obj: obj,
                     "Changing interval from {} to {}",
-                    gst::ClockTime::from(settings.interval),
-                    gst::ClockTime::from(interval)
+                    settings.interval,
+                    interval,
                 );
                 settings.interval = interval;
             }
@@ -396,7 +397,7 @@ impl BaseTransformImpl for EbuR128Level {
 
         let interval_frames = settings
             .interval
-            .mul_div_floor(info.rate() as u64, gst::SECOND_VAL)
+            .mul_div_floor(info.rate() as u64, *gst::ClockTime::SECOND)
             .unwrap();
 
         *self.state.borrow_mut() = Some(State {
@@ -459,7 +460,10 @@ impl BaseTransformImpl for EbuR128Level {
                 state.num_frames = 0;
             }
 
-            let to_process = u64::min(state.interval_frames_remaining, frames.num_frames() as u64);
+            let to_process = u64::min(
+                state.interval_frames_remaining.nseconds(),
+                frames.num_frames() as u64,
+            );
 
             frames
                 .process(to_process, &mut state.ebur128)
@@ -472,30 +476,25 @@ impl BaseTransformImpl for EbuR128Level {
                     gst::FlowError::Error
                 })?;
 
-            state.interval_frames_remaining -= to_process;
+            state.interval_frames_remaining -= gst::ClockTime::from_nseconds(to_process);
             state.num_frames += to_process;
 
             // The timestamp we report in messages is always the timestamp until which measurements
             // are included, not the starting timestamp.
-            timestamp += gst::ClockTime::from(
-                to_process
-                    .mul_div_floor(gst::SECOND_VAL, state.info.rate() as u64)
-                    .unwrap(),
-            );
+            timestamp = timestamp.map(|ts| {
+                ts + to_process
+                    .mul_div_floor(*gst::ClockTime::SECOND, state.info.rate() as u64)
+                    .map(gst::ClockTime::from_nseconds)
+                    .unwrap()
+            });
 
             // Post a message whenever an interval is full
-            if state.interval_frames_remaining == 0 {
+            if state.interval_frames_remaining.is_zero() {
                 state.interval_frames_remaining = state.interval_frames;
 
                 if settings.post_messages {
-                    let running_time = segment
-                        .as_ref()
-                        .map(|s| s.to_running_time(timestamp))
-                        .unwrap_or(gst::CLOCK_TIME_NONE);
-                    let stream_time = segment
-                        .as_ref()
-                        .map(|s| s.to_stream_time(timestamp))
-                        .unwrap_or(gst::CLOCK_TIME_NONE);
+                    let running_time = segment.as_ref().and_then(|s| s.to_running_time(timestamp));
+                    let stream_time = segment.as_ref().and_then(|s| s.to_stream_time(timestamp));
 
                     let mut s = gst::Structure::builder("ebur128-level")
                         .field("timestamp", &timestamp)

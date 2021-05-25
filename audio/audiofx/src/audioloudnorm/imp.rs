@@ -232,10 +232,10 @@ impl State {
         {
             let (pts, distance) = self.adapter.prev_pts();
             let distance_samples = distance / self.info.bpf() as u64;
-            let pts = pts
-                + gst::ClockTime::from(
-                    distance_samples.mul_div_floor(gst::SECOND_VAL, self.info.rate() as u64),
-                );
+            let distance_ts = distance_samples
+                .mul_div_floor(*gst::ClockTime::SECOND, self.info.rate() as u64)
+                .map(gst::ClockTime::from_nseconds);
+            let pts = pts.zip(distance_ts).map(|(pts, dist)| pts + dist);
 
             let inbuf = self
                 .adapter
@@ -253,8 +253,11 @@ impl State {
                 outbuf.set_pts(pts);
                 outbuf.set_duration(
                     (outbuf.size() as u64)
-                        .mul_div_floor(gst::SECOND_VAL, (self.info.bpf() * self.info.rate()) as u64)
-                        .into(),
+                        .mul_div_floor(
+                            *gst::ClockTime::SECOND,
+                            (self.info.bpf() * self.info.rate()) as u64,
+                        )
+                        .map(gst::ClockTime::from_nseconds),
                 );
             }
 
@@ -270,10 +273,10 @@ impl State {
 
         let (pts, distance) = self.adapter.prev_pts();
         let distance_samples = distance / self.info.bpf() as u64;
-        let pts = pts
-            + gst::ClockTime::from(
-                distance_samples.mul_div_floor(gst::SECOND_VAL, self.info.rate() as u64),
-            );
+        let distance_ts = distance_samples
+            .mul_div_floor(*gst::ClockTime::SECOND, self.info.rate() as u64)
+            .map(gst::ClockTime::from_nseconds);
+        let pts = pts.zip(distance_ts).map(|(pts, dist)| pts + dist);
 
         let mut _mapped_inbuf = None;
         let src = if self.adapter.available() > 0 {
@@ -310,8 +313,11 @@ impl State {
             outbuf.set_pts(pts);
             outbuf.set_duration(
                 (outbuf.size() as u64)
-                    .mul_div_floor(gst::SECOND_VAL, (self.info.bpf() * self.info.rate()) as u64)
-                    .into(),
+                    .mul_div_floor(
+                        *gst::ClockTime::SECOND,
+                        (self.info.bpf() * self.info.rate()) as u64,
+                    )
+                    .map(gst::ClockTime::from_nseconds),
             );
         }
 
@@ -370,8 +376,8 @@ impl State {
         &mut self,
         element: &super::AudioLoudNorm,
         src: &[f64],
-        pts: gst::ClockTime,
-    ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
+        pts: impl Into<Option<gst::ClockTime>>,
+    ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
         // Fill our whole buffer here with the initial input, i.e. 3000ms of samples.
         self.buf.copy_from_slice(src);
 
@@ -439,7 +445,7 @@ impl State {
 
         // PTS is the input PTS for the first frame, we output the first 100ms of the input
         // buffer here
-        Ok((outbuf, pts))
+        Ok((outbuf, pts.into()))
     }
 
     fn process_fill_inner_frame(&mut self, element: &super::AudioLoudNorm, src: &[f64]) {
@@ -600,8 +606,8 @@ impl State {
         &mut self,
         element: &super::AudioLoudNorm,
         src: &[f64],
-        pts: gst::ClockTime,
-    ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
+        pts: impl Into<Option<gst::ClockTime>>,
+    ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
         // Fill in these 100ms and adjust its gain according to previous measurements, and
         // at the same time copy 100ms over to the limiter_buf.
         self.process_fill_inner_frame(element, src);
@@ -632,7 +638,9 @@ impl State {
 
         // PTS is 2.9s seconds before the input PTS as we buffer 3s of samples and just
         // outputted here the first 100ms of that.
-        let pts = pts + 100 * gst::MSECOND - 3 * gst::SECOND;
+        let pts = pts
+            .into()
+            .map(|pts| pts + 100 * gst::ClockTime::MSECOND - 3 * gst::ClockTime::SECOND);
         Ok((outbuf, pts))
     }
 
@@ -693,8 +701,8 @@ impl State {
         &mut self,
         element: &super::AudioLoudNorm,
         src: &[f64],
-        pts: gst::ClockTime,
-    ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
+        pts: impl Into<Option<gst::ClockTime>>,
+    ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
         let channels = self.info.channels() as usize;
         let num_samples = src.len() / channels;
 
@@ -769,7 +777,9 @@ impl State {
 
         // PTS is 2.9s seconds before the input PTS as we buffer 3s of samples and just
         // outputted here the first 100ms of that.
-        let pts = pts + 100 * gst::MSECOND - 3 * gst::SECOND;
+        let pts = pts
+            .into()
+            .map(|pts| pts + 100 * gst::ClockTime::MSECOND - 3 * gst::ClockTime::SECOND);
         Ok((outbuf, pts))
     }
 
@@ -777,8 +787,8 @@ impl State {
         &mut self,
         element: &super::AudioLoudNorm,
         src: &[f64],
-        pts: gst::ClockTime,
-    ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
+        pts: impl Into<Option<gst::ClockTime>>,
+    ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
         // Apply a linear scale factor to the whole buffer
 
         gst_debug!(
@@ -807,15 +817,15 @@ impl State {
         }
 
         // PTS is input PTS as we just pass through the data without latency.
-        Ok((outbuf, pts))
+        Ok((outbuf, pts.into()))
     }
 
     fn process(
         &mut self,
         element: &super::AudioLoudNorm,
         src: &[f64],
-        pts: gst::ClockTime,
-    ) -> Result<(gst::Buffer, gst::ClockTime), gst::FlowError> {
+        pts: impl Into<Option<gst::ClockTime>>,
+    ) -> Result<(gst::Buffer, Option<gst::ClockTime>), gst::FlowError> {
         self.r128_in
             .add_frames_f64(src)
             .map_err(|_| gst::FlowError::Error)?;
@@ -1690,8 +1700,8 @@ impl AudioLoudNorm {
                     let (live, min_latency, max_latency) = peer_query.result();
                     q.set(
                         live,
-                        min_latency + 3 * gst::SECOND,
-                        max_latency + 3 * gst::SECOND,
+                        min_latency + 3 * gst::ClockTime::SECOND,
+                        max_latency.map(|max| max + 3 * gst::ClockTime::SECOND),
                     );
                     true
                 } else {

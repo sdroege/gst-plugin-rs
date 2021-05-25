@@ -73,8 +73,10 @@ fn build_harness(src_caps: gst::Caps, sink_caps: gst::Caps, csd: &str) -> gst_ch
     h
 }
 
-fn duration_from_samples(num_samples: u64, rate: u64) -> gst::ClockTime {
-    gst::ClockTime(num_samples.mul_div_round(gst::SECOND_VAL, rate))
+fn duration_from_samples(num_samples: u64, rate: u64) -> Option<gst::ClockTime> {
+    num_samples
+        .mul_div_round(*gst::ClockTime::SECOND, rate)
+        .map(gst::ClockTime::from_nseconds)
 }
 
 // This test verifies the well functioning of the EOS logic,
@@ -116,15 +118,16 @@ fn csound_filter_eos() {
     h.play();
 
     // The input buffer pts and duration
-    let mut in_pts = gst::ClockTime::zero();
-    let in_duration = duration_from_samples(EOS_NUM_SAMPLES as _, sr as _);
+    let mut in_pts = gst::ClockTime::ZERO;
+    let in_duration = duration_from_samples(EOS_NUM_SAMPLES as _, sr as _)
+        .expect("duration defined because sr is > 0");
     // The number of samples that were leftover during the previous iteration
     let mut samples_offset = 0;
     // Output samples and buffers counters
     let mut num_samples: usize = 0;
     let mut num_buffers = 0;
     // The expected pts of output buffers
-    let mut expected_pts = gst::ClockTime::zero();
+    let mut expected_pts = gst::ClockTime::ZERO;
 
     for _ in 0..EOS_NUM_BUFFERS {
         let mut buffer =
@@ -149,13 +152,14 @@ fn csound_filter_eos() {
             buffer.as_ref().duration(),
             duration_from_samples(in_process_samples, sr as _)
         );
-        assert_eq!(buffer.as_ref().pts(), expected_pts);
+        assert_eq!(buffer.as_ref().pts(), Some(expected_pts));
 
         // Get the number of samples that were not processed
         samples_offset = in_samples % ksmps as u64;
         // Calculates the next output buffer timestamp
-        expected_pts =
-            in_pts + duration_from_samples(EOS_NUM_SAMPLES as u64 - samples_offset, sr as _);
+        expected_pts = in_pts
+            + duration_from_samples(EOS_NUM_SAMPLES as u64 - samples_offset, sr as _)
+                .expect("duration defined because sr is > 0");
         // Calculates the next input buffer timestamp
         in_pts += in_duration;
 
@@ -177,7 +181,7 @@ fn csound_filter_eos() {
     let samples_at_eos = (EOS_NUM_BUFFERS * EOS_NUM_SAMPLES) % ksmps;
     assert_eq!(
         buffer.as_ref().pts(),
-        in_pts - duration_from_samples(samples_at_eos as _, sr as _)
+        duration_from_samples(samples_at_eos as _, sr as _).map(|duration| in_pts - duration)
     );
 
     let map = buffer.into_mapped_buffer_readable().unwrap();
@@ -226,8 +230,9 @@ fn csound_filter_underflow() {
     h.play();
 
     // Input buffers timestamp
-    let mut in_pts = gst::ClockTime::zero();
-    let in_samples_duration = duration_from_samples(UNDERFLOW_NUM_SAMPLES as _, sr as _);
+    let mut in_pts = gst::ClockTime::ZERO;
+    let in_samples_duration = duration_from_samples(UNDERFLOW_NUM_SAMPLES as _, sr as _)
+        .expect("duration defined because sr is > 0");
 
     for _ in 0..UNDERFLOW_NUM_BUFFERS {
         let mut buffer =
@@ -247,21 +252,22 @@ fn csound_filter_underflow() {
     let mut num_buffers = 0;
     let mut num_samples = 0;
 
-    let expected_duration = duration_from_samples(UNDERFLOW_NUM_SAMPLES as u64 * 2, sr as _);
+    let expected_duration = duration_from_samples(UNDERFLOW_NUM_SAMPLES as u64 * 2, sr as _)
+        .expect("duration defined because sr is > 0");
     let expected_buffers = UNDERFLOW_NUM_BUFFERS / 2;
-    let mut expected_pts = gst::ClockTime::zero();
+    let mut expected_pts = gst::ClockTime::ZERO;
 
     for _ in 0..expected_buffers {
         let buffer = h.pull().unwrap();
         let samples = buffer.size() / std::mem::size_of::<f64>();
 
-        assert_eq!(buffer.as_ref().pts(), expected_pts);
-        assert_eq!(buffer.as_ref().duration(), expected_duration);
+        assert_eq!(buffer.as_ref().pts(), Some(expected_pts));
+        assert_eq!(buffer.as_ref().duration(), Some(expected_duration));
         assert_eq!(samples, UNDERFLOW_NUM_SAMPLES * 2);
         // Output data is produced after 2 input buffers
         // so that, the next output buffer's PTS should be
         // equal to the last PTS plus the duration of 2 input buffers
-        expected_pts += in_samples_duration * 2;
+        expected_pts += 2 * in_samples_duration;
 
         num_buffers += 1;
         num_samples += samples;
