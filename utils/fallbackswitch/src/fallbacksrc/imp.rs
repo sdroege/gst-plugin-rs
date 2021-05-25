@@ -1142,9 +1142,9 @@ impl FallbackSrc {
             Some(state) => state,
         };
 
-        let (type_, stream) = match pad.name() {
-            x if x.starts_with("audio_") => ("audio", &mut state.audio_stream),
-            x if x.starts_with("video_") => ("video", &mut state.video_stream),
+        let (is_video, stream) = match pad.name() {
+            x if x.starts_with("audio_") => (false, &mut state.audio_stream),
+            x if x.starts_with("video_") => (true, &mut state.video_stream),
             _ => {
                 let caps = match pad.current_caps().unwrap_or_else(|| pad.query_caps(None)) {
                     caps if !caps.is_any() && !caps.is_empty() => caps,
@@ -1154,15 +1154,17 @@ impl FallbackSrc {
                 let s = caps.structure(0).unwrap();
 
                 if s.name().starts_with("audio/") {
-                    ("audio", &mut state.audio_stream)
+                    (false, &mut state.audio_stream)
                 } else if s.name().starts_with("video/") {
-                    ("video", &mut state.video_stream)
+                    (true, &mut state.video_stream)
                 } else {
                     // TODO: handle subtitles etc
                     return Ok(());
                 }
             }
         };
+
+        let type_ = if is_video { "video" } else { "audio" };
 
         let stream = match stream {
             None => {
@@ -1193,42 +1195,62 @@ impl FallbackSrc {
             )
         })?;
 
-        if state.settings.restart_on_eos {
-            let element_weak = element.downgrade();
-            pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |pad, info| {
-                let element = match element_weak.upgrade() {
-                    None => return gst::PadProbeReturn::Ok,
-                    Some(element) => element,
-                };
+        let element_weak = element.downgrade();
+        pad.add_probe(gst::PadProbeType::EVENT_DOWNSTREAM, move |pad, info| {
+            let element = match element_weak.upgrade() {
+                None => return gst::PadProbeReturn::Ok,
+                Some(element) => element,
+            };
 
-                let src = FallbackSrc::from_instance(&element);
+            let src = FallbackSrc::from_instance(&element);
 
-                match info.data {
-                    Some(gst::PadProbeData::Event(ref ev)) if ev.type_() == gst::EventType::Eos => {
-                        gst_debug!(
-                            CAT,
-                            obj: &element,
-                            "Received EOS from source on pad {}, restarting",
-                            pad.name()
-                        );
+            match info.data {
+                Some(gst::PadProbeData::Event(ref ev)) if ev.type_() == gst::EventType::Eos => {
+                    gst_debug!(
+                        CAT,
+                        obj: &element,
+                        "Received EOS from source on pad {}",
+                        pad.name()
+                    );
 
-                        let mut state_guard = src.state.lock().unwrap();
-                        let state = match &mut *state_guard {
-                            None => {
-                                return gst::PadProbeReturn::Ok;
-                            }
-                            Some(state) => state,
-                        };
+                    let mut state_guard = src.state.lock().unwrap();
+                    let state = match &mut *state_guard {
+                        None => {
+                            return gst::PadProbeReturn::Ok;
+                        }
+                        Some(state) => state,
+                    };
+                    if state.settings.restart_on_eos {
                         src.handle_source_error(&element, state, RetryReason::Eos);
                         drop(state_guard);
                         element.notify("statistics");
 
                         gst::PadProbeReturn::Drop
+                    } else {
+                        if let Some(other_stream) = {
+                            if is_video {
+                                state.audio_stream.as_ref()
+                            } else {
+                                state.video_stream.as_ref()
+                            }
+                        } {
+                            if other_stream.source_srcpad.is_none() {
+                                let fallback_input = &other_stream.fallback_input;
+                                let clocksync_queue_sinkpad =
+                                    other_stream.clocksync_queue.static_pad("sink").unwrap();
+                                fallback_input.call_async(move |fallback_input| {
+                                    fallback_input.send_event(gst::event::Eos::new());
+                                    clocksync_queue_sinkpad.send_event(gst::event::Eos::new());
+                                });
+                            }
+                        }
+
+                        gst::PadProbeReturn::Ok
                     }
-                    _ => gst::PadProbeReturn::Ok,
                 }
-            });
-        }
+                _ => gst::PadProbeReturn::Ok,
+            }
+        });
 
         assert!(stream.source_srcpad_block.is_none());
         stream.source_srcpad = Some(pad.clone());
@@ -1854,7 +1876,7 @@ impl FallbackSrc {
         state: &mut State,
         reason: RetryReason,
     ) {
-        gst_debug!(CAT, obj: element, "Handling source error");
+        gst_debug!(CAT, obj: element, "Handling source error: {:?}", reason);
 
         state.stats.last_retry_reason = reason;
         if state.source_pending_restart {
