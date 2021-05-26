@@ -30,6 +30,7 @@ git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package="gstreamer-check"
 
 [features]
+default = ["gst/ser_de"]
 # GStreamer 1.14 is required for static linking
-static = ["gst/v1_14"]
+static = ["default", "gst/v1_14"]
 

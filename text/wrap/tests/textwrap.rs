@@ -56,8 +56,8 @@ fn test_columns() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
 
-    assert_eq!(buf.pts(), 0.into());
-    assert_eq!(buf.duration(), 2 * gst::SECOND);
+    assert_eq!(buf.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(buf.duration(), Some(2 * gst::ClockTime::SECOND));
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
 
@@ -95,8 +95,8 @@ fn test_lines() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
 
-    assert_eq!(buf.pts(), 0.into());
-    assert_eq!(buf.duration(), gst::SECOND);
+    assert_eq!(buf.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(buf.duration(), Some(gst::ClockTime::SECOND));
 
     let expected_output = "Split\nthis";
 
@@ -109,8 +109,8 @@ fn test_lines() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
 
-    assert_eq!(buf.pts(), gst::SECOND);
-    assert_eq!(buf.duration(), gst::SECOND);
+    assert_eq!(buf.pts(), Some(gst::ClockTime::SECOND));
+    assert_eq!(buf.duration(), Some(gst::ClockTime::SECOND));
 
     let expected_output = "text\nup";
 

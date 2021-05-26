@@ -64,8 +64,8 @@ fn test_replace_all() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
 
-    assert_eq!(buf.pts(), 0.into());
-    assert_eq!(buf.duration(), 2 * gst::SECOND);
+    assert_eq!(buf.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(buf.duration(), Some(2 * gst::ClockTime::SECOND));
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
 

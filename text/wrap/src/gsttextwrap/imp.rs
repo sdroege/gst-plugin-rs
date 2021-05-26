@@ -15,6 +15,7 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use glib::translate::{from_glib, IntoGlib};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -48,7 +49,7 @@ struct Settings {
     dictionary: Option<String>,
     columns: u32,
     lines: u32,
-    accumulate_time: gst::ClockTime,
+    accumulate_time: Option<gst::ClockTime>,
 }
 
 impl Default for Settings {
@@ -57,7 +58,7 @@ impl Default for Settings {
             dictionary: DEFAULT_DICTIONARY,
             columns: DEFAULT_COLUMNS, /* CEA 608 max columns */
             lines: DEFAULT_LINES,
-            accumulate_time: gst::CLOCK_TIME_NONE,
+            accumulate_time: None,
         }
     }
 }
@@ -66,8 +67,8 @@ struct State {
     options: Option<textwrap::Options<'static, Box<dyn textwrap::WordSplitter + Send>>>,
 
     current_text: String,
-    start_ts: gst::ClockTime,
-    end_ts: gst::ClockTime,
+    start_ts: Option<gst::ClockTime>,
+    end_ts: Option<gst::ClockTime>,
 }
 
 impl Default for State {
@@ -76,8 +77,8 @@ impl Default for State {
             options: None,
 
             current_text: "".to_string(),
-            start_ts: gst::CLOCK_TIME_NONE,
-            end_ts: gst::CLOCK_TIME_NONE,
+            start_ts: None,
+            end_ts: None,
         }
     }
 }
@@ -145,25 +146,18 @@ impl TextWrap {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         self.update_wrapper(element);
 
-        let mut pts: gst::ClockTime = buffer
-            .pts()
-            .ok_or_else(|| {
-                gst_error!(CAT, obj: element, "Need timestamped buffers");
-                gst::FlowError::Error
-            })?
-            .into();
+        let mut pts = buffer.pts().ok_or_else(|| {
+            gst_error!(CAT, obj: element, "Need timestamped buffers");
+            gst::FlowError::Error
+        })?;
 
-        let duration: gst::ClockTime = buffer
-            .duration()
-            .ok_or_else(|| {
-                gst_error!(CAT, obj: element, "Need buffers with duration");
-                gst::FlowError::Error
-            })?
-            .into();
+        let duration = buffer.duration().ok_or_else(|| {
+            gst_error!(CAT, obj: element, "Need buffers with duration");
+            gst::FlowError::Error
+        })?;
 
         let data = buffer.map_readable().map_err(|_| {
             gst_error!(CAT, obj: element, "Can't map buffer readable");
-
             gst::FlowError::Error
         })?;
 
@@ -180,19 +174,30 @@ impl TextWrap {
             let mut bufferlist = gst::BufferList::new();
             let n_lines = std::cmp::max(self.settings.lock().unwrap().lines, 1);
 
-            if state.start_ts.is_some() && state.start_ts + accumulate_time < buffer.pts() {
+            if state
+                .start_ts
+                .zip(accumulate_time)
+                .map_or(false, |(start_ts, accumulate_time)| {
+                    start_ts + accumulate_time < pts
+                })
+            {
                 let mut buf = gst::Buffer::from_mut_slice(
                     mem::replace(&mut state.current_text, String::new()).into_bytes(),
                 );
                 {
                     let buf_mut = buf.get_mut().unwrap();
                     buf_mut.set_pts(state.start_ts);
-                    buf_mut.set_duration(state.end_ts - state.start_ts);
+                    buf_mut.set_duration(
+                        state
+                            .end_ts
+                            .zip(state.start_ts)
+                            .and_then(|(end_ts, start_ts)| end_ts.checked_sub(start_ts)),
+                    );
                 }
                 bufferlist.get_mut().unwrap().add(buf);
 
-                state.start_ts = gst::CLOCK_TIME_NONE;
-                state.end_ts = gst::CLOCK_TIME_NONE;
+                state.start_ts = None;
+                state.end_ts = None;
             }
 
             let duration_per_word: gst::ClockTime =
@@ -230,6 +235,10 @@ impl TextWrap {
                             .collect::<Vec<String>>()
                             .join("\n");
                     } else {
+                        let duration = state
+                            .end_ts
+                            .zip(state.start_ts)
+                            .and_then(|(end_ts, start_ts)| end_ts.checked_sub(start_ts));
                         let contents = chunk
                             .iter()
                             .map(|l| l.to_string())
@@ -240,14 +249,14 @@ impl TextWrap {
                             obj: element,
                             "Outputting contents {}, ts: {}, duration: {}",
                             contents.to_string(),
-                            state.start_ts,
-                            state.end_ts - state.start_ts
+                            state.start_ts.display(),
+                            duration.display(),
                         );
                         let mut buf = gst::Buffer::from_mut_slice(contents.into_bytes());
                         {
                             let buf_mut = buf.get_mut().unwrap();
                             buf_mut.set_pts(state.start_ts);
-                            buf_mut.set_duration(state.end_ts - state.start_ts);
+                            buf_mut.set_duration(duration);
                         }
                         bufferlist.get_mut().unwrap().add(buf);
                         state.start_ts = state.end_ts;
@@ -255,14 +264,14 @@ impl TextWrap {
                 }
 
                 current_text = trailing;
-                state.end_ts += duration_per_word;
+                state.end_ts = state.end_ts.map(|end_ts| end_ts + duration_per_word);
             }
 
             state.current_text = current_text;
 
             if state.current_text.is_empty() {
-                state.start_ts = gst::CLOCK_TIME_NONE;
-                state.end_ts = gst::CLOCK_TIME_NONE;
+                state.start_ts = None;
+                state.end_ts = None;
             }
 
             drop(state);
@@ -362,11 +371,16 @@ impl TextWrap {
                     {
                         let buf_mut = buf.get_mut().unwrap();
                         buf_mut.set_pts(state.start_ts);
-                        buf_mut.set_duration(state.end_ts - state.start_ts);
+                        buf_mut.set_duration(
+                            state
+                                .end_ts
+                                .zip(state.start_ts)
+                                .and_then(|(end_ts, start_ts)| end_ts.checked_sub(start_ts)),
+                        );
                     }
 
-                    state.start_ts = gst::CLOCK_TIME_NONE;
-                    state.end_ts = gst::CLOCK_TIME_NONE;
+                    state.start_ts = None;
+                    state.end_ts = None;
 
                     drop(state);
                     let _ = self.srcpad.push(buf);
@@ -402,8 +416,7 @@ impl TextWrap {
                         .lock()
                         .unwrap()
                         .accumulate_time
-                        .unwrap_or(0)
-                        .into();
+                        .unwrap_or(gst::ClockTime::ZERO);
                     gst_info!(
                         CAT,
                         obj: element,
@@ -411,7 +424,7 @@ impl TextWrap {
                         our_latency,
                         min
                     );
-                    q.set(live, our_latency + min, gst::CLOCK_TIME_NONE);
+                    q.set(live, our_latency + min, gst::ClockTime::NONE);
                 }
                 ret
             }
@@ -549,16 +562,14 @@ impl ObjectImpl for TextWrap {
             "accumulate-time" => {
                 let mut settings = self.settings.lock().unwrap();
                 let old_accumulate_time = settings.accumulate_time;
-                settings.accumulate_time = match value.get().expect("type checked upstream") {
-                    -1i64 => gst::CLOCK_TIME_NONE,
-                    time => (time as u64).into(),
-                };
+                settings.accumulate_time =
+                    unsafe { from_glib(value.get::<i64>().expect("type checked upstream")) };
                 if settings.accumulate_time != old_accumulate_time {
                     gst_debug!(
                         CAT,
                         obj: obj,
                         "Accumulate time changed: {}",
-                        settings.accumulate_time
+                        settings.accumulate_time.display(),
                     );
                     drop(settings);
                     let _ = obj.post_message(gst::message::Latency::builder().src(obj).build());
@@ -584,10 +595,7 @@ impl ObjectImpl for TextWrap {
             }
             "accumulate-time" => {
                 let settings = self.settings.lock().unwrap();
-                match settings.accumulate_time.0 {
-                    Some(time) => (time as i64).to_value(),
-                    None => (-1i64).to_value(),
-                }
+                settings.accumulate_time.into_glib().to_value()
             }
             _ => unimplemented!(),
         }

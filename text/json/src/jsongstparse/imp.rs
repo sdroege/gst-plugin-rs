@@ -43,7 +43,7 @@ struct PullState {
     need_stream_start: bool,
     stream_id: String,
     offset: u64,
-    duration: gst::ClockTime,
+    duration: Option<gst::ClockTime>,
 }
 
 impl PullState {
@@ -52,7 +52,7 @@ impl PullState {
             need_stream_start: true,
             stream_id: pad.create_stream_id(element, Some("src")).to_string(),
             offset: 0,
-            duration: gst::CLOCK_TIME_NONE,
+            duration: None,
         }
     }
 }
@@ -64,7 +64,7 @@ struct State {
     need_caps: bool,
     format: Option<String>,
     pending_events: Vec<gst::Event>,
-    last_position: gst::ClockTime,
+    last_position: Option<gst::ClockTime>,
     segment: gst::FormattedSegment<gst::ClockTime>,
 
     // Pull mode
@@ -87,7 +87,7 @@ impl Default for State {
             need_caps: true,
             format: None,
             pending_events: Vec::new(),
-            last_position: gst::CLOCK_TIME_NONE,
+            last_position: None,
             segment: gst::FormattedSegment::<gst::ClockTime>::new(),
             pull: None,
             seeking: false,
@@ -106,8 +106,8 @@ enum Line<'a> {
         format: String,
     },
     Buffer {
-        pts: u64,
-        duration: u64,
+        pts: Option<gst::ClockTime>,
+        duration: Option<gst::ClockTime>,
         #[serde(borrow)]
         data: &'a serde_json::value::RawValue,
     },
@@ -189,12 +189,12 @@ impl State {
         &mut self,
         _element: &super::JsonGstParse,
         buffer: &mut gst::buffer::Buffer,
-        pts: gst::ClockTime,
-        duration: gst::ClockTime,
+        pts: Option<gst::ClockTime>,
+        duration: Option<gst::ClockTime>,
     ) {
         let buffer = buffer.get_mut().unwrap();
 
-        self.last_position = pts + duration;
+        self.last_position = pts.zip(duration).map(|(pts, duration)| pts + duration);
 
         buffer.set_pts(pts);
 
@@ -252,12 +252,9 @@ impl JsonGstParse {
                         CAT,
                         obj: element,
                         "Got buffer with timestamp {} and duration {}",
-                        pts,
-                        duration
+                        pts.display(),
+                        duration.display(),
                     );
-
-                    let pts: gst::ClockTime = pts.into();
-                    let duration: gst::ClockTime = duration.into();
 
                     if !seeking {
                         let data = data.to_string().clone();
@@ -265,17 +262,24 @@ impl JsonGstParse {
 
                         let mut buffer = gst::Buffer::from_slice(data);
 
-                        if state.last_position < pts {
-                            events.push(gst::event::Gap::new(
-                                state.last_position,
-                                pts - state.last_position,
-                            ));
+                        if let Some(last_position) = state.last_position {
+                            if let Some(duration) = pts.map(|pts| pts.checked_sub(last_position)) {
+                                events.push(
+                                    gst::event::Gap::builder(last_position)
+                                        .duration(duration)
+                                        .build(),
+                                );
+                            }
                         }
 
                         state.add_buffer_metadata(element, &mut buffer, pts, duration);
 
-                        let send_eos = state.segment.stop().is_some()
-                            && buffer.pts() + buffer.duration() >= state.segment.stop();
+                        let send_eos = state
+                            .segment
+                            .stop()
+                            .zip(buffer.pts())
+                            .zip(buffer.duration())
+                            .map_or(false, |((stop, pts), duration)| pts + duration >= stop);
 
                         // Drop our state mutex while we push out buffers or events
                         drop(state);
@@ -339,10 +343,14 @@ impl JsonGstParse {
     fn handle_skipped_line(
         &self,
         element: &super::JsonGstParse,
-        pts: gst::ClockTime,
+        pts: impl Into<Option<gst::ClockTime>>,
         mut state: MutexGuard<State>,
     ) -> MutexGuard<State> {
-        if pts >= state.segment.start() {
+        if pts
+            .into()
+            .zip(state.segment.start())
+            .map_or(false, |(pts, start)| pts >= start)
+        {
             state.seeking = false;
             state.discont = true;
             state.replay_last_line = true;
@@ -445,9 +453,9 @@ impl JsonGstParse {
             ));
         }
 
-        let size = match q.result().try_into().unwrap() {
-            gst::format::Bytes(Some(size)) => size,
-            gst::format::Bytes(None) => {
+        let size = match q.result().try_into().ok().flatten() {
+            Some(gst::format::Bytes(size)) => size,
+            None => {
                 return Err(gst::loggable_error!(
                     CAT,
                     "Failed to query upstream duration"
@@ -495,7 +503,7 @@ impl JsonGstParse {
                     data: _data,
                 }) = serde_json::from_slice(&line)
                 {
-                    last_pts = Some((pts + duration).into());
+                    last_pts = pts.zip(duration).map(|(pts, duration)| pts + duration);
                 }
             }
 
@@ -549,15 +557,10 @@ impl JsonGstParse {
 
         if scan_duration {
             match self.scan_duration(element) {
-                Ok(Some(pts)) => {
+                Ok(pts) => {
                     let mut state = self.state.lock().unwrap();
                     let mut pull = state.pull.as_mut().unwrap();
                     pull.duration = pts;
-                }
-                Ok(None) => {
-                    let mut state = self.state.lock().unwrap();
-                    let mut pull = state.pull.as_mut().unwrap();
-                    pull.duration = 0.into();
                 }
                 Err(err) => {
                     err.log();
@@ -643,7 +646,7 @@ impl JsonGstParse {
         state.need_segment = true;
         state.need_caps = true;
         state.pending_events.clear();
-        state.last_position = 0.into();
+        state.last_position = None;
         state.last_raw_line = [].to_vec();
         state.format = None;
     }
@@ -702,7 +705,7 @@ impl JsonGstParse {
 
         let (rate, flags, start_type, start, stop_type, stop) = event.get();
 
-        let mut start: gst::ClockTime = match start.try_into() {
+        let mut start: Option<gst::ClockTime> = match start.try_into() {
             Ok(start) => start,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");
@@ -710,7 +713,7 @@ impl JsonGstParse {
             }
         };
 
-        let mut stop: gst::ClockTime = match stop.try_into() {
+        let mut stop: Option<gst::ClockTime> = match stop.try_into() {
             Ok(stop) => stop,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");
@@ -750,11 +753,17 @@ impl JsonGstParse {
         let pull = state.pull.as_ref().unwrap();
 
         if start_type == gst::SeekType::Set {
-            start = start.min(pull.duration).unwrap_or(start);
+            start = start
+                .zip(pull.duration)
+                .map(|(start, duration)| start.min(duration))
+                .or(start);
         }
 
         if stop_type == gst::SeekType::Set {
-            stop = stop.min(pull.duration).unwrap_or(stop);
+            stop = stop
+                .zip(pull.duration)
+                .map(|(stop, duration)| stop.min(duration))
+                .or(stop);
         }
 
         state.seeking = true;
@@ -817,7 +826,7 @@ impl JsonGstParse {
                     if let Some(pull) = state.pull.as_ref() {
                         q.set(
                             true,
-                            gst::GenericFormattedValue::Time(0.into()),
+                            gst::GenericFormattedValue::Time(Some(gst::ClockTime::ZERO)),
                             gst::GenericFormattedValue::Time(pull.duration),
                         );
                         true

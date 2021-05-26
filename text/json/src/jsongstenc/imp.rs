@@ -32,8 +32,8 @@ enum Line<'a> {
         format: String,
     },
     Buffer {
-        pts: i64,
-        duration: i64,
+        pts: Option<gst::ClockTime>,
+        duration: Option<gst::ClockTime>,
         #[serde(borrow)]
         data: &'a serde_json::value::RawValue,
     },
@@ -49,8 +49,8 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[derive(Debug)]
 struct State {
-    start_ts: gst::ClockTime,
-    end_ts: gst::ClockTime,
+    start_ts: Option<gst::ClockTime>,
+    end_ts: Option<gst::ClockTime>,
     current_line: String,
     format: Option<String>,
 }
@@ -58,8 +58,8 @@ struct State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            start_ts: gst::CLOCK_TIME_NONE,
-            end_ts: gst::CLOCK_TIME_NONE,
+            start_ts: None,
+            end_ts: None,
             current_line: "".to_string(),
             format: None,
         }
@@ -146,8 +146,8 @@ impl JsonGstEnc {
         })?;
 
         let line = Line::Buffer {
-            pts: pts.unwrap_or(std::u64::MAX) as i64,
-            duration: duration.unwrap_or(std::u64::MAX) as i64,
+            pts,
+            duration,
             data,
         };
 

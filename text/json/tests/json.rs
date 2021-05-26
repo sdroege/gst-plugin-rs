@@ -55,8 +55,8 @@ fn test_enc() {
     );
 
     let buf = h.pull().expect("Couldn't pull buffer");
-    assert_eq!(buf.pts(), 0.into());
-    assert_eq!(buf.duration(), 2 * gst::SECOND);
+    assert_eq!(buf.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(buf.duration(), Some(2 * gst::ClockTime::SECOND));
     let map = buf.map_readable().expect("Couldn't map buffer readable");
     assert_eq!(
         std::str::from_utf8(map.as_ref()),
@@ -98,7 +98,7 @@ fn test_parse() {
 
     let buf = h.pull().expect("Couldn't pull buffer");
     let map = buf.map_readable().expect("Couldn't map buffer readable");
-    assert_eq!(buf.pts(), 0.into());
-    assert_eq!(buf.duration(), 2 * gst::SECOND);
+    assert_eq!(buf.pts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(buf.duration(), Some(2 * gst::ClockTime::SECOND));
     assert_eq!(std::str::from_utf8(map.as_ref()), Ok("{\"foo\":42}"));
 }
