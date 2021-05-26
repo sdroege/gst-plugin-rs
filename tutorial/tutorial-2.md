@@ -31,14 +31,22 @@ use gst_base::subclass::prelude::*;
 
 use byte_slice_cast::*;
 
-use std::{i32, u32};
-use std::sync::Mutex;
 use std::ops::Rem;
+use std::sync::Mutex;
+use std::{i32, u32};
 
-use num_traits::float::Float;
 use num_traits::cast::NumCast;
+use num_traits::float::Float;
 
 use once_cell::sync::Lazy;
+
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "rssinesrc",
+        gst::DebugColorFlags::empty(),
+        Some("Rust Sine Wave Source"),
+    )
+});
 
 // Default values of properties
 const DEFAULT_SAMPLES_PER_BUFFER: u32 = 1024;
@@ -95,14 +103,6 @@ pub struct SineSrc {
     settings: Mutex<Settings>,
     state: Mutex<State>,
 }
-
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
-    gst::DebugCategory::new(
-        "rssinesrc",
-        gst::DebugColorFlags::empty(),
-        Some("Rust Sine Wave Source"),
-    )
-});
 
 #[glib::object_subclass]
 impl ObjectSubclass for SineSrc {
@@ -435,7 +435,7 @@ First of all, we need to get notified whenever the caps that our source is confi
         // in nanoseconds
         let old_rate = match state.info {
             Some(ref info) => info.rate() as u64,
-            None => gst::SECOND_VAL,
+            None => gst::ClockTime::SECOND,
         };
 
         // Update sample offset and accumulator based on the previous values and the
@@ -611,13 +611,13 @@ Now that this is done, we need to implement the `PushSrc::create` virtual meth
             // simply the number of samples to prevent rounding errors
             let pts = state
                 .sample_offset
-                .mul_div_floor(gst::SECOND_VAL, info.rate() as u64)
-                .unwrap()
-                .into();
-            let next_pts: gst::ClockTime = (state.sample_offset + n_samples)
-                .mul_div_floor(gst::SECOND_VAL, info.rate() as u64)
-                .unwrap()
-                .into();
+                .mul_div_floor(gst::ClockTime::SECOND, info.rate() as u64)
+                .map(gst::ClockTime::from_nseconds)
+                .unwrap();
+            let next_pts = (state.sample_offset + n_samples)
+                .mul_div_floor(*gst::ClockTime::SECOND, info.rate() as u64)
+                .map(gst::ClockTime::from_nseconds)
+                .unwrap();
             buffer.set_pts(pts);
             buffer.set_duration(next_pts - pts);
 
@@ -698,19 +698,24 @@ For working in live mode, we have to add a few different parts in various places
                 Some(clock) => clock,
             };
 
-            let segment = element
-                .get_segment()
-                .downcast::<gst::format::Time>()
-                .unwrap();
-            let base_time = element.get_base_time();
-            let running_time = segment.to_running_time(buffer.get_pts() + buffer.get_duration());
+            let segment = element.segment().downcast::<gst::format::Time>().unwrap();
+            let base_time = element.base_time();
+            let running_time = segment.to_running_time(
+                buffer
+                    .pts()
+                    .zip(buffer.duration())
+                    .map(|(pts, duration)| pts + duration),
+            );
 
             // The last sample's clock time is the base time of the element plus the
             // running time of the last sample
-            let wait_until = running_time + base_time;
-            if wait_until.is_none() {
-                return Ok(buffer);
-            }
+            let wait_until = match running_time
+                .zip(base_time)
+                .map(|(running_time, base_time)| running_time + base_time)
+            {
+                Some(wait_until) => wait_until,
+                None => return Ok(buffer),
+            };
 
             let id = clock.new_single_shot_id(wait_until);
 
@@ -719,7 +724,7 @@ For working in live mode, we have to add a few different parts in various places
                 obj: element,
                 "Waiting until {}, now {}",
                 wait_until,
-                clock.get_time()
+                clock.get_time().display(),
             );
             let (res, jitter) = id.wait();
             gst_log!(
@@ -782,11 +787,11 @@ This querying is done with the `LATENCY` query, which we will have to handle i
                 let state = self.state.lock().unwrap();
 
                 if let Some(ref info) = state.info {
-                    let latency = gst::SECOND
+                    let latency = gst::ClockTime::SECOND
                         .mul_div_floor(settings.samples_per_buffer as u64, info.rate() as u64)
                         .unwrap();
                     gst_debug!(CAT, obj: element, "Returning latency {}", latency);
-                    q.set(settings.is_live, latency, gst::CLOCK_TIME_NONE);
+                    q.set(settings.is_live, latency, gst::ClockTime::NONE);
                     true
                 } else {
                     false
@@ -889,7 +894,7 @@ Now as a last step, we need to actually make use of the new struct we added arou
                 obj: element,
                 "Waiting until {}, now {}",
                 wait_until,
-                clock.get_time()
+                clock.get_time().display(),
             );
             let (res, jitter) = id.wait();
             gst_log!(
@@ -944,7 +949,7 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
         // don't know any sample rate yet. It will be converted correctly
         // once a sample rate is known.
         let rate = match state.info {
-            None => gst::SECOND_VAL,
+            None => *gst::ClockTime::SECOND,
             Some(ref info) => info.rate() as u64,
         };
 
@@ -954,12 +959,12 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
             let sample_offset = segment
                 .get_start()
                 .unwrap()
-                .mul_div_floor(rate, gst::SECOND_VAL)
+                .mul_div_floor(rate, *gst::ClockTime::SECOND)
                 .unwrap();
 
             let sample_stop = segment
                 .get_stop()
-                .map(|v| v.mul_div_floor(rate, gst::SECOND_VAL).unwrap());
+                .map(|v| v.mul_div_floor(rate, *gst::ClockTime::SECOND).unwrap());
 
             let accumulator =
                 (sample_offset as f64).rem(2.0 * PI * (settings.freq as f64) / (rate as f64));
@@ -994,8 +999,8 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
                 return false;
             }
 
-            let sample_offset = segment.get_start().unwrap();
-            let sample_stop = segment.get_stop().0;
+            let sample_offset = *segment.start().unwrap();
+            let sample_stop = segment.stop().map(|stop| *stop);
 
             let accumulator =
                 (sample_offset as f64).rem(2.0 * PI * (settings.freq as f64) / (rate as f64));

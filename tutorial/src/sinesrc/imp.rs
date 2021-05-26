@@ -432,7 +432,7 @@ impl BaseSrcImpl for SineSrc {
         // in nanoseconds
         let old_rate = match state.info {
             Some(ref info) => info.rate() as u64,
-            None => gst::SECOND_VAL,
+            None => *gst::ClockTime::SECOND,
         };
 
         // Update sample offset and accumulator based on the previous values and the
@@ -497,11 +497,11 @@ impl BaseSrcImpl for SineSrc {
                 let state = self.state.lock().unwrap();
 
                 if let Some(ref info) = state.info {
-                    let latency = gst::SECOND
+                    let latency = gst::ClockTime::SECOND
                         .mul_div_floor(settings.samples_per_buffer as u64, info.rate() as u64)
                         .unwrap();
                     gst_debug!(CAT, obj: element, "Returning latency {}", latency);
-                    q.set(settings.is_live, latency, gst::CLOCK_TIME_NONE);
+                    q.set(settings.is_live, latency, gst::ClockTime::NONE);
                     true
                 } else {
                     false
@@ -556,7 +556,7 @@ impl BaseSrcImpl for SineSrc {
         // don't know any sample rate yet. It will be converted correctly
         // once a sample rate is known.
         let rate = match state.info {
-            None => gst::SECOND_VAL,
+            None => *gst::ClockTime::SECOND,
             Some(ref info) => info.rate() as u64,
         };
 
@@ -566,12 +566,13 @@ impl BaseSrcImpl for SineSrc {
             let sample_offset = segment
                 .start()
                 .unwrap()
-                .mul_div_floor(rate, gst::SECOND_VAL)
+                .nseconds()
+                .mul_div_floor(rate, *gst::ClockTime::SECOND)
                 .unwrap();
 
             let sample_stop = segment
                 .stop()
-                .map(|v| v.mul_div_floor(rate, gst::SECOND_VAL).unwrap());
+                .and_then(|v| v.nseconds().mul_div_floor(rate, *gst::ClockTime::SECOND));
 
             let accumulator =
                 (sample_offset as f64).rem(2.0 * PI * (settings.freq as f64) / (rate as f64));
@@ -606,8 +607,8 @@ impl BaseSrcImpl for SineSrc {
                 return false;
             }
 
-            let sample_offset = segment.start().unwrap();
-            let sample_stop = segment.stop().0;
+            let sample_offset = *segment.start().unwrap();
+            let sample_stop = segment.stop().map(|stop| *stop);
 
             let accumulator =
                 (sample_offset as f64).rem(2.0 * PI * (settings.freq as f64) / (rate as f64));
@@ -710,13 +711,13 @@ impl PushSrcImpl for SineSrc {
             // simply the number of samples to prevent rounding errors
             let pts = state
                 .sample_offset
-                .mul_div_floor(gst::SECOND_VAL, info.rate() as u64)
-                .unwrap()
-                .into();
-            let next_pts: gst::ClockTime = (state.sample_offset + n_samples)
-                .mul_div_floor(gst::SECOND_VAL, info.rate() as u64)
-                .unwrap()
-                .into();
+                .mul_div_floor(*gst::ClockTime::SECOND, info.rate() as u64)
+                .map(gst::ClockTime::from_nseconds)
+                .unwrap();
+            let next_pts = (state.sample_offset + n_samples)
+                .mul_div_floor(*gst::ClockTime::SECOND, info.rate() as u64)
+                .map(gst::ClockTime::from_nseconds)
+                .unwrap();
             buffer.set_pts(pts);
             buffer.set_duration(next_pts - pts);
 
@@ -764,14 +765,22 @@ impl PushSrcImpl for SineSrc {
 
             let segment = element.segment().downcast::<gst::format::Time>().unwrap();
             let base_time = element.base_time();
-            let running_time = segment.to_running_time(buffer.pts() + buffer.duration());
+            let running_time = segment.to_running_time(
+                buffer
+                    .pts()
+                    .zip(buffer.duration())
+                    .map(|(pts, duration)| pts + duration),
+            );
 
             // The last sample's clock time is the base time of the element plus the
             // running time of the last sample
-            let wait_until = running_time + base_time;
-            if wait_until.is_none() {
-                return Ok(buffer);
-            }
+            let wait_until = match running_time
+                .zip(base_time)
+                .map(|(running_time, base_time)| running_time + base_time)
+            {
+                Some(wait_until) => wait_until,
+                None => return Ok(buffer),
+            };
 
             // Store the clock ID in our struct unless we're flushing anyway.
             // This allows to asynchronously cancel the waiting from unlock()
@@ -791,7 +800,7 @@ impl PushSrcImpl for SineSrc {
                 obj: element,
                 "Waiting until {}, now {}",
                 wait_until,
-                clock.time()
+                clock.time().display(),
             );
             let (res, jitter) = id.wait();
             gst_log!(CAT, obj: element, "Waited res {:?} jitter {}", res, jitter);
