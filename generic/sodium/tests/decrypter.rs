@@ -119,7 +119,7 @@ fn test_pipeline() {
         .expect("Unable to set the pipeline to the `Playing` state");
 
     let bus = pipeline.bus().unwrap();
-    for msg in bus.iter_timed(gst::CLOCK_TIME_NONE) {
+    for msg in bus.iter_timed(gst::ClockTime::NONE) {
         use gst::MessageView;
         match msg.view() {
             MessageView::Error(err) => {
@@ -200,11 +200,11 @@ fn test_pull_range() {
     assert_eq!(seekable, true);
     assert_eq!(
         start,
-        gst::GenericFormattedValue::Bytes(gst::format::Bytes(Some(0)))
+        gst::GenericFormattedValue::Bytes(Some(gst::format::Bytes(0)))
     );
     assert_eq!(
         stop,
-        gst::GenericFormattedValue::Bytes(gst::format::Bytes(Some(6043)))
+        gst::GenericFormattedValue::Bytes(Some(gst::format::Bytes(6043)))
     );
 
     // do pulls

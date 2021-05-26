@@ -31,13 +31,15 @@ use once_cell::sync::Lazy;
 use std::convert::TryInto;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
+use std::time::Duration;
 use std::u32;
 
 use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task, TaskState};
 
 const DEFAULT_CONTEXT: &str = "";
-const DEFAULT_CONTEXT_WAIT: u32 = 0;
+// FIXME use Duration::ZERO when MSVC >= 1.53.2
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_MAX_BUFFERS: u32 = 10;
 const DEFAULT_DO_TIMESTAMP: bool = false;
@@ -45,7 +47,7 @@ const DEFAULT_DO_TIMESTAMP: bool = false;
 #[derive(Debug, Clone)]
 struct Settings {
     context: String,
-    context_wait: u32,
+    context_wait: Duration,
     caps: Option<gst::Caps>,
     max_buffers: u32,
     do_timestamp: bool,
@@ -223,7 +225,7 @@ impl PadSrcHandler for AppSrcPadHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                q.set(true, 0.into(), gst::CLOCK_TIME_NONE);
+                q.set(true, gst::ClockTime::ZERO, gst::ClockTime::NONE);
                 true
             }
             QueryView::Scheduling(ref mut q) => {
@@ -389,8 +391,11 @@ impl AppSrc {
                 let now = clock.time();
 
                 let buffer = buffer.make_mut();
-                buffer.set_dts(now - base_time);
-                buffer.set_pts(gst::CLOCK_TIME_NONE);
+                buffer.set_dts(
+                    now.zip(base_time)
+                        .and_then(|(now, base_time)| now.checked_sub(base_time)),
+                );
+                buffer.set_pts(None);
             } else {
                 gst_error!(CAT, obj: element, "Don't have a clock yet");
                 return false;
@@ -540,7 +545,7 @@ impl ObjectImpl for AppSrc {
                     "Throttle poll loop to run at most once every this many ms",
                     0,
                     1000,
-                    DEFAULT_CONTEXT_WAIT,
+                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
                 glib::ParamSpec::new_uint(
@@ -620,7 +625,9 @@ impl ObjectImpl for AppSrc {
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get().expect("type checked upstream");
+                settings.context_wait = Duration::from_millis(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
             }
             "caps" => {
                 settings.caps = value.get().expect("type checked upstream");
@@ -639,7 +646,7 @@ impl ObjectImpl for AppSrc {
         let settings = self.settings.lock().unwrap();
         match pspec.name() {
             "context" => settings.context.to_value(),
-            "context-wait" => settings.context_wait.to_value(),
+            "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
             "caps" => settings.caps.to_value(),
             "max-buffers" => settings.max_buffers.to_value(),
             "do-timestamp" => settings.do_timestamp.to_value(),

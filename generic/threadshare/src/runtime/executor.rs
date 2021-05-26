@@ -166,7 +166,7 @@ struct ContextThread {
 }
 
 impl ContextThread {
-    fn start(name: &str, wait: u32) -> Context {
+    fn start(name: &str, wait: Duration) -> Context {
         let context_thread = ContextThread { name: name.into() };
         let (context_sender, context_receiver) = sync_mpsc::channel();
         let join = thread::spawn(move || {
@@ -187,14 +187,14 @@ impl ContextThread {
         context
     }
 
-    fn spawn(&self, wait: u32, context_sender: sync_mpsc::Sender<Context>) {
+    fn spawn(&self, wait: Duration, context_sender: sync_mpsc::Sender<Context>) {
         gst_debug!(RUNTIME_CAT, "Started context thread '{}'", self.name);
 
         let mut runtime = tokio::runtime::Builder::new()
             .basic_scheduler()
             .thread_name(self.name.clone())
             .enable_all()
-            .max_throttling(Duration::from_millis(wait as u64))
+            .max_throttling(wait)
             .build()
             .expect("Couldn't build the runtime");
 
@@ -406,7 +406,7 @@ impl PartialEq for Context {
 impl Eq for Context {}
 
 impl Context {
-    pub fn acquire(context_name: &str, wait: u32) -> Result<Self, io::Error> {
+    pub fn acquire(context_name: &str, wait: Duration) -> Result<Self, io::Error> {
         assert_ne!(context_name, "DUMMY");
 
         let mut contexts = CONTEXTS.lock().unwrap();
@@ -693,16 +693,16 @@ mod tests {
 
     type Item = i32;
 
-    const SLEEP_DURATION_MS: u32 = 2;
-    const SLEEP_DURATION: Duration = Duration::from_millis(SLEEP_DURATION_MS as u64);
-    const DELAY: Duration = Duration::from_millis(SLEEP_DURATION_MS as u64 * 10);
+    const SLEEP_DURATION_MS: u64 = 2;
+    const SLEEP_DURATION: Duration = Duration::from_millis(SLEEP_DURATION_MS);
+    const DELAY: Duration = Duration::from_millis(SLEEP_DURATION_MS * 10);
 
     #[tokio::test]
     async fn drain_sub_tasks() {
         // Setup
         gst::init().unwrap();
 
-        let context = Context::acquire("drain_sub_tasks", SLEEP_DURATION_MS).unwrap();
+        let context = Context::acquire("drain_sub_tasks", SLEEP_DURATION).unwrap();
 
         let join_handle = context.spawn(async move {
             let (sender, mut receiver) = mpsc::channel(1);
@@ -755,7 +755,7 @@ mod tests {
     async fn block_on_within_tokio() {
         gst::init().unwrap();
 
-        let context = Context::acquire("block_on_within_tokio", SLEEP_DURATION_MS).unwrap();
+        let context = Context::acquire("block_on_within_tokio", SLEEP_DURATION).unwrap();
 
         let bytes_sent = crate::runtime::executor::block_on(context.spawn(async {
             let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
@@ -781,7 +781,7 @@ mod tests {
     fn block_on_from_sync() {
         gst::init().unwrap();
 
-        let context = Context::acquire("block_on_from_sync", SLEEP_DURATION_MS).unwrap();
+        let context = Context::acquire("block_on_from_sync", SLEEP_DURATION).unwrap();
 
         let bytes_sent = crate::runtime::executor::block_on(context.spawn(async {
             let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5001);
@@ -807,7 +807,7 @@ mod tests {
     fn block_on_from_context() {
         gst::init().unwrap();
 
-        let context = Context::acquire("block_on_from_context", SLEEP_DURATION_MS).unwrap();
+        let context = Context::acquire("block_on_from_context", SLEEP_DURATION).unwrap();
         let join_handle = context.spawn(async {
             crate::runtime::executor::block_on(async {
                 crate::runtime::time::delay_for(DELAY).await;
@@ -821,7 +821,7 @@ mod tests {
     async fn enter_context_from_tokio() {
         gst::init().unwrap();
 
-        let context = Context::acquire("enter_context_from_tokio", SLEEP_DURATION_MS).unwrap();
+        let context = Context::acquire("enter_context_from_tokio", SLEEP_DURATION).unwrap();
         let mut socket = context
             .enter(|| {
                 let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5002);
@@ -849,7 +849,7 @@ mod tests {
     fn enter_context_from_sync() {
         gst::init().unwrap();
 
-        let context = Context::acquire("enter_context_from_sync", SLEEP_DURATION_MS).unwrap();
+        let context = Context::acquire("enter_context_from_sync", SLEEP_DURATION).unwrap();
         let mut socket = context
             .enter(|| {
                 let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5003);

@@ -31,6 +31,7 @@ use std::io;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
+use std::time::Duration;
 use std::u16;
 use std::u32;
 
@@ -47,7 +48,8 @@ const DEFAULT_PORT: i32 = 4953;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_BLOCKSIZE: u32 = 4096;
 const DEFAULT_CONTEXT: &str = "";
-const DEFAULT_CONTEXT_WAIT: u32 = 0;
+// FIXME use Duration::ZERO when MSVC >= 1.53.2
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -56,7 +58,7 @@ struct Settings {
     caps: Option<gst::Caps>,
     blocksize: u32,
     context: String,
-    context_wait: u32,
+    context_wait: Duration,
 }
 
 impl Default for Settings {
@@ -224,7 +226,7 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                q.set(false, 0.into(), gst::CLOCK_TIME_NONE);
+                q.set(false, gst::ClockTime::ZERO, gst::ClockTime::NONE);
                 true
             }
             QueryView::Scheduling(ref mut q) => {
@@ -580,7 +582,7 @@ impl ObjectImpl for TcpClientSrc {
                     "Throttle poll loop to run at most once every this many ms",
                     0,
                     1000,
-                    DEFAULT_CONTEXT_WAIT,
+                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
                 glib::ParamSpec::new_string(
@@ -649,7 +651,9 @@ impl ObjectImpl for TcpClientSrc {
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get().expect("type checked upstream");
+                settings.context_wait = Duration::from_millis(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
             }
             _ => unimplemented!(),
         }
@@ -663,7 +667,7 @@ impl ObjectImpl for TcpClientSrc {
             "caps" => settings.caps.to_value(),
             "blocksize" => settings.blocksize.to_value(),
             "context" => settings.context.to_value(),
-            "context-wait" => settings.context_wait.to_value(),
+            "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
             _ => unimplemented!(),
         }
     }

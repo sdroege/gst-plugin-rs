@@ -32,6 +32,7 @@ use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
+use std::time::Duration;
 use std::u16;
 
 use crate::runtime::prelude::*;
@@ -47,7 +48,8 @@ const DEFAULT_MTU: u32 = 1492;
 const DEFAULT_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_USED_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_CONTEXT: &str = "";
-const DEFAULT_CONTEXT_WAIT: u32 = 0;
+// FIXME use Duration::ZERO when MSVC >= 1.53.2
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
 const DEFAULT_RETRIEVE_SENDER_ADDRESS: bool = true;
 
 #[derive(Debug, Clone)]
@@ -60,7 +62,7 @@ struct Settings {
     socket: Option<GioSocketWrapper>,
     used_socket: Option<GioSocketWrapper>,
     context: String,
-    context_wait: u32,
+    context_wait: Duration,
     retrieve_sender_address: bool,
 }
 
@@ -237,7 +239,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
 
         let ret = match query.view_mut() {
             QueryView::Latency(ref mut q) => {
-                q.set(true, 0.into(), gst::CLOCK_TIME_NONE);
+                q.set(true, gst::ClockTime::ZERO, gst::ClockTime::NONE);
                 true
             }
             QueryView::Scheduling(ref mut q) => {
@@ -301,7 +303,7 @@ impl TaskImpl for UdpSrcTask {
         async move {
             gst_log!(CAT, obj: &self.element, "Starting task");
             self.socket
-                .set_clock(self.element.clock(), Some(self.element.base_time()));
+                .set_clock(self.element.clock(), self.element.base_time());
             gst_log!(CAT, obj: &self.element, "Task started");
             Ok(())
         }
@@ -721,7 +723,7 @@ impl ObjectImpl for UdpSrc {
                     "Throttle poll loop to run at most once every this many ms",
                     0,
                     1000,
-                    DEFAULT_CONTEXT_WAIT,
+                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
                 glib::ParamSpec::new_string(
@@ -836,7 +838,9 @@ impl ObjectImpl for UdpSrc {
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get().expect("type checked upstream");
+                settings.context_wait = Duration::from_millis(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
             }
             "retrieve-sender-address" => {
                 settings.retrieve_sender_address = value.get().expect("type checked upstream");
@@ -864,7 +868,7 @@ impl ObjectImpl for UdpSrc {
                 .map(GioSocketWrapper::as_socket)
                 .to_value(),
             "context" => settings.context.to_value(),
-            "context-wait" => settings.context_wait.to_value(),
+            "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
             "retrieve-sender-address" => settings.retrieve_sender_address.to_value(),
             _ => unimplemented!(),
         }

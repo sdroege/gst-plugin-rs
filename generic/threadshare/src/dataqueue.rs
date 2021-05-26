@@ -25,7 +25,7 @@ use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
-use std::{u32, u64};
+use std::u32;
 
 static DATA_QUEUE_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -54,12 +54,10 @@ impl DataQueueItem {
         }
     }
 
-    fn timestamp(&self) -> Option<u64> {
+    fn timestamp(&self) -> Option<gst::ClockTime> {
         match *self {
-            DataQueueItem::Buffer(ref buffer) => buffer.dts_or_pts().0,
-            DataQueueItem::BufferList(ref list) => {
-                list.iter().filter_map(|b| b.dts_or_pts().0).next()
-            }
+            DataQueueItem::Buffer(ref buffer) => buffer.dts_or_pts(),
+            DataQueueItem::BufferList(ref list) => list.iter().find_map(|b| b.dts_or_pts()),
             DataQueueItem::Event(_) => None,
         }
     }
@@ -86,7 +84,7 @@ struct DataQueueInner {
     cur_size_bytes: u32,
     max_size_buffers: Option<u32>,
     max_size_bytes: Option<u32>,
-    max_size_time: Option<u64>,
+    max_size_time: Option<gst::ClockTime>,
 
     pending_handle: Option<AbortHandle>,
 }
@@ -105,7 +103,7 @@ impl DataQueue {
         src_pad: &gst::Pad,
         max_size_buffers: Option<u32>,
         max_size_bytes: Option<u32>,
-        max_size_time: Option<u64>,
+        max_size_time: impl Into<Option<gst::ClockTime>>,
     ) -> DataQueue {
         DataQueue(Arc::new(StdMutex::new(DataQueueInner {
             element: element.clone(),
@@ -116,7 +114,7 @@ impl DataQueue {
             cur_size_bytes: 0,
             max_size_buffers,
             max_size_bytes,
-            max_size_time,
+            max_size_time: max_size_time.into(),
             pending_handle: None,
         })))
     }

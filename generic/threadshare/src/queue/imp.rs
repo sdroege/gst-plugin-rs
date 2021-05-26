@@ -28,6 +28,7 @@ use once_cell::sync::Lazy;
 
 use std::collections::VecDeque;
 use std::sync::Mutex as StdMutex;
+use std::time::Duration;
 use std::{u32, u64};
 
 use crate::runtime::prelude::*;
@@ -37,17 +38,18 @@ use crate::dataqueue::{DataQueue, DataQueueItem};
 
 const DEFAULT_MAX_SIZE_BUFFERS: u32 = 200;
 const DEFAULT_MAX_SIZE_BYTES: u32 = 1024 * 1024;
-const DEFAULT_MAX_SIZE_TIME: u64 = gst::SECOND_VAL;
+const DEFAULT_MAX_SIZE_TIME: gst::ClockTime = gst::ClockTime::SECOND;
 const DEFAULT_CONTEXT: &str = "";
-const DEFAULT_CONTEXT_WAIT: u32 = 0;
+// FIXME use Duration::ZERO when MSVC >= 1.53.2
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
 
 #[derive(Debug, Clone)]
 struct Settings {
     max_size_buffers: u32,
     max_size_bytes: u32,
-    max_size_time: u64,
+    max_size_time: gst::ClockTime,
     context: String,
-    context_wait: u32,
+    context_wait: Duration,
 }
 
 impl Default for Settings {
@@ -628,7 +630,7 @@ impl Queue {
             } else {
                 Some(settings.max_size_bytes)
             },
-            if settings.max_size_time == 0 {
+            if settings.max_size_time.is_zero() {
                 None
             } else {
                 Some(settings.max_size_time)
@@ -729,7 +731,7 @@ impl ObjectImpl for Queue {
                     "Throttle poll loop to run at most once every this many ms",
                     0,
                     1000,
-                    DEFAULT_CONTEXT_WAIT,
+                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
                 glib::ParamSpec::new_uint(
@@ -756,7 +758,7 @@ impl ObjectImpl for Queue {
                     "Maximum number of nanoseconds to queue (0=unlimited)",
                     0,
                     u64::MAX - 1,
-                    DEFAULT_MAX_SIZE_TIME,
+                    DEFAULT_MAX_SIZE_TIME.nseconds(),
                     glib::ParamFlags::READWRITE,
                 ),
             ]
@@ -781,7 +783,8 @@ impl ObjectImpl for Queue {
                 settings.max_size_bytes = value.get().expect("type checked upstream");
             }
             "max-size-time" => {
-                settings.max_size_time = value.get().expect("type checked upstream");
+                settings.max_size_time =
+                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
             }
             "context" => {
                 settings.context = value
@@ -790,7 +793,9 @@ impl ObjectImpl for Queue {
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get().expect("type checked upstream");
+                settings.context_wait = Duration::from_millis(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
             }
             _ => unimplemented!(),
         }
@@ -801,9 +806,9 @@ impl ObjectImpl for Queue {
         match pspec.name() {
             "max-size-buffers" => settings.max_size_buffers.to_value(),
             "max-size-bytes" => settings.max_size_bytes.to_value(),
-            "max-size-time" => settings.max_size_time.to_value(),
+            "max-size-time" => settings.max_size_time.nseconds().to_value(),
             "context" => settings.context.to_value(),
-            "context-wait" => settings.context_wait.to_value(),
+            "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
             _ => unimplemented!(),
         }
     }

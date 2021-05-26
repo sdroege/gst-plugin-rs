@@ -322,8 +322,8 @@ impl Decrypter {
                 }
 
                 let size = match peer_query.result().try_into().unwrap() {
-                    gst::format::Bytes(Some(size)) => size,
-                    gst::format::Bytes(None) => {
+                    Some(gst::format::Bytes(size)) => size,
+                    None => {
                         gst_error!(CAT, "Failed to query upstream duration");
 
                         return false;
@@ -348,7 +348,7 @@ impl Decrypter {
                 let size = size - total_chunks * box_::MACBYTES as u64;
 
                 gst_debug!(CAT, obj: pad, "Setting duration bytes: {}", size);
-                q.set(gst::format::Bytes::from(size));
+                q.set(gst::format::Bytes(size));
 
                 true
             }

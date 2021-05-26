@@ -34,6 +34,7 @@ use once_cell::sync::Lazy;
 use std::boxed::Box;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex as StdMutex;
+use std::time::Duration;
 
 use gstthreadshare::runtime::prelude::*;
 use gstthreadshare::runtime::{
@@ -41,7 +42,7 @@ use gstthreadshare::runtime::{
 };
 
 const DEFAULT_CONTEXT: &str = "";
-const THROTTLING_DURATION: u32 = 2;
+const THROTTLING_DURATION: Duration = Duration::from_millis(2);
 
 fn init() {
     use std::sync::Once;
@@ -968,7 +969,7 @@ fn src_tsqueue_sink_nominal() {
         .set_property("context", &format!("{}_queue", name))
         .unwrap();
     ts_queue
-        .set_property("context-wait", &THROTTLING_DURATION)
+        .set_property("context-wait", &(THROTTLING_DURATION.as_millis() as u32))
         .unwrap();
 
     let (pipeline, src_element, _sink_element, receiver) = setup(name, Some(ts_queue), None);
@@ -1007,7 +1008,7 @@ fn src_tsproxy_sink_nominal() {
         .set_property("context", &format!("{}_context", name))
         .unwrap();
     ts_proxy_src
-        .set_property("context-wait", &THROTTLING_DURATION)
+        .set_property("context-wait", &(THROTTLING_DURATION.as_millis() as u32))
         .unwrap();
 
     let (pipeline, src_element, _sink_element, receiver) =

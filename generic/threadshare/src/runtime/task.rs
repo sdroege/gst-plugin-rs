@@ -1252,7 +1252,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("task_iterate", 2).unwrap();
+        let context = Context::acquire("task_iterate", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -1519,7 +1519,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("prepare_error", 2).unwrap();
+        let context = Context::acquire("prepare_error", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -1604,7 +1604,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("prepare_start_ok", 2).unwrap();
+        let context = Context::acquire("prepare_start_ok", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -1612,7 +1612,9 @@ mod tests {
         task.prepare(TaskPrepareTest { prepare_receiver }, context.clone())
             .unwrap();
 
-        let start_ctx = Context::acquire("prepare_start_ok_requester", 0).unwrap();
+        // FIXME use Duration::ZERO when MSVC >= 1.53.2
+        let start_ctx =
+            Context::acquire("prepare_start_ok_requester", Duration::from_nanos(0)).unwrap();
         let task_clone = task.clone();
         let (ready_sender, ready_receiver) = oneshot::channel();
         let start_handle = start_ctx.spawn(async move {
@@ -1720,7 +1722,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("prepare_start_error", 2).unwrap();
+        let context = Context::acquire("prepare_start_error", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -1735,7 +1737,9 @@ mod tests {
         )
         .unwrap();
 
-        let start_ctx = Context::acquire("prepare_start_error_requester", 0).unwrap();
+        // FIXME use Duration::ZERO when MSVC >= 1.53.2
+        let start_ctx =
+            Context::acquire("prepare_start_error_requester", Duration::from_nanos(0)).unwrap();
         let task_clone = task.clone();
         let (ready_sender, ready_receiver) = oneshot::channel();
         let start_handle = start_ctx.spawn(async move {
@@ -1808,7 +1812,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("pause_start", 2).unwrap();
+        let context = Context::acquire("pause_start", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -1901,7 +1905,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("successive_pause_start", 2).unwrap();
+        let context = Context::acquire("successive_pause_start", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -1962,7 +1966,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("flush_regular_sync", 2).unwrap();
+        let context = Context::acquire("flush_regular_sync", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -2049,7 +2053,8 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("flush_regular_different_context", 2).unwrap();
+        let context =
+            Context::acquire("flush_regular_different_context", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -2067,7 +2072,11 @@ mod tests {
         gst_debug!(RUNTIME_CAT, "flush_regular_different_context: start");
         task.start().unwrap();
 
-        let oob_context = Context::acquire("flush_regular_different_context_oob", 2).unwrap();
+        let oob_context = Context::acquire(
+            "flush_regular_different_context_oob",
+            Duration::from_millis(2),
+        )
+        .unwrap();
 
         let task_clone = task.clone();
         let flush_handle = oob_context.spawn(async move {
@@ -2134,7 +2143,8 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("flush_regular_same_context", 2).unwrap();
+        let context =
+            Context::acquire("flush_regular_same_context", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -2218,7 +2228,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("flush_from_loop", 2).unwrap();
+        let context = Context::acquire("flush_from_loop", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -2291,7 +2301,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("pause_from_loop", 2).unwrap();
+        let context = Context::acquire("pause_from_loop", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -2357,7 +2367,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("trigger_from_action", 2).unwrap();
+        let context = Context::acquire("trigger_from_action", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -2427,7 +2437,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("pause_flush_start", 2).unwrap();
+        let context = Context::acquire("pause_flush_start", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -2538,7 +2548,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("pause_flushing_start", 2).unwrap();
+        let context = Context::acquire("pause_flushing_start", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -2629,7 +2639,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("flush_concurrent_start", 2).unwrap();
+        let context = Context::acquire("flush_concurrent_start", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 
@@ -2644,7 +2654,8 @@ mod tests {
         )
         .unwrap();
 
-        let oob_context = Context::acquire("flush_concurrent_start_oob", 2).unwrap();
+        let oob_context =
+            Context::acquire("flush_concurrent_start_oob", Duration::from_millis(2)).unwrap();
         let task_clone = task.clone();
 
         task.pause().unwrap();
@@ -2746,7 +2757,7 @@ mod tests {
             }
         }
 
-        let context = Context::acquire("start_timer", 2).unwrap();
+        let context = Context::acquire("start_timer", Duration::from_millis(2)).unwrap();
 
         let task = Task::default();
 

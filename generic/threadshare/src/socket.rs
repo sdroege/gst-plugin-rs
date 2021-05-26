@@ -143,19 +143,25 @@ impl<T: SocketRead> Socket<T> {
             Ok((len, saddr)) => {
                 let dts = if T::DO_TIMESTAMP {
                     let time = self.clock.as_ref().unwrap().time();
-                    let running_time = time - self.base_time.unwrap();
+                    let running_time = time
+                        .zip(self.base_time)
+                        // TODO Do we want None if time < base_time
+                        // or do we expect Some?
+                        .and_then(|(time, base_time)| time.checked_sub(base_time));
+                    // FIXME maybe we should check if running_time.is_none
+                    // so as to display another message
                     gst_debug!(
                         SOCKET_CAT,
                         obj: &self.element,
                         "Read {} bytes at {} (clock {})",
                         len,
-                        running_time,
-                        time
+                        running_time.display(),
+                        time.display(),
                     );
                     running_time
                 } else {
                     gst_debug!(SOCKET_CAT, obj: &self.element, "Read {} bytes", len);
-                    gst::CLOCK_TIME_NONE
+                    gst::ClockTime::NONE
                 };
 
                 let mut buffer = self.mapped_buffer.take().unwrap().into_buffer();

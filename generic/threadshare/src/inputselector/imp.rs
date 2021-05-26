@@ -35,12 +35,13 @@ use crate::runtime::prelude::*;
 use crate::runtime::{self, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
 const DEFAULT_CONTEXT: &str = "";
-const DEFAULT_CONTEXT_WAIT: u32 = 0;
+// FIXME use Duration::ZERO when MSVC >= 1.53.2
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
 
 #[derive(Debug, Clone)]
 struct Settings {
     context: String,
-    context_wait: u32,
+    context_wait: Duration,
 }
 
 impl Default for Settings {
@@ -74,14 +75,20 @@ struct InputSelectorPadSinkHandler(Arc<Mutex<InputSelectorPadSinkHandlerInner>>)
 
 impl InputSelectorPadSinkHandler {
     /* Wait until specified time */
-    async fn sync(&self, element: &super::InputSelector, running_time: gst::ClockTime) {
+    async fn sync(
+        &self,
+        element: &super::InputSelector,
+        running_time: impl Into<Option<gst::ClockTime>>,
+    ) {
         let now = element.current_running_time();
 
-        if let Some(delay) = running_time
-            .saturating_sub(now)
-            .and_then(|delay| delay.nseconds())
+        match running_time
+            .into()
+            .zip(now)
+            .and_then(|(running_time, now)| running_time.checked_sub(now))
         {
-            runtime::time::delay_for(Duration::from_nanos(delay)).await;
+            Some(delay) => runtime::time::delay_for(delay.into()).await,
+            None => runtime::executor::yield_now().await,
         }
     }
 
@@ -289,8 +296,8 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
         match query.view_mut() {
             QueryView::Latency(ref mut q) => {
                 let mut ret = true;
-                let mut min_latency = 0.into();
-                let mut max_latency = gst::ClockTime::none();
+                let mut min_latency = gst::ClockTime::ZERO;
+                let mut max_latency = gst::ClockTime::NONE;
                 let pads = {
                     let pads = inputselector.pads.lock().unwrap();
                     pads.sink_pads
@@ -307,8 +314,11 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
                     if ret {
                         let (live, min, max) = peer_query.result();
                         if live {
-                            min_latency = min.max(min_latency).unwrap_or(min_latency);
-                            max_latency = max.min(max_latency).unwrap_or(max);
+                            min_latency = min.max(min_latency);
+                            max_latency = max
+                                .zip(max_latency)
+                                .map(|(max, max_latency)| max.min(max_latency))
+                                .or(max);
                         }
                     }
                 }
@@ -424,7 +434,7 @@ impl ObjectImpl for InputSelector {
                     "Throttle poll loop to run at most once every this many ms",
                     0,
                     1000,
-                    DEFAULT_CONTEXT_WAIT,
+                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
                 glib::ParamSpec::new_object(
@@ -457,7 +467,9 @@ impl ObjectImpl for InputSelector {
             }
             "context-wait" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.context_wait = value.get().expect("type checked upstream");
+                settings.context_wait = Duration::from_millis(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
             }
             "active-pad" => {
                 let pad = value
@@ -501,7 +513,7 @@ impl ObjectImpl for InputSelector {
             }
             "context-wait" => {
                 let settings = self.settings.lock().unwrap();
-                settings.context_wait.to_value()
+                (settings.context_wait.as_millis() as u32).to_value()
             }
             "active-pad" => {
                 let state = self.state.lock().unwrap();

@@ -76,7 +76,7 @@ fn test_push() {
 
     let mut eos = false;
     let bus = pipeline.bus().unwrap();
-    while let Some(msg) = bus.timed_pop(5 * gst::SECOND) {
+    while let Some(msg) = bus.timed_pop(5 * gst::ClockTime::SECOND) {
         use gst::MessageView;
         match msg.view() {
             MessageView::Eos(..) => {
@@ -123,8 +123,8 @@ fn test_from_pipeline_to_pipeline() {
     pipe_1.set_state(gst::State::Paused).unwrap();
     pipe_2.set_state(gst::State::Paused).unwrap();
 
-    let _ = pipe_1.state(gst::CLOCK_TIME_NONE);
-    let _ = pipe_2.state(gst::CLOCK_TIME_NONE);
+    let _ = pipe_1.state(gst::ClockTime::NONE);
+    let _ = pipe_2.state(gst::ClockTime::NONE);
 
     pipe_1.set_state(gst::State::Null).unwrap();
 

@@ -62,7 +62,8 @@ const DEFAULT_TTL_MC: u32 = 1;
 const DEFAULT_QOS_DSCP: i32 = -1;
 const DEFAULT_CLIENTS: &str = "";
 const DEFAULT_CONTEXT: &str = "";
-const DEFAULT_CONTEXT_WAIT: u32 = 0;
+// FIXME use Duration::ZERO when MSVC >= 1.53.2
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -81,7 +82,7 @@ struct Settings {
     ttl_mc: u32,
     qos_dscp: i32,
     context: String,
-    context_wait: u32,
+    context_wait: Duration,
 }
 
 impl Default for Settings {
@@ -125,7 +126,7 @@ enum TaskItem {
 struct UdpSinkPadHandlerInner {
     sync: bool,
     segment: Option<gst::Segment>,
-    latency: gst::ClockTime,
+    latency: Option<gst::ClockTime>,
     socket: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
     socket_v6: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
     #[allow(clippy::rc_buffer)]
@@ -141,7 +142,7 @@ impl UdpSinkPadHandlerInner {
         UdpSinkPadHandlerInner {
             sync: DEFAULT_SYNC,
             segment: None,
-            latency: gst::CLOCK_TIME_NONE,
+            latency: None,
             socket: Arc::new(Mutex::new(None)),
             socket_v6: Arc::new(Mutex::new(None)),
             clients: Arc::new(vec![SocketAddr::new(
@@ -217,7 +218,7 @@ impl UdpSinkPadHandler {
     }
 
     fn set_latency(&self, latency: gst::ClockTime) {
-        self.0.write().unwrap().latency = latency;
+        self.0.write().unwrap().latency = Some(latency);
     }
 
     fn prepare(&self) {
@@ -405,15 +406,17 @@ impl UdpSinkPadHandler {
         ) = {
             let mut inner = self.0.write().unwrap();
             let do_sync = inner.sync;
-            let mut rtime: gst::ClockTime = 0.into();
+            let mut rtime = gst::ClockTime::NONE;
 
             if let Some(segment) = &inner.segment {
-                if let Some(segment) = segment.downcast_ref::<gst::format::Time>() {
-                    rtime = segment.to_running_time(buffer.pts());
-                    if inner.latency.is_some() {
-                        rtime += inner.latency;
-                    }
-                }
+                rtime = segment
+                    .downcast_ref::<gst::format::Time>()
+                    .and_then(|segment| {
+                        segment
+                            .to_running_time(buffer.pts())
+                            .zip(inner.latency)
+                            .map(|(rtime, latency)| rtime + latency)
+                    });
             }
 
             let clients_to_configure = mem::replace(&mut inner.clients_to_configure, vec![]);
@@ -519,14 +522,20 @@ impl UdpSinkPadHandler {
     }
 
     /* Wait until specified time */
-    async fn sync(&self, element: &super::UdpSink, running_time: gst::ClockTime) {
+    async fn sync(
+        &self,
+        element: &super::UdpSink,
+        running_time: impl Into<Option<gst::ClockTime>>,
+    ) {
         let now = element.current_running_time();
 
-        if let Some(delay) = running_time
-            .saturating_sub(now)
-            .and_then(|delay| delay.nseconds())
+        match running_time
+            .into()
+            .zip(now)
+            .and_then(|(running_time, now)| running_time.checked_sub(now))
         {
-            runtime::time::delay_for(Duration::from_nanos(delay)).await;
+            Some(delay) => runtime::time::delay_for(delay.into()).await,
+            None => runtime::executor::yield_now().await,
         }
     }
 
@@ -980,7 +989,7 @@ impl ObjectImpl for UdpSink {
                     "Throttle poll loop to run at most once every this many ms",
                     0,
                     1000,
-                    DEFAULT_CONTEXT_WAIT,
+                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
                 glib::ParamSpec::new_boolean(
@@ -1257,7 +1266,9 @@ impl ObjectImpl for UdpSink {
                     .unwrap_or_else(|| "".into());
             }
             "context-wait" => {
-                settings.context_wait = value.get().expect("type checked upstream");
+                settings.context_wait = Duration::from_millis(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
             }
             _ => unimplemented!(),
         }
@@ -1309,7 +1320,7 @@ impl ObjectImpl for UdpSink {
                 clients.join(",").to_value()
             }
             "context" => settings.context.to_value(),
-            "context-wait" => settings.context_wait.to_value(),
+            "context-wait" => (settings.context_wait.as_millis() as u32).to_value(),
             _ => unimplemented!(),
         }
     }
