@@ -1116,18 +1116,18 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             }
         };
 
-        let start = segment.start().expect("No start position given");
-        let stop = segment.stop();
+        let start = *segment.start().expect("No start position given");
+        let stop = segment.stop().map(|stop| *stop);
 
         gst_debug!(CAT, obj: src, "Seeking to {}-{:?}", start, stop);
 
-        if position == start && old_stop == stop.0 {
+        if position == start && old_stop == stop {
             gst_debug!(CAT, obj: src, "No change to current request");
             return true;
         }
 
         *state = State::Stopped;
-        match self.do_request(src, uri, start, stop.0) {
+        match self.do_request(src, uri, start, stop) {
             Ok(s) => {
                 *state = s;
                 true
