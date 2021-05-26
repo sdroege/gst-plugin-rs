@@ -153,17 +153,22 @@ test nightly:
   rules:
     - if: '$UPDATE_IMG == null || $UPDATE_IMG == "nightly"'
 
-meson shared:
+.meson:
   extends: .img-stable
+  rules:
+    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
+  variables:
+    CSOUND_LIB_DIR: '/usr/lib'
+
+meson shared:
+  extends: .meson
   script:
     - meson build --default-library=shared --prefix=$(pwd)/install
     - ninja -C build install
     - ./ci/check-plugins-installed.py install
-  rules:
-    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
 
 meson static:
-  extends: .img-stable
+  extends: .meson
   script:
     - meson build --default-library=static --prefix=$(pwd)/install -Dsodium=built-in
     - ninja -C build install
@@ -172,8 +177,6 @@ meson static:
     - PKG_CONFIG_PATH=$PKG_CONFIG_PATH:$(pwd)/../install/lib/x86_64-linux-gnu/pkgconfig meson build
     - ninja -C build
     - ./build/test-gst-static
-  rules:
-    - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
 
 rustfmt:
   extends: .img-stable
