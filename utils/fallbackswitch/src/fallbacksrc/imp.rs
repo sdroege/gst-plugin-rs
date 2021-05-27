@@ -669,6 +669,57 @@ impl ElementImpl for FallbackSrc {
             _ => Ok(gst::StateChangeSuccess::Success),
         }
     }
+
+    fn send_event(&self, _element: &Self::Type, event: gst::Event) -> bool {
+        match event.view() {
+            gst::EventView::Eos(..) => {
+                gst_debug!(CAT, "Handling element-level EOS, forwarding to all streams");
+
+                let mut state_guard = self.state.lock().unwrap();
+                let state = match &mut *state_guard {
+                    None => {
+                        return true;
+                    }
+                    Some(state) => state,
+                };
+
+                // We don't want to hold the state lock while pushing out EOS
+                let mut send_eos_elements: Vec<gst::Element> = vec![];
+                let mut send_eos_pads: Vec<gst::Pad> = vec![];
+
+                send_eos_elements.push(state.source.clone());
+
+                for stream in [&mut state.video_stream, &mut state.audio_stream]
+                    .iter_mut()
+                    .filter_map(|v| v.as_mut())
+                {
+                    // Not strictly necessary as the switch will EOS when receiving
+                    // EOS on its primary pad, just good form.
+                    send_eos_elements.push(stream.fallback_input.clone());
+                    // If our source hadn't been connected to the switch as a primary
+                    // stream, we need to send EOS there ourselves
+                    if stream.source_srcpad.is_none() {
+                        let clocksync_queue_sinkpad =
+                            stream.clocksync_queue.static_pad("sink").unwrap();
+                        send_eos_pads.push(clocksync_queue_sinkpad.clone());
+                    }
+                }
+
+                drop(state_guard);
+
+                for elem in send_eos_elements.drain(..) {
+                    elem.send_event(event.clone());
+                }
+
+                for pad in send_eos_pads.drain(..) {
+                    pad.send_event(event.clone());
+                }
+
+                true
+            }
+            _ => true,
+        }
+    }
 }
 
 impl BinImpl for FallbackSrc {
