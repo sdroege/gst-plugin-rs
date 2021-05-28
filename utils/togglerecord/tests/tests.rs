@@ -153,8 +153,8 @@ fn setup_sender_receiver(
                         let mut buffer = buffer.clone();
                         {
                             let buffer = buffer.make_mut();
-                            buffer.set_pts(offset + i * 20 * gst::MSECOND);
-                            buffer.set_duration(20 * gst::MSECOND);
+                            buffer.set_pts(offset + i * 20 * gst::ClockTime::MSECOND);
+                            buffer.set_duration(20 * gst::ClockTime::MSECOND);
                         }
                         let _ = sinkpad.chain(buffer);
                         i += 1;
@@ -166,8 +166,11 @@ fn setup_sender_receiver(
                         buffer
                             .get_mut()
                             .unwrap()
-                            .set_pts(offset + i * 20 * gst::MSECOND);
-                        buffer.get_mut().unwrap().set_duration(20 * gst::MSECOND);
+                            .set_pts(offset + i * 20 * gst::ClockTime::MSECOND);
+                        buffer
+                            .get_mut()
+                            .unwrap()
+                            .set_duration(20 * gst::ClockTime::MSECOND);
                         buffer
                             .get_mut()
                             .unwrap()
@@ -178,8 +181,10 @@ fn setup_sender_receiver(
                 }
                 SendData::Gaps(n) => {
                     for _ in 0..n {
-                        let event =
-                            gst::event::Gap::new(offset + i * 20 * gst::MSECOND, 20 * gst::MSECOND);
+                        let event = gst::event::Gap::new(
+                            offset + i * 20 * gst::ClockTime::MSECOND,
+                            20 * gst::ClockTime::MSECOND,
+                        );
                         let _ = sinkpad.send_event(event);
                         i += 1;
                     }
@@ -204,7 +209,14 @@ fn recv_buffers(
     receiver_output: &mpsc::Receiver<Either<gst::Buffer, gst::Event>>,
     segment: &mut gst::FormattedSegment<gst::ClockTime>,
     wait_buffers: usize,
-) -> (Vec<(gst::ClockTime, gst::ClockTime, gst::ClockTime)>, bool) {
+) -> (
+    Vec<(
+        Option<gst::ClockTime>,
+        Option<gst::ClockTime>,
+        Option<gst::ClockTime>,
+    )>,
+    bool,
+) {
     let mut res = Vec::new();
     let mut n_buffers = 0;
     let mut saw_eos = false;
@@ -228,7 +240,7 @@ fn recv_buffers(
                     EventView::Gap(ref e) => {
                         let (ts, duration) = e.get();
 
-                        res.push((segment.to_running_time(ts), ts, duration));
+                        res.push((segment.to_running_time(ts), Some(ts), duration));
                         n_buffers += 1;
                         if wait_buffers > 0 && n_buffers == wait_buffers {
                             return (res, saw_eos);
@@ -281,7 +293,7 @@ fn test_one_stream_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, _, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -294,9 +306,9 @@ fn test_one_stream_open() {
     assert_eq!(buffers.len(), 10);
     for (index, &(running_time, pts, duration)) in buffers.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
 
     thread.join().unwrap();
@@ -313,7 +325,7 @@ fn test_one_stream_gaps_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, _, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -327,9 +339,9 @@ fn test_one_stream_gaps_open() {
     assert_eq!(buffers.len(), 10);
     for (index, &(running_time, pts, duration)) in buffers.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
 
     thread.join().unwrap();
@@ -346,7 +358,7 @@ fn test_one_stream_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, receiver_input_done, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -361,9 +373,9 @@ fn test_one_stream_close_open() {
     assert_eq!(buffers.len(), 10);
     for (index, &(running_time, pts, duration)) in buffers.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, (10 + index) * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), (10 + index) * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
 
     thread.join().unwrap();
@@ -380,7 +392,7 @@ fn test_one_stream_open_close() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, receiver_input_done, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -396,9 +408,9 @@ fn test_one_stream_open_close() {
     assert_eq!(buffers.len(), 10);
     for (index, &(running_time, pts, duration)) in buffers.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
 
     thread.join().unwrap();
@@ -415,7 +427,7 @@ fn test_one_stream_open_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input, receiver_input_done, receiver_output, thread) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -434,15 +446,15 @@ fn test_one_stream_open_close_open() {
     assert_eq!(buffers.len(), 20);
     for (index, &(running_time, pts, duration)) in buffers.iter().enumerate() {
         let pts_off = if index >= 10 {
-            10 * 20 * gst::MSECOND
+            10 * 20 * gst::ClockTime::MSECOND
         } else {
-            0.into()
+            gst::ClockTime::ZERO
         };
 
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, pts_off + index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), pts_off + index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
 
     thread.join().unwrap();
@@ -459,9 +471,9 @@ fn test_two_stream_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -480,9 +492,9 @@ fn test_two_stream_open() {
     let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
 
@@ -491,9 +503,9 @@ fn test_two_stream_open() {
     let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 10);
 
@@ -512,9 +524,14 @@ fn test_two_stream_open_shift() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 5 * gst::MSECOND);
+        setup_sender_receiver(
+            &pipeline,
+            &togglerecord,
+            "src_%u",
+            5 * gst::ClockTime::MSECOND,
+        );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -533,9 +550,9 @@ fn test_two_stream_open_shift() {
     let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
 
@@ -544,12 +561,18 @@ fn test_two_stream_open_shift() {
     let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, 5 * gst::MSECOND + index * 20 * gst::MSECOND);
-        assert_eq!(pts, 5 * gst::MSECOND + index * 20 * gst::MSECOND);
+        assert_eq!(
+            running_time.unwrap(),
+            5 * gst::ClockTime::MSECOND + index * 20 * gst::ClockTime::MSECOND
+        );
+        assert_eq!(
+            pts.unwrap(),
+            5 * gst::ClockTime::MSECOND + index * 20 * gst::ClockTime::MSECOND
+        );
         if index == 9 {
-            assert_eq!(duration, 15 * gst::MSECOND);
+            assert_eq!(duration.unwrap(), 15 * gst::ClockTime::MSECOND);
         } else {
-            assert_eq!(duration, 20 * gst::MSECOND);
+            assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
         }
     }
     assert_eq!(buffers_2.len(), 10);
@@ -569,9 +592,9 @@ fn test_two_stream_open_shift_main() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 5 * gst::MSECOND);
+        setup_sender_receiver(&pipeline, &togglerecord, "src", 5 * gst::ClockTime::MSECOND);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -591,9 +614,12 @@ fn test_two_stream_open_shift_main() {
     let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, 5 * gst::MSECOND + index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(
+            pts.unwrap(),
+            5 * gst::ClockTime::MSECOND + index * 20 * gst::ClockTime::MSECOND
+        );
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
 
@@ -604,17 +630,26 @@ fn test_two_stream_open_shift_main() {
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
         if index == 0 {
-            assert_eq!(running_time, index * 20 * gst::MSECOND);
-            assert_eq!(pts, 5 * gst::MSECOND + index * 20 * gst::MSECOND);
-            assert_eq!(duration, 15 * gst::MSECOND);
+            assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+            assert_eq!(
+                pts.unwrap(),
+                5 * gst::ClockTime::MSECOND + index * 20 * gst::ClockTime::MSECOND
+            );
+            assert_eq!(duration.unwrap(), 15 * gst::ClockTime::MSECOND);
         } else if index == 10 {
-            assert_eq!(running_time, index * 20 * gst::MSECOND - 5 * gst::MSECOND);
-            assert_eq!(pts, index * 20 * gst::MSECOND);
-            assert_eq!(duration, 5 * gst::MSECOND);
+            assert_eq!(
+                running_time.unwrap(),
+                index * 20 * gst::ClockTime::MSECOND - 5 * gst::ClockTime::MSECOND
+            );
+            assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+            assert_eq!(duration.unwrap(), 5 * gst::ClockTime::MSECOND);
         } else {
-            assert_eq!(running_time, index * 20 * gst::MSECOND - 5 * gst::MSECOND);
-            assert_eq!(pts, index * 20 * gst::MSECOND);
-            assert_eq!(duration, 20 * gst::MSECOND);
+            assert_eq!(
+                running_time.unwrap(),
+                index * 20 * gst::ClockTime::MSECOND - 5 * gst::ClockTime::MSECOND
+            );
+            assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+            assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
         }
     }
     assert_eq!(buffers_2.len(), 11);
@@ -634,9 +669,9 @@ fn test_two_stream_open_close() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -671,9 +706,9 @@ fn test_two_stream_open_close() {
     let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
 
@@ -682,9 +717,9 @@ fn test_two_stream_open_close() {
     let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 10);
 
@@ -703,9 +738,9 @@ fn test_two_stream_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -740,9 +775,9 @@ fn test_two_stream_close_open() {
     let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, (10 + index) * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), (10 + index) * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
 
@@ -751,9 +786,9 @@ fn test_two_stream_close_open() {
     let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, (10 + index) * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), (10 + index) * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 10);
 
@@ -772,9 +807,9 @@ fn test_two_stream_open_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -822,15 +857,15 @@ fn test_two_stream_open_close_open() {
     let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let pts_off = if index >= 10 {
-            10 * 20 * gst::MSECOND
+            10 * 20 * gst::ClockTime::MSECOND
         } else {
-            0.into()
+            gst::ClockTime::ZERO
         };
 
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, pts_off + index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), pts_off + index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 20);
 
@@ -839,15 +874,15 @@ fn test_two_stream_open_close_open() {
     let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let pts_off = if index >= 10 {
-            10 * 20 * gst::MSECOND
+            10 * 20 * gst::ClockTime::MSECOND
         } else {
-            0.into()
+            gst::ClockTime::ZERO
         };
 
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, pts_off + index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), pts_off + index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 20);
 
@@ -866,9 +901,9 @@ fn test_two_stream_open_close_open_gaps() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -922,15 +957,15 @@ fn test_two_stream_open_close_open_gaps() {
     let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let pts_off = if index >= 10 {
-            10 * 20 * gst::MSECOND
+            10 * 20 * gst::ClockTime::MSECOND
         } else {
-            0.into()
+            gst::ClockTime::ZERO
         };
 
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, pts_off + index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), pts_off + index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 20);
 
@@ -939,15 +974,15 @@ fn test_two_stream_open_close_open_gaps() {
     let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let pts_off = if index >= 10 {
-            10 * 20 * gst::MSECOND
+            10 * 20 * gst::ClockTime::MSECOND
         } else {
-            0.into()
+            gst::ClockTime::ZERO
         };
 
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, pts_off + index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), pts_off + index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 20);
 
@@ -966,9 +1001,9 @@ fn test_two_stream_close_open_close_delta() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1023,9 +1058,9 @@ fn test_two_stream_close_open_close_delta() {
     let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, (11 + index) * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), (11 + index) * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
 
@@ -1034,9 +1069,9 @@ fn test_two_stream_close_open_close_delta() {
     let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, (11 + index) * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), (11 + index) * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 10);
 
@@ -1055,11 +1090,11 @@ fn test_three_stream_open_close_open() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
     let (sender_input_3, receiver_input_done_3, receiver_output_3, thread_3) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1118,15 +1153,15 @@ fn test_three_stream_open_close_open() {
     let (buffers_1, _) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let pts_off = if index >= 10 {
-            10 * 20 * gst::MSECOND
+            10 * 20 * gst::ClockTime::MSECOND
         } else {
-            0.into()
+            gst::ClockTime::ZERO
         };
 
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, pts_off + index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), pts_off + index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 20);
 
@@ -1135,15 +1170,15 @@ fn test_three_stream_open_close_open() {
     let (buffers_2, _) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let pts_off = if index >= 10 {
-            10 * 20 * gst::MSECOND
+            10 * 20 * gst::ClockTime::MSECOND
         } else {
-            0.into()
+            gst::ClockTime::ZERO
         };
 
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, pts_off + index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), pts_off + index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 20);
 
@@ -1151,15 +1186,15 @@ fn test_three_stream_open_close_open() {
     let (buffers_3, _) = recv_buffers(&receiver_output_3, &mut segment_3, 0);
     for (index, &(running_time, pts, duration)) in buffers_3.iter().enumerate() {
         let pts_off = if index >= 10 {
-            10 * 20 * gst::MSECOND
+            10 * 20 * gst::ClockTime::MSECOND
         } else {
-            0.into()
+            gst::ClockTime::ZERO
         };
 
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, pts_off + index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), pts_off + index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_3.len(), 20);
 
@@ -1179,9 +1214,9 @@ fn test_two_stream_main_eos() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1228,9 +1263,9 @@ fn test_two_stream_main_eos() {
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
     assert_eq!(saw_eos, true);
@@ -1240,9 +1275,9 @@ fn test_two_stream_main_eos() {
     let (buffers_2, saw_eos) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 10);
     assert_eq!(saw_eos, true);
@@ -1262,9 +1297,9 @@ fn test_two_stream_secondary_eos_first() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1303,9 +1338,9 @@ fn test_two_stream_secondary_eos_first() {
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
     assert_eq!(saw_eos, true);
@@ -1316,9 +1351,9 @@ fn test_two_stream_secondary_eos_first() {
     let (buffers_2, saw_eos) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 9);
     assert_eq!(saw_eos, true);
@@ -1338,11 +1373,11 @@ fn test_three_stream_main_eos() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
     let (sender_input_3, receiver_input_done_3, receiver_output_3, thread_3) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1405,9 +1440,9 @@ fn test_three_stream_main_eos() {
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
     assert_eq!(saw_eos, true);
@@ -1417,9 +1452,9 @@ fn test_three_stream_main_eos() {
     let (buffers_2, saw_eos) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 10);
     assert_eq!(saw_eos, true);
@@ -1428,9 +1463,9 @@ fn test_three_stream_main_eos() {
     let (buffers_3, saw_eos) = recv_buffers(&receiver_output_3, &mut segment_3, 0);
     for (index, &(running_time, pts, duration)) in buffers_3.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_3.len(), 10);
     assert_eq!(saw_eos, true);
@@ -1451,11 +1486,11 @@ fn test_three_stream_main_and_second_eos() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
     let (sender_input_3, receiver_input_done_3, receiver_output_3, thread_3) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1517,9 +1552,9 @@ fn test_three_stream_main_and_second_eos() {
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
     assert_eq!(saw_eos, true);
@@ -1529,9 +1564,9 @@ fn test_three_stream_main_and_second_eos() {
     let (buffers_2, saw_eos) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 9);
     assert_eq!(saw_eos, true);
@@ -1541,9 +1576,9 @@ fn test_three_stream_main_and_second_eos() {
     let (buffers_3, saw_eos) = recv_buffers(&receiver_output_3, &mut segment_3, 0);
     for (index, &(running_time, pts, duration)) in buffers_3.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_3.len(), 10);
     assert_eq!(saw_eos, true);
@@ -1564,11 +1599,11 @@ fn test_three_stream_secondary_eos_first() {
     pipeline.add(&togglerecord).unwrap();
 
     let (sender_input_1, receiver_input_done_1, receiver_output_1, thread_1) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src", gst::ClockTime::ZERO);
     let (sender_input_2, receiver_input_done_2, receiver_output_2, thread_2) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
     let (sender_input_3, receiver_input_done_3, receiver_output_3, thread_3) =
-        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", 0.into());
+        setup_sender_receiver(&pipeline, &togglerecord, "src_%u", gst::ClockTime::ZERO);
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1612,9 +1647,9 @@ fn test_three_stream_secondary_eos_first() {
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
     for (index, &(running_time, pts, duration)) in buffers_1.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
     assert_eq!(saw_eos, true);
@@ -1624,9 +1659,9 @@ fn test_three_stream_secondary_eos_first() {
     let (buffers_2, saw_eos) = recv_buffers(&receiver_output_2, &mut segment_2, 0);
     for (index, &(running_time, pts, duration)) in buffers_2.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 9);
     assert_eq!(saw_eos, true);
@@ -1635,9 +1670,9 @@ fn test_three_stream_secondary_eos_first() {
     let (buffers_3, saw_eos) = recv_buffers(&receiver_output_3, &mut segment_3, 0);
     for (index, &(running_time, pts, duration)) in buffers_3.iter().enumerate() {
         let index = index as u64;
-        assert_eq!(running_time, index * 20 * gst::MSECOND);
-        assert_eq!(pts, index * 20 * gst::MSECOND);
-        assert_eq!(duration, 20 * gst::MSECOND);
+        assert_eq!(running_time.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(pts.unwrap(), index * 20 * gst::ClockTime::MSECOND);
+        assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_3.len(), 9);
     assert_eq!(saw_eos, true);

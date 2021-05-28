@@ -30,7 +30,7 @@ unsafe impl Send for VideoFallbackSource {}
 unsafe impl Sync for VideoFallbackSource {}
 
 impl VideoFallbackSource {
-    pub fn new(uri: Option<&str>, min_latency: u64) -> VideoFallbackSource {
-        glib::Object::new(&[("uri", &uri), ("min-latency", &min_latency)]).unwrap()
+    pub fn new(uri: Option<&str>, min_latency: gst::ClockTime) -> VideoFallbackSource {
+        glib::Object::new(&[("uri", &uri), ("min-latency", &min_latency.nseconds())]).unwrap()
     }
 }

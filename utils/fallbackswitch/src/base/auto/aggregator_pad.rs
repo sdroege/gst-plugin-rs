@@ -3,13 +3,14 @@
 // DO NOT EDIT
 
 use super::super::ffi;
-use glib::object::Cast;
-use glib::object::IsA;
+
 use glib::signal::connect_raw;
 use glib::signal::SignalHandlerId;
 use glib::translate::*;
-use glib::StaticType;
+
 use gst::glib;
+use gst::prelude::*;
+
 use std::boxed::Box as Box_;
 use std::mem::transmute;
 
@@ -42,10 +43,10 @@ pub trait AggregatorPadExt: 'static {
     #[doc(alias = "gst_aggregator_pad_pop_buffer")]
     fn pop_buffer(&self) -> Option<gst::Buffer>;
 
-    #[doc(alias = "get_property_emit_signals")]
+    #[doc(alias = "emit-signals")]
     fn emits_signals(&self) -> bool;
 
-    #[doc(alias = "set_property_emit_signals")]
+    #[doc(alias = "emit-signals")]
     fn set_emit_signals(&self, emit_signals: bool);
 
     fn connect_buffer_consumed<F: Fn(&Self, &gst::Buffer) + Send + Sync + 'static>(
@@ -53,7 +54,8 @@ pub trait AggregatorPadExt: 'static {
         f: F,
     ) -> SignalHandlerId;
 
-    fn connect_property_emit_signals_notify<F: Fn(&Self) + Send + Sync + 'static>(
+    #[doc(alias = "emit-signals")]
+    fn connect_emit_signals_notify<F: Fn(&Self) + Send + Sync + 'static>(
         &self,
         f: F,
     ) -> SignalHandlerId;
@@ -119,25 +121,24 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
             glib::gobject_ffi::g_object_set_property(
                 self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"emit-signals\0".as_ptr() as *const _,
-                glib::Value::from(&emit_signals).to_glib_none().0,
+                emit_signals.to_value().to_glib_none().0,
             );
         }
     }
 
+    #[doc(alias = "buffer-consumed")]
     fn connect_buffer_consumed<F: Fn(&Self, &gst::Buffer) + Send + Sync + 'static>(
         &self,
         f: F,
     ) -> SignalHandlerId {
         unsafe extern "C" fn buffer_consumed_trampoline<
-            P,
+            P: IsA<AggregatorPad>,
             F: Fn(&P, &gst::Buffer) + Send + Sync + 'static,
         >(
             this: *mut ffi::GstAggregatorPad,
             object: *mut gst::ffi::GstBuffer,
             f: glib::ffi::gpointer,
-        ) where
-            P: IsA<AggregatorPad>,
-        {
+        ) {
             let f: &F = &*(f as *const F);
             f(
                 &AggregatorPad::from_glib_borrow(this).unsafe_cast_ref(),
@@ -157,17 +158,19 @@ impl<O: IsA<AggregatorPad>> AggregatorPadExt for O {
         }
     }
 
-    fn connect_property_emit_signals_notify<F: Fn(&Self) + Send + Sync + 'static>(
+    #[doc(alias = "emit-signals")]
+    fn connect_emit_signals_notify<F: Fn(&Self) + Send + Sync + 'static>(
         &self,
         f: F,
     ) -> SignalHandlerId {
-        unsafe extern "C" fn notify_emit_signals_trampoline<P, F: Fn(&P) + Send + Sync + 'static>(
+        unsafe extern "C" fn notify_emit_signals_trampoline<
+            P: IsA<AggregatorPad>,
+            F: Fn(&P) + Send + Sync + 'static,
+        >(
             this: *mut ffi::GstAggregatorPad,
             _param_spec: glib::ffi::gpointer,
             f: glib::ffi::gpointer,
-        ) where
-            P: IsA<AggregatorPad>,
-        {
+        ) {
             let f: &F = &*(f as *const F);
             f(&AggregatorPad::from_glib_borrow(this).unsafe_cast_ref())
         }

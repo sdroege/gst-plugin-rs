@@ -20,9 +20,10 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info, gst_warning};
 
+use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use once_cell::sync::Lazy;
 
@@ -72,11 +73,11 @@ struct Settings {
     uri: Option<String>,
     source: Option<gst::Element>,
     fallback_uri: Option<String>,
-    timeout: u64,
-    restart_timeout: u64,
-    retry_timeout: u64,
+    timeout: gst::ClockTime,
+    restart_timeout: gst::ClockTime,
+    retry_timeout: gst::ClockTime,
     restart_on_eos: bool,
-    min_latency: u64,
+    min_latency: gst::ClockTime,
     buffer_duration: i64,
 }
 
@@ -88,11 +89,11 @@ impl Default for Settings {
             uri: None,
             source: None,
             fallback_uri: None,
-            timeout: 5 * gst::SECOND_VAL,
-            restart_timeout: 5 * gst::SECOND_VAL,
-            retry_timeout: 60 * gst::SECOND_VAL,
+            timeout: 5 * gst::ClockTime::SECOND,
+            restart_timeout: 5 * gst::ClockTime::SECOND,
+            retry_timeout: 60 * gst::ClockTime::SECOND,
             restart_on_eos: false,
-            min_latency: 0,
+            min_latency: gst::ClockTime::ZERO,
             buffer_duration: -1,
         }
     }
@@ -112,7 +113,7 @@ enum Source {
 struct Block {
     pad: gst::Pad,
     probe_id: gst::PadProbeId,
-    running_time: gst::ClockTime,
+    running_time: Option<gst::ClockTime>,
 }
 
 // Connects one source pad with fallbackswitch and the corresponding fallback input
@@ -221,8 +222,8 @@ impl ObjectImpl for FallbackSrc {
                     "Timeout",
                     "Timeout for switching to the fallback URI",
                     0,
-                    std::u64::MAX,
-                    5 * gst::SECOND_VAL,
+                    std::u64::MAX - 1,
+                    5 * *gst::ClockTime::SECOND,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::new_uint64(
@@ -230,8 +231,8 @@ impl ObjectImpl for FallbackSrc {
                     "Timeout",
                     "Timeout for restarting an active source",
                     0,
-                    std::u64::MAX,
-                    5 * gst::SECOND_VAL,
+                    std::u64::MAX - 1,
+                    5 * *gst::ClockTime::SECOND,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::new_uint64(
@@ -239,8 +240,8 @@ impl ObjectImpl for FallbackSrc {
                     "Retry Timeout",
                     "Timeout for stopping after repeated failure",
                     0,
-                    std::u64::MAX,
-                    60 * gst::SECOND_VAL,
+                    std::u64::MAX - 1,
+                    60 * *gst::ClockTime::SECOND,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::new_boolean(
@@ -265,7 +266,7 @@ impl ObjectImpl for FallbackSrc {
                      this allows to configure a minimum latency that would be configured \
                      if initially the fallback is enabled",
                     0,
-                    std::u64::MAX,
+                    std::u64::MAX - 1,
                     0,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
@@ -274,7 +275,7 @@ impl ObjectImpl for FallbackSrc {
                     "Buffer Duration",
                     "Buffer duration when buffering streams (-1 default value)",
                     -1,
-                    std::i64::MAX,
+                    std::i64::MAX - 1,
                     -1,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
@@ -740,7 +741,7 @@ impl FallbackSrc {
     fn create_fallback_video_input(
         &self,
         _element: &super::FallbackSrc,
-        min_latency: u64,
+        min_latency: gst::ClockTime,
         fallback_uri: Option<&str>,
     ) -> gst::Element {
         VideoFallbackSource::new(fallback_uri, min_latency).upcast()
@@ -770,8 +771,8 @@ impl FallbackSrc {
     fn create_stream(
         &self,
         element: &super::FallbackSrc,
-        timeout: u64,
-        min_latency: u64,
+        timeout: gst::ClockTime,
+        min_latency: gst::ClockTime,
         is_audio: bool,
         fallback_uri: Option<&str>,
     ) -> Stream {
@@ -797,7 +798,7 @@ impl FallbackSrc {
             .set_properties(&[
                 ("max-size-buffers", &0u32),
                 ("max-size-bytes", &0u32),
-                ("max-size-time", &gst::SECOND),
+                ("max-size-time", &gst::ClockTime::SECOND),
             ])
             .unwrap();
 
@@ -815,9 +816,9 @@ impl FallbackSrc {
             let src = FallbackSrc::from_instance(&element);
             src.handle_switch_active_pad_change(&element);
         });
-        switch.set_property("timeout", &timeout).unwrap();
+        switch.set_property("timeout", &timeout.nseconds()).unwrap();
         switch
-            .set_property("min-upstream-latency", &min_latency)
+            .set_property("min-upstream-latency", &min_latency.nseconds())
             .unwrap();
 
         gst::Element::link_pads(&fallback_input, Some("src"), &switch, Some("fallback_sink"))
@@ -1067,7 +1068,7 @@ impl FallbackSrc {
                     || (!state.source_is_live && transition == gst::StateChange::PausedToPlaying)
                 {
                     assert!(state.source_restart_timeout.is_none());
-                    self.schedule_source_restart_timeout(element, state, 0.into());
+                    self.schedule_source_restart_timeout(element, state, gst::ClockTime::ZERO);
                 }
             }
         }
@@ -1230,7 +1231,7 @@ impl FallbackSrc {
                     let pts = match info.data {
                         Some(gst::PadProbeData::Buffer(ref buffer)) => buffer.pts(),
                         Some(gst::PadProbeData::Event(ref ev)) => match ev.view() {
-                            gst::EventView::Gap(ref ev) => ev.get().0,
+                            gst::EventView::Gap(ref ev) => Some(ev.get().0),
                             _ => return gst::PadProbeReturn::Pass,
                         },
                         _ => unreachable!(),
@@ -1250,7 +1251,7 @@ impl FallbackSrc {
         Block {
             pad: stream.clocksync_queue_srcpad.clone(),
             probe_id,
-            running_time: gst::CLOCK_TIME_NONE,
+            running_time: gst::ClockTime::NONE,
         }
     }
 
@@ -1258,7 +1259,7 @@ impl FallbackSrc {
         &self,
         element: &super::FallbackSrc,
         pad: &gst::Pad,
-        pts: gst::ClockTime,
+        pts: impl Into<Option<gst::ClockTime>>,
     ) -> Result<(), gst::ErrorMessage> {
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
@@ -1354,21 +1355,22 @@ impl FallbackSrc {
             gst::error_msg!(gst::CoreError::Clock, ["Have no time segment"])
         })?;
 
-        let running_time = if pts < segment.start() {
-            segment.start()
-        } else if segment.stop().is_some() && pts >= segment.stop() {
-            segment.stop()
+        let pts = pts.into();
+        let running_time = if let Some((_, start)) =
+            pts.zip(segment.start()).filter(|(pts, start)| pts < start)
+        {
+            Some(start)
+        } else if let Some((_, stop)) = pts.zip(segment.stop()).filter(|(pts, stop)| pts >= stop) {
+            Some(stop)
         } else {
             segment.to_running_time(pts)
         };
-
-        assert!(running_time.is_some());
 
         gst_debug!(
             CAT,
             obj: element,
             "Have block running time {}",
-            running_time,
+            running_time.display(),
         );
 
         block.running_time = running_time;
@@ -1414,13 +1416,13 @@ impl FallbackSrc {
         let audio_running_time = state
             .audio_stream
             .as_ref()
-            .and_then(|s| s.source_srcpad_block.as_ref().map(|b| b.running_time))
-            .unwrap_or(gst::CLOCK_TIME_NONE);
+            .and_then(|s| s.source_srcpad_block.as_ref())
+            .and_then(|b| b.running_time);
         let video_running_time = state
             .video_stream
             .as_ref()
-            .and_then(|s| s.source_srcpad_block.as_ref().map(|b| b.running_time))
-            .unwrap_or(gst::CLOCK_TIME_NONE);
+            .and_then(|s| s.source_srcpad_block.as_ref())
+            .and_then(|b| b.running_time);
 
         let audio_srcpad = state
             .audio_stream
@@ -1444,7 +1446,14 @@ impl FallbackSrc {
         // Also consider EOS, we'd never get a new running time after EOS so don't need to wait.
         // FIXME: All this surely can be simplified somehow
 
-        let current_running_time = element.current_running_time();
+        // FIXME I guess this could be moved up
+        let current_running_time = match element.current_running_time() {
+            Some(current_running_time) => current_running_time,
+            None => {
+                gst_debug!(CAT, obj: element, "Waiting for current_running_time");
+                return;
+            }
+        };
 
         if have_audio && want_audio && have_video && want_video {
             if audio_running_time.is_none()
@@ -1466,18 +1475,21 @@ impl FallbackSrc {
                 return;
             }
 
+            let audio_running_time = audio_running_time.expect("checked above");
+            let video_running_time = video_running_time.expect("checked above");
+
             let min_running_time = if audio_is_eos {
                 video_running_time
             } else if video_is_eos {
                 audio_running_time
             } else {
-                assert!(audio_running_time.is_some() && video_running_time.is_some());
-                audio_running_time.min(video_running_time).unwrap()
+                audio_running_time.min(video_running_time)
             };
+
             let offset = if current_running_time > min_running_time {
-                (current_running_time - min_running_time).unwrap() as i64
+                (current_running_time - min_running_time).nseconds() as i64
             } else {
-                -((min_running_time - current_running_time).unwrap() as i64)
+                -((min_running_time - current_running_time).nseconds() as i64)
             };
 
             gst_debug!(
@@ -1514,15 +1526,18 @@ impl FallbackSrc {
                 block.pad.remove_probe(block.probe_id);
             }
         } else if have_audio && want_audio {
-            if audio_running_time.is_none() {
-                gst_debug!(CAT, obj: element, "Waiting for audio pad to block");
-                return;
-            }
+            let audio_running_time = match audio_running_time {
+                Some(audio_running_time) => audio_running_time,
+                None => {
+                    gst_debug!(CAT, obj: element, "Waiting for audio pad to block");
+                    return;
+                }
+            };
 
             let offset = if current_running_time > audio_running_time {
-                (current_running_time - audio_running_time).unwrap() as i64
+                (current_running_time - audio_running_time).nseconds() as i64
             } else {
-                -((audio_running_time - current_running_time).unwrap() as i64)
+                -((audio_running_time - current_running_time).nseconds() as i64)
             };
 
             gst_debug!(
@@ -1546,15 +1561,18 @@ impl FallbackSrc {
                 block.pad.remove_probe(block.probe_id);
             }
         } else if have_video && want_video {
-            if video_running_time.is_none() {
-                gst_debug!(CAT, obj: element, "Waiting for video pad to block");
-                return;
-            }
+            let video_running_time = match video_running_time {
+                Some(video_running_time) => video_running_time,
+                None => {
+                    gst_debug!(CAT, obj: element, "Waiting for video pad to block");
+                    return;
+                }
+            };
 
             let offset = if current_running_time > video_running_time {
-                (current_running_time - video_running_time).unwrap() as i64
+                (current_running_time - video_running_time).nseconds() as i64
             } else {
-                -((video_running_time - current_running_time).unwrap() as i64)
+                -((video_running_time - current_running_time).nseconds() as i64)
             };
 
             gst_debug!(
@@ -1911,8 +1929,7 @@ impl FallbackSrc {
 
             gst_debug!(CAT, obj: element, "Waiting for 1s before retrying");
             let clock = gst::SystemClock::obtain();
-            let wait_time = clock.time() + gst::SECOND;
-            assert!(wait_time.is_some());
+            let wait_time = clock.time().unwrap() + gst::ClockTime::SECOND;
             assert!(state.source_pending_restart_timeout.is_none());
 
             let timeout = clock.new_single_shot_id(wait_time);
@@ -1998,7 +2015,11 @@ impl FallbackSrc {
                             let mut state_guard = src.state.lock().unwrap();
                             let state = state_guard.as_mut().expect("no state");
                             assert!(state.source_restart_timeout.is_none());
-                            src.schedule_source_restart_timeout(element, state, 0.into());
+                            src.schedule_source_restart_timeout(
+                                element,
+                                state,
+                                gst::ClockTime::ZERO,
+                            );
                         }
                     });
                 })
@@ -2024,9 +2045,7 @@ impl FallbackSrc {
         }
 
         let clock = gst::SystemClock::obtain();
-        let wait_time =
-            clock.time() + gst::ClockTime::from_nseconds(state.settings.restart_timeout) - elapsed;
-        assert!(wait_time.is_some());
+        let wait_time = clock.time().unwrap() + state.settings.restart_timeout - elapsed;
         gst_debug!(
             CAT,
             obj: element,
@@ -2063,9 +2082,7 @@ impl FallbackSrc {
                         // If we're not actively buffering right now let's restart the source
                         if state
                             .last_buffering_update
-                            .map(|i| {
-                                i.elapsed() >= Duration::from_nanos(state.settings.restart_timeout)
-                            })
+                            .map(|i| i.elapsed() >= state.settings.restart_timeout.into())
                             .unwrap_or(state.stats.buffering_percent == 100)
                         {
                             gst_debug!(CAT, obj: element, "Not buffering, restarting source");
@@ -2077,10 +2094,12 @@ impl FallbackSrc {
                             gst_debug!(CAT, obj: element, "Buffering, restarting source later");
                             let elapsed = state
                                 .last_buffering_update
-                                .map(|i| i.elapsed().as_nanos() as u64)
-                                .unwrap_or(0);
+                                .and_then(|last_buffering_update| {
+                                    gst::ClockTime::try_from(last_buffering_update.elapsed()).ok()
+                                })
+                                .unwrap_or(gst::ClockTime::ZERO);
 
-                            src.schedule_source_restart_timeout(element, state, elapsed.into());
+                            src.schedule_source_restart_timeout(element, state, elapsed);
                         }
                     } else {
                         gst_debug!(CAT, obj: element, "Restarting source not needed anymore");
@@ -2150,7 +2169,7 @@ impl FallbackSrc {
         if self.have_fallback_activated(element, state) {
             gst_warning!(CAT, obj: element, "Switched to fallback stream");
             if state.source_restart_timeout.is_none() {
-                self.schedule_source_restart_timeout(element, state, 0.into());
+                self.schedule_source_restart_timeout(element, state, gst::ClockTime::ZERO);
             }
 
             drop(state_guard);

@@ -71,13 +71,13 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[derive(Debug, Default)]
 struct PadOutputState {
-    last_sinkpad_time: gst::ClockTime,
+    last_sinkpad_time: Option<gst::ClockTime>,
     stream_health: StreamHealth,
 }
 
 #[derive(Debug)]
 struct OutputState {
-    last_output_time: gst::ClockTime,
+    last_output_time: Option<gst::ClockTime>,
     primary: PadOutputState,
     fallback: PadOutputState,
 }
@@ -89,7 +89,7 @@ struct PadInputState {
     video_info: Option<gst_video::VideoInfo>,
 }
 
-const DEFAULT_TIMEOUT: u64 = 5 * gst::SECOND_VAL;
+const DEFAULT_TIMEOUT: gst::ClockTime = gst::ClockTime::from_seconds(5);
 const DEFAULT_AUTO_SWITCH: bool = true;
 const DEFAULT_STREAM_HEALTH: StreamHealth = StreamHealth::Inactive;
 
@@ -108,7 +108,7 @@ impl Default for StreamHealth {
 impl Default for OutputState {
     fn default() -> Self {
         OutputState {
-            last_output_time: gst::CLOCK_TIME_NONE,
+            last_output_time: gst::ClockTime::NONE,
             primary: PadOutputState::default(),
             fallback: PadOutputState::default(),
         }
@@ -118,7 +118,7 @@ impl Default for OutputState {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            timeout: DEFAULT_TIMEOUT.into(),
+            timeout: DEFAULT_TIMEOUT,
             auto_switch: DEFAULT_AUTO_SWITCH,
         }
     }
@@ -129,7 +129,7 @@ impl OutputState {
         &self,
         settings: &Settings,
         check_primary_pad: bool,
-        cur_running_time: gst::ClockTime,
+        cur_running_time: impl Into<Option<gst::ClockTime>>,
     ) -> StreamHealth {
         let last_sinkpad_time = if check_primary_pad {
             self.primary.last_sinkpad_time
@@ -137,11 +137,11 @@ impl OutputState {
             self.fallback.last_sinkpad_time
         };
 
-        if last_sinkpad_time == gst::ClockTime::none() {
+        if last_sinkpad_time.is_none() {
             StreamHealth::Inactive
-        } else if cur_running_time != gst::ClockTime::none()
-            && cur_running_time < last_sinkpad_time + settings.timeout
-        {
+        } else if cur_running_time.into().map_or(false, |cur_running_time| {
+            cur_running_time < last_sinkpad_time.expect("checked above") + settings.timeout
+        }) {
             StreamHealth::Present
         } else {
             StreamHealth::Inactive
@@ -153,7 +153,7 @@ impl OutputState {
         settings: &Settings,
         backup_pad: &Option<&gst_base::AggregatorPad>,
         preferred_is_primary: bool,
-        cur_running_time: gst::ClockTime,
+        cur_running_time: impl Into<Option<gst::ClockTime>> + Copy,
     ) -> (bool, bool) {
         let preferred_health = self.health(settings, preferred_is_primary, cur_running_time);
         let backup_health = if backup_pad.is_some() {
@@ -187,7 +187,7 @@ impl FallbackSwitch {
         &self,
         state: &mut OutputState,
         pad: &gst_base::AggregatorPad,
-        target_running_time: gst::ClockTime,
+        target_running_time: impl Into<Option<gst::ClockTime>> + Copy,
     ) -> Result<(), gst::FlowError> {
         let segment = pad.segment();
 
@@ -201,13 +201,17 @@ impl FallbackSwitch {
             gst::FlowError::Error
         })?;
 
-        let mut running_time = gst::ClockTime::none();
+        let mut running_time = gst::ClockTime::NONE;
 
         while let Some(buffer) = pad.peek_buffer() {
             let pts = buffer.dts_or_pts();
             let new_running_time = segment.to_running_time(pts);
 
-            if pts.is_none() || new_running_time <= target_running_time {
+            if pts.is_none()
+                || new_running_time
+                    .zip(target_running_time.into())
+                    .map_or(false, |(new, target)| new <= target)
+            {
                 gst_debug!(CAT, obj: pad, "Dropping trailing buffer {:?}", buffer);
                 pad.drop_buffer();
                 running_time = new_running_time;
@@ -215,7 +219,7 @@ impl FallbackSwitch {
                 break;
             }
         }
-        if running_time != gst::ClockTime::none() {
+        if running_time.is_some() {
             if pad == &self.primary_sinkpad {
                 state.primary.last_sinkpad_time = running_time;
             } else {
@@ -234,7 +238,7 @@ impl FallbackSwitch {
         mut buffer: gst::Buffer,
         preferred_pad: &gst_base::AggregatorPad,
         backup_pad: &Option<&gst_base::AggregatorPad>,
-        cur_running_time: gst::ClockTime,
+        cur_running_time: impl Into<Option<gst::ClockTime>>,
     ) -> Result<Option<(gst::Buffer, gst::Caps, bool)>, gst::FlowError> {
         // If we got a buffer on the sinkpad just handle it
         gst_debug!(
@@ -273,48 +277,46 @@ impl FallbackSwitch {
             state.fallback.last_sinkpad_time = running_time;
         }
 
-        let is_late = {
-            if cur_running_time != gst::ClockTime::none() {
-                let latency = agg.latency();
-                if latency.is_some() {
-                    let deadline = running_time + latency + 40 * gst::MSECOND;
+        let cur_running_time = cur_running_time.into();
+        let (is_late, deadline) = cur_running_time
+            .zip(agg.latency())
+            .zip(running_time)
+            .map_or(
+                (false, None),
+                |((cur_running_time, latency), running_time)| {
+                    let dealine = running_time + latency + 40 * gst::ClockTime::MSECOND;
+                    (cur_running_time > dealine, Some(dealine))
+                },
+            );
 
-                    if cur_running_time > deadline {
-                        gst_debug!(
-                            CAT,
-                            obj: preferred_pad,
-                            "Buffer is too late: {} > {}",
-                            cur_running_time,
-                            deadline
-                        );
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        };
-
-        if state.last_output_time.is_some()
-            && is_late
-            && state.last_output_time + settings.timeout <= running_time
-        {
-            /* This buffer arrived too late - we either already switched
-             * to the other pad or there's no point outputting this anyway */
+        if is_late {
             gst_debug!(
                 CAT,
                 obj: preferred_pad,
-                "Buffer is too late and timeout reached: {} + {} <= {}",
-                state.last_output_time,
-                settings.timeout,
-                running_time,
+                "Buffer is too late: {} > {}",
+                cur_running_time.display(),
+                deadline.display(),
             );
 
-            return Ok(None);
+            if state.last_output_time.zip(running_time).map_or(
+                false,
+                |(last_output_time, running_time)| {
+                    last_output_time + settings.timeout <= running_time
+                },
+            ) {
+                /* This buffer arrived too late - we either already switched
+                 * to the other pad or there's no point outputting this anyway */
+                gst_debug!(
+                    CAT,
+                    obj: preferred_pad,
+                    "Buffer is too late and timeout reached: {} + {} <= {}",
+                    state.last_output_time.display(),
+                    settings.timeout,
+                    running_time.display(),
+                );
+
+                return Ok(None);
+            }
         }
 
         let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
@@ -416,14 +418,19 @@ impl FallbackSwitch {
             }
 
             // Get the next one if this one is before the timeout
-            if state.last_output_time + settings.timeout > running_time {
+            if state.last_output_time.zip(running_time).map_or(
+                false,
+                |(last_output_time, running_time)| {
+                    last_output_time + settings.timeout > running_time
+                },
+            ) {
                 gst_debug!(
                     CAT,
                     obj: backup_pad,
                     "Timeout not reached yet: {} + {} > {}",
-                    state.last_output_time,
+                    state.last_output_time.display(),
                     settings.timeout,
-                    running_time
+                    running_time.display(),
                 );
 
                 continue;
@@ -433,9 +440,9 @@ impl FallbackSwitch {
                 CAT,
                 obj: backup_pad,
                 "Timeout reached: {} + {} <= {}",
-                state.last_output_time,
+                state.last_output_time.display(),
                 settings.timeout,
-                running_time
+                running_time.display(),
             );
 
             let mut active_sinkpad = self.active_sinkpad.lock().unwrap();
@@ -529,9 +536,12 @@ impl FallbackSwitch {
         let base_time = agg.base_time();
 
         let cur_running_time = if let Some(clock) = clock {
-            clock.time() - base_time
+            clock
+                .time()
+                .zip(base_time)
+                .and_then(|(time, base_time)| time.checked_sub(base_time))
         } else {
-            gst::ClockTime::none()
+            gst::ClockTime::NONE
         };
 
         /* See if there's a buffer on the preferred pad and output that */
@@ -677,8 +687,8 @@ impl ObjectImpl for FallbackSwitch {
                     "Timeout",
                     "Timeout in nanoseconds",
                     0,
-                    std::u64::MAX,
-                    DEFAULT_TIMEOUT,
+                    std::u64::MAX - 1,
+                    DEFAULT_TIMEOUT.nseconds() as u64,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::new_object(
@@ -984,7 +994,7 @@ impl AggregatorImpl for FallbackSwitch {
         }
     }
 
-    fn next_time(&self, agg: &Self::Type) -> gst::ClockTime {
+    fn next_time(&self, agg: &Self::Type) -> Option<gst::ClockTime> {
         /* At each iteration, we have a preferred pad and a backup pad. If autoswitch is true,
          * the sinkpad is always preferred, otherwise it's the active sinkpad as set by the app.
          * The backup pad is the other one (may be None if there's no fallback pad yet).
@@ -1020,10 +1030,10 @@ impl AggregatorImpl for FallbackSwitch {
                 "Have buffer on sinkpad {}, immediate timeout",
                 preferred_pad.name()
             );
-            0.into()
+            Some(gst::ClockTime::ZERO)
         } else if self.primary_sinkpad.is_eos() {
             gst_debug!(CAT, obj: agg, "Sinkpad is EOS, immediate timeout");
-            0.into()
+            Some(gst::ClockTime::ZERO)
         } else if let Some((buffer, backup_sinkpad)) = backup_pad
             .as_ref()
             .and_then(|p| p.peek_buffer().map(|buffer| (buffer, p)))
@@ -1031,7 +1041,7 @@ impl AggregatorImpl for FallbackSwitch {
             if buffer.pts().is_none() {
                 gst_error!(CAT, obj: agg, "Only buffers with PTS supported");
                 // Trigger aggregate immediately to error out immediately
-                return 0.into();
+                return Some(gst::ClockTime::ZERO);
             }
 
             let segment = match backup_sinkpad.segment().downcast::<gst::ClockTime>() {
@@ -1039,7 +1049,7 @@ impl AggregatorImpl for FallbackSwitch {
                 Err(_) => {
                     gst_error!(CAT, obj: agg, "Only TIME segments supported");
                     // Trigger aggregate immediately to error out immediately
-                    return 0.into();
+                    return Some(gst::ClockTime::ZERO);
                 }
             };
 
@@ -1049,12 +1059,12 @@ impl AggregatorImpl for FallbackSwitch {
                 obj: agg,
                 "Have buffer on {} pad, timeout at {}",
                 backup_sinkpad.name(),
-                running_time
+                running_time.display(),
             );
             running_time
         } else {
             gst_debug!(CAT, obj: agg, "No buffer available on either input");
-            gst::CLOCK_TIME_NONE
+            gst::ClockTime::NONE
         }
     }
 
@@ -1096,25 +1106,21 @@ impl AggregatorImpl for FallbackSwitch {
             return Some(buffer);
         }
 
-        let duration = if buffer.duration().is_some() {
-            buffer.duration()
+        let duration = if let Some(duration) = buffer.duration() {
+            Some(duration)
         } else if let Some(ref audio_info) = pad_state.audio_info {
-            gst::SECOND
-                .mul_div_floor(
-                    buffer.size() as u64,
-                    audio_info.rate() as u64 * audio_info.bpf() as u64,
-                )
-                .unwrap()
+            gst::ClockTime::SECOND.mul_div_floor(
+                buffer.size() as u64,
+                audio_info.rate() as u64 * audio_info.bpf() as u64,
+            )
         } else if let Some(ref video_info) = pad_state.video_info {
             if *video_info.fps().numer() > 0 {
-                gst::SECOND
-                    .mul_div_floor(
-                        *video_info.fps().denom() as u64,
-                        *video_info.fps().numer() as u64,
-                    )
-                    .unwrap()
+                gst::ClockTime::SECOND.mul_div_floor(
+                    *video_info.fps().denom() as u64,
+                    *video_info.fps().numer() as u64,
+                )
             } else {
-                gst::CLOCK_TIME_NONE
+                gst::ClockTime::NONE
             }
         } else {
             unreachable!()
@@ -1125,8 +1131,8 @@ impl AggregatorImpl for FallbackSwitch {
             obj: agg_pad,
             "Clipping buffer {:?} with PTS {} and duration {}",
             buffer,
-            pts,
-            duration
+            pts.display(),
+            duration.display(),
         );
         if let Some(ref audio_info) = pad_state.audio_info {
             gst_audio::audio_buffer_clip(
@@ -1136,12 +1142,16 @@ impl AggregatorImpl for FallbackSwitch {
                 audio_info.bpf(),
             )
         } else if pad_state.video_info.is_some() {
-            segment.clip(pts, pts + duration).map(|(start, stop)| {
+            let stop = pts.zip(duration).map(|(pts, duration)| pts + duration);
+            segment.clip(pts, stop).map(|(start, stop)| {
                 {
                     let buffer = buffer.make_mut();
                     buffer.set_pts(start);
                     if duration.is_some() {
-                        buffer.set_duration(stop - start);
+                        buffer.set_duration(
+                            stop.zip(start)
+                                .and_then(|(stop, start)| stop.checked_sub(start)),
+                        );
                     }
                 }
 

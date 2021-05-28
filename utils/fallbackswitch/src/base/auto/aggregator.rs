@@ -4,13 +4,14 @@
 // DO NOT EDIT
 
 use super::super::ffi;
-use glib::object::Cast;
-use glib::object::IsA;
+
 use glib::signal::connect_raw;
 use glib::signal::SignalHandlerId;
 use glib::translate::*;
-use glib::StaticType;
+
 use gst::glib;
+use gst::prelude::*;
+
 use std::boxed::Box as Box_;
 use std::mem::transmute;
 
@@ -29,38 +30,45 @@ pub const NONE_AGGREGATOR: Option<&Aggregator> = None;
 
 pub trait AggregatorExt: 'static {
     //#[doc(alias = "gst_aggregator_get_allocator")]
+    //#[doc(alias = "get_allocator")]
     //fn allocator(&self, allocator: /*Ignored*/Option<gst::Allocator>, params: /*Ignored*/gst::AllocationParams);
 
     #[doc(alias = "gst_aggregator_get_buffer_pool")]
+    #[doc(alias = "get_buffer_pool")]
     fn buffer_pool(&self) -> Option<gst::BufferPool>;
 
     #[doc(alias = "gst_aggregator_get_latency")]
-    fn latency(&self) -> gst::ClockTime;
+    #[doc(alias = "get_latency")]
+    fn latency(&self) -> Option<gst::ClockTime>;
 
     #[doc(alias = "gst_aggregator_negotiate")]
     fn negotiate(&self) -> bool;
 
     #[doc(alias = "gst_aggregator_set_latency")]
-    fn set_latency(&self, min_latency: gst::ClockTime, max_latency: gst::ClockTime);
+    fn set_latency(
+        &self,
+        min_latency: gst::ClockTime,
+        max_latency: impl Into<Option<gst::ClockTime>>,
+    );
 
     #[doc(alias = "gst_aggregator_set_src_caps")]
     fn set_src_caps(&self, caps: &gst::Caps);
 
     #[doc(alias = "gst_aggregator_simple_get_next_time")]
-    fn simple_get_next_time(&self) -> gst::ClockTime;
+    fn simple_get_next_time(&self) -> Option<gst::ClockTime>;
 
-    #[doc(alias = "get_property_start_time")]
+    #[doc(alias = "start-time")]
     fn start_time(&self) -> u64;
 
-    #[doc(alias = "set_property_start_time")]
+    #[doc(alias = "start-time")]
     fn set_start_time(&self, start_time: u64);
 
-    fn connect_property_latency_notify<F: Fn(&Self) + Send + Sync + 'static>(
-        &self,
-        f: F,
-    ) -> SignalHandlerId;
+    #[doc(alias = "latency")]
+    fn connect_latency_notify<F: Fn(&Self) + Send + Sync + 'static>(&self, f: F)
+        -> SignalHandlerId;
 
-    fn connect_property_start_time_notify<F: Fn(&Self) + Send + Sync + 'static>(
+    #[doc(alias = "start-time")]
+    fn connect_start_time_notify<F: Fn(&Self) + Send + Sync + 'static>(
         &self,
         f: F,
     ) -> SignalHandlerId;
@@ -79,7 +87,7 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
         }
     }
 
-    fn latency(&self) -> gst::ClockTime {
+    fn latency(&self) -> Option<gst::ClockTime> {
         unsafe {
             from_glib(ffi::gst_aggregator_get_latency(
                 self.as_ref().to_glib_none().0,
@@ -95,12 +103,16 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
         }
     }
 
-    fn set_latency(&self, min_latency: gst::ClockTime, max_latency: gst::ClockTime) {
+    fn set_latency(
+        &self,
+        min_latency: gst::ClockTime,
+        max_latency: impl Into<Option<gst::ClockTime>>,
+    ) {
         unsafe {
             ffi::gst_aggregator_set_latency(
                 self.as_ref().to_glib_none().0,
                 min_latency.into_glib(),
-                max_latency.into_glib(),
+                max_latency.into().into_glib(),
             );
         }
     }
@@ -111,7 +123,7 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
         }
     }
 
-    fn simple_get_next_time(&self) -> gst::ClockTime {
+    fn simple_get_next_time(&self) -> Option<gst::ClockTime> {
         unsafe {
             from_glib(ffi::gst_aggregator_simple_get_next_time(
                 self.as_ref().to_glib_none().0,
@@ -138,22 +150,24 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
             glib::gobject_ffi::g_object_set_property(
                 self.to_glib_none().0 as *mut glib::gobject_ffi::GObject,
                 b"start-time\0".as_ptr() as *const _,
-                glib::Value::from(&start_time).to_glib_none().0,
+                start_time.to_value().to_glib_none().0,
             );
         }
     }
 
-    fn connect_property_latency_notify<F: Fn(&Self) + Send + Sync + 'static>(
+    #[doc(alias = "latency")]
+    fn connect_latency_notify<F: Fn(&Self) + Send + Sync + 'static>(
         &self,
         f: F,
     ) -> SignalHandlerId {
-        unsafe extern "C" fn notify_latency_trampoline<P, F: Fn(&P) + Send + Sync + 'static>(
+        unsafe extern "C" fn notify_latency_trampoline<
+            P: IsA<Aggregator>,
+            F: Fn(&P) + Send + Sync + 'static,
+        >(
             this: *mut ffi::GstAggregator,
             _param_spec: glib::ffi::gpointer,
             f: glib::ffi::gpointer,
-        ) where
-            P: IsA<Aggregator>,
-        {
+        ) {
             let f: &F = &*(f as *const F);
             f(&Aggregator::from_glib_borrow(this).unsafe_cast_ref())
         }
@@ -170,17 +184,19 @@ impl<O: IsA<Aggregator>> AggregatorExt for O {
         }
     }
 
-    fn connect_property_start_time_notify<F: Fn(&Self) + Send + Sync + 'static>(
+    #[doc(alias = "start-time")]
+    fn connect_start_time_notify<F: Fn(&Self) + Send + Sync + 'static>(
         &self,
         f: F,
     ) -> SignalHandlerId {
-        unsafe extern "C" fn notify_start_time_trampoline<P, F: Fn(&P) + Send + Sync + 'static>(
+        unsafe extern "C" fn notify_start_time_trampoline<
+            P: IsA<Aggregator>,
+            F: Fn(&P) + Send + Sync + 'static,
+        >(
             this: *mut ffi::GstAggregator,
             _param_spec: glib::ffi::gpointer,
             f: glib::ffi::gpointer,
-        ) where
-            P: IsA<Aggregator>,
-        {
+        ) {
             let f: &F = &*(f as *const F);
             f(&Aggregator::from_glib_borrow(this).unsafe_cast_ref())
         }

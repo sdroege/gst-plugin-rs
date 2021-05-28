@@ -36,14 +36,14 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 #[derive(Debug, Clone)]
 struct Settings {
     uri: Option<String>,
-    min_latency: u64,
+    min_latency: gst::ClockTime,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             uri: None,
-            min_latency: 0,
+            min_latency: gst::ClockTime::ZERO,
         }
     }
 }
@@ -131,7 +131,7 @@ impl ObjectImpl for VideoFallbackSource {
                 gst_info!(
                     CAT,
                     obj: obj,
-                    "Changing Minimum Latency from {:?} to {:?}",
+                    "Changing Minimum Latency from {} to {}",
                     settings.min_latency,
                     new_value,
                 );
@@ -276,7 +276,7 @@ impl VideoFallbackSource {
     fn create_source(
         &self,
         element: &super::VideoFallbackSource,
-        min_latency: u64,
+        min_latency: gst::ClockTime,
         uri: Option<&str>,
     ) -> gst::Element {
         gst_debug!(CAT, obj: element, "Creating source with uri {:?}", uri);
@@ -313,7 +313,7 @@ impl VideoFallbackSource {
                         ("max-size-bytes", &0u32),
                         (
                             "max-size-time",
-                            &gst::ClockTime::max(5 * gst::SECOND, min_latency.into()).unwrap(),
+                            &min_latency.max(5 * gst::ClockTime::SECOND).nseconds(),
                         ),
                     ])
                     .unwrap();

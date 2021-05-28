@@ -1,17 +1,10 @@
-// Copyright (C) 2018 Sebastian Dröge <sebastian@centricular.com>
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use super::super::ffi;
 
 use glib::translate::*;
 use gst::glib;
 use gst::prelude::*;
-
 use gst::subclass::prelude::*;
 
 use super::super::Aggregator;
@@ -58,12 +51,12 @@ impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
         aggregator: &Aggregator,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         unsafe {
-            let data = T::type_data();
+            let data = Self::type_data();
             let parent_class = data.as_ref().parent_class() as *mut ffi::GstAggregatorPadClass;
             (*parent_class)
                 .flush
                 .map(|f| {
-                    from_glib(f(
+                    try_from_glib(f(
                         aggregator_pad
                             .unsafe_cast_ref::<AggregatorPad>()
                             .to_glib_none()
@@ -71,8 +64,7 @@ impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
                         aggregator.to_glib_none().0,
                     ))
                 })
-                .unwrap_or(gst::FlowReturn::Ok)
-                .into_result()
+                .unwrap_or(Ok(gst::FlowSuccess::Ok))
         }
     }
 
@@ -83,7 +75,7 @@ impl<T: AggregatorPadImpl> AggregatorPadImplExt for T {
         buffer: &gst::Buffer,
     ) -> bool {
         unsafe {
-            let data = T::type_data();
+            let data = Self::type_data();
             let parent_class = data.as_ref().parent_class() as *mut ffi::GstAggregatorPadClass;
             (*parent_class)
                 .skip_buffer

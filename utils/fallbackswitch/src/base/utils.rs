@@ -1,10 +1,4 @@
-// Copyright (C) 2017 Sebastian Dröge <sebastian@centricular.com>
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use glib::translate::mut_override;
 use gst::glib;
@@ -14,6 +8,7 @@ pub struct MutexGuard<'a>(&'a glib::ffi::GMutex);
 
 impl<'a> MutexGuard<'a> {
     #[allow(clippy::trivially_copy_pass_by_ref)]
+    #[doc(alias = "g_mutex_lock")]
     pub fn lock(mutex: &'a glib::ffi::GMutex) -> Self {
         unsafe {
             glib::ffi::g_mutex_lock(mut_override(mutex));

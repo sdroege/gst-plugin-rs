@@ -42,7 +42,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
 
     let fallbackswitch = gst::ElementFactory::make("fallbackswitch", None).unwrap();
     fallbackswitch
-        .set_property("timeout", &gst::SECOND)
+        .set_property("timeout", &gst::ClockTime::SECOND)
         .unwrap();
 
     let decodebin = gst::ElementFactory::make("decodebin", None).unwrap();
@@ -134,7 +134,7 @@ fn create_ui(app: &gtk::Application) {
 
         let position = video_sink
             .query_position::<gst::ClockTime>()
-            .unwrap_or_else(|| 0.into());
+            .unwrap_or(gst::ClockTime::ZERO);
         position_label.set_text(&format!("Position: {:.1}", position));
 
         glib::Continue(true)
