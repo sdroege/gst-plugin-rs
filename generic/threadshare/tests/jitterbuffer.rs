@@ -77,17 +77,21 @@ fn jb_pipeline() {
 
     let appsink = sink.dynamic_cast::<gst_app::AppSink>().unwrap();
     let (sender, receiver) = mpsc::channel();
-    appsink.connect_new_sample(move |appsink| {
-        let _sample = appsink
-            .emit_by_name("pull-sample", &[])
-            .unwrap()
-            .unwrap()
-            .get::<gst::Sample>()
-            .unwrap();
+    appsink.set_callbacks(
+        gst_app::AppSinkCallbacks::builder()
+            .new_sample(move |appsink| {
+                let _sample = appsink
+                    .emit_by_name("pull-sample", &[])
+                    .unwrap()
+                    .unwrap()
+                    .get::<gst::Sample>()
+                    .unwrap();
 
-        sender.send(()).unwrap();
-        Ok(gst::FlowSuccess::Ok)
-    });
+                sender.send(()).unwrap();
+                Ok(gst::FlowSuccess::Ok)
+            })
+            .build(),
+    );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -143,17 +147,21 @@ fn jb_ts_pipeline() {
 
     let appsink = sink.dynamic_cast::<gst_app::AppSink>().unwrap();
     let (sender, receiver) = mpsc::channel();
-    appsink.connect_new_sample(move |appsink| {
-        let _sample = appsink
-            .emit_by_name("pull-sample", &[])
-            .unwrap()
-            .unwrap()
-            .get::<gst::Sample>()
-            .unwrap();
+    appsink.set_callbacks(
+        gst_app::AppSinkCallbacks::builder()
+            .new_sample(move |appsink| {
+                let _sample = appsink
+                    .emit_by_name("pull-sample", &[])
+                    .unwrap()
+                    .unwrap()
+                    .get::<gst::Sample>()
+                    .unwrap();
 
-        sender.send(()).unwrap();
-        Ok(gst::FlowSuccess::Ok)
-    });
+                sender.send(()).unwrap();
+                Ok(gst::FlowSuccess::Ok)
+            })
+            .build(),
+    );
 
     pipeline.set_state(gst::State::Playing).unwrap();
 

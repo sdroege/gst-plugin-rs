@@ -73,18 +73,22 @@ fn test_push() {
 
     let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
     let samples_clone = samples.clone();
-    appsink.connect_new_sample(move |appsink| {
-        let sample = appsink
-            .emit_by_name("pull-sample", &[])
-            .unwrap()
-            .unwrap()
-            .get::<gst::Sample>()
-            .unwrap();
+    appsink.set_callbacks(
+        gst_app::AppSinkCallbacks::builder()
+            .new_sample(move |appsink| {
+                let sample = appsink
+                    .emit_by_name("pull-sample", &[])
+                    .unwrap()
+                    .unwrap()
+                    .get::<gst::Sample>()
+                    .unwrap();
 
-        let mut samples = samples_clone.lock().unwrap();
-        samples.push(sample);
-        Ok(gst::FlowSuccess::Ok)
-    });
+                let mut samples = samples_clone.lock().unwrap();
+                samples.push(sample);
+                Ok(gst::FlowSuccess::Ok)
+            })
+            .build(),
+    );
 
     // Wait for the server to listen
     listening_rx.recv().unwrap();

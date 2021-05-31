@@ -86,17 +86,21 @@ fn multiple_contexts_queue() {
 
         let appsink = sink.dynamic_cast::<gst_app::AppSink>().unwrap();
         let sender_clone = sender.clone();
-        appsink.connect_new_sample(move |appsink| {
-            let _sample = appsink
-                .emit_by_name("pull-sample", &[])
-                .unwrap()
-                .unwrap()
-                .get::<gst::Sample>()
-                .unwrap();
+        appsink.set_callbacks(
+            gst_app::AppSinkCallbacks::builder()
+                .new_sample(move |appsink| {
+                    let _sample = appsink
+                        .emit_by_name("pull-sample", &[])
+                        .unwrap()
+                        .unwrap()
+                        .get::<gst::Sample>()
+                        .unwrap();
 
-            sender_clone.send(()).unwrap();
-            Ok(gst::FlowSuccess::Ok)
-        });
+                    sender_clone.send(()).unwrap();
+                    Ok(gst::FlowSuccess::Ok)
+                })
+                .build(),
+        );
     }
 
     let pipeline_clone = pipeline.clone();
@@ -244,17 +248,21 @@ fn multiple_contexts_proxy() {
 
         let appsink = sink.dynamic_cast::<gst_app::AppSink>().unwrap();
         let sender_clone = sender.clone();
-        appsink.connect_new_sample(move |appsink| {
-            let _sample = appsink
-                .emit_by_name("pull-sample", &[])
-                .unwrap()
-                .unwrap()
-                .get::<gst::Sample>()
-                .unwrap();
+        appsink.set_callbacks(
+            gst_app::AppSinkCallbacks::builder()
+                .new_sample(move |appsink| {
+                    let _sample = appsink
+                        .emit_by_name("pull-sample", &[])
+                        .unwrap()
+                        .unwrap()
+                        .get::<gst::Sample>()
+                        .unwrap();
 
-            sender_clone.send(()).unwrap();
-            Ok(gst::FlowSuccess::Ok)
-        });
+                    sender_clone.send(()).unwrap();
+                    Ok(gst::FlowSuccess::Ok)
+                })
+                .build(),
+        );
     }
 
     let pipeline_clone = pipeline.clone();
@@ -361,21 +369,24 @@ fn eos() {
     let (sample_notifier, sample_notif_rcv) = mpsc::channel();
     let (eos_notifier, eos_notif_rcv) = mpsc::channel();
     let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
-    appsink.connect_new_sample(move |appsink| {
-        gst_debug!(CAT, obj: appsink, "eos: pulling sample");
-        let _ = appsink
-            .emit_by_name("pull-sample", &[])
-            .unwrap()
-            .unwrap()
-            .get::<gst::Sample>()
-            .unwrap();
+    appsink.set_callbacks(
+        gst_app::AppSinkCallbacks::builder()
+            .new_sample(move |appsink| {
+                gst_debug!(CAT, obj: appsink, "eos: pulling sample");
+                let _ = appsink
+                    .emit_by_name("pull-sample", &[])
+                    .unwrap()
+                    .unwrap()
+                    .get::<gst::Sample>()
+                    .unwrap();
 
-        sample_notifier.send(()).unwrap();
+                sample_notifier.send(()).unwrap();
 
-        Ok(gst::FlowSuccess::Ok)
-    });
-
-    appsink.connect_eos(move |_appsink| eos_notifier.send(()).unwrap());
+                Ok(gst::FlowSuccess::Ok)
+            })
+            .eos(move |_appsink| eos_notifier.send(()).unwrap())
+            .build(),
+    );
 
     fn push_buffer(src: &gst::Element) -> bool {
         gst_debug!(CAT, obj: src, "eos: pushing buffer");
@@ -504,19 +515,23 @@ fn premature_shutdown() {
     let (appsink_sender, appsink_receiver) = mpsc::channel();
 
     let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
-    appsink.connect_new_sample(move |appsink| {
-        gst_debug!(CAT, obj: appsink, "premature_shutdown: pulling sample");
-        let _sample = appsink
-            .emit_by_name("pull-sample", &[])
-            .unwrap()
-            .unwrap()
-            .get::<gst::Sample>()
-            .unwrap();
+    appsink.set_callbacks(
+        gst_app::AppSinkCallbacks::builder()
+            .new_sample(move |appsink| {
+                gst_debug!(CAT, obj: appsink, "premature_shutdown: pulling sample");
+                let _sample = appsink
+                    .emit_by_name("pull-sample", &[])
+                    .unwrap()
+                    .unwrap()
+                    .get::<gst::Sample>()
+                    .unwrap();
 
-        appsink_sender.send(()).unwrap();
+                appsink_sender.send(()).unwrap();
 
-        Ok(gst::FlowSuccess::Ok)
-    });
+                Ok(gst::FlowSuccess::Ok)
+            })
+            .build(),
+    );
 
     fn push_buffer(src: &gst::Element, intent: &str) -> bool {
         gst_debug!(
