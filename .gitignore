@@ -4,3 +4,4 @@ target
 *.bk
 *.swp
 .vscode
+builddir
