@@ -179,6 +179,8 @@ struct State {
     // So that we don't schedule a restart when manually unblocking
     // and our source hasn't reached the required state
     schedule_restart_on_unblock: bool,
+
+    is_image: bool,
 }
 
 #[derive(Default)]
@@ -1089,6 +1091,7 @@ impl FallbackSrc {
             stats: Stats::default(),
             manually_blocked,
             schedule_restart_on_unblock: false,
+            is_image: false,
         });
 
         drop(state_guard);
@@ -1261,6 +1264,39 @@ impl FallbackSrc {
             Some(state) => state,
         };
 
+        let mut is_image = false;
+
+        if let Some(stream_event) = pad.sticky_event(gst::EventType::StreamStart, 0) {
+            let stream = match stream_event.view() {
+                gst::EventView::StreamStart(ref ev) => ev.stream(),
+                _ => unreachable!(),
+            };
+
+            if let Some(stream) = stream {
+                if let Some(caps) = stream.caps() {
+                    if let Some(s) = caps.structure(0) {
+                        is_image = s.name().starts_with("image/");
+                    }
+                }
+            }
+        }
+
+        if is_image {
+            if let Some(timeout) = state.source_pending_restart_timeout.take() {
+                timeout.unschedule();
+            }
+
+            if let Some(timeout) = state.source_retry_timeout.take() {
+                timeout.unschedule();
+            }
+
+            if let Some(timeout) = state.source_restart_timeout.take() {
+                timeout.unschedule();
+            }
+        }
+
+        state.is_image |= is_image;
+
         let (is_video, stream) = match pad.name() {
             x if x.starts_with("audio_") => (false, &mut state.audio_stream),
             x if x.starts_with("video_") => (true, &mut state.video_stream),
@@ -1300,7 +1336,26 @@ impl FallbackSrc {
             Some(ref mut stream) => stream,
         };
 
-        let sinkpad = stream.clocksync_queue.static_pad("sink").unwrap();
+        let sinkpad = if is_image {
+            let imagefreeze =
+                gst::ElementFactory::make("imagefreeze", None).expect("no imagefreeze found");
+
+            gst_debug!(CAT, "image stream, inserting imagefreeze");
+            element.add(&imagefreeze).unwrap();
+            imagefreeze.set_property("is-live", &true).unwrap();
+            if imagefreeze.sync_state_with_parent().is_err() {
+                gst_error!(CAT, obj: element, "imagefreeze failed to change state",);
+                return Err(gst::error_msg!(
+                    gst::CoreError::StateChange,
+                    ["Failed to change imagefreeze state"]
+                ));
+            }
+            imagefreeze.link(&stream.clocksync_queue).unwrap();
+            imagefreeze.static_pad("sink").unwrap()
+        } else {
+            stream.clocksync_queue.static_pad("sink").unwrap()
+        };
+
         pad.link(&sinkpad).map_err(|err| {
             gst_error!(
                 CAT,
@@ -1339,7 +1394,10 @@ impl FallbackSrc {
                         }
                         Some(state) => state,
                     };
-                    if state.settings.restart_on_eos {
+
+                    if is_image {
+                        gst::PadProbeReturn::Ok
+                    } else if state.settings.restart_on_eos {
                         src.handle_source_error(&element, state, RetryReason::Eos);
                         drop(state_guard);
                         element.notify("statistics");
@@ -2222,6 +2280,15 @@ impl FallbackSrc {
                 CAT,
                 obj: element,
                 "Not scheduling source restart timeout because source is pending restart already",
+            );
+            return;
+        }
+
+        if state.is_image {
+            gst_debug!(
+                CAT,
+                obj: element,
+                "Not scheduling source restart timeout because we are playing back an image",
             );
             return;
         }
