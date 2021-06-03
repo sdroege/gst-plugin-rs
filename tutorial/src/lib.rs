@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use gst::glib;
+
 mod identity;
 mod progressbin;
 mod rgb2gray;

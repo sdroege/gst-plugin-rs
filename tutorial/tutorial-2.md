@@ -4,12 +4,12 @@ In this part, a raw audio sine wave source element is going to be written. The f
 
 ### Table of Contents
 
-1.  [Boilerplate](#boilerplate)
-2.  [Caps Negotiation](#caps-negotiation)
-3.  [Buffer Creation](#buffer-creation)
-4.  [(Pseudo) Live Mode](#pseudo-live-mode)
-5.  [Unlocking](#unlocking)
-6.  [Seeking](#seeking)
+ 1.  [Boilerplate](#boilerplate)
+ 2.  [Caps Negotiation](#caps-negotiation)
+ 3.  [Buffer Creation](#buffer-creation)
+ 4.  [(Pseudo) Live Mode](#pseudo-live-mode)
+ 5.  [Unlocking](#unlocking)
+ 6.  [Seeking](#seeking)
 
 ### Boilerplate
 
@@ -22,8 +22,7 @@ So let's get started with all the boilerplate. This time our element will be bas
 In `src/sinesrc/imp.rs`:
 
 ```rust
-use glib::prelude::*;
-use glib::subclass::prelude::*;
+use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info, gst_log};
@@ -366,7 +365,8 @@ impl BaseSrcImpl for SineSrc {
 In `src/sinesrc/mod.rs`:
 
 ```rust
-use glib::prelude::*;
+use gst::glib;
+use gst::prelude::*;
 
 mod imp;
 

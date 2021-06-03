@@ -25,7 +25,7 @@
 //  * The Chunk object could have an "indent" field, that would get translated
 //    to tab offsets for small bandwidth savings
 
-use glib::subclass::prelude::*;
+use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};

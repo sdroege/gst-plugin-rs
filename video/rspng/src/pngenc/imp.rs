@@ -8,8 +8,7 @@
 
 use std::{io, io::Write, sync::Arc};
 
-use glib::subclass::prelude::*;
-
+use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error};

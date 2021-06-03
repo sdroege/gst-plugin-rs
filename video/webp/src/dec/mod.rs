@@ -19,7 +19,8 @@
 //
 // gst-launch-1.0 filesrc location=animated.webp ! webpdec-rs ! videoconvert ! autovideosink
 
-use glib::prelude::*;
+use gst::glib;
+use gst::prelude::*;
 
 mod imp;
 

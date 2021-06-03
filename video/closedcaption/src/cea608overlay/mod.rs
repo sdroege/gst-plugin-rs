@@ -21,7 +21,8 @@
 //   videotestsrc ! video/x-raw, width=1280, height=720 ! queue ! ccc.sink \
 //   filesrc location=input.srt ! subparse ! tttocea608 ! queue ! ccc.caption
 
-use glib::prelude::*;
+use gst::glib;
+use gst::prelude::*;
 
 mod imp;
 

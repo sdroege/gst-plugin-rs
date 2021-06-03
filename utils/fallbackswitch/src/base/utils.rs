@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use glib::translate::mut_override;
+use gst::glib;
 
 #[must_use = "if unused the Mutex will immediately unlock"]
 pub struct MutexGuard<'a>(&'a glib::ffi::GMutex);

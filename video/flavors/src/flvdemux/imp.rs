@@ -13,6 +13,7 @@ use std::sync::Mutex;
 #[rustfmt::skip]
 use ::flavors::parser as flavors;
 
+use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};

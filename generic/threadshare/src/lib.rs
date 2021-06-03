@@ -41,6 +41,7 @@ mod proxy;
 mod queue;
 
 use glib::translate::*;
+use gst::glib;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     udpsrc::register(plugin)?;

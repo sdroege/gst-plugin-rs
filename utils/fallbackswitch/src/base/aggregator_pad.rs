@@ -10,6 +10,7 @@ use super::ffi;
 use super::AggregatorPad;
 use glib::object::IsA;
 use glib::translate::*;
+use gst::glib;
 
 pub trait AggregatorPadExtManual: 'static {
     fn segment(&self) -> gst::Segment;

@@ -17,6 +17,8 @@
 
 #![recursion_limit = "128"]
 
+use gst::glib;
+
 mod gstregex;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {

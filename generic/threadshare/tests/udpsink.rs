@@ -17,7 +17,7 @@
 
 use std::thread;
 
-use glib::prelude::*;
+use gst::prelude::*;
 
 fn init() {
     use std::sync::Once;

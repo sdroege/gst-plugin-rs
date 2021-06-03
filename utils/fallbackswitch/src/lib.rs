@@ -15,6 +15,8 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use gst::glib;
+
 #[cfg(not(feature = "v1_18"))]
 #[path = "base/mod.rs"]
 pub mod gst_base_compat;

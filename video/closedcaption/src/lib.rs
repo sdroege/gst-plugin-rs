@@ -17,6 +17,8 @@
 
 #![recursion_limit = "128"]
 
+use gst::glib;
+
 #[allow(non_camel_case_types, non_upper_case_globals, unused)]
 #[allow(clippy::redundant_static_lifetimes, clippy::unreadable_literal)]
 #[allow(clippy::useless_transmute, clippy::trivially_copy_pass_by_ref)]

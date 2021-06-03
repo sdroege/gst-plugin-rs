@@ -1,3 +1,4 @@
+use gst::glib;
 use url::Url;
 
 use std::convert::AsRef;

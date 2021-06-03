@@ -11,7 +11,7 @@ mod aggregator;
 mod aggregator_pad;
 
 pub mod prelude {
-    pub use glib::prelude::*;
+    pub use gst::glib::prelude::*;
     pub use gst::prelude::*;
 
     pub use super::aggregator::AggregatorExtManual;

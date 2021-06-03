@@ -13,9 +13,8 @@ use futures::future;
 use once_cell::sync::Lazy;
 use rusoto_s3::*;
 
-use glib::prelude::*;
-use glib::subclass::prelude::*;
-
+use gst::glib;
+use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info};
 

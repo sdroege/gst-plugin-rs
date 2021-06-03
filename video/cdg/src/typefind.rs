@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use gst::glib;
+
 use crate::constants::{CDG_COMMAND, CDG_MASK, CDG_PACKET_PERIOD, CDG_PACKET_SIZE};
 use gst::{Caps, TypeFind, TypeFindProbability};
 use std::cmp;

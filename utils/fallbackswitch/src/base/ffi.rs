@@ -14,7 +14,7 @@ use libc::{
 };
 
 #[allow(unused_imports)]
-use glib::ffi::{gboolean, gconstpointer, gpointer, GType};
+use ::gst::glib::ffi::{gboolean, gconstpointer, gpointer, GType};
 
 #[repr(C)]
 #[derive(Copy, Clone)]

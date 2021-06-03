@@ -19,9 +19,7 @@ use futures::future::BoxFuture;
 use futures::future::{abortable, AbortHandle};
 use futures::prelude::*;
 
-use glib::prelude::*;
-use glib::subclass::prelude::*;
-
+use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_log, gst_trace};

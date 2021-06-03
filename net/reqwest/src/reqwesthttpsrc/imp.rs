@@ -17,7 +17,7 @@ use url::Url;
 
 use once_cell::sync::Lazy;
 
-use glib::subclass::prelude::*;
+use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_trace, gst_warning};

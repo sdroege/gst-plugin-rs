@@ -19,8 +19,9 @@ use super::ffi;
 
 use std::ptr;
 
-use glib::prelude::*;
 use glib::translate::*;
+use gst::glib;
+use gst::prelude::*;
 
 use std::mem;
 

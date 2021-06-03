@@ -18,6 +18,7 @@
 
 use futures::future::BoxFuture;
 
+use gst::glib;
 use gst::prelude::*;
 use gst::{gst_debug, gst_error, gst_log};
 

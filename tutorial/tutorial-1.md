@@ -10,18 +10,17 @@ The final code for this plugin can be found [here](https://gitlab.freedesktop.or
 
 # Table of contents
 
-1. [Project Structure](#project-structure)
-1. [Plugin Initialization](#plugin-initialization)
-1. [Type Registration](#type-registration)
-1. [Type Class and Instance Initialization](#type-class-and-instance-initialization)
-1. [Caps and Pad Templates](#caps-and-pad-templates)
-1. [Caps Handling Part 1](#caps-handling-part-1)
-1. [Caps Handling Part 2](#caps-handling-part-2)
-1. [Conversion of BGRx Video Frames to Grayscale](#conversion-of-bgrx-video-frames-to-grayscale)
-1. [Testing the new element](#testing-the-new-element)
-1. [Properties](#properties)
-1. [What next](#what-next)
-
+ 1.  [Project Structure](#project-structure)
+ 2.  [Plugin Initialization](#plugin-initialization)
+ 3.  [Type Registration](#type-registration)
+ 4.  [Type Class and Instance Initialization](#type-class-and-instance-initialization)
+ 5.  [Caps and Pad Templates](#caps-and-pad-templates)
+ 6.  [Caps Handling Part 1](#caps-handling-part-1)
+ 7.  [Caps Handling Part 2](#caps-handling-part-2)
+ 8.  [Conversion of BGRx Video Frames to Grayscale](#conversion-of-bgrx-video-frames-to-grayscale)
+ 9.  [Testing the new element](#testing-the-new-element)
+ 10.  [Properties](#properties)
+ 11.  [What next](#what-next)
 
 ## Project Structure
 
@@ -41,7 +40,6 @@ edition = "2018"
 description = "Rust Tutorial Plugin"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/glib" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
@@ -91,15 +89,16 @@ gst::plugin_define!(
 GStreamer requires this information to be statically available in the shared library, not returned by a function.
 
 The static plugin metadata that we provide here is
-1. name of the plugin
-1. short description for the plugin
-1. name of the plugin entry point function
-1. version number of the plugin
-1. license of the plugin (only a fixed set of licenses is allowed here, [see](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstPlugin.html#GstPluginDesc))
-1. source package name
-1. binary package name (only really makes sense for e.g. Linux distributions)
-1. origin of the plugin
-1. release date of this version
+
+ 1. name of the plugin
+ 1. short description for the plugin
+ 1. name of the plugin entry point function
+ 1. version number of the plugin
+ 1. license of the plugin (only a fixed set of licenses is allowed here, [see](https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/GstPlugin.html#GstPluginDesc))
+ 1. source package name
+ 1. binary package name (only really makes sense for e.g. Linux distributions)
+ 1. origin of the plugin
+ 1. release date of this version
 
 
 Next we create `build.rs` in the project main directory.
@@ -133,6 +132,8 @@ gst-inspect-1.0 target/debug/libgstrstutorial.so
 As a next step, we’re going to add another module `rgb2gray` to our project, and call a function called `register` from our `plugin_init` function.
 
 ```rust
+use gst::glib;
+
 mod rgb2gray;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
@@ -144,11 +145,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 With that our `src/lib.rs` is complete, and all following code is only in `src/rgb2gray/imp.rs`. At the top of the new file we first need to add various `use-directives` to import various types, macros and functions we’re going to use into the current module’s scope.
 
 ```rust
-use glib::subclass;
-use glib::subclass::prelude::*;
-
-use gst::prelude::*;
-use gst::subclass::prelude::*;
+use gst::glib;
 use gst::{gst_debug, gst_info};
 use gst_base::subclass::prelude::*;
 
@@ -163,6 +160,8 @@ GStreamer is based on the GLib object system ([GObject](https://developer.gnome.
 So, as a next step we need to register a new type for our RGB to Grayscale converter GStreamer element with the GObject type system, and then register that type with GStreamer to be able to create new instances of it. We do this with the following code
 
 ```rust
+use gst::glib;
+
 #[derive(Default)]
 pub struct Rgb2Gray {}
 
@@ -183,11 +182,11 @@ This defines a struct `Rgb2Gray` which is empty for now and an empty implementat
 We also add the following code is in `src/rgb2gray/mod.rs`:
 
 ```rust
-use glib::prelude::*;
+use gst::glib;
+use gst::prelude::*;
 
 mod imp;
 
-// The public Rust wrapper type for our element
 glib::wrapper! {
     pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
@@ -220,6 +219,8 @@ In addition, we also define a `register` function (the one that is already calle
 As a next step we implement the `new` funtion and `class_init` functions. In the first version, this struct is empty for now but we will later use it to store all state of our element.
 
 ```rust
+use gst::glib;
+
 #[derive(Default)]
 pub struct Rgb2Gray {}
 
@@ -286,10 +287,12 @@ impl BaseTransformImpl for Rgb2Gray {}
 ```
 
 ```rust
-use glib::prelude::*;
+use gst::glib;
+use gst::prelude::*;
 
 mod imp;
 
+// The public Rust wrapper type for our element
 glib::wrapper! {
     pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }

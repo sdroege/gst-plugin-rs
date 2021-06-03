@@ -14,7 +14,6 @@
 // License along with this library; if not, write to the
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
-use glib::prelude::*;
 use gst::prelude::*;
 
 use byte_slice_cast::*;
@@ -33,13 +32,13 @@ macro_rules! CSD {
             <CsInstruments>
             sr = 44100 ; default sample rate
             ksmps = {}
-            nchnls_i = {} 
+            nchnls_i = {}
             nchnls = {}
             0dbfs  = 1
 
-            instr 1 
+            instr 1
 
-            {} ;input	
+            {} ;input
                 {}	; csound output
 
             endin

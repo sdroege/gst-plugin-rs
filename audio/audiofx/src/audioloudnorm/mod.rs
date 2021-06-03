@@ -18,7 +18,8 @@
 // License along with FFmpeg; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-use glib::prelude::*;
+use gst::glib;
+use gst::prelude::*;
 
 mod imp;
 

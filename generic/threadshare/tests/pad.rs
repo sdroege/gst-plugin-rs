@@ -22,6 +22,7 @@ use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
 use glib::GBoxed;
+use gst::glib;
 
 use gst::prelude::*;
 use gst::subclass::prelude::*;

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::subclass::prelude::*;
+use gst::glib;
 use gst::gst_debug;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;

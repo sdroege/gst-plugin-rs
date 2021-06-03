@@ -16,6 +16,7 @@
 // Boston, MA 02110-1335, USA.
 
 use glib::ffi::{gboolean, gpointer, GList, GType};
+use gst::glib;
 
 use gst::ffi::GstClockTime;
 use libc::{c_int, c_uint, c_ulonglong, c_ushort, c_void};

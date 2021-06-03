@@ -17,6 +17,8 @@
 
 #![recursion_limit = "128"]
 
+use gst::glib;
+
 mod jsongstenc;
 mod jsongstparse;
 mod line_reader;

@@ -20,6 +20,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+use gst::glib;
+
 const TYPEFIND_HEADER: &[u8; 12] = b"gst-sodium10";
 // `core::slice::<impl [T]>::len` is not yet stable as a const fn
 // const TYPEFIND_HEADER_SIZE: usize = TYPEFIND_HEADER.len();

@@ -22,7 +22,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-use glib::prelude::*;
+use gst::glib;
 use gst::prelude::*;
 use sodiumoxide::crypto::box_;
 

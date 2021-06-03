@@ -6,8 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::prelude::*;
 use glib::GEnum;
+use gst::glib;
+use gst::prelude::*;
 
 mod imp;
 

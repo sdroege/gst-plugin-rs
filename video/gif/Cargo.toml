@@ -8,7 +8,6 @@ edition = "2018"
 description = "GStreamer GIF plugin"
 
 [dependencies]
-glib = { git = "https://github.com/gtk-rs/gtk-rs-core" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gif = "0.11"

@@ -8,11 +8,12 @@
 
 use super::ffi;
 use super::Aggregator;
-use glib::prelude::*;
 use glib::signal::{connect_raw, SignalHandlerId};
 use glib::translate::*;
 use glib::IsA;
 use glib::Value;
+use gst::glib;
+use gst::prelude::*;
 use std::boxed::Box as Box_;
 use std::mem;
 use std::ptr;

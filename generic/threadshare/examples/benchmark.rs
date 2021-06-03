@@ -15,7 +15,7 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::prelude::*;
+use gst::glib;
 use gst::prelude::*;
 
 use std::env;

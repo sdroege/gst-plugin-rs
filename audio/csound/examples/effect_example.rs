@@ -15,7 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::prelude::*;
 use gst::prelude::*;
 
 use std::error::Error;
@@ -40,25 +39,25 @@ const CSD: &str = "
     sr = 44100
     ksmps = 7
 
-    nchnls_i = 1 
-    nchnls = 2   
+    nchnls_i = 1
+    nchnls = 2
 
     gasig  init 0
-    gidel  = 1	
+    gidel  = 1
 
     instr 1
 
         ain in
             outs ain, ain
 
-        vincr gasig, ain	
+        vincr gasig, ain
     endin
 
     instr 2
 
         ifeedback = p4
 
-        aseg linseg 1., p3, 0.0 
+        aseg linseg 1., p3, 0.0
 
         abuf2	delayr	gidel
         adelL 	deltap	.4

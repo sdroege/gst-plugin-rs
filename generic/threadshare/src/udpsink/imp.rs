@@ -20,9 +20,7 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex;
 use futures::prelude::*;
 
-use glib::prelude::*;
-use glib::subclass::prelude::*;
-
+use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::EventView;

@@ -17,6 +17,7 @@
 
 use gio::prelude::*;
 
+use gst::glib;
 use gst::prelude::*;
 
 use gtk::prelude::*;

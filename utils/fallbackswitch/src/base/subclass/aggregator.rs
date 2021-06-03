@@ -8,10 +8,9 @@
 
 use super::super::ffi;
 
-use glib::prelude::*;
-use glib::subclass::prelude::*;
 use glib::translate::*;
-
+use gst::glib;
+use gst::prelude::*;
 use gst::subclass::prelude::*;
 
 use std::ptr;
