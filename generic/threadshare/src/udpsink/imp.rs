@@ -161,7 +161,7 @@ impl UdpSinkPadHandlerInner {
         gst_pad: &gst::Pad,
         clients_to_add: impl Iterator<Item = SocketAddr>,
     ) {
-        let old_clients = mem::replace(&mut *Arc::make_mut(&mut self.clients), vec![]);
+        let old_clients = mem::take(&mut *Arc::make_mut(&mut self.clients));
 
         self.clients_to_configure = vec![];
         self.clients_to_unconfigure = vec![];
@@ -419,8 +419,8 @@ impl UdpSinkPadHandler {
                     });
             }
 
-            let clients_to_configure = mem::replace(&mut inner.clients_to_configure, vec![]);
-            let clients_to_unconfigure = mem::replace(&mut inner.clients_to_unconfigure, vec![]);
+            let clients_to_configure = mem::take(&mut inner.clients_to_configure);
+            let clients_to_unconfigure = mem::take(&mut inner.clients_to_unconfigure);
 
             let settings = inner.settings.lock().unwrap().clone();
 

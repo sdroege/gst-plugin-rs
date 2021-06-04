@@ -57,7 +57,7 @@ impl CacheBuffer {
 
     pub fn consume(&self) -> Vec<u8> {
         let mut buffer = self.buffer.borrow_mut();
-        std::mem::replace(&mut *buffer, Vec::new())
+        std::mem::take(&mut *buffer)
     }
 }
 // The Encoder requires a Writer, so we use here and intermediate structure

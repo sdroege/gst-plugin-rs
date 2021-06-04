@@ -166,7 +166,7 @@ impl SinkHandler {
         inner.ips_rtptime = None;
         inner.ips_pts = None;
 
-        mem::replace(&mut inner.gap_packets, BTreeSet::new())
+        mem::take(&mut inner.gap_packets)
     }
 
     fn parse_caps(

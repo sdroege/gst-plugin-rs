@@ -205,6 +205,7 @@ fn setup_sender_receiver(
     (sender_input, receiver_input_done, receiver_output, thread)
 }
 
+#[allow(clippy::type_complexity)]
 fn recv_buffers(
     receiver_output: &mpsc::Receiver<Either<gst::Buffer, gst::Event>>,
     segment: &mut gst::FormattedSegment<gst::ClockTime>,
@@ -1238,7 +1239,7 @@ fn test_two_stream_main_eos() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, true);
+    assert!(recording);
 
     // Send 2 buffers to secondary stream. At this moment, main stream got eos
     // already (after 10 buffers) and secondary stream got 2 buffers.
@@ -1257,7 +1258,7 @@ fn test_two_stream_main_eos() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, false);
+    assert!(!recording);
 
     let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
@@ -1268,7 +1269,7 @@ fn test_two_stream_main_eos() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     // Last buffer should be dropped from second stream
     let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -1280,7 +1281,7 @@ fn test_two_stream_main_eos() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 10);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     thread_1.join().unwrap();
     thread_2.join().unwrap();
@@ -1321,7 +1322,7 @@ fn test_two_stream_secondary_eos_first() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, true);
+    assert!(recording);
 
     // And send EOS to the main stream then it will update state to Stopped
     sender_input_1.send(SendData::Eos).unwrap();
@@ -1332,7 +1333,7 @@ fn test_two_stream_secondary_eos_first() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, false);
+    assert!(!recording);
 
     let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
@@ -1343,7 +1344,7 @@ fn test_two_stream_secondary_eos_first() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     // We sent 9 buffers to the second stream, and there should be no dropped
     // buffer
@@ -1356,7 +1357,7 @@ fn test_two_stream_secondary_eos_first() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 9);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     thread_1.join().unwrap();
     thread_2.join().unwrap();
@@ -1400,7 +1401,7 @@ fn test_three_stream_main_eos() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, true);
+    assert!(recording);
 
     // Send 2 buffers to non-main streams. At this moment, main stream got EOS
     // already (after 10 buffers) and the other streams got 9 buffers.
@@ -1419,7 +1420,7 @@ fn test_three_stream_main_eos() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, true);
+    assert!(recording);
 
     // And terminate the third thread without EOS
     sender_input_3.send(SendData::Buffers(2)).unwrap();
@@ -1434,7 +1435,7 @@ fn test_three_stream_main_eos() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, false);
+    assert!(!recording);
 
     let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
@@ -1445,7 +1446,7 @@ fn test_three_stream_main_eos() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     // Last buffer should be dropped from non-main streams
     let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -1457,7 +1458,7 @@ fn test_three_stream_main_eos() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 10);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     let mut segment_3 = gst::FormattedSegment::<gst::ClockTime>::new();
     let (buffers_3, saw_eos) = recv_buffers(&receiver_output_3, &mut segment_3, 0);
@@ -1468,7 +1469,7 @@ fn test_three_stream_main_eos() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_3.len(), 10);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     thread_1.join().unwrap();
     thread_2.join().unwrap();
@@ -1513,7 +1514,7 @@ fn test_three_stream_main_and_second_eos() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, true);
+    assert!(recording);
 
     // And send EOS to the second stream, but state shouldn't be affected by
     // this EOS. The third stream is still not in EOS state
@@ -1525,7 +1526,7 @@ fn test_three_stream_main_and_second_eos() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, true);
+    assert!(recording);
 
     // Send 2 buffers to the third stream. At this moment, main stream and
     // the second stream got EOS already (after 10 buffers) and the third stream
@@ -1546,7 +1547,7 @@ fn test_three_stream_main_and_second_eos() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, false);
+    assert!(!recording);
 
     let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
@@ -1557,7 +1558,7 @@ fn test_three_stream_main_and_second_eos() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     // We sent 9 buffers to the second stream, and there must be no dropped one
     let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -1569,7 +1570,7 @@ fn test_three_stream_main_and_second_eos() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 9);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     // Last buffer should be dropped from the third stream
     let mut segment_3 = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -1581,7 +1582,7 @@ fn test_three_stream_main_and_second_eos() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_3.len(), 10);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     thread_1.join().unwrap();
     thread_2.join().unwrap();
@@ -1629,7 +1630,7 @@ fn test_three_stream_secondary_eos_first() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, true);
+    assert!(recording);
 
     // And send EOS, Send EOS to the main stream then it will update state to
     // Stopped
@@ -1641,7 +1642,7 @@ fn test_three_stream_secondary_eos_first() {
         .unwrap()
         .get::<bool>()
         .unwrap();
-    assert_eq!(recording, false);
+    assert!(!recording);
 
     let mut segment_1 = gst::FormattedSegment::<gst::ClockTime>::new();
     let (buffers_1, saw_eos) = recv_buffers(&receiver_output_1, &mut segment_1, 0);
@@ -1652,7 +1653,7 @@ fn test_three_stream_secondary_eos_first() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_1.len(), 10);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     // Last buffer should be dropped from non-main streams
     let mut segment_2 = gst::FormattedSegment::<gst::ClockTime>::new();
@@ -1664,7 +1665,7 @@ fn test_three_stream_secondary_eos_first() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_2.len(), 9);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     let mut segment_3 = gst::FormattedSegment::<gst::ClockTime>::new();
     let (buffers_3, saw_eos) = recv_buffers(&receiver_output_3, &mut segment_3, 0);
@@ -1675,7 +1676,7 @@ fn test_three_stream_secondary_eos_first() {
         assert_eq!(duration.unwrap(), 20 * gst::ClockTime::MSECOND);
     }
     assert_eq!(buffers_3.len(), 9);
-    assert_eq!(saw_eos, true);
+    assert!(saw_eos);
 
     thread_1.join().unwrap();
     thread_2.join().unwrap();

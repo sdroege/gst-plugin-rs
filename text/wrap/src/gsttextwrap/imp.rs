@@ -181,9 +181,8 @@ impl TextWrap {
                     start_ts + accumulate_time < pts
                 })
             {
-                let mut buf = gst::Buffer::from_mut_slice(
-                    mem::replace(&mut state.current_text, String::new()).into_bytes(),
-                );
+                let mut buf =
+                    gst::Buffer::from_mut_slice(mem::take(&mut state.current_text).into_bytes());
                 {
                     let buf_mut = buf.get_mut().unwrap();
                     buf_mut.set_pts(state.start_ts);
@@ -366,7 +365,7 @@ impl TextWrap {
                 let mut state = self.state.lock().unwrap();
                 if !state.current_text.is_empty() {
                     let mut buf = gst::Buffer::from_mut_slice(
-                        mem::replace(&mut state.current_text, String::new()).into_bytes(),
+                        mem::take(&mut state.current_text).into_bytes(),
                     );
                     {
                         let buf_mut = buf.get_mut().unwrap();

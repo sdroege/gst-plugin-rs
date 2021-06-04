@@ -458,8 +458,8 @@ impl Transcriber {
                         let mut result = transcript.transcript.results.remove(0);
                         let use_partial_results = self.settings.lock().unwrap().use_partial_results;
                         if !result.is_partial && !result.alternatives.is_empty() {
+                            let alternative = result.alternatives.remove(0);
                             if !use_partial_results {
-                                let alternative = result.alternatives.remove(0);
                                 gst_info!(
                                     CAT,
                                     obj: element,
@@ -518,7 +518,6 @@ impl Transcriber {
                                     state.buffers.push_back(buf);
                                 }
                             } else {
-                                let alternative = result.alternatives.remove(0);
                                 let mut state = self.state.lock().unwrap();
                                 self.enqueue(
                                     element,

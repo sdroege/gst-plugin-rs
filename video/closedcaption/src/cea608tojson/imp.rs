@@ -463,7 +463,7 @@ impl State {
         let mut lines: Vec<Line> = vec![];
 
         // Wish BTreeMap had a drain() method
-        for (_idx, row) in std::mem::replace(&mut self.rows, BTreeMap::new()).into_iter() {
+        for (_idx, row) in std::mem::take(&mut self.rows).into_iter() {
             if !row.is_empty() {
                 let mut line: Line = row.into();
                 line.carriage_return = self.carriage_return.take();

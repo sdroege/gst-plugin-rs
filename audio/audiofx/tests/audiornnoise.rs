@@ -65,7 +65,7 @@ fn test_rnnoise(audio_info: &gst_audio::AudioInfo, buffer_size: usize) {
         let output = map.as_slice().as_slice_of::<f64>().unwrap();
 
         // all samples in the output buffers must value 0
-        assert_eq!(output.iter().any(|sample| *sample as u16 != 0u16), false);
+        assert!(output.iter().all(|sample| *sample as u16 == 0u16));
         total_processed += output.len();
     }
     h.push_event(gst::event::Eos::new());

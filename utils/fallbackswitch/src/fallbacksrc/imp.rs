@@ -2171,9 +2171,6 @@ impl FallbackSrc {
             if state.source_restart_timeout.is_none() {
                 self.schedule_source_restart_timeout(element, state, gst::ClockTime::ZERO);
             }
-
-            drop(state_guard);
-            element.notify("status");
         } else {
             gst_debug!(CAT, obj: element, "Switched to main stream");
             if let Some(timeout) = state.source_retry_timeout.take() {
@@ -2185,10 +2182,10 @@ impl FallbackSrc {
                 gst_debug!(CAT, obj: element, "Unscheduling restart timeout");
                 timeout.unschedule();
             }
-
-            drop(state_guard);
-            element.notify("status");
         }
+
+        drop(state_guard);
+        element.notify("status");
     }
 
     fn stats(&self) -> gst::Structure {

@@ -435,22 +435,15 @@ impl BaseTransformImpl for HsvDetector {
         caps: &gst::Caps,
         filter: Option<&gst::Caps>,
     ) -> Option<gst::Caps> {
-        let other_caps = if direction == gst::PadDirection::Src {
-            let mut caps = caps.clone();
-
-            for s in caps.make_mut().iter_mut() {
+        let mut other_caps = caps.clone();
+        if direction == gst::PadDirection::Src {
+            for s in other_caps.make_mut().iter_mut() {
                 s.set("format", &gst::List::from_owned(video_input_formats()));
             }
-
-            caps
         } else {
-            let mut caps = caps.clone();
-
-            for s in caps.make_mut().iter_mut() {
+            for s in other_caps.make_mut().iter_mut() {
                 s.set("format", &gst::List::from_owned(video_output_formats()));
             }
-
-            caps
         };
 
         gst_debug!(

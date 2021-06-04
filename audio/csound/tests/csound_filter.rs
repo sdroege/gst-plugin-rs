@@ -167,7 +167,7 @@ fn csound_filter_eos() {
         let output = map.as_slice().as_slice_of::<f64>().unwrap();
 
         // all samples in the output buffers must value 1
-        assert_eq!(output.iter().any(|sample| *sample as u16 != 1u16), false);
+        assert!(output.iter().all(|sample| *sample as u16 == 1u16));
 
         num_samples += output.len();
         num_buffers += 1;
@@ -190,7 +190,7 @@ fn csound_filter_eos() {
     num_buffers += 1;
 
     assert_eq!(output.len(), samples_at_eos);
-    assert_eq!(output.iter().any(|sample| *sample as u16 != 1u16), false);
+    assert!(output.iter().all(|sample| *sample as u16 == 1u16));
 
     // All the generated samples should have been processed at this point
     assert_eq!(num_samples, EOS_NUM_SAMPLES * EOS_NUM_BUFFERS);

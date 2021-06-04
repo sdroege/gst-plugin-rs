@@ -370,7 +370,7 @@ impl CustomSource {
         gst_debug!(CAT, obj: element, "Stopping");
 
         let mut state = self.state.lock().unwrap();
-        let pads = mem::replace(&mut state.pads, vec![]);
+        let pads = mem::take(&mut state.pads);
         state.num_audio = 0;
         state.num_video = 0;
         drop(state);

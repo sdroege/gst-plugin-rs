@@ -178,10 +178,7 @@ impl S3Sink {
             .sort_by(|a, b| a.part_number.cmp(&b.part_number));
 
         let completed_upload = CompletedMultipartUpload {
-            parts: Some(std::mem::replace(
-                &mut started_state.completed_parts,
-                Vec::new(),
-            )),
+            parts: Some(std::mem::take(&mut started_state.completed_parts)),
         };
 
         let url = self.url.lock().unwrap();
