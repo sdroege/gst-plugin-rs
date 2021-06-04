@@ -169,7 +169,7 @@ impl WebPDec {
     }
 
     fn decode(&self, _element: &super::WebPDec) -> Result<(), gst::ErrorMessage> {
-        let mut prev_timestamp: gst::ClockTime = 0.into();
+        let mut prev_timestamp: Option<gst::ClockTime> = Some(gst::ClockTime::ZERO);
         let mut state = self.state.lock().unwrap();
 
         if state.buffers.is_empty() {
@@ -223,8 +223,9 @@ impl WebPDec {
                 gst::error_msg!(gst::StreamError::Decode, ["Failed to get next frame"])
             })?;
 
-            let timestamp = frame.timestamp as u64 * gst::MSECOND;
-            let duration = timestamp - prev_timestamp;
+            let timestamp = frame.timestamp as u64 * gst::ClockTime::MSECOND;
+            let duration =
+                prev_timestamp.and_then(|prev_timestamp| timestamp.checked_sub(prev_timestamp));
 
             let mut out_buf =
                 gst::Buffer::with_size((info.width * info.height * 4) as usize).unwrap();
@@ -235,7 +236,7 @@ impl WebPDec {
                 out_buf_mut.set_duration(duration);
             }
 
-            prev_timestamp = timestamp;
+            prev_timestamp = Some(timestamp);
 
             match self.srcpad.push(out_buf) {
                 Ok(_) => (),

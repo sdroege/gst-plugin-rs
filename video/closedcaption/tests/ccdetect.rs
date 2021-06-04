@@ -16,6 +16,7 @@
 // Boston, MA 02110-1335, USA.
 
 use gst::prelude::*;
+use gst::ClockTime;
 
 use std::sync::{Arc, Mutex};
 
@@ -94,16 +95,37 @@ fn test_have_cc_data_notify() {
         });
 
     /* valid cc608 data moves cc608 property to true */
-    assert_push_data!(h, state, valid_cc608_data, 0.into(), 1, 0);
+    assert_push_data!(h, state, valid_cc608_data, ClockTime::ZERO, 1, 0);
 
     /* invalid cc608 data moves cc608 property to false */
-    assert_push_data!(h, state, invalid_cc608_data, 1_000_000_000.into(), 2, 0);
+    assert_push_data!(
+        h,
+        state,
+        invalid_cc608_data,
+        ClockTime::from_nseconds(1_000_000_000),
+        2,
+        0
+    );
 
     /* valid cc708 data moves cc708 property to true */
-    assert_push_data!(h, state, valid_cc708_data, 2_000_000_000.into(), 2, 1);
+    assert_push_data!(
+        h,
+        state,
+        valid_cc708_data,
+        ClockTime::from_nseconds(2_000_000_000),
+        2,
+        1
+    );
 
     /* invalid cc708 data moves cc708 property to false */
-    assert_push_data!(h, state, invalid_cc708_data, 3_000_000_000.into(), 2, 2);
+    assert_push_data!(
+        h,
+        state,
+        invalid_cc708_data,
+        ClockTime::from_nseconds(3_000_000_000),
+        2,
+        2
+    );
 }
 
 #[test]
@@ -137,36 +159,57 @@ fn test_cc_data_window() {
         });
 
     /* valid cc608 data moves cc608 property to true */
-    assert_push_data!(h, state, valid_cc608_data.clone(), 0.into(), 1, 0);
+    assert_push_data!(h, state, valid_cc608_data.clone(), ClockTime::ZERO, 1, 0);
 
     /* valid cc608 data moves within window */
-    assert_push_data!(h, state, valid_cc608_data.clone(), 300_000_000.into(), 1, 0);
+    assert_push_data!(
+        h,
+        state,
+        valid_cc608_data.clone(),
+        ClockTime::from_nseconds(300_000_000),
+        1,
+        0
+    );
 
     /* invalid cc608 data before window expires, no change */
     assert_push_data!(
         h,
         state,
         invalid_cc608_data.clone(),
-        600_000_000.into(),
+        ClockTime::from_nseconds(600_000_000),
         1,
         0
     );
 
     /* invalid cc608 data after window expires, cc608 changes to false */
-    assert_push_data!(h, state, invalid_cc608_data, 1_000_000_000.into(), 2, 0);
+    assert_push_data!(
+        h,
+        state,
+        invalid_cc608_data,
+        ClockTime::from_nseconds(1_000_000_000),
+        2,
+        0
+    );
 
     /* valid cc608 data before window expires, no change */
     assert_push_data!(
         h,
         state,
         valid_cc608_data.clone(),
-        1_300_000_000.into(),
+        ClockTime::from_nseconds(1_300_000_000),
         2,
         0
     );
 
     /* valid cc608 data after window expires, property changes */
-    assert_push_data!(h, state, valid_cc608_data, 1_600_000_000.into(), 3, 0);
+    assert_push_data!(
+        h,
+        state,
+        valid_cc608_data,
+        ClockTime::from_nseconds(1_600_000_000),
+        3,
+        0
+    );
 }
 
 #[test]
@@ -215,10 +258,17 @@ fn test_have_cdp_notify() {
         });
 
     /* valid cc608 data moves cc608 property to true */
-    assert_push_data!(h, state, valid_cc608_data, 0.into(), 1, 0);
+    assert_push_data!(h, state, valid_cc608_data, ClockTime::ZERO, 1, 0);
 
     /* invalid cc608 data moves cc608 property to false */
-    assert_push_data!(h, state, invalid_cc608_data, 1_000_000_000.into(), 2, 0);
+    assert_push_data!(
+        h,
+        state,
+        invalid_cc608_data,
+        ClockTime::from_nseconds(1_000_000_000),
+        2,
+        0
+    );
 }
 
 #[test]
@@ -276,14 +326,56 @@ fn test_malformed_cdp_notify() {
         });
 
     /* all invalid data does not change properties */
-    assert_push_data!(h, state, too_short, 0.into(), 0, 0);
-    assert_push_data!(h, state, wrong_magic, 1_000.into(), 0, 0);
-    assert_push_data!(h, state, length_too_long, 2_000.into(), 0, 0);
-    assert_push_data!(h, state, length_too_short, 3_000.into(), 0, 0);
-    assert_push_data!(h, state, wrong_cc_data_header_byte, 4_000.into(), 0, 0);
-    assert_push_data!(h, state, big_cc_count, 5_000.into(), 0, 0);
-    assert_push_data!(h, state, wrong_cc_count_reserved_bits, 6_000.into(), 0, 0);
-    assert_push_data!(h, state, cc608_after_cc708, 7_000.into(), 0, 0);
+    assert_push_data!(h, state, too_short, ClockTime::from_nseconds(0), 0, 0);
+    assert_push_data!(h, state, wrong_magic, ClockTime::from_nseconds(1_000), 0, 0);
+    assert_push_data!(
+        h,
+        state,
+        length_too_long,
+        ClockTime::from_nseconds(2_000),
+        0,
+        0
+    );
+    assert_push_data!(
+        h,
+        state,
+        length_too_short,
+        ClockTime::from_nseconds(3_000),
+        0,
+        0
+    );
+    assert_push_data!(
+        h,
+        state,
+        wrong_cc_data_header_byte,
+        ClockTime::from_nseconds(4_000),
+        0,
+        0
+    );
+    assert_push_data!(
+        h,
+        state,
+        big_cc_count,
+        ClockTime::from_nseconds(5_000),
+        0,
+        0
+    );
+    assert_push_data!(
+        h,
+        state,
+        wrong_cc_count_reserved_bits,
+        ClockTime::from_nseconds(6_000),
+        0,
+        0
+    );
+    assert_push_data!(
+        h,
+        state,
+        cc608_after_cc708,
+        ClockTime::from_nseconds(7_000),
+        0,
+        0
+    );
 }
 
 #[test]
@@ -316,11 +408,14 @@ fn test_gap_events() {
         });
 
     /* valid cc608 data moves cc608 property to true */
-    assert_push_data!(h, state, valid_cc608_data, 0.into(), 1, 0);
+    assert_push_data!(h, state, valid_cc608_data, ClockTime::ZERO, 1, 0);
 
     /* pushing gap event within the window changes nothing */
     assert_eq!(
-        h.push_event(gst::event::Gap::builder(100_000_000.into(), 1.into()).build()),
+        h.push_event(gst::event::Gap::new(
+            ClockTime::from_nseconds(100_000_000),
+            ClockTime::from_nseconds(1)
+        )),
         true
     );
 
@@ -332,7 +427,10 @@ fn test_gap_events() {
 
     /* pushing gap event outside the window moves cc608 property to false */
     assert_eq!(
-        h.push_event(gst::event::Gap::builder(1_000_000_000.into(), 1.into()).build()),
+        h.push_event(gst::event::Gap::new(
+            ClockTime::from_nseconds(1_000_000_000),
+            ClockTime::from_nseconds(1)
+        )),
         true
     );
 

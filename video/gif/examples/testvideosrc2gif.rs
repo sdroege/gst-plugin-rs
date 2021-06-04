@@ -30,7 +30,7 @@ fn main() {
         .set_state(gst::State::Playing)
         .expect("Failed to set pipeline state to playing");
 
-    for msg in bus.iter_timed(gst::CLOCK_TIME_NONE) {
+    for msg in bus.iter_timed(gst::ClockTime::NONE) {
         use gst::MessageView;
 
         match msg.view() {

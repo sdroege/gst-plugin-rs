@@ -53,7 +53,7 @@ struct PullState {
     need_stream_start: bool,
     stream_id: String,
     offset: u64,
-    duration: gst::ClockTime,
+    duration: Option<gst::ClockTime>,
 }
 
 impl PullState {
@@ -62,7 +62,7 @@ impl PullState {
             need_stream_start: true,
             stream_id: pad.create_stream_id(element, Some("src")).to_string(),
             offset: 0,
-            duration: gst::CLOCK_TIME_NONE,
+            duration: gst::ClockTime::NONE,
         }
     }
 }
@@ -74,8 +74,8 @@ struct State {
     format: Option<Format>,
     need_segment: bool,
     pending_events: Vec<gst::Event>,
-    start_position: gst::ClockTime,
-    last_position: gst::ClockTime,
+    start_position: Option<gst::ClockTime>,
+    last_position: Option<gst::ClockTime>,
     last_timecode: Option<gst_video::ValidVideoTimeCode>,
     timecode_rate: Option<(u8, bool)>,
     segment: gst::FormattedSegment<gst::ClockTime>,
@@ -100,11 +100,11 @@ impl Default for State {
             format: None,
             need_segment: true,
             pending_events: Vec::new(),
-            start_position: gst::CLOCK_TIME_NONE,
-            last_position: gst::CLOCK_TIME_NONE,
+            start_position: None,
+            last_position: None,
             last_timecode: None,
             timecode_rate: None,
-            segment: gst::FormattedSegment::<gst::ClockTime>::new(),
+            segment: gst::FormattedSegment::new(),
             pull: None,
             seeking: false,
             discont: false,
@@ -221,33 +221,35 @@ impl State {
         element: &super::MccParse,
         timecode: &gst_video::ValidVideoTimeCode,
     ) {
-        let nsecs = gst::ClockTime::from(timecode.nsec_since_daily_jam());
+        let nsecs = timecode.time_since_daily_jam();
         if self.start_position.is_none() {
-            self.start_position = nsecs;
+            self.start_position = Some(nsecs);
         }
+        let start_position = self.start_position.expect("checked above");
 
-        let nsecs = if nsecs < self.start_position {
+        let nsecs = nsecs.checked_sub(start_position).unwrap_or_else(|| {
             gst_fixme!(
                 CAT,
                 obj: element,
                 "New position {} < start position {}",
                 nsecs,
-                self.start_position
+                start_position,
             );
-            self.start_position
-        } else {
-            nsecs - self.start_position
-        };
+            start_position
+        });
 
-        if self.last_position.is_none() || nsecs >= self.last_position {
-            self.last_position = nsecs;
+        if self
+            .last_position
+            .map_or(true, |last_position| nsecs >= last_position)
+        {
+            self.last_position = Some(nsecs);
         } else {
             gst_fixme!(
                 CAT,
                 obj: element,
                 "New position {} < last position {}",
                 nsecs,
-                self.last_position
+                self.last_position.display(),
             );
         }
     }
@@ -272,9 +274,8 @@ impl State {
         }
 
         buffer.set_duration(
-            gst::SECOND
-                .mul_div_ceil(*framerate.denom() as u64, *framerate.numer() as u64)
-                .unwrap_or(gst::CLOCK_TIME_NONE),
+            gst::ClockTime::SECOND
+                .mul_div_ceil(*framerate.denom() as u64, *framerate.numer() as u64),
         );
     }
 
@@ -518,11 +519,15 @@ impl MccParse {
     ) -> Result<MutexGuard<State>, gst::FlowError> {
         let (framerate, drop_frame) = parse_timecode_rate(state.timecode_rate)?;
         let timecode = state.handle_timecode(element, framerate, drop_frame, tc)?;
-        let nsecs = gst::ClockTime::from(timecode.nsec_since_daily_jam());
+        let nsecs = timecode.time_since_daily_jam();
 
         state.last_timecode = Some(timecode);
 
-        if nsecs >= state.segment.start() {
+        if state
+            .segment
+            .start()
+            .map_or(false, |seg_start| nsecs >= seg_start)
+        {
             state.seeking = false;
             state.discont = true;
             state.replay_last_line = true;
@@ -558,8 +563,12 @@ impl MccParse {
         // Update the last_timecode to the current one
         state.last_timecode = Some(timecode);
 
-        let send_eos = state.segment.stop().is_some()
-            && buffer.pts() + buffer.duration() >= state.segment.stop();
+        let send_eos = state.segment.stop().map_or(false, |stop| {
+            buffer
+                .pts()
+                .zip(buffer.duration())
+                .map_or(false, |(pts, duration)| pts + duration >= stop)
+        });
 
         // Drop our state mutex while we push out buffers or events
         drop(state);
@@ -670,8 +679,8 @@ impl MccParse {
         }
 
         let size = match q.result().try_into().unwrap() {
-            gst::format::Bytes(Some(size)) => size,
-            gst::format::Bytes(None) => {
+            Some(gst::format::Bytes(size)) => size,
+            None => {
                 return Err(loggable_error!(CAT, "Failed to query upstream duration"));
             }
         };
@@ -820,12 +829,12 @@ impl MccParse {
                         Ok(Some(tc)) => {
                             let mut state = self.state.lock().unwrap();
                             let mut pull = state.pull.as_mut().unwrap();
-                            pull.duration = tc.nsec_since_daily_jam().into();
+                            pull.duration = Some(tc.time_since_daily_jam());
                         }
                         Ok(None) => {
                             let mut state = self.state.lock().unwrap();
                             let mut pull = state.pull.as_mut().unwrap();
-                            pull.duration = 0.into();
+                            pull.duration = Some(gst::ClockTime::ZERO);
                         }
                         Err(err) => {
                             err.log();
@@ -886,11 +895,11 @@ impl MccParse {
         if let Some(pull) = &mut state.pull {
             pull.offset = 0;
         }
-        state.segment = gst::FormattedSegment::<gst::ClockTime>::new();
+        state.segment = gst::FormattedSegment::new();
         state.need_segment = true;
         state.pending_events.clear();
-        state.start_position = 0.into();
-        state.last_position = 0.into();
+        state.start_position = Some(gst::ClockTime::ZERO);
+        state.last_position = None;
         state.last_timecode = None;
         state.timecode_rate = None;
         state.last_raw_line = [].to_vec();
@@ -954,7 +963,7 @@ impl MccParse {
 
         let (rate, flags, start_type, start, stop_type, stop) = event.get();
 
-        let mut start: gst::ClockTime = match start.try_into() {
+        let mut start: Option<gst::ClockTime> = match start.try_into() {
             Ok(start) => start,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");
@@ -962,7 +971,7 @@ impl MccParse {
             }
         };
 
-        let mut stop: gst::ClockTime = match stop.try_into() {
+        let mut stop: Option<gst::ClockTime> = match stop.try_into() {
             Ok(stop) => stop,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");
@@ -1002,11 +1011,17 @@ impl MccParse {
         let pull = state.pull.as_ref().unwrap();
 
         if start_type == gst::SeekType::Set {
-            start = start.min(pull.duration).unwrap_or(start);
+            start = start
+                .zip(pull.duration)
+                .map(|(start, duration)| start.min(duration))
+                .or(start);
         }
 
         if stop_type == gst::SeekType::Set {
-            stop = stop.min(pull.duration).unwrap_or(stop);
+            stop = stop
+                .zip(pull.duration)
+                .map(|(stop, duration)| stop.min(duration))
+                .or(stop);
         }
 
         state.seeking = true;
@@ -1069,7 +1084,7 @@ impl MccParse {
                     if let Some(pull) = state.pull.as_ref() {
                         q.set(
                             true,
-                            gst::GenericFormattedValue::Time(0.into()),
+                            gst::GenericFormattedValue::Time(gst::ClockTime::ZERO.into()),
                             gst::GenericFormattedValue::Time(pull.duration),
                         );
                         true

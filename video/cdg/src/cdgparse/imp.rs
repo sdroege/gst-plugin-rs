@@ -10,7 +10,6 @@ use gst::format::Bytes;
 use gst::glib;
 use gst::gst_debug;
 use gst::subclass::prelude::*;
-use gst::SECOND_VAL;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 use once_cell::sync::Lazy;
@@ -94,23 +93,22 @@ impl ElementImpl for CdgParse {
 }
 
 fn bytes_to_time(bytes: Bytes) -> gst::ClockTime {
-    match bytes {
-        Bytes(Some(bytes)) => {
-            let nb = bytes / CDG_PACKET_SIZE as u64;
-            gst::ClockTime(nb.mul_div_round(SECOND_VAL, CDG_PACKET_PERIOD))
-        }
-        Bytes(None) => gst::ClockTime::none(),
-    }
+    let nb = bytes.0 / CDG_PACKET_SIZE as u64;
+    gst::ClockTime::from_nseconds(
+        nb.mul_div_round(*gst::ClockTime::SECOND, CDG_PACKET_PERIOD)
+            .unwrap(),
+    )
 }
 
 fn time_to_bytes(time: gst::ClockTime) -> Bytes {
-    match time.nseconds() {
-        Some(time) => {
-            let bytes = time.mul_div_round(CDG_PACKET_PERIOD * CDG_PACKET_SIZE as u64, SECOND_VAL);
-            Bytes(bytes)
-        }
-        None => Bytes(None),
-    }
+    Bytes(
+        time.nseconds()
+            .mul_div_round(
+                CDG_PACKET_PERIOD * CDG_PACKET_SIZE as u64,
+                *gst::ClockTime::SECOND,
+            )
+            .unwrap(),
+    )
 }
 
 impl BaseParseImpl for CdgParse {
@@ -122,8 +120,8 @@ impl BaseParseImpl for CdgParse {
         let pad = element.src_pad();
         if pad.query(&mut query) {
             let size = query.result();
-            let duration = bytes_to_time(size.try_into().unwrap());
-            element.set_duration(duration, 0);
+            let bytes: Option<Bytes> = size.try_into().unwrap();
+            element.set_duration(bytes.map(bytes_to_time), 0);
         }
 
         Ok(())
@@ -198,7 +196,7 @@ impl BaseParseImpl for CdgParse {
             }
         };
 
-        let pts = bytes_to_time(Bytes(Some(frame.offset())));
+        let pts = bytes_to_time(Bytes(frame.offset()));
         let buffer = frame.buffer_mut().unwrap();
         buffer.set_pts(pts);
 
@@ -226,10 +224,10 @@ impl BaseParseImpl for CdgParse {
 
         match (src_val, dest_format) {
             (gst::GenericFormattedValue::Bytes(bytes), gst::Format::Time) => {
-                Some(bytes_to_time(bytes).into())
+                Some(bytes.map(bytes_to_time).into())
             }
             (gst::GenericFormattedValue::Time(time), gst::Format::Bytes) => {
-                Some(time_to_bytes(time).into())
+                Some(time.map(time_to_bytes).into())
             }
             _ => None,
         }

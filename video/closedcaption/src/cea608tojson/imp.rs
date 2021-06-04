@@ -42,8 +42,8 @@ use std::collections::BTreeMap;
 #[derive(Debug)]
 struct TimestampedLines {
     lines: Lines,
-    pts: gst::ClockTime,
-    duration: gst::ClockTime,
+    pts: Option<gst::ClockTime>,
+    duration: Option<gst::ClockTime>,
 }
 
 struct Cursor {
@@ -182,9 +182,9 @@ struct State {
     mode: Option<Cea608Mode>,
     last_cc_data: Option<u16>,
     rows: BTreeMap<u32, Row>,
-    first_pts: gst::ClockTime,
-    current_pts: gst::ClockTime,
-    current_duration: gst::ClockTime,
+    first_pts: Option<gst::ClockTime>,
+    current_pts: Option<gst::ClockTime>,
+    current_duration: Option<gst::ClockTime>,
     carriage_return: Option<bool>,
     clear: Option<bool>,
     cursor: Cursor,
@@ -197,9 +197,9 @@ impl Default for State {
             mode: None,
             last_cc_data: None,
             rows: BTreeMap::new(),
-            first_pts: gst::CLOCK_TIME_NONE,
-            current_pts: gst::CLOCK_TIME_NONE,
-            current_duration: gst::CLOCK_TIME_NONE,
+            first_pts: gst::ClockTime::NONE,
+            current_pts: gst::ClockTime::NONE,
+            current_duration: gst::ClockTime::NONE,
             carriage_return: None,
             clear: None,
             cursor: Cursor {
@@ -377,20 +377,31 @@ fn eia608_to_text(cc_data: u16) -> String {
 fn dump(
     element: &super::Cea608ToJson,
     cc_data: u16,
-    pts: gst::ClockTime,
-    duration: gst::ClockTime,
+    pts: impl Into<Option<gst::ClockTime>>,
+    duration: impl Into<Option<gst::ClockTime>>,
 ) {
+    let pts = pts.into();
+    let end = pts
+        .zip(duration.into())
+        .map(|(pts, duration)| pts + duration);
+
     if cc_data != 0x8080 {
         gst_debug!(
             CAT,
             obj: element,
             "{} -> {}: {}",
-            pts,
-            pts + duration,
+            pts.display(),
+            end.display(),
             eia608_to_text(cc_data)
         );
     } else {
-        gst_trace!(CAT, obj: element, "{} -> {}: padding", pts, pts + duration);
+        gst_trace!(
+            CAT,
+            obj: element,
+            "{} -> {}: padding",
+            pts.display(),
+            end.display()
+        );
     }
 }
 
@@ -438,11 +449,16 @@ impl State {
         let pts = self.first_pts;
 
         let duration = match self.mode {
-            Some(Cea608Mode::PopOn) => gst::CLOCK_TIME_NONE,
-            _ => self.current_pts + self.current_duration - self.first_pts,
+            Some(Cea608Mode::PopOn) => gst::ClockTime::NONE,
+            _ => self
+                .current_pts
+                .zip(self.current_duration)
+                .map(|(cur_pts, cur_duration)| cur_pts + cur_duration)
+                .zip(self.first_pts)
+                .and_then(|(cur_end, first_pts)| cur_end.checked_sub(first_pts)),
         };
 
-        self.first_pts = gst::CLOCK_TIME_NONE;
+        self.first_pts = gst::ClockTime::NONE;
 
         let mut lines: Vec<Line> = vec![];
 
@@ -477,7 +493,7 @@ impl State {
                     clear,
                 },
                 pts: self.current_pts,
-                duration: 0.into(),
+                duration: Some(gst::ClockTime::ZERO),
             })
         } else {
             None
@@ -487,7 +503,12 @@ impl State {
     fn drain_pending(&mut self, element: &super::Cea608ToJson) -> Option<TimestampedLines> {
         if let Some(mut pending) = self.pending_lines.take() {
             gst_log!(CAT, obj: element, "Draining pending");
-            pending.duration = self.current_pts + self.current_duration - pending.pts;
+            pending.duration = self
+                .current_pts
+                .zip(self.current_duration)
+                .map(|(cur_pts, cur_dur)| cur_pts + cur_dur)
+                .zip(pending.pts)
+                .and_then(|(cur_end, pending_pts)| cur_end.checked_sub(pending_pts));
             Some(pending)
         } else {
             None
@@ -675,8 +696,8 @@ impl State {
     fn handle_cc_data(
         &mut self,
         element: &super::Cea608ToJson,
-        pts: gst::ClockTime,
-        duration: gst::ClockTime,
+        pts: Option<gst::ClockTime>,
+        duration: Option<gst::ClockTime>,
         cc_data: u16,
     ) -> Option<TimestampedLines> {
         if (is_specialna(cc_data) || is_control(cc_data)) && Some(cc_data) == self.last_cc_data {

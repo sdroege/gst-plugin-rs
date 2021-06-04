@@ -84,7 +84,7 @@ struct State {
     video_info: gst_video::VideoInfo,
     cache: Arc<CacheBuffer>,
     gif_pts: Option<gst::ClockTime>,
-    last_actual_pts: gst::ClockTime,
+    last_actual_pts: Option<gst::ClockTime>,
     context: Option<gif::Encoder<CacheBufferWriter>>,
 }
 
@@ -94,14 +94,14 @@ impl State {
             video_info,
             cache: Arc::new(CacheBuffer::new()),
             gif_pts: None,
-            last_actual_pts: gst::ClockTime::none(),
+            last_actual_pts: None,
             context: None,
         }
     }
     pub fn reset(&mut self, settings: Settings) {
         self.cache.clear();
         self.gif_pts = None;
-        self.last_actual_pts = gst::ClockTime::none();
+        self.last_actual_pts = None;
         // initialize and configure encoder with a CacheBufferWriter pointing
         // to our CacheBuffer instance
         let mut encoder = gif::Encoder::new(
@@ -321,20 +321,30 @@ impl VideoEncoderImpl for GifEnc {
             // Calculate delay to new frame by calculating the difference between the current actual
             // presentation timestamp of the last frame within the gif, and the pts of the new frame.
             // This results in variable frame delays in the gif - but an overall constant fps.
-            state.last_actual_pts = in_frame.buffer().pts();
+            let pts = in_frame.buffer().pts();
+            state.last_actual_pts = pts;
             if state.gif_pts.is_none() {
                 // First frame: use pts of first input frame as origin
-                state.gif_pts = Some(in_frame.buffer().pts());
+                state.gif_pts = pts;
             }
-            let frame_delay = in_frame.buffer().pts() - state.gif_pts.unwrap();
-            if frame_delay.is_none() {
+            let pts = pts.ok_or_else(|| {
                 gst::element_error!(
                     element,
                     gst::CoreError::Failed,
                     ["No PTS set on input frame. Unable to calculate proper frame timing."]
                 );
-                return Err(gst::FlowError::Error);
-            }
+                gst::FlowError::Error
+            })?;
+            let frame_delay = pts
+                .checked_sub(state.gif_pts.expect("checked above"))
+                .ok_or_else(|| {
+                    gst::element_error!(
+                        element,
+                        gst::CoreError::Failed,
+                        ["Input frame PTS is greater than gif_pts. Unable to calculate proper frame timing."]
+                    );
+                    gst::FlowError::Error
+                })?;
 
             let mut raw_frame = tightly_packed_framebuffer(&in_frame);
             let mut gif_frame = match in_frame.info().format() {
@@ -361,10 +371,10 @@ impl VideoEncoderImpl for GifEnc {
             // use float arithmetic with rounding for this calculation, since small stuttering
             // is probably less visible than the large stuttering when a complete 10ms have to
             // "catch up".
-            gif_frame.delay = (frame_delay.mseconds().unwrap() as f32 / 10.0).round() as u16;
-            state.gif_pts.replace(
-                state.gif_pts.unwrap() + gst::ClockTime::from_mseconds(gif_frame.delay as u64 * 10),
-            );
+            gif_frame.delay = (frame_delay.mseconds() as f32 / 10.0).round() as u16;
+            state.gif_pts = state.gif_pts.map(|gif_pts| {
+                gif_pts + gst::ClockTime::from_mseconds(gif_frame.delay as u64 * 10)
+            });
 
             // encode new frame
             let context = state.context.as_mut().unwrap();

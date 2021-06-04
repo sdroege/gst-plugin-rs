@@ -35,13 +35,13 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-const DEFAULT_WINDOW: u64 = 10 * gst::SECOND_VAL;
+const DEFAULT_WINDOW: gst::ClockTime = gst::ClockTime::from_seconds(10);
 const DEFAULT_CC608: bool = false;
 const DEFAULT_CC708: bool = false;
 
 #[derive(Debug, Clone, Copy)]
 struct Settings {
-    pub window: u64,
+    pub window: gst::ClockTime,
     pub cc608: bool,
     pub cc708: bool,
 }
@@ -65,8 +65,8 @@ enum CCFormat {
 #[derive(Debug, Clone, Copy)]
 struct State {
     format: CCFormat,
-    last_cc608_change: gst::ClockTime,
-    last_cc708_change: gst::ClockTime,
+    last_cc608_change: Option<gst::ClockTime>,
+    last_cc708_change: Option<gst::ClockTime>,
 }
 
 #[derive(Default)]
@@ -177,27 +177,27 @@ impl CCDetect {
             );
 
             if cc_packet.cc608 != settings.cc608 {
-                if state.last_cc608_change.is_none()
-                    || ts - state.last_cc608_change > settings.window.into()
-                {
+                if state.last_cc608_change.map_or(true, |last_cc608_change| {
+                    ts > last_cc608_change + settings.window
+                }) {
                     settings.cc608 = cc_packet.cc608;
-                    state.last_cc608_change = ts;
+                    state.last_cc608_change = Some(ts);
                     notify_cc608 = true;
                 }
             } else {
-                state.last_cc608_change = ts;
+                state.last_cc608_change = Some(ts);
             }
 
             if cc_packet.cc708 != settings.cc708 {
-                if state.last_cc708_change.is_none()
-                    || ts - state.last_cc708_change > settings.window.into()
-                {
+                if state.last_cc708_change.map_or(true, |last_cc708_change| {
+                    ts > last_cc708_change + settings.window
+                }) {
                     settings.cc708 = cc_packet.cc708;
-                    state.last_cc708_change = ts;
+                    state.last_cc708_change = Some(ts);
                     notify_cc708 = true;
                 }
             } else {
-                state.last_cc708_change = ts;
+                state.last_cc708_change = Some(ts);
             }
 
             gst_trace!(CAT, "changed to settings {:?} state {:?}", settings, state);
@@ -230,8 +230,8 @@ impl ObjectImpl for CCDetect {
                     "Window",
                     "Window of time (in ns) to determine if captions exist in the stream",
                     0,
-                    u64::MAX,
-                    DEFAULT_WINDOW,
+                    u64::MAX - 1,
+                    DEFAULT_WINDOW.nseconds(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpec::new_boolean(
@@ -264,7 +264,8 @@ impl ObjectImpl for CCDetect {
         match pspec.name() {
             "window" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.window = value.get().expect("type checked upstream");
+                settings.window =
+                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
             }
             _ => unimplemented!(),
         }
@@ -274,7 +275,7 @@ impl ObjectImpl for CCDetect {
         match pspec.name() {
             "window" => {
                 let settings = self.settings.lock().unwrap();
-                settings.window.to_value()
+                settings.window.nseconds().to_value()
             }
             "cc608" => {
                 let settings = self.settings.lock().unwrap();
@@ -350,14 +351,14 @@ impl BaseTransformImpl for CCDetect {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let map = buf.map_readable().map_err(|_| gst::FlowError::Error)?;
 
-        if buf.pts().is_none() {
+        let pts = buf.pts().ok_or_else(|| {
             gst::element_error!(
                 element,
                 gst::ResourceError::Read,
                 ["Input buffers must have valid timestamps"]
             );
-            return Err(gst::FlowError::Error);
-        }
+            gst::FlowError::Error
+        })?;
 
         let format = {
             let mut state_guard = self.state.lock().unwrap();
@@ -377,7 +378,7 @@ impl BaseTransformImpl for CCDetect {
             }
         };
 
-        self.maybe_update_properties(element, buf.pts(), cc_packet)
+        self.maybe_update_properties(element, pts, cc_packet)
             .map_err(|_| gst::FlowError::Error)?;
 
         Ok(gst::FlowSuccess::Ok)
@@ -428,8 +429,8 @@ impl BaseTransformImpl for CCDetect {
 
         *self.state.lock().unwrap() = Some(State {
             format: cc_format,
-            last_cc608_change: gst::ClockTime::none(),
-            last_cc708_change: gst::ClockTime::none(),
+            last_cc608_change: gst::ClockTime::NONE,
+            last_cc708_change: gst::ClockTime::NONE,
         });
 
         Ok(())

@@ -8,7 +8,7 @@
 
 use gst::prelude::*;
 
-const ENCODE_PIPELINE: &str = "videotestsrc is-live=false num-buffers=1 ! videoconvert ! video/x-raw, format=RGB, width=160, height=120 ! 
+const ENCODE_PIPELINE: &str = "videotestsrc is-live=false num-buffers=1 ! videoconvert ! video/x-raw, format=RGB, width=160, height=120 !
     rspngenc compression-level=2 filter=4 ! filesink location=frame.png";
 
 fn main() {
@@ -22,7 +22,7 @@ fn main() {
         .set_state(gst::State::Playing)
         .expect("Failed to set pipeline state to playing");
 
-    for msg in bus.iter_timed(gst::CLOCK_TIME_NONE) {
+    for msg in bus.iter_timed(gst::ClockTime::NONE) {
         use gst::MessageView;
 
         match msg.view() {

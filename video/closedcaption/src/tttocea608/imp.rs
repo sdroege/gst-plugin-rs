@@ -218,7 +218,7 @@ impl State {
             *self.framerate.denom() as u64,
         );
 
-        let pts = (self.last_frame_no * gst::SECOND)
+        let pts = (self.last_frame_no * gst::ClockTime::SECOND)
             .mul_div_round(fps_d, fps_n)
             .unwrap();
 
@@ -228,7 +228,7 @@ impl State {
             gst_debug!(CAT, obj: element, "More text than bandwidth!");
         }
 
-        let next_pts = (self.last_frame_no * gst::SECOND)
+        let next_pts = (self.last_frame_no * gst::ClockTime::SECOND)
             .mul_div_round(fps_d, fps_n)
             .unwrap();
 
@@ -567,10 +567,12 @@ impl TtToCea608 {
             *state.framerate.denom() as u64,
         );
 
-        let frame_no = (pts.mul_div_round(fps_n, fps_d).unwrap() / gst::SECOND).unwrap();
+        let frame_no = pts.mul_div_round(fps_n, fps_d).unwrap().seconds();
 
-        state.max_frame_no =
-            ((pts + duration).mul_div_round(fps_n, fps_d).unwrap() / gst::SECOND).unwrap();
+        state.max_frame_no = (pts + duration)
+            .mul_div_round(fps_n, fps_d)
+            .unwrap()
+            .seconds();
 
         state.pad(element, mut_list, frame_no);
 
@@ -792,10 +794,8 @@ impl TtToCea608 {
         state.column = col;
 
         if state.mode == Cea608Mode::PopOn {
-            state.erase_display_frame_no = Some(
-                state.last_frame_no
-                    + (duration.mul_div_round(fps_n, fps_d).unwrap() / gst::SECOND).unwrap(),
-            );
+            state.erase_display_frame_no =
+                Some(state.last_frame_no + duration.mul_div_round(fps_n, fps_d).unwrap().seconds());
         }
 
         state.pad(element, mut_list, state.max_frame_no);
@@ -809,29 +809,23 @@ impl TtToCea608 {
         element: &super::TtToCea608,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let pts = match buffer.pts() {
-            gst::CLOCK_TIME_NONE => {
-                gst::element_error!(
-                    element,
-                    gst::StreamError::Format,
-                    ["Stream with timestamped buffers required"]
-                );
-                Err(gst::FlowError::Error)
-            }
-            pts => Ok(pts),
-        }?;
+        let pts = buffer.pts().ok_or_else(|| {
+            gst::element_error!(
+                element,
+                gst::StreamError::Format,
+                ["Stream with timestamped buffers required"]
+            );
+            gst::FlowError::Error
+        })?;
 
-        let duration = match buffer.duration() {
-            gst::CLOCK_TIME_NONE => {
-                gst::element_error!(
-                    element,
-                    gst::StreamError::Format,
-                    ["Buffers of stream need to have a duration"]
-                );
-                Err(gst::FlowError::Error)
-            }
-            duration => Ok(duration),
-        }?;
+        let duration = buffer.duration().ok_or_else(|| {
+            gst::element_error!(
+                element,
+                gst::StreamError::Format,
+                ["Buffers of stream need to have a duration"]
+            );
+            gst::FlowError::Error
+        })?;
 
         let data = buffer.map_readable().map_err(|_| {
             gst_error!(CAT, obj: pad, "Can't map buffer readable");
@@ -947,9 +941,10 @@ impl TtToCea608 {
                 );
 
                 let (timestamp, duration) = e.get();
-                let frame_no = ((timestamp + duration).mul_div_round(fps_n, fps_d).unwrap()
-                    / gst::SECOND)
-                    .unwrap();
+                let frame_no = (timestamp + duration.unwrap())
+                    .mul_div_round(fps_n, fps_d)
+                    .unwrap()
+                    .seconds();
                 state.max_frame_no = frame_no;
 
                 let mut bufferlist = gst::BufferList::new();

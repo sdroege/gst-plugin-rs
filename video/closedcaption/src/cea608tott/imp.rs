@@ -76,12 +76,12 @@ impl Cea608ToTt {
             }
         };
 
-        let buffer_pts = buffer.pts();
-        if buffer_pts.is_none() {
+        let buffer_pts = buffer.pts().ok_or_else(|| {
             gst_error!(CAT, obj: pad, "Require timestamped buffers");
-            return Err(gst::FlowError::Error);
-        }
-        let pts = (buffer_pts.unwrap() as f64) / 1_000_000_000.0;
+            gst::FlowError::Error
+        })?;
+
+        let pts = (buffer_pts.nseconds() as f64) / 1_000_000_000.0;
 
         let data = buffer.map_readable().map_err(|_| {
             gst_error!(CAT, obj: pad, "Can't map buffer readable");
@@ -130,11 +130,7 @@ impl Cea608ToTt {
             }
         };
 
-        let duration = if buffer_pts > previous_text.0 {
-            buffer_pts - previous_text.0
-        } else {
-            0.into()
-        };
+        let duration = buffer_pts.saturating_sub(previous_text.0);
 
         let (timestamp, text) = previous_text;
 
@@ -181,7 +177,7 @@ impl Cea608ToTt {
     }
 
     fn split_time(time: gst::ClockTime) -> (u64, u8, u8, u16) {
-        let time = time.unwrap();
+        let time = time.nseconds();
 
         let mut s = time / 1_000_000_000;
         let mut m = s / 60;
@@ -347,11 +343,18 @@ impl Cea608ToTt {
                     };
 
                     let buffer = match format {
-                        Format::Vtt => Self::create_vtt_buffer(timestamp, 0.into(), text),
-                        Format::Srt => {
-                            Self::create_srt_buffer(timestamp, 0.into(), state.index, text)
+                        Format::Vtt => {
+                            Self::create_vtt_buffer(timestamp, gst::ClockTime::ZERO, text)
                         }
-                        Format::Raw => Self::create_raw_buffer(timestamp, 0.into(), text),
+                        Format::Srt => Self::create_srt_buffer(
+                            timestamp,
+                            gst::ClockTime::ZERO,
+                            state.index,
+                            text,
+                        ),
+                        Format::Raw => {
+                            Self::create_raw_buffer(timestamp, gst::ClockTime::ZERO, text)
+                        }
                     };
                     state.index += 1;
                     drop(state);

@@ -40,15 +40,17 @@ fn test_decode() {
     assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
     h.push_event(gst::event::Eos::new());
 
-    let mut expected_timestamp: gst::ClockTime = 0.into();
+    let mut expected_timestamp: Option<gst::ClockTime> = Some(gst::ClockTime::ZERO);
     let mut count = 0;
-    let expected_duration: gst::ClockTime = 40_000_000.into();
+    let expected_duration: Option<gst::ClockTime> = Some(gst::ClockTime::from_nseconds(40_000_000));
 
     while let Some(buf) = h.try_pull() {
         assert_eq!(buf.pts(), expected_timestamp);
         assert_eq!(buf.duration(), expected_duration);
 
-        expected_timestamp += expected_duration;
+        expected_timestamp = expected_timestamp
+            .zip(expected_duration)
+            .map(|(ts, duration)| ts + duration);
         count += 1;
     }
 

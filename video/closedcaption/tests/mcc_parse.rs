@@ -175,9 +175,9 @@ fn test_pull() {
         1.0,
         gst::SeekFlags::FLUSH,
         gst::SeekType::Set,
-        gst::GenericFormattedValue::Time(gst::SECOND),
+        gst::GenericFormattedValue::Time(Some(gst::ClockTime::SECOND)),
         gst::SeekType::Set,
-        gst::GenericFormattedValue::Time(2 * gst::SECOND),
+        gst::GenericFormattedValue::Time(Some(2 * gst::ClockTime::SECOND)),
     ));
 
     loop {
@@ -185,8 +185,8 @@ fn test_pull() {
 
         while h.buffers_in_queue() != 0 {
             if let Ok(buffer) = h.pull() {
-                let pts = buffer.pts();
-                assert!(pts > gst::SECOND && pts < 2 * gst::SECOND);
+                let pts = buffer.pts().unwrap();
+                assert!(pts > gst::ClockTime::SECOND && pts < 2 * gst::ClockTime::SECOND);
             }
         }
 

@@ -194,12 +194,10 @@ impl State {
             assert!(self.framerate.is_some());
             let framerate = self.framerate.unwrap();
 
-            let dur = gst::SECOND
-                .mul_div_floor(
-                    self.internal_buffer.len() as u64 * *framerate.denom() as u64,
-                    *framerate.numer() as u64,
-                )
-                .unwrap_or(gst::CLOCK_TIME_NONE);
+            let dur = gst::ClockTime::SECOND.mul_div_floor(
+                self.internal_buffer.len() as u64 * *framerate.denom() as u64,
+                *framerate.numer() as u64,
+            );
             buf_mut.set_duration(dur);
 
             // Copy the metadata of the first buffer

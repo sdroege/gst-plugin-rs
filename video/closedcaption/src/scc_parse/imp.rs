@@ -47,7 +47,7 @@ struct PullState {
     need_stream_start: bool,
     stream_id: String,
     offset: u64,
-    duration: gst::ClockTime,
+    duration: Option<gst::ClockTime>,
 }
 
 impl PullState {
@@ -56,7 +56,7 @@ impl PullState {
             need_stream_start: true,
             stream_id: pad.create_stream_id(element, Some("src")).to_string(),
             offset: 0,
-            duration: gst::CLOCK_TIME_NONE,
+            duration: gst::ClockTime::NONE,
         }
     }
 }
@@ -68,7 +68,7 @@ struct State {
     need_segment: bool,
     pending_events: Vec<gst::Event>,
     framerate: Option<gst::Fraction>,
-    last_position: gst::ClockTime,
+    last_position: Option<gst::ClockTime>,
     last_timecode: Option<gst_video::ValidVideoTimeCode>,
     segment: gst::FormattedSegment<gst::ClockTime>,
 
@@ -90,9 +90,9 @@ impl Default for State {
             need_segment: true,
             pending_events: Vec::new(),
             framerate: None,
-            last_position: gst::CLOCK_TIME_NONE,
+            last_position: None,
             last_timecode: None,
-            segment: gst::FormattedSegment::<gst::ClockTime>::new(),
+            segment: gst::FormattedSegment::new(),
             pull: None,
             seeking: false,
             discont: false,
@@ -196,17 +196,20 @@ impl State {
         timecode: &gst_video::ValidVideoTimeCode,
         element: &super::SccParse,
     ) {
-        let nsecs = gst::ClockTime::from(timecode.nsec_since_daily_jam());
+        let nsecs = timecode.time_since_daily_jam();
 
-        if self.last_position.is_none() || nsecs >= self.last_position {
-            self.last_position = nsecs;
+        if self
+            .last_position
+            .map_or(true, |last_position| nsecs >= last_position)
+        {
+            self.last_position = Some(nsecs);
         } else {
             gst_fixme!(
                 CAT,
                 obj: element,
                 "New position {} < last position {}",
                 nsecs,
-                self.last_position
+                self.last_position.display(),
             );
         }
     }
@@ -225,9 +228,8 @@ impl State {
 
         buffer.set_pts(self.last_position);
         buffer.set_duration(
-            gst::SECOND
-                .mul_div_ceil(*framerate.denom() as u64, *framerate.numer() as u64)
-                .unwrap_or(gst::CLOCK_TIME_NONE),
+            gst::ClockTime::SECOND
+                .mul_div_ceil(*framerate.denom() as u64, *framerate.numer() as u64),
         );
     }
 
@@ -371,7 +373,7 @@ impl SccParse {
         };
 
         let mut timecode = state.handle_timecode(&tc, framerate, element)?;
-        let start_time = gst::ClockTime::from(timecode.nsec_since_daily_jam());
+        let start_time = timecode.time_since_daily_jam();
         let segment_start = state.segment.start();
         let clip_buffers = if state.seeking {
             // If we are in the middle of seeking, check whether this line
@@ -380,7 +382,7 @@ impl SccParse {
             let mut end_timecode = timecode.clone();
             // add one more frame here so that add duration of the last frame
             end_timecode.add_frames(num_bufs + 1);
-            let stop_time = gst::ClockTime::from(end_timecode.nsec_since_daily_jam());
+            let stop_time = end_timecode.time_since_daily_jam();
 
             gst_trace!(
                 CAT,
@@ -388,11 +390,11 @@ impl SccParse {
                 "Checking inside of segment, line start {} line stop {} segment start {} num bufs {}",
                 start_time,
                 stop_time,
-                segment_start,
+                segment_start.display(),
                 num_bufs,
             );
 
-            if stop_time > segment_start {
+            if segment_start.map_or(false, |seg_start| stop_time > seg_start) {
                 state.seeking = false;
                 state.discont = true;
                 state.need_flush_stop = true;
@@ -427,8 +429,14 @@ impl SccParse {
             timecode.increment_frame();
 
             if clip_buffers {
-                let end_time = buffer.pts() + buffer.duration();
-                if end_time < segment_start {
+                let end_time = buffer
+                    .pts()
+                    .zip(buffer.duration())
+                    .map(|(pts, duration)| pts + duration);
+                if end_time
+                    .zip(segment_start)
+                    .map_or(false, |(end_time, segment_start)| end_time < segment_start)
+                {
                     gst_trace!(
                         CAT,
                         obj: element,
@@ -440,8 +448,12 @@ impl SccParse {
                 }
             }
 
-            send_eos = state.segment.stop().is_some()
-                && buffer.pts() + buffer.duration() >= state.segment.stop();
+            send_eos = state.segment.stop().map_or(false, |stop| {
+                buffer
+                    .pts()
+                    .zip(buffer.duration())
+                    .map_or(false, |(pts, duration)| pts + duration >= stop)
+            });
 
             let buffers = buffers.get_mut().unwrap();
             buffers.add(buffer);
@@ -564,8 +576,8 @@ impl SccParse {
         }
 
         let size = match q.result().try_into().unwrap() {
-            gst::format::Bytes(Some(size)) => size,
-            gst::format::Bytes(None) => {
+            Some(gst::format::Bytes(size)) => size,
+            None => {
                 return Err(loggable_error!(CAT, "Failed to query upstream duration"));
             }
         };
@@ -704,12 +716,12 @@ impl SccParse {
                         Ok(Some(tc)) => {
                             let mut state = self.state.lock().unwrap();
                             let mut pull = state.pull.as_mut().unwrap();
-                            pull.duration = tc.nsec_since_daily_jam().into();
+                            pull.duration = Some(tc.time_since_daily_jam());
                         }
                         Ok(None) => {
                             let mut state = self.state.lock().unwrap();
                             let mut pull = state.pull.as_mut().unwrap();
-                            pull.duration = 0.into();
+                            pull.duration = Some(gst::ClockTime::ZERO);
                         }
                         Err(err) => {
                             err.log();
@@ -770,10 +782,10 @@ impl SccParse {
         if let Some(pull) = &mut state.pull {
             pull.offset = 0;
         }
-        state.segment = gst::FormattedSegment::<gst::ClockTime>::new();
+        state.segment = gst::FormattedSegment::new();
         state.need_segment = true;
         state.pending_events.clear();
-        state.last_position = 0.into();
+        state.last_position = None;
         state.last_timecode = None;
 
         drop(state);
@@ -835,7 +847,7 @@ impl SccParse {
 
         let (rate, flags, start_type, start, stop_type, stop) = event.get();
 
-        let mut start: gst::ClockTime = match start.try_into() {
+        let mut start: Option<gst::ClockTime> = match start.try_into() {
             Ok(start) => start,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");
@@ -843,7 +855,7 @@ impl SccParse {
             }
         };
 
-        let mut stop: gst::ClockTime = match stop.try_into() {
+        let mut stop: Option<gst::ClockTime> = match stop.try_into() {
             Ok(stop) => stop,
             Err(_) => {
                 gst_error!(CAT, obj: element, "seek has invalid format");
@@ -883,11 +895,17 @@ impl SccParse {
         let pull = state.pull.as_ref().unwrap();
 
         if start_type == gst::SeekType::Set {
-            start = start.min(pull.duration).unwrap_or(start);
+            start = start
+                .zip(pull.duration)
+                .map(|(start, duration)| start.min(duration))
+                .or(start);
         }
 
         if stop_type == gst::SeekType::Set {
-            stop = stop.min(pull.duration).unwrap_or(stop);
+            stop = stop
+                .zip(pull.duration)
+                .map(|(stop, duration)| stop.min(duration))
+                .or(stop);
         }
 
         state.seeking = true;
@@ -950,7 +968,7 @@ impl SccParse {
                     if let Some(pull) = state.pull.as_ref() {
                         q.set(
                             true,
-                            gst::GenericFormattedValue::Time(0.into()),
+                            gst::GenericFormattedValue::Time(gst::ClockTime::ZERO.into()),
                             gst::GenericFormattedValue::Time(pull.duration),
                         );
                         true

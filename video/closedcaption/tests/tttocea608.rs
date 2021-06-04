@@ -15,6 +15,7 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+use gst::ClockTime;
 use pretty_assertions::assert_eq;
 
 fn init() {
@@ -29,8 +30,8 @@ fn init() {
 
 fn new_timed_buffer<T: AsRef<[u8]> + Send + 'static>(
     slice: T,
-    timestamp: gst::ClockTime,
-    duration: gst::ClockTime,
+    timestamp: ClockTime,
+    duration: ClockTime,
 ) -> gst::buffer::Buffer {
     let mut buf = gst::Buffer::from_slice(slice);
     let buf_ref = buf.get_mut().unwrap();
@@ -63,13 +64,13 @@ fn test_one_timed_buffer_and_eos() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", gst::SECOND, gst::SECOND);
+    let inbuf = new_timed_buffer(&"Hello", ClockTime::SECOND, ClockTime::SECOND);
 
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.pts() + outbuf.duration() >= gst::SECOND {
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= ClockTime::SECOND {
             break;
         }
 
@@ -77,23 +78,56 @@ fn test_one_timed_buffer_and_eos() {
         assert_eq!(&*data, &[0x80, 0x80]);
     }
 
-    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 7] = [
-        (1_000_000_000.into(), 33_333_333.into(), [0x94, 0x20]), /* resume_caption_loading */
-        (1_033_333_333.into(), 33_333_334.into(), [0x94, 0xae]), /* erase_non_displayed_memory */
-        (1_066_666_667.into(), 33_333_333.into(), [0x94, 0x70]), /* preamble */
-        (1_100_000_000.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
-        (1_133_333_333.into(), 33_333_334.into(), [0xec, 0xec]), /* l l */
-        (1_166_666_667.into(), 33_333_333.into(), [0xef, 0x80]), /* o, nil */
-        (1_200_000_000.into(), 33_333_333.into(), [0x94, 0x2f]), /* end_of_caption */
+    let expected: [(ClockTime, ClockTime, [u8; 2usize]); 7] = [
+        (
+            ClockTime::from_nseconds(1_000_000_000),
+            ClockTime::from_nseconds(33_333_333),
+            [0x94, 0x20],
+        ), /* resume_caption_loading */
+        (
+            ClockTime::from_nseconds(1_033_333_333),
+            ClockTime::from_nseconds(33_333_334),
+            [0x94, 0xae],
+        ), /* erase_non_displayed_memory */
+        (
+            ClockTime::from_nseconds(1_066_666_667),
+            ClockTime::from_nseconds(33_333_333),
+            [0x94, 0x70],
+        ), /* preamble */
+        (
+            ClockTime::from_nseconds(1_100_000_000),
+            ClockTime::from_nseconds(33_333_333),
+            [0xc8, 0xe5],
+        ), /* H e */
+        (
+            ClockTime::from_nseconds(1_133_333_333),
+            ClockTime::from_nseconds(33_333_334),
+            [0xec, 0xec],
+        ), /* l l */
+        (
+            ClockTime::from_nseconds(1_166_666_667),
+            ClockTime::from_nseconds(33_333_333),
+            [0xef, 0x80],
+        ), /* o, nil */
+        (
+            ClockTime::from_nseconds(1_200_000_000),
+            ClockTime::from_nseconds(33_333_333),
+            [0x94, 0x2f],
+        ), /* end_of_caption */
     ];
 
     for (i, e) in expected.iter().enumerate() {
         let outbuf = h.try_pull().unwrap();
 
-        assert_eq!(e.0, outbuf.pts(), "Unexpected PTS for {}th buffer", i + 1);
+        assert_eq!(
+            e.0,
+            outbuf.pts().unwrap(),
+            "Unexpected PTS for {}th buffer",
+            i + 1
+        );
         assert_eq!(
             e.1,
-            outbuf.duration(),
+            outbuf.duration().unwrap(),
             "Unexpected duration for {}th buffer",
             i + 1
         );
@@ -110,7 +144,7 @@ fn test_one_timed_buffer_and_eos() {
     loop {
         let outbuf = h.try_pull().unwrap();
         let data = outbuf.map_readable().unwrap();
-        if outbuf.pts() == 2_200_000_000.into() {
+        if outbuf.pts().unwrap() == ClockTime::from_nseconds(2_200_000_000) {
             assert_eq!(&*data, &[0x94, 0x2c]);
             break;
         } else {
@@ -139,10 +173,18 @@ fn test_erase_display_memory_non_spliced() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", 1_000_000_000.into(), gst::SECOND);
+    let inbuf = new_timed_buffer(
+        &"Hello",
+        ClockTime::from_nseconds(1_000_000_000),
+        ClockTime::SECOND,
+    );
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let inbuf = new_timed_buffer(&"World", 3_000_000_000.into(), gst::SECOND);
+    let inbuf = new_timed_buffer(
+        &"World",
+        ClockTime::from_nseconds(3_000_000_000),
+        ClockTime::SECOND,
+    );
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     let mut erase_display_buffers = 0;
@@ -150,7 +192,7 @@ fn test_erase_display_memory_non_spliced() {
     while h.buffers_in_queue() > 0 {
         let outbuf = h.pull().unwrap();
 
-        if outbuf.pts() == 2_200_000_000.into() {
+        if outbuf.pts().unwrap() == ClockTime::from_nseconds(2_200_000_000) {
             let data = outbuf.map_readable().unwrap();
             assert_eq!(&*data, &[0x94, 0x2c]);
             erase_display_buffers += 1;
@@ -175,28 +217,37 @@ fn test_erase_display_memory_spliced() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", 1_000_000_000.into(), gst::SECOND);
+    let inbuf = new_timed_buffer(
+        &"Hello",
+        ClockTime::from_nseconds(1_000_000_000),
+        ClockTime::SECOND,
+    );
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let inbuf = new_timed_buffer(&"World", 2_000_000_000.into(), gst::SECOND);
+    let inbuf = new_timed_buffer(
+        &"World",
+        ClockTime::from_nseconds(2_000_000_000),
+        ClockTime::SECOND,
+    );
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     let mut erase_display_buffers = 0;
-    let mut prev_pts: gst::ClockTime = 0.into();
+    let mut prev_pts: ClockTime = ClockTime::ZERO;
 
     while h.buffers_in_queue() > 0 {
         let outbuf = h.pull().unwrap();
 
         /* Check that our timestamps are strictly ascending */
-        assert!(outbuf.pts() >= prev_pts);
+        let pts = outbuf.pts().unwrap();
+        assert!(pts >= prev_pts);
 
-        if outbuf.pts() == 2_000_000_000.into() {
+        if pts == ClockTime::from_nseconds(2_000_000_000) {
             let data = outbuf.map_readable().unwrap();
             assert_eq!(&*data, &[0x94, 0x2c]);
             erase_display_buffers += 1;
         }
 
-        prev_pts = outbuf.pts();
+        prev_pts = pts;
     }
 
     assert_eq!(erase_display_buffers, 1);
@@ -216,10 +267,18 @@ fn test_output_gaps() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", 1_000_000_000.into(), gst::SECOND);
+    let inbuf = new_timed_buffer(
+        &"Hello",
+        ClockTime::from_nseconds(1_000_000_000),
+        ClockTime::SECOND,
+    );
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let inbuf = new_timed_buffer(&"World", 3_000_000_000.into(), gst::SECOND);
+    let inbuf = new_timed_buffer(
+        &"World",
+        ClockTime::from_nseconds(3_000_000_000),
+        ClockTime::SECOND,
+    );
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     h.push_event(gst::event::Eos::new());
@@ -227,7 +286,7 @@ fn test_output_gaps() {
     /* Padding */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.pts() + outbuf.duration() >= gst::SECOND {
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= ClockTime::SECOND {
             break;
         }
 
@@ -238,7 +297,9 @@ fn test_output_gaps() {
     /* Hello */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.pts() + outbuf.duration() >= 1_233_333_333.into() {
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap()
+            >= ClockTime::from_nseconds(1_233_333_333)
+        {
             break;
         }
 
@@ -249,12 +310,14 @@ fn test_output_gaps() {
     /* Padding */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.pts() + outbuf.duration() >= 3_000_000_000.into() {
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap()
+            >= ClockTime::from_nseconds(3_000_000_000)
+        {
             break;
         }
 
         let data = outbuf.map_readable().unwrap();
-        if outbuf.pts() == 2_200_000_000.into() {
+        if outbuf.pts().unwrap() == ClockTime::from_nseconds(2_200_000_000) {
             /* Erase display one second after Hello */
             assert_eq!(&*data, &[0x94, 0x2C]);
         } else {
@@ -265,7 +328,9 @@ fn test_output_gaps() {
     /* World */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.pts() + outbuf.duration() >= 3_233_333_333.into() {
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap()
+            >= ClockTime::from_nseconds(3_233_333_333)
+        {
             break;
         }
 
@@ -290,16 +355,16 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello", gst::SECOND, gst::SECOND);
+    let inbuf = new_timed_buffer(&"Hello", ClockTime::SECOND, ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    let inbuf = new_timed_buffer(&"World", 2 * gst::SECOND, 1.into());
+    let inbuf = new_timed_buffer(&"World", 2 * ClockTime::SECOND, ClockTime::from_nseconds(1));
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     /* Padding */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.pts() + outbuf.duration() >= gst::SECOND {
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= ClockTime::SECOND {
             break;
         }
 
@@ -307,21 +372,46 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
         assert_eq!(&*data, &[0x80, 0x80]);
     }
 
-    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 5] = [
-        (1_000_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
-        (1_033_333_333.into(), 33_333_334.into(), [0x94, 0x70]), /* preamble */
-        (1_066_666_667.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
-        (1_100_000_000.into(), 33_333_333.into(), [0xec, 0xec]), /* l l */
-        (1_133_333_333.into(), 33_333_334.into(), [0xef, 0x80]), /* o nil */
+    let expected: [(ClockTime, ClockTime, [u8; 2usize]); 5] = [
+        (
+            ClockTime::from_nseconds(1_000_000_000),
+            ClockTime::from_nseconds(33_333_333),
+            [0x94, 0x25],
+        ), /* roll_up_2 */
+        (
+            ClockTime::from_nseconds(1_033_333_333),
+            ClockTime::from_nseconds(33_333_334),
+            [0x94, 0x70],
+        ), /* preamble */
+        (
+            ClockTime::from_nseconds(1_066_666_667),
+            ClockTime::from_nseconds(33_333_333),
+            [0xc8, 0xe5],
+        ), /* H e */
+        (
+            ClockTime::from_nseconds(1_100_000_000),
+            ClockTime::from_nseconds(33_333_333),
+            [0xec, 0xec],
+        ), /* l l */
+        (
+            ClockTime::from_nseconds(1_133_333_333),
+            ClockTime::from_nseconds(33_333_334),
+            [0xef, 0x80],
+        ), /* o nil */
     ];
 
     for (i, e) in expected.iter().enumerate() {
         let outbuf = h.try_pull().unwrap();
 
-        assert_eq!(e.0, outbuf.pts(), "Unexpected PTS for {}th buffer", i + 1);
+        assert_eq!(
+            e.0,
+            outbuf.pts().unwrap(),
+            "Unexpected PTS for {}th buffer",
+            i + 1
+        );
         assert_eq!(
             e.1,
-            outbuf.duration(),
+            outbuf.duration().unwrap(),
             "Unexpected duration for {}th buffer",
             i + 1
         );
@@ -333,7 +423,7 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     /* Padding */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.pts() + outbuf.duration() >= 2 * gst::SECOND {
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= 2 * ClockTime::SECOND {
             break;
         }
 
@@ -341,19 +431,36 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
         assert_eq!(&*data, &[0x80, 0x80]);
     }
 
-    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 3] = [
-        (2_000_000_000.into(), 0.into(), [0x20, 0x57]), /* SPACE W */
-        (2_000_000_000.into(), 0.into(), [0xef, 0xf2]), /* o r */
-        (2_000_000_000.into(), 0.into(), [0xec, 0x64]), /* l d */
+    let expected: [(ClockTime, ClockTime, [u8; 2usize]); 3] = [
+        (
+            ClockTime::from_nseconds(2_000_000_000),
+            ClockTime::ZERO,
+            [0x20, 0x57],
+        ), /* SPACE W */
+        (
+            ClockTime::from_nseconds(2_000_000_000),
+            ClockTime::ZERO,
+            [0xef, 0xf2],
+        ), /* o r */
+        (
+            ClockTime::from_nseconds(2_000_000_000),
+            ClockTime::ZERO,
+            [0xec, 0x64],
+        ), /* l d */
     ];
 
     for (i, e) in expected.iter().enumerate() {
         let outbuf = h.try_pull().unwrap();
 
-        assert_eq!(e.0, outbuf.pts(), "Unexpected PTS for {}th buffer", i + 1);
+        assert_eq!(
+            e.0,
+            outbuf.pts().unwrap(),
+            "Unexpected PTS for {}th buffer",
+            i + 1
+        );
         assert_eq!(
             e.1,
-            outbuf.duration(),
+            outbuf.duration().unwrap(),
             "Unexpected duration for {}th buffer",
             i + 1
         );
@@ -387,13 +494,13 @@ fn test_word_wrap_roll_up() {
         let _event = h.pull_event().unwrap();
     }
 
-    let inbuf = new_timed_buffer(&"Hello World", gst::SECOND, gst::SECOND);
+    let inbuf = new_timed_buffer(&"Hello World", ClockTime::SECOND, ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     /* Padding */
     loop {
         let outbuf = h.pull().unwrap();
-        if outbuf.pts() + outbuf.duration() >= gst::SECOND {
+        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= ClockTime::SECOND {
             break;
         }
 
@@ -401,27 +508,76 @@ fn test_word_wrap_roll_up() {
         assert_eq!(&*data, &[0x80, 0x80]);
     }
 
-    let expected: [(gst::ClockTime, gst::ClockTime, [u8; 2usize]); 11] = [
-        (1_000_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
-        (1_033_333_333.into(), 33_333_334.into(), [0x94, 0x7c]), /* preamble */
-        (1_066_666_667.into(), 33_333_333.into(), [0xc8, 0xe5]), /* H e */
-        (1_100_000_000.into(), 33_333_333.into(), [0xec, 0xec]), /* l l */
-        (1_133_333_333.into(), 33_333_334.into(), [0xef, 0x20]), /* o SPACE */
-        (1_166_666_667.into(), 33_333_333.into(), [0x94, 0xad]), /* carriage return */
-        (1_200_000_000.into(), 33_333_333.into(), [0x94, 0x25]), /* roll_up_2 */
-        (1_233_333_333.into(), 33_333_334.into(), [0x94, 0x7c]), /* preamble */
-        (1_266_666_667.into(), 33_333_333.into(), [0x57, 0xef]), /* W o */
-        (1_300_000_000.into(), 33_333_333.into(), [0xf2, 0xec]), /* r l */
-        (1_333_333_333.into(), 33_333_334.into(), [0x64, 0x80]), /* d nil */
+    let expected: [(ClockTime, ClockTime, [u8; 2usize]); 11] = [
+        (
+            ClockTime::from_nseconds(1_000_000_000),
+            ClockTime::from_nseconds(33_333_333),
+            [0x94, 0x25],
+        ), /* roll_up_2 */
+        (
+            ClockTime::from_nseconds(1_033_333_333),
+            ClockTime::from_nseconds(33_333_334),
+            [0x94, 0x7c],
+        ), /* preamble */
+        (
+            ClockTime::from_nseconds(1_066_666_667),
+            ClockTime::from_nseconds(33_333_333),
+            [0xc8, 0xe5],
+        ), /* H e */
+        (
+            ClockTime::from_nseconds(1_100_000_000),
+            ClockTime::from_nseconds(33_333_333),
+            [0xec, 0xec],
+        ), /* l l */
+        (
+            ClockTime::from_nseconds(1_133_333_333),
+            ClockTime::from_nseconds(33_333_334),
+            [0xef, 0x20],
+        ), /* o SPACE */
+        (
+            ClockTime::from_nseconds(1_166_666_667),
+            ClockTime::from_nseconds(33_333_333),
+            [0x94, 0xad],
+        ), /* carriage return */
+        (
+            ClockTime::from_nseconds(1_200_000_000),
+            ClockTime::from_nseconds(33_333_333),
+            [0x94, 0x25],
+        ), /* roll_up_2 */
+        (
+            ClockTime::from_nseconds(1_233_333_333),
+            ClockTime::from_nseconds(33_333_334),
+            [0x94, 0x7c],
+        ), /* preamble */
+        (
+            ClockTime::from_nseconds(1_266_666_667),
+            ClockTime::from_nseconds(33_333_333),
+            [0x57, 0xef],
+        ), /* W o */
+        (
+            ClockTime::from_nseconds(1_300_000_000),
+            ClockTime::from_nseconds(33_333_333),
+            [0xf2, 0xec],
+        ), /* r l */
+        (
+            ClockTime::from_nseconds(1_333_333_333),
+            ClockTime::from_nseconds(33_333_334),
+            [0x64, 0x80],
+        ), /* d nil */
     ];
 
     for (i, e) in expected.iter().enumerate() {
         let outbuf = h.try_pull().unwrap();
 
-        assert_eq!(e.0, outbuf.pts(), "Unexpected PTS for {}th buffer", i + 1);
+        assert_eq!(
+            e.0,
+            outbuf.pts().unwrap(),
+            "Unexpected PTS for {}th buffer",
+            i + 1
+        );
         assert_eq!(
             e.1,
-            outbuf.duration(),
+            outbuf.duration().unwrap(),
             "Unexpected duration for {}th buffer",
             i + 1
         );

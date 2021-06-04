@@ -136,8 +136,8 @@ Time Code Rate=30DF\r\n\
         .tc();
     assert_eq!(timecode, tc);
 
-    let pts = buf.pts();
-    assert_eq!(pts, gst::ClockTime::from_seconds(0));
+    let pts = buf.pts().unwrap();
+    assert_eq!(pts, gst::ClockTime::ZERO);
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
     assert_eq!(

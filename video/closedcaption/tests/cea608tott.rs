@@ -16,6 +16,7 @@
 // Boston, MA 02110-1335, USA.
 
 use gst::prelude::*;
+use gst::ClockTime;
 
 use pretty_assertions::assert_eq;
 
@@ -42,25 +43,25 @@ fn test_parse() {
     assert_eq!(h.push(buf), Ok(gst::FlowSuccess::Ok));
 
     // Check the first 4 output buffers
-    let expected: [(gst::ClockTime, gst::ClockTime, &'static str); 4] = [
+    let expected: [(ClockTime, ClockTime, &'static str); 4] = [
         (
-            15_048_366_666.into(),
-            3_236_566_667.into(),
+            ClockTime::from_nseconds(15_048_366_666),
+            ClockTime::from_nseconds(3_236_566_667),
             "From New York,\r\nthis is Democracy Now!",
         ),
         (
-            18_985_633_333.into(),
-            1_234_566_667.into(),
+            ClockTime::from_nseconds(18_985_633_333),
+            ClockTime::from_nseconds(1_234_566_667),
             "Yes, I’m supporting\r\nDonald Trump.",
         ),
         (
-            20_220_200_000.into(),
-            2_168_833_333.into(),
+            ClockTime::from_nseconds(20_220_200_000),
+            ClockTime::from_nseconds(2_168_833_333),
             "I’m doing so as enthusiastically\r\nas I can,",
         ),
         (
-            22_389_033_333.into(),
-            2_235_566_667.into(),
+            ClockTime::from_nseconds(22_389_033_333),
+            ClockTime::from_nseconds(2_235_566_667),
             "even the fact I think\r\nhe’s a terrible human being.",
         ),
     ];
@@ -68,10 +69,15 @@ fn test_parse() {
     for (i, e) in expected.iter().enumerate() {
         let buf = h.try_pull().unwrap();
 
-        assert_eq!(e.0, buf.pts(), "Unexpected PTS for {}th buffer", i + 1);
+        assert_eq!(
+            e.0,
+            buf.pts().unwrap(),
+            "Unexpected PTS for {}th buffer",
+            i + 1
+        );
         assert_eq!(
             e.1,
-            buf.duration(),
+            buf.duration().unwrap(),
             "Unexpected duration for {}th buffer",
             i + 1
         );

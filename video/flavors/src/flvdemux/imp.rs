@@ -72,7 +72,7 @@ struct StreamingState {
     video: Option<VideoFormat>,
     expect_video: bool,
     got_all_streams: bool,
-    last_position: gst::ClockTime,
+    last_position: Option<gst::ClockTime>,
 
     metadata: Option<Metadata>,
 
@@ -103,7 +103,7 @@ struct VideoFormat {
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 struct Metadata {
-    duration: gst::ClockTime,
+    duration: Option<gst::ClockTime>,
 
     creation_date: Option<String>,
     creator: Option<String>,
@@ -683,7 +683,7 @@ impl StreamingState {
             video: None,
             expect_video: video,
             got_all_streams: false,
-            last_position: gst::CLOCK_TIME_NONE,
+            last_position: gst::ClockTime::NONE,
             metadata: None,
             aac_sequence_header: None,
             avc_sequence_header: None,
@@ -1197,12 +1197,16 @@ impl StreamingState {
     }
 
     fn update_position(&mut self, buffer: &gst::Buffer) {
-        if buffer.pts().is_some() {
-            let pts = buffer.pts();
-            self.last_position = self.last_position.max(pts).unwrap_or(pts);
-        } else if buffer.dts().is_some() {
-            let dts = buffer.dts();
-            self.last_position = self.last_position.max(dts).unwrap_or(dts);
+        if let Some(pts) = buffer.pts() {
+            self.last_position = self
+                .last_position
+                .map(|last_pos| last_pos.max(pts))
+                .or(Some(pts));
+        } else if let Some(dts) = buffer.dts() {
+            self.last_position = self
+                .last_position
+                .map(|last_pos| last_pos.max(dts))
+                .or(Some(dts));
         }
     }
 }
@@ -1521,7 +1525,9 @@ impl Metadata {
         for arg in args {
             match (arg.name, &arg.data) {
                 ("duration", &flavors::ScriptDataValue::Number(duration)) => {
-                    metadata.duration = ((duration * 1000.0 * 1000.0 * 1000.0) as u64).into();
+                    metadata.duration = Some(gst::ClockTime::from_nseconds(
+                        (duration * 1000.0 * 1000.0 * 1000.0) as u64,
+                    ));
                 }
                 ("creationdate", &flavors::ScriptDataValue::String(date)) => {
                     metadata.creation_date = Some(String::from(date));

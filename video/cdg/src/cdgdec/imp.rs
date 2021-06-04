@@ -186,7 +186,12 @@ impl VideoDecoderImpl for CdgDec {
             }
         }
 
-        gst_debug!(CAT, obj: element, "Finish frame pts={}", frame.pts());
+        gst_debug!(
+            CAT,
+            obj: element,
+            "Finish frame pts={}",
+            frame.pts().display()
+        );
 
         element.finish_frame(frame)
     }

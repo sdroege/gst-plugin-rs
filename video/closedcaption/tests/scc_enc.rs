@@ -69,8 +69,8 @@ fn test_encode_single_packet() {
         .tc();
     assert_eq!(timecode, tc);
 
-    let pts = buf.pts();
-    assert_eq!(pts, gst::ClockTime::from_seconds(0));
+    let pts = buf.pts().unwrap();
+    assert_eq!(pts, gst::ClockTime::ZERO);
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
     assert_eq!(
@@ -168,8 +168,8 @@ fn test_encode_multiple_packets() {
         .tc();
     assert_eq!(timecode, tc1);
 
-    let pts = buf.pts();
-    assert_eq!(pts, gst::ClockTime::from_seconds(0));
+    let pts = buf.pts().unwrap();
+    assert_eq!(pts, gst::ClockTime::ZERO);
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
 
@@ -186,8 +186,8 @@ fn test_encode_multiple_packets() {
         .tc();
     assert_eq!(timecode, tc2);
 
-    // let pts = buf.get_pts();
-    // assert_eq!(pts, gst::ClockTime::from_seconds(0));
+    // let pts = buf.get_pts().unwrap();
+    // assert_eq!(pts, gst::ClockTime::ZERO);
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
     assert_eq!(
@@ -215,8 +215,8 @@ fn test_encode_multiple_packets() {
         .tc();
     assert_eq!(timecode, tc3);
 
-    // let pts = buf.get_pts();
-    // assert_eq!(pts, gst::ClockTime::from_seconds(0));
+    // let pts = buf.get_pts().unwrap();
+    // assert_eq!(pts, gst::ClockTime::ZERO);
 
     let map = buf.map_readable().expect("Couldn't map buffer readable");
     assert_eq!(
