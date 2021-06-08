@@ -107,6 +107,14 @@ version = "0.9"
 name = "semver-parser"
 version = "0.7"
 
+# ignore duplicated rustc_version dependency because rav1e depends on an old version
+[[bans.skip]]
+name = "rustc_version"
+version = "0.3"
+[[bans.skip]]
+name = "semver"
+version = "0.11"
+
 # ignore duplicated num-rational dependency because image depends on an old version
 # https://github.com/image-rs/image/pull/1451
 [[bans.skip]]
