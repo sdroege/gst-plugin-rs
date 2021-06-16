@@ -119,6 +119,7 @@ struct Settings {
     language_code: Option<String>,
     use_partial_results: bool,
     vocabulary: Option<String>,
+    session_id: Option<String>,
 }
 
 impl Default for Settings {
@@ -128,6 +129,7 @@ impl Default for Settings {
             language_code: Some("en-US".to_string()),
             use_partial_results: DEFAULT_USE_PARTIAL_RESULTS,
             vocabulary: None,
+            session_id: None,
         }
     }
 }
@@ -895,6 +897,11 @@ impl Transcriber {
             signed.add_param("vocabulary-name", vocabulary);
         }
 
+        if let Some(ref session_id) = settings.session_id {
+            gst_debug!(CAT, obj: element, "Using session ID: {}", session_id);
+            signed.add_param("session-id", session_id);
+        }
+
         let url = signed.generate_presigned_url(&creds, &std::time::Duration::from_secs(60), true);
 
         let (ws, _) = {
@@ -1078,6 +1085,13 @@ impl ObjectImpl for Transcriber {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpec::new_string(
+                    "session-id",
+                    "Session ID",
+                    "The ID of the transcription session, must be length 36",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -1118,6 +1132,10 @@ impl ObjectImpl for Transcriber {
                 let mut settings = self.settings.lock().unwrap();
                 settings.vocabulary = value.get().expect("type checked upstream");
             }
+            "session-id" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.session_id = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1139,6 +1157,10 @@ impl ObjectImpl for Transcriber {
             "vocabulary-name" => {
                 let settings = self.settings.lock().unwrap();
                 settings.vocabulary.to_value()
+            }
+            "session-id" => {
+                let settings = self.settings.lock().unwrap();
+                settings.session_id.to_value()
             }
             _ => unimplemented!(),
         }
