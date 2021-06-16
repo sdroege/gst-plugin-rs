@@ -39,16 +39,19 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 const DEFAULT_FIELD: i32 = -1;
+const DEFAULT_BLACK_BACKGROUND: bool = false;
 
 #[derive(Debug)]
 struct Settings {
     field: i32,
+    black_background: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             field: DEFAULT_FIELD,
+            black_background: DEFAULT_BLACK_BACKGROUND,
         }
     }
 }
@@ -148,6 +151,13 @@ impl Cea608Overlay {
             }
             left_alignment = (video_info.width() as i32 - logical_rect.width / pango::SCALE) / 2;
             font_size += 1;
+        }
+
+        if self.settings.lock().unwrap().black_background {
+            let attrs = pango::AttrList::new();
+            let attr = pango::Attribute::new_background(0, 0, 0);
+            attrs.insert(attr);
+            layout.set_attributes(Some(&attrs));
         }
 
         state.left_alignment = left_alignment;
@@ -306,7 +316,7 @@ impl Cea608Overlay {
 
         state.attach = upstream_has_meta || downstream_accepts_meta;
 
-        self.recalculate_layout(element, state)?;
+        let _ = state.layout.take();
 
         if !self.srcpad.push_event(gst::event::Caps::new(&caps)) {
             Err(gst::FlowError::NotNegotiated)
@@ -433,6 +443,10 @@ impl Cea608Overlay {
 
         if self.srcpad.check_reconfigure() {
             self.negotiate(element, &mut state)?;
+        }
+
+        if state.layout.is_none() {
+            self.recalculate_layout(element, &mut state)?;
         }
 
         for meta in buffer.iter_meta::<gst_video::VideoCaptionMeta>() {
@@ -578,15 +592,24 @@ impl ObjectSubclass for Cea608Overlay {
 impl ObjectImpl for Cea608Overlay {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::new_int(
-                "field",
-                "Field",
-                "The field to render the caption for when available, (-1=automatic)",
-                -1,
-                1,
-                DEFAULT_FIELD,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-            )]
+            vec![
+                glib::ParamSpec::new_int(
+                    "field",
+                    "Field",
+                    "The field to render the caption for when available, (-1=automatic)",
+                    -1,
+                    1,
+                    DEFAULT_FIELD,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+                glib::ParamSpec::new_boolean(
+                    "black-background",
+                    "Black background",
+                    "Whether a black background should be drawn behind text",
+                    DEFAULT_BLACK_BACKGROUND,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -610,6 +633,13 @@ impl ObjectImpl for Cea608Overlay {
                     val => Some(val as u8),
                 };
             }
+            "black-background" => {
+                let mut settings = self.settings.lock().unwrap();
+                let mut state = self.state.lock().unwrap();
+
+                settings.black_background = value.get().expect("type checked upstream");
+                let _ = state.layout.take();
+            }
             _ => unimplemented!(),
         }
     }
@@ -619,6 +649,10 @@ impl ObjectImpl for Cea608Overlay {
             "field" => {
                 let settings = self.settings.lock().unwrap();
                 settings.field.to_value()
+            }
+            "black-background" => {
+                let settings = self.settings.lock().unwrap();
+                settings.black_background.to_value()
             }
             _ => unimplemented!(),
         }
