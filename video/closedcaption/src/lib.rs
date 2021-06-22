@@ -36,6 +36,7 @@ mod mcc_parse;
 mod parser_utils;
 mod scc_enc;
 mod scc_parse;
+mod transcriberbin;
 mod tttocea608;
 mod tttojson;
 mod ttutils;
@@ -51,6 +52,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     ccdetect::register(plugin)?;
     tttojson::register(plugin)?;
     cea608tojson::register(plugin)?;
+    transcriberbin::register(plugin)?;
     Ok(())
 }
 

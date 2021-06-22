@@ -8,6 +8,7 @@ description = "Rust Closed Caption Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
+anyhow = "1"
 nom = "6.0"
 either = "1"
 uuid = { version = "0.8", features = ["v4"] }
