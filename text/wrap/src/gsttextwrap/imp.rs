@@ -15,7 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use glib::translate::{from_glib, IntoGlib};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -42,14 +41,14 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 const DEFAULT_DICTIONARY: Option<String> = None;
 const DEFAULT_COLUMNS: u32 = 32; /* CEA 608 max columns */
 const DEFAULT_LINES: u32 = 0;
-const DEFAULT_ACCUMULATE: i64 = -1;
+const DEFAULT_ACCUMULATE: gst::ClockTime = gst::ClockTime::ZERO;
 
 #[derive(Debug, Clone)]
 struct Settings {
     dictionary: Option<String>,
     columns: u32,
     lines: u32,
-    accumulate_time: Option<gst::ClockTime>,
+    accumulate_time: gst::ClockTime,
 }
 
 impl Default for Settings {
@@ -58,7 +57,7 @@ impl Default for Settings {
             dictionary: DEFAULT_DICTIONARY,
             columns: DEFAULT_COLUMNS, /* CEA 608 max columns */
             lines: DEFAULT_LINES,
-            accumulate_time: None,
+            accumulate_time: DEFAULT_ACCUMULATE,
         }
     }
 }
@@ -170,13 +169,13 @@ impl TextWrap {
         let accumulate_time = self.settings.lock().unwrap().accumulate_time;
         let mut state = self.state.lock().unwrap();
 
-        if accumulate_time.is_some() {
+        if !accumulate_time.is_zero() {
             let mut bufferlist = gst::BufferList::new();
             let n_lines = std::cmp::max(self.settings.lock().unwrap().lines, 1);
 
             if state
                 .start_ts
-                .zip(accumulate_time)
+                .zip(Some(accumulate_time))
                 .map_or(false, |(start_ts, accumulate_time)| {
                     start_ts + accumulate_time < pts
                 })
@@ -410,12 +409,7 @@ impl TextWrap {
 
                 if ret {
                     let (live, min, _) = peer_query.result();
-                    let our_latency: gst::ClockTime = self
-                        .settings
-                        .lock()
-                        .unwrap()
-                        .accumulate_time
-                        .unwrap_or(gst::ClockTime::ZERO);
+                    let our_latency: gst::ClockTime = self.settings.lock().unwrap().accumulate_time;
                     gst_info!(
                         CAT,
                         obj: element,
@@ -512,13 +506,13 @@ impl ObjectImpl for TextWrap {
                     DEFAULT_LINES,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_int64(
+                glib::ParamSpec::new_uint64(
                     "accumulate-time",
                     "accumulate-time",
-                    "Cut-off time for input text accumulation (-1=do not accumulate)",
-                    -1,
-                    std::i64::MAX,
-                    DEFAULT_ACCUMULATE,
+                    "Cut-off time for input text accumulation (0=do not accumulate)",
+                    0,
+                    u64::MAX - 1,
+                    DEFAULT_ACCUMULATE.nseconds(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
             ]
@@ -562,7 +556,7 @@ impl ObjectImpl for TextWrap {
                 let mut settings = self.settings.lock().unwrap();
                 let old_accumulate_time = settings.accumulate_time;
                 settings.accumulate_time =
-                    unsafe { from_glib(value.get::<i64>().expect("type checked upstream")) };
+                    gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
                 if settings.accumulate_time != old_accumulate_time {
                     gst_debug!(
                         CAT,
@@ -594,7 +588,7 @@ impl ObjectImpl for TextWrap {
             }
             "accumulate-time" => {
                 let settings = self.settings.lock().unwrap();
-                settings.accumulate_time.into_glib().to_value()
+                settings.accumulate_time.nseconds().to_value()
             }
             _ => unimplemented!(),
         }
