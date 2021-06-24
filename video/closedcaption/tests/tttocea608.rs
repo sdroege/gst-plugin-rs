@@ -68,16 +68,6 @@ fn test_one_timed_buffer_and_eos() {
 
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    loop {
-        let outbuf = h.pull().unwrap();
-        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= ClockTime::SECOND {
-            break;
-        }
-
-        let data = outbuf.map_readable().unwrap();
-        assert_eq!(&*data, &[0x80, 0x80]);
-    }
-
     let expected: [(ClockTime, ClockTime, [u8; 2usize]); 7] = [
         (
             ClockTime::from_nseconds(1_000_000_000),
@@ -361,17 +351,6 @@ fn test_one_timed_buffer_and_eos_roll_up2() {
     let inbuf = new_timed_buffer(&"World", 2 * ClockTime::SECOND, ClockTime::from_nseconds(1));
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
-    /* Padding */
-    loop {
-        let outbuf = h.pull().unwrap();
-        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= ClockTime::SECOND {
-            break;
-        }
-
-        let data = outbuf.map_readable().unwrap();
-        assert_eq!(&*data, &[0x80, 0x80]);
-    }
-
     let expected: [(ClockTime, ClockTime, [u8; 2usize]); 5] = [
         (
             ClockTime::from_nseconds(1_000_000_000),
@@ -496,17 +475,6 @@ fn test_word_wrap_roll_up() {
 
     let inbuf = new_timed_buffer(&"Hello World", ClockTime::SECOND, ClockTime::SECOND);
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
-
-    /* Padding */
-    loop {
-        let outbuf = h.pull().unwrap();
-        if outbuf.pts().unwrap() + outbuf.duration().unwrap() >= ClockTime::SECOND {
-            break;
-        }
-
-        let data = outbuf.map_readable().unwrap();
-        assert_eq!(&*data, &[0x80, 0x80]);
-    }
 
     let expected: [(ClockTime, ClockTime, [u8; 2usize]); 11] = [
         (

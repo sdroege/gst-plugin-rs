@@ -569,6 +569,11 @@ impl TtToCea608 {
 
         let frame_no = pts.mul_div_round(fps_n, fps_d).unwrap().seconds();
 
+        if state.last_frame_no == 0 {
+            gst_debug!(CAT, obj: element, "Initial skip to frame no {}", frame_no);
+            state.last_frame_no = pts.mul_div_floor(fps_n, fps_d).unwrap().seconds();
+        }
+
         state.max_frame_no = (pts + duration)
             .mul_div_round(fps_n, fps_d)
             .unwrap()
@@ -809,6 +814,8 @@ impl TtToCea608 {
         element: &super::TtToCea608,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        gst_log!(CAT, obj: element, "Handling {:?}", buffer);
+
         let pts = buffer.pts().ok_or_else(|| {
             gst::element_error!(
                 element,
@@ -941,6 +948,18 @@ impl TtToCea608 {
                 );
 
                 let (timestamp, duration) = e.get();
+
+                if state.last_frame_no == 0 {
+                    state.last_frame_no = timestamp.mul_div_floor(fps_n, fps_d).unwrap().seconds();
+
+                    gst_debug!(
+                        CAT,
+                        obj: element,
+                        "Initial skip to frame no {}",
+                        state.last_frame_no
+                    );
+                }
+
                 let frame_no = (timestamp + duration.unwrap())
                     .mul_div_round(fps_n, fps_d)
                     .unwrap()
