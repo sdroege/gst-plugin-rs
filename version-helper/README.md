@@ -25,6 +25,7 @@ gst::plugin_define!(
     env!("CARGO_PKG_REPOSITORY"),
     env!("BUILD_REL_DATE")
 );
+```
 
 ## LICENSE
 
