@@ -608,7 +608,6 @@ impl ObjectImpl for FallbackSrc {
                     &[String::static_type().into()],
                     String::static_type().into(),
                 )
-                .action()
                 .class_handler(|_token, args| {
                     // Simply return the input by default
                     Some(args[1].clone())
