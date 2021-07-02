@@ -8,10 +8,10 @@ edition = "2018"
 description = "Rust Tutorial Plugin"
 
 [dependencies]
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst = { package = "gstreamer", version = "0.17" }
+gst-base = { package = "gstreamer-base", version = "0.17" }
+gst-video = { package = "gstreamer-video", version = "0.17" }
+gst-audio = { package = "gstreamer-audio", version = "0.17" }
 byte-slice-cast = "1.0"
 num-traits = "0.2"
 once_cell = "1.0"

@@ -13,7 +13,7 @@ textwrap = { version = "0.13.2", features = ["hyphenation"] }
 hyphenation = "0.8"
 
 [dependencies.gst]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.17"
 features = ["v1_12"]
 package="gstreamer"
 
@@ -26,7 +26,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper = { path="../../version-helper" }
 
 [dev-dependencies.gst-check]
-git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
+version = "0.17"
 package="gstreamer-check"
 
 [features]

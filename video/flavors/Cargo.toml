@@ -8,8 +8,8 @@ edition = "2018"
 description = "Rust FLV Plugin"
 
 [dependencies]
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst = { package = "gstreamer", version = "0.17" }
+gst-base = { package = "gstreamer-base", version = "0.17" }
 num-rational = { version = "0.4", default-features = false, features = [] }
 nom = "6"
 flavors = { git = "https://github.com/rust-av/flavors" }
