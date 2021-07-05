@@ -20,6 +20,7 @@ use std::{
 };
 
 const DEFAULT_REPEAT: i32 = 0;
+const DEFAULT_SPEED: i32 = 10;
 
 /// The gif::Encoder requires a std::io::Write implementation, to which it
 /// can save the generated gif. This struct is used as a temporary cache, into
@@ -70,12 +71,14 @@ impl Write for CacheBufferWriter {
 #[derive(Debug, Clone, Copy)]
 struct Settings {
     repeat: i32,
+    speed: i32,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             repeat: DEFAULT_REPEAT,
+            speed: DEFAULT_SPEED,
         }
     }
 }
@@ -140,15 +143,26 @@ impl ObjectSubclass for GifEnc {
 impl ObjectImpl for GifEnc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::new_int(
-                "repeat",
-                "Repeat",
-                "Repeat (-1 to loop forever, 0 .. n finite repetitions)",
-                -1,
-                std::u16::MAX as i32,
-                DEFAULT_REPEAT,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-            )]
+            vec![
+                glib::ParamSpec::new_int(
+                    "repeat",
+                    "Repeat",
+                    "Repeat (-1 to loop forever, 0 .. n finite repetitions)",
+                    -1,
+                    std::u16::MAX as i32,
+                    DEFAULT_REPEAT,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpec::new_int(
+                    "speed",
+                    "Speed",
+                    "Speed (1 .. 30; higher value yields faster encoding)",
+                    1,
+                    30,
+                    DEFAULT_SPEED,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -166,6 +180,10 @@ impl ObjectImpl for GifEnc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.repeat = value.get().expect("type checked upstream");
             }
+            "speed" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.speed = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -175,6 +193,10 @@ impl ObjectImpl for GifEnc {
             "repeat" => {
                 let settings = self.settings.lock().unwrap();
                 settings.repeat.to_value()
+            }
+            "speed" => {
+                let settings = self.settings.lock().unwrap();
+                settings.speed.to_value()
             }
             _ => unimplemented!(),
         }
@@ -346,24 +368,22 @@ impl VideoEncoderImpl for GifEnc {
                     gst::FlowError::Error
                 })?;
 
+            let settings = self.settings.lock().unwrap();
+
             let mut raw_frame = tightly_packed_framebuffer(&in_frame);
             let mut gif_frame = match in_frame.info().format() {
-                gst_video::VideoFormat::Rgb => {
-                    gif::Frame::from_rgb_speed(
-                        frame_width as u16,
-                        frame_height as u16,
-                        &raw_frame,
-                        10, // TODO: Export option for this quality/speed tradeoff
-                    )
-                }
-                gst_video::VideoFormat::Rgba => {
-                    gif::Frame::from_rgba_speed(
-                        frame_width as u16,
-                        frame_height as u16,
-                        &mut raw_frame,
-                        10, //TODO: Export option for this quality/speed tradeoff
-                    )
-                }
+                gst_video::VideoFormat::Rgb => gif::Frame::from_rgb_speed(
+                    frame_width as u16,
+                    frame_height as u16,
+                    &raw_frame,
+                    settings.speed,
+                ),
+                gst_video::VideoFormat::Rgba => gif::Frame::from_rgba_speed(
+                    frame_width as u16,
+                    frame_height as u16,
+                    &mut raw_frame,
+                    settings.speed,
+                ),
                 _ => unreachable!(),
             };
 
