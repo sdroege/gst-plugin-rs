@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-textwrap"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "LGPL-2.1-or-later"
 edition = "2018"
