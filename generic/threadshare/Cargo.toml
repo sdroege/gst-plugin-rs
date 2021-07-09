@@ -45,7 +45,7 @@ name = "tcpclientsrc-benchmark-sender"
 path = "examples/tcpclientsrc_benchmark_sender.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { version = "0.7.0", path="../../version-helper" }
 cc = "1.0.38"
 pkg-config = "0.3.15"
 

@@ -29,7 +29,7 @@ gst-check = { package = "gstreamer-check", version = "0.17", features = ["v1_18"
 gst-app = { package = "gstreamer-app", version = "0.17" }
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { version = "0.7.0", path="../../version-helper" }
 
 [features]
 static = []

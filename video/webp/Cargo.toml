@@ -34,7 +34,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { version = "0.7.0", path="../../version-helper" }
 
 [features]
 # We already use 1.16 which is new enough for static build

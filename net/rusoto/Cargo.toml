@@ -37,7 +37,7 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { version = "0.7.0", path="../../version-helper" }
 
 [features]
 # GStreamer 1.14 is required for static linking

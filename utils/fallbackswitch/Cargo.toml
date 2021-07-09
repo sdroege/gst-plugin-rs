@@ -32,7 +32,7 @@ path = "examples/gtk_fallbackswitch.rs"
 required-features = ["gtk", "gio"]
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { version = "0.7.0", path="../../version-helper" }
 cc = "1.0"
 pkg-config = "0.3"
 
