@@ -5,7 +5,7 @@ authors = ["Sajeer Ahamed <ahamedsajeer.15.15@cse.mrt.ac.lk>",
            "Sebastian Dröge <sebastian@centricular.com>"]
 categories = ["development-tools"]
 description = "build.rs helper function for GStreamer plugin metadata"
-repository = "https://gitlab.freedesktop.org/gst-plugins-rs/gstreamer-rs"
+repository = "https://gitlab.freedesktop.org/gst-plugins-rs"
 license = "MIT"
 homepage = "https://gstreamer.freedesktop.org"
 keywords = ["gstreamer", "multimedia", "cargo"]
