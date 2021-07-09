@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-dav1d"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Philippe Normand <philn@igalia.com>"]
 edition = "2018"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
@@ -27,7 +27,7 @@ gst-plugin-version-helper = { path = "../../version-helper" }
 static = ["gst/v1_14"]
 
 [package.metadata.capi]
-min_version = "0.7.0"
+min_version = "0.8.0"
 
 [package.metadata.capi.header]
 enabled = false

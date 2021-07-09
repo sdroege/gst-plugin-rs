@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-fallbackswitch"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "LGPL-2.1-or-later"
@@ -43,7 +43,7 @@ v1_18 = ["gst-base/v1_18"]
 static = []
 
 [package.metadata.capi]
-min_version = "0.7.0"
+min_version = "0.8.0"
 
 [package.metadata.capi.header]
 enabled = false

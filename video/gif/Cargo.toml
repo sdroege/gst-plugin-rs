@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-gif"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Markus Ebner <info@ebner-markus.de>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
@@ -34,7 +34,7 @@ gst-plugin-version-helper = { path="../../version-helper" }
 static = ["gst/v1_14"]
 
 [package.metadata.capi]
-min_version = "0.7.0"
+min_version = "0.8.0"
 
 [package.metadata.capi.header]
 enabled = false

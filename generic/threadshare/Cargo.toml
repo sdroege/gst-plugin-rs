@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-threadshare"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1-or-later"
 description = "Threadshare Plugin"
@@ -54,7 +54,7 @@ pkg-config = "0.3.15"
 static = ["gst/v1_14"]
 
 [package.metadata.capi]
-min_version = "0.7.0"
+min_version = "0.8.0"
 
 [package.metadata.capi.header]
 enabled = false

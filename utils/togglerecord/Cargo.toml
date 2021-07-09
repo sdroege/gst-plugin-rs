@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-togglerecord"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1-or-later"
 description = "Toggle Record Plugin"
@@ -37,7 +37,7 @@ gst-plugin-version-helper = { path="../../version-helper" }
 static = ["gst/v1_14"]
 
 [package.metadata.capi]
-min_version = "0.7.0"
+min_version = "0.8.0"
 
 [package.metadata.capi.header]
 enabled = false
