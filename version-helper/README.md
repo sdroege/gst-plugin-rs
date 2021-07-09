@@ -8,7 +8,7 @@ This function is supposed to be used as follows in the `build.rs` of a crate tha
 plugin:
 
 ```rust,ignore
-gst_plugin_version_helper::get_info();
+gst_plugin_version_helper::info();
 ```
 
 Inside `lib.rs` of the plugin, the information provided by `get_info` are usable as follows:
