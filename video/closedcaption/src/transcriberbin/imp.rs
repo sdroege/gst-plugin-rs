@@ -222,8 +222,6 @@ impl TranscriberBin {
 
         self.construct_transcription_bin(element, state)?;
 
-        element.debug_to_dot_file(gst::DebugGraphDetails::all(), "Initial");
-
         Ok(())
     }
 
@@ -282,6 +280,8 @@ impl TranscriberBin {
             let passthrough = self.settings.lock().unwrap().passthrough;
 
             if passthrough {
+                gst_debug!(CAT, obj: element, "disabling transcription bin");
+
                 let bin_sink_pad = state.transcription_bin.static_pad("sink").unwrap();
                 if let Some(audio_tee_pad) = bin_sink_pad.peer() {
                     audio_tee_pad.unlink(&bin_sink_pad).unwrap();
@@ -296,8 +296,6 @@ impl TranscriberBin {
 
                 state.transcription_bin.set_locked_state(true);
                 state.transcription_bin.set_state(gst::State::Null).unwrap();
-
-                element.debug_to_dot_file(gst::DebugGraphDetails::all(), "after-disable");
             }
         }
     }
@@ -342,8 +340,6 @@ impl TranscriberBin {
                     .unwrap();
                 state.transcription_bin.set_locked_state(false);
                 state.transcription_bin.sync_state_with_parent().unwrap();
-
-                element.debug_to_dot_file(gst::DebugGraphDetails::all(), "after-enable");
             }
         }
     }
