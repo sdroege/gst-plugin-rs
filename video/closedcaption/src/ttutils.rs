@@ -60,14 +60,14 @@ impl From<u32> for TextStyle {
 }
 
 // TODO allow indenting chunks
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Chunk {
     pub style: TextStyle,
     pub underline: bool,
     pub text: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Line {
     pub column: Option<u32>,
     pub row: Option<u32>,
@@ -77,7 +77,7 @@ pub struct Line {
     pub carriage_return: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Lines {
     pub lines: Vec<Line>,
     pub mode: Option<Cea608Mode>,

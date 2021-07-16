@@ -30,6 +30,7 @@ mod ccutils;
 mod cea608overlay;
 mod cea608tojson;
 mod cea608tott;
+mod jsontovtt;
 mod line_reader;
 mod mcc_enc;
 mod mcc_parse;
@@ -52,6 +53,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     ccdetect::register(plugin)?;
     tttojson::register(plugin)?;
     cea608tojson::register(plugin)?;
+    jsontovtt::register(plugin)?;
     transcriberbin::register(plugin)?;
     Ok(())
 }
