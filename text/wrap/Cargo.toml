@@ -14,7 +14,6 @@ hyphenation = "0.8"
 
 [dependencies.gst]
 version = "0.17"
-features = ["v1_12"]
 package="gstreamer"
 
 [lib]

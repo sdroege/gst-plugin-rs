@@ -10,7 +10,7 @@ edition = "2018"
 [dependencies]
 libc = "0.2"
 gio = { version = "0.14" }
-gst = { package = "gstreamer", version = "0.17", features=["v1_10"] }
+gst = { package = "gstreamer", version = "0.17" }
 gst-net = { package = "gstreamer-net", version = "0.17" }
 gst-rtp = { package = "gstreamer-rtp", version = "0.17" }
 pin-project = "1"

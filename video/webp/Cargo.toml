@@ -13,12 +13,10 @@ libwebp-sys2 = { version = "0.1.2", features = ["demux", "0_5"] }
 
 [dependencies.gst]
 version = "0.17"
-features = ["v1_16"]
 package="gstreamer"
 
 [dependencies.gst-video]
 version = "0.17"
-features = ["v1_16"]
 package="gstreamer-video"
 
 [dev-dependencies]
@@ -37,8 +35,8 @@ path = "src/lib.rs"
 gst-plugin-version-helper = { version = "0.7.0", path="../../version-helper" }
 
 [features]
-# We already use 1.16 which is new enough for static build
-static = []
+# GStreamer 1.14 is required for static linking
+static = ["gst/v1_14"]
 
 [package.metadata.capi]
 min_version = "0.7.0"
