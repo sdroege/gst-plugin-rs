@@ -10,7 +10,7 @@ edition = "2018"
 [dependencies]
 libc = "0.2"
 gio = { git = "https://github.com/gtk-rs/gtk-rs-core" }
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features=["v1_10"] }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 pin-project = "1"

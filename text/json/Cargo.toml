@@ -14,7 +14,6 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
-features = ["v1_12"]
 package="gstreamer"
 
 [lib]
@@ -33,4 +32,3 @@ package="gstreamer-check"
 default = ["gst/ser_de"]
 # GStreamer 1.14 is required for static linking
 static = ["default", "gst/v1_14"]
-

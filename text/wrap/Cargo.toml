@@ -14,7 +14,6 @@ hyphenation = "0.8"
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
-features = ["v1_12"]
 package="gstreamer"
 
 [lib]

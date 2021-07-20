@@ -8,8 +8,8 @@ license = "MIT"
 edition = "2018"
 
 [dependencies]
-gst = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"], package="gstreamer" }
-gst-base = { git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"], package = "gstreamer-base" }
+gst = { package="gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 sodiumoxide = "0.2.1"
 once_cell = "1.3.0"
 hex = "0.4"
