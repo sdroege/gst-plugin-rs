@@ -113,6 +113,8 @@ impl RegEx {
             );
         }
 
+        drop(state);
+
         self.srcpad.push(outbuf)
     }
 }
