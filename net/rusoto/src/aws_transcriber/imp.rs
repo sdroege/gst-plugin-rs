@@ -115,12 +115,14 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
 });
 
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(8);
+const DEFAULT_LATENESS: gst::ClockTime = gst::ClockTime::from_seconds(0);
 const DEFAULT_STABILITY: AwsTranscriberResultStability = AwsTranscriberResultStability::Low;
 const GRANULARITY: gst::ClockTime = gst::ClockTime::from_mseconds(100);
 
 #[derive(Debug, Clone)]
 struct Settings {
     latency: gst::ClockTime,
+    lateness: gst::ClockTime,
     language_code: Option<String>,
     vocabulary: Option<String>,
     session_id: Option<String>,
@@ -131,6 +133,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             latency: DEFAULT_LATENCY,
+            lateness: DEFAULT_LATENESS,
             language_code: Some("en-US".to_string()),
             vocabulary: None,
             session_id: None,
@@ -370,11 +373,15 @@ impl Transcriber {
         alternative: &TranscriptAlternative,
         partial: bool,
     ) {
+        let lateness = self.settings.lock().unwrap().lateness;
+
         for item in &alternative.items[state.partial_index..] {
             let start_time =
-                gst::ClockTime::from_nseconds((item.start_time as f64 * 1_000_000_000.0) as u64);
+                gst::ClockTime::from_nseconds((item.start_time as f64 * 1_000_000_000.0) as u64)
+                    + lateness;
             let end_time =
-                gst::ClockTime::from_nseconds((item.end_time as f64 * 1_000_000_000.0) as u64);
+                gst::ClockTime::from_nseconds((item.end_time as f64 * 1_000_000_000.0) as u64)
+                    + lateness;
 
             if !item.stable {
                 break;
@@ -839,6 +846,18 @@ impl Transcriber {
 
         let settings = self.settings.lock().unwrap();
 
+        if settings.latency + settings.lateness <= 2 * GRANULARITY {
+            gst_error!(
+                CAT,
+                obj: element,
+                "latency + lateness must be greater than 200 milliseconds"
+            );
+            return Err(error_msg!(
+                gst::LibraryError::Settings,
+                ["latency + lateness must be greater than 200 milliseconds"]
+            ));
+        }
+
         gst_info!(CAT, obj: element, "Connecting ..");
 
         let creds = {
@@ -1059,9 +1078,18 @@ impl ObjectImpl for Transcriber {
                     "latency",
                     "Latency",
                     "Amount of milliseconds to allow AWS transcribe",
-                    2 * GRANULARITY.mseconds() as u32,
+                    0,
                     std::u32::MAX,
                     DEFAULT_LATENCY.mseconds() as u32,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpec::new_uint(
+                    "lateness",
+                    "Lateness",
+                    "Amount of milliseconds to introduce as lateness",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_LATENESS.mseconds() as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpec::new_string(
@@ -1120,6 +1148,12 @@ impl ObjectImpl for Transcriber {
                     value.get::<u32>().expect("type checked upstream").into(),
                 );
             }
+            "lateness" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.lateness = gst::ClockTime::from_mseconds(
+                    value.get::<u32>().expect("type checked upstream").into(),
+                );
+            }
             "vocabulary-name" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.vocabulary = value.get().expect("type checked upstream");
@@ -1147,6 +1181,10 @@ impl ObjectImpl for Transcriber {
             "latency" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.latency.mseconds() as u32).to_value()
+            }
+            "lateness" => {
+                let settings = self.settings.lock().unwrap();
+                (settings.lateness.mseconds() as u32).to_value()
             }
             "vocabulary-name" => {
                 let settings = self.settings.lock().unwrap();
