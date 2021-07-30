@@ -525,7 +525,7 @@ impl SinkHandler {
         // Reschedule if needed
         let (_, next_wakeup) =
             jb.src_pad_handler
-                .next_wakeup(&element, &state, latency, context_wait);
+                .next_wakeup(element, &state, latency, context_wait);
         if let Some((next_wakeup, _)) = next_wakeup {
             if let Some((previous_next_wakeup, ref abort_handle)) = state.wait_handle {
                 if previous_next_wakeup.is_none()

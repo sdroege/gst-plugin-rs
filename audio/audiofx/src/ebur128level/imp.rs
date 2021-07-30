@@ -436,7 +436,7 @@ impl BaseTransformImpl for EbuR128Level {
         let mut timestamp = buf.pts();
         let segment = element.segment().downcast::<gst::ClockTime>().ok();
 
-        let buf = gst_audio::AudioBufferRef::from_buffer_ref_readable(&buf, &state.info).map_err(
+        let buf = gst_audio::AudioBufferRef::from_buffer_ref_readable(buf, &state.info).map_err(
             |_| {
                 gst::element_error!(element, gst::ResourceError::Read, ["Failed to map buffer"]);
                 gst::FlowError::Error

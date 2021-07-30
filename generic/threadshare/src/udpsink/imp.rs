@@ -441,7 +441,7 @@ impl UdpSinkPadHandler {
 
         if !clients_to_configure.is_empty() {
             for client in &clients_to_configure {
-                self.configure_client(&settings, &mut socket, &mut socket_v6, &client)
+                self.configure_client(&settings, &mut socket, &mut socket_v6, client)
                     .map_err(|err| {
                         element_error!(
                             element,
@@ -456,7 +456,7 @@ impl UdpSinkPadHandler {
 
         if !clients_to_unconfigure.is_empty() {
             for client in &clients_to_unconfigure {
-                self.unconfigure_client(&settings, &mut socket, &mut socket_v6, &client)
+                self.unconfigure_client(&settings, &mut socket, &mut socket_v6, client)
                     .map_err(|err| {
                         element_error!(
                             element,
@@ -470,7 +470,7 @@ impl UdpSinkPadHandler {
         }
 
         if do_sync {
-            self.sync(&element, rtime).await;
+            self.sync(element, rtime).await;
         }
 
         let data = buffer.map_readable().map_err(|_| {
@@ -876,7 +876,7 @@ impl UdpSink {
         self.prepare_socket(SocketFamily::Ipv6, &context, element)?;
 
         self.task
-            .prepare(UdpSinkTask::new(&element, &self.sink_pad_handler), context)
+            .prepare(UdpSinkTask::new(element, &self.sink_pad_handler), context)
             .map_err(|err| {
                 error_msg!(
                     gst::ResourceError::OpenRead,
@@ -916,17 +916,17 @@ impl UdpSink {
 impl UdpSink {
     fn clear_clients(&self, clients_to_add: impl Iterator<Item = SocketAddr>) {
         self.sink_pad_handler
-            .clear_clients(&self.sink_pad.gst_pad(), clients_to_add);
+            .clear_clients(self.sink_pad.gst_pad(), clients_to_add);
     }
 
     fn remove_client(&self, addr: SocketAddr) {
         self.sink_pad_handler
-            .remove_client(&self.sink_pad.gst_pad(), addr);
+            .remove_client(self.sink_pad.gst_pad(), addr);
     }
 
     fn add_client(&self, addr: SocketAddr) {
         self.sink_pad_handler
-            .add_client(&self.sink_pad.gst_pad(), addr);
+            .add_client(self.sink_pad.gst_pad(), addr);
     }
 }
 
@@ -1249,7 +1249,7 @@ impl ObjectImpl for UdpSink {
                             .map_err(|err| {
                                 gst_error!(CAT, obj: obj, "Invalid port {}: {}", rsplit[0], err);
                             })
-                            .and_then(|port| try_into_socket_addr(&obj, rsplit[1], port))
+                            .and_then(|port| try_into_socket_addr(obj, rsplit[1], port))
                             .ok()
                     } else {
                         None

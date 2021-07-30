@@ -902,7 +902,7 @@ impl TaskImpl for ProxySrcTask {
 
             let pad = self.src_pad.upgrade().expect("PadSrc no longer exists");
             let proxysrc = ProxySrc::from_instance(&self.element);
-            let res = ProxySrcPadHandler::push_item(&pad, &proxysrc, item).await;
+            let res = ProxySrcPadHandler::push_item(&pad, proxysrc, item).await;
             match res {
                 Ok(()) => {
                     gst_log!(SRC_CAT, obj: &self.element, "Successfully pushed item");

@@ -721,7 +721,7 @@ impl ObjectImpl for TranscriberBin {
             }
             "transcriber" => {
                 let state = self.state.lock().unwrap();
-                if let Some(ref state) = state.as_ref() {
+                if let Some(state) = state.as_ref() {
                     state.transcriber.to_value()
                 } else {
                     let ret: Option<gst::Element> = None;

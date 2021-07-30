@@ -1274,7 +1274,7 @@ impl URIHandlerImpl for ReqwestHttpSrc {
     }
 
     fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
-        self.set_location(&element, Some(uri))
+        self.set_location(element, Some(uri))
     }
 }
 

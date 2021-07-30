@@ -128,7 +128,7 @@ fn test_encode(video_info: &gst_video::VideoInfo) {
 
     let buffer = {
         let buffer = gst::Buffer::with_size(video_info.size()).unwrap();
-        let mut vframe = gst_video::VideoFrame::from_buffer_writable(buffer, &video_info).unwrap();
+        let mut vframe = gst_video::VideoFrame::from_buffer_writable(buffer, video_info).unwrap();
 
         for v in vframe.plane_data_mut(0).unwrap() {
             *v = 0;

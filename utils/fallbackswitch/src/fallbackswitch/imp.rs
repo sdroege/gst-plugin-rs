@@ -361,7 +361,7 @@ impl FallbackSwitch {
 
         // Drop all older buffers from the fallback sinkpad
         if let Some(backup_pad) = backup_pad {
-            self.drain_pad_to_time(state, &backup_pad, state.last_output_time)?;
+            self.drain_pad_to_time(state, backup_pad, state.last_output_time)?;
         }
 
         Ok(Some((buffer, active_caps, pad_change)))
@@ -607,7 +607,7 @@ impl FallbackSwitch {
                 "No primary buffer, but can't autoswitch - draining backup pad"
             );
             if let Some(backup_pad) = &backup_pad {
-                if let Err(e) = self.drain_pad_to_time(&mut *state, &backup_pad, cur_running_time) {
+                if let Err(e) = self.drain_pad_to_time(&mut *state, backup_pad, cur_running_time) {
                     return (
                         Err(e),
                         state.check_health_changes(
@@ -917,11 +917,9 @@ impl ElementImpl for FallbackSwitch {
             return None;
         }
 
-        let sinkpad = gst::PadBuilder::<gst_base::AggregatorPad>::from_template(
-            &templ,
-            Some("fallback_sink"),
-        )
-        .build();
+        let sinkpad =
+            gst::PadBuilder::<gst_base::AggregatorPad>::from_template(templ, Some("fallback_sink"))
+                .build();
 
         *fallback_sinkpad = Some(sinkpad.clone());
         drop(fallback_sinkpad);

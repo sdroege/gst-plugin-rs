@@ -262,9 +262,9 @@ impl State {
         framerate: gst::Fraction,
     ) {
         let buffer = buffer.get_mut().unwrap();
-        gst_video::VideoTimeCodeMeta::add(buffer, &timecode);
+        gst_video::VideoTimeCodeMeta::add(buffer, timecode);
 
-        self.update_timestamp(element, &timecode);
+        self.update_timestamp(element, timecode);
 
         buffer.set_pts(self.last_position);
 
@@ -336,7 +336,7 @@ impl State {
             self.need_segment = false;
         }
 
-        events.extend(self.pending_events.drain(..));
+        events.append(&mut self.pending_events);
         events
     }
 }

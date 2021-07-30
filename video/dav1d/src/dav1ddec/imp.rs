@@ -253,14 +253,14 @@ impl Dav1dDec {
         pic: &dav1d::Picture,
         format: gst_video::VideoFormat,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        self.handle_resolution_change(element, &pic, format)?;
+        self.handle_resolution_change(element, pic, format)?;
 
         let output_state = element
             .output_state()
             .expect("Output state not set. Shouldn't happen!");
         let offset = pic.offset() as i32;
         if let Some(mut frame) = element.frame(offset) {
-            let output_buffer = self.decoded_picture_as_buffer(&pic, output_state)?;
+            let output_buffer = self.decoded_picture_as_buffer(pic, output_state)?;
             frame.set_output_buffer(output_buffer);
             element.finish_frame(frame)?;
         } else {

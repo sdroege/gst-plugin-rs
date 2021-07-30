@@ -73,7 +73,7 @@ fn test_png_encode(video_info: &gst_video::VideoInfo) {
                 buffer.set_pts(gst::ClockTime::from_seconds(pts));
             }
             let mut vframe =
-                gst_video::VideoFrame::from_buffer_writable(buffer, &video_info).unwrap();
+                gst_video::VideoFrame::from_buffer_writable(buffer, video_info).unwrap();
             for v in vframe.plane_data_mut(0).unwrap() {
                 *v = 128;
             }

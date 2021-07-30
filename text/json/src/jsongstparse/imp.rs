@@ -130,7 +130,7 @@ impl State {
             }
         };
 
-        let line: Line = serde_json::from_slice(&line).map_err(|err| (line, err))?;
+        let line: Line = serde_json::from_slice(line).map_err(|err| (line, err))?;
 
         Ok(Some(line))
     }
@@ -181,7 +181,7 @@ impl State {
             self.need_segment = false;
         }
 
-        events.extend(self.pending_events.drain(..));
+        events.append(&mut self.pending_events);
         events
     }
 
@@ -501,7 +501,7 @@ impl JsonGstParse {
                     pts,
                     duration,
                     data: _data,
-                }) = serde_json::from_slice(&line)
+                }) = serde_json::from_slice(line)
                 {
                     last_pts = pts.zip(duration).map(|(pts, duration)| pts + duration);
                 }

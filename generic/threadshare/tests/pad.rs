@@ -524,7 +524,7 @@ mod imp_sink {
 
             match event.view() {
                 EventView::FlushStart(..) => {
-                    elem_sink_test.stop(&element.downcast_ref::<super::ElementSinkTest>().unwrap());
+                    elem_sink_test.stop(element.downcast_ref::<super::ElementSinkTest>().unwrap());
                     true
                 }
                 _ => false,
@@ -953,9 +953,9 @@ fn nominal_scenario(
 fn src_sink_nominal() {
     let name = "src_sink_nominal";
 
-    let (pipeline, src_element, _sink_element, receiver) = setup(&name, None, None);
+    let (pipeline, src_element, _sink_element, receiver) = setup(name, None, None);
 
-    nominal_scenario(&name, pipeline, src_element, receiver);
+    nominal_scenario(name, pipeline, src_element, receiver);
 }
 
 #[test]
@@ -974,7 +974,7 @@ fn src_tsqueue_sink_nominal() {
 
     let (pipeline, src_element, _sink_element, receiver) = setup(name, Some(ts_queue), None);
 
-    nominal_scenario(&name, pipeline, src_element, receiver);
+    nominal_scenario(name, pipeline, src_element, receiver);
 }
 
 #[test]
@@ -986,7 +986,7 @@ fn src_queue_sink_nominal() {
     let queue = gst::ElementFactory::make("queue", Some("queue")).unwrap();
     let (pipeline, src_element, _sink_element, receiver) = setup(name, Some(queue), None);
 
-    nominal_scenario(&name, pipeline, src_element, receiver);
+    nominal_scenario(name, pipeline, src_element, receiver);
 }
 
 #[test]
@@ -1014,7 +1014,7 @@ fn src_tsproxy_sink_nominal() {
     let (pipeline, src_element, _sink_element, receiver) =
         setup(name, Some(ts_proxy_sink), Some(ts_proxy_src));
 
-    nominal_scenario(&name, pipeline, src_element, receiver);
+    nominal_scenario(name, pipeline, src_element, receiver);
 }
 
 #[test]
@@ -1023,7 +1023,7 @@ fn start_pause_start() {
 
     let scenario_name = "start_pause_start";
 
-    let (pipeline, src_element, _sink_element, mut receiver) = setup(&scenario_name, None, None);
+    let (pipeline, src_element, _sink_element, mut receiver) = setup(scenario_name, None, None);
 
     let elem_src_test = imp_src::ElementSrcTest::from_instance(&src_element);
 
@@ -1101,7 +1101,7 @@ fn start_stop_start() {
 
     let scenario_name = "start_stop_start";
 
-    let (pipeline, src_element, _sink_element, mut receiver) = setup(&scenario_name, None, None);
+    let (pipeline, src_element, _sink_element, mut receiver) = setup(scenario_name, None, None);
 
     let elem_src_test = imp_src::ElementSrcTest::from_instance(&src_element);
 
@@ -1214,7 +1214,7 @@ fn start_flush() {
 
     let scenario_name = "start_flush";
 
-    let (pipeline, src_element, sink_element, mut receiver) = setup(&scenario_name, None, None);
+    let (pipeline, src_element, sink_element, mut receiver) = setup(scenario_name, None, None);
 
     let elem_src_test = imp_src::ElementSrcTest::from_instance(&src_element);
 

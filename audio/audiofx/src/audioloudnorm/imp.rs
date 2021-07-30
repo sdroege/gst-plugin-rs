@@ -1622,7 +1622,7 @@ impl AudioLoudNorm {
                 let mut state = self.state.borrow_mut();
                 let mut outbuf = None;
                 if let Some(ref mut state) = &mut *state {
-                    outbuf = match state.drain(&element) {
+                    outbuf = match state.drain(element) {
                         Ok(outbuf) => Some(outbuf),
                         Err(gst::FlowError::Eos) => None,
                         Err(_) => return false,
@@ -1644,7 +1644,7 @@ impl AudioLoudNorm {
                 let mut state = self.state.borrow_mut();
                 let mut outbuf = None;
                 if let Some(ref mut state) = &mut *state {
-                    outbuf = match state.drain(&element) {
+                    outbuf = match state.drain(element) {
                         Ok(outbuf) => Some(outbuf),
                         Err(gst::FlowError::Eos) => None,
                         Err(_) => return false,

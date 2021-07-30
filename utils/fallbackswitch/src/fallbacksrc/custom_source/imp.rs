@@ -162,7 +162,7 @@ impl BinImpl for CustomSource {
                 // TODO: Drop stream collection message for now, we only create a simple custom
                 // one here so that fallbacksrc can know about our streams. It is never
                 // forwarded.
-                self.handle_source_no_more_pads(&bin);
+                self.handle_source_no_more_pads(bin);
             }
             _ => self.parent_handle_message(bin, msg),
         }
@@ -198,14 +198,14 @@ impl CustomSource {
 
         // Handle all source pads that already exist
         for pad in source.src_pads() {
-            if let Err(msg) = self.handle_source_pad_added(&element, &pad) {
+            if let Err(msg) = self.handle_source_pad_added(element, &pad) {
                 element.post_error_message(msg);
                 return Err(gst::StateChangeError);
             }
         }
 
         if !has_sometimes_pads {
-            self.handle_source_no_more_pads(&element);
+            self.handle_source_no_more_pads(element);
         } else {
             gst_debug!(CAT, obj: element, "Found sometimes pads");
 

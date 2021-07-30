@@ -259,7 +259,7 @@ impl ObjectImpl for RegEx {
                         Operation::ReplaceAll(ref replacement) => {
                             commands.push(
                                 gst::Structure::new(
-                                    &"replace-all",
+                                    "replace-all",
                                     &[("pattern", &command.pattern), ("replacement", &replacement)],
                                 )
                                 .to_send_value(),
