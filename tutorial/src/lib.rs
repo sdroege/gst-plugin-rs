@@ -23,7 +23,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     Ok(())
 }
 
-// Static plugin metdata that is directly stored in the plugin shared object and read by GStreamer
+// Static plugin metadata that is directly stored in the plugin shared object and read by GStreamer
 // upon loading.
 // Plugin name, plugin description, plugin entry point function, version number of this plugin,
 // license of the plugin, source package name, binary package name, origin where it comes from
