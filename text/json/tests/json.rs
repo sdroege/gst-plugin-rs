@@ -88,8 +88,8 @@ fn test_parse() {
         match ev.view() {
             EventView::Caps(ev) => {
                 assert!(ev.caps().is_strictly_equal(&gst::Caps::new_simple(
-                    &"application/x-json",
-                    &[(&"format", &"test")]
+                    "application/x-json",
+                    &[("format", &"test")]
                 )));
             }
             _ => (),

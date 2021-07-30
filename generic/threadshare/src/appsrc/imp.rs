@@ -134,7 +134,7 @@ impl AppSrcPadHandler {
             pad.push_event(stream_start_evt).await;
 
             if let Some(ref caps) = state.caps {
-                pad.push_event(gst::event::Caps::new(&caps)).await;
+                pad.push_event(gst::event::Caps::new(caps)).await;
                 *self.0.configured_caps.lock().unwrap() = Some(caps.clone());
             }
 

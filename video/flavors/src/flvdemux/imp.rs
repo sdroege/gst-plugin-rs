@@ -661,7 +661,7 @@ impl FlvDemux {
         let full_stream_id = srcpad.create_stream_id(element, Some(name));
         // FIXME group id
         srcpad.push_event(gst::event::StreamStart::new(&full_stream_id));
-        srcpad.push_event(gst::event::Caps::new(&caps));
+        srcpad.push_event(gst::event::Caps::new(caps));
 
         // FIXME proper segment handling
         let segment = gst::FormattedSegment::<gst::ClockTime>::default();
@@ -940,7 +940,7 @@ impl StreamingState {
 
         // AAC special case
         if data_header.sound_format == flavors::SoundFormat::AAC
-            && self.handle_aac_audio_packet_header(element, &tag_header, adapter)?
+            && self.handle_aac_audio_packet_header(element, tag_header, adapter)?
         {
             return Ok(events);
         }

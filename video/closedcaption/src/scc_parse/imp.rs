@@ -159,7 +159,7 @@ impl State {
         framerate: gst::Fraction,
         element: &super::SccParse,
     ) -> Result<gst_video::ValidVideoTimeCode, gst::FlowError> {
-        match parse_timecode(framerate, &tc) {
+        match parse_timecode(framerate, tc) {
             Ok(timecode) => Ok(timecode),
             Err(err) => {
                 let last_timecode =
@@ -222,7 +222,7 @@ impl State {
         element: &super::SccParse,
     ) {
         let buffer = buffer.get_mut().unwrap();
-        gst_video::VideoTimeCodeMeta::add(buffer, &timecode);
+        gst_video::VideoTimeCodeMeta::add(buffer, timecode);
 
         self.update_timestamp(timecode, element);
 
@@ -284,7 +284,7 @@ impl State {
             self.need_segment = false;
         }
 
-        events.extend(self.pending_events.drain(..));
+        events.append(&mut self.pending_events);
         events
     }
 }

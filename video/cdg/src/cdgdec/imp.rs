@@ -135,7 +135,7 @@ impl VideoDecoderImpl for CdgDec {
             })?;
             let data = map.as_slice();
 
-            cdg::decode_subchannel_cmd(&data)
+            cdg::decode_subchannel_cmd(data)
         };
 
         let cmd = match cmd {

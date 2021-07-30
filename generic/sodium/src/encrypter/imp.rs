@@ -73,7 +73,7 @@ impl State {
         let sender_key = props
             .sender_key
             .as_ref()
-            .and_then(|k| box_::SecretKey::from_slice(&k))
+            .and_then(|k| box_::SecretKey::from_slice(k))
             .ok_or_else(|| {
                 gst::error_msg!(
                     gst::ResourceError::NotFound,
@@ -88,7 +88,7 @@ impl State {
         let receiver_key = props
             .receiver_key
             .as_ref()
-            .and_then(|k| box_::PublicKey::from_slice(&k))
+            .and_then(|k| box_::PublicKey::from_slice(k))
             .ok_or_else(|| {
                 gst::error_msg!(
                     gst::ResourceError::NotFound,

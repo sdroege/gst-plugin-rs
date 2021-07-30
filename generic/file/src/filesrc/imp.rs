@@ -366,7 +366,7 @@ impl URIHandlerImpl for FileSrc {
 
         if uri != "file://" {
             let file_location = FileLocation::try_from_uri_str(uri)?;
-            self.set_location(&element, Some(file_location))
+            self.set_location(element, Some(file_location))
         } else {
             Ok(())
         }

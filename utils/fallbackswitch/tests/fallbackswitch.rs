@@ -399,7 +399,7 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
     let queue = gst::ElementFactory::make("queue", None).unwrap();
 
     pipeline
-        .add_many(&[src.upcast_ref(), &switch, &queue, &sink.upcast_ref()])
+        .add_many(&[src.upcast_ref(), &switch, &queue, sink.upcast_ref()])
         .unwrap();
     src.link_pads(Some("src"), &switch, Some("sink")).unwrap();
     switch.link_pads(Some("src"), &queue, Some("sink")).unwrap();

@@ -479,7 +479,7 @@ impl Transcriber {
 
                     if packet_is_exception(&pkt) {
                         let message: ExceptionMessage =
-                            serde_json::from_str(&payload).map_err(|err| {
+                            serde_json::from_str(payload).map_err(|err| {
                                 gst_error!(
                                     CAT,
                                     obj: element,
@@ -505,7 +505,7 @@ impl Transcriber {
                         ));
                     }
 
-                    let transcript: Transcript = serde_json::from_str(&payload).map_err(|err| {
+                    let transcript: Transcript = serde_json::from_str(payload).map_err(|err| {
                         error_msg!(
                             gst::StreamError::Failed,
                             ["Unexpected binary message: {} ({})", payload, err]
@@ -795,7 +795,7 @@ impl Transcriber {
 
         self.ensure_connection(element).map_err(|err| {
             element_error!(
-                &element,
+                element,
                 gst::StreamError::Failed,
                 ["Streaming failed: {}", err]
             );

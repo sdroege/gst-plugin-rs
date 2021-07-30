@@ -368,7 +368,7 @@ impl TaskImpl for QueueTask {
 
             let pad = self.src_pad.upgrade().expect("PadSrc no longer exists");
             let queue = Queue::from_instance(&self.element);
-            let res = QueuePadSrcHandler::push_item(&pad, &queue, item).await;
+            let res = QueuePadSrcHandler::push_item(&pad, queue, item).await;
             match res {
                 Ok(()) => {
                     gst_log!(CAT, obj: &self.element, "Successfully pushed item");
@@ -558,7 +558,7 @@ impl Queue {
 
             let mut pending_queue = self.pending_queue.lock().unwrap();
 
-            if let Err(item) = self.queue_until_full(&dataqueue, &mut pending_queue, item) {
+            if let Err(item) = self.queue_until_full(dataqueue, &mut pending_queue, item) {
                 if pending_queue
                     .as_ref()
                     .map(|pq| !pq.scheduled)

@@ -1027,7 +1027,7 @@ impl StateMachine {
         task_inner: &Arc<Mutex<TaskInner>>,
         context: &Context,
     ) -> Self {
-        let task_inner_clone = Arc::clone(&task_inner);
+        let task_inner_clone = Arc::clone(task_inner);
         let loop_fut = async move {
             let mut res = self.task_impl.start().await;
             if res.is_ok() {

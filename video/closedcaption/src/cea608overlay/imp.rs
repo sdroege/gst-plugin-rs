@@ -131,7 +131,7 @@ impl Cea608Overlay {
         context.set_base_dir(pango::Direction::Ltr);
         let layout = pango::Layout::new(&context);
         layout.set_alignment(pango::Alignment::Left);
-        let mut font_desc = pango::FontDescription::from_string(&"monospace");
+        let mut font_desc = pango::FontDescription::from_string("monospace");
 
         let mut font_size = 1;
         let mut left_alignment = 0;
@@ -139,7 +139,7 @@ impl Cea608Overlay {
             font_desc.set_size(font_size * pango::SCALE);
             layout.set_font_description(Some(&font_desc));
             layout.set_text(
-                &"12345678901234567890123456789012\n2\n3\n4\n5\n6\n7\n8\n9\n0\n1\n2\n3\n4\n5",
+                "12345678901234567890123456789012\n2\n3\n4\n5\n6\n7\n8\n9\n0\n1\n2\n3\n4\n5",
             );
             let (_ink_rect, logical_rect) = layout.extents();
             if logical_rect.width > video_info.width() as i32 * pango::SCALE
@@ -222,7 +222,7 @@ impl Cea608Overlay {
 
             cr.set_source_rgba(0.0, 0.0, 0.0, 1.0);
 
-            pangocairo::functions::layout_path(&cr, &layout);
+            pangocairo::functions::layout_path(&cr, layout);
             cr.stroke().ok()?;
             cr.restore().ok()?;
 
@@ -230,7 +230,7 @@ impl Cea608Overlay {
             cr.save().ok()?;
             cr.set_source_rgba(255.0, 255.0, 255.0, 1.0);
 
-            pangocairo::functions::show_layout(&cr, &layout);
+            pangocairo::functions::show_layout(&cr, layout);
 
             cr.restore().ok()?;
             drop(cr);
@@ -496,7 +496,7 @@ impl Cea608Overlay {
         if let Some(composition) = &state.composition {
             let buffer = buffer.make_mut();
             if state.attach {
-                gst_video::VideoOverlayCompositionMeta::add(buffer, &composition);
+                gst_video::VideoOverlayCompositionMeta::add(buffer, composition);
             } else {
                 let mut frame = gst_video::VideoFrameRef::from_buffer_ref_writable(
                     buffer,

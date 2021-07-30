@@ -58,7 +58,7 @@ impl State {
         let sender_key = props
             .sender_key
             .as_ref()
-            .and_then(|k| box_::PublicKey::from_slice(&k))
+            .and_then(|k| box_::PublicKey::from_slice(k))
             .ok_or_else(|| {
                 gst::error_msg!(
                     gst::ResourceError::NotFound,
@@ -73,7 +73,7 @@ impl State {
         let receiver_key = props
             .receiver_key
             .as_ref()
-            .and_then(|k| box_::SecretKey::from_slice(&k))
+            .and_then(|k| box_::SecretKey::from_slice(k))
             .ok_or_else(|| {
                 gst::error_msg!(
                     gst::ResourceError::NotFound,
@@ -121,16 +121,15 @@ impl State {
         let block_size = self.block_size.expect("Block size wasn't set") as usize + box_::MACBYTES;
 
         for subbuffer in map.chunks(block_size) {
-            let plain = box_::open_precomputed(&subbuffer, &nonce, &self.precomputed_key).map_err(
-                |_| {
+            let plain =
+                box_::open_precomputed(subbuffer, &nonce, &self.precomputed_key).map_err(|_| {
                     gst::element_error!(
                         element,
                         gst::StreamError::Format,
                         ["Failed to decrypt buffer"]
                     );
                     gst::FlowError::Error
-                },
-            )?;
+                })?;
             // assumes little endian
             nonce.increment_le_inplace();
             self.adapter.push(gst::Buffer::from_mut_slice(plain));

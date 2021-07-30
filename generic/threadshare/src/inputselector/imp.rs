@@ -110,7 +110,7 @@ impl InputSelectorPadSinkHandler {
             if let Some(segment) = &inner.segment {
                 if let Some(segment) = segment.downcast_ref::<gst::format::Time>() {
                     let rtime = segment.to_running_time(buffer.pts());
-                    let (sync_fut, abort_handle) = abortable(self.sync(&element, rtime));
+                    let (sync_fut, abort_handle) = abortable(self.sync(element, rtime));
                     inner.abort_handle = Some(abort_handle);
                     sync_future = Some(sync_fut.map_err(|_| gst::FlowError::Flushing));
                 }
@@ -479,7 +479,7 @@ impl ObjectImpl for InputSelector {
                 let pads = self.pads.lock().unwrap();
                 let mut old_pad = None;
                 if let Some(ref pad) = pad {
-                    if pads.sink_pads.get(&pad).is_some() {
+                    if pads.sink_pads.get(pad).is_some() {
                         old_pad = state.active_sinkpad.clone();
                         state.active_sinkpad = Some(pad.clone());
                         state.switched_pad = true;
@@ -607,7 +607,7 @@ impl ElementImpl for InputSelector {
         let mut state = self.state.lock().unwrap();
         let mut pads = self.pads.lock().unwrap();
         let sink_pad =
-            gst::Pad::from_template(&templ, Some(format!("sink_{}", pads.pad_serial).as_str()));
+            gst::Pad::from_template(templ, Some(format!("sink_{}", pads.pad_serial).as_str()));
         pads.pad_serial += 1;
         sink_pad.set_active(true).unwrap();
         element.add_pad(&sink_pad).unwrap();
