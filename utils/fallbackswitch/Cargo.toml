@@ -39,6 +39,7 @@ pkg-config = "0.3"
 [features]
 default = ["libc"]
 v1_18 = ["gst-base/v1_18"]
+v1_20 = ["v1_18", "gst/v1_20"]
 # We already use 1.14 which is new enough for static build
 static = []
 

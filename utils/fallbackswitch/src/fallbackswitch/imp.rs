@@ -963,6 +963,7 @@ impl AggregatorImpl for FallbackSwitch {
         Ok(())
     }
 
+    #[cfg(feature = "v1_20")]
     fn sink_event_pre_queue(
         &self,
         agg: &Self::Type,
@@ -972,9 +973,13 @@ impl AggregatorImpl for FallbackSwitch {
         use gst::EventView;
 
         match event.view() {
-            EventView::Gap(_) => {
-                gst_debug!(CAT, obj: agg_pad, "Dropping gap event");
-                Ok(gst::FlowSuccess::Ok)
+            EventView::Gap(gap) => {
+                if gap.gap_flags().contains(gst::GapFlags::DATA) {
+                    gst_debug!(CAT, obj: agg_pad, "Dropping gap event");
+                    Ok(gst::FlowSuccess::Ok)
+                } else {
+                    self.parent_sink_event_pre_queue(agg, agg_pad, event)
+                }
             }
             _ => self.parent_sink_event_pre_queue(agg, agg_pad, event),
         }
