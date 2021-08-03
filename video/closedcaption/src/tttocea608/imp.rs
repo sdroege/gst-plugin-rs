@@ -424,6 +424,7 @@ pub struct TtToCea608 {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
 
+    // Ordered by locking order
     state: Mutex<State>,
     settings: Mutex<Settings>,
 }
@@ -452,6 +453,7 @@ impl TtToCea608 {
         &self,
         element: &super::TtToCea608,
         state: &mut State,
+        settings: &Settings,
         chunk: &Chunk,
         bufferlist: &mut gst::BufferListRef,
         col: &mut u32,
@@ -465,7 +467,7 @@ impl TtToCea608 {
             Cea608Mode::RollUp2 | Cea608Mode::RollUp3 | Cea608Mode::RollUp4 => {
                 if let Some(carriage_return) = carriage_return {
                     if carriage_return {
-                        *col = self.settings.lock().unwrap().origin_column;
+                        *col = settings.origin_column;
                         state.carriage_return(element, bufferlist);
                         true
                     } else {
@@ -527,7 +529,7 @@ impl TtToCea608 {
             state.underline = chunk.underline;
             state.send_roll_up_preamble = false;
             ret = false;
-        } else if *col == self.settings.lock().unwrap().origin_column {
+        } else if *col == settings.origin_column {
             ret = false;
         }
 
@@ -546,12 +548,13 @@ impl TtToCea608 {
     fn generate(
         &self,
         mut state: &mut State,
+        settings: &Settings,
         element: &super::TtToCea608,
         pts: gst::ClockTime,
         duration: gst::ClockTime,
         lines: Lines,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let origin_column = self.settings.lock().unwrap().origin_column;
+    ) -> Result<gst::BufferList, gst::FlowError> {
+        let origin_column = settings.origin_column;
         let mut row = 13;
         let mut bufferlist = gst::BufferList::new();
         let mut_list = bufferlist.get_mut().unwrap();
@@ -662,6 +665,7 @@ impl TtToCea608 {
                     prepend_space = self.open_line(
                         element,
                         &mut state,
+                        settings,
                         chunk,
                         mut_list,
                         &mut col,
@@ -758,6 +762,7 @@ impl TtToCea608 {
                             self.open_line(
                                 element,
                                 &mut state,
+                                settings,
                                 chunk,
                                 mut_list,
                                 &mut col,
@@ -805,7 +810,7 @@ impl TtToCea608 {
 
         state.pad(element, mut_list, state.max_frame_no);
 
-        self.srcpad.push_list(bufferlist)
+        Ok(bufferlist)
     }
 
     fn sink_chain(
@@ -893,9 +898,12 @@ impl TtToCea608 {
             }
         }
 
-        drop(settings);
+        let bufferlist = self.generate(&mut state, &settings, element, pts, duration, lines)?;
 
-        self.generate(&mut state, element, pts, duration, lines)
+        drop(settings);
+        drop(state);
+
+        self.srcpad.push_list(bufferlist)
     }
 
     fn sink_event(&self, pad: &gst::Pad, element: &super::TtToCea608, event: gst::Event) -> bool {
@@ -989,19 +997,26 @@ impl TtToCea608 {
                     drop(state);
 
                     let _ = self.srcpad.push_list(bufferlist);
+                } else {
+                    drop(state);
                 }
+
                 pad.event_default(Some(element), event)
             }
             EventView::FlushStop(_) => {
                 let mut state = self.state.lock().unwrap();
+                let settings = self.settings.lock().unwrap();
 
                 *state = State::default();
 
-                state.mode = self.settings.lock().unwrap().mode;
+                state.mode = settings.mode;
 
                 if state.mode != Cea608Mode::PopOn {
                     state.send_roll_up_preamble = true;
                 }
+
+                drop(settings);
+                drop(state);
 
                 pad.event_default(Some(element), event)
             }
@@ -1102,19 +1117,21 @@ impl ObjectImpl for TtToCea608 {
     ) {
         match pspec.name() {
             "mode" => {
+                let mut state = self.state.lock().unwrap();
                 let mut settings = self.settings.lock().unwrap();
                 settings.mode = value.get::<Cea608Mode>().expect("type checked upstream");
-                self.state.lock().unwrap().force_clear = true;
+                state.force_clear = true;
             }
             "origin-row" => {
+                let mut state = self.state.lock().unwrap();
                 let mut settings = self.settings.lock().unwrap();
                 settings.origin_row = value.get().expect("type checked upstream");
-                self.state.lock().unwrap().force_clear = true;
+                state.force_clear = true;
             }
             "origin-column" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.origin_column = value.get().expect("type checked upstream");
                 let mut state = self.state.lock().unwrap();
+                settings.origin_column = value.get().expect("type checked upstream");
                 state.force_clear = true;
                 state.column = settings.origin_column;
             }
