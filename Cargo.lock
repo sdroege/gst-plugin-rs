@@ -1305,8 +1305,8 @@ dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-base",
+ "headers",
  "hyper",
- "hyperx",
  "mime",
  "once_cell",
  "reqwest",
@@ -1461,9 +1461,9 @@ dependencies = [
 
 [[package]]
 name = "gstreamer"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f71e8c163945a3e0140e6b1ed10d1507da7e71196fedec568cbad92db63d762"
+checksum = "4aa71d1b3f562645e2d3b96c8d5cf1f26174696e37781ef34193311da733f98c"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -1486,9 +1486,9 @@ dependencies = [
 
 [[package]]
 name = "gstreamer-app"
-version = "0.17.0"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2ed9c3e9ce3a406ea5026c2d4e094acd8efd61084bb107f8ff97d13f739b542"
+checksum = "f73b8d33b1bbe9f22d0cf56661a1d2a2c9a0e099ea10e5f1f347be5038f5c043"
 dependencies = [
  "bitflags",
  "futures-core",
@@ -1516,9 +1516,9 @@ dependencies = [
 
 [[package]]
 name = "gstreamer-audio"
-version = "0.17.0"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba5d560479c5fe704ea9eecdf394cfd514b6628e0c0a4207bb5c1230370d116b"
+checksum = "420b6bcb1759231f01172751da094e7afa5cd9edf40bee7475f5bc86df433c57"
 dependencies = [
  "array-init",
  "bitflags",
@@ -1547,9 +1547,9 @@ dependencies = [
 
 [[package]]
 name = "gstreamer-base"
-version = "0.17.0"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cf50118e1933d9e9e043036f2306d0b9660182ea61a75f266cd9fb3607b7a19"
+checksum = "2c0c1d8c62eb5d08fb80173609f2eea71d385393363146e4e78107facbd67715"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -1662,9 +1662,9 @@ dependencies = [
 
 [[package]]
 name = "gstreamer-video"
-version = "0.17.0"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "500442ed0ba5f8f2b28942470b136a3dcb2df93b586e9acdd2d14687ece272ff"
+checksum = "e3447ee95c8e79daec0b163260cf6a3de9bc19ff47a01b533787f900074a3476"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -1773,6 +1773,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 
 [[package]]
+name = "headers"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0b7591fb62902706ae8e7aaff416b1b0fa2c0fd0878b46dc13baa3712d8a855"
+dependencies = [
+ "base64",
+ "bitflags",
+ "bytes 1.0.1",
+ "headers-core",
+ "http",
+ "mime",
+ "sha-1",
+ "time 0.1.43",
+]
+
+[[package]]
+name = "headers-core"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
+dependencies = [
+ "http",
+]
+
+[[package]]
 name = "heck"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1830,15 +1855,15 @@ dependencies = [
 
 [[package]]
 name = "httparse"
-version = "1.3.6"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc35c995b9d93ec174cf9a27d425c7892722101e14993cd227fdb51d70cf9589"
+checksum = "f3a87b616e37e93c22fb19bcd386f02f3af5ea98a25670ad0fce773de23c5e68"
 
 [[package]]
 name = "httpdate"
-version = "0.3.2"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "494b4d60369511e7dea41cf646832512a94e542f68bb9c49e54518e0f468eb47"
+checksum = "6456b8a6c8f33fee7d958fcd1b60d55b11940a79e63ae87013e6d22e26034440"
 
 [[package]]
 name = "humantime"
@@ -1848,9 +1873,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.5"
+version = "0.14.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bf09f61b52cfcf4c00de50df88ae423d6c02354e385a86341133b5338630ad1"
+checksum = "0b61cf2d1aebcf6e6352c97b81dc2244ca29194be1b276f5d8ad5c6330fffb11"
 dependencies = [
  "bytes 1.0.1",
  "futures-channel",
@@ -1862,7 +1887,7 @@ dependencies = [
  "httparse",
  "httpdate",
  "itoa",
- "pin-project",
+ "pin-project-lite 0.2.7",
  "socket2",
  "tokio 1.9.0",
  "tower-service",
@@ -1881,23 +1906,6 @@ dependencies = [
  "native-tls",
  "tokio 1.9.0",
  "tokio-native-tls",
-]
-
-[[package]]
-name = "hyperx"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82566a1ace7f56f604d83b7b2c259c78e243d99c565f23d7b4ae34466442c5a2"
-dependencies = [
- "base64",
- "bytes 1.0.1",
- "http",
- "httparse",
- "httpdate",
- "language-tags",
- "mime",
- "percent-encoding",
- "unicase",
 ]
 
 [[package]]
@@ -2036,12 +2044,6 @@ dependencies = [
  "winapi 0.2.8",
  "winapi-build",
 ]
-
-[[package]]
-name = "language-tags"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a91d884b6667cd606bb5a69aa0c99ba811a115fc68915e7056ec08a46e93199a"
 
 [[package]]
 name = "lazy_static"
@@ -3769,15 +3771,6 @@ name = "ucd-trie"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56dee185309b50d1f11bfedef0fe6d036842e3fb77413abef29f8f8d1c5d4c1c"
-
-[[package]]
-name = "unicase"
-version = "2.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
-dependencies = [
- "version_check",
-]
 
 [[package]]
 name = "unicode-bidi"
