@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-json"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "LGPL-2.1-or-later"
 edition = "2018"
