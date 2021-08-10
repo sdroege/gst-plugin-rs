@@ -83,7 +83,7 @@ fn test_encode() {
 ///////////////////////////////////////////////////////////////////////////////////\r\n\
 \r\n\
 UUID=14720C04-857D-40E2-86FC-F080DE44CE74\r\n\
-Creation Program=GStreamer MCC Encoder 0.7.0\r\n\
+Creation Program=GStreamer MCC Encoder 0.7.1\r\n\
 Creation Date=Thursday, December 27, 2018\r\n\
 Creation Time=17:34:47\r\n\
 Time Code Rate=30DF\r\n\
