@@ -32,6 +32,7 @@ package="gstreamer-check"
 default = ["gst/ser_de"]
 # GStreamer 1.14 is required for static linking
 static = ["default", "gst/v1_14"]
+capi = []
 
 [package.metadata.capi]
 min_version = "0.7.0"
