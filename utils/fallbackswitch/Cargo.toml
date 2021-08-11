@@ -42,6 +42,7 @@ v1_18 = ["gst-base/v1_18"]
 v1_20 = ["v1_18", "gst/v1_20"]
 # We already use 1.14 which is new enough for static build
 static = []
+capi = []
 
 [package.metadata.capi]
 min_version = "0.7.0"

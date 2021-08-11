@@ -33,6 +33,7 @@ gst-plugin-version-helper = { version = "0.7.0", path="../../version-helper" }
 [features]
 # GStreamer 1.14 is required for static linking
 static = ["gst/v1_14"]
+capi = []
 
 [package.metadata.capi]
 min_version = "0.7.0"

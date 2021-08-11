@@ -57,6 +57,7 @@ cc = "1.0"
 [features]
 # We already use 1.16 which is new enough for static build
 static = []
+capi = []
 
 [package.metadata.capi]
 min_version = "0.7.0"
