@@ -82,7 +82,7 @@ csound_option = get_option('csound')
 csound_dep = dependency('', required: false)
 if not csound_dep.found() and not csound_option.disabled()
   # if csound isn't distributed with pkg-config then user needs to define CSOUND_LIB_DIR with its location
-  python3 = import('python').find_installation('python3')
+  python3 = import('python').find_installation()
   res = run_command(python3, '-c', 'import os; print(os.environ["CSOUND_LIB_DIR"])')
   if res.returncode() == 0
     csound_libdir = res.stdout().strip()
