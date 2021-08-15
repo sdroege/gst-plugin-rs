@@ -54,7 +54,6 @@ plugins = {
   'gst-plugin-aws': 'libgstaws',
   'gst-plugin-hlssink3': 'libgsthlssink3',
   'gst-plugin-ndi': 'libgstndi',
-  'gst-plugin-onvif': 'libgstrsonvif',
   'gst-plugin-raptorq': 'libgstraptorq',
   'gst-plugin-reqwest': 'libgstreqwest',
   'gst-plugin-rtp': 'libgstrsrtp',
@@ -96,6 +95,10 @@ endif
 
 if dependency('pangocairo', required : get_option('closedcaption')).found()
   plugins += {'gst-plugin-closedcaption' : 'libgstrsclosedcaption',}
+endif
+
+if dependency('pangocairo', required : get_option('onvif')).found()
+  plugins += {'gst-plugin-onvif': 'libgstrsonvif',}
 endif
 
 if dependency('dav1d', version : '>= 1.0.0', required : get_option('dav1d')).found()

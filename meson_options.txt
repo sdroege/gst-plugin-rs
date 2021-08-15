@@ -1,5 +1,6 @@
 option('videofx', type : 'feature', value : 'auto', description : 'Build videofx plugin')
 option('closedcaption', type : 'feature', value : 'auto', description : 'Build closedcaption plugin')
+option('onvif', type : 'feature', value : 'auto', description : 'Build onvif plugin')
 option('dav1d', type : 'feature', value : 'auto', description : 'Build dav1d plugin')
 option('sodium', type : 'combo',
     choices : ['system', 'built-in', 'disabled'], value : 'built-in',
