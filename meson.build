@@ -35,7 +35,6 @@ plugins_rep = {
   'audio/audiofx': 'libgstrsaudiofx',
   'video/cdg': 'libgstcdg',
   'audio/claxon': 'libgstclaxon',
-  'video/closedcaption': 'libgstrsclosedcaption',
   'utils/fallbackswitch': 'libgstfallbackswitch',
   'generic/file': 'libgstrsfile',
   'video/flavors': 'libgstrsflv',
@@ -58,6 +57,12 @@ plugins_rep = {
 
 exclude = []
 extra_env = {}
+
+if dependency('pangocairo', required : get_option('closedcaption')).found()
+  plugins_rep += {'video/closedcaption' : 'libgstrsclosedcaption',}
+else
+  exclude += ['video/closedcaption']
+endif
 
 if dependency('dav1d', required : get_option('dav1d')).found()
   plugins_rep += {'video/dav1d' : 'libgstrsdav1d'}
