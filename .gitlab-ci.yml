@@ -1,4 +1,4 @@
-.templates_sha: &templates_sha 322bf2b8f29b6491caeb13861201e96969ddc169
+.templates_sha: &templates_sha 567700e483aabed992d0a4fea84994a0472deff6
 
 include:
   - project: 'freedesktop/ci-templates'
@@ -16,9 +16,9 @@ stages:
   - "test"
   - "extras"
 
-.debian:10:
+.debian:11:
   variables:
-    FDO_DISTRIBUTION_VERSION: 10
+    FDO_DISTRIBUTION_VERSION: 'bullseye-slim'
   before_script:
     - source ./ci/env.sh
     - mkdir .cargo && echo -e "[net]\ngit-fetch-with-cli = true" > .cargo/config
@@ -30,23 +30,23 @@ stages:
         cargo update
       fi
 
-.debian:10-stable:
-  extends: .debian:10
+.debian:11-stable:
+  extends: .debian:11
   variables:
-    FDO_DISTRIBUTION_TAG: '$GST_RS_STABLE-${GST_RS_IMG_TAG}_2021-06-20.0'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/10:$GST_RS_STABLE-$GST_RS_IMG_TAG"
+    FDO_DISTRIBUTION_TAG: '$GST_RS_STABLE-${GST_RS_IMG_TAG}_2021-08-16.0'
+    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:$GST_RS_STABLE-$GST_RS_IMG_TAG"
 
-.debian:10-msrv:
-  extends: .debian:10
+.debian:11-msrv:
+  extends: .debian:11
   variables:
-    FDO_DISTRIBUTION_TAG: '$GST_RS_MSRV-${GST_RS_IMG_TAG}_2021-06-20.0'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/10:$GST_RS_MSRV-$GST_RS_IMG_TAG"
+    FDO_DISTRIBUTION_TAG: '$GST_RS_MSRV-${GST_RS_IMG_TAG}_2021-08-16.0'
+    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:$GST_RS_MSRV-$GST_RS_IMG_TAG"
 
-.debian:10-nightly:
-  extends: .debian:10
+.debian:11-nightly:
+  extends: .debian:11
   variables:
-    FDO_DISTRIBUTION_TAG: 'nightly-${GST_RS_IMG_TAG}_2021-06-20.0'
-    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/10:nightly-$GST_RS_IMG_TAG"
+    FDO_DISTRIBUTION_TAG: 'nightly-${GST_RS_IMG_TAG}_2021-08-16.0'
+    FDO_BASE_IMAGE: "registry.freedesktop.org/gstreamer/gstreamer-rs/debian/bullseye-slim:nightly-$GST_RS_IMG_TAG"
 
 .build-debian-container:
   extends:
@@ -64,17 +64,17 @@ stages:
 build-stable:
   extends:
     - .build-debian-container
-    - .debian:10-stable
+    - .debian:11-stable
 
 build-msrv:
   extends:
     - .build-debian-container
-    - .debian:10-msrv
+    - .debian:11-msrv
 
 build-nightly:
   extends:
     - .build-debian-container
-    - .debian:10-nightly
+    - .debian:11-nightly
 
 # Those jobs are triggered by gstreamer-rs when updating its images
 update-stable:
@@ -109,20 +109,23 @@ update-nightly:
 .img-stable:
   extends:
     - .dist-debian-container
-    - .debian:10-stable
+    - .debian:11-stable
 
 .img-msrv:
   extends:
     - .dist-debian-container
-    - .debian:10-msrv
+    - .debian:11-msrv
 
 .img-nightly:
   extends:
     - .dist-debian-container
-    - .debian:10-nightly
+    - .debian:11-nightly
 
 .cargo test:
   stage: "test"
+  variables:
+    # csound-sys only looks at /usr/lib and /usr/local top levels
+    CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
   script:
     - rustc --version
 
@@ -158,7 +161,8 @@ test nightly:
   rules:
     - if: '$UPDATE_IMG == null || $UPDATE_IMG == "stable"'
   variables:
-    CSOUND_LIB_DIR: '/usr/lib'
+    # csound-sys only looks at /usr/lib and /usr/local top levels
+    CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
 
 meson shared:
   extends: .meson
@@ -198,6 +202,9 @@ check commits:
 clippy:
   extends: .img-stable
   stage: 'extras'
+  variables:
+    # csound-sys only looks at /usr/lib and /usr/local top levels
+    CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
   rules:
     - when: 'always'
   script:
@@ -230,6 +237,8 @@ coverage:
   variables:
     RUSTFLAGS: "-Zinstrument-coverage"
     LLVM_PROFILE_FILE: "gst-plugins-rs-%p-%m.profraw"
+    # csound-sys only looks at /usr/lib and /usr/local top levels
+    CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
   script:
     - cargo test --locked --color=always --all-features
     # generate html report
