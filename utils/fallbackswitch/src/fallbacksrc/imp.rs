@@ -893,7 +893,9 @@ impl FallbackSrc {
             .expect("No audiotestsrc found");
         input.add_many(&[&audiotestsrc]).unwrap();
 
-        audiotestsrc.set_property_from_str("wave", "silence");
+        audiotestsrc
+            .set_property_from_str("wave", "silence")
+            .unwrap();
         audiotestsrc.set_property("is-live", &true).unwrap();
 
         let srcpad = audiotestsrc.static_pad("src").unwrap();

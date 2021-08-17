@@ -420,7 +420,9 @@ impl VideoFallbackSource {
                         .expect("No videotestsrc found");
                 source.add_many(&[&videotestsrc]).unwrap();
 
-                videotestsrc.set_property_from_str("pattern", "black");
+                videotestsrc
+                    .set_property_from_str("pattern", "black")
+                    .unwrap();
                 videotestsrc.set_property("is-live", &true).unwrap();
 
                 videotestsrc.static_pad("src").unwrap()

@@ -34,7 +34,7 @@ fn create_pipeline() -> (
 
     let video_src = gst::ElementFactory::make("videotestsrc", None).unwrap();
     video_src.set_property("is-live", &true).unwrap();
-    video_src.set_property_from_str("pattern", "ball");
+    video_src.set_property_from_str("pattern", "ball").unwrap();
 
     let timeoverlay = gst::ElementFactory::make("timeoverlay", None).unwrap();
     timeoverlay
@@ -68,7 +68,7 @@ fn create_pipeline() -> (
 
     let audio_src = gst::ElementFactory::make("audiotestsrc", None).unwrap();
     audio_src.set_property("is-live", &true).unwrap();
-    audio_src.set_property_from_str("wave", "ticks");
+    audio_src.set_property_from_str("wave", "ticks").unwrap();
 
     let audio_tee = gst::ElementFactory::make("tee", None).unwrap();
     let audio_queue1 = gst::ElementFactory::make("queue", None).unwrap();
