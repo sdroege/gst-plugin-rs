@@ -81,7 +81,8 @@ impl Default for State {
 const DEFAULT_BUFFER_SIZE: u64 = 5 * 1024 * 1024;
 
 struct Settings {
-    region: Region,
+    region: String,
+    endpoint: Option<String>,
     bucket: Option<String>,
     key: Option<String>,
     content_type: Option<String>,
@@ -92,7 +93,7 @@ impl Settings {
     fn to_uri(&self) -> String {
         format!(
             "s3://{}/{}/{}",
-            self.region.name(),
+            self.region,
             self.bucket.as_ref().unwrap(),
             self.key.as_ref().unwrap()
         )
@@ -102,7 +103,8 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            region: Region::default(),
+            region: Region::default().name().to_string(),
+            endpoint: None,
             bucket: None,
             key: None,
             content_type: None,
@@ -273,7 +275,11 @@ impl S3Sink {
             }
         };
 
-        let client = S3Client::new(s3url.region.clone());
+        let region = match settings.endpoint {
+            Some(ref endpoint) => Region::Custom { name: s3url.region.clone(), endpoint: endpoint.to_string()},
+            None => Region::from_str(&settings.region).unwrap(),
+        };
+        let client = S3Client::new(region);
 
         let create_multipart_req = self.create_create_multipart_upload_request(&s3url, &settings);
         let create_multipart_req_future = client.create_multipart_upload(create_multipart_req);
@@ -434,6 +440,13 @@ impl ObjectImpl for S3Sink {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpec::new_string(
+                    "endpoint",
+                    "Custom AWS-compatible service endpoint",
+                    "Endpoint to be used. For instance, \"https://s3.my-provider.net\"",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -467,15 +480,16 @@ impl ObjectImpl for S3Sink {
                 }
             }
             "region" => {
-                settings.region =
-                    Region::from_str(&value.get::<String>().expect("type checked upstream"))
-                        .unwrap();
+                settings.region = value.get::<String>().expect("type checked upstream");
                 if settings.key.is_some() && settings.bucket.is_some() {
                     let _ = self.set_uri(obj, Some(&settings.to_uri()));
                 }
             }
             "part-size" => {
                 settings.buffer_size = value.get::<u64>().expect("type checked upstream");
+            }
+            "endpoint" => {
+                settings.endpoint = value.get::<Option<String>>().expect("type checked upstream");
             }
             "uri" => {
                 let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
@@ -490,8 +504,9 @@ impl ObjectImpl for S3Sink {
         match pspec.name() {
             "key" => settings.key.to_value(),
             "bucket" => settings.bucket.to_value(),
-            "region" => settings.region.name().to_value(),
+            "region" => settings.region.to_value(),
             "part-size" => settings.buffer_size.to_value(),
+            "endpoint" => settings.endpoint.to_value(),
             "uri" => {
                 let url = match *self.url.lock().unwrap() {
                     Some(ref url) => url.to_string(),

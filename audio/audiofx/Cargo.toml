@@ -33,6 +33,7 @@ gst-plugin-version-helper = { version = "0.7.0", path="../../version-helper" }
 
 [features]
 static = []
+capi = []
 
 [package.metadata.capi]
 min_version = "0.7.0"

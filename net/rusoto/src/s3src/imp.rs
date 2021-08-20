@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use bytes::Bytes;
 use futures::future;
 use once_cell::sync::Lazy;
+use rusoto_core::Region;
 use rusoto_s3::*;
 
 use gst::glib;
@@ -35,6 +36,8 @@ enum StreamingState {
     },
 }
 
+const DEFAULT_BLOCK_SIZE: u32 = 256 * 1024;
+
 impl Default for StreamingState {
     fn default() -> StreamingState {
         StreamingState::Stopped
@@ -44,6 +47,7 @@ impl Default for StreamingState {
 #[derive(Default)]
 pub struct S3Src {
     url: Mutex<Option<GstS3Url>>,
+    endpoint: Mutex<Option<String>>,
     state: Mutex<StreamingState>,
     canceller: Mutex<Option<future::AbortHandle>>,
 }
@@ -65,8 +69,8 @@ impl S3Src {
         };
     }
 
-    fn connect(self: &S3Src, url: &GstS3Url) -> S3Client {
-        S3Client::new(url.region.clone())
+    fn connect(self: &S3Src, region: &Region) -> S3Client {
+        S3Client::new(region.clone())
     }
 
     fn set_uri(self: &S3Src, _: &super::S3Src, url_str: Option<&str>) -> Result<(), glib::Error> {
@@ -97,6 +101,56 @@ impl S3Src {
                 "Could not parse URI",
             )),
         }
+    }
+
+    fn set_endpoint(self: &S3Src, _: &super::S3Src, endpoint_str: Option<&str>) -> Result<(), glib::Error> {
+        let state = self.state.lock().unwrap();
+
+        if let StreamingState::Started { .. } = *state {
+            return Err(glib::Error::new(
+                gst::URIError::BadState,
+                "Cannot set URI on a started s3src",
+            ));
+        }
+
+        let mut endpoint = self.endpoint.lock().unwrap();
+
+        if endpoint_str.is_none() {
+            *endpoint = None;
+            return Ok(());
+        }
+
+        let endpoint_str = endpoint_str.unwrap();
+        match parse_s3_endpoint(endpoint_str) {
+            Ok(s3endpoint) => {
+                *endpoint = Some(s3endpoint);
+                Ok(())
+            }
+            Err(_) => Err(glib::Error::new(
+                gst::URIError::BadUri,
+                "Could not parse Endpoint URI",
+            )),
+        }
+    }
+
+    fn set_blocksize(self: &S3Src, obj: &super::S3Src, blocksize: Option<u32>) -> Result<(), glib::Error> {
+        let state = self.state.lock().unwrap();
+
+        if let StreamingState::Started { .. } = *state {
+            return Err(glib::Error::new(
+                gst::URIError::BadState,
+                "Cannot set blocksize on a started s3src",
+            ));
+        }
+
+        if blocksize.is_none() {
+            obj.set_blocksize(DEFAULT_BLOCK_SIZE);
+            return Ok(());
+        }
+
+        let blocksize = blocksize.unwrap();
+        obj.set_blocksize(blocksize);
+        Ok(())
     }
 
     fn head(
@@ -207,18 +261,50 @@ impl ObjectSubclass for S3Src {
     type Type = super::S3Src;
     type ParentType = gst_base::BaseSrc;
     type Interfaces = (gst::URIHandler,);
+/*
+    type Instance = gst::subclass::ElementInstanceStruct<Self>;
+
+    type Class = subclass::simple::ClassStruct<Self>;
+
+    fn new() -> Self {
+        Self {
+            url: Mutex::new(None),
+            endpoint: Mutex::new(None),
+            state: Mutex::new(StreamingState::Stopped),
+            canceller: Mutex::new(None),
+        }
+    }
+*/
 }
 
 impl ObjectImpl for S3Src {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::new_string(
-                "uri",
-                "URI",
-                "The S3 object URI",
-                None,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-            )]
+            vec![
+                glib::ParamSpec::new_string(
+                    "uri",
+                    "URI",
+                    "The S3 object URI",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpec::new_uint(
+                    "block-size",
+                    "Block size",
+                    "A size (in bytes) of an individual part used for download.",
+                    256 * 1024,
+                    u32::MAX,
+                    DEFAULT_BLOCK_SIZE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpec::new_string(
+                    "endpoint",
+                    "Custom AWS-compatible service endpoint",
+                    "Endpoint to be used. For instance, \"https://s3.my-provider.net\"",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -235,11 +321,17 @@ impl ObjectImpl for S3Src {
             "uri" => {
                 let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
             }
+            "endpoint" => {
+                let _ = self.set_endpoint(obj, value.get().expect("type checked upstream"));
+            }
+            "block-size" => {
+                let _ = self.set_blocksize(obj, Some(value.get().expect("type checked upstream")) );
+            }
             _ => unimplemented!(),
         }
     }
 
-    fn property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "uri" => {
                 let url = match *self.url.lock().unwrap() {
@@ -248,6 +340,17 @@ impl ObjectImpl for S3Src {
                 };
 
                 url.to_value()
+            }
+            "endpoint" => {
+                let endpoint = match *self.endpoint.lock().unwrap() {
+                    Some(ref endpoint) => endpoint.clone(),
+                    None => "".to_string(),
+                };
+
+                endpoint.to_value()
+            }
+            "block-size" => {
+                obj.blocksize().to_value()
             }
             _ => unimplemented!(),
         }
@@ -258,7 +361,7 @@ impl ObjectImpl for S3Src {
 
         obj.set_format(gst::Format::Bytes);
         /* Set a larger default blocksize to make read more efficient */
-        obj.set_blocksize(256 * 1024);
+        obj.set_blocksize(DEFAULT_BLOCK_SIZE);
     }
 }
 
@@ -339,7 +442,12 @@ impl BaseSrcImpl for S3Src {
             }
         };
 
-        let s3client = self.connect(&s3url);
+        let s3region = match *self.endpoint.lock().unwrap() {
+            Some(ref endpoint) => custom_region(&s3url.region, endpoint),
+            None => region_from_str(&s3url.region).unwrap(),
+        };
+
+        let s3client = self.connect(&s3region);
         let size = self.head(src, &s3client, &s3url)?;
 
         *state = StreamingState::Started {

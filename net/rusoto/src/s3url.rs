@@ -14,7 +14,7 @@ use url::Url;
 
 #[derive(Clone)]
 pub struct GstS3Url {
-    pub region: Region,
+    pub region: String,
     pub bucket: String,
     pub object: String,
     pub version: Option<String>,
@@ -31,7 +31,7 @@ impl ToString for GstS3Url {
     fn to_string(&self) -> String {
         format!(
             "s3://{}/{}/{}{}",
-            self.region.name(),
+            self.region,
             self.bucket,
             percent_encode(self.object.as_bytes(), PATH_SEGMENT),
             if self.version.is_some() {
@@ -41,6 +41,22 @@ impl ToString for GstS3Url {
             }
         )
     }
+}
+
+pub fn region_from_str(region: &str) -> Result<Region, String> {
+    let region = Region::from_str(region).map_err(|_| format!("Invalid region '{}'", region))?;
+
+    Ok(region)
+}
+
+pub fn custom_region(region: &str, endpoint: &str) -> Region {
+    Region::Custom{ name: region.to_string(), endpoint: endpoint.to_string()}
+}
+
+pub fn parse_s3_endpoint(endpoint_str: &str) -> Result<String, String> {
+    let _ = Url::parse(endpoint_str).map_err(|err| format!("Parse error: {}", err))?;
+
+    Ok(endpoint_str.to_string())
 }
 
 pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
@@ -54,9 +70,8 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
         return Err(format!("Invalid host in uri '{}'", url));
     }
 
-    let host = url.host_str().unwrap();
-    let region = Region::from_str(host).map_err(|_| format!("Invalid region '{}'", host))?;
-
+    let region = url.host_str().unwrap().to_string();
+   
     let mut path = url
         .path_segments()
         .ok_or_else(|| format!("Invalid uri '{}'", url))?;
