@@ -47,7 +47,7 @@ enum Mode {
     #[gflags(name = "Calculate loudness range", nick = "loudness-range")]
     LOUDNESS_RANGE = 0b00001000,
     #[gflags(name = "Calculate sample peak", nick = "sample-peak")]
-    SAMPLE_PEAK = 0b000100000,
+    SAMPLE_PEAK = 0b00010000,
     #[gflags(name = "Calculate true peak", nick = "true-peak")]
     TRUE_PEAK = 0b00100000,
 }
