@@ -2041,9 +2041,6 @@ impl ElementImpl for ToggleRecord {
             Some(stream) => stream.clone(),
         };
 
-        stream.srcpad.set_active(false).unwrap();
-        stream.sinkpad.set_active(false).unwrap();
-
         pads.remove(&stream.sinkpad).unwrap();
         pads.remove(&stream.srcpad).unwrap();
 
@@ -2053,6 +2050,13 @@ impl ElementImpl for ToggleRecord {
 
         drop(pads);
         drop(other_streams_guard);
+
+        let main_state = self.main_stream.state.lock();
+        self.main_stream_cond.notify_all();
+        drop(main_state);
+
+        stream.srcpad.set_active(false).unwrap();
+        stream.sinkpad.set_active(false).unwrap();
 
         element.remove_pad(&stream.sinkpad).unwrap();
         element.remove_pad(&stream.srcpad).unwrap();
