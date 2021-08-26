@@ -257,7 +257,7 @@ fn mcc_payload(s: &[u8]) -> IResult<&[u8], Vec<u8>> {
 
     context(
         "invalid MCC payload",
-        fold_many1(mcc_payload_item, Vec::new(), |mut acc: Vec<_>, item| {
+        fold_many1(mcc_payload_item, Vec::new, |mut acc: Vec<_>, item| {
             match item {
                 Either::Left(val) => acc.push(val),
                 Either::Right(vals) => acc.extend_from_slice(vals),

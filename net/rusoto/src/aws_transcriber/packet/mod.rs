@@ -16,13 +16,14 @@
 // Boston, MA 02110-1335, USA.
 
 use byteorder::{BigEndian, WriteBytesExt};
-use crc::crc32;
 use nom::{
     self, bytes::complete::take, combinator::map_res, multi::many0, number::complete::be_u16,
     number::complete::be_u32, number::complete::be_u8, sequence::tuple, IResult,
 };
 use std::borrow::Cow;
 use std::io::{self, Write};
+
+const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_BZIP2);
 
 #[derive(Debug)]
 struct Prelude {
@@ -87,11 +88,11 @@ pub fn encode_packet(payload: &[u8], headers: &[Header]) -> Result<Vec<u8>, io::
     (&mut res[0..4]).write_u32::<BigEndian>(total_length as u32)?;
 
     // Rewrite the prelude crc since we replaced the lengths
-    let prelude_crc = crc32::checksum_ieee(&res[0..8]);
+    let prelude_crc = CRC.checksum(&res[0..8]);
     (&mut res[8..12]).write_u32::<BigEndian>(prelude_crc)?;
 
     // Message CRC
-    let message_crc = crc32::checksum_ieee(&res);
+    let message_crc = CRC.checksum(&res);
     res.write_u32::<BigEndian>(message_crc)?;
 
     Ok(res)
@@ -101,7 +102,7 @@ fn parse_prelude(input: &[u8]) -> IResult<&[u8], Prelude> {
     map_res(
         tuple((be_u32, be_u32, be_u32)),
         |(total_bytes, header_bytes, prelude_crc)| {
-            let sum = crc32::checksum_ieee(&input[0..8]);
+            let sum = CRC.checksum(&input[0..8]);
             if prelude_crc != sum {
                 return Err(nom::Err::Error((
                     "Prelude CRC doesn't match",
@@ -148,7 +149,7 @@ pub fn parse_packet(input: &[u8]) -> IResult<&[u8], Packet> {
     let (remainder, prelude) = parse_prelude(input)?;
 
     // Check the crc of the whole input
-    let sum = crc32::checksum_ieee(&input[..input.len() - 4]);
+    let sum = CRC.checksum(&input[..input.len() - 4]);
     let (_, msg_crc) = be_u32(&input[input.len() - 4..])?;
 
     if msg_crc != sum {
