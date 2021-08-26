@@ -9,7 +9,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 
 [dependencies]
 once_cell = "1.0"
-textwrap = { version = "0.13.2", features = ["hyphenation"] }
+textwrap = { version = "0.14", features = ["hyphenation"] }
 hyphenation = "0.8"
 
 [dependencies.gst]

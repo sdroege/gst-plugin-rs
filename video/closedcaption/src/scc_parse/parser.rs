@@ -109,7 +109,7 @@ fn scc_payload(s: &[u8]) -> IResult<&[u8], Vec<u8>> {
 
     context(
         "invalid SCC payload",
-        fold_many1(parse_item, Vec::new(), |mut acc: Vec<_>, item| {
+        fold_many1(parse_item, Vec::new, |mut acc: Vec<_>, item| {
             acc.push(item.0);
             acc.push(item.1);
             acc

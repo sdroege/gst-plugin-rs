@@ -62,8 +62,36 @@ impl Default for Settings {
     }
 }
 
+// FIXME: https://github.com/mgeisler/textwrap/issues/412
+#[derive(Debug)]
+struct WrappedWordSplitter(Box<dyn textwrap::word_splitters::WordSplitter + Send>);
+
+impl textwrap::word_splitters::WordSplitter for WrappedWordSplitter {
+    fn split_points(&self, word: &str) -> Vec<usize> {
+        self.0.split_points(word)
+    }
+}
+
+impl Clone for WrappedWordSplitter {
+    fn clone(&self) -> Self {
+        WrappedWordSplitter(unsafe {
+            std::mem::transmute::<
+                Box<dyn textwrap::word_splitters::WordSplitter + 'static>,
+                Box<dyn textwrap::word_splitters::WordSplitter + Send + 'static>,
+            >(self.0.clone_box())
+        })
+    }
+}
+
 struct State {
-    options: Option<textwrap::Options<'static, Box<dyn textwrap::WordSplitter + Send>>>,
+    options: Option<
+        textwrap::Options<
+            'static,
+            textwrap::wrap_algorithms::OptimalFit,
+            textwrap::word_separators::UnicodeBreakProperties,
+            WrappedWordSplitter,
+        >,
+    >,
 
     current_text: String,
     start_ts: Option<gst::ClockTime>,
@@ -125,14 +153,14 @@ impl TextWrap {
                 Ok(standard) => standard,
             };
 
-            Some(textwrap::Options::with_splitter(
+            Some(textwrap::Options::with_word_splitter(
                 settings.columns as usize,
-                Box::new(standard),
+                WrappedWordSplitter(Box::new(standard)),
             ))
         } else {
-            Some(textwrap::Options::with_splitter(
+            Some(textwrap::Options::with_word_splitter(
                 settings.columns as usize,
-                Box::new(textwrap::NoHyphenation),
+                WrappedWordSplitter(Box::new(textwrap::word_splitters::NoHyphenation)),
             ))
         };
     }
@@ -221,7 +249,7 @@ impl TextWrap {
                     .as_ref()
                     .expect("We should have a wrapper by now");
 
-                let lines = textwrap::wrap(&current_text, options);
+                let lines = textwrap::wrap(&current_text, &*options);
                 let mut chunks = lines.chunks(n_lines as usize).peekable();
                 let mut trailing = "".to_string();
 
@@ -287,7 +315,7 @@ impl TextWrap {
                     .options
                     .as_ref()
                     .expect("We should have a wrapper by now");
-                textwrap::fill(data, options)
+                textwrap::fill(data, &*options)
             };
 
             // If the lines property was set, we want to split the result into buffers
