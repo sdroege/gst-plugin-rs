@@ -133,6 +133,20 @@ version = "0.11"
 name = "shlex"
 version = "0.1"
 
+# ignore duplicated nom dependency because gst-plugin-flavors / flavors has to
+# be updated
+[[bans.skip]]
+name = "nom"
+version = "6"
+
+# ignore duplicated shlex dependency because rustfft 5 depends on an old version
+# https://github.com/ejmahler/RustFFT/commit/24140ef06e56c21debb7a47a37ca680717bb4414
+# rustfft 6 is released but nnnoiseless doesn't depend on it yet
+# https://github.com/jneem/nnnoiseless/pull/16
+[[bans.skip]]
+name = "num-complex"
+version = "0.3"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
