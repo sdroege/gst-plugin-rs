@@ -5,7 +5,7 @@ include:
     ref: *templates_sha
     file: '/templates/debian.yml'
 
-  - remote: "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/-/raw/master/ci/images_template.yml"
+  - remote: "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/-/raw/0.17/ci/images_template.yml"
 
 variables:
   FDO_UPSTREAM_REPO: gstreamer/gst-plugins-rs
