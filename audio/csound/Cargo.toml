@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-csound"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Natanael Mojica <neithanmo@gmail.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "LGPL-2.1-or-later"

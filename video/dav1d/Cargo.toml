@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-dav1d"
-version = "0.7.1"
+version = "0.7.2"
 authors = ["Philippe Normand <philn@igalia.com>"]
 edition = "2018"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
