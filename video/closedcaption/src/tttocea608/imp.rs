@@ -616,10 +616,6 @@ impl TtToCea608 {
         }
 
         if state.mode == Cea608Mode::PopOn {
-            if state.erase_display_frame_no.is_some() {
-                state.erase_display_frame_no = None;
-                state.erase_display_memory(element, mut_list);
-            }
             state.resume_caption_loading(element, mut_list);
             state.cc_data(element, mut_list, erase_non_displayed_memory());
         } else if state.mode == Cea608Mode::PaintOn {
@@ -798,6 +794,8 @@ impl TtToCea608 {
         }
 
         if state.mode == Cea608Mode::PopOn {
+            /* No need to erase the display at this point, end_of_caption will be equivalent */
+            state.erase_display_frame_no = None;
             state.end_of_caption(element, mut_list);
         }
 

@@ -193,8 +193,14 @@ fn test_erase_display_memory_non_spliced() {
 }
 
 /* Here we test that the erase_display_memory control code
- * gets inserted before the following pop-on captions
+ * gets inserted while loading the following pop-on captions
  * when there's not enough of an interval between them.
+ *
+ * Note that as tttocea608 introduces an offset between the
+ * intended PTS and the actual display time with pop-on captions
+ * (when end_of_caption is output) in order not to introduce
+ * a huge latency, the clear time is also offset so that the captions
+ * display as long as intended.
  */
 #[test]
 fn test_erase_display_memory_spliced() {
@@ -215,7 +221,7 @@ fn test_erase_display_memory_spliced() {
     assert_eq!(h.push(inbuf), Ok(gst::FlowSuccess::Ok));
 
     let inbuf = new_timed_buffer(
-        &"World",
+        &"World, Lorem Ipsum",
         ClockTime::from_nseconds(2_000_000_000),
         ClockTime::SECOND,
     );
@@ -231,7 +237,7 @@ fn test_erase_display_memory_spliced() {
         let pts = outbuf.pts().unwrap();
         assert!(pts >= prev_pts);
 
-        if pts == ClockTime::from_nseconds(2_000_000_000) {
+        if pts == ClockTime::from_nseconds(2_200_000_000) {
             let data = outbuf.map_readable().unwrap();
             assert_eq!(&*data, &[0x94, 0x2c]);
             erase_display_buffers += 1;
