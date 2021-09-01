@@ -64,13 +64,6 @@ name = "tokio-macros"
 name = "textwrap"
 version = "0.11"
 
-# ignore duplicated miniz_oxide dependency because png/tiff depend on an old version
-# https://github.com/image-rs/image-tiff/pull/76
-# https://github.com/image-rs/image-png/pull/235
-[[bans.skip]]
-name = "miniz_oxide"
-version = "0.3"
-
 # ignore duplicated cfg-if dependency because a few dozen dependencies still
 # pull in the old version
 [[bans.skip]]
@@ -127,25 +120,20 @@ version = "0.3"
 name = "ansi_term"
 version = "0.11"
 
-# ignore duplicated shlex dependency because rusoto_credentials depends on an old version
-# https://github.com/rusoto/rusoto/pull/1915
-[[bans.skip]]
-name = "shlex"
-version = "0.1"
-
 # ignore duplicated nom dependency because gst-plugin-flavors / flavors has to
 # be updated
 [[bans.skip]]
 name = "nom"
 version = "6"
 
-# ignore duplicated shlex dependency because rustfft 5 depends on an old version
-# https://github.com/ejmahler/RustFFT/commit/24140ef06e56c21debb7a47a37ca680717bb4414
-# rustfft 6 is released but nnnoiseless doesn't depend on it yet
-# https://github.com/jneem/nnnoiseless/pull/16
+# ignore duplicated system-deps dependency because dav1d depends on an old version
+# https://github.com/rusoto/rusoto/pull/1915
 [[bans.skip]]
-name = "num-complex"
-version = "0.3"
+name = "system-deps"
+version = "3"
+[[bans.skip]]
+name = "cfg-expr"
+version = "0.8"
 
 [sources]
 unknown-registry = "deny"
