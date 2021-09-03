@@ -44,7 +44,7 @@ fn test_encode() {
         0x81, 0x7f, 0xff, 0x74, 0x00, 0x00, 0x1c,
     ];
 
-    let expected_output = b"File Format=MacCaption_MCC V1.0\r\n\
+    let expected_output = format!("File Format=MacCaption_MCC V1.0\r\n\
 \r\n\
 ///////////////////////////////////////////////////////////////////////////////////\r\n\
 // Computer Prompting and Captioning Company\r\n\
@@ -83,12 +83,12 @@ fn test_encode() {
 ///////////////////////////////////////////////////////////////////////////////////\r\n\
 \r\n\
 UUID=14720C04-857D-40E2-86FC-F080DE44CE74\r\n\
-Creation Program=GStreamer MCC Encoder 0.8.0\r\n\
+Creation Program=GStreamer MCC Encoder {}\r\n\
 Creation Date=Thursday, December 27, 2018\r\n\
 Creation Time=17:34:47\r\n\
 Time Code Rate=30DF\r\n\
 \r\n\
-11:12:13;14	T52S524F67ZZ72F4QRFF0222FE8CFFOM739181656E67817FFF74ZZ1CZ\r\n";
+11:12:13;14	T52S524F67ZZ72F4QRFF0222FE8CFFOM739181656E67817FFF74ZZ1CZ\r\n", env!("CARGO_PKG_VERSION"));
 
     let mut h = gst_check::Harness::new("mccenc");
     {
@@ -142,6 +142,6 @@ Time Code Rate=30DF\r\n\
     let map = buf.map_readable().expect("Couldn't map buffer readable");
     assert_eq!(
         std::str::from_utf8(map.as_ref()),
-        std::str::from_utf8(expected_output.as_ref())
+        Ok(expected_output.as_str()),
     );
 }
