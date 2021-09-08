@@ -1049,7 +1049,7 @@ impl State {
 
                     // Calculate the current position in the attack window
                     let cur_pos = (current_gain_reduction - self.gain_reduction[0]) / old_slope;
-                    assert!(cur_pos >= 0.0 && cur_pos <= 1.0);
+                    assert!((0.0..=1.0).contains(&cur_pos));
                     self.env_cnt = ((LIMITER_ATTACK_WINDOW as f64 - 1.0) * cur_pos) as usize;
 
                     // Need to sustain in any case for this many samples to actually
@@ -1684,6 +1684,7 @@ impl AudioLoudNorm {
         pad.event_default(Some(element), event)
     }
 
+    #[allow(clippy::single_match)]
     fn src_query(
         &self,
         pad: &gst::Pad,
@@ -1911,6 +1912,7 @@ impl ElementImpl for AudioLoudNorm {
         PAD_TEMPLATES.as_ref()
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         element: &Self::Type,

@@ -398,6 +398,7 @@ impl TranscriberBin {
         Ok(())
     }
 
+    #[allow(clippy::single_match)]
     fn src_query(
         &self,
         pad: &gst::Pad,
@@ -474,6 +475,7 @@ impl TranscriberBin {
         })
     }
 
+    #[allow(clippy::single_match)]
     fn video_sink_event(
         &self,
         pad: &gst::Pad,
@@ -815,6 +817,7 @@ impl ElementImpl for TranscriberBin {
         PAD_TEMPLATES.as_ref()
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         element: &Self::Type,

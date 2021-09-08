@@ -15,7 +15,7 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
-use gst::EventView;
+#![allow(clippy::single_match)]
 
 fn init() {
     use std::sync::Once;
@@ -83,6 +83,8 @@ fn test_parse() {
     }
 
     while h.events_in_queue() > 0 {
+        use gst::EventView;
+
         let ev = h.pull_event().unwrap();
 
         match ev.view() {

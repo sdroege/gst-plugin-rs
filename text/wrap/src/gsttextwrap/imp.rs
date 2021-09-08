@@ -201,13 +201,14 @@ impl TextWrap {
             let mut bufferlist = gst::BufferList::new();
             let n_lines = std::cmp::max(self.settings.lock().unwrap().lines, 1);
 
-            if state
+            let add_buffer = state
                 .start_ts
                 .zip(Some(accumulate_time))
                 .map_or(false, |(start_ts, accumulate_time)| {
                     start_ts + accumulate_time < pts
-                })
-            {
+                });
+
+            if add_buffer {
                 let mut buf =
                     gst::Buffer::from_mut_slice(mem::take(&mut state.current_text).into_bytes());
                 {

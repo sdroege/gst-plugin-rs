@@ -8,8 +8,6 @@
 
 // Reference used for implementation: https://en.wikipedia.org/wiki/HSL_and_HSV
 
-#![allow(unstable_name_collisions)]
-
 // Since the standard 'clamp' feature is still considered unstable, we provide
 // a subsititute implementaion here so we can still build with the stable toolchain.
 // Source: https://github.com/rust-lang/rust/issues/44095#issuecomment-624879262

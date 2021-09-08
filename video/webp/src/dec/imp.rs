@@ -151,7 +151,6 @@ pub struct WebPDec {
 }
 
 impl WebPDec {
-    #![allow(clippy::unnecessary_wraps)]
     fn sink_chain(
         &self,
         pad: &gst::Pad,

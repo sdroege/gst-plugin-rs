@@ -353,26 +353,23 @@ impl Cea608Overlay {
                     }
 
                     if Some(cc_type) == state.selected_field {
-                        match state
+                        if let Ok(Status::Ready) = state
                             .caption_frame
                             .decode((triple[1] as u16) << 8 | triple[2] as u16, 0.0)
                         {
-                            Ok(Status::Ready) => {
-                                let text = match state.caption_frame.to_text(true) {
-                                    Ok(text) => text,
-                                    Err(_) => {
-                                        gst_error!(
-                                            CAT,
-                                            obj: pad,
-                                            "Failed to convert caption frame to text"
-                                        );
-                                        continue;
-                                    }
-                                };
+                            let text = match state.caption_frame.to_text(true) {
+                                Ok(text) => text,
+                                Err(_) => {
+                                    gst_error!(
+                                        CAT,
+                                        obj: pad,
+                                        "Failed to convert caption frame to text"
+                                    );
+                                    continue;
+                                }
+                            };
 
-                                self.overlay_text(element, &text, state);
-                            }
-                            _ => (),
+                            self.overlay_text(element, &text, state);
                         }
                     }
                 } else {
@@ -406,26 +403,19 @@ impl Cea608Overlay {
             }
 
             if Some(cc_type) == state.selected_field {
-                match state
+                if let Ok(Status::Ready) = state
                     .caption_frame
                     .decode((triple[1] as u16) << 8 | triple[2] as u16, 0.0)
                 {
-                    Ok(Status::Ready) => {
-                        let text = match state.caption_frame.to_text(true) {
-                            Ok(text) => text,
-                            Err(_) => {
-                                gst_error!(
-                                    CAT,
-                                    obj: pad,
-                                    "Failed to convert caption frame to text"
-                                );
-                                continue;
-                            }
-                        };
+                    let text = match state.caption_frame.to_text(true) {
+                        Ok(text) => text,
+                        Err(_) => {
+                            gst_error!(CAT, obj: pad, "Failed to convert caption frame to text");
+                            continue;
+                        }
+                    };
 
-                        self.overlay_text(element, &text, state);
-                    }
-                    _ => (),
+                    self.overlay_text(element, &text, state);
                 }
             }
         }
@@ -468,26 +458,23 @@ impl Cea608Overlay {
                 let data = meta.data();
                 assert!(data.len() % 2 == 0);
                 for i in 0..data.len() / 2 {
-                    match state
+                    if let Ok(Status::Ready) = state
                         .caption_frame
                         .decode((data[i * 2] as u16) << 8 | data[i * 2 + 1] as u16, 0.0)
                     {
-                        Ok(Status::Ready) => {
-                            let text = match state.caption_frame.to_text(true) {
-                                Ok(text) => text,
-                                Err(_) => {
-                                    gst_error!(
-                                        CAT,
-                                        obj: pad,
-                                        "Failed to convert caption frame to text"
-                                    );
-                                    continue;
-                                }
-                            };
+                        let text = match state.caption_frame.to_text(true) {
+                            Ok(text) => text,
+                            Err(_) => {
+                                gst_error!(
+                                    CAT,
+                                    obj: pad,
+                                    "Failed to convert caption frame to text"
+                                );
+                                continue;
+                            }
+                        };
 
-                            self.overlay_text(element, &text, &mut state);
-                        }
-                        _ => (),
+                        self.overlay_text(element, &text, &mut state);
                     }
                 }
             }
@@ -503,11 +490,9 @@ impl Cea608Overlay {
                     state.video_info.as_ref().unwrap(),
                 )
                 .unwrap();
-                match composition.blend(&mut frame) {
-                    Err(_) => {
-                        gst_error!(CAT, obj: pad, "Failed to blend composition");
-                    }
-                    _ => (),
+
+                if composition.blend(&mut frame).is_err() {
+                    gst_error!(CAT, obj: pad, "Failed to blend composition");
                 }
             }
         }

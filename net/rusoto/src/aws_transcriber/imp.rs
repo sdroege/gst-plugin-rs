@@ -589,17 +589,14 @@ impl Transcriber {
             };
 
             let transcribe = Self::from_instance(&element);
-            match transcribe.loop_fn(&element, &mut receiver) {
-                Err(err) => {
-                    element_error!(
-                        &element,
-                        gst::StreamError::Failed,
-                        ["Streaming failed: {}", err]
-                    );
-                    let _ = transcribe.srcpad.pause_task();
-                }
-                Ok(_) => (),
-            };
+            if let Err(err) = transcribe.loop_fn(&element, &mut receiver) {
+                element_error!(
+                    &element,
+                    gst::StreamError::Failed,
+                    ["Streaming failed: {}", err]
+                );
+                let _ = transcribe.srcpad.pause_task();
+            }
         });
         if res.is_err() {
             return Err(loggable_error!(CAT, "Failed to start pad task"));

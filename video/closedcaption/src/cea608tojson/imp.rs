@@ -547,10 +547,9 @@ impl State {
                     ret
                 }
                 Cea608Mode::PopOn => {
-                    #[allow(clippy::map_entry)]
-                    if !self.rows.contains_key(&self.cursor.row) {
-                        self.rows.insert(self.cursor.row, Row::new(self.cursor.row));
-                    }
+                    let row = self.cursor.row;
+                    self.rows.entry(row).or_insert_with(|| Row::new(row));
+
                     None
                 }
             }
@@ -930,6 +929,7 @@ impl ElementImpl for Cea608ToJson {
         PAD_TEMPLATES.as_ref()
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         element: &Self::Type,

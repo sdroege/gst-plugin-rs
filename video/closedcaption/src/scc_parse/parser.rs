@@ -78,9 +78,9 @@ fn scc_payload_item(s: &[u8]) -> IResult<&[u8], (u8, u8)> {
         "invalid SCC payload item",
         map(take_while_m_n(4, 4, is_hex_digit), |s: &[u8]| {
             let hex_to_u8 = |v: u8| match v {
-                v if v >= b'0' && v <= b'9' => v - b'0',
-                v if v >= b'A' && v <= b'F' => 10 + v - b'A',
-                v if v >= b'a' && v <= b'f' => 10 + v - b'a',
+                v if (b'0'..=b'9').contains(&v) => v - b'0',
+                v if (b'A'..=b'F').contains(&v) => 10 + v - b'A',
+                v if (b'a'..=b'f').contains(&v) => 10 + v - b'a',
                 _ => unreachable!(),
             };
 

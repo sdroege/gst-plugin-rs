@@ -25,7 +25,7 @@ pub enum MccLine<'a> {
     Header,
     Comment,
     Empty,
-    UUID(&'a [u8]),
+    Uuid(&'a [u8]),
     Metadata(&'a [u8], &'a [u8]),
     TimeCodeRate(u8, bool),
     Caption(TimeCode, Option<Vec<u8>>),
@@ -96,7 +96,7 @@ fn uuid(s: &[u8]) -> IResult<&[u8], MccLine> {
                 take_while1(|b| b != b'\n' && b != b'\r'),
                 end_of_line,
             )),
-            |(_, uuid, _)| MccLine::UUID(uuid),
+            |(_, uuid, _)| MccLine::Uuid(uuid),
         ),
     )(s)
 }
@@ -238,9 +238,9 @@ fn mcc_payload_item(s: &[u8]) -> IResult<&[u8], Either<u8, &'static [u8]>> {
             map(tag("Z"), |_| Either::Right([0x00].as_ref())),
             map(take_while_m_n(2, 2, is_hex_digit), |s: &[u8]| {
                 let hex_to_u8 = |v: u8| match v {
-                    v if v >= b'0' && v <= b'9' => v - b'0',
-                    v if v >= b'A' && v <= b'F' => 10 + v - b'A',
-                    v if v >= b'a' && v <= b'f' => 10 + v - b'a',
+                    v if (b'0'..=b'9').contains(&v) => v - b'0',
+                    v if (b'A'..=b'F').contains(&v) => 10 + v - b'A',
+                    v if (b'a'..=b'f').contains(&v) => 10 + v - b'a',
                     _ => unreachable!(),
                 };
                 let val = (hex_to_u8(s[0]) << 4) | hex_to_u8(s[1]);
@@ -472,17 +472,17 @@ mod tests {
     fn test_uuid() {
         assert_eq!(
             uuid(b"UUID=1234".as_ref()),
-            Ok((b"".as_ref(), MccLine::UUID(b"1234".as_ref())))
+            Ok((b"".as_ref(), MccLine::Uuid(b"1234".as_ref())))
         );
 
         assert_eq!(
             uuid(b"UUID=1234\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::UUID(b"1234".as_ref())))
+            Ok((b"".as_ref(), MccLine::Uuid(b"1234".as_ref())))
         );
 
         assert_eq!(
             uuid(b"UUID=1234\r\n".as_ref()),
-            Ok((b"".as_ref(), MccLine::UUID(b"1234".as_ref())))
+            Ok((b"".as_ref(), MccLine::Uuid(b"1234".as_ref())))
         );
 
         assert_eq!(
@@ -697,10 +697,10 @@ mod tests {
             match line_cnt {
                 0 => assert_eq!(res, MccLine::Header),
                 1 | 37 | 43 => assert_eq!(res, MccLine::Empty),
-                x if x >= 2 && x <= 36 => assert_eq!(res, MccLine::Comment),
+                x if (2..=36).contains(&x) => assert_eq!(res, MccLine::Comment),
                 38 => assert_eq!(
                     res,
-                    MccLine::UUID(b"CA8BC94D-9931-4EEE-812F-2D68FA74F287".as_ref())
+                    MccLine::Uuid(b"CA8BC94D-9931-4EEE-812F-2D68FA74F287".as_ref())
                 ),
                 39 => assert_eq!(
                     res,

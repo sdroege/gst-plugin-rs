@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![allow(clippy::single_match)]
+
 use gst::glib;
 use gst::prelude::*;
 

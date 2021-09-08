@@ -16,6 +16,8 @@
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
 
+#![allow(clippy::single_match)]
+
 use gst::prelude::*;
 use gst::EventView;
 use gst_video::{ValidVideoTimeCode, VideoTimeCode};

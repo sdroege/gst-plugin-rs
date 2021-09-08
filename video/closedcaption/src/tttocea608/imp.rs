@@ -1217,6 +1217,7 @@ impl ElementImpl for TtToCea608 {
         PAD_TEMPLATES.as_ref()
     }
 
+    #[allow(clippy::single_match)]
     fn change_state(
         &self,
         element: &Self::Type,

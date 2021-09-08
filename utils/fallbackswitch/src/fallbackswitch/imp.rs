@@ -128,6 +128,7 @@ impl Default for Settings {
 }
 
 impl OutputState {
+    #[allow(clippy::blocks_in_if_conditions)]
     fn health(
         &self,
         settings: &Settings,
@@ -301,12 +302,13 @@ impl FallbackSwitch {
                 deadline.display(),
             );
 
-            if state.last_output_time.zip(running_time).map_or(
+            let is_late = state.last_output_time.zip(running_time).map_or(
                 false,
                 |(last_output_time, running_time)| {
                     last_output_time + settings.timeout <= running_time
                 },
-            ) {
+            );
+            if is_late {
                 /* This buffer arrived too late - we either already switched
                  * to the other pad or there's no point outputting this anyway */
                 gst_debug!(
@@ -429,13 +431,15 @@ impl FallbackSwitch {
             };
 
             if !ignore_timeout {
-                // Get the next one if this one is before the timeout
-                if state.last_output_time.zip(running_time).map_or(
+                let timed_out = !state.last_output_time.zip(running_time).map_or(
                     false,
                     |(last_output_time, running_time)| {
                         last_output_time + settings.timeout > running_time
                     },
-                ) {
+                );
+
+                // Get the next one if this one is before the timeout
+                if !timed_out {
                     gst_debug!(
                         CAT,
                         obj: backup_pad,
