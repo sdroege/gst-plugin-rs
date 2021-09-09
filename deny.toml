@@ -120,12 +120,6 @@ version = "0.3"
 name = "ansi_term"
 version = "0.11"
 
-# ignore duplicated nom dependency because gst-plugin-flavors / flavors has to
-# be updated
-[[bans.skip]]
-name = "nom"
-version = "6"
-
 # ignore duplicated system-deps dependency because dav1d depends on an old version
 # https://github.com/rusoto/rusoto/pull/1915
 [[bans.skip]]
