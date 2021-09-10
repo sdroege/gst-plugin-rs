@@ -27,7 +27,8 @@ You will find the following plugins in this repository:
       [reqwest](https://github.com/seanmonstar/reqwest) library.
 
     - `rusoto`: A source and sink plugin to talk to the Amazon S3 object
-      storage system using the [Rusoto](https://rusoto.org) library.
+      storage system, as well as an element wrapping the AWS Transcriber
+      service using the [Rusoto](https://rusoto.org) library.
 
   * `audio`
     - `audiofx`: Plugins to apply audio effects to a stream (such as adding
@@ -52,14 +53,33 @@ You will find the following plugins in this repository:
     - `dav1d`: AV1 decoder based on the
       [dav1d](https://code.videolan.org/videolan/dav1d) library.
 
+    - `ffv1`: FFV1 decoder based on the
+      [ffv1](https://github.com/rust-av/ffv1) library.
+
     - `flavors`: FLV demuxer based on the
       [flavors](https://github.com/rust-av/flavors) library.
 
     - `gif`: A GIF encoder based on the
       [gif](https://github.com/image-rs/image-gif) library.
 
+    - `hsv`: Elements to work with video data in hue, saturation, value form.
+
+    - `png`: PNG encoder based on the
+      [png](https://github.com/image-rs/image-png) library.
+
     - `rav1e`: AV1 encoder based on the [rav1e](https://github.com/xiph/rav1e)
       library.
+
+    - `webp`: WebP decoder based on the
+      [libwebp-sys-2](https://github.com/qnighy/libwebp-sys2-rs) library.
+
+  * `text`
+    - `json`: A plugin to convert a stream of JSON objects to a higher level
+      wrapped NDJSON output.
+
+    - `regex`: A regular expression text filter plugin.
+
+    - `wrap`: A plugin to perform text wrapping with hyphenation.
 
   * `utils`
     - `fallbackswitch`: Aggregator element that allows falling back to a
