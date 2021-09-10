@@ -1,0 +1,367 @@
+// Copyright (C) 2020 Arun Raghavan <arun@asymptotic.io>
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+use ffv1::constants::{RGB, YCBCR};
+use ffv1::decoder::{Decoder, Frame};
+use ffv1::record::ConfigRecord;
+
+use gst::glib;
+use gst::prelude::*;
+use gst::subclass::prelude::*;
+use gst_video::prelude::*;
+use gst_video::subclass::prelude::*;
+use gst_video::VideoFormat;
+
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+enum DecoderState {
+    Stopped,
+    Started {
+        output_info: Option<gst_video::VideoInfo>,
+        decoder: Box<Decoder>,
+    },
+}
+
+impl Default for DecoderState {
+    fn default() -> Self {
+        DecoderState::Stopped
+    }
+}
+
+#[derive(Default)]
+pub struct Ffv1Dec {
+    state: Mutex<DecoderState>,
+}
+
+fn get_all_video_formats() -> Vec<glib::SendValue> {
+    let values = [
+        VideoFormat::Gray8,
+        // VideoFormat::Gray16Le,
+        // VideoFormat::Gray16Be,
+        VideoFormat::Y444,
+        // VideoFormat::Y44410le,
+        // VideoFormat::Y44410be,
+        // VideoFormat::A44410le,
+        // VideoFormat::A44410be,
+        // VideoFormat::Y44412le,
+        // VideoFormat::Y44412be,
+        // VideoFormat::Y44416le,
+        // VideoFormat::Y44416be,
+        VideoFormat::A420,
+        VideoFormat::Y42b,
+        // VideoFormat::I42210le,
+        // VideoFormat::I42210be,
+        // VideoFormat::A42210le,
+        // VideoFormat::A42210be,
+        // VideoFormat::I42212le,
+        // VideoFormat::I42212be,
+        VideoFormat::I420,
+        // VideoFormat::I42010le,
+        // VideoFormat::I42010be,
+        // VideoFormat::I42012le,
+        // VideoFormat::I42012be,
+        VideoFormat::Gbra,
+        VideoFormat::Gbr,
+        // VideoFormat::Gbr10le,
+        // VideoFormat::Gbr10be,
+        // VideoFormat::Gbra10le,
+        // VideoFormat::Gbra10be,
+        // VideoFormat::Gbr12le,
+        // VideoFormat::Gbr12be,
+        // VideoFormat::Gbra12le,
+        // VideoFormat::Gbra12be,
+    ];
+
+    values.iter().map(|i| i.to_str().to_send_value()).collect()
+}
+
+fn get_output_format(record: &ConfigRecord) -> Option<VideoFormat> {
+    const IS_LITTLE_ENDIAN: bool = cfg!(target_endian = "little");
+
+    match record.colorspace_type as usize {
+        YCBCR => match (
+            record.chroma_planes,
+            record.log2_v_chroma_subsample,
+            record.log2_h_chroma_subsample,
+            record.bits_per_raw_sample,
+            record.extra_plane,
+            IS_LITTLE_ENDIAN,
+        ) {
+            // Interpret luma-only as grayscale
+            (false, _, _, 8, false, _) => Some(VideoFormat::Gray8),
+            // (false, _, _, 16, false, true) => Some(VideoFormat::Gray16Le),
+            // (false, _, _, 16, false, false) => Some(VideoFormat::Gray16Be),
+            // 4:4:4
+            (true, 4, 4, 8, false, _) => Some(VideoFormat::Y444),
+            // (true, 4, 4, 10, false, true) => Some(VideoFormat::Y44410le),
+            // (true, 4, 4, 10, false, false) => Some(VideoFormat::Y44410be),
+            // (true, 4, 4, 10, true, true) => Some(VideoFormat::A44410le),
+            // (true, 4, 4, 10, true, false) => Some(VideoFormat::A44410be),
+            // (true, 4, 4, 12, false, true) => Some(VideoFormat::Y44412le),
+            // (true, 4, 4, 12, false, false) => Some(VideoFormat::Y44412be),
+            // (true, 4, 4, 16, false, true) => Some(VideoFormat::Y44416le),
+            // (true, 4, 4, 16, false, false) => Some(VideoFormat::Y44416be),
+            // 4:2:2
+            (true, 2, 2, 8, false, _) => Some(VideoFormat::Y42b),
+            // (true, 2, 2, 10, false, true) => Some(VideoFormat::I42210le),
+            // (true, 2, 2, 10, false, false) => Some(VideoFormat::I42210be),
+            // (true, 2, 2, 10, true, true) => Some(VideoFormat::A42210le),
+            // (true, 2, 2, 10, true, false) => Some(VideoFormat::A42210be),
+            // (true, 2, 2, 12, false, true) => Some(VideoFormat::I42212le),
+            // (true, 2, 2, 12, false, false) => Some(VideoFormat::I42212be),
+            // 4:2:0
+            (true, 1, 1, 8, false, _) => Some(VideoFormat::I420),
+            (true, 1, 1, 8, true, _) => Some(VideoFormat::A420),
+            // (true, 1, 1, 10, false, true) => Some(VideoFormat::I42010le),
+            // (true, 1, 1, 10, false, false) => Some(VideoFormat::I42010be),
+            // (true, 1, 1, 12, false, true) => Some(VideoFormat::I42012le),
+            // (true, 1, 1, 12, false, false) => Some(VideoFormat::I42012be),
+            // Nothing matched
+            (_, _, _, _, _, _) => None,
+        },
+        RGB => match (
+            record.bits_per_raw_sample,
+            record.extra_plane,
+            IS_LITTLE_ENDIAN,
+        ) {
+            (8, true, _) => Some(VideoFormat::Gbra),
+            (8, false, _) => Some(VideoFormat::Gbr),
+            // (10, false, true) => Some(VideoFormat::Gbr10le),
+            // (10, false, false) => Some(VideoFormat::Gbr10be),
+            // (10, true, true) => Some(VideoFormat::Gbra10le),
+            // (10, true, false) => Some(VideoFormat::Gbra10be),
+            // (12, false, true) => Some(VideoFormat::Gbr12le),
+            // (12, false, false) => Some(VideoFormat::Gbr12be),
+            // (12, true, true) => Some(VideoFormat::Gbra12le),
+            // (12, true, false) => Some(VideoFormat::Gbra12be),
+            (_, _, _) => None,
+        },
+        _ => panic!("Unknown color_space type"),
+    }
+}
+
+impl Ffv1Dec {
+    // FIXME: Implement other pixel depths
+    pub fn get_decoded_frame(
+        &self,
+        mut decoded_frame: Frame,
+        output_info: &gst_video::VideoInfo,
+    ) -> gst::Buffer {
+        let mut buf = gst::Buffer::new();
+        let mut_buf = buf.make_mut();
+        let format_info = output_info.format_info();
+
+        // Greater depths are not yet supported
+        assert_eq!(decoded_frame.bit_depth, 8);
+
+        for (plane, decoded_plane) in decoded_frame.buf.drain(..).enumerate() {
+            let component = format_info
+                .plane()
+                .iter()
+                .position(|&p| p == plane as u32)
+                .unwrap() as u8;
+
+            let comp_height = format_info.scale_height(component, output_info.height()) as usize;
+            let src_stride = decoded_plane.len() / comp_height;
+            let dest_stride = output_info.stride()[plane] as usize;
+
+            // FIXME: we can also do this if we have video meta support and differing strides
+            let mem = if src_stride == dest_stride {
+                // Just wrap the decoded frame vecs and push them out
+                gst::Memory::from_slice(decoded_plane)
+            } else {
+                // Mismatched stride, let's copy
+                let out_plane = gst::Memory::with_size(dest_stride * comp_height);
+                let mut out_plane_mut = out_plane.into_mapped_memory_writable().unwrap();
+
+                for (in_line, out_line) in decoded_plane
+                    .as_slice()
+                    .chunks_exact(src_stride)
+                    .zip(out_plane_mut.as_mut_slice().chunks_exact_mut(dest_stride))
+                {
+                    out_line[..src_stride].copy_from_slice(in_line);
+                }
+
+                out_plane_mut.into_memory()
+            };
+
+            mut_buf.append_memory(mem);
+        }
+
+        // FIXME: attach video meta if supported
+
+        buf
+    }
+}
+
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "ffv1dec",
+        gst::DebugColorFlags::empty(),
+        Some("FFV1 decoder"),
+    )
+});
+
+#[glib::object_subclass]
+impl ObjectSubclass for Ffv1Dec {
+    const NAME: &'static str = "Ffv1Dec";
+    type Type = super::Ffv1Dec;
+    type ParentType = gst_video::VideoDecoder;
+}
+
+impl ObjectImpl for Ffv1Dec {}
+
+impl ElementImpl for Ffv1Dec {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "FFV1 Decoder",
+                "Codec/Decoder/Video",
+                "Decode FFV1 video streams",
+                "Arun Raghavan <arun@asymptotic.io>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let sink_caps = gst::Caps::builder("video/x-ffv")
+                .field("ffvversion", &1)
+                .field("width", &gst::IntRange::<i32>::new(1, i32::MAX))
+                .field("height", &gst::IntRange::<i32>::new(1, i32::MAX))
+                .field(
+                    "framerate",
+                    &gst::FractionRange::new(
+                        gst::Fraction::new(0, 1),
+                        gst::Fraction::new(i32::MAX, 1),
+                    ),
+                )
+                .build();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &sink_caps,
+            )
+            .unwrap();
+
+            let src_caps = gst::Caps::builder("video/x-raw")
+                .field("format", &gst::List::from_owned(get_all_video_formats()))
+                .field("width", &gst::IntRange::<i32>::new(1, i32::MAX))
+                .field("height", &gst::IntRange::<i32>::new(1, i32::MAX))
+                .field(
+                    "framerate",
+                    &gst::FractionRange::new(
+                        gst::Fraction::new(0, 1),
+                        gst::Fraction::new(i32::MAX, 1),
+                    ),
+                )
+                .build();
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &src_caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        &*PAD_TEMPLATES
+    }
+}
+
+impl VideoDecoderImpl for Ffv1Dec {
+    /* We allocate the decoder here rather than start() because we need the sink caps */
+    fn set_format(
+        &self,
+        element: &super::Ffv1Dec,
+        state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
+    ) -> Result<(), gst::LoggableError> {
+        let info = state.info();
+        let codec_data = state
+            .codec_data()
+            .ok_or_else(|| gst::loggable_error!(CAT, "Missing codec_data"))?
+            .map_readable()?;
+        let decoder = Decoder::new(codec_data.as_slice(), info.width(), info.height())
+            .map_err(|err| gst::loggable_error!(CAT, "Could not instantiate decoder: {}", err))?;
+
+        let format = get_output_format(decoder.config_record())
+            .ok_or_else(|| gst::loggable_error!(CAT, "Unsupported format"))?;
+
+        let output_state = element
+            .set_output_state(format, info.width(), info.height(), Some(state))
+            .map_err(|err| gst::loggable_error!(CAT, "Failed to set output params: {}", err))?;
+
+        let output_info = Some(output_state.info());
+
+        element
+            .negotiate(output_state)
+            .map_err(|err| gst::loggable_error!(CAT, "Negotiation failed: {}", err))?;
+
+        let mut decoder_state = self.state.lock().unwrap();
+        *decoder_state = DecoderState::Started {
+            output_info,
+            decoder: Box::new(decoder),
+        };
+
+        self.parent_set_format(element, state)
+    }
+
+    fn stop(&self, element: &super::Ffv1Dec) -> Result<(), gst::ErrorMessage> {
+        let mut decoder_state = self.state.lock().unwrap();
+        *decoder_state = DecoderState::Stopped;
+
+        self.parent_stop(element)
+    }
+
+    fn handle_frame(
+        &self,
+        element: &super::Ffv1Dec,
+        mut frame: gst_video::VideoCodecFrame,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut state = self.state.lock().unwrap();
+
+        let (output_info, decoder) = match *state {
+            DecoderState::Stopped => Err(gst::FlowError::Error),
+            DecoderState::Started {
+                ref mut output_info,
+                ref mut decoder,
+            } => Ok((output_info, decoder)),
+        }?;
+
+        let input_buffer = frame
+            .input_buffer()
+            .expect("Frame must have input buffer")
+            .map_readable()
+            .expect("Could not map input buffer for read");
+
+        let decoded_frame = decoder.decode_frame(input_buffer.as_slice()).map_err(|e| {
+            gst::gst_error!(CAT, "Decoding failed: {}", e);
+            gst::FlowError::Error
+        })?;
+
+        // Drop so we can mutably borrow frame later
+        drop(input_buffer);
+
+        //  * Make sure the decoder and output plane orders match for all cases
+        let buf = self.get_decoded_frame(decoded_frame, output_info.as_ref().unwrap());
+
+        // We no longer need the state lock
+        drop(state);
+
+        frame.set_output_buffer(buf);
+        element.finish_frame(frame)?;
+
+        Ok(gst::FlowSuccess::Ok)
+    }
+}

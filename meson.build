@@ -36,6 +36,7 @@ plugins_rep = {
   'video/cdg': 'libgstcdg',
   'audio/claxon': 'libgstclaxon',
   'utils/fallbackswitch': 'libgstfallbackswitch',
+  'video/ffv1': 'libgstffv1',
   'generic/file': 'libgstrsfile',
   'video/flavors': 'libgstrsflv',
   'video/gif': 'libgstgif',
