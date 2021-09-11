@@ -129,6 +129,12 @@ version = "3"
 name = "cfg-expr"
 version = "0.8"
 
+# ignore duplicated crc dependency because ffv1 depends on an old version
+# https://github.com/rust-av/ffv1/issues/21
+[[bans.skip]]
+name = "crc"
+version = "1.8"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
