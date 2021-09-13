@@ -1,4 +1,5 @@
 // Copyright (C) 2019 Sebastian Dröge <sebastian@centricular.com>
+// Copyright (C) 2021 Jan Schmidt <jan@centricular.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at
@@ -6,9 +7,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use gst::debug;
 use gst::prelude::*;
 
 use once_cell::sync::Lazy;
+
+const LATENCY: gst::ClockTime = gst::ClockTime::from_mseconds(10);
 
 static TEST_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -44,20 +48,20 @@ macro_rules! assert_buffer {
 
 #[test]
 fn test_no_fallback_no_drops() {
-    let pipeline = setup_pipeline(None);
+    let pipeline = setup_pipeline(None, None, None);
 
     push_buffer(&pipeline, gst::ClockTime::ZERO);
-    set_time(&pipeline, gst::ClockTime::ZERO);
+    set_time(&pipeline, gst::ClockTime::ZERO + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
 
     push_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(&pipeline, gst::ClockTime::SECOND);
+    set_time(&pipeline, gst::ClockTime::SECOND + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::SECOND));
 
     push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 2 * gst::ClockTime::SECOND);
+    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
 
@@ -78,23 +82,23 @@ fn test_no_drops_not_live() {
 }
 
 fn test_no_drops(live: bool) {
-    let pipeline = setup_pipeline(Some(live));
+    let pipeline = setup_pipeline(Some(live), None, None);
 
     push_buffer(&pipeline, gst::ClockTime::ZERO);
     push_fallback_buffer(&pipeline, gst::ClockTime::ZERO);
-    set_time(&pipeline, gst::ClockTime::ZERO);
+    set_time(&pipeline, gst::ClockTime::ZERO + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
 
     push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
     push_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(&pipeline, gst::ClockTime::SECOND);
+    set_time(&pipeline, gst::ClockTime::SECOND + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::SECOND));
 
     push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
     push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 2 * gst::ClockTime::SECOND);
+    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
 
@@ -116,22 +120,22 @@ fn test_no_drops_but_no_fallback_frames_not_live() {
 }
 
 fn test_no_drops_but_no_fallback_frames(live: bool) {
-    let pipeline = setup_pipeline(Some(live));
+    let pipeline = setup_pipeline(Some(live), None, None);
 
     push_buffer(&pipeline, gst::ClockTime::ZERO);
     // +10ms needed here because the immediate timeout will be always at running time 0, but
     // aggregator also adds the latency to it so we end up at 10ms instead.
-    set_time(&pipeline, 10 * gst::ClockTime::MSECOND);
+    set_time(&pipeline, LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
 
     push_buffer(&pipeline, gst::ClockTime::SECOND);
-    set_time(&pipeline, gst::ClockTime::SECOND);
+    set_time(&pipeline, gst::ClockTime::SECOND + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::SECOND));
 
     push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 2 * gst::ClockTime::SECOND);
+    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
 
@@ -153,11 +157,11 @@ fn test_short_drop_not_live() {
 }
 
 fn test_short_drop(live: bool) {
-    let pipeline = setup_pipeline(Some(live));
+    let pipeline = setup_pipeline(Some(live), None, None);
 
     push_buffer(&pipeline, gst::ClockTime::ZERO);
     push_fallback_buffer(&pipeline, gst::ClockTime::ZERO);
-    set_time(&pipeline, gst::ClockTime::ZERO);
+    set_time(&pipeline, gst::ClockTime::ZERO + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
 
@@ -172,7 +176,7 @@ fn test_short_drop(live: bool) {
 
     push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
     push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 2 * gst::ClockTime::SECOND);
+    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
 
@@ -194,7 +198,7 @@ fn test_long_drop_and_eos_not_live() {
 }
 
 fn test_long_drop_and_eos(live: bool) {
-    let pipeline = setup_pipeline(Some(live));
+    let pipeline = setup_pipeline(Some(live), None, None);
 
     // Produce the first frame
     push_buffer(&pipeline, gst::ClockTime::ZERO);
@@ -256,7 +260,9 @@ fn test_long_drop_and_recover_not_live() {
 }
 
 fn test_long_drop_and_recover(live: bool) {
-    let pipeline = setup_pipeline(Some(live));
+    let pipeline = setup_pipeline(Some(live), None, None);
+    let switch = pipeline.by_name("switch").unwrap();
+    let mainsink = switch.static_pad("sink_0").unwrap();
 
     // Produce the first frame
     push_buffer(&pipeline, gst::ClockTime::ZERO);
@@ -264,6 +270,7 @@ fn test_long_drop_and_recover(live: bool) {
     set_time(&pipeline, gst::ClockTime::ZERO);
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
+    assert!(mainsink.property::<bool>("is-healthy"));
 
     // Produce a second frame but only from the fallback source
     push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
@@ -301,28 +308,177 @@ fn test_long_drop_and_recover(live: bool) {
 
     // Produce a sixth frame from the normal source
     push_buffer(&pipeline, 5 * gst::ClockTime::SECOND);
-    push_fallback_buffer(&pipeline, 5 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 5 * gst::ClockTime::SECOND);
+    set_time(
+        &pipeline,
+        5 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
+    );
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(5 * gst::ClockTime::SECOND));
+    assert!(!mainsink.property::<bool>("is-healthy"));
+    drop(mainsink);
+    drop(switch);
 
     // Produce a seventh frame from the normal source but no fallback.
     // This should still be output immediately
     push_buffer(&pipeline, 6 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 6 * gst::ClockTime::SECOND);
+    set_time(
+        &pipeline,
+        6 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
+    );
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(6 * gst::ClockTime::SECOND));
 
     // Produce a eight frame from the normal source
     push_buffer(&pipeline, 7 * gst::ClockTime::SECOND);
     push_fallback_buffer(&pipeline, 7 * gst::ClockTime::SECOND);
-    set_time(&pipeline, 7 * gst::ClockTime::SECOND);
+    set_time(
+        &pipeline,
+        7 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
+    );
     let buffer = pull_buffer(&pipeline);
     assert_buffer!(buffer, Some(7 * gst::ClockTime::SECOND));
 
     // Wait for EOS to arrive at appsink
     push_eos(&pipeline);
     push_fallback_eos(&pipeline);
+    wait_eos(&pipeline);
+
+    stop_pipeline(pipeline);
+}
+
+#[test]
+fn test_initial_timeout_live() {
+    test_initial_timeout(true);
+}
+
+#[test]
+fn test_initial_timeout_not_live() {
+    test_initial_timeout(false);
+}
+
+fn test_initial_timeout(live: bool) {
+    let pipeline = setup_pipeline(Some(live), None, None);
+
+    // Produce the first frame but only from the fallback source
+    push_fallback_buffer(&pipeline, gst::ClockTime::ZERO);
+    set_time(&pipeline, gst::ClockTime::ZERO);
+
+    // Produce a second frame but only from the fallback source
+    push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
+    set_time(
+        &pipeline,
+        gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
+    );
+
+    // Produce a third frame but only from the fallback source
+    push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
+    set_time(
+        &pipeline,
+        2 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
+    );
+
+    // Produce a fourth frame but only from the fallback source
+    // This should be output now
+    push_fallback_buffer(&pipeline, 3 * gst::ClockTime::SECOND);
+    set_time(
+        &pipeline,
+        3 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
+    );
+    let buffer = pull_buffer(&pipeline);
+    assert_fallback_buffer!(buffer, Some(3 * gst::ClockTime::SECOND));
+
+    // Produce a fifth frame but only from the fallback source
+    // This should be output now
+    push_fallback_buffer(&pipeline, 4 * gst::ClockTime::SECOND);
+    set_time(
+        &pipeline,
+        4 * gst::ClockTime::SECOND + 10 * gst::ClockTime::MSECOND,
+    );
+    let buffer = pull_buffer(&pipeline);
+    assert_fallback_buffer!(buffer, Some(4 * gst::ClockTime::SECOND));
+
+    // Wait for EOS to arrive at appsink
+    push_eos(&pipeline);
+    push_fallback_eos(&pipeline);
+    wait_eos(&pipeline);
+
+    stop_pipeline(pipeline);
+}
+
+#[test]
+fn test_immediate_fallback_live() {
+    test_immediate_fallback(true);
+}
+
+#[test]
+fn test_immediate_fallback_not_live() {
+    test_immediate_fallback(false);
+}
+
+fn test_immediate_fallback(live: bool) {
+    let pipeline = setup_pipeline(Some(live), Some(true), None);
+
+    // Produce the first frame but only from the fallback source
+    push_fallback_buffer(&pipeline, gst::ClockTime::ZERO);
+    set_time(&pipeline, gst::ClockTime::ZERO);
+
+    let buffer = pull_buffer(&pipeline);
+    assert_fallback_buffer!(buffer, Some(gst::ClockTime::ZERO));
+
+    // Wait for EOS to arrive at appsink
+    push_eos(&pipeline);
+    push_fallback_eos(&pipeline);
+    wait_eos(&pipeline);
+
+    stop_pipeline(pipeline);
+}
+
+#[test]
+fn test_manual_switch_live() {
+    test_manual_switch(true);
+}
+
+#[test]
+fn test_manual_switch_not_live() {
+    test_manual_switch(false);
+}
+
+fn test_manual_switch(live: bool) {
+    let pipeline = setup_pipeline(Some(live), None, Some(false));
+    let switch = pipeline.by_name("switch").unwrap();
+    let mainsink = switch.static_pad("sink_0").unwrap();
+    let fallbacksink = switch.static_pad("sink_1").unwrap();
+
+    switch.set_property("active-pad", &mainsink);
+    push_buffer(&pipeline, gst::ClockTime::ZERO);
+    push_fallback_buffer(&pipeline, gst::ClockTime::ZERO);
+    set_time(&pipeline, gst::ClockTime::ZERO + LATENCY);
+    let buffer = pull_buffer(&pipeline);
+    assert_buffer!(buffer, Some(gst::ClockTime::ZERO));
+
+    switch.set_property("active-pad", &fallbacksink);
+    push_fallback_buffer(&pipeline, gst::ClockTime::SECOND);
+    push_buffer(&pipeline, gst::ClockTime::SECOND);
+    set_time(&pipeline, gst::ClockTime::SECOND + LATENCY);
+    let mut buffer = pull_buffer(&pipeline);
+    // FIXME: Sometimes we get the ZERO buffer from the fallback sink instead
+    if buffer.pts() == Some(gst::ClockTime::ZERO) {
+        buffer = pull_buffer(&pipeline);
+    }
+    assert_fallback_buffer!(buffer, Some(gst::ClockTime::SECOND));
+
+    switch.set_property("active-pad", &mainsink);
+    push_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
+    push_fallback_buffer(&pipeline, 2 * gst::ClockTime::SECOND);
+    set_time(&pipeline, 2 * gst::ClockTime::SECOND + LATENCY);
+    let buffer = pull_buffer(&pipeline);
+    assert_buffer!(buffer, Some(2 * gst::ClockTime::SECOND));
+
+    drop(mainsink);
+    drop(fallbacksink);
+    drop(switch);
+    // EOS on the fallback should not be required
+    push_eos(&pipeline);
     wait_eos(&pipeline);
 
     stop_pipeline(pipeline);
@@ -341,10 +497,14 @@ impl std::ops::Deref for Pipeline {
     }
 }
 
-fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
+fn setup_pipeline(
+    with_live_fallback: Option<bool>,
+    immediate_fallback: Option<bool>,
+    auto_switch: Option<bool>,
+) -> Pipeline {
     init();
 
-    gst::debug!(TEST_CAT, "Setting up pipeline");
+    debug!(TEST_CAT, "Setting up pipeline");
 
     let clock = gst_check::TestClock::new();
     clock.set_time(gst::ClockTime::ZERO);
@@ -363,19 +523,25 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
         .unwrap();
     src.set_property("is-live", true);
     src.set_property("format", gst::Format::Time);
-    src.set_property("min-latency", 10i64);
+    src.set_property("min-latency", LATENCY.nseconds() as i64);
     src.set_property(
         "caps",
-        &gst::Caps::builder("video/x-raw")
+        gst::Caps::builder("video/x-raw")
             .field("format", "ARGB")
-            .field("width", 320)
-            .field("height", 240)
+            .field("width", 320i32)
+            .field("height", 240i32)
             .field("framerate", gst::Fraction::new(1, 1))
             .build(),
     );
 
     let switch = gst::ElementFactory::make("fallbackswitch", Some("switch")).unwrap();
     switch.set_property("timeout", 3 * gst::ClockTime::SECOND);
+    if let Some(imm) = immediate_fallback {
+        switch.set_property("immediate-fallback", imm);
+    }
+    if let Some(auto_switch) = auto_switch {
+        switch.set_property("auto-switch", auto_switch);
+    }
 
     let sink = gst::ElementFactory::make("appsink", Some("sink"))
         .unwrap()
@@ -388,7 +554,7 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
     pipeline
         .add_many(&[src.upcast_ref(), &switch, &queue, sink.upcast_ref()])
         .unwrap();
-    src.link_pads(Some("src"), &switch, Some("sink")).unwrap();
+    src.link_pads(Some("src"), &switch, Some("sink_0")).unwrap();
     switch.link_pads(Some("src"), &queue, Some("sink")).unwrap();
     queue.link_pads(Some("src"), &sink, Some("sink")).unwrap();
 
@@ -399,13 +565,13 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
             .unwrap();
         fallback_src.set_property("is-live", live);
         fallback_src.set_property("format", gst::Format::Time);
-        fallback_src.set_property("min-latency", 10i64);
+        fallback_src.set_property("min-latency", LATENCY.nseconds() as i64);
         fallback_src.set_property(
             "caps",
-            &gst::Caps::builder("video/x-raw")
+            gst::Caps::builder("video/x-raw")
                 .field("format", "ARGB")
-                .field("width", 160)
-                .field("height", 120)
+                .field("width", 160i32)
+                .field("height", 120i32)
                 .field("framerate", gst::Fraction::new(1, 1))
                 .build(),
         );
@@ -413,7 +579,7 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
         pipeline.add(&fallback_src).unwrap();
 
         fallback_src
-            .link_pads(Some("src"), &switch, Some("fallback_sink"))
+            .link_pads(Some("src"), &switch, Some("sink_1"))
             .unwrap();
     }
 
@@ -429,11 +595,16 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
                     None
                 }
             }) {
-                gst::debug!(TEST_CAT, "Processing clock ID at {}", clock_id.time());
+                debug!(
+                    TEST_CAT,
+                    "Processing clock ID {} at {:?}",
+                    clock_id.time(),
+                    clock.time()
+                );
                 if let Some(clock_id) = clock.process_next_clock_id() {
-                    gst::debug!(TEST_CAT, "Processed clock ID at {}", clock_id.time());
+                    debug!(TEST_CAT, "Processed clock ID {}", clock_id.time());
                     if clock_id.time().is_zero() {
-                        gst::debug!(TEST_CAT, "Stopping clock thread");
+                        debug!(TEST_CAT, "Stopping clock thread");
                         return;
                     }
                 }
@@ -528,7 +699,7 @@ fn set_time(pipeline: &Pipeline, time: gst::ClockTime) {
         .downcast::<gst_check::TestClock>()
         .unwrap();
 
-    gst::debug!(TEST_CAT, "Setting time to {}", time);
+    debug!(TEST_CAT, "Setting time to {}", time);
     clock.set_time(gst::ClockTime::SECOND + time);
 }
 
@@ -543,7 +714,7 @@ fn wait_eos(pipeline: &Pipeline) {
         use std::{thread, time};
 
         if sink.is_eos() {
-            gst::debug!(TEST_CAT, "Waited for EOS");
+            debug!(TEST_CAT, "Waited for EOS");
             break;
         }
         thread::sleep(time::Duration::from_millis(10));

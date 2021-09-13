@@ -74,11 +74,12 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
         ])
         .unwrap();
 
+    /* The first pad requested will be automatically preferred */
     video_src
-        .link_pads(Some("src"), &fallbackswitch, Some("sink"))
+        .link_pads(Some("src"), &fallbackswitch, Some("sink_%u"))
         .unwrap();
     fallback_video_src
-        .link_pads(Some("src"), &fallbackswitch, Some("fallback_sink"))
+        .link_pads(Some("src"), &fallbackswitch, Some("sink_%u"))
         .unwrap();
     fallbackswitch
         .link_pads(Some("src"), &decodebin, Some("sink"))

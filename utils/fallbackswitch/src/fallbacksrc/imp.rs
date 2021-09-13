@@ -10,8 +10,8 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
+use parking_lot::Mutex;
 use std::mem;
-use std::sync::Mutex;
 use std::time::Instant;
 
 use once_cell::sync::Lazy;
@@ -316,7 +316,7 @@ impl ObjectImpl for FallbackSrc {
     ) {
         match pspec.name() {
             "enable-audio" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -328,7 +328,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.enable_audio = new_value;
             }
             "enable-video" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -340,7 +340,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.enable_video = new_value;
             }
             "uri" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -352,7 +352,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.uri = new_value;
             }
             "source" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -364,7 +364,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.source = new_value;
             }
             "fallback-uri" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -376,7 +376,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.fallback_uri = new_value;
             }
             "timeout" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -388,7 +388,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.timeout = new_value;
             }
             "restart-timeout" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -400,7 +400,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.restart_timeout = new_value;
             }
             "retry-timeout" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -412,7 +412,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.retry_timeout = new_value;
             }
             "restart-on-eos" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -424,7 +424,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.restart_on_eos = new_value;
             }
             "min-latency" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -436,7 +436,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.min_latency = new_value;
             }
             "buffer-duration" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -448,7 +448,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.buffer_duration = new_value;
             }
             "immediate-fallback" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -460,7 +460,7 @@ impl ObjectImpl for FallbackSrc {
                 settings.immediate_fallback = new_value;
             }
             "manual-unblock" => {
-                let mut settings = self.settings.lock().unwrap();
+                let mut settings = self.settings.lock();
                 let new_value = value.get().expect("type checked upstream");
                 gst::info!(
                     CAT,
@@ -481,43 +481,43 @@ impl ObjectImpl for FallbackSrc {
     fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "enable-audio" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.enable_audio.to_value()
             }
             "enable-video" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.enable_video.to_value()
             }
             "uri" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.uri.to_value()
             }
             "source" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.source.to_value()
             }
             "fallback-uri" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.fallback_uri.to_value()
             }
             "timeout" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.timeout.to_value()
             }
             "restart-timeout" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.restart_timeout.to_value()
             }
             "retry-timeout" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.retry_timeout.to_value()
             }
             "restart-on-eos" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.restart_on_eos.to_value()
             }
             "status" => {
-                let state_guard = self.state.lock().unwrap();
+                let state_guard = self.state.lock();
 
                 // If we have no state then we'r stopped
                 let state = match &*state_guard {
@@ -569,20 +569,20 @@ impl ObjectImpl for FallbackSrc {
                 Status::Running.to_value()
             }
             "min-latency" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.min_latency.to_value()
             }
             "buffer-duration" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.buffer_duration.to_value()
             }
             "statistics" => self.stats().to_value(),
             "immediate-fallback" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.immediate_fallback.to_value()
             }
             "manual-unblock" => {
-                let settings = self.settings.lock().unwrap();
+                let settings = self.settings.lock();
                 settings.manual_unblock.to_value()
             }
             _ => unimplemented!(),
@@ -612,7 +612,7 @@ impl ObjectImpl for FallbackSrc {
                     .class_handler(|_token, args| {
                         let element = args[0].get::<super::FallbackSrc>().expect("signal arg");
                         let src = element.imp();
-                        let mut state_guard = src.state.lock().unwrap();
+                        let mut state_guard = src.state.lock();
                         let state = match &mut *state_guard {
                             None => {
                                 return None;
@@ -730,7 +730,7 @@ impl ElementImpl for FallbackSrc {
             gst::EventView::Eos(..) => {
                 gst::debug!(CAT, "Handling element-level EOS, forwarding to all streams");
 
-                let mut state_guard = self.state.lock().unwrap();
+                let mut state_guard = self.state.lock();
                 let state = match &mut *state_guard {
                     None => {
                         return true;
@@ -942,10 +942,17 @@ impl FallbackSrc {
         switch.set_property("min-upstream-latency", min_latency.nseconds());
         switch.set_property("immediate-fallback", immediate_fallback);
 
-        gst::Element::link_pads(&fallback_input, Some("src"), &switch, Some("fallback_sink"))
-            .unwrap();
+        let fallback_srcpad = fallback_input.static_pad("src").unwrap();
+        let switch_fallbacksink = switch.request_pad_simple("sink_%u").unwrap();
+        fallback_srcpad.link(&switch_fallbacksink).unwrap();
+        switch_fallbacksink.set_property("priority", 1u32);
+
         gst::Element::link_pads(&clocksync_queue, Some("src"), &clocksync, Some("sink")).unwrap();
-        gst::Element::link_pads(&clocksync, Some("src"), &switch, Some("sink")).unwrap();
+
+        let clocksync_srcpad = clocksync.static_pad("src").unwrap();
+        let switch_mainsink = switch.request_pad_simple("sink_%u").unwrap();
+        clocksync_srcpad.link(&switch_mainsink).unwrap();
+        switch_mainsink.set_property("priority", 0u32);
         // clocksync_queue sink pad is not connected to anything yet at this point!
 
         let srcpad = switch.static_pad("src").unwrap();
@@ -984,12 +991,12 @@ impl FallbackSrc {
 
     fn start(&self, element: &super::FallbackSrc) -> Result<(), gst::StateChangeError> {
         gst::debug!(CAT, obj: element, "Starting");
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         if state_guard.is_some() {
             return Err(gst::StateChangeError);
         }
 
-        let settings = self.settings.lock().unwrap().clone();
+        let settings = self.settings.lock().clone();
         let configured_source = match settings
             .uri
             .as_ref()
@@ -1082,7 +1089,7 @@ impl FallbackSrc {
 
     fn stop(&self, element: &super::FallbackSrc) {
         gst::debug!(CAT, obj: element, "Stopping");
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let mut state = match state_guard.take() {
             Some(state) => state,
             None => return,
@@ -1138,7 +1145,7 @@ impl FallbackSrc {
 
     fn change_source_state(&self, element: &super::FallbackSrc, transition: gst::StateChange) {
         gst::debug!(CAT, obj: element, "Changing source state: {:?}", transition);
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let state = match &mut *state_guard {
             Some(state) => state,
             None => return,
@@ -1174,7 +1181,7 @@ impl FallbackSrc {
                 // Try again later if we're not shutting down
                 if transition != gst::StateChange::ReadyToNull {
                     let _ = source.set_state(gst::State::Null);
-                    let mut state_guard = self.state.lock().unwrap();
+                    let mut state_guard = self.state.lock();
                     let state = state_guard.as_mut().expect("no state");
                     self.handle_source_error(element, state, RetryReason::StateChangeFailure);
                     drop(state_guard);
@@ -1189,7 +1196,7 @@ impl FallbackSrc {
                     res
                 );
 
-                let mut state_guard = self.state.lock().unwrap();
+                let mut state_guard = self.state.lock();
                 let state = state_guard.as_mut().expect("no state");
 
                 // Remember if the source is live
@@ -1216,7 +1223,7 @@ impl FallbackSrc {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let res = gst::ProxyPad::chain_default(pad, Some(element), buffer);
 
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let state = match &mut *state_guard {
             None => return res,
             Some(state) => state,
@@ -1232,7 +1239,7 @@ impl FallbackSrc {
     ) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Pad {} added to source", pad.name(),);
 
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let state = match &mut *state_guard {
             None => {
                 return Ok(());
@@ -1360,7 +1367,7 @@ impl FallbackSrc {
                         pad.name()
                     );
 
-                    let mut state_guard = src.state.lock().unwrap();
+                    let mut state_guard = src.state.lock();
                     let state = match &mut *state_guard {
                         None => {
                             return gst::PadProbeReturn::Ok;
@@ -1469,7 +1476,7 @@ impl FallbackSrc {
         pad: &gst::Pad,
         pts: impl Into<Option<gst::ClockTime>>,
     ) -> Result<(), gst::ErrorMessage> {
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let state = match &mut *state_guard {
             None => {
                 return Ok(());
@@ -1810,7 +1817,7 @@ impl FallbackSrc {
     fn handle_source_pad_removed(&self, element: &super::FallbackSrc, pad: &gst::Pad) {
         gst::debug!(CAT, obj: element, "Pad {} removed from source", pad.name());
 
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let state = match &mut *state_guard {
             None => {
                 return;
@@ -1846,7 +1853,7 @@ impl FallbackSrc {
     }
 
     fn handle_buffering(&self, element: &super::FallbackSrc, m: &gst::message::Buffering) {
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let state = match &mut *state_guard {
             None => {
                 return;
@@ -1890,7 +1897,7 @@ impl FallbackSrc {
         element: &super::FallbackSrc,
         m: &gst::message::StreamsSelected,
     ) {
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let state = match &mut *state_guard {
             None => {
                 return;
@@ -1950,7 +1957,7 @@ impl FallbackSrc {
     }
 
     fn handle_error(&self, element: &super::FallbackSrc, m: &gst::message::Error) -> bool {
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let state = match &mut *state_guard {
             None => {
                 return false;
@@ -2074,7 +2081,7 @@ impl FallbackSrc {
 
             // Remove blocking pad probes if they are still there as otherwise shutting down the
             // source will deadlock on the probes.
-            let mut state_guard = src.state.lock().unwrap();
+            let mut state_guard = src.state.lock();
             let state = match &mut *state_guard {
                 None
                 | Some(State {
@@ -2115,7 +2122,7 @@ impl FallbackSrc {
 
             // Sleep for 1s before retrying
 
-            let mut state_guard = src.state.lock().unwrap();
+            let mut state_guard = src.state.lock();
             let state = match &mut *state_guard {
                 None
                 | Some(State {
@@ -2154,7 +2161,7 @@ impl FallbackSrc {
                     element.call_async(|element| {
                         let src = element.imp();
 
-                        let mut state_guard = src.state.lock().unwrap();
+                        let mut state_guard = src.state.lock();
                         let state = match &mut *state_guard {
                             None
                             | Some(State {
@@ -2211,7 +2218,7 @@ impl FallbackSrc {
                         if source.sync_state_with_parent().is_err() {
                             gst::error!(CAT, obj: element, "Source failed to change state");
                             let _ = source.set_state(gst::State::Null);
-                            let mut state_guard = src.state.lock().unwrap();
+                            let mut state_guard = src.state.lock();
                             let state = state_guard.as_mut().expect("no state");
                             src.handle_source_error(
                                 element,
@@ -2221,7 +2228,7 @@ impl FallbackSrc {
                             drop(state_guard);
                             element.notify("statistics");
                         } else {
-                            let mut state_guard = src.state.lock().unwrap();
+                            let mut state_guard = src.state.lock();
                             let state = state_guard.as_mut().expect("no state");
                             assert!(state.source_restart_timeout.is_none());
                             src.schedule_source_restart_timeout(
@@ -2293,7 +2300,7 @@ impl FallbackSrc {
                     let src = element.imp();
 
                     gst::debug!(CAT, obj: element, "Source restart timeout triggered");
-                    let mut state_guard = src.state.lock().unwrap();
+                    let mut state_guard = src.state.lock();
                     let state = match &mut *state_guard {
                         None => {
                             gst::debug!(CAT, obj: element, "Restarting source not needed anymore");
@@ -2358,7 +2365,7 @@ impl FallbackSrc {
                     .audio_stream
                     .as_ref()
                     .and_then(|s| s.switch.property::<Option<gst::Pad>>("active-pad"))
-                    .map(|p| p.name() == "fallback_sink")
+                    .map(|p| p.property::<u32>("priority") != 0)
                     .unwrap_or(true))
             || (have_video
                 && state.video_stream.is_some()
@@ -2366,12 +2373,12 @@ impl FallbackSrc {
                     .video_stream
                     .as_ref()
                     .and_then(|s| s.switch.property::<Option<gst::Pad>>("active-pad"))
-                    .map(|p| p.name() == "fallback_sink")
+                    .map(|p| p.property::<u32>("priority") != 0)
                     .unwrap_or(true))
     }
 
     fn handle_switch_active_pad_change(&self, element: &super::FallbackSrc) {
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.lock();
         let state = match &mut *state_guard {
             None => {
                 return;
@@ -2404,7 +2411,7 @@ impl FallbackSrc {
     }
 
     fn stats(&self) -> gst::Structure {
-        let state_guard = self.state.lock().unwrap();
+        let state_guard = self.state.lock();
 
         let state = match &*state_guard {
             None => return Stats::default().to_structure(),
