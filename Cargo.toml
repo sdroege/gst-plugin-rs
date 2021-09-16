@@ -18,6 +18,7 @@ members = [
     "utils/togglerecord",
     "video/cdg",
     "video/closedcaption",
+    "video/videofx",
     "video/dav1d",
     "video/ffv1",
     "video/flavors",

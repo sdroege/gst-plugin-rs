@@ -57,6 +57,7 @@ plugins = {
   # FIXME: libwebp-sys2 will build its bundled version on msvc and apple platforms
   # https://github.com/qnighy/libwebp-sys2-rs/issues/4
   'gst-plugin-webp': 'libgstrswebp',
+  'gst-plugin-videofx': 'libgstvideofx',
 }
 
 extra_env = {}
