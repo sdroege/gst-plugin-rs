@@ -25,6 +25,7 @@ enum DecoderState {
     Started {
         output_info: Option<gst_video::VideoInfo>,
         decoder: Box<Decoder>,
+        video_meta_supported: bool,
     },
 }
 
@@ -152,6 +153,7 @@ impl Ffv1Dec {
         &self,
         mut decoded_frame: Frame,
         output_info: &gst_video::VideoInfo,
+        video_meta_supported: bool,
     ) -> gst::Buffer {
         let mut buf = gst::Buffer::new();
         let mut_buf = buf.make_mut();
@@ -159,6 +161,10 @@ impl Ffv1Dec {
 
         // Greater depths are not yet supported
         assert_eq!(decoded_frame.bit_depth, 8);
+
+        let mut offsets = vec![];
+        let mut strides = vec![];
+        let mut acc_offset = 0;
 
         for (plane, decoded_plane) in decoded_frame.buf.drain(..).enumerate() {
             let component = format_info
@@ -171,8 +177,7 @@ impl Ffv1Dec {
             let src_stride = decoded_plane.len() / comp_height;
             let dest_stride = output_info.stride()[plane] as usize;
 
-            // FIXME: we can also do this if we have video meta support and differing strides
-            let mem = if src_stride == dest_stride {
+            let mem = if video_meta_supported || src_stride == dest_stride {
                 // Just wrap the decoded frame vecs and push them out
                 gst::Memory::from_mut_slice(decoded_plane)
             } else {
@@ -191,10 +196,26 @@ impl Ffv1Dec {
                 out_plane_mut.into_memory()
             };
 
+            let mem_size = mem.size();
             mut_buf.append_memory(mem);
+
+            strides.push(src_stride as i32);
+            offsets.push(acc_offset);
+            acc_offset += mem_size;
         }
 
-        // FIXME: attach video meta if supported
+        if video_meta_supported {
+            gst_video::VideoMeta::add_full(
+                buf.get_mut().unwrap(),
+                gst_video::VideoFrameFlags::empty(),
+                output_info.format(),
+                output_info.width(),
+                output_info.height(),
+                &offsets,
+                &strides[..],
+            )
+            .unwrap();
+        }
 
         buf
     }
@@ -333,12 +354,14 @@ impl VideoDecoderImpl for Ffv1Dec {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
-        let (output_info, decoder) = match *state {
-            DecoderState::Stopped => Err(gst::FlowError::Error),
+        let (output_info, decoder, video_meta_supported) = match *state {
             DecoderState::Started {
-                ref mut output_info,
+                output_info: Some(ref output_info),
                 ref mut decoder,
-            } => Ok((output_info, decoder)),
+                video_meta_supported,
+                ..
+            } => Ok((output_info, decoder, video_meta_supported)),
+            _ => Err(gst::FlowError::Error),
         }?;
 
         let input_buffer = frame
@@ -356,7 +379,7 @@ impl VideoDecoderImpl for Ffv1Dec {
         drop(input_buffer);
 
         //  * Make sure the decoder and output plane orders match for all cases
-        let buf = self.get_decoded_frame(decoded_frame, output_info.as_ref().unwrap());
+        let buf = self.get_decoded_frame(decoded_frame, output_info, video_meta_supported);
 
         // We no longer need the state lock
         drop(state);
@@ -365,5 +388,28 @@ impl VideoDecoderImpl for Ffv1Dec {
         element.finish_frame(frame)?;
 
         Ok(gst::FlowSuccess::Ok)
+    }
+
+    fn decide_allocation(
+        &self,
+        element: &Self::Type,
+        query: &mut gst::QueryRef,
+    ) -> Result<(), gst::ErrorMessage> {
+        if let gst::query::QueryView::Allocation(allocation) = query.view() {
+            let supported = allocation
+                .find_allocation_meta::<gst_video::VideoMeta>()
+                .is_some();
+
+            let mut state = self.state.lock().unwrap();
+            if let DecoderState::Started {
+                ref mut video_meta_supported,
+                ..
+            } = *state
+            {
+                *video_meta_supported = supported;
+            }
+        }
+
+        self.parent_decide_allocation(element, query)
     }
 }
