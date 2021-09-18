@@ -49,7 +49,7 @@ macro_rules! CSD {
             </CsScore>
             </CsoundSynthesizer>",
             $ksmps, $ichannels, $ochannels, $ins, $out
-        );
+        )
     };
 }
 
