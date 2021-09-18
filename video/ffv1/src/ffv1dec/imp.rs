@@ -304,15 +304,17 @@ impl VideoDecoderImpl for Ffv1Dec {
 
         let output_info = Some(output_state.info());
 
-        element
-            .negotiate(output_state)
-            .map_err(|err| gst::loggable_error!(CAT, "Negotiation failed: {}", err))?;
-
         let mut decoder_state = self.state.lock().unwrap();
         *decoder_state = DecoderState::Started {
             output_info,
             decoder: Box::new(decoder),
+            video_meta_supported: false,
         };
+        drop(decoder_state);
+
+        element
+            .negotiate(output_state)
+            .map_err(|err| gst::loggable_error!(CAT, "Negotiation failed: {}", err))?;
 
         self.parent_set_format(element, state)
     }
