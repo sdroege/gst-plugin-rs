@@ -77,6 +77,8 @@ fn get_all_video_formats() -> Vec<glib::SendValue> {
         VideoFormat::Gbr12be,
         VideoFormat::Gbra12le,
         VideoFormat::Gbra12be,
+        VideoFormat::Y41b,
+        VideoFormat::Yuv9,
     ];
 
     values.iter().map(|i| i.to_str().to_send_value()).collect()
@@ -116,6 +118,8 @@ fn get_output_format(record: &ConfigRecord) -> Option<VideoFormat> {
             (true, 0, 1, 10, true, false) => Some(VideoFormat::A42210be),
             (true, 0, 1, 12, false, true) => Some(VideoFormat::I42212le),
             (true, 0, 1, 12, false, false) => Some(VideoFormat::I42212be),
+            // 4:1:1
+            (true, 0, 2, 8, false, _) => Some(VideoFormat::Y41b),
             // 4:2:0
             (true, 1, 1, 8, false, _) => Some(VideoFormat::I420),
             (true, 1, 1, 8, true, _) => Some(VideoFormat::A420),
@@ -123,6 +127,8 @@ fn get_output_format(record: &ConfigRecord) -> Option<VideoFormat> {
             (true, 1, 1, 10, false, false) => Some(VideoFormat::I42010be),
             (true, 1, 1, 12, false, true) => Some(VideoFormat::I42012le),
             (true, 1, 1, 12, false, false) => Some(VideoFormat::I42012be),
+            // 4:1:0
+            (true, 2, 2, 8, false, _) => Some(VideoFormat::Yuv9),
             // Nothing matched
             (_, _, _, _, _, _) => None,
         },
