@@ -141,7 +141,8 @@ impl TranscribeParse {
                 "punctuation" => {
                     if !item.alternatives.is_empty() {
                         let alternative = item.alternatives.remove(0);
-                        let mut outbuf = gst::Buffer::from_slice(alternative.content.into_bytes());
+                        let mut outbuf =
+                            gst::Buffer::from_mut_slice(alternative.content.into_bytes());
 
                         {
                             let outbuf = outbuf.get_mut().unwrap();
@@ -198,7 +199,8 @@ impl TranscribeParse {
 
                     if !(item.alternatives.is_empty()) {
                         let alternative = item.alternatives.remove(0);
-                        let mut outbuf = gst::Buffer::from_slice(alternative.content.into_bytes());
+                        let mut outbuf =
+                            gst::Buffer::from_mut_slice(alternative.content.into_bytes());
 
                         {
                             let outbuf = outbuf.get_mut().unwrap();

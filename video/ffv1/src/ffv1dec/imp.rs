@@ -174,7 +174,7 @@ impl Ffv1Dec {
             // FIXME: we can also do this if we have video meta support and differing strides
             let mem = if src_stride == dest_stride {
                 // Just wrap the decoded frame vecs and push them out
-                gst::Memory::from_slice(decoded_plane)
+                gst::Memory::from_mut_slice(decoded_plane)
             } else {
                 // Mismatched stride, let's copy
                 let out_plane = gst::Memory::with_size(dest_stride * comp_height);

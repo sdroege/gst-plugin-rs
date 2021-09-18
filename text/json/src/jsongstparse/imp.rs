@@ -257,10 +257,10 @@ impl JsonGstParse {
                     );
 
                     if !seeking {
-                        let data = data.to_string().clone();
+                        let data = data.to_string();
                         let mut events = state.create_events(element);
 
-                        let mut buffer = gst::Buffer::from_slice(data);
+                        let mut buffer = gst::Buffer::from_mut_slice(data.into_bytes());
 
                         if let Some(last_position) = state.last_position {
                             if let Some(duration) = pts.map(|pts| pts.checked_sub(last_position)) {
