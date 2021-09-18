@@ -467,19 +467,9 @@ impl VideoDecoderImpl for Dav1dDec {
         query: &mut gst::QueryRef,
     ) -> Result<(), gst::ErrorMessage> {
         if let gst::query::QueryView::Allocation(allocation) = query.view() {
-            if allocation
+            self.negotiation_infos.lock().unwrap().video_meta_supported = allocation
                 .find_allocation_meta::<gst_video::VideoMeta>()
-                .is_some()
-            {
-                let pools = allocation.allocation_pools();
-                if let Some((Some(ref pool), _, _, _)) = pools.first() {
-                    let mut config = pool.config();
-                    config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
-                    pool.set_config(config)
-                        .map_err(|e| gst::error_msg!(gst::CoreError::Negotiation, [&e.message]))?;
-                    self.negotiation_infos.lock().unwrap().video_meta_supported = true;
-                }
-            }
+                .is_some();
         }
 
         self.parent_decide_allocation(element, query)
