@@ -11,6 +11,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info, gst_log};
 use gst_base::prelude::*;
+use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use byte_slice_cast::*;
@@ -669,7 +670,11 @@ impl BaseSrcImpl for SineSrc {
 
 impl PushSrcImpl for SineSrc {
     // Creates the audio buffers
-    fn create(&self, element: &Self::Type) -> Result<gst::Buffer, gst::FlowError> {
+    fn create(
+        &self,
+        element: &Self::Type,
+        _buffer: Option<&mut gst::BufferRef>,
+    ) -> Result<CreateSuccess, gst::FlowError> {
         // Keep a local copy of the values of all our properties at this very moment. This
         // ensures that the mutex is never locked for long and the application wouldn't
         // have to block until this function returns when getting/setting property values
@@ -759,7 +764,7 @@ impl PushSrcImpl for SineSrc {
         // This is out of scope for the tutorial though.
         if element.is_live() {
             let clock = match element.clock() {
-                None => return Ok(buffer),
+                None => return Ok(CreateSuccess::NewBuffer(buffer)),
                 Some(clock) => clock,
             };
 
@@ -779,7 +784,7 @@ impl PushSrcImpl for SineSrc {
                 .map(|(running_time, base_time)| running_time + base_time)
             {
                 Some(wait_until) => wait_until,
-                None => return Ok(buffer),
+                None => return Ok(CreateSuccess::NewBuffer(buffer)),
             };
 
             // Store the clock ID in our struct unless we're flushing anyway.
@@ -816,6 +821,6 @@ impl PushSrcImpl for SineSrc {
 
         gst_debug!(CAT, obj: element, "Produced buffer {:?}", buffer);
 
-        Ok(buffer)
+        Ok(CreateSuccess::NewBuffer(buffer))
     }
 }

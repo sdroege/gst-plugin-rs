@@ -22,6 +22,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_trace, gst_warning};
 use gst_base::prelude::*;
+use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 const DEFAULT_LOCATION: Option<Url> = None;
@@ -1139,7 +1140,11 @@ impl BaseSrcImpl for ReqwestHttpSrc {
 }
 
 impl PushSrcImpl for ReqwestHttpSrc {
-    fn create(&self, src: &Self::Type) -> Result<gst::Buffer, gst::FlowError> {
+    fn create(
+        &self,
+        src: &Self::Type,
+        _buffer: Option<&mut gst::BufferRef>,
+    ) -> Result<CreateSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
         let (response, position, caps, tags) = match *state {
@@ -1248,7 +1253,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
                     buffer.set_offset_end(offset + size as u64);
                 }
 
-                Ok(buffer)
+                Ok(CreateSuccess::NewBuffer(buffer))
             }
             None => {
                 /* No further data, end of stream */
