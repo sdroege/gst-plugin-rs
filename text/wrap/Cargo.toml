@@ -34,7 +34,7 @@ static = ["gst/v1_14"]
 capi = []
 
 [package.metadata.capi]
-min_version = "0.8.0"
+min_version = "0.9.3"
 
 [package.metadata.capi.header]
 enabled = false

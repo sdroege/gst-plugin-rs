@@ -100,7 +100,7 @@ $ cargo install cargo-c
 Then you can easily build and test a specific plugin:
 
 ```
-$ cargo cbuild --manifest-path video/cdg/Cargo.toml
+$ cargo cbuild -p gst-plugin-cdg
 $ GST_PLUGIN_PATH="target/x86_64-unknown-linux-gnu/debug:$GST_PLUGIN_PATH" gst-inspect-1.0 cdgdec
 ```
 
@@ -109,8 +109,8 @@ Replace `x86_64-unknown-linux-gnu` with your system's Rust target triple (`rustc
 The plugin can also be installed system-wide:
 
 ```
-$ cargo cbuild --manifest-path video/cdg/Cargo.toml --prefix=/usr
-$ cargo cinstall --manifest-path video/cdg/Cargo.toml --prefix=/usr
+$ cargo cbuild -p gst-plugin-cdg --prefix=/usr
+$ cargo cinstall -p gst-plugin-cdg --prefix=/usr
 ```
 
 This will install the plugin to `/usr/lib/gstreamer-1.0`.
