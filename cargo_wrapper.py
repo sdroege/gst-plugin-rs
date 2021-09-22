@@ -9,8 +9,9 @@ import sys
 
 PLUGIN_DIRS = ['audio', 'generic', 'net', 'text', 'utils', 'video']
 
-command, meson_build_dir, meson_current_source_dir, meson_build_root, target, exclude, extra_env, prefix, libdir = sys.argv[
+command, meson_build_dir, meson_current_source_dir, meson_build_root, target, include, extra_env, prefix, libdir = sys.argv[
     1:10]
+include = include.split(',')
 
 cargo_target_dir = os.path.join(meson_build_dir, 'target')
 
@@ -57,15 +58,9 @@ def run(cargo_cmd, env):
         sys.exit(1)
 
 
-for d in PLUGIN_DIRS:
-    for name in os.listdir(os.path.join(meson_current_source_dir, d)):
-        if '{}/{}'.format(d, name) in exclude:
-            continue
-
-        cargo_toml = os.path.join(
-            meson_current_source_dir, d, name, 'Cargo.toml')
-        cmd = cargo_cmd + ['--manifest-path', cargo_toml]
-        run(cmd, env)
+for p in include:
+    cargo_cmd.extend(['-p', p])
+run(cargo_cmd, env)
 
 if command == 'build':
     target_dir = os.path.join(cargo_target_dir, '**', target)

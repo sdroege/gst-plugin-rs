@@ -31,55 +31,49 @@ else
   ext_static = 'a'
 endif
 
-plugins_rep = {
-  'audio/audiofx': 'libgstrsaudiofx',
-  'video/cdg': 'libgstcdg',
-  'audio/claxon': 'libgstclaxon',
-  'utils/fallbackswitch': 'libgstfallbackswitch',
-  'video/ffv1': 'libgstffv1',
-  'generic/file': 'libgstrsfile',
-  'video/flavors': 'libgstrsflv',
-  'video/gif': 'libgstgif',
-  'audio/lewton': 'libgstlewton',
-  'video/rav1e': 'libgstrav1e',
-  'net/reqwest': 'libgstreqwest',
-  'video/rspng': 'libgstrspng',
-  'net/rusoto': 'libgstrusoto',
-  'text/wrap': 'libgstrstextwrap',
-  'generic/threadshare': 'libgstthreadshare',
-  'utils/togglerecord': 'libgsttogglerecord',
-  'video/hsv': 'libgsthsv',
-  'text/json': 'libgstrsjson',
-  'text/regex': 'libgstrsregex',
+# workspace name -> lib name
+plugins = {
+  'gst-plugin-audiofx': 'libgstrsaudiofx',
+  'gst-plugin-cdg': 'libgstcdg',
+  'gst-plugin-claxon': 'libgstclaxon',
+  'gst-plugin-fallbackswitch': 'libgstfallbackswitch',
+  'gst-plugin-ffv1': 'libgstffv1',
+  'gst-plugin-file': 'libgstrsfile',
+  'gst-plugin-flavors': 'libgstrsflv',
+  'gst-plugin-gif': 'libgstgif',
+  'gst-plugin-lewton': 'libgstlewton',
+  'gst-plugin-rav1e': 'libgstrav1e',
+  'gst-plugin-reqwest': 'libgstreqwest',
+  'gst-plugin-rspng': 'libgstrspng',
+  'gst-plugin-rusoto': 'libgstrusoto',
+  'gst-plugin-textwrap': 'libgstrstextwrap',
+  'gst-plugin-threadshare': 'libgstthreadshare',
+  'gst-plugin-togglerecord': 'libgsttogglerecord',
+  'gst-plugin-hsv': 'libgsthsv',
+  'gst-plugin-json': 'libgstrsjson',
+  'gst-plugin-regex': 'libgstrsregex',
   # FIXME: libwebp-sys2 will build its bundled version on msvc and apple platforms
   # https://github.com/qnighy/libwebp-sys2-rs/issues/4
-  'video/webp': 'libgstrswebp',
+  'gst-plugin-webp': 'libgstrswebp',
 }
 
-exclude = []
 extra_env = {}
 
 if dependency('pangocairo', required : get_option('closedcaption')).found()
-  plugins_rep += {'video/closedcaption' : 'libgstrsclosedcaption',}
-else
-  exclude += ['video/closedcaption']
+  plugins += {'gst-plugin-closedcaption' : 'libgstrsclosedcaption',}
 endif
 
 if dependency('dav1d', required : get_option('dav1d')).found()
-  plugins_rep += {'video/dav1d' : 'libgstrsdav1d'}
-else
-  exclude += ['video/dav1d']
+  plugins += {'gst-plugin-dav1d' : 'libgstrsdav1d'}
 endif
 
 sodium = get_option ('sodium')
 if sodium == 'system'
   dependency('libsodium')
-  plugins_rep += {'generic/sodium': 'libgstsodium'}
+  plugins += {'gst-plugin-sodium': 'libgstsodium'}
   extra_env += {'SODIUM_USE_PKG_CONFIG': '1'}
 elif sodium == 'built-in'
-  plugins_rep += {'generic/sodium': 'libgstsodium'}
-else
-  exclude += ['generic/sodium']
+  plugins += {'gst-plugin-sodium': 'libgstsodium'}
 endif
 
 cc = meson.get_compiler('c')
@@ -100,18 +94,15 @@ if not csound_dep.found() and not csound_option.disabled()
 endif
 
 if csound_dep.found()
-  plugins_rep += {'audio/csound' : 'libgstcsound'}
+  plugins += {'gst-plugin-csound' : 'libgstcsound'}
 elif csound_option.enabled()
   error('csound option is enabled, but csound64 library could not be found and CSOUND_LIB_DIR was not set')
 else
   message('csound not found, disabling its plugin')
-  exclude += ['audio/csound']
 endif
 
 if dependency('gtk4', required : get_option('gtk4')).found()
-  plugins_rep += {'video/gtk4' : 'libgstgtk4',}
-else
-  exclude += ['video/gtk4']
+  plugins += {'gst-plugin-gtk4' : 'libgstgtk4',}
 endif
 
 output = []
@@ -121,20 +112,20 @@ extensions = []
 # Add the plugin file as output
 if get_option('default_library') == 'shared' or get_option('default_library') == 'both'
   extensions += [ext_dynamic]
-  foreach p, lib : plugins_rep
+  foreach p, lib : plugins
     output += [lib + '.' + ext_dynamic]
   endforeach
 endif
 
 if get_option('default_library') == 'static' or get_option('default_library') == 'both'
   extensions += [ext_static]
-  foreach p, lib : plugins_rep
+  foreach p, lib : plugins
     output += [lib + '.' + ext_static]
   endforeach
 endif
 
 pc_files = []
-foreach p, lib : plugins_rep
+foreach p, lib : plugins
   # skip the 'lib' prefix in plugin name
   pc_files += [lib.substring(3) + '.pc']
 endforeach
@@ -167,7 +158,7 @@ foreach d: deps
   endif
 endforeach
 
-exclude = ','.join(exclude)
+include = ','.join(plugins.keys())
 
 # serialize extra_env
 extra_env_list = []
@@ -194,7 +185,7 @@ rs_plugins = custom_target('gst-plugins-rs',
     meson.current_source_dir(),
     meson.build_root(),
     target,
-    exclude,
+    include,
     extra_env_str,
     get_option('prefix'),
     get_option('libdir'),
@@ -222,7 +213,7 @@ test('tests',
     meson.current_source_dir(),
     meson.build_root(),
     target,
-    exclude,
+    include,
     extra_env_str,
     get_option('prefix'),
     get_option('libdir')],
