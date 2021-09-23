@@ -681,6 +681,8 @@ impl ToggleRecord {
         // above but all notifying must happen while the main_stream state is locked as per above.
         self.main_stream_cond.notify_all();
 
+        state = stream.state.lock();
+
         let mut rec_state = self.state.lock();
 
         // Wait until the main stream advanced completely past our current running time in
@@ -709,7 +711,7 @@ impl ToggleRecord {
                     current_running_time.map_or(false, |cur_rt| last_rec_stop <= cur_rt)
                 }))
             && !main_state.eos
-            && !stream.state.lock().flushing
+            && !state.flushing
         {
             gst_log!(
                 CAT,
@@ -723,11 +725,11 @@ impl ToggleRecord {
             );
 
             drop(rec_state);
+            drop(state);
             self.main_stream_cond.wait(&mut main_state);
+            state = stream.state.lock();
             rec_state = self.state.lock();
         }
-
-        state = stream.state.lock();
 
         if state.flushing {
             gst_debug!(CAT, obj: pad, "Flushing");
