@@ -29,6 +29,31 @@ members = [
     "text/regex",
 ]
 
+# Only plugins without external dependencies
+default-members = [
+    "tutorial",
+    "version-helper",
+    "audio/audiofx",
+    "audio/claxon",
+    "audio/lewton",
+    "generic/file",
+    "generic/threadshare",
+    "net/reqwest",
+    "net/rusoto",
+    "utils/fallbackswitch",
+    "utils/togglerecord",
+    "video/cdg",
+    "video/ffv1",
+    "video/flavors",
+    "video/gif",
+    "video/rav1e",
+    "video/rspng",
+    "video/hsv",
+    "text/wrap",
+    "text/json",
+    "text/regex",
+]
+
 [profile.release]
 lto = true
 opt-level = 3
