@@ -854,4 +854,42 @@ impl ElementImpl for TranscriberBin {
     }
 }
 
-impl BinImpl for TranscriberBin {}
+impl BinImpl for TranscriberBin {
+    fn handle_message(&self, bin: &Self::Type, msg: gst::Message) {
+        use gst::MessageView;
+
+        match msg.view() {
+            MessageView::Error(ref m) => {
+                /* We must have a state here */
+                let s = self.state.lock().unwrap();
+
+                if let Some(state) = s.as_ref() {
+                    if msg.src().as_ref() == Some(state.transcriber.upcast_ref()) {
+                        gst_error!(
+                            CAT,
+                            obj: bin,
+                            "Transcriber has posted an error ({:?}), going back to passthrough",
+                            m
+                        );
+                        drop(s);
+                        let mut settings = self.settings.lock().unwrap();
+                        settings.passthrough = true;
+                        bin.notify("passthrough");
+                        drop(settings);
+                        bin.call_async(move |bin| {
+                            let thiz = TranscriberBin::from_instance(bin);
+                            thiz.block_and_update(bin, true);
+                        });
+                    } else {
+                        drop(s);
+                        self.parent_handle_message(bin, msg);
+                    }
+                } else {
+                    drop(s);
+                    self.parent_handle_message(bin, msg);
+                }
+            }
+            _ => self.parent_handle_message(bin, msg),
+        }
+    }
+}
