@@ -14,7 +14,8 @@ use gst::{gst_debug, gst_error, gst_info, gst_trace};
 use gst_base::subclass::prelude::*;
 
 use futures::future;
-use rusoto_core::region::Region;
+use rusoto_core::{region::Region, request::HttpClient};
+use rusoto_credential::StaticProvider;
 use rusoto_s3::{
     CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart,
     CreateMultipartUploadRequest, S3Client, UploadPartRequest, S3,
@@ -86,6 +87,8 @@ struct Settings {
     key: Option<String>,
     content_type: Option<String>,
     buffer_size: u64,
+    access_key: Option<String>,
+    secret_access_key: Option<String>,
 }
 
 impl Settings {
@@ -107,6 +110,8 @@ impl Default for Settings {
             key: None,
             content_type: None,
             buffer_size: DEFAULT_BUFFER_SIZE,
+            access_key: None,
+            secret_access_key: None,
         }
     }
 }
@@ -273,7 +278,21 @@ impl S3Sink {
             }
         };
 
-        let client = S3Client::new(s3url.region.clone());
+        let client = match (
+            settings.access_key.as_ref(),
+            settings.secret_access_key.as_ref(),
+        ) {
+            (Some(access_key), Some(secret_access_key)) => {
+                let creds =
+                    StaticProvider::new_minimal(access_key.clone(), secret_access_key.clone());
+                S3Client::new_with(
+                    HttpClient::new().expect("failed to create request dispatcher"),
+                    creds,
+                    s3url.region.clone(),
+                )
+            }
+            _ => S3Client::new(s3url.region.clone()),
+        };
 
         let create_multipart_req = self.create_create_multipart_upload_request(&s3url, &settings);
         let create_multipart_req_future = client.create_multipart_upload(create_multipart_req);
@@ -434,6 +453,20 @@ impl ObjectImpl for S3Sink {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpec::new_string(
+                    "access-key",
+                    "Access Key",
+                    "AWS Access Key",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpec::new_string(
+                    "secret-access-key",
+                    "Secret Access Key",
+                    "AWS Secret Access Key",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -480,6 +513,12 @@ impl ObjectImpl for S3Sink {
             "uri" => {
                 let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
             }
+            "access-key" => {
+                settings.access_key = value.get().expect("type checked upstream");
+            }
+            "secret-access-key" => {
+                settings.secret_access_key = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -500,6 +539,8 @@ impl ObjectImpl for S3Sink {
 
                 url.to_value()
             }
+            "access-key" => settings.access_key.to_value(),
+            "secret-access-key" => settings.secret_access_key.to_value(),
             _ => unimplemented!(),
         }
     }

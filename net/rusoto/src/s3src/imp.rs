@@ -11,7 +11,9 @@ use std::sync::Mutex;
 use bytes::Bytes;
 use futures::future;
 use once_cell::sync::Lazy;
-use rusoto_s3::*;
+use rusoto_core::request::HttpClient;
+use rusoto_credential::StaticProvider;
+use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
 
 use gst::glib;
 use gst::prelude::*;
@@ -41,9 +43,25 @@ impl Default for StreamingState {
     }
 }
 
+struct Settings {
+    url: Option<GstS3Url>,
+    access_key: Option<String>,
+    secret_access_key: Option<String>,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            url: None,
+            access_key: None,
+            secret_access_key: None,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct S3Src {
-    url: Mutex<Option<GstS3Url>>,
+    settings: Mutex<Settings>,
     state: Mutex<StreamingState>,
     canceller: Mutex<Option<future::AbortHandle>>,
 }
@@ -66,7 +84,23 @@ impl S3Src {
     }
 
     fn connect(self: &S3Src, url: &GstS3Url) -> S3Client {
-        S3Client::new(url.region.clone())
+        let settings = self.settings.lock().unwrap();
+
+        match (
+            settings.access_key.as_ref(),
+            settings.secret_access_key.as_ref(),
+        ) {
+            (Some(access_key), Some(secret_access_key)) => {
+                let creds =
+                    StaticProvider::new_minimal(access_key.clone(), secret_access_key.clone());
+                S3Client::new_with(
+                    HttpClient::new().expect("failed to create request dispatcher"),
+                    creds,
+                    url.region.clone(),
+                )
+            }
+            _ => S3Client::new(url.region.clone()),
+        }
     }
 
     fn set_uri(self: &S3Src, _: &super::S3Src, url_str: Option<&str>) -> Result<(), glib::Error> {
@@ -79,17 +113,17 @@ impl S3Src {
             ));
         }
 
-        let mut url = self.url.lock().unwrap();
+        let mut settings = self.settings.lock().unwrap();
 
         if url_str.is_none() {
-            *url = None;
+            settings.url = None;
             return Ok(());
         }
 
         let url_str = url_str.unwrap();
         match parse_s3_url(url_str) {
             Ok(s3url) => {
-                *url = Some(s3url);
+                settings.url = Some(s3url);
                 Ok(())
             }
             Err(_) => Err(glib::Error::new(
@@ -212,13 +246,29 @@ impl ObjectSubclass for S3Src {
 impl ObjectImpl for S3Src {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::new_string(
-                "uri",
-                "URI",
-                "The S3 object URI",
-                None,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-            )]
+            vec![
+                glib::ParamSpec::new_string(
+                    "uri",
+                    "URI",
+                    "The S3 object URI",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpec::new_string(
+                    "access-key",
+                    "Access Key",
+                    "AWS Access Key",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpec::new_string(
+                    "secret-access-key",
+                    "Secret Access Key",
+                    "AWS Secret Access Key",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -235,20 +285,32 @@ impl ObjectImpl for S3Src {
             "uri" => {
                 let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
             }
+            "access-key" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.access_key = value.get().expect("type checked upstream");
+            }
+            "secret-access-key" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.secret_access_key = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
 
     fn property(&self, _: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let settings = self.settings.lock().unwrap();
+
         match pspec.name() {
             "uri" => {
-                let url = match *self.url.lock().unwrap() {
+                let url = match settings.url {
                     Some(ref url) => url.to_string(),
                     None => "".to_string(),
                 };
 
                 url.to_value()
             }
+            "access-key" => settings.access_key.to_value(),
+            "secret-access-key" => settings.secret_access_key.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -302,7 +364,9 @@ impl URIHandlerImpl for S3Src {
     }
 
     fn uri(&self, _: &Self::Type) -> Option<String> {
-        self.url.lock().unwrap().as_ref().map(|s| s.to_string())
+        let settings = self.settings.lock().unwrap();
+
+        settings.url.as_ref().map(|s| s.to_string())
     }
 
     fn set_uri(&self, element: &Self::Type, uri: &str) -> Result<(), glib::Error> {
@@ -329,7 +393,8 @@ impl BaseSrcImpl for S3Src {
             unreachable!("RusotoS3Src is already started");
         }
 
-        let s3url = match *self.url.lock().unwrap() {
+        let settings = self.settings.lock().unwrap();
+        let s3url = match settings.url {
             Some(ref url) => url.clone(),
             None => {
                 return Err(gst::error_msg!(
@@ -338,6 +403,7 @@ impl BaseSrcImpl for S3Src {
                 ));
             }
         };
+        drop(settings);
 
         let s3client = self.connect(&s3url);
         let size = self.head(src, &s3client, &s3url)?;

@@ -26,7 +26,7 @@ use gst::{
 use std::default::Default;
 
 use rusoto_core::Region;
-use rusoto_credential::{ChainProvider, ProvideAwsCredentials};
+use rusoto_credential::{ChainProvider, ProvideAwsCredentials, StaticProvider};
 
 use rusoto_signature::signature::SignedRequest;
 
@@ -127,6 +127,8 @@ struct Settings {
     vocabulary: Option<String>,
     session_id: Option<String>,
     results_stability: AwsTranscriberResultStability,
+    access_key: Option<String>,
+    secret_access_key: Option<String>,
 }
 
 impl Default for Settings {
@@ -138,6 +140,8 @@ impl Default for Settings {
             vocabulary: None,
             session_id: None,
             results_stability: DEFAULT_STABILITY,
+            access_key: None,
+            secret_access_key: None,
         }
     }
 }
@@ -857,15 +861,39 @@ impl Transcriber {
 
         gst_info!(CAT, obj: element, "Connecting ..");
 
-        let creds = {
-            let _enter = RUNTIME.enter();
-            futures::executor::block_on(ChainProvider::new().credentials()).map_err(|err| {
-                gst_error!(CAT, obj: element, "Failed to generate credentials: {}", err);
-                error_msg!(
-                    gst::CoreError::Failed,
-                    ["Failed to generate credentials: {}", err]
-                )
-            })?
+        let creds = match (
+            settings.access_key.as_ref(),
+            settings.secret_access_key.as_ref(),
+        ) {
+            (Some(access_key), Some(secret_access_key)) => {
+                let _enter = RUNTIME.enter();
+                futures::executor::block_on(
+                    StaticProvider::new_minimal(access_key.clone(), secret_access_key.clone())
+                        .credentials()
+                        .map_err(|err| {
+                            gst_error!(
+                                CAT,
+                                obj: element,
+                                "Failed to generate credentials: {}",
+                                err
+                            );
+                            error_msg!(
+                                gst::CoreError::Failed,
+                                ["Failed to generate credentials: {}", err]
+                            )
+                        }),
+                )?
+            }
+            _ => {
+                let _enter = RUNTIME.enter();
+                futures::executor::block_on(ChainProvider::new().credentials()).map_err(|err| {
+                    gst_error!(CAT, obj: element, "Failed to generate credentials: {}", err);
+                    error_msg!(
+                        gst::CoreError::Failed,
+                        ["Failed to generate credentials: {}", err]
+                    )
+                })?
+            }
         };
 
         let language_code = settings
@@ -1113,6 +1141,20 @@ impl ObjectImpl for Transcriber {
                     DEFAULT_STABILITY as i32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpec::new_string(
+                    "access-key",
+                    "Access Key",
+                    "AWS Access Key",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpec::new_string(
+                    "secret-access-key",
+                    "Secret Access Key",
+                    "AWS Secret Access Key",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -1165,6 +1207,14 @@ impl ObjectImpl for Transcriber {
                     .get::<AwsTranscriberResultStability>()
                     .expect("type checked upstream");
             }
+            "access-key" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.access_key = value.get().expect("type checked upstream");
+            }
+            "secret-access-key" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.secret_access_key = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1194,6 +1244,14 @@ impl ObjectImpl for Transcriber {
             "results-stability" => {
                 let settings = self.settings.lock().unwrap();
                 settings.results_stability.to_value()
+            }
+            "access-key" => {
+                let settings = self.settings.lock().unwrap();
+                settings.access_key.to_value()
+            }
+            "secret-access-key" => {
+                let settings = self.settings.lock().unwrap();
+                settings.secret_access_key.to_value()
             }
             _ => unimplemented!(),
         }
