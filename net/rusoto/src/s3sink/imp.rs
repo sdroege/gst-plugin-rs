@@ -95,7 +95,27 @@ impl Settings {
     fn to_uri(&self) -> String {
         format!(
             "s3://{}/{}/{}",
-            self.region.name(),
+            match self.region {
+                Region::Custom {
+                    ref name,
+                    ref endpoint,
+                } => {
+                    format!(
+                        "{}+{}",
+                        base32::encode(
+                            base32::Alphabet::RFC4648 { padding: true },
+                            name.as_bytes(),
+                        ),
+                        base32::encode(
+                            base32::Alphabet::RFC4648 { padding: true },
+                            endpoint.as_bytes(),
+                        ),
+                    )
+                }
+                _ => {
+                    String::from(self.region.name())
+                }
+            },
             self.bucket.as_ref().unwrap(),
             self.key.as_ref().unwrap()
         )
@@ -500,9 +520,17 @@ impl ObjectImpl for S3Sink {
                 }
             }
             "region" => {
-                settings.region =
-                    Region::from_str(&value.get::<String>().expect("type checked upstream"))
-                        .unwrap();
+                let region = value.get::<String>().expect("type checked upstream");
+                settings.region = Region::from_str(&region)
+                    .or_else(|_| {
+                        let (name, endpoint) = region.split_once('+').ok_or(())?;
+                        Ok(Region::Custom {
+                            name: name.into(),
+                            endpoint: endpoint.into(),
+                        })
+                    })
+                    .unwrap_or_else(|_: ()| panic!("Invalid region '{}'", region));
+
                 if settings.key.is_some() && settings.bucket.is_some() {
                     let _ = self.set_uri(obj, Some(&settings.to_uri()));
                 }

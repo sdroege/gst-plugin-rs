@@ -31,7 +31,27 @@ impl ToString for GstS3Url {
     fn to_string(&self) -> String {
         format!(
             "s3://{}/{}/{}{}",
-            self.region.name(),
+            match self.region {
+                Region::Custom {
+                    ref name,
+                    ref endpoint,
+                } => {
+                    format!(
+                        "{}+{}",
+                        base32::encode(
+                            base32::Alphabet::RFC4648 { padding: true },
+                            name.as_bytes(),
+                        ),
+                        base32::encode(
+                            base32::Alphabet::RFC4648 { padding: true },
+                            endpoint.as_bytes(),
+                        ),
+                    )
+                }
+                _ => {
+                    String::from(self.region.name())
+                }
+            },
             self.bucket,
             percent_encode(self.object.as_bytes(), PATH_SEGMENT),
             if self.version.is_some() {
@@ -55,7 +75,18 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
     }
 
     let host = url.host_str().unwrap();
-    let region = Region::from_str(host).map_err(|_| format!("Invalid region '{}'", host))?;
+    let region = Region::from_str(host)
+        .or_else(|_| {
+            let (name, endpoint) = host.split_once('+').ok_or(())?;
+            let name =
+                base32::decode(base32::Alphabet::RFC4648 { padding: true }, name).ok_or(())?;
+            let endpoint =
+                base32::decode(base32::Alphabet::RFC4648 { padding: true }, endpoint).ok_or(())?;
+            let name = String::from_utf8(name).map_err(|_| ())?;
+            let endpoint = String::from_utf8(endpoint).map_err(|_| ())?;
+            Ok(Region::Custom { name, endpoint })
+        })
+        .map_err(|_: ()| format!("Invalid region '{}'", host))?;
 
     let mut path = url
         .path_segments()

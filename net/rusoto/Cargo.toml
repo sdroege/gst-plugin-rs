@@ -30,6 +30,7 @@ serde = "1"
 serde_derive = "1"
 serde_json = "1"
 atomic_refcell = "0.1"
+base32 = "0.4"
 
 [lib]
 name = "gstrusoto"
