@@ -1028,7 +1028,7 @@ impl State {
                     // Calculate at which point we would reach the new gain reduction
                     // relative to 0.0 == attack window start, 1.0 attack window end.
                     let new_end = (gain_reduction - self.gain_reduction[0]) / old_slope;
-                    assert!(new_end >= 1.0);
+                    let new_end = f64::max(new_end, 1.0);
 
                     // New start of the window, this will be in the past
                     let new_start = new_end - 1.0;
@@ -1049,7 +1049,7 @@ impl State {
 
                     // Calculate the current position in the attack window
                     let cur_pos = (current_gain_reduction - self.gain_reduction[0]) / old_slope;
-                    assert!((0.0..=1.0).contains(&cur_pos));
+                    let cur_pos = f64::clamp(cur_pos, 0.0, 1.0);
                     self.env_cnt = ((LIMITER_ATTACK_WINDOW as f64 - 1.0) * cur_pos) as usize;
 
                     // Need to sustain in any case for this many samples to actually
