@@ -209,6 +209,7 @@ impl ContextThread {
         let context = Context(Arc::new(ContextInner {
             real: Some(ContextRealInner {
                 name: self.name.clone(),
+                wait_duration: wait,
                 handle: Mutex::new(runtime.handle().clone()),
                 shutdown,
             }),
@@ -352,6 +353,7 @@ impl<T> fmt::Debug for JoinHandle<T> {
 struct ContextRealInner {
     name: String,
     handle: Mutex<tokio::runtime::Handle>,
+    wait_duration: Duration,
     // Only used for dropping
     shutdown: ContextShutdown,
 }
@@ -441,6 +443,13 @@ impl Context {
         match self.0.real {
             Some(ref real) => real.name.as_str(),
             None => "DUMMY",
+        }
+    }
+
+    pub fn wait_duration(&self) -> Duration {
+        match self.0.real {
+            Some(ref real) => real.wait_duration,
+            None => Duration::ZERO,
         }
     }
 
