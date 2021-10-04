@@ -29,16 +29,19 @@ use std::iter;
 use std::sync::Arc;
 
 const DEFAULT_RECORD: bool = false;
+const DEFAULT_LIVE: bool = false;
 
 #[derive(Debug, Clone, Copy)]
 struct Settings {
     record: bool,
+    live: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             record: DEFAULT_RECORD,
+            live: DEFAULT_LIVE,
         }
     }
 }
@@ -132,6 +135,7 @@ struct State {
     recording_duration: gst::ClockTime,
     // Updated whenever going to Recording
     running_time_offset: i64,
+    live: bool,
 }
 
 impl Default for State {
@@ -142,6 +146,7 @@ impl Default for State {
             last_recording_stop: None,
             recording_duration: gst::ClockTime::ZERO,
             running_time_offset: 0,
+            live: false,
         }
     }
 }
@@ -1195,10 +1200,13 @@ impl ToggleRecord {
                 // recording_duration
 
                 state.out_segment = state.in_segment.clone();
-                state
-                    .out_segment
-                    .offset_running_time(-rec_state.running_time_offset)
-                    .expect("Adjusting record duration");
+
+                if !rec_state.live {
+                    state
+                        .out_segment
+                        .offset_running_time(-rec_state.running_time_offset)
+                        .expect("Adjusting record duration");
+                }
                 events.push(
                     gst::event::Segment::builder(&state.out_segment)
                         .seqnum(state.segment_seqnum)
@@ -1770,6 +1778,13 @@ impl ObjectImpl for ToggleRecord {
                     DEFAULT_RECORD,
                     glib::ParamFlags::READABLE,
                 ),
+                glib::ParamSpec::new_boolean(
+                    "is-live",
+                    "Live mode",
+                    "Live mode: no \"gap eating\", forward incoming segment",
+                    DEFAULT_LIVE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -1797,6 +1812,19 @@ impl ObjectImpl for ToggleRecord {
 
                 settings.record = record;
             }
+            "is-live" => {
+                let mut settings = self.settings.lock();
+                let live = value.get().expect("type checked upstream");
+                gst_debug!(
+                    CAT,
+                    obj: obj,
+                    "Setting live from {:?} to {:?}",
+                    settings.live,
+                    live
+                );
+
+                settings.live = live;
+            }
             _ => unimplemented!(),
         }
     }
@@ -1810,6 +1838,10 @@ impl ObjectImpl for ToggleRecord {
             "recording" => {
                 let rec_state = self.state.lock();
                 (rec_state.recording_state == RecordingState::Recording).to_value()
+            }
+            "is-live" => {
+                let settings = self.settings.lock();
+                settings.live.to_value()
             }
             _ => unimplemented!(),
         }
@@ -1905,6 +1937,8 @@ impl ElementImpl for ToggleRecord {
 
                 let mut rec_state = self.state.lock();
                 *rec_state = State::default();
+                let settings = *self.settings.lock();
+                rec_state.live = settings.live;
             }
             gst::StateChange::PausedToReady => {
                 for s in &self.other_streams.lock().0 {
