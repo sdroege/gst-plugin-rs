@@ -101,8 +101,10 @@ Then you can easily build and test a specific plugin:
 
 ```
 $ cargo cbuild --manifest-path video/cdg/Cargo.toml
-$ GST_PLUGIN_PATH=$GST_PLUGIN_PATH:target/debug gst-inspect-1.0 cdgdec
+$ GST_PLUGIN_PATH="target/x86_64-unknown-linux-gnu/debug:$GST_PLUGIN_PATH" gst-inspect-1.0 cdgdec
 ```
+
+Replace `x86_64-unknown-linux-gnu` with your system's Rust target triple (`rustc -vV`).
 
 The plugin can also be installed system-wide:
 
