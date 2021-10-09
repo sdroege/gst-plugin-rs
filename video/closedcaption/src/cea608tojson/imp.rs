@@ -400,9 +400,7 @@ fn dump(
     duration: impl Into<Option<gst::ClockTime>>,
 ) {
     let pts = pts.into();
-    let end = pts
-        .zip(duration.into())
-        .map(|(pts, duration)| pts + duration);
+    let end = pts.opt_add(duration.into());
 
     if cc_data != 0x8080 {
         gst_debug!(
@@ -478,10 +476,10 @@ impl State {
                 Some(Cea608Mode::PopOn) => gst::ClockTime::NONE,
                 _ => self
                     .current_pts
-                    .zip(self.current_duration)
-                    .map(|(cur_pts, cur_duration)| cur_pts + cur_duration)
-                    .zip(self.first_pts)
-                    .and_then(|(cur_end, first_pts)| cur_end.checked_sub(first_pts)),
+                    .opt_add(self.current_duration)
+                    .opt_checked_sub(self.first_pts)
+                    .ok()
+                    .flatten(),
             }
         };
 
@@ -541,10 +539,10 @@ impl State {
             gst_log!(CAT, obj: element, "Draining pending");
             pending.duration = self
                 .current_pts
-                .zip(self.current_duration)
-                .map(|(cur_pts, cur_dur)| cur_pts + cur_dur)
-                .zip(pending.pts)
-                .and_then(|(cur_end, pending_pts)| cur_end.checked_sub(pending_pts));
+                .opt_add(self.current_duration)
+                .opt_checked_sub(pending.pts)
+                .ok()
+                .flatten();
             Some(pending)
         } else {
             None

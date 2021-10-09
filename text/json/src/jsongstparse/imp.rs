@@ -194,7 +194,7 @@ impl State {
     ) {
         let buffer = buffer.get_mut().unwrap();
 
-        self.last_position = pts.zip(duration).map(|(pts, duration)| pts + duration);
+        self.last_position = pts.opt_add(duration);
 
         buffer.set_pts(pts);
 
@@ -263,7 +263,7 @@ impl JsonGstParse {
                         let mut buffer = gst::Buffer::from_mut_slice(data.into_bytes());
 
                         if let Some(last_position) = state.last_position {
-                            if let Some(duration) = pts.map(|pts| pts.checked_sub(last_position)) {
+                            if let Ok(Some(duration)) = pts.opt_checked_sub(last_position) {
                                 events.push(
                                     gst::event::Gap::builder(last_position)
                                         .duration(duration)
@@ -274,12 +274,11 @@ impl JsonGstParse {
 
                         state.add_buffer_metadata(element, &mut buffer, pts, duration);
 
-                        let send_eos = state
-                            .segment
-                            .stop()
-                            .zip(buffer.pts())
-                            .zip(buffer.duration())
-                            .map_or(false, |((stop, pts), duration)| pts + duration >= stop);
+                        let send_eos = buffer
+                            .pts()
+                            .opt_add(buffer.duration())
+                            .opt_ge(state.segment.stop())
+                            .unwrap_or(false);
 
                         // Drop our state mutex while we push out buffers or events
                         drop(state);
@@ -346,11 +345,7 @@ impl JsonGstParse {
         pts: impl Into<Option<gst::ClockTime>>,
         mut state: MutexGuard<State>,
     ) -> MutexGuard<State> {
-        if pts
-            .into()
-            .zip(state.segment.start())
-            .map_or(false, |(pts, start)| pts >= start)
-        {
+        if pts.into().opt_ge(state.segment.start()).unwrap_or(false) {
             state.seeking = false;
             state.discont = true;
             state.replay_last_line = true;
@@ -503,7 +498,7 @@ impl JsonGstParse {
                     data: _data,
                 }) = serde_json::from_slice(line)
                 {
-                    last_pts = pts.zip(duration).map(|(pts, duration)| pts + duration);
+                    last_pts = pts.opt_add(duration);
                 }
             }
 
@@ -757,17 +752,11 @@ impl JsonGstParse {
         let pull = state.pull.as_ref().unwrap();
 
         if start_type == gst::SeekType::Set {
-            start = start
-                .zip(pull.duration)
-                .map(|(start, duration)| start.min(duration))
-                .or(start);
+            start = start.opt_min(pull.duration).or(start);
         }
 
         if stop_type == gst::SeekType::Set {
-            stop = stop
-                .zip(pull.duration)
-                .map(|(stop, duration)| stop.min(duration))
-                .or(stop);
+            stop = stop.opt_min(pull.duration).or(stop);
         }
 
         state.seeking = true;

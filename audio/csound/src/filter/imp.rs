@@ -120,8 +120,9 @@ impl State {
         // pts at the beginning of the adapter.
         let samples = distance / self.in_info.bpf() as u64;
         prev_pts
-            .zip(self.samples_to_time(samples))
-            .map(|(prev_pts, time_offset)| prev_pts + time_offset)
+            .opt_checked_add(self.samples_to_time(samples))
+            .ok()
+            .flatten()
     }
 
     fn buffer_duration(&self, buffer_size: u64) -> Option<gst::ClockTime> {

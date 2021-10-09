@@ -1612,9 +1612,7 @@ mod tests {
         task.prepare(TaskPrepareTest { prepare_receiver }, context.clone())
             .unwrap();
 
-        // FIXME use Duration::ZERO when MSVC >= 1.53.2
-        let start_ctx =
-            Context::acquire("prepare_start_ok_requester", Duration::from_nanos(0)).unwrap();
+        let start_ctx = Context::acquire("prepare_start_ok_requester", Duration::ZERO).unwrap();
         let task_clone = task.clone();
         let (ready_sender, ready_receiver) = oneshot::channel();
         let start_handle = start_ctx.spawn(async move {
@@ -1737,9 +1735,7 @@ mod tests {
         )
         .unwrap();
 
-        // FIXME use Duration::ZERO when MSVC >= 1.53.2
-        let start_ctx =
-            Context::acquire("prepare_start_error_requester", Duration::from_nanos(0)).unwrap();
+        let start_ctx = Context::acquire("prepare_start_error_requester", Duration::ZERO).unwrap();
         let task_clone = task.clone();
         let (ready_sender, ready_receiver) = oneshot::channel();
         let start_handle = start_ctx.spawn(async move {

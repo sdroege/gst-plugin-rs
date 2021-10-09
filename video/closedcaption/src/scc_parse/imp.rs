@@ -429,14 +429,8 @@ impl SccParse {
             timecode.increment_frame();
 
             if clip_buffers {
-                let end_time = buffer
-                    .pts()
-                    .zip(buffer.duration())
-                    .map(|(pts, duration)| pts + duration);
-                if end_time
-                    .zip(segment_start)
-                    .map_or(false, |(end_time, segment_start)| end_time < segment_start)
-                {
+                let end_time = buffer.pts().opt_add(buffer.duration());
+                if end_time.opt_lt(segment_start).unwrap_or(false) {
                     gst_trace!(
                         CAT,
                         obj: element,
@@ -448,12 +442,11 @@ impl SccParse {
                 }
             }
 
-            send_eos = state.segment.stop().map_or(false, |stop| {
-                buffer
-                    .pts()
-                    .zip(buffer.duration())
-                    .map_or(false, |(pts, duration)| pts + duration >= stop)
-            });
+            send_eos = buffer
+                .pts()
+                .opt_add(buffer.duration())
+                .opt_ge(state.segment.stop())
+                .unwrap_or(false);
 
             let buffers = buffers.get_mut().unwrap();
             buffers.add(buffer);
@@ -899,17 +892,11 @@ impl SccParse {
         let pull = state.pull.as_ref().unwrap();
 
         if start_type == gst::SeekType::Set {
-            start = start
-                .zip(pull.duration)
-                .map(|(start, duration)| start.min(duration))
-                .or(start);
+            start = start.opt_min(pull.duration).or(start);
         }
 
         if stop_type == gst::SeekType::Set {
-            stop = stop
-                .zip(pull.duration)
-                .map(|(stop, duration)| stop.min(duration))
-                .or(stop);
+            stop = stop.opt_min(pull.duration).or(stop);
         }
 
         state.seeking = true;

@@ -203,10 +203,9 @@ impl TextWrap {
 
             let add_buffer = state
                 .start_ts
-                .zip(Some(accumulate_time))
-                .map_or(false, |(start_ts, accumulate_time)| {
-                    start_ts + accumulate_time < pts
-                });
+                .opt_add(accumulate_time)
+                .opt_lt(pts)
+                .unwrap_or(false);
 
             if add_buffer {
                 let mut buf =
@@ -214,12 +213,8 @@ impl TextWrap {
                 {
                     let buf_mut = buf.get_mut().unwrap();
                     buf_mut.set_pts(state.start_ts);
-                    buf_mut.set_duration(
-                        state
-                            .end_ts
-                            .zip(state.start_ts)
-                            .and_then(|(end_ts, start_ts)| end_ts.checked_sub(start_ts)),
-                    );
+                    buf_mut
+                        .set_duration(state.end_ts.opt_checked_sub(state.start_ts).ok().flatten());
                 }
                 bufferlist.get_mut().unwrap().add(buf);
 
@@ -262,10 +257,7 @@ impl TextWrap {
                             .collect::<Vec<String>>()
                             .join("\n");
                     } else {
-                        let duration = state
-                            .end_ts
-                            .zip(state.start_ts)
-                            .and_then(|(end_ts, start_ts)| end_ts.checked_sub(start_ts));
+                        let duration = state.end_ts.opt_checked_sub(state.start_ts).ok().flatten();
                         let contents = chunk
                             .iter()
                             .map(|l| l.to_string())
@@ -291,7 +283,7 @@ impl TextWrap {
                 }
 
                 current_text = trailing;
-                state.end_ts = state.end_ts.map(|end_ts| end_ts + duration_per_word);
+                state.end_ts = state.end_ts.opt_add(duration_per_word);
             }
 
             state.current_text = current_text;
@@ -399,10 +391,7 @@ impl TextWrap {
                         let buf_mut = buf.get_mut().unwrap();
                         buf_mut.set_pts(state.start_ts);
                         buf_mut.set_duration(
-                            state
-                                .end_ts
-                                .zip(state.start_ts)
-                                .and_then(|(end_ts, start_ts)| end_ts.checked_sub(start_ts)),
+                            state.end_ts.opt_checked_sub(state.start_ts).ok().flatten(),
                         );
                     }
 

@@ -770,19 +770,11 @@ impl PushSrcImpl for SineSrc {
 
             let segment = element.segment().downcast::<gst::format::Time>().unwrap();
             let base_time = element.base_time();
-            let running_time = segment.to_running_time(
-                buffer
-                    .pts()
-                    .zip(buffer.duration())
-                    .map(|(pts, duration)| pts + duration),
-            );
+            let running_time = segment.to_running_time(buffer.pts().opt_add(buffer.duration()));
 
             // The last sample's clock time is the base time of the element plus the
             // running time of the last sample
-            let wait_until = match running_time
-                .zip(base_time)
-                .map(|(running_time, base_time)| running_time + base_time)
-            {
+            let wait_until = match running_time.opt_add(base_time) {
                 Some(wait_until) => wait_until,
                 None => return Ok(CreateSuccess::NewBuffer(buffer)),
             };

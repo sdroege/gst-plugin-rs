@@ -210,7 +210,7 @@ impl HandleData for (gst::ClockTime, Option<gst::ClockTime>) {
 
         segment.clip(self.0, stop).map(|(start, stop)| {
             let start = start.expect("provided a defined value");
-            (start, stop.map(|stop| stop - start))
+            (start, stop.opt_sub(start))
         })
     }
 }
@@ -306,9 +306,7 @@ impl HandleData for gst::Buffer {
                     let buffer = self.make_mut();
                     buffer.set_pts(start);
                     buffer.set_duration(
-                        stop.zip(start)
-                            .and_then(|(stop, start)| stop.checked_sub(start)),
-                        // FIXME we could expect here
+                        stop.opt_checked_sub(start).ok().flatten(), // FIXME we could expect here
                     );
                 }
 
@@ -370,7 +368,6 @@ impl ToggleRecord {
         };
 
         // This will only do anything for non-raw data
-        // FIXME comment why we can unwrap
         dts_or_pts = state.in_segment.start().unwrap().max(dts_or_pts);
         dts_or_pts_end = state.in_segment.start().unwrap().max(dts_or_pts_end);
         if let Some(stop) = state.in_segment.stop() {
@@ -380,13 +377,12 @@ impl ToggleRecord {
 
         let current_running_time = state.in_segment.to_running_time(dts_or_pts);
         let current_running_time_end = state.in_segment.to_running_time(dts_or_pts_end);
+
         state.current_running_time = current_running_time
-            .zip(state.current_running_time)
-            .map(|(cur_rt, state_rt)| cur_rt.max(state_rt))
+            .opt_max(state.current_running_time)
             .or(current_running_time);
         state.current_running_time_end = current_running_time_end
-            .zip(state.current_running_time_end)
-            .map(|(cur_rt_end, state_rt_end)| cur_rt_end.max(state_rt_end))
+            .opt_max(state.current_running_time_end)
             .or(current_running_time_end);
 
         // FIXME we should probably return if either current_running_time or current_running_time_end
@@ -455,8 +451,9 @@ impl ToggleRecord {
                 rec_state.last_recording_stop = current_running_time;
                 let last_recording_duration = rec_state
                     .last_recording_stop
-                    .zip(rec_state.last_recording_start)
-                    .and_then(|(stop, start)| stop.checked_sub(start));
+                    .opt_checked_sub(rec_state.last_recording_start)
+                    .ok()
+                    .flatten();
                 gst_debug!(
                     CAT,
                     obj: pad,
@@ -477,8 +474,8 @@ impl ToggleRecord {
                         let s = s.state.lock();
                         s.eos
                             || s.current_running_time
-                                .zip(current_running_time)
-                                .map_or(false, |(s_cur_rt, cur_rt)| s_cur_rt >= cur_rt)
+                                .opt_ge(current_running_time)
+                                .unwrap_or(false)
                     })
                 {
                     gst_log!(CAT, obj: pad, "Waiting for other streams to stop");
@@ -570,8 +567,8 @@ impl ToggleRecord {
                         let s = s.state.lock();
                         s.eos
                             || s.current_running_time
-                                .zip(current_running_time)
-                                .map_or(false, |(s_cur_rt, cur_rt)| s_cur_rt >= cur_rt)
+                                .opt_ge(current_running_time)
+                                .unwrap_or(false)
                     })
                 {
                     gst_log!(CAT, obj: pad, "Waiting for other streams to start");
@@ -649,7 +646,6 @@ impl ToggleRecord {
         };
 
         // This will only do anything for non-raw data
-        // FIXME comment why we can unwrap
         pts = state.in_segment.start().unwrap().max(pts);
         pts_end = state.in_segment.start().unwrap().max(pts_end);
         if let Some(stop) = state.in_segment.stop() {
@@ -660,12 +656,10 @@ impl ToggleRecord {
         let current_running_time = state.in_segment.to_running_time(pts);
         let current_running_time_end = state.in_segment.to_running_time(pts_end);
         state.current_running_time = current_running_time
-            .zip(state.current_running_time)
-            .map(|(cur_rt, state_rt)| cur_rt.max(state_rt))
+            .opt_max(state.current_running_time)
             .or(current_running_time);
         state.current_running_time_end = current_running_time_end
-            .zip(state.current_running_time_end)
-            .map(|(cur_rt_end, state_rt_end)| cur_rt_end.max(state_rt_end))
+            .opt_max(state.current_running_time_end)
             .or(current_running_time_end);
 
         gst_log!(
@@ -703,18 +697,20 @@ impl ToggleRecord {
                 && rec_state.recording_state != RecordingState::Stopping
                 && main_state
                     .current_running_time_end
-                    .zip(current_running_time_end)
-                    .map_or(false, |(main_rt_end, cur_rt_end)| main_rt_end < cur_rt_end)
+                    .opt_lt(current_running_time_end)
+                    .unwrap_or(false)
             || rec_state.recording_state == RecordingState::Starting
-                && rec_state
-                    .last_recording_start
-                    .map_or(true, |last_rec_start| {
-                        current_running_time.map_or(false, |cur_rt| last_rec_start <= cur_rt)
-                    })
+                && (rec_state.last_recording_start.is_none()
+                    || rec_state
+                        .last_recording_start
+                        .opt_le(current_running_time)
+                        .unwrap_or(false))
             || rec_state.recording_state == RecordingState::Stopping
-                && rec_state.last_recording_stop.map_or(true, |last_rec_stop| {
-                    current_running_time.map_or(false, |cur_rt| last_rec_stop <= cur_rt)
-                }))
+                && (rec_state.last_recording_stop.is_none()
+                    || rec_state
+                        .last_recording_stop
+                        .opt_le(current_running_time)
+                        .unwrap_or(false)))
             && !main_state.eos
             && !state.flushing
         {
@@ -800,7 +796,10 @@ impl ToggleRecord {
                     gst_warning!(CAT, obj: pad, "Complete buffer clipped!");
                     return Ok(HandleResult::Drop);
                 }
-            } else if current_running_time.map_or(false, |cur_rt| cur_rt < last_recording_start) {
+            } else if current_running_time
+                .opt_lt(last_recording_start)
+                .unwrap_or(false)
+            {
                 // Otherwise if the buffer starts before the recording start, drop it. This
                 // means that we either can't clip, or that the end is also before the
                 // recording start
@@ -814,13 +813,11 @@ impl ToggleRecord {
                 return Ok(HandleResult::Drop);
             } else if data.can_clip(&*state)
                 && current_running_time
-                    .zip(rec_state.last_recording_stop)
-                    .map_or(false, |(cur_rt, last_rec_stop)| cur_rt < last_rec_stop)
+                    .opt_lt(rec_state.last_recording_stop)
+                    .unwrap_or(false)
                 && current_running_time_end
-                    .zip(rec_state.last_recording_stop)
-                    .map_or(false, |(cur_rt_end, last_rec_stop)| {
-                        cur_rt_end > last_rec_stop
-                    })
+                    .opt_gt(rec_state.last_recording_stop)
+                    .unwrap_or(false)
             {
                 // Similarly if the end is after the recording stop but the start is before and we
                 // can clip, clip the buffer and pass it through.
@@ -863,10 +860,8 @@ impl ToggleRecord {
                     )));
                 }
             } else if current_running_time_end
-                .zip(rec_state.last_recording_stop)
-                .map_or(false, |(cur_rt_end, last_rec_stop)| {
-                    cur_rt_end > last_rec_stop
-                })
+                .opt_gt(rec_state.last_recording_stop)
+                .unwrap_or(false)
             {
                 // Otherwise if the end of the buffer is after the recording stop, we're EOS
                 // now. This means that we either couldn't clip or that the start is also after
@@ -887,11 +882,12 @@ impl ToggleRecord {
             } else {
                 // In all other cases the buffer is fully between recording start and end and
                 // can be passed through as is
-                assert!(current_running_time.map_or(false, |cur_rt| cur_rt >= last_recording_start));
+                assert!(current_running_time
+                    .opt_ge(last_recording_start)
+                    .unwrap_or(false));
                 assert!(current_running_time_end
-                    .zip(rec_state.last_recording_stop)
-                    .map_or(false, |(cur_rt_end, last_rec_stop)| cur_rt_end
-                        <= last_rec_stop));
+                    .opt_le(rec_state.last_recording_stop)
+                    .unwrap_or(false));
 
                 gst_debug!(
                     CAT,
@@ -910,15 +906,14 @@ impl ToggleRecord {
                 // The end of our buffer must be before/at the end of the previous buffer of the main
                 // stream
                 assert!(current_running_time_end
-                    .zip(main_state.current_running_time_end)
-                    .map_or(false, |(cur_rt_end, main_cur_rt_end)| cur_rt_end
-                        <= main_cur_rt_end));
+                    .opt_le(main_state.current_running_time_end)
+                    .unwrap_or(false));
 
                 // We're properly started, must have a start position and
                 // be actually after that start position
                 assert!(current_running_time
-                    .zip(rec_state.last_recording_start)
-                    .map_or(false, |(cur_rt, last_rec_start)| cur_rt >= last_rec_start));
+                    .opt_ge(rec_state.last_recording_start)
+                    .unwrap_or(false));
                 gst_log!(CAT, obj: pad, "Passing buffer (recording)");
                 Ok(HandleResult::Pass(data))
             }
@@ -998,9 +993,8 @@ impl ToggleRecord {
                 // The end of our buffer must be before/at the end of the previous buffer of the main
                 // stream
                 assert!(current_running_time_end
-                    .zip(main_state.current_running_time_end)
-                    .map_or(false, |(cur_rt_end, state_rt_end)| cur_rt_end
-                        <= state_rt_end));
+                    .opt_le(main_state.current_running_time_end)
+                    .unwrap_or(false));
 
                 // We're properly stopped
                 gst_log!(CAT, obj: pad, "Dropping buffer (stopped)");
@@ -1357,11 +1351,7 @@ impl ToggleRecord {
 
                 forward = match handle_result {
                     Ok(HandleResult::Pass((new_pts, new_duration))) => {
-                        if new_pts != pts
-                            || new_duration
-                                .zip(duration)
-                                .map_or(false, |(new_duration, duration)| new_duration != duration)
-                        {
+                        if new_pts != pts || new_duration.is_some() && new_duration != duration {
                             event = gst::event::Gap::builder(new_pts)
                                 .duration(new_duration)
                                 .build();
@@ -1587,10 +1577,9 @@ impl ToggleRecord {
                     {
                         if let Some(delta) = state
                             .current_running_time_end
-                            .zip(rec_state.last_recording_start)
-                            .and_then(|(cur_rt_end, last_rec_start)| {
-                                cur_rt_end.checked_sub(last_rec_start)
-                            })
+                            .opt_checked_sub(rec_state.last_recording_start)
+                            .ok()
+                            .flatten()
                         {
                             gst_debug!(
                                 CAT,
@@ -1622,10 +1611,9 @@ impl ToggleRecord {
                     {
                         if let Some(delta) = state
                             .current_running_time_end
-                            .zip(rec_state.last_recording_start)
-                            .and_then(|(cur_rt_end, last_rec_start)| {
-                                cur_rt_end.checked_sub(last_rec_start)
-                            })
+                            .opt_checked_sub(rec_state.last_recording_start)
+                            .ok()
+                            .flatten()
                         {
                             gst_debug!(
                                 CAT,

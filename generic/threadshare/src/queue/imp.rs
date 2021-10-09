@@ -40,8 +40,7 @@ const DEFAULT_MAX_SIZE_BUFFERS: u32 = 200;
 const DEFAULT_MAX_SIZE_BYTES: u32 = 1024 * 1024;
 const DEFAULT_MAX_SIZE_TIME: gst::ClockTime = gst::ClockTime::SECOND;
 const DEFAULT_CONTEXT: &str = "";
-// FIXME use Duration::ZERO when MSVC >= 1.53.2
-const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 
 #[derive(Debug, Clone)]
 struct Settings {

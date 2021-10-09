@@ -181,7 +181,7 @@ fn csound_filter_eos() {
     let samples_at_eos = (EOS_NUM_BUFFERS * EOS_NUM_SAMPLES) % ksmps;
     assert_eq!(
         buffer.as_ref().pts(),
-        duration_from_samples(samples_at_eos as _, sr as _).map(|duration| in_pts - duration)
+        in_pts.opt_sub(duration_from_samples(samples_at_eos as _, sr as _))
     );
 
     let map = buffer.into_mapped_buffer_readable().unwrap();

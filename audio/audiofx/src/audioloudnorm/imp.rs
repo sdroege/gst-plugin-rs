@@ -235,7 +235,9 @@ impl State {
             let distance_ts = distance_samples
                 .mul_div_floor(*gst::ClockTime::SECOND, self.info.rate() as u64)
                 .map(gst::ClockTime::from_nseconds);
-            let pts = pts.zip(distance_ts).map(|(pts, dist)| pts + dist);
+            let pts = pts
+                .opt_checked_add(distance_ts)
+                .map_err(|_| gst::FlowError::Error)?;
 
             let inbuf = self
                 .adapter
@@ -276,7 +278,9 @@ impl State {
         let distance_ts = distance_samples
             .mul_div_floor(*gst::ClockTime::SECOND, self.info.rate() as u64)
             .map(gst::ClockTime::from_nseconds);
-        let pts = pts.zip(distance_ts).map(|(pts, dist)| pts + dist);
+        let pts = pts
+            .opt_checked_add(distance_ts)
+            .map_err(|_| gst::FlowError::Error)?;
 
         let mut _mapped_inbuf = None;
         let src = if self.adapter.available() > 0 {
@@ -1702,7 +1706,7 @@ impl AudioLoudNorm {
                     q.set(
                         live,
                         min_latency + 3 * gst::ClockTime::SECOND,
-                        max_latency.map(|max| max + 3 * gst::ClockTime::SECOND),
+                        max_latency.opt_add(3 * gst::ClockTime::SECOND),
                     );
                     true
                 } else {

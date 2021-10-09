@@ -143,11 +143,7 @@ impl<T: SocketRead> Socket<T> {
             Ok((len, saddr)) => {
                 let dts = if T::DO_TIMESTAMP {
                     let time = self.clock.as_ref().unwrap().time();
-                    let running_time = time
-                        .zip(self.base_time)
-                        // TODO Do we want None if time < base_time
-                        // or do we expect Some?
-                        .and_then(|(time, base_time)| time.checked_sub(base_time));
+                    let running_time = time.opt_checked_sub(self.base_time).ok().flatten();
                     // FIXME maybe we should check if running_time.is_none
                     // so as to display another message
                     gst_debug!(

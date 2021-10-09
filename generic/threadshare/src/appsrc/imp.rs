@@ -38,8 +38,7 @@ use crate::runtime::prelude::*;
 use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task, TaskState};
 
 const DEFAULT_CONTEXT: &str = "";
-// FIXME use Duration::ZERO when MSVC >= 1.53.2
-const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_MAX_BUFFERS: u32 = 10;
 const DEFAULT_DO_TIMESTAMP: bool = false;
@@ -391,10 +390,7 @@ impl AppSrc {
                 let now = clock.time();
 
                 let buffer = buffer.make_mut();
-                buffer.set_dts(
-                    now.zip(base_time)
-                        .and_then(|(now, base_time)| now.checked_sub(base_time)),
-                );
+                buffer.set_dts(now.opt_checked_sub(base_time).ok().flatten());
                 buffer.set_pts(None);
             } else {
                 gst_error!(CAT, obj: element, "Don't have a clock yet");

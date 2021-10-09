@@ -212,10 +212,7 @@ impl SinkHandler {
     ) {
         if inner.ips_rtptime != Some(rtptime) {
             let pts = pts.into();
-            let new_packet_spacing = inner
-                .ips_pts
-                .zip(pts)
-                .and_then(|(ips_pts, pts)| pts.checked_sub(ips_pts));
+            let new_packet_spacing = pts.opt_checked_sub(inner.ips_pts).ok().flatten();
             if let Some(new_packet_spacing) = new_packet_spacing {
                 let old_packet_spacing = state.packet_spacing;
 
@@ -744,7 +741,6 @@ impl SrcHandler {
                         &[
                             ("seqnum", &(lost_seqnum as u32)),
                             ("timestamp", &timestamp),
-                            // FIXME would probably make sense being a ClockTime
                             ("duration", &duration.nseconds()),
                             ("retry", &0),
                         ],
@@ -864,8 +860,7 @@ impl SrcHandler {
 
         if state.eos {
             gst_debug!(CAT, obj: element, "EOS, not waiting");
-            // FIXME use Duration::ZERO when MSVC >= 1.53.2
-            return (now, Some((now, Duration::from_nanos(0))));
+            return (now, Some((now, Duration::ZERO)));
         }
 
         if state.earliest_pts.is_none() {
@@ -877,10 +872,8 @@ impl SrcHandler {
             .map(|earliest_pts| earliest_pts + latency - state.packet_spacing - context_wait / 2);
 
         let delay = next_wakeup
-            .zip(now)
-            .map_or(gst::ClockTime::ZERO, |(next_wakeup, now)| {
-                next_wakeup.saturating_sub(now)
-            });
+            .opt_saturating_sub(now)
+            .unwrap_or(gst::ClockTime::ZERO);
 
         gst_debug!(
             CAT,
@@ -1113,8 +1106,7 @@ impl TaskImpl for JitterBufferTask {
                     );
 
                     let (delay_fut, abort_handle) = match next_wakeup {
-                        // FIXME use Duration::ZERO when MSVC >= 1.53.2
-                        Some((_, delay)) if delay == Duration::from_nanos(0) => (None, None),
+                        Some((_, delay)) if delay.is_zero() => (None, None),
                         _ => {
                             let (delay_fut, abort_handle) = abortable(async move {
                                 match next_wakeup {
@@ -1166,10 +1158,7 @@ impl TaskImpl for JitterBufferTask {
                     );
 
                     if let Some((next_wakeup, _)) = next_wakeup {
-                        if next_wakeup
-                            .zip(now)
-                            .map_or(false, |(next_wakeup, now)| next_wakeup > now)
-                        {
+                        if next_wakeup.opt_gt(now).unwrap_or(false) {
                             // Reschedule and wait a bit longer in the next iteration
                             return Ok(());
                         }

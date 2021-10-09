@@ -74,8 +74,9 @@ impl State {
         // pts at the beginning of the adapter.
         let samples = distance / self.in_info.bpf() as u64;
         prev_pts
-            .zip(self.samples_to_time(samples))
-            .map(|(prev_pts, time_offset)| prev_pts + time_offset)
+            .opt_checked_add(self.samples_to_time(samples))
+            .ok()
+            .flatten()
     }
 
     fn needs_more_data(&self) -> bool {
@@ -367,8 +368,7 @@ impl BaseTransformImpl for AudioRNNoise {
                     );
 
                     min += gst::ClockTime::from_seconds((FRAME_SIZE / 48000) as u64);
-                    max = max
-                        .map(|max| max + gst::ClockTime::from_seconds((FRAME_SIZE / 48000) as u64));
+                    max = max.opt_add(gst::ClockTime::from_seconds((FRAME_SIZE / 48000) as u64));
                     q.set(live, min, max);
                     return true;
                 }

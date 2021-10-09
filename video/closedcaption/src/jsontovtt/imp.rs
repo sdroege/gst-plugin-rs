@@ -68,7 +68,7 @@ fn clamp(
     mut pts: gst::ClockTime,
     mut duration: Option<gst::ClockTime>,
 ) -> Option<(gst::ClockTime, Option<gst::ClockTime>)> {
-    let end_pts = duration.map(|duration| pts + duration).unwrap_or(pts);
+    let end_pts = pts.opt_add(duration).unwrap_or(pts);
 
     if let Some(segment_start) = segment.start() {
         if end_pts < segment_start {
@@ -76,9 +76,7 @@ fn clamp(
         }
 
         if pts < segment_start {
-            if let Some(ref mut duration) = duration {
-                *duration = duration.saturating_sub(segment_start - pts);
-            }
+            duration.opt_sub_assign(segment_start - pts);
             pts = segment_start;
         }
     }
@@ -89,9 +87,7 @@ fn clamp(
         }
 
         if end_pts > segment_stop {
-            if let Some(ref mut duration) = duration {
-                *duration = duration.saturating_sub(end_pts - segment_stop);
-            }
+            duration.opt_sub_assign(end_pts - segment_stop);
         }
     }
 
@@ -322,10 +318,7 @@ impl State {
 
         self.drain(&mut ret, self.segment.to_running_time(pts));
 
-        self.last_pts = Some(pts)
-            .zip(duration)
-            .map(|(pts, duration)| pts + duration)
-            .or(Some(pts));
+        self.last_pts = Some(pts).opt_add(duration).or(Some(pts));
 
         ret
     }

@@ -48,9 +48,7 @@ fn test_decode() {
         assert_eq!(buf.pts(), expected_timestamp);
         assert_eq!(buf.duration(), expected_duration);
 
-        expected_timestamp = expected_timestamp
-            .zip(expected_duration)
-            .map(|(ts, duration)| ts + duration);
+        expected_timestamp = expected_timestamp.opt_add(expected_duration);
         count += 1;
     }
 

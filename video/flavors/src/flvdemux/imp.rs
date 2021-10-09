@@ -1198,15 +1198,9 @@ impl StreamingState {
 
     fn update_position(&mut self, buffer: &gst::Buffer) {
         if let Some(pts) = buffer.pts() {
-            self.last_position = self
-                .last_position
-                .map(|last_pos| last_pos.max(pts))
-                .or(Some(pts));
+            self.last_position = self.last_position.opt_max(pts).or(Some(pts));
         } else if let Some(dts) = buffer.dts() {
-            self.last_position = self
-                .last_position
-                .map(|last_pos| last_pos.max(dts))
-                .or(Some(dts));
+            self.last_position = self.last_position.opt_max(dts).or(Some(dts));
         }
     }
 }

@@ -48,8 +48,7 @@ const DEFAULT_MTU: u32 = 1492;
 const DEFAULT_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_USED_SOCKET: Option<GioSocketWrapper> = None;
 const DEFAULT_CONTEXT: &str = "";
-// FIXME use Duration::ZERO when MSVC >= 1.53.2
-const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 const DEFAULT_RETRIEVE_SENDER_ADDRESS: bool = true;
 
 #[derive(Debug, Clone)]

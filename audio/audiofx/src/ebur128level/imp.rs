@@ -481,12 +481,12 @@ impl BaseTransformImpl for EbuR128Level {
 
             // The timestamp we report in messages is always the timestamp until which measurements
             // are included, not the starting timestamp.
-            timestamp = timestamp.map(|ts| {
-                ts + to_process
+            timestamp = timestamp.opt_add(
+                to_process
                     .mul_div_floor(*gst::ClockTime::SECOND, state.info.rate() as u64)
                     .map(gst::ClockTime::from_nseconds)
-                    .unwrap()
-            });
+                    .unwrap(),
+            );
 
             // Post a message whenever an interval is full
             if state.interval_frames_remaining.is_zero() {

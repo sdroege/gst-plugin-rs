@@ -1015,17 +1015,11 @@ impl MccParse {
         let pull = state.pull.as_ref().unwrap();
 
         if start_type == gst::SeekType::Set {
-            start = start
-                .zip(pull.duration)
-                .map(|(start, duration)| start.min(duration))
-                .or(start);
+            start = start.opt_min(pull.duration).or(start);
         }
 
         if stop_type == gst::SeekType::Set {
-            stop = stop
-                .zip(pull.duration)
-                .map(|(stop, duration)| stop.min(duration))
-                .or(stop);
+            stop = stop.opt_min(pull.duration).or(stop);
         }
 
         state.seeking = true;

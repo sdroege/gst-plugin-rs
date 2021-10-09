@@ -200,8 +200,8 @@ impl FallbackSwitch {
 
             if pts.is_none()
                 || new_running_time
-                    .zip(target_running_time.into())
-                    .map_or(false, |(new, target)| new <= target)
+                    .opt_le(target_running_time.into())
+                    .unwrap_or(false)
             {
                 gst_debug!(CAT, obj: pad, "Dropping trailing buffer {:?}", buffer);
                 pad.drop_buffer();
@@ -269,16 +269,13 @@ impl FallbackSwitch {
         }
 
         let cur_running_time = cur_running_time.into();
-        let (is_late, deadline) = cur_running_time
-            .zip(agg.latency())
-            .zip(running_time)
-            .map_or(
-                (false, None),
-                |((cur_running_time, latency), running_time)| {
-                    let dealine = running_time + latency + 40 * gst::ClockTime::MSECOND;
-                    (cur_running_time > dealine, Some(dealine))
-                },
-            );
+        let (is_late, deadline) = match (cur_running_time, agg.latency(), running_time) {
+            (Some(cur_running_time), Some(latency), Some(running_time)) => {
+                let deadline = running_time + latency + 40 * gst::ClockTime::MSECOND;
+                (cur_running_time > deadline, Some(deadline))
+            }
+            _ => (false, None),
+        };
 
         if is_late {
             gst_debug!(
@@ -289,13 +286,12 @@ impl FallbackSwitch {
                 deadline.display(),
             );
 
-            let is_late = state.last_output_time.zip(running_time).map_or(
-                false,
-                |(last_output_time, running_time)| {
-                    last_output_time + settings.timeout <= running_time
-                },
-            );
-            if is_late {
+            let is_late = state
+                .last_output_time
+                .opt_add(settings.timeout)
+                .opt_le(running_time);
+
+            if let Some(true) = is_late {
                 /* This buffer arrived too late - we either already switched
                  * to the other pad or there's no point outputting this anyway */
                 gst_debug!(
@@ -418,12 +414,11 @@ impl FallbackSwitch {
             };
 
             if !ignore_timeout {
-                let timed_out = !state.last_output_time.zip(running_time).map_or(
-                    false,
-                    |(last_output_time, running_time)| {
-                        last_output_time + settings.timeout > running_time
-                    },
-                );
+                let timed_out = state
+                    .last_output_time
+                    .opt_add(settings.timeout)
+                    .opt_le(running_time)
+                    .unwrap_or(true);
 
                 // Get the next one if this one is before the timeout
                 if !timed_out {
@@ -544,10 +539,7 @@ impl FallbackSwitch {
         let base_time = agg.base_time();
 
         let cur_running_time = if let Some(clock) = clock {
-            clock
-                .time()
-                .zip(base_time)
-                .and_then(|(time, base_time)| time.checked_sub(base_time))
+            clock.time().opt_checked_sub(base_time).ok().flatten()
         } else {
             gst::ClockTime::NONE
         };
@@ -1168,16 +1160,13 @@ impl AggregatorImpl for FallbackSwitch {
                 audio_info.bpf(),
             )
         } else if pad_state.video_info.is_some() {
-            let stop = pts.zip(duration).map(|(pts, duration)| pts + duration);
+            let stop = pts.opt_add(duration);
             segment.clip(pts, stop).map(|(start, stop)| {
                 {
                     let buffer = buffer.make_mut();
                     buffer.set_pts(start);
                     if duration.is_some() {
-                        buffer.set_duration(
-                            stop.zip(start)
-                                .and_then(|(stop, start)| stop.checked_sub(start)),
-                        );
+                        buffer.set_duration(stop.opt_checked_sub(start).ok().flatten());
                     }
                 }
 

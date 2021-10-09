@@ -35,8 +35,7 @@ use crate::runtime::prelude::*;
 use crate::runtime::{self, PadSink, PadSinkRef, PadSrc, PadSrcRef};
 
 const DEFAULT_CONTEXT: &str = "";
-// FIXME use Duration::ZERO when MSVC >= 1.53.2
-const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -82,13 +81,9 @@ impl InputSelectorPadSinkHandler {
     ) {
         let now = element.current_running_time();
 
-        match running_time
-            .into()
-            .zip(now)
-            .and_then(|(running_time, now)| running_time.checked_sub(now))
-        {
-            Some(delay) => runtime::time::delay_for(delay.into()).await,
-            None => runtime::executor::yield_now().await,
+        match running_time.into().opt_checked_sub(now) {
+            Ok(Some(delay)) => runtime::time::delay_for(delay.into()).await,
+            _ => runtime::executor::yield_now().await,
         }
     }
 
@@ -315,10 +310,7 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
                         let (live, min, max) = peer_query.result();
                         if live {
                             min_latency = min.max(min_latency);
-                            max_latency = max
-                                .zip(max_latency)
-                                .map(|(max, max_latency)| max.min(max_latency))
-                                .or(max);
+                            max_latency = max.opt_min(max_latency).or(max);
                         }
                     }
                 }

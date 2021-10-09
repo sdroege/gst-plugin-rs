@@ -401,9 +401,9 @@ impl VideoEncoderImpl for GifEnc {
             // is probably less visible than the large stuttering when a complete 10ms have to
             // "catch up".
             gif_frame.delay = (frame_delay.mseconds() as f32 / 10.0).round() as u16;
-            state.gif_pts = state.gif_pts.map(|gif_pts| {
-                gif_pts + gst::ClockTime::from_mseconds(gif_frame.delay as u64 * 10)
-            });
+            state.gif_pts = state
+                .gif_pts
+                .opt_add(gst::ClockTime::from_mseconds(gif_frame.delay as u64 * 10));
 
             // encode new frame
             let context = state.context.as_mut().unwrap();

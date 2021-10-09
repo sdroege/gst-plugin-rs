@@ -62,8 +62,7 @@ const DEFAULT_TTL_MC: u32 = 1;
 const DEFAULT_QOS_DSCP: i32 = -1;
 const DEFAULT_CLIENTS: &str = "";
 const DEFAULT_CONTEXT: &str = "";
-// FIXME use Duration::ZERO when MSVC >= 1.53.2
-const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 
 #[derive(Debug, Clone)]
 struct Settings {
@@ -412,10 +411,7 @@ impl UdpSinkPadHandler {
                 rtime = segment
                     .downcast_ref::<gst::format::Time>()
                     .and_then(|segment| {
-                        segment
-                            .to_running_time(buffer.pts())
-                            .zip(inner.latency)
-                            .map(|(rtime, latency)| rtime + latency)
+                        segment.to_running_time(buffer.pts()).opt_add(inner.latency)
                     });
             }
 
@@ -529,13 +525,9 @@ impl UdpSinkPadHandler {
     ) {
         let now = element.current_running_time();
 
-        match running_time
-            .into()
-            .zip(now)
-            .and_then(|(running_time, now)| running_time.checked_sub(now))
-        {
-            Some(delay) => runtime::time::delay_for(delay.into()).await,
-            None => runtime::executor::yield_now().await,
+        match running_time.into().opt_checked_sub(now) {
+            Ok(Some(delay)) => runtime::time::delay_for(delay.into()).await,
+            _ => runtime::executor::yield_now().await,
         }
     }
 

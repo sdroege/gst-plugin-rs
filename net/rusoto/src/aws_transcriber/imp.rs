@@ -760,9 +760,7 @@ impl Transcriber {
                 let running_time = state.in_segment.to_running_time(buffer.pts());
                 let now = element.current_running_time();
 
-                delay = running_time
-                    .zip(now)
-                    .and_then(|(running_time, now)| running_time.checked_sub(now));
+                delay = running_time.opt_checked_sub(now).ok().flatten();
             }
         }
 

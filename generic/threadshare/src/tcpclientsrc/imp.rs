@@ -48,8 +48,7 @@ const DEFAULT_PORT: i32 = 4953;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_BLOCKSIZE: u32 = 4096;
 const DEFAULT_CONTEXT: &str = "";
-// FIXME use Duration::ZERO when MSVC >= 1.53.2
-const DEFAULT_CONTEXT_WAIT: Duration = Duration::from_nanos(0);
+const DEFAULT_CONTEXT_WAIT: Duration = Duration::ZERO;
 
 #[derive(Debug, Clone)]
 struct Settings {
