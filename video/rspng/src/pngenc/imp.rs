@@ -333,15 +333,6 @@ impl VideoEncoderImpl for PngEncoder {
         let mut state_guard = self.state.lock();
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
-        // FIXME: https://github.com/image-rs/image-png/issues/301
-        {
-            let settings = self.settings.lock();
-            state.reset(*settings).map_err(|err| {
-                err.log_with_object(element);
-                gst::FlowError::Error
-            })?;
-        }
-
         gst_debug!(
             CAT,
             obj: element,
