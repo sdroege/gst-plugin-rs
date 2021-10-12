@@ -331,7 +331,7 @@ fn create_ui(app: &gtk::Application) {
         bus.remove_watch().unwrap();
 
         if let Some(timeout_id) = timeout_id.borrow_mut().take() {
-            glib::source_remove(timeout_id);
+            timeout_id.remove();
         }
     });
 }
