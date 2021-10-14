@@ -20,7 +20,7 @@ git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package="gstreamer-video"
 
 [dev-dependencies]
-pretty_assertions = "0.7"
+pretty_assertions = "1"
 
 [dev-dependencies.gst-check]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
