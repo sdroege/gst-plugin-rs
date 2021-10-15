@@ -1,0 +1,50 @@
+[package]
+name = "gst-plugin-uriplaylistbin"
+version = "0.8.0"
+authors = ["Guillaume Desmottes <guillaume.desmottes@onestream.live>"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+license = "MPL-2.0"
+edition = "2018"
+description = "Playlist Plugin"
+
+[dependencies]
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+once_cell = "1.0"
+anyhow = "1"
+crossbeam-channel = "0.5"
+
+[dev-dependencies]
+gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_14"]}
+structopt = "0.3"
+url = "2.2"
+more-asserts = "0.2"
+
+[lib]
+name = "gsturiplaylistbin"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[example]]
+name = "playlist"
+path = "examples/playlist.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../version-helper" }
+
+[features]
+# GStreamer 1.14 is required for static linking
+static = ["gst/v1_14"]
+capi = []
+
+[package.metadata.capi]
+min_version = "0.8.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

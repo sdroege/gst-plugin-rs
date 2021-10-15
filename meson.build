@@ -58,6 +58,7 @@ plugins = {
   # https://github.com/qnighy/libwebp-sys2-rs/issues/4
   'gst-plugin-webp': 'libgstrswebp',
   'gst-plugin-videofx': 'libgstvideofx',
+  'gst-plugin-uriplaylistbin': 'libgsturiplaylistbin',
 }
 
 extra_env = {}
