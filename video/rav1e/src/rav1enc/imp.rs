@@ -484,6 +484,15 @@ impl VideoEncoderImpl for Rav1Enc {
         Ok(())
     }
 
+    fn propose_allocation(
+        &self,
+        element: &Self::Type,
+        mut query: gst::query::Allocation<&mut gst::QueryRef>,
+    ) -> Result<(), gst::ErrorMessage> {
+        query.add_allocation_meta::<gst_video::VideoMeta>(None);
+        self.parent_propose_allocation(element, query)
+    }
+
     // For the colorimetry mapping below
     #[allow(clippy::wildcard_in_or_patterns)]
     fn set_format(

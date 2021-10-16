@@ -274,6 +274,15 @@ impl VideoEncoderImpl for GifEnc {
         Ok(())
     }
 
+    fn propose_allocation(
+        &self,
+        element: &Self::Type,
+        mut query: gst::query::Allocation<&mut gst::QueryRef>,
+    ) -> Result<(), gst::ErrorMessage> {
+        query.add_allocation_meta::<gst_video::VideoMeta>(None);
+        self.parent_propose_allocation(element, query)
+    }
+
     fn set_format(
         &self,
         element: &Self::Type,
@@ -456,8 +465,8 @@ impl GifEnc {
 /// tightly packed rgb(a) buffer, ready for consumption by the gif encoder.
 fn tightly_packed_framebuffer(frame: &gst_video::VideoFrameRef<&gst::BufferRef>) -> Vec<u8> {
     assert_eq!(frame.n_planes(), 1); // RGB and RGBA are tightly packed
-    let line_size = (frame.info().width() * frame.n_components()) as usize;
-    let line_stride = frame.info().stride()[0] as usize;
+    let line_size = (frame.width() * frame.n_components()) as usize;
+    let line_stride = frame.plane_stride()[0] as usize;
     let mut raw_frame: Vec<u8> = Vec::with_capacity(line_size * frame.info().height() as usize);
 
     // copy gstreamer frame to tightly packed rgb(a) frame.
