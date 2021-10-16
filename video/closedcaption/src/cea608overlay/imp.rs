@@ -558,11 +558,13 @@ impl ObjectSubclass for Cea608Overlay {
                 )
             })
             .flags(gst::PadFlags::PROXY_CAPS)
+            .flags(gst::PadFlags::PROXY_ALLOCATION)
             .build();
 
         let templ = klass.pad_template("src").unwrap();
         let srcpad = gst::Pad::builder_with_template(&templ, Some("src"))
             .flags(gst::PadFlags::PROXY_CAPS)
+            .flags(gst::PadFlags::PROXY_ALLOCATION)
             .build();
 
         Self {
