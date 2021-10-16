@@ -7,12 +7,12 @@
 // except according to those terms.
 
 use gst::glib;
+use gst::gst_info;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_info};
 use gst_base::subclass::prelude::*;
+use gst_video::subclass::prelude::*;
 
-use atomic_refcell::AtomicRefCell;
 use std::i32;
 use std::sync::Mutex;
 
@@ -50,16 +50,10 @@ impl Default for Settings {
     }
 }
 
-// Stream-specific state, i.e. video format configuration
-struct State {
-    info: gst_video::VideoInfo,
-}
-
 // Struct containing all the element data
 #[derive(Default)]
 pub struct HsvFilter {
     settings: Mutex<Settings>,
-    state: AtomicRefCell<Option<State>>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -74,7 +68,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 impl ObjectSubclass for HsvFilter {
     const NAME: &'static str = "HsvFilter";
     type Type = super::HsvFilter;
-    type ParentType = gst_base::BaseTransform;
+    type ParentType = gst_video::VideoFilter;
 }
 
 impl HsvFilter {
@@ -357,74 +351,20 @@ impl BaseTransformImpl for HsvFilter {
         gst_base::subclass::BaseTransformMode::AlwaysInPlace;
     const PASSTHROUGH_ON_SAME_CAPS: bool = false;
     const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+}
 
-    fn unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
-        gst_video::VideoInfo::from_caps(caps)
-            .map(|info| info.size())
-            .ok()
-    }
-
-    fn set_caps(
+impl VideoFilterImpl for HsvFilter {
+    fn transform_frame_ip(
         &self,
-        element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
-        let _in_info = match gst_video::VideoInfo::from_caps(incaps) {
-            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
-            Ok(info) => info,
-        };
-        let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
-            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse output caps")),
-            Ok(info) => info,
-        };
-
-        gst_debug!(
-            CAT,
-            obj: element,
-            "Configured for caps {} to {}",
-            incaps,
-            outcaps
-        );
-
-        *self.state.borrow_mut() = Some(State { info: out_info });
-
-        Ok(())
-    }
-
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        // Drop state
-        *self.state.borrow_mut() = None;
-
-        gst_info!(CAT, obj: element, "Stopped");
-
-        Ok(())
-    }
-
-    fn transform_ip(
-        &self,
-        element: &Self::Type,
-        buf: &mut gst::BufferRef,
+        _element: &Self::Type,
+        frame: &mut gst_video::VideoFrameRef<&mut gst::BufferRef>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state_guard = self.state.borrow_mut();
-        let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
-
-        let mut frame = gst_video::VideoFrameRef::from_buffer_ref_writable(buf, &state.info)
-            .map_err(|_| {
-                gst::element_error!(
-                    element,
-                    gst::CoreError::Failed,
-                    ["Failed to map output buffer writable"]
-                );
-                gst::FlowError::Error
-            })?;
-
-        match state.info.format() {
+        match frame.format() {
             gst_video::VideoFormat::Rgbx
             | gst_video::VideoFormat::Rgba
             | gst_video::VideoFormat::Rgb => {
                 self.hsv_filter(
-                    &mut frame,
+                    frame,
                     |p| hsvutils::from_rgb(p[..3].try_into().expect("slice with incorrect length")),
                     |hsv, p| {
                         p[..3].copy_from_slice(&hsvutils::to_rgb(hsv));
@@ -433,7 +373,7 @@ impl BaseTransformImpl for HsvFilter {
             }
             gst_video::VideoFormat::Xrgb | gst_video::VideoFormat::Argb => {
                 self.hsv_filter(
-                    &mut frame,
+                    frame,
                     |p| {
                         hsvutils::from_rgb(p[1..4].try_into().expect("slice with incorrect length"))
                     },
@@ -446,7 +386,7 @@ impl BaseTransformImpl for HsvFilter {
             | gst_video::VideoFormat::Bgra
             | gst_video::VideoFormat::Bgr => {
                 self.hsv_filter(
-                    &mut frame,
+                    frame,
                     |p| hsvutils::from_bgr(p[..3].try_into().expect("slice with incorrect length")),
                     |hsv, p| {
                         p[..3].copy_from_slice(&hsvutils::to_bgr(hsv));
@@ -455,7 +395,7 @@ impl BaseTransformImpl for HsvFilter {
             }
             gst_video::VideoFormat::Xbgr | gst_video::VideoFormat::Abgr => {
                 self.hsv_filter(
-                    &mut frame,
+                    frame,
                     |p| {
                         hsvutils::from_bgr(p[1..4].try_into().expect("slice with incorrect length"))
                     },

@@ -12,8 +12,8 @@ use gst::subclass::prelude::*;
 
 use gst::{gst_debug, gst_info};
 use gst_base::subclass::prelude::*;
+use gst_video::subclass::prelude::*;
 
-use atomic_refcell::AtomicRefCell;
 use std::i32;
 use std::sync::Mutex;
 
@@ -54,17 +54,10 @@ impl Default for Settings {
     }
 }
 
-// Stream-specific state, i.e. video format configuration
-struct State {
-    in_info: gst_video::VideoInfo,
-    out_info: gst_video::VideoInfo,
-}
-
 // Struct containing all the element data
 #[derive(Default)]
 pub struct HsvDetector {
     settings: Mutex<Settings>,
-    state: AtomicRefCell<Option<State>>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -79,7 +72,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 impl ObjectSubclass for HsvDetector {
     const NAME: &'static str = "HsvDetector";
     type Type = super::HsvDetector;
-    type ParentType = gst_base::BaseTransform;
+    type ParentType = gst_video::VideoFilter;
 }
 
 fn video_input_formats() -> Vec<glib::SendValue> {
@@ -463,90 +456,22 @@ impl BaseTransformImpl for HsvDetector {
             Some(other_caps)
         }
     }
+}
 
-    fn unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
-        gst_video::VideoInfo::from_caps(caps)
-            .map(|info| info.size())
-            .ok()
-    }
-
-    fn set_caps(
+impl VideoFilterImpl for HsvDetector {
+    fn transform_frame(
         &self,
-        element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
-        let in_info = match gst_video::VideoInfo::from_caps(incaps) {
-            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
-            Ok(info) => info,
-        };
-        let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
-            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse output caps")),
-            Ok(info) => info,
-        };
-
-        gst_debug!(
-            CAT,
-            obj: element,
-            "Configured for caps {} to {}",
-            incaps,
-            outcaps
-        );
-
-        *self.state.borrow_mut() = Some(State { in_info, out_info });
-
-        Ok(())
-    }
-
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        // Drop state
-        *self.state.borrow_mut() = None;
-
-        gst_info!(CAT, obj: element, "Stopped");
-
-        Ok(())
-    }
-
-    fn transform(
-        &self,
-        element: &Self::Type,
-        inbuf: &gst::Buffer,
-        outbuf: &mut gst::BufferRef,
+        _element: &Self::Type,
+        in_frame: &gst_video::VideoFrameRef<&gst::BufferRef>,
+        out_frame: &mut gst_video::VideoFrameRef<&mut gst::BufferRef>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state_guard = self.state.borrow_mut();
-        let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
-
-        let in_frame =
-            gst_video::VideoFrameRef::from_buffer_ref_readable(inbuf.as_ref(), &state.in_info)
-                .map_err(|_| {
-                    gst::element_error!(
-                        element,
-                        gst::CoreError::Failed,
-                        ["Failed to map input buffer readable"]
-                    );
-                    gst::FlowError::Error
-                })?;
-
-        // And now map the output buffer writable, so we can fill it.
-        let mut out_frame =
-            gst_video::VideoFrameRef::from_buffer_ref_writable(outbuf, &state.out_info).map_err(
-                |_| {
-                    gst::element_error!(
-                        element,
-                        gst::CoreError::Failed,
-                        ["Failed to map output buffer writable"]
-                    );
-                    gst::FlowError::Error
-                },
-            )?;
-
-        match state.in_info.format() {
+        match in_frame.format() {
             gst_video::VideoFormat::Rgbx | gst_video::VideoFormat::Rgb => {
-                match state.out_info.format() {
+                match out_frame.format() {
                     gst_video::VideoFormat::Rgba => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_rgb(
                                     in_p[..3].try_into().expect("slice with incorrect length"),
@@ -560,8 +485,8 @@ impl BaseTransformImpl for HsvDetector {
                     }
                     gst_video::VideoFormat::Argb => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_rgb(
                                     in_p[..3].try_into().expect("slice with incorrect length"),
@@ -575,8 +500,8 @@ impl BaseTransformImpl for HsvDetector {
                     }
                     gst_video::VideoFormat::Bgra => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_rgb(
                                     in_p[..3].try_into().expect("slice with incorrect length"),
@@ -592,8 +517,8 @@ impl BaseTransformImpl for HsvDetector {
                     }
                     gst_video::VideoFormat::Abgr => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_rgb(
                                     in_p[..3].try_into().expect("slice with incorrect length"),
@@ -611,11 +536,11 @@ impl BaseTransformImpl for HsvDetector {
                 }
             }
             gst_video::VideoFormat::Xrgb => {
-                match state.out_info.format() {
+                match out_frame.format() {
                     gst_video::VideoFormat::Rgba => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_rgb(
                                     in_p[1..4].try_into().expect("slice with incorrect length"),
@@ -629,8 +554,8 @@ impl BaseTransformImpl for HsvDetector {
                     }
                     gst_video::VideoFormat::Argb => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_rgb(
                                     in_p[1..4].try_into().expect("slice with incorrect length"),
@@ -644,8 +569,8 @@ impl BaseTransformImpl for HsvDetector {
                     }
                     gst_video::VideoFormat::Bgra => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_rgb(
                                     in_p[1..4].try_into().expect("slice with incorrect length"),
@@ -661,8 +586,8 @@ impl BaseTransformImpl for HsvDetector {
                     }
                     gst_video::VideoFormat::Abgr => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_rgb(
                                     in_p[1..4].try_into().expect("slice with incorrect length"),
@@ -680,11 +605,11 @@ impl BaseTransformImpl for HsvDetector {
                 };
             }
             gst_video::VideoFormat::Bgrx | gst_video::VideoFormat::Bgr => {
-                match state.out_info.format() {
+                match out_frame.format() {
                     gst_video::VideoFormat::Rgba => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_bgr(
                                     in_p[..3].try_into().expect("slice with incorrect length"),
@@ -700,8 +625,8 @@ impl BaseTransformImpl for HsvDetector {
                     }
                     gst_video::VideoFormat::Argb => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_bgr(
                                     in_p[..3].try_into().expect("slice with incorrect length"),
@@ -717,8 +642,8 @@ impl BaseTransformImpl for HsvDetector {
                     }
                     gst_video::VideoFormat::Bgra => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_bgr(
                                     in_p[..3].try_into().expect("slice with incorrect length"),
@@ -732,8 +657,8 @@ impl BaseTransformImpl for HsvDetector {
                     }
                     gst_video::VideoFormat::Abgr => {
                         self.hsv_detect(
-                            &in_frame,
-                            &mut out_frame,
+                            in_frame,
+                            out_frame,
                             |in_p| {
                                 hsvutils::from_bgr(
                                     in_p[..3].try_into().expect("slice with incorrect length"),
@@ -748,11 +673,11 @@ impl BaseTransformImpl for HsvDetector {
                     _ => unreachable!(),
                 }
             }
-            gst_video::VideoFormat::Xbgr => match state.out_info.format() {
+            gst_video::VideoFormat::Xbgr => match out_frame.format() {
                 gst_video::VideoFormat::Rgba => {
                     self.hsv_detect(
-                        &in_frame,
-                        &mut out_frame,
+                        in_frame,
+                        out_frame,
                         |in_p| {
                             hsvutils::from_bgr(
                                 in_p[1..4].try_into().expect("slice with incorrect length"),
@@ -768,8 +693,8 @@ impl BaseTransformImpl for HsvDetector {
                 }
                 gst_video::VideoFormat::Argb => {
                     self.hsv_detect(
-                        &in_frame,
-                        &mut out_frame,
+                        in_frame,
+                        out_frame,
                         |in_p| {
                             hsvutils::from_bgr(
                                 in_p[1..4].try_into().expect("slice with incorrect length"),
@@ -785,8 +710,8 @@ impl BaseTransformImpl for HsvDetector {
                 }
                 gst_video::VideoFormat::Bgra => {
                     self.hsv_detect(
-                        &in_frame,
-                        &mut out_frame,
+                        in_frame,
+                        out_frame,
                         |in_p| {
                             hsvutils::from_bgr(
                                 in_p[1..4].try_into().expect("slice with incorrect length"),
@@ -800,8 +725,8 @@ impl BaseTransformImpl for HsvDetector {
                 }
                 gst_video::VideoFormat::Abgr => {
                     self.hsv_detect(
-                        &in_frame,
-                        &mut out_frame,
+                        in_frame,
+                        out_frame,
                         |in_p| {
                             hsvutils::from_bgr(
                                 in_p[1..4].try_into().expect("slice with incorrect length"),
