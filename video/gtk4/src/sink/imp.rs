@@ -201,6 +201,16 @@ impl BaseSinkImpl for PaintableSink {
 
         Ok(())
     }
+
+    fn propose_allocation(
+        &self,
+        element: &Self::Type,
+        mut query: gst::query::Allocation<&mut gst::QueryRef>,
+    ) -> Result<(), gst::ErrorMessage> {
+        query.add_allocation_meta::<gst_video::VideoMeta>(None);
+
+        self.parent_propose_allocation(element, query)
+    }
 }
 
 impl VideoSinkImpl for PaintableSink {
