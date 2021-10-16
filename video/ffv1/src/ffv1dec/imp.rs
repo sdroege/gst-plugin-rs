@@ -454,21 +454,19 @@ impl VideoDecoderImpl for Ffv1Dec {
     fn decide_allocation(
         &self,
         element: &Self::Type,
-        query: &mut gst::QueryRef,
+        query: gst::query::Allocation<&mut gst::QueryRef>,
     ) -> Result<(), gst::ErrorMessage> {
-        if let gst::query::QueryView::Allocation(allocation) = query.view() {
-            let supported = allocation
-                .find_allocation_meta::<gst_video::VideoMeta>()
-                .is_some();
+        let supported = query
+            .find_allocation_meta::<gst_video::VideoMeta>()
+            .is_some();
 
-            let mut state = self.state.lock().unwrap();
-            if let DecoderState::Started {
-                ref mut video_meta_supported,
-                ..
-            } = *state
-            {
-                *video_meta_supported = supported;
-            }
+        let mut state = self.state.lock().unwrap();
+        if let DecoderState::Started {
+            ref mut video_meta_supported,
+            ..
+        } = *state
+        {
+            *video_meta_supported = supported;
         }
 
         self.parent_decide_allocation(element, query)

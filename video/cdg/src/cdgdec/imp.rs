@@ -199,20 +199,18 @@ impl VideoDecoderImpl for CdgDec {
     fn decide_allocation(
         &self,
         element: &Self::Type,
-        query: &mut gst::QueryRef,
+        query: gst::query::Allocation<&mut gst::QueryRef>,
     ) -> Result<(), gst::ErrorMessage> {
-        if let gst::query::QueryView::Allocation(allocation) = query.view() {
-            if allocation
-                .find_allocation_meta::<gst_video::VideoMeta>()
-                .is_some()
-            {
-                let pools = allocation.allocation_pools();
-                if let Some((Some(ref pool), _, _, _)) = pools.first() {
-                    let mut config = pool.config();
-                    config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
-                    pool.set_config(config)
-                        .map_err(|e| gst::error_msg!(gst::CoreError::Negotiation, [&e.message]))?;
-                }
+        if query
+            .find_allocation_meta::<gst_video::VideoMeta>()
+            .is_some()
+        {
+            let pools = query.allocation_pools();
+            if let Some((Some(ref pool), _, _, _)) = pools.first() {
+                let mut config = pool.config();
+                config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
+                pool.set_config(config)
+                    .map_err(|e| gst::error_msg!(gst::CoreError::Negotiation, [&e.message]))?;
             }
         }
 

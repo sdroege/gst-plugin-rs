@@ -464,13 +464,11 @@ impl VideoDecoderImpl for Dav1dDec {
     fn decide_allocation(
         &self,
         element: &Self::Type,
-        query: &mut gst::QueryRef,
+        query: gst::query::Allocation<&mut gst::QueryRef>,
     ) -> Result<(), gst::ErrorMessage> {
-        if let gst::query::QueryView::Allocation(allocation) = query.view() {
-            self.negotiation_infos.lock().unwrap().video_meta_supported = allocation
-                .find_allocation_meta::<gst_video::VideoMeta>()
-                .is_some();
-        }
+        self.negotiation_infos.lock().unwrap().video_meta_supported = query
+            .find_allocation_meta::<gst_video::VideoMeta>()
+            .is_some();
 
         self.parent_decide_allocation(element, query)
     }
