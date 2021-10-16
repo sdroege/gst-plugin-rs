@@ -11,6 +11,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_info};
 use gst_base::subclass::prelude::*;
+use gst_video::subclass::prelude::*;
 
 use std::i32;
 use std::sync::Mutex;
@@ -47,17 +48,10 @@ impl Default for Settings {
     }
 }
 
-// Stream-specific state, i.e. video format configuration
-struct State {
-    in_info: gst_video::VideoInfo,
-    out_info: gst_video::VideoInfo,
-}
-
 // Struct containing all the element data
 #[derive(Default)]
 pub struct Rgb2Gray {
     settings: Mutex<Settings>,
-    state: Mutex<Option<State>>,
 }
 
 impl Rgb2Gray {
@@ -94,7 +88,7 @@ impl Rgb2Gray {
 impl ObjectSubclass for Rgb2Gray {
     const NAME: &'static str = "RsRgb2Gray";
     type Type = super::Rgb2Gray;
-    type ParentType = gst_base::BaseTransform;
+    type ParentType = gst_video::VideoFilter;
 }
 
 // Implementation of glib::Object virtual methods
@@ -347,111 +341,20 @@ impl BaseTransformImpl for Rgb2Gray {
             Some(other_caps)
         }
     }
+}
 
-    // Returns the size of one processing unit (i.e. a frame in our case) corresponding
-    // to the given caps. This is used for allocating a big enough output buffer and
-    // sanity checking the input buffer size, among other things.
-    fn unit_size(&self, _element: &Self::Type, caps: &gst::Caps) -> Option<usize> {
-        gst_video::VideoInfo::from_caps(caps)
-            .map(|info| info.size())
-            .ok()
-    }
-
-    // Called whenever the input/output caps are changing, i.e. in the very beginning before data
-    // flow happens and whenever the situation in the pipeline is changing. All buffers after this
-    // call have the caps given here.
-    //
-    // We simply remember the resulting VideoInfo from the caps to be able to use this for knowing
-    // the width, stride, etc when transforming buffers
-    fn set_caps(
-        &self,
-        element: &Self::Type,
-        incaps: &gst::Caps,
-        outcaps: &gst::Caps,
-    ) -> Result<(), gst::LoggableError> {
-        let in_info = match gst_video::VideoInfo::from_caps(incaps) {
-            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
-            Ok(info) => info,
-        };
-        let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
-            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse output caps")),
-            Ok(info) => info,
-        };
-
-        gst_debug!(
-            CAT,
-            obj: element,
-            "Configured for caps {} to {}",
-            incaps,
-            outcaps
-        );
-
-        *self.state.lock().unwrap() = Some(State { in_info, out_info });
-
-        Ok(())
-    }
-
-    // Called when shutting down the element so we can release all stream-related state
-    // There's also start(), which is called whenever starting the element again
-    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        // Drop state
-        let _ = self.state.lock().unwrap().take();
-
-        gst_info!(CAT, obj: element, "Stopped");
-
-        Ok(())
-    }
-
+impl VideoFilterImpl for Rgb2Gray {
     // Does the actual transformation of the input buffer to the output buffer
-    fn transform(
+    fn transform_frame(
         &self,
-        element: &Self::Type,
-        inbuf: &gst::Buffer,
-        outbuf: &mut gst::BufferRef,
+        _element: &Self::Type,
+        in_frame: &gst_video::VideoFrameRef<&gst::BufferRef>,
+        out_frame: &mut gst_video::VideoFrameRef<&mut gst::BufferRef>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         // Keep a local copy of the values of all our properties at this very moment. This
         // ensures that the mutex is never locked for long and the application wouldn't
         // have to block until this function returns when getting/setting property values
         let settings = *self.settings.lock().unwrap();
-
-        // Get a locked reference to our state, i.e. the input and output VideoInfo
-        let mut state_guard = self.state.lock().unwrap();
-        let state = state_guard.as_mut().ok_or_else(|| {
-            gst::element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
-            gst::FlowError::NotNegotiated
-        })?;
-
-        // Map the input buffer as a VideoFrameRef. This is similar to directly mapping
-        // the buffer with inbuf.map_readable() but in addition extracts various video
-        // specific metadata and sets up a convenient data structure that directly gives
-        // pointers to the different planes and has all the information about the raw
-        // video frame, like width, height, stride, video format, etc.
-        //
-        // This fails if the buffer can't be read or is invalid in relation to the video
-        // info that is passed here
-        let in_frame =
-            gst_video::VideoFrameRef::from_buffer_ref_readable(inbuf.as_ref(), &state.in_info)
-                .map_err(|_| {
-                    gst::element_error!(
-                        element,
-                        gst::CoreError::Failed,
-                        ["Failed to map input buffer readable"]
-                    );
-                    gst::FlowError::Error
-                })?;
-
-        // And now map the output buffer writable, so we can fill it.
-        let mut out_frame =
-            gst_video::VideoFrameRef::from_buffer_ref_writable(outbuf, &state.out_info).map_err(
-                |_| {
-                    gst::element_error!(
-                        element,
-                        gst::CoreError::Failed,
-                        ["Failed to map output buffer writable"]
-                    );
-                    gst::FlowError::Error
-                },
-            )?;
 
         // Keep the various metadata we need for working with the video frames in
         // local variables. This saves some typing below.
