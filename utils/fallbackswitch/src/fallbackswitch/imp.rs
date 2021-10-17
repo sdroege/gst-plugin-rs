@@ -17,22 +17,9 @@
 
 use gst::glib;
 
-#[cfg(not(feature = "v1_18"))]
-use self::gst_base::prelude::*;
-#[cfg(not(feature = "v1_18"))]
-use self::gst_base::subclass::prelude::*;
-#[cfg(not(feature = "v1_18"))]
-use crate::gst_base_compat as gst_base;
-
-#[cfg(feature = "v1_18")]
 use gst_base::prelude::*;
-#[cfg(feature = "v1_18")]
 use gst_base::subclass::prelude::*;
 
-#[cfg(not(feature = "v1_18"))]
-use glib::subclass::prelude::*;
-#[cfg(not(feature = "v1_18"))]
-use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info, gst_log, gst_warning};
 
 use once_cell::sync::Lazy;

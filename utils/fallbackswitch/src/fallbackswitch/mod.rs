@@ -18,9 +18,6 @@
 use gst::glib;
 use gst::prelude::*;
 
-#[cfg(not(feature = "v1_18"))]
-use crate::gst_base_compat as gst_base;
-
 mod imp;
 
 glib::wrapper! {

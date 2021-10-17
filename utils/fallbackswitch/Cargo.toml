@@ -10,7 +10,7 @@ description = "Fallback Switcher Plugin"
 [dependencies]
 libc = { version = "0.2", optional = true }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_16"] }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
 gtk = { git = "https://github.com/gtk-rs/gtk3-rs", optional = true }
@@ -33,13 +33,10 @@ required-features = ["gtk", "gio"]
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../../version-helper" }
-cc = "1.0"
-pkg-config = "0.3"
 
 [features]
 default = ["libc"]
-v1_18 = ["gst-base/v1_18"]
-v1_20 = ["v1_18", "gst/v1_20"]
+v1_20 = ["gst/v1_20"]
 # We already use 1.14 which is new enough for static build
 static = []
 capi = []

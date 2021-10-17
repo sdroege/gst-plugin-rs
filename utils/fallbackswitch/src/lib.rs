@@ -17,10 +17,6 @@
 
 use gst::glib;
 
-#[cfg(not(feature = "v1_18"))]
-#[path = "base/mod.rs"]
-pub mod gst_base_compat;
-
 mod fallbacksrc;
 mod fallbackswitch;
 
