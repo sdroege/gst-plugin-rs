@@ -132,16 +132,34 @@ impl ElementImpl for PaintableSink {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             // Those are the supported formats by a gdk::Texture
-            let caps = gst_video::video_make_raw_caps(&[
-                gst_video::VideoFormat::Bgra,
-                gst_video::VideoFormat::Argb,
-                gst_video::VideoFormat::Rgba,
-                gst_video::VideoFormat::Abgr,
-                gst_video::VideoFormat::Rgb,
-                gst_video::VideoFormat::Bgr,
-            ])
-            .any_features()
-            .build();
+            let mut caps = gst::Caps::new_empty();
+            {
+                let caps = caps.get_mut().unwrap();
+
+                for features in [
+                    None,
+                    Some(&["memory:SystemMemory", "meta:GstVideoOverlayComposition"][..]),
+                    Some(&["meta:GstVideoOverlayComposition"][..]),
+                ] {
+                    let mut c = gst_video::video_make_raw_caps(&[
+                        gst_video::VideoFormat::Bgra,
+                        gst_video::VideoFormat::Argb,
+                        gst_video::VideoFormat::Rgba,
+                        gst_video::VideoFormat::Abgr,
+                        gst_video::VideoFormat::Rgb,
+                        gst_video::VideoFormat::Bgr,
+                    ])
+                    .build();
+
+                    if let Some(features) = features {
+                        c.get_mut()
+                            .unwrap()
+                            .set_features_simple(Some(gst::CapsFeatures::new(features)));
+                    }
+
+                    caps.append(c);
+                }
+            }
 
             vec![gst::PadTemplate::new(
                 "sink",
@@ -209,6 +227,9 @@ impl BaseSinkImpl for PaintableSink {
     ) -> Result<(), gst::ErrorMessage> {
         query.add_allocation_meta::<gst_video::VideoMeta>(None);
 
+        // TODO: Provide a preferred "window size" here for higher-resolution rendering
+        query.add_allocation_meta::<gst_video::VideoOverlayCompositionMeta>(None);
+
         self.parent_propose_allocation(element, query)
     }
 }
@@ -227,7 +248,10 @@ impl VideoSinkImpl for PaintableSink {
             gst::FlowError::NotNegotiated
         })?;
 
-        let frame = Frame::new(buffer, info);
+        let frame = Frame::new(buffer, info).map_err(|err| {
+            gst_error!(CAT, obj: element, "Failed to map video frame");
+            err
+        })?;
         self.pending_frame.lock().unwrap().replace(frame);
 
         let sender = self.sender.lock().unwrap();

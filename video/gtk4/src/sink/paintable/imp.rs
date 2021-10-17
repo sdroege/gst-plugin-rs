@@ -13,11 +13,12 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 
-use gst::gst_trace;
+use gst::{gst_debug, gst_trace};
 
-use crate::sink::frame::Paintable;
+use crate::sink::frame::{Frame, Texture};
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
 
@@ -31,7 +32,8 @@ pub(super) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[derive(Default)]
 pub struct SinkPaintable {
-    pub paintable: RefCell<Option<Paintable>>,
+    paintables: RefCell<Vec<Texture>>,
+    cached_textures: RefCell<HashMap<usize, gdk::Texture>>,
 }
 
 #[glib::object_subclass]
@@ -46,56 +48,122 @@ impl ObjectImpl for SinkPaintable {}
 
 impl PaintableImpl for SinkPaintable {
     fn intrinsic_height(&self, _paintable: &Self::Type) -> i32 {
-        if let Some(Paintable { ref paintable, .. }) = *self.paintable.borrow() {
-            paintable.intrinsic_height()
+        if let Some(paintable) = self.paintables.borrow().first() {
+            f32::round(paintable.height) as i32
         } else {
             0
         }
     }
 
     fn intrinsic_width(&self, _paintable: &Self::Type) -> i32 {
-        if let Some(Paintable {
-            ref paintable,
-            pixel_aspect_ratio,
-        }) = *self.paintable.borrow()
-        {
-            f64::round(paintable.intrinsic_width() as f64 * pixel_aspect_ratio) as i32
+        if let Some(paintable) = self.paintables.borrow().first() {
+            f32::round(paintable.width) as i32
         } else {
             0
         }
     }
 
     fn intrinsic_aspect_ratio(&self, _paintable: &Self::Type) -> f64 {
-        if let Some(Paintable {
-            ref paintable,
-            pixel_aspect_ratio,
-        }) = *self.paintable.borrow()
-        {
-            paintable.intrinsic_aspect_ratio() * pixel_aspect_ratio
+        if let Some(paintable) = self.paintables.borrow().first() {
+            paintable.width as f64 / paintable.height as f64
         } else {
             0.0
         }
     }
 
-    fn current_image(&self, _paintable: &Self::Type) -> gdk::Paintable {
-        if let Some(Paintable { ref paintable, .. }) = *self.paintable.borrow() {
-            paintable.clone()
-        } else {
-            gdk::Paintable::new_empty(0, 0).expect("Couldn't create empty paintable")
-        }
-    }
-
     fn snapshot(&self, paintable: &Self::Type, snapshot: &gdk::Snapshot, width: f64, height: f64) {
-        if let Some(Paintable { ref paintable, .. }) = *self.paintable.borrow() {
+        let snapshot = snapshot.downcast_ref::<gtk::Snapshot>().unwrap();
+
+        let paintables = self.paintables.borrow();
+
+        if !paintables.is_empty() {
             gst_trace!(CAT, obj: paintable, "Snapshotting frame");
-            paintable.snapshot(snapshot, width, height);
+
+            let (frame_width, frame_height) =
+                paintables.first().map(|p| (p.width, p.height)).unwrap();
+
+            let mut scale_x = width / frame_width as f64;
+            let mut scale_y = height / frame_height as f64;
+            let mut trans_x = 0.0;
+            let mut trans_y = 0.0;
+
+            // TODO: Property for keeping aspect ratio or not
+            if (scale_x - scale_y).abs() > f64::EPSILON {
+                if scale_x > scale_y {
+                    trans_x =
+                        ((frame_width as f64 * scale_x) - (frame_width as f64 * scale_y)) / 2.0;
+                    scale_x = scale_y;
+                } else {
+                    trans_y =
+                        ((frame_height as f64 * scale_y) - (frame_height as f64 * scale_x)) / 2.0;
+                    scale_y = scale_x;
+                }
+            }
+
+            if trans_x != 0.0 || trans_y != 0.0 {
+                snapshot.append_color(
+                    &gdk::RGBA::BLACK,
+                    &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
+                );
+            }
+
+            snapshot.translate(&graphene::Point::new(trans_x as f32, trans_y as f32));
+            snapshot.scale(scale_x as f32, scale_y as f32);
+
+            for Texture {
+                texture,
+                x,
+                y,
+                width: paintable_width,
+                height: paintable_height,
+                global_alpha,
+            } in &*paintables
+            {
+                snapshot.push_opacity(*global_alpha as f64);
+                snapshot.append_texture(
+                    texture,
+                    &graphene::Rect::new(*x, *y, *paintable_width, *paintable_height),
+                );
+                snapshot.pop();
+            }
         } else {
             gst_trace!(CAT, obj: paintable, "Snapshotting black frame");
-            let snapshot = snapshot.downcast_ref::<gtk::Snapshot>().unwrap();
             snapshot.append_color(
                 &gdk::RGBA::BLACK,
                 &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
             );
+        }
+    }
+}
+
+impl SinkPaintable {
+    pub(super) fn handle_frame_changed(&self, obj: &super::SinkPaintable, frame: Option<Frame>) {
+        if let Some(frame) = frame {
+            gst_trace!(CAT, obj: obj, "Received new frame");
+
+            let new_paintables = frame.into_textures(&mut *self.cached_textures.borrow_mut());
+            let new_size = new_paintables
+                .first()
+                .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32))
+                .unwrap();
+
+            let old_paintables = self.paintables.replace(new_paintables);
+            let old_size = old_paintables
+                .first()
+                .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32));
+
+            if Some(new_size) != old_size {
+                gst_debug!(
+                    CAT,
+                    obj: obj,
+                    "Size changed from {:?} to {:?}",
+                    old_size,
+                    new_size,
+                );
+                obj.invalidate_size();
+            }
+
+            obj.invalidate_contents();
         }
     }
 }

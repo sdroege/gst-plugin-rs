@@ -9,6 +9,9 @@ fn create_ui(app: &gtk::Application) {
     let pipeline = gst::Pipeline::new(None);
     let src = gst::ElementFactory::make("videotestsrc", None).unwrap();
 
+    let overlay = gst::ElementFactory::make("clockoverlay", None).unwrap();
+    overlay.set_property("font-desc", "Monospace 42").unwrap();
+
     let sink = gst::ElementFactory::make("gtk4paintablesink", None).unwrap();
     let paintable = sink
         .property("paintable")
@@ -16,8 +19,16 @@ fn create_ui(app: &gtk::Application) {
         .get::<gdk::Paintable>()
         .unwrap();
 
-    pipeline.add_many(&[&src, &sink]).unwrap();
-    src.link(&sink).unwrap();
+    pipeline.add_many(&[&src, &overlay, &sink]).unwrap();
+    src.link_filtered(
+        &overlay,
+        &gst::Caps::builder("video/x-raw")
+            .field("width", 640)
+            .field("height", 480)
+            .build(),
+    )
+    .unwrap();
+    overlay.link(&sink).unwrap();
 
     let window = gtk::ApplicationWindow::new(app);
     window.set_default_size(640, 480);
