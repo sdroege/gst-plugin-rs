@@ -1267,11 +1267,8 @@ impl FallbackSrc {
 
         let mut is_image = false;
 
-        if let Some(stream_event) = pad.sticky_event(gst::EventType::StreamStart, 0) {
-            let stream = match stream_event.view() {
-                gst::EventView::StreamStart(ref ev) => ev.stream(),
-                _ => unreachable!(),
-            };
+        if let Some(ev) = pad.sticky_event::<gst::event::StreamStart<_>>(0) {
+            let stream = ev.stream();
 
             if let Some(stream) = stream {
                 if let Some(caps) = stream.caps() {
@@ -1574,19 +1571,15 @@ impl FallbackSrc {
             None => return Ok(()),
         };
 
-        let ev = match pad.sticky_event(gst::EventType::Segment, 0) {
-            Some(ev) => ev,
+        let segment = match pad.sticky_event::<gst::event::Segment<_>>(0) {
+            Some(ev) => ev.segment().clone(),
             None => {
                 gst_warning!(CAT, obj: element, "Have no segment event yet");
                 return Ok(());
             }
         };
 
-        let segment = match ev.view() {
-            gst::EventView::Segment(s) => s.segment(),
-            _ => unreachable!(),
-        };
-        let segment = segment.downcast_ref::<gst::ClockTime>().ok_or_else(|| {
+        let segment = segment.downcast::<gst::ClockTime>().map_err(|_| {
             gst_error!(CAT, obj: element, "Have no time segment");
             gst::error_msg!(gst::CoreError::Clock, ["Have no time segment"])
         })?;

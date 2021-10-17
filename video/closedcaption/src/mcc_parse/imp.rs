@@ -955,7 +955,11 @@ impl MccParse {
         }
     }
 
-    fn perform_seek(&self, event: &gst::event::Seek, element: &super::MccParse) -> bool {
+    fn perform_seek(
+        &self,
+        event: &gst::event::Seek<&gst::EventRef>,
+        element: &super::MccParse,
+    ) -> bool {
         if self.state.lock().unwrap().pull.is_none() {
             gst_error!(CAT, obj: element, "seeking is only supported in pull mode");
             return false;

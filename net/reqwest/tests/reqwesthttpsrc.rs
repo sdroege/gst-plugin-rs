@@ -656,10 +656,8 @@ fn test_iradio_mode() {
     );
 
     {
-        use gst::EventView;
-        let tag_event = srcpad.sticky_event(gst::EventType::Tag, 0).unwrap();
-        if let EventView::Tag(tags) = tag_event.view() {
-            let tags = tags.tag();
+        if let Some(tag_event) = srcpad.sticky_event::<gst::event::Tag<_>>(0) {
+            let tags = tag_event.tag();
             assert_eq!(tags.get::<gst::tags::Organization>().unwrap().get(), "Name");
             assert_eq!(tags.get::<gst::tags::Genre>().unwrap().get(), "Genre");
             assert_eq!(

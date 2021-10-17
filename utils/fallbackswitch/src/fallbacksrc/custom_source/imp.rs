@@ -259,10 +259,8 @@ impl CustomSource {
         let mut stream_type = None;
 
         // Take stream type from stream-start event if we can
-        if let Some(event) = pad.sticky_event(gst::EventType::StreamStart, 0) {
-            if let gst::EventView::StreamStart(ev) = event.view() {
-                stream_type = ev.stream().map(|s| s.stream_type());
-            }
+        if let Some(ev) = pad.sticky_event::<gst::event::StreamStart<_>>(0) {
+            stream_type = ev.stream().map(|s| s.stream_type());
         }
 
         // Otherwise from the caps
