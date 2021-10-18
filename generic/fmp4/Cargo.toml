@@ -1,0 +1,47 @@
+[package]
+name = "gst-plugin-fmp4"
+version = "0.8.0"
+authors = ["Sebastian Dröge <sebastian@centricular.com>"]
+license = "MPL-2.0"
+description = "Fragmented MP4 Plugin"
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+edition = "2021"
+rust-version = "1.56"
+
+[dependencies]
+anyhow = "1"
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_14"] }
+once_cell = "1.0"
+
+[lib]
+name = "gstfmp4"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dev-dependencies]
+gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../version-helper" }
+
+[features]
+default = ["v1_18"]
+static = []
+capi = []
+v1_18 = ["gst-video/v1_18"]
+
+[package.metadata.capi]
+min_version = "0.8.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-audio-1.0, gstreamer-video-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

@@ -7,6 +7,7 @@ members = [
     "audio/claxon",
     "audio/csound",
     "audio/lewton",
+    "generic/fmp4",
     "generic/file",
     "generic/sodium",
     "generic/threadshare",

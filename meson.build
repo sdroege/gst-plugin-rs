@@ -47,6 +47,7 @@ plugins = {
   'gst-plugin-rspng': 'libgstrspng',
   'gst-plugin-rusoto': 'libgstrusoto',
   'gst-plugin-textwrap': 'libgstrstextwrap',
+  'gst-plugin-fmp4': 'libgstfmp4',
   'gst-plugin-threadshare': 'libgstthreadshare',
   'gst-plugin-togglerecord': 'libgsttogglerecord',
   'gst-plugin-hsv': 'libgsthsv',
