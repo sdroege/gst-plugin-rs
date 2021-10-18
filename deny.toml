@@ -5,6 +5,8 @@ vulnerability = "deny"
 unmaintained = "warn"
 notice = "warn"
 ignore = [
+    # Waiting for https://github.com/chronotope/chrono/pull/578
+    "RUSTSEC-2020-0071",
 ]
 
 [licenses]
