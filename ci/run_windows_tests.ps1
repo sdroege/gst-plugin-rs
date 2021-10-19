@@ -17,11 +17,18 @@ function Run-Tests {
     param (
         $Features
     )
+    $local_exclude = $exclude_crates;
+
+    # In this case the plugin will pull x11/wayland features
+    # which will fail to build on windows.
+    if (($Features -eq '--all-features') -or ($Features -eq '')) {
+        $local_exclude += @("--exclude", "gst-plugin-gtk4")
+    }
 
     Write-Host "Features: $Features"
-    Write-Host "Exclude string: $exclude_crates"
+    Write-Host "Exclude string: $local_exclude"
 
-    cargo build --color=always --workspace $exclude_crates --all-targets $Features
+    cargo build --color=always --workspace $local_exclude --all-targets $Features
 
     if (!$?) {
         Write-Host "Build failed"
@@ -29,7 +36,7 @@ function Run-Tests {
     }
 
     $env:G_DEBUG="fatal_warnings"
-    cargo test --no-fail-fast --color=always --workspace $exclude_crates --all-targets $Features
+    cargo test --no-fail-fast --color=always --workspace $local_exclude --all-targets $Features
 
     if (!$?) {
         Write-Host "Tests failed"

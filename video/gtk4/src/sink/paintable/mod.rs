@@ -22,20 +22,15 @@ glib::wrapper! {
 }
 
 impl Paintable {
-    pub fn new() -> Self {
-        glib::Object::new(&[])
-    }
-}
-
-impl Default for Paintable {
-    fn default() -> Self {
-        Self::new()
+    pub fn new(context: Option<gdk::GLContext>) -> Self {
+        glib::Object::builder()
+            .property("gl-context", context)
+            .build()
     }
 }
 
 impl Paintable {
     pub(crate) fn handle_frame_changed(&self, frame: Option<Frame>) {
-        let imp = self.imp();
-        imp.handle_frame_changed(frame);
+        self.imp().handle_frame_changed(frame);
     }
 }

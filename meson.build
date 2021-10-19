@@ -140,7 +140,7 @@ else
   message('csound not found, disabling its plugin')
 endif
 
-if dependency('gtk4', required : get_option('gtk4')).found()
+if dependency('gtk4', version: '>= 4.6.0', required : get_option('gtk4')).found()
   plugins += {'gst-plugin-gtk4' : 'libgstgtk4',}
 endif
 
@@ -278,7 +278,7 @@ foreach plugin : plugins
   )
   meson.override_dependency(plugin_name, dep)
 
-  if static_build and plugin_name in ['gstcsound', 'gstthreadshare']
+  if static_build and plugin_name in ['gstcsound', 'gstthreadshare', 'gstgtk4']
     warning('Static plugin @0@ is known to fail. It will not be included in libgstreamer-full.'.format(plugin_name))
   else
     gst_plugins += dep

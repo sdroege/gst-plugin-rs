@@ -6,36 +6,54 @@ use gtk::{gdk, gio, glib};
 use std::cell::RefCell;
 
 fn create_ui(app: &gtk::Application) {
-    let pipeline = gst::Pipeline::default();
-    let src = gst::ElementFactory::make("videotestsrc").build().unwrap();
-
-    let overlay = gst::ElementFactory::make("clockoverlay")
-        .property("font-desc", "Monospace 42")
-        .build()
-        .unwrap();
-
-    let sink = gst::ElementFactory::make("gtk4paintablesink")
-        .build()
-        .unwrap();
-    let paintable = sink.property::<gdk::Paintable>("paintable");
-
-    pipeline.add_many(&[&src, &overlay, &sink]).unwrap();
-    src.link_filtered(
-        &overlay,
-        &gst_video::VideoCapsBuilder::new()
-            .width(640)
-            .height(480)
-            .build(),
-    )
-    .unwrap();
-    overlay.link(&sink).unwrap();
-
     let window = gtk::ApplicationWindow::new(app);
     window.set_default_size(640, 480);
 
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let picture = gtk::Picture::new();
     let label = gtk::Label::new(Some("Position: 00:00:00"));
+
+    let pipeline = gst::Pipeline::new(None);
+
+    let overlay = gst::ElementFactory::make("clockoverlay")
+        .property("font-desc", "Monospace 42")
+        .build()
+        .unwrap();
+
+    let gtksink = gst::ElementFactory::make("gtk4paintablesink")
+        .build()
+        .unwrap();
+
+    // Need to set state to Ready to get a GL context
+    gtksink.set_state(gst::State::Ready).unwrap();
+    let paintable = gtksink.property::<gdk::Paintable>("paintable");
+
+    // TODO: future plans to provide a bin-like element that works with less setup
+    let (src, sink) = if paintable
+        .property::<Option<gdk::GLContext>>("gl-context")
+        .is_some()
+    {
+        let src = gst::ElementFactory::make("gltestsrc").build().unwrap();
+
+        let sink = gst::ElementFactory::make("glsinkbin")
+            .property("sink", &gtksink)
+            .build()
+            .unwrap();
+        (src, sink)
+    } else {
+        let src = gst::ElementFactory::make("videotestsrc").build().unwrap();
+        (src, gtksink)
+    };
+
+    pipeline.add_many(&[&src, &overlay, &sink]).unwrap();
+    let caps = gst_video::VideoCapsBuilder::new()
+        .width(640)
+        .height(480)
+        .any_features()
+        .build();
+
+    src.link_filtered(&overlay, &caps).unwrap();
+    overlay.link(&sink).unwrap();
 
     picture.set_paintable(Some(&paintable));
     vbox.append(&picture);
@@ -115,12 +133,10 @@ fn main() {
 
     gstgtk4::plugin_register_static().expect("Failed to register gstgtk4 plugin");
 
-    {
-        let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE);
+    let app = gtk::Application::new(None, gio::ApplicationFlags::FLAGS_NONE);
 
-        app.connect_activate(create_ui);
-        app.run();
-    }
+    app.connect_activate(create_ui);
+    app.run();
 
     unsafe {
         gst::deinit();

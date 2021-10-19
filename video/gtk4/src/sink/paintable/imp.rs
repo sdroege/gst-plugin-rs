@@ -20,7 +20,7 @@ use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
 
-pub(super) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "gstgtk4paintable",
         gst::DebugColorFlags::empty(),
@@ -28,21 +28,51 @@ pub(super) static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Paintable {
     paintables: RefCell<Vec<Texture>>,
     cached_textures: RefCell<HashMap<usize, gdk::Texture>>,
+    gl_context: RefCell<Option<gdk::GLContext>>,
 }
 
 #[glib::object_subclass]
 impl ObjectSubclass for Paintable {
     const NAME: &'static str = "GstGtk4Paintable";
     type Type = super::Paintable;
-    type ParentType = glib::Object;
     type Interfaces = (gdk::Paintable,);
 }
 
-impl ObjectImpl for Paintable {}
+impl ObjectImpl for Paintable {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpecObject::builder::<gdk::GLContext>("gl-context")
+                    .nick("GL Context")
+                    .blurb("GL context to use for rendering")
+                    .construct_only()
+                    .build(),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "gl-context" => self.gl_context.borrow().to_value(),
+            _ => unimplemented!(),
+        }
+    }
+
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        match pspec.name() {
+            "gl-context" => {
+                *self.gl_context.borrow_mut() = value.get::<Option<gtk::gdk::GLContext>>().unwrap();
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl PaintableImpl for Paintable {
     fn intrinsic_height(&self) -> i32 {
@@ -136,10 +166,12 @@ impl PaintableImpl for Paintable {
 
 impl Paintable {
     pub(super) fn handle_frame_changed(&self, frame: Option<Frame>) {
+        let context = self.gl_context.borrow();
         if let Some(frame) = frame {
             gst::trace!(CAT, imp: self, "Received new frame");
 
-            let new_paintables = frame.into_textures(&mut self.cached_textures.borrow_mut());
+            let new_paintables =
+                frame.into_textures(context.as_ref(), &mut self.cached_textures.borrow_mut());
             let new_size = new_paintables
                 .first()
                 .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32))
