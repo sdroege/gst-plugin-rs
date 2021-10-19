@@ -18,6 +18,7 @@
 use gst::glib;
 
 mod sink;
+mod utils;
 pub use sink::PaintableSink;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
