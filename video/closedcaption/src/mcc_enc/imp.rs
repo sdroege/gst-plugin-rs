@@ -130,7 +130,7 @@ impl MccEnc {
                     creation_date.seconds() as u32,
                 )
                 .with_timezone(&FixedOffset::east(
-                    (creation_date.utc_offset() / 1_000_000) as i32,
+                    creation_date.utc_offset().as_seconds() as i32
                 ));
 
             let _ = write!(
