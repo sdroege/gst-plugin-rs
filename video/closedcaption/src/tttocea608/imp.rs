@@ -1156,6 +1156,8 @@ impl ObjectImpl for TtToCea608 {
     }
 }
 
+impl GstObjectImpl for TtToCea608 {}
+
 impl ElementImpl for TtToCea608 {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

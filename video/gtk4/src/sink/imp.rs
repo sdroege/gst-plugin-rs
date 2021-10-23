@@ -115,6 +115,8 @@ impl ObjectImpl for PaintableSink {
     }
 }
 
+impl GstObjectImpl for PaintableSink {}
+
 impl ElementImpl for PaintableSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

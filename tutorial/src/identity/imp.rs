@@ -196,6 +196,8 @@ impl ObjectImpl for Identity {
     }
 }
 
+impl GstObjectImpl for Identity {}
+
 // Implementation of gst::Element virtual methods
 impl ElementImpl for Identity {
     // Set the element specific metadata. This information is what

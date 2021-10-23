@@ -174,6 +174,8 @@ impl ObjectImpl for Rgb2Gray {
     }
 }
 
+impl GstObjectImpl for Rgb2Gray {}
+
 // Implementation of gst::Element virtual methods
 impl ElementImpl for Rgb2Gray {
     // Set the element specific metadata. This information is what

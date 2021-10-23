@@ -101,6 +101,8 @@ impl ObjectImpl for CustomSource {
     }
 }
 
+impl GstObjectImpl for CustomSource {}
+
 impl ElementImpl for CustomSource {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {

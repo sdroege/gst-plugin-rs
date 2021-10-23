@@ -446,6 +446,8 @@ impl ObjectImpl for CsoundFilter {
     }
 }
 
+impl GstObjectImpl for CsoundFilter {}
+
 impl ElementImpl for CsoundFilter {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

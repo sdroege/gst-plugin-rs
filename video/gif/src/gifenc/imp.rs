@@ -203,6 +203,8 @@ impl ObjectImpl for GifEnc {
     }
 }
 
+impl GstObjectImpl for GifEnc {}
+
 impl ElementImpl for GifEnc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

@@ -337,6 +337,8 @@ impl ObjectImpl for WebPDec {
     }
 }
 
+impl GstObjectImpl for WebPDec {}
+
 impl ElementImpl for WebPDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

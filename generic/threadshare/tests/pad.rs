@@ -364,6 +364,8 @@ mod imp_src {
         }
     }
 
+    impl GstObjectImpl for ElementSrcTest {}
+
     impl ElementImpl for ElementSrcTest {
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
             static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
@@ -692,6 +694,8 @@ mod imp_sink {
             obj.add_pad(self.sink_pad.gst_pad()).unwrap();
         }
     }
+
+    impl GstObjectImpl for ElementSinkTest {}
 
     impl ElementImpl for ElementSinkTest {
         fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {

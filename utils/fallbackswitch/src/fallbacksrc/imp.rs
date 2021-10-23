@@ -663,6 +663,8 @@ impl ObjectImpl for FallbackSrc {
     }
 }
 
+impl GstObjectImpl for FallbackSrc {}
+
 impl ElementImpl for FallbackSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

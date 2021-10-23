@@ -43,6 +43,8 @@ impl ObjectSubclass for CdgParse {
 
 impl ObjectImpl for CdgParse {}
 
+impl GstObjectImpl for CdgParse {}
+
 impl ElementImpl for CdgParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

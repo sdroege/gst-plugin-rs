@@ -882,6 +882,8 @@ impl ObjectImpl for UdpSrc {
     }
 }
 
+impl GstObjectImpl for UdpSrc {}
+
 impl ElementImpl for UdpSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

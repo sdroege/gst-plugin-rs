@@ -164,6 +164,8 @@ impl ObjectImpl for VideoFallbackSource {
     }
 }
 
+impl GstObjectImpl for VideoFallbackSource {}
+
 impl ElementImpl for VideoFallbackSource {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {

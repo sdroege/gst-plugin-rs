@@ -557,6 +557,8 @@ impl ObjectImpl for MccEnc {
     }
 }
 
+impl GstObjectImpl for MccEnc {}
+
 impl ElementImpl for MccEnc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

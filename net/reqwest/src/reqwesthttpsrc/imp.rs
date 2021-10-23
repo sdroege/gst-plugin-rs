@@ -963,6 +963,8 @@ impl ObjectImpl for ReqwestHttpSrc {
     }
 }
 
+impl GstObjectImpl for ReqwestHttpSrc {}
+
 impl ElementImpl for ReqwestHttpSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

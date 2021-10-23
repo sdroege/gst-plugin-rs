@@ -661,6 +661,8 @@ impl ObjectImpl for Decrypter {
     }
 }
 
+impl GstObjectImpl for Decrypter {}
+
 impl ElementImpl for Decrypter {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

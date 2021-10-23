@@ -234,6 +234,8 @@ impl ObjectImpl for PngEncoder {
     }
 }
 
+impl GstObjectImpl for PngEncoder {}
+
 impl ElementImpl for PngEncoder {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

@@ -1077,6 +1077,8 @@ impl ObjectImpl for SccParse {
     }
 }
 
+impl GstObjectImpl for SccParse {}
+
 impl ElementImpl for SccParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

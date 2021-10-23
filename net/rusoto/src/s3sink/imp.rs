@@ -574,6 +574,8 @@ impl ObjectImpl for S3Sink {
     }
 }
 
+impl GstObjectImpl for S3Sink {}
+
 impl ElementImpl for S3Sink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

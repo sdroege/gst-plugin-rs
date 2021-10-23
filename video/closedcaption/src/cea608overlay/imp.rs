@@ -652,6 +652,8 @@ impl ObjectImpl for Cea608Overlay {
     }
 }
 
+impl GstObjectImpl for Cea608Overlay {}
+
 impl ElementImpl for Cea608Overlay {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

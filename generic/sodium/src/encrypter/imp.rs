@@ -472,6 +472,8 @@ impl ObjectImpl for Encrypter {
     }
 }
 
+impl GstObjectImpl for Encrypter {}
+
 impl ElementImpl for Encrypter {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

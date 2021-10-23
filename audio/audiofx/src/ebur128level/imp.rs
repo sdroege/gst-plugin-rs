@@ -235,6 +235,8 @@ impl ObjectImpl for EbuR128Level {
     }
 }
 
+impl GstObjectImpl for EbuR128Level {}
+
 impl ElementImpl for EbuR128Level {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

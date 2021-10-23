@@ -159,6 +159,8 @@ impl ObjectImpl for ProgressBin {
     }
 }
 
+impl GstObjectImpl for ProgressBin {}
+
 // Implementation of gst::Element virtual methods
 impl ElementImpl for ProgressBin {
     // Set the element specific metadata. This information is what

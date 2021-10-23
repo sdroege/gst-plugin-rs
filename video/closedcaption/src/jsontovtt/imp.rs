@@ -529,6 +529,8 @@ impl ObjectImpl for JsonToVtt {
     }
 }
 
+impl GstObjectImpl for JsonToVtt {}
+
 impl ElementImpl for JsonToVtt {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

@@ -349,6 +349,8 @@ impl ObjectSubclass for Dav1dDec {
 
 impl ObjectImpl for Dav1dDec {}
 
+impl GstObjectImpl for Dav1dDec {}
+
 impl ElementImpl for Dav1dDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

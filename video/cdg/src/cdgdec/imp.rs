@@ -36,6 +36,8 @@ impl ObjectSubclass for CdgDec {
 
 impl ObjectImpl for CdgDec {}
 
+impl GstObjectImpl for CdgDec {}
+
 impl ElementImpl for CdgDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

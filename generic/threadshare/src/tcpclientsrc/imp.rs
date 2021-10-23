@@ -680,6 +680,8 @@ impl ObjectImpl for TcpClientSrc {
     }
 }
 
+impl GstObjectImpl for TcpClientSrc {}
+
 impl ElementImpl for TcpClientSrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

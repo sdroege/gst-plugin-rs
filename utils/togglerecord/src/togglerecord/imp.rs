@@ -1843,6 +1843,8 @@ impl ObjectImpl for ToggleRecord {
     }
 }
 
+impl GstObjectImpl for ToggleRecord {}
+
 impl ElementImpl for ToggleRecord {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

@@ -169,6 +169,8 @@ impl ObjectImpl for FileSink {
     }
 }
 
+impl GstObjectImpl for FileSink {}
+
 impl ElementImpl for FileSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

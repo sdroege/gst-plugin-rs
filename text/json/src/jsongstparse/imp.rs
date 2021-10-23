@@ -942,6 +942,8 @@ impl ObjectImpl for JsonGstParse {
     }
 }
 
+impl GstObjectImpl for JsonGstParse {}
+
 impl ElementImpl for JsonGstParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

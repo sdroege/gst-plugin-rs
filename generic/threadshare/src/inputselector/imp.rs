@@ -524,6 +524,8 @@ impl ObjectImpl for InputSelector {
     }
 }
 
+impl GstObjectImpl for InputSelector {}
+
 impl ElementImpl for InputSelector {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

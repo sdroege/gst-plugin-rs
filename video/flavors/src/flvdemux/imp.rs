@@ -186,6 +186,8 @@ impl ObjectImpl for FlvDemux {
     }
 }
 
+impl GstObjectImpl for FlvDemux {}
+
 impl ElementImpl for FlvDemux {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

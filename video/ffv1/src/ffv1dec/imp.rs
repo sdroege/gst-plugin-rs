@@ -299,6 +299,8 @@ impl ObjectSubclass for Ffv1Dec {
 
 impl ObjectImpl for Ffv1Dec {}
 
+impl GstObjectImpl for Ffv1Dec {}
+
 impl ElementImpl for Ffv1Dec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

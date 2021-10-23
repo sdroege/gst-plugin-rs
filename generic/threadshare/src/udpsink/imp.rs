@@ -1326,6 +1326,8 @@ impl ObjectImpl for UdpSink {
     }
 }
 
+impl GstObjectImpl for UdpSink {}
+
 impl ElementImpl for UdpSink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

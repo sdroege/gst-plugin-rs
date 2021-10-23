@@ -1055,6 +1055,8 @@ impl ObjectImpl for Cea608ToJson {
     }
 }
 
+impl GstObjectImpl for Cea608ToJson {}
+
 impl ElementImpl for Cea608ToJson {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

@@ -53,6 +53,8 @@ impl ObjectSubclass for LewtonDec {
 
 impl ObjectImpl for LewtonDec {}
 
+impl GstObjectImpl for LewtonDec {}
+
 impl ElementImpl for LewtonDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

@@ -343,6 +343,8 @@ impl ObjectImpl for HsvDetector {
     }
 }
 
+impl GstObjectImpl for HsvDetector {}
+
 impl ElementImpl for HsvDetector {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

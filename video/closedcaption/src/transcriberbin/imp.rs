@@ -758,6 +758,8 @@ impl ObjectImpl for TranscriberBin {
     }
 }
 
+impl GstObjectImpl for TranscriberBin {}
+
 impl ElementImpl for TranscriberBin {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

@@ -331,6 +331,8 @@ impl ObjectImpl for SineSrc {
     }
 }
 
+impl GstObjectImpl for SineSrc {}
+
 // Implementation of gst::Element virtual methods
 impl ElementImpl for SineSrc {
     // Set the element specific metadata. This information is what

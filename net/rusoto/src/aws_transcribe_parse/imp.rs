@@ -305,6 +305,8 @@ impl ObjectImpl for TranscribeParse {
     }
 }
 
+impl GstObjectImpl for TranscribeParse {}
+
 impl ElementImpl for TranscribeParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

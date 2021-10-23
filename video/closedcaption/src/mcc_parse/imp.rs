@@ -1200,6 +1200,8 @@ impl ObjectImpl for MccParse {
     }
 }
 
+impl GstObjectImpl for MccParse {}
+
 impl ElementImpl for MccParse {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

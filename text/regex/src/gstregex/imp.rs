@@ -274,6 +274,8 @@ impl ObjectImpl for RegEx {
     }
 }
 
+impl GstObjectImpl for RegEx {}
+
 impl ElementImpl for RegEx {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

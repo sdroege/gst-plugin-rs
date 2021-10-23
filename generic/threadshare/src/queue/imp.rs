@@ -820,6 +820,8 @@ impl ObjectImpl for Queue {
     }
 }
 
+impl GstObjectImpl for Queue {}
+
 impl ElementImpl for Queue {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

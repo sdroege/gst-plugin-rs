@@ -1534,6 +1534,8 @@ impl ObjectImpl for JitterBuffer {
     }
 }
 
+impl GstObjectImpl for JitterBuffer {}
+
 impl ElementImpl for JitterBuffer {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

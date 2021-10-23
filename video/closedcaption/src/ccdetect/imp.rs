@@ -293,6 +293,8 @@ impl ObjectImpl for CCDetect {
     }
 }
 
+impl GstObjectImpl for CCDetect {}
+
 impl ElementImpl for CCDetect {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

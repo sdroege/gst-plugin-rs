@@ -825,6 +825,8 @@ impl ObjectImpl for FallbackSwitch {
     }
 }
 
+impl GstObjectImpl for FallbackSwitch {}
+
 impl ElementImpl for FallbackSwitch {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

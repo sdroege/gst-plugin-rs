@@ -207,6 +207,8 @@ impl ObjectSubclass for AudioRNNoise {
 
 impl ObjectImpl for AudioRNNoise {}
 
+impl GstObjectImpl for AudioRNNoise {}
+
 impl ElementImpl for AudioRNNoise {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

@@ -390,6 +390,8 @@ impl ObjectImpl for SccEnc {
     }
 }
 
+impl GstObjectImpl for SccEnc {}
+
 impl ElementImpl for SccEnc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {

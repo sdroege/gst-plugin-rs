@@ -637,6 +637,8 @@ impl ObjectImpl for ProxySink {
     }
 }
 
+impl GstObjectImpl for ProxySink {}
+
 impl ElementImpl for ProxySink {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
@@ -1246,6 +1248,8 @@ impl ObjectImpl for ProxySrc {
         crate::set_element_flags(obj, gst::ElementFlags::SOURCE);
     }
 }
+
+impl GstObjectImpl for ProxySrc {}
 
 impl ElementImpl for ProxySrc {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {

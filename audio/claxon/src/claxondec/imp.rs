@@ -46,6 +46,8 @@ impl ObjectSubclass for ClaxonDec {
 
 impl ObjectImpl for ClaxonDec {}
 
+impl GstObjectImpl for ClaxonDec {}
+
 impl ElementImpl for ClaxonDec {
     fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
         static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
