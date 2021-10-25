@@ -45,6 +45,7 @@ const DEFAULT_BLACK_BACKGROUND: bool = false;
 struct Settings {
     field: i32,
     black_background: bool,
+    timeout: Option<gst::ClockTime>,
 }
 
 impl Default for Settings {
@@ -52,6 +53,7 @@ impl Default for Settings {
         Settings {
             field: DEFAULT_FIELD,
             black_background: DEFAULT_BLACK_BACKGROUND,
+            timeout: gst::ClockTime::NONE,
         }
     }
 }
@@ -64,6 +66,7 @@ struct State {
     left_alignment: i32,
     attach: bool,
     selected_field: Option<u8>,
+    last_cc_pts: Option<gst::ClockTime>,
 }
 
 impl Default for State {
@@ -76,6 +79,7 @@ impl Default for State {
             left_alignment: 0,
             attach: false,
             selected_field: None,
+            last_cc_pts: gst::ClockTime::NONE,
         }
     }
 }
@@ -331,6 +335,7 @@ impl Cea608Overlay {
         element: &super::Cea608Overlay,
         state: &mut State,
         data: &[u8],
+        pts: gst::ClockTime,
     ) {
         if data.len() % 3 != 0 {
             gst_warning!(CAT, "cc_data length is not a multiple of 3, truncating");
@@ -371,6 +376,8 @@ impl Cea608Overlay {
 
                             self.overlay_text(element, &text, state);
                         }
+
+                        self.reset_timeout(state, pts);
                     }
                 } else {
                     break;
@@ -385,6 +392,7 @@ impl Cea608Overlay {
         element: &super::Cea608Overlay,
         state: &mut State,
         data: &[u8],
+        pts: gst::ClockTime,
     ) {
         if data.len() % 3 != 0 {
             gst_warning!(CAT, "cc_data length is not a multiple of 3, truncating");
@@ -417,8 +425,14 @@ impl Cea608Overlay {
 
                     self.overlay_text(element, &text, state);
                 }
+
+                self.reset_timeout(state, pts);
             }
         }
+    }
+
+    fn reset_timeout(&self, state: &mut State, pts: gst::ClockTime) {
+        state.last_cc_pts = Some(pts);
     }
 
     fn sink_chain(
@@ -428,6 +442,11 @@ impl Cea608Overlay {
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+
+        let pts = buffer.pts().ok_or_else(|| {
+            gst_error!(CAT, obj: pad, "Require timestamped buffers");
+            gst::FlowError::Error
+        })?;
 
         let mut state = self.state.lock().unwrap();
 
@@ -443,7 +462,7 @@ impl Cea608Overlay {
             if meta.caption_type() == gst_video::VideoCaptionType::Cea708Cdp {
                 match extract_cdp(meta.data()) {
                     Ok(data) => {
-                        self.decode_cc_data(pad, element, &mut state, data);
+                        self.decode_cc_data(pad, element, &mut state, data, pts);
                     }
                     Err(e) => {
                         gst_warning!(CAT, "{}", &e.to_string());
@@ -451,9 +470,9 @@ impl Cea608Overlay {
                     }
                 }
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea708Raw {
-                self.decode_cc_data(pad, element, &mut state, meta.data());
+                self.decode_cc_data(pad, element, &mut state, meta.data(), pts);
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608S3341a {
-                self.decode_s334_1a(pad, element, &mut state, meta.data());
+                self.decode_s334_1a(pad, element, &mut state, meta.data(), pts);
             } else if meta.caption_type() == gst_video::VideoCaptionType::Cea608Raw {
                 let data = meta.data();
                 assert!(data.len() % 2 == 0);
@@ -476,6 +495,18 @@ impl Cea608Overlay {
 
                         self.overlay_text(element, &text, &mut state);
                     }
+
+                    self.reset_timeout(&mut state, pts);
+                }
+            }
+        }
+
+        if let Some(timeout) = self.settings.lock().unwrap().timeout {
+            if let Some(interval) = pts.opt_saturating_sub(state.last_cc_pts) {
+                if interval > timeout {
+                    gst_info!(CAT, obj: element, "Reached timeout, clearing overlay");
+                    state.composition.take();
+                    state.last_cc_pts.take();
                 }
             }
         }
@@ -596,6 +627,15 @@ impl ObjectImpl for Cea608Overlay {
                     DEFAULT_BLACK_BACKGROUND,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
+                glib::ParamSpec::new_uint64(
+                    "timeout",
+                    "Timeout",
+                    "Duration after which to erase overlay when no cc data has arrived for the selected field",
+                    gst::ClockTime::from_seconds(16).nseconds(),
+                    u64::MAX,
+                    u64::MAX,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
             ]
         });
 
@@ -627,6 +667,16 @@ impl ObjectImpl for Cea608Overlay {
                 settings.black_background = value.get().expect("type checked upstream");
                 let _ = state.layout.take();
             }
+            "timeout" => {
+                let mut settings = self.settings.lock().unwrap();
+
+                let timeout = value.get().expect("type checked upstream");
+
+                settings.timeout = match timeout {
+                    u64::MAX => gst::ClockTime::NONE,
+                    _ => Some(gst::ClockTime::from_nseconds(timeout)),
+                };
+            }
             _ => unimplemented!(),
         }
     }
@@ -640,6 +690,14 @@ impl ObjectImpl for Cea608Overlay {
             "black-background" => {
                 let settings = self.settings.lock().unwrap();
                 settings.black_background.to_value()
+            }
+            "timeout" => {
+                let settings = self.settings.lock().unwrap();
+                if let Some(timeout) = settings.timeout {
+                    timeout.nseconds().to_value()
+                } else {
+                    u64::MAX.to_value()
+                }
             }
             _ => unimplemented!(),
         }
