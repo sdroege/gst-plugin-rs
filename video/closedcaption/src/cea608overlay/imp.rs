@@ -142,20 +142,20 @@ impl Cea608Overlay {
                 "12345678901234567890123456789012\n2\n3\n4\n5\n6\n7\n8\n9\n0\n1\n2\n3\n4\n5",
             );
             let (_ink_rect, logical_rect) = layout.extents();
-            if logical_rect.width > video_info.width() as i32 * pango::SCALE
-                || logical_rect.height > video_info.height() as i32 * pango::SCALE
+            if logical_rect.width() > video_info.width() as i32 * pango::SCALE
+                || logical_rect.height() > video_info.height() as i32 * pango::SCALE
             {
                 font_desc.set_size((font_size - 1) * pango::SCALE);
                 layout.set_font_description(Some(&font_desc));
                 break;
             }
-            left_alignment = (video_info.width() as i32 - logical_rect.width / pango::SCALE) / 2;
+            left_alignment = (video_info.width() as i32 - logical_rect.width() / pango::SCALE) / 2;
             font_size += 1;
         }
 
         if self.settings.lock().unwrap().black_background {
             let attrs = pango::AttrList::new();
-            let attr = pango::Attribute::new_background(0, 0, 0);
+            let attr = pango::AttrColor::new_background(0, 0, 0).upcast();
             attrs.insert(attr);
             layout.set_attributes(Some(&attrs));
         }
@@ -171,8 +171,8 @@ impl Cea608Overlay {
         let layout = state.layout.as_ref().unwrap();
         layout.set_text(text);
         let (_ink_rect, logical_rect) = layout.extents();
-        let height = logical_rect.height / pango::SCALE;
-        let width = logical_rect.width / pango::SCALE;
+        let height = logical_rect.height() / pango::SCALE;
+        let width = logical_rect.width() / pango::SCALE;
 
         // No text actually needs rendering
         if width == 0 || height == 0 {
