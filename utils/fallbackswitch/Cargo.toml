@@ -4,7 +4,8 @@ version = "0.8.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "LGPL-2.1-or-later"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 description = "Fallback Switcher Plugin"
 
 [dependencies]

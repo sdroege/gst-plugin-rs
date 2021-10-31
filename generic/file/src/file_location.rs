@@ -1,7 +1,6 @@
 use gst::glib;
 use url::Url;
 
-use std::convert::AsRef;
 use std::fmt;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};

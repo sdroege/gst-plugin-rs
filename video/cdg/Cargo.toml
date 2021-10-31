@@ -5,7 +5,8 @@ authors = ["Guillaume Desmottes <guillaume.desmottes@collabora.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 description = "CDG Plugin"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 
 [dependencies]
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }

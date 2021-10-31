@@ -2,7 +2,8 @@
 name = "gst-plugin-dav1d"
 version = "0.8.0"
 authors = ["Philippe Normand <philn@igalia.com>"]
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 description = "Dav1d Plugin"

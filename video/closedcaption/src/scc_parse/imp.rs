@@ -25,7 +25,6 @@ use gst::{
 };
 
 use std::cmp;
-use std::convert::TryInto;
 use std::sync::{Mutex, MutexGuard};
 
 use once_cell::sync::Lazy;
@@ -106,8 +105,6 @@ fn parse_timecode(
     framerate: gst::Fraction,
     tc: &TimeCode,
 ) -> Result<gst_video::ValidVideoTimeCode, gst::FlowError> {
-    use std::convert::TryFrom;
-
     let mut tc = tc.clone();
     // Workaround for various SCC files having invalid drop frame timecodes:
     // Every full minute the first two timecodes are skipped, except for every tenth minute.

@@ -341,7 +341,6 @@ impl ReqwestHttpSrc {
     ) -> Result<State, Option<gst::ErrorMessage>> {
         use headers::{Connection, ContentLength, ContentRange, HeaderMapExt, Range, UserAgent};
         use reqwest::header::{self, HeaderMap, HeaderName, HeaderValue};
-        use std::str::FromStr;
 
         gst_debug!(CAT, obj: src, "Creating new request for {}", uri);
 
@@ -371,19 +370,17 @@ impl ReqwestHttpSrc {
             }
         }
 
-        headers.typed_insert(UserAgent::from_str(&settings.user_agent).unwrap());
+        headers.typed_insert(settings.user_agent.parse::<UserAgent>().unwrap());
 
         if !settings.compress {
             // Compression is the default
             headers.insert(
                 header::ACCEPT_ENCODING,
-                HeaderValue::from_str("identity").unwrap(),
+                "identity".parse::<HeaderValue>().unwrap(),
             );
         };
 
         if let Some(ref extra_headers) = settings.extra_headers {
-            use std::convert::TryFrom;
-
             for (field, value) in extra_headers.iter() {
                 let field = match HeaderName::try_from(field) {
                     Ok(field) => field,
@@ -416,7 +413,7 @@ impl ReqwestHttpSrc {
 
                     let value = value.get::<Option<&str>>().unwrap().unwrap_or("");
 
-                    let value = match HeaderValue::from_str(value) {
+                    let value = match value.parse::<HeaderValue>() {
                         Ok(value) => value,
                         Err(_) => {
                             gst_warning!(
@@ -449,7 +446,7 @@ impl ReqwestHttpSrc {
         if !settings.cookies.is_empty() {
             headers.insert(
                 header::COOKIE,
-                HeaderValue::from_str(&settings.cookies.join("; ")).unwrap(),
+                settings.cookies.join("; ").parse::<HeaderValue>().unwrap(),
             );
         }
 
@@ -562,7 +559,7 @@ impl ReqwestHttpSrc {
         if let Some(content_type) = headers
             .get(header::CONTENT_TYPE)
             .and_then(|content_type| content_type.to_str().ok())
-            .and_then(|content_type| mime::Mime::from_str(content_type).ok())
+            .and_then(|content_type| content_type.parse::<mime::Mime>().ok())
         {
             gst_debug!(CAT, obj: src, "Got content type {}", content_type);
             if let Some(ref mut caps) = caps {

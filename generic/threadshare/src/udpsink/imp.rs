@@ -34,10 +34,8 @@ use crate::runtime::prelude::*;
 use crate::runtime::{self, Context, PadSink, PadSinkRef, Task};
 use crate::socket::{wrap_socket, GioSocketWrapper};
 
-use std::convert::TryInto;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::string::ToString;
 use std::sync::Mutex as StdMutex;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;

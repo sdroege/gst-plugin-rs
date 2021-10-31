@@ -20,7 +20,6 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info, gst_warning};
 
-use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
 use std::time::Instant;

@@ -5,7 +5,8 @@ authors = ["Jordan Petridis <jordan@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 description = "libsodium-based file encryption and decryption"
 license = "MIT"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 
 [dependencies]
 gst = { package="gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

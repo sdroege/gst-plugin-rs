@@ -33,7 +33,6 @@
 mod git;
 
 use chrono::TimeZone;
-use std::convert::TryInto;
 use std::time::SystemTime;
 use std::{env, fs, path};
 

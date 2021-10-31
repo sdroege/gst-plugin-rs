@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Bilal Elmoussaoui <bil.elmoussaoui@gmail.com>", "Jordan Petridis <jordan@centricular.com>", "Sebastian Dröge <sebastian@centricular.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 description = "GTK 4 Sink element and Paintable widget"
 
 [dependencies]

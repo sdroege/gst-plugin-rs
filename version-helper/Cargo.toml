@@ -9,7 +9,8 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT"
 homepage = "https://gstreamer.freedesktop.org"
 keywords = ["gstreamer", "multimedia", "cargo"]
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 
 [dependencies]
 chrono = "0.4.6"

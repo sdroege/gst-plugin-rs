@@ -28,7 +28,6 @@ use gst::{gst_debug, gst_error, gst_log, gst_trace};
 
 use once_cell::sync::Lazy;
 
-use std::convert::TryInto;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;

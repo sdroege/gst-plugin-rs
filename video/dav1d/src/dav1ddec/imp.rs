@@ -15,9 +15,7 @@ use gst_video::subclass::prelude::*;
 
 use once_cell::sync::Lazy;
 
-use std::convert::TryInto;
 use std::i32;
-use std::str::FromStr;
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -80,7 +78,7 @@ impl Dav1dDec {
                 None => format_desc.into(),
             }
         };
-        gst_video::VideoFormat::from_str(&f).unwrap_or_else(|_| {
+        f.parse::<gst_video::VideoFormat>().unwrap_or_else(|_| {
             gst_warning!(CAT, "Unsupported dav1d format: {}", f);
             gst_video::VideoFormat::Unknown
         })

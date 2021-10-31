@@ -3,7 +3,8 @@ name = "gst-plugin-regex"
 version = "0.8.0"
 authors = ["Mathieu Duponchelle <mathieu@centricular.com>"]
 license = "LGPL-2.1-or-later"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 description = "Rust Regular Expression Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 

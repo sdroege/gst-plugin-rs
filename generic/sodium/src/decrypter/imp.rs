@@ -306,8 +306,6 @@ impl Decrypter {
                 true
             }
             QueryView::Duration(ref mut q) => {
-                use std::convert::TryInto;
-
                 if q.format() != gst::Format::Bytes {
                     return pad.query_default(Some(element), query);
                 }

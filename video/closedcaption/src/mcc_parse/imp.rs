@@ -25,7 +25,6 @@ use gst::{
 use gst_video::ValidVideoTimeCode;
 
 use std::cmp;
-use std::convert::TryInto;
 use std::sync::{Mutex, MutexGuard};
 
 use once_cell::sync::Lazy;

@@ -6,8 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::str::FromStr;
-
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
 use rusoto_core::Region;
 use url::Url;
@@ -75,7 +73,8 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
     }
 
     let host = url.host_str().unwrap();
-    let region = Region::from_str(host)
+    let region = host
+        .parse::<Region>()
         .or_else(|_| {
             let (name, endpoint) = host.split_once('+').ok_or(())?;
             let name =

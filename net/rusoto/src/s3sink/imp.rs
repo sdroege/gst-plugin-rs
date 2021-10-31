@@ -23,8 +23,6 @@ use rusoto_s3::{
 
 use once_cell::sync::Lazy;
 
-use std::convert::From;
-use std::str::FromStr;
 use std::sync::Mutex;
 
 use crate::s3url::*;
@@ -521,7 +519,8 @@ impl ObjectImpl for S3Sink {
             }
             "region" => {
                 let region = value.get::<String>().expect("type checked upstream");
-                settings.region = Region::from_str(&region)
+                settings.region = region
+                    .parse::<Region>()
                     .or_else(|_| {
                         let (name, endpoint) = region.split_once('+').ok_or(())?;
                         Ok(Region::Custom {

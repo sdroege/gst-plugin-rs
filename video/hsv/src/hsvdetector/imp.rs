@@ -18,7 +18,6 @@ use std::i32;
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
-use std::convert::TryInto;
 
 use super::super::hsvutils;
 

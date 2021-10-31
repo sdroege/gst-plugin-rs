@@ -12,7 +12,6 @@
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 use std::collections::{HashMap, HashSet};
-use std::convert::AsRef;
 
 #[derive(Debug)]
 pub struct Frame {

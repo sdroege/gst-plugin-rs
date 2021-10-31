@@ -5,7 +5,8 @@ authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "LGPL-2.1-or-later"
 description = "Toggle Record Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 
 [dependencies]
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }

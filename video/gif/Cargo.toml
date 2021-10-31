@@ -4,7 +4,8 @@ version = "0.8.0"
 authors = ["Markus Ebner <info@ebner-markus.de>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 description = "GStreamer GIF plugin"
 
 [dependencies]
