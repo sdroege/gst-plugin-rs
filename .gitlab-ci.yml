@@ -193,6 +193,20 @@ meson static:
     - ninja -C build
     - ./build/test-gst-static
 
+# build gst-plugins-rs as a gst-build subproject
+gst-build:
+  extends: .meson
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - P=$(pwd)
+    - cd ..
+    - git clone --depth 1 https://gitlab.freedesktop.org/gstreamer/gstreamer.git --branch main
+    - cd gstreamer
+    - ln -s $P subprojects/gst-plugins-rs
+    - meson build -Domx=disabled -Dpython=disabled -Dlibav=disabled -Dlibnice=disabled -Dugly=disabled -Dbad=disabled -Ddevtools=disabled -Dges=disabled -Drtsp_server=disabled -Dvaapi=disabled -Dsharp=disabled -Dgst-examples=disabled -Drs=enabled -Dgst-plugins-rs:sodium=system
+    - ninja -C build
+
 rustfmt:
   extends: .img-stable
   stage: "lint"
