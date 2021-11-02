@@ -47,6 +47,9 @@ else:
     print("Unknown command:", command)
     sys.exit(1)
 
+cargo_cmd.extend(
+    ['--manifest-path', os.path.join(meson_current_source_dir, 'Cargo.toml')])
+
 cargo_cmd.extend(['--prefix', prefix, '--libdir',
                   os.path.join(prefix, libdir)])
 
