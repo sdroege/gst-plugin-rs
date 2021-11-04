@@ -99,6 +99,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-process"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b21b63ab5a0db0369deb913540af2892750e42d949faacc7a61495ac418a1692"
+dependencies = [
+ "async-io",
+ "blocking",
+ "cfg-if",
+ "event-listener",
+ "futures-lite",
+ "libc",
+ "once_cell",
+ "signal-hook",
+ "winapi",
+]
+
+[[package]]
 name = "async-std"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -108,6 +125,7 @@ dependencies = [
  "async-global-executor",
  "async-io",
  "async-lock",
+ "async-process",
  "crossbeam-utils",
  "futures-channel",
  "futures-core",
@@ -516,7 +534,7 @@ dependencies = [
 [[package]]
 name = "glib"
 version = "0.15.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#64cd888c4b02525b2c22a5979f8c5f592c1f4047"
+source = "git+https://github.com/gtk-rs/gtk-rs-core#834ea60512aef1df6d861fb1efd06173b3d7083a"
 dependencies = [
  "bitflags",
  "futures-channel",
@@ -534,7 +552,7 @@ dependencies = [
 [[package]]
 name = "glib-macros"
 version = "0.15.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#64cd888c4b02525b2c22a5979f8c5f592c1f4047"
+source = "git+https://github.com/gtk-rs/gtk-rs-core#834ea60512aef1df6d861fb1efd06173b3d7083a"
 dependencies = [
  "anyhow",
  "heck",
@@ -548,7 +566,7 @@ dependencies = [
 [[package]]
 name = "glib-sys"
 version = "0.15.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#64cd888c4b02525b2c22a5979f8c5f592c1f4047"
+source = "git+https://github.com/gtk-rs/gtk-rs-core#834ea60512aef1df6d861fb1efd06173b3d7083a"
 dependencies = [
  "libc",
  "system-deps",
@@ -570,7 +588,7 @@ dependencies = [
 [[package]]
 name = "gobject-sys"
 version = "0.15.0"
-source = "git+https://github.com/gtk-rs/gtk-rs-core#64cd888c4b02525b2c22a5979f8c5f592c1f4047"
+source = "git+https://github.com/gtk-rs/gtk-rs-core#834ea60512aef1df6d861fb1efd06173b3d7083a"
 dependencies = [
  "glib-sys",
  "libc",
@@ -658,6 +676,30 @@ source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs#b43d785d8377
 dependencies = [
  "glib-sys",
  "gobject-sys",
+ "gstreamer-sys",
+ "libc",
+ "system-deps",
+]
+
+[[package]]
+name = "gstreamer-rtp"
+version = "0.18.0"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs#b43d785d837738a9071ad0690232e245e487dd53"
+dependencies = [
+ "bitflags",
+ "glib",
+ "gstreamer",
+ "gstreamer-rtp-sys",
+ "once_cell",
+]
+
+[[package]]
+name = "gstreamer-rtp-sys"
+version = "0.18.0"
+source = "git+https://gitlab.freedesktop.org/gstreamer/gstreamer-rs#b43d785d837738a9071ad0690232e245e487dd53"
+dependencies = [
+ "glib-sys",
+ "gstreamer-base-sys",
  "gstreamer-sys",
  "libc",
  "system-deps",
@@ -1313,6 +1355,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "signal-hook"
+version = "0.3.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c98891d737e271a2954825ef19e46bd16bdb98e2746f2eec4f7a4ef7946efd1"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
+name = "signal-hook-registry"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1630,6 +1691,7 @@ dependencies = [
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
+ "gstreamer-rtp",
  "gstreamer-sdp",
  "gstreamer-video",
  "gstreamer-webrtc",

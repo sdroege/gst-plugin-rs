@@ -14,11 +14,12 @@ gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gst
 gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
 gst-webrtc = { package = "gstreamer-webrtc", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
 gst-sdp = { package = "gstreamer-sdp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
+gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
 once_cell = "1.0"
 smallvec = "1"
 anyhow = "1"
 futures = "0.3"
-async-std = "1"
+async-std = { version = "1", features = ["unstable"] }
 async-tungstenite = { version = "0.10", features = ["async-std-runtime", "async-native-tls"] }
 serde = "1"
 serde_derive = "1"
@@ -48,4 +49,4 @@ install_subdir = "gstreamer-1.0"
 versioning = false
 
 [package.metadata.capi.pkg_config]
-requires_private = "gstreamer-webrtc >= 1.20, gstreamer-1.0 >= 1.20, gstreamer-app >= 1.20, gstreamer-video >= 1.20, gstreamer-sdp >= 1.20, gobject-2.0, glib-2.0, gmodule-2.0"
+requires_private = "gstreamer-rtp >= 1.20, gstreamer-webrtc >= 1.20, gstreamer-1.0 >= 1.20, gstreamer-app >= 1.20, gstreamer-video >= 1.20, gstreamer-sdp >= 1.20, gobject-2.0, glib-2.0, gmodule-2.0"

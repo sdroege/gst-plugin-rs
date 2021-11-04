@@ -110,6 +110,16 @@ impl WebRTCSink {
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
+#[repr(u32)]
+#[genum(type_name = "GstWebRTCSinkCongestionControl")]
+pub enum WebRTCSinkCongestionControl {
+    #[genum(name = "Disabled: no congestion control is applied", nick = "disabled")]
+    Disabled,
+    #[genum(name = "Homegrown: simple sender-side heuristic", nick = "homegrown")]
+    Homegrown,
+}
+
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
