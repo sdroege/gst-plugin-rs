@@ -139,21 +139,18 @@ impl ObjectSubclass for SineSrc {
 
         // On the src pad, we can produce F32/F64 with any sample rate
         // and any number of channels
-        let caps = gst::Caps::new_simple(
-            "audio/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[
-                        &gst_audio::AUDIO_FORMAT_F32.to_str(),
-                        &gst_audio::AUDIO_FORMAT_F64.to_str(),
-                    ]),
-                ),
-                ("layout", &"interleaved"),
-                ("rate", &gst::IntRange::<i32>::new(1, i32::MAX)),
-                ("channels", &gst::IntRange::<i32>::new(1, i32::MAX)),
-            ],
-        );
+        let caps = gst::Caps::builder("audio/x-raw")
+            .field(
+                "format",
+                gst::List::new([
+                    gst_audio::AUDIO_FORMAT_F32.to_str(),
+                    gst_audio::AUDIO_FORMAT_F64.to_str(),
+                ]),
+            )
+            .field("layout", "interleaved")
+            .field("rate", gst::IntRange::new(1, i32::MAX))
+            .field("channels", gst::IntRange::new(1, i32::MAX))
+            .build();
         // The src pad template must be named "src" for basesrc
         // and specific a pad that is always there
         let src_pad_template = gst::PadTemplate::new(

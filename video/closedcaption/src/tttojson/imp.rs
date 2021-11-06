@@ -134,7 +134,7 @@ impl TtToJson {
             EventView::Caps(_) => {
                 // We send our own caps downstream
                 let caps = gst::Caps::builder("application/x-json")
-                    .field("format", &"cea608")
+                    .field("format", "cea608")
                     .build();
                 self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
@@ -163,7 +163,7 @@ impl ElementImpl for TtToJson {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let caps = gst::Caps::builder("text/x-raw")
-                .field("format", &"utf8")
+                .field("format", "utf8")
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

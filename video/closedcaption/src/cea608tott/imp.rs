@@ -309,7 +309,7 @@ impl Cea608ToTt {
                 } else if s.name() == "text/x-raw" {
                     state.format = Some(Format::Raw);
                     gst::Caps::builder("text/x-raw")
-                        .field("format", &"utf8")
+                        .field("format", "utf8")
                         .build()
                 } else {
                     unreachable!();
@@ -453,7 +453,7 @@ impl ElementImpl for Cea608ToTt {
 
                 // Raw timed text
                 let s = gst::Structure::builder("text/x-raw")
-                    .field("format", &"utf8")
+                    .field("format", "utf8")
                     .build();
                 caps.append_structure(s);
             }
@@ -467,7 +467,7 @@ impl ElementImpl for Cea608ToTt {
             .unwrap();
 
             let caps = gst::Caps::builder("closedcaption/x-cea-608")
-                .field("format", &"raw")
+                .field("format", "raw")
                 .build();
 
             let sink_pad_template = gst::PadTemplate::new(

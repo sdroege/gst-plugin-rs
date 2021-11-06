@@ -64,7 +64,7 @@ impl ObjectSubclass for ProgressBin {
         // Create the progressreport element.
         let progress = gst::ElementFactory::make("progressreport", Some("progress")).unwrap();
         // Don't let progressreport print to stdout itself
-        progress.set_property("silent", &true).unwrap();
+        progress.set_property("silent", true).unwrap();
 
         // Return an instance of our struct
         Self {

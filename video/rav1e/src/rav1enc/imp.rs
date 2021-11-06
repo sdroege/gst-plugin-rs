@@ -426,35 +426,32 @@ impl ElementImpl for Rav1Enc {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::new_simple(
-                "video/x-raw",
-                &[
-                    (
-                        "format",
-                        &gst::List::new(&[
-                            &gst_video::VideoFormat::I420.to_str(),
-                            &gst_video::VideoFormat::Y42b.to_str(),
-                            &gst_video::VideoFormat::Y444.to_str(),
-                            &gst_video::VideoFormat::I42010le.to_str(),
-                            &gst_video::VideoFormat::I42210le.to_str(),
-                            &gst_video::VideoFormat::Y44410le.to_str(),
-                            &gst_video::VideoFormat::I42012le.to_str(),
-                            &gst_video::VideoFormat::I42212le.to_str(),
-                            &gst_video::VideoFormat::Y44412le.to_str(),
-                            // &gst_video::VideoFormat::Gray8.to_str(),
-                        ]),
+            let sink_caps = gst::Caps::builder("video/x-raw")
+                .field(
+                    "format",
+                    gst::List::new([
+                        gst_video::VideoFormat::I420.to_str(),
+                        gst_video::VideoFormat::Y42b.to_str(),
+                        gst_video::VideoFormat::Y444.to_str(),
+                        gst_video::VideoFormat::I42010le.to_str(),
+                        gst_video::VideoFormat::I42210le.to_str(),
+                        gst_video::VideoFormat::Y44410le.to_str(),
+                        gst_video::VideoFormat::I42012le.to_str(),
+                        gst_video::VideoFormat::I42212le.to_str(),
+                        gst_video::VideoFormat::Y44412le.to_str(),
+                        // &gst_video::VideoFormat::Gray8.to_str(),
+                    ]),
+                )
+                .field("width", gst::IntRange::new(1, std::i32::MAX))
+                .field("height", gst::IntRange::new(1, std::i32::MAX))
+                .field(
+                    "framerate",
+                    gst::FractionRange::new(
+                        gst::Fraction::new(0, 1),
+                        gst::Fraction::new(std::i32::MAX, 1),
                     ),
-                    ("width", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                    ("height", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                    (
-                        "framerate",
-                        &gst::FractionRange::new(
-                            gst::Fraction::new(0, 1),
-                            gst::Fraction::new(std::i32::MAX, 1),
-                        ),
-                    ),
-                ],
-            );
+                )
+                .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -463,7 +460,7 @@ impl ElementImpl for Rav1Enc {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::new_simple("video/x-av1", &[]);
+            let src_caps = gst::Caps::builder("video/x-av1").build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -603,8 +600,8 @@ impl VideoEncoderImpl for Rav1Enc {
                 speed_settings: config::SpeedSettings::from_preset(settings.speed_preset as usize),
                 time_base: if video_info.fps() != gst::Fraction::new(0, 1) {
                     data::Rational {
-                        num: *video_info.fps().numer() as u64,
-                        den: *video_info.fps().denom() as u64,
+                        num: video_info.fps().numer() as u64,
+                        den: video_info.fps().denom() as u64,
                     }
                 } else {
                     data::Rational { num: 30, den: 1 }
@@ -636,7 +633,7 @@ impl VideoEncoderImpl for Rav1Enc {
         });
 
         let output_state = element
-            .set_output_state(gst::Caps::new_simple("video/x-av1", &[]), Some(state))
+            .set_output_state(gst::Caps::builder("video/x-av1").build(), Some(state))
             .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
         element
             .negotiate(output_state)

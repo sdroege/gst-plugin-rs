@@ -37,7 +37,7 @@ fn test_cdgdec() {
     // Ensure we are in push mode so 'blocksize' prop is used
     let filesrc = gst::ElementFactory::make("pushfilesrc", None).unwrap();
     filesrc
-        .set_property("location", &input_path.to_str().unwrap())
+        .set_property("location", input_path.to_str().unwrap())
         .expect("failed to set 'location' property");
     {
         let child_proxy = filesrc.dynamic_cast_ref::<gst::ChildProxy>().unwrap();

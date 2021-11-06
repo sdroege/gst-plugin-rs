@@ -99,7 +99,7 @@ fn test_client_management() {
 
     /* The client properties is writable too */
     udpsink
-        .set_property("clients", &"127.0.0.1:5004,192.168.1.1:57")
+        .set_property("clients", "127.0.0.1:5004,192.168.1.1:57")
         .unwrap();
     let clients = udpsink
         .property("clients")
@@ -125,7 +125,7 @@ fn test_chain() {
     h.set_src_caps_str("foo/bar");
     {
         let udpsink = h.element().unwrap();
-        udpsink.set_property("clients", &"127.0.0.1:5005").unwrap();
+        udpsink.set_property("clients", "127.0.0.1:5005").unwrap();
     }
 
     thread::spawn(move || {

@@ -42,9 +42,9 @@ fn test_push() {
     fakesrc.link(&queue).unwrap();
     queue.link(&appsink).unwrap();
 
-    fakesrc.set_property("num-buffers", &3i32).unwrap();
+    fakesrc.set_property("num-buffers", 3i32).unwrap();
 
-    appsink.set_property("emit-signals", &true).unwrap();
+    appsink.set_property("emit-signals", true).unwrap();
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 

@@ -195,8 +195,8 @@ impl State {
             let framerate = self.framerate.unwrap();
 
             let dur = gst::ClockTime::SECOND.mul_div_floor(
-                self.internal_buffer.len() as u64 * *framerate.denom() as u64,
-                *framerate.numer() as u64,
+                self.internal_buffer.len() as u64 * framerate.denom() as u64,
+                framerate.numer() as u64,
             );
             buf_mut.set_duration(dur);
 
@@ -409,10 +409,10 @@ impl ElementImpl for SccEnc {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let framerates =
-                gst::List::new(&[&gst::Fraction::new(30000, 1001), &gst::Fraction::new(30, 1)]);
+                gst::List::new([gst::Fraction::new(30000, 1001), gst::Fraction::new(30, 1)]);
             let caps = gst::Caps::builder("closedcaption/x-cea-608")
-                .field("format", &"raw")
-                .field("framerate", &framerates)
+                .field("format", "raw")
+                .field("framerate", framerates)
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

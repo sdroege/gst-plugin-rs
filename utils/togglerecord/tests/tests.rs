@@ -53,7 +53,7 @@ fn setup_sender_receiver(
     thread::JoinHandle<()>,
 ) {
     let fakesink = gst::ElementFactory::make("fakesink", None).unwrap();
-    fakesink.set_property("async", &false).unwrap();
+    fakesink.set_property("async", false).unwrap();
     pipeline.add(&fakesink).unwrap();
 
     let main_stream = pad == "src";
@@ -111,17 +111,17 @@ fn setup_sender_receiver(
                 assert!(sinkpad.send_event(gst::event::StreamStart::new("test")));
                 let caps = if main_stream {
                     gst::Caps::builder("video/x-raw")
-                        .field("format", &"ARGB")
-                        .field("width", &320i32)
-                        .field("height", &240i32)
-                        .field("framerate", &gst::Fraction::new(50, 1))
+                        .field("format", "ARGB")
+                        .field("width", 320i32)
+                        .field("height", 240i32)
+                        .field("framerate", gst::Fraction::new(50, 1))
                         .build()
                 } else {
                     gst::Caps::builder("audio/x-raw")
-                        .field("format", &"U8")
-                        .field("layout", &"interleaved")
-                        .field("rate", &8000i32)
-                        .field("channels", &1i32)
+                        .field("format", "U8")
+                        .field("layout", "interleaved")
+                        .field("rate", 8000i32)
+                        .field("channels", 1i32)
                         .build()
                 };
                 assert!(sinkpad.send_event(gst::event::Caps::new(&caps)));
@@ -298,7 +298,7 @@ fn test_one_stream_open() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
     drop(sender_input);
 
@@ -330,7 +330,7 @@ fn test_one_stream_gaps_open() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input.send(SendData::Buffers(5)).unwrap();
     sender_input.send(SendData::Gaps(5)).unwrap();
     drop(sender_input);
@@ -365,7 +365,7 @@ fn test_one_stream_close_open() {
 
     sender_input.send(SendData::Buffers(10)).unwrap();
     receiver_input_done.recv().unwrap();
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
     drop(sender_input);
 
@@ -397,10 +397,10 @@ fn test_one_stream_open_close() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
     receiver_input_done.recv().unwrap();
-    togglerecord.set_property("record", &false).unwrap();
+    togglerecord.set_property("record", false).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
     drop(sender_input);
 
@@ -432,13 +432,13 @@ fn test_one_stream_open_close_open() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
     receiver_input_done.recv().unwrap();
-    togglerecord.set_property("record", &false).unwrap();
+    togglerecord.set_property("record", false).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
     receiver_input_done.recv().unwrap();
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input.send(SendData::Buffers(10)).unwrap();
     drop(sender_input);
 
@@ -478,7 +478,7 @@ fn test_two_stream_open() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(11)).unwrap();
@@ -536,7 +536,7 @@ fn test_two_stream_open_shift() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(11)).unwrap();
@@ -599,7 +599,7 @@ fn test_two_stream_open_shift_main() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(12)).unwrap();
@@ -676,7 +676,7 @@ fn test_two_stream_open_close() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(11)).unwrap();
@@ -686,7 +686,7 @@ fn test_two_stream_open_close() {
 
     // Stop recording and push new buffers to sender 1, which will advance
     // it and release the 11th buffer of sender 2 above
-    togglerecord.set_property("record", &false).unwrap();
+    togglerecord.set_property("record", false).unwrap();
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     receiver_input_done_2.recv().unwrap();
 
@@ -745,7 +745,7 @@ fn test_two_stream_close_open() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &false).unwrap();
+    togglerecord.set_property("record", false).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(11)).unwrap();
@@ -755,7 +755,7 @@ fn test_two_stream_close_open() {
 
     // Start recording and push new buffers to sender 1, which will advance
     // it and release the 11th buffer of sender 2 above
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     receiver_input_done_2.recv().unwrap();
 
@@ -814,7 +814,7 @@ fn test_two_stream_open_close_open() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(11)).unwrap();
@@ -824,7 +824,7 @@ fn test_two_stream_open_close_open() {
 
     // Stop recording and push new buffers to sender 1, which will advance
     // it and release the 11th buffer of sender 2 above
-    togglerecord.set_property("record", &false).unwrap();
+    togglerecord.set_property("record", false).unwrap();
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     receiver_input_done_2.recv().unwrap();
 
@@ -840,7 +840,7 @@ fn test_two_stream_open_close_open() {
     sender_input_2.send(SendData::Buffers(1)).unwrap();
 
     // Start recording again and send another set of buffers to both senders
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(10)).unwrap();
     receiver_input_done_1.recv().unwrap();
@@ -908,7 +908,7 @@ fn test_two_stream_open_close_open_gaps() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(3)).unwrap();
     sender_input_1.send(SendData::Gaps(3)).unwrap();
@@ -922,7 +922,7 @@ fn test_two_stream_open_close_open_gaps() {
 
     // Stop recording and push new buffers to sender 1, which will advance
     // it and release the 11th buffer of sender 2 above
-    togglerecord.set_property("record", &false).unwrap();
+    togglerecord.set_property("record", false).unwrap();
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     receiver_input_done_2.recv().unwrap();
 
@@ -940,7 +940,7 @@ fn test_two_stream_open_close_open_gaps() {
     sender_input_2.send(SendData::Gaps(1)).unwrap();
 
     // Start recording again and send another set of buffers to both senders
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(10)).unwrap();
     receiver_input_done_1.recv().unwrap();
@@ -1008,7 +1008,7 @@ fn test_two_stream_close_open_close_delta() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &false).unwrap();
+    togglerecord.set_property("record", false).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(11)).unwrap();
@@ -1019,7 +1019,7 @@ fn test_two_stream_close_open_close_delta() {
     // Start recording and push new buffers to sender 1. The first one is a delta frame,
     // so will be dropped, and as such the next frame of sender 2 will also be dropped
     // Sender 2 is empty now
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input_1.send(SendData::BuffersDelta(1)).unwrap();
     sender_input_1.send(SendData::Buffers(9)).unwrap();
     receiver_input_done_2.recv().unwrap();
@@ -1039,7 +1039,7 @@ fn test_two_stream_close_open_close_delta() {
     // Stop recording again and send another set of buffers to both senders
     // The first one is a delta frame, so we only actually stop recording
     // after recording another frame
-    togglerecord.set_property("record", &false).unwrap();
+    togglerecord.set_property("record", false).unwrap();
     sender_input_1.send(SendData::BuffersDelta(1)).unwrap();
     sender_input_1.send(SendData::Buffers(9)).unwrap();
     sender_input_2.send(SendData::Buffers(10)).unwrap();
@@ -1099,7 +1099,7 @@ fn test_three_stream_open_close_open() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(11)).unwrap();
@@ -1110,7 +1110,7 @@ fn test_three_stream_open_close_open() {
 
     // Stop recording and push new buffers to sender 1, which will advance
     // it and release the 11th buffer of sender 2/3 above
-    togglerecord.set_property("record", &false).unwrap();
+    togglerecord.set_property("record", false).unwrap();
     sender_input_1.send(SendData::Buffers(10)).unwrap();
 
     receiver_input_done_2.recv().unwrap();
@@ -1130,7 +1130,7 @@ fn test_three_stream_open_close_open() {
     sender_input_2.send(SendData::Buffers(1)).unwrap();
 
     // Start recording again and send another set of buffers to both senders
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(10)).unwrap();
     sender_input_3.send(SendData::Buffers(5)).unwrap();
@@ -1221,7 +1221,7 @@ fn test_two_stream_main_eos() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     // Send 10 buffers to main stream first
     sender_input_1.send(SendData::Buffers(10)).unwrap();
@@ -1304,7 +1304,7 @@ fn test_two_stream_secondary_eos_first() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     // Send 10 buffers to main stream first
     sender_input_1.send(SendData::Buffers(10)).unwrap();
@@ -1382,7 +1382,7 @@ fn test_three_stream_main_eos() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(9)).unwrap();
@@ -1495,7 +1495,7 @@ fn test_three_stream_main_and_second_eos() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(9)).unwrap();
@@ -1608,7 +1608,7 @@ fn test_three_stream_secondary_eos_first() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    togglerecord.set_property("record", &true).unwrap();
+    togglerecord.set_property("record", true).unwrap();
 
     sender_input_1.send(SendData::Buffers(10)).unwrap();
     sender_input_2.send(SendData::Buffers(9)).unwrap();

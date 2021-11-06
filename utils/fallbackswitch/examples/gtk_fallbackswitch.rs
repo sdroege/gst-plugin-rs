@@ -42,7 +42,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
 
     let fallbackswitch = gst::ElementFactory::make("fallbackswitch", None).unwrap();
     fallbackswitch
-        .set_property("timeout", &gst::ClockTime::SECOND)
+        .set_property("timeout", gst::ClockTime::SECOND)
         .unwrap();
 
     let decodebin = gst::ElementFactory::make("decodebin", None).unwrap();

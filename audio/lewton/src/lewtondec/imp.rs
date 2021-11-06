@@ -71,7 +71,7 @@ impl ElementImpl for LewtonDec {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::new_simple("audio/x-vorbis", &[]);
+            let sink_caps = gst::Caps::builder("audio/x-vorbis").build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -80,15 +80,12 @@ impl ElementImpl for LewtonDec {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::new_simple(
-                "audio/x-raw",
-                &[
-                    ("format", &gst_audio::AUDIO_FORMAT_F32.to_str()),
-                    ("rate", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                    ("channels", &gst::IntRange::<i32>::new(1, 255)),
-                    ("layout", &"interleaved"),
-                ],
-            );
+            let src_caps = gst::Caps::builder("audio/x-raw")
+                .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
+                .field("rate", gst::IntRange::new(1, std::i32::MAX))
+                .field("channels", gst::IntRange::new(1i32, 255))
+                .field("layout", "interleaved")
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -139,7 +136,7 @@ impl AudioDecoderImpl for LewtonDec {
         let mut state = state_guard.as_mut().unwrap();
 
         let s = caps.structure(0).unwrap();
-        if let Ok(Some(streamheaders)) = s.get_optional::<gst::Array>("streamheader") {
+        if let Ok(Some(streamheaders)) = s.get_optional::<gst::ArrayRef>("streamheader") {
             let streamheaders = streamheaders.as_slice();
             if streamheaders.len() < 3 {
                 gst_debug!(

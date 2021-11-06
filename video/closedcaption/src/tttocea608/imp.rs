@@ -213,10 +213,7 @@ impl State {
     ) {
         self.check_erase_display(element, bufferlist);
 
-        let (fps_n, fps_d) = (
-            *self.framerate.numer() as u64,
-            *self.framerate.denom() as u64,
-        );
+        let (fps_n, fps_d) = (self.framerate.numer() as u64, self.framerate.denom() as u64);
 
         let pts = (self.last_frame_no * gst::ClockTime::SECOND)
             .mul_div_round(fps_d, fps_n)
@@ -566,8 +563,8 @@ impl TtToCea608 {
         };
 
         let (fps_n, fps_d) = (
-            *state.framerate.numer() as u64,
-            *state.framerate.denom() as u64,
+            state.framerate.numer() as u64,
+            state.framerate.denom() as u64,
         );
 
         let frame_no = pts.mul_div_round(fps_n, fps_d).unwrap().seconds();
@@ -949,8 +946,8 @@ impl TtToCea608 {
                 let mut state = self.state.lock().unwrap();
 
                 let (fps_n, fps_d) = (
-                    *state.framerate.numer() as u64,
-                    *state.framerate.denom() as u64,
+                    state.framerate.numer() as u64,
+                    state.framerate.denom() as u64,
                 );
 
                 let (timestamp, duration) = e.get();
@@ -1178,11 +1175,11 @@ impl ElementImpl for TtToCea608 {
             {
                 let caps = caps.get_mut().unwrap();
 
-                let s = gst::Structure::new_empty("text/x-raw");
+                let s = gst::Structure::builder("text/x-raw").build();
                 caps.append_structure(s);
 
                 let s = gst::Structure::builder("application/x-json")
-                    .field("format", &"cea608")
+                    .field("format", "cea608")
                     .build();
                 caps.append_structure(s);
             }
@@ -1201,8 +1198,8 @@ impl ElementImpl for TtToCea608 {
             );
 
             let caps = gst::Caps::builder("closedcaption/x-cea-608")
-                .field("format", &"raw")
-                .field("framerate", &framerate)
+                .field("format", "raw")
+                .field("framerate", framerate)
                 .build();
 
             let src_pad_template = gst::PadTemplate::new(

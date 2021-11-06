@@ -25,7 +25,7 @@ use gst::{gst_debug, gst_error, gst_info, gst_log};
 
 use std::mem;
 use std::sync::Mutex;
-use std::{i32, u64};
+use std::u64;
 
 use byte_slice_cast::*;
 
@@ -1887,15 +1887,12 @@ impl ElementImpl for AudioLoudNorm {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::new_simple(
-                "audio/x-raw",
-                &[
-                    ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-                    ("rate", &192_000i32),
-                    ("channels", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                    ("layout", &"interleaved"),
-                ],
-            );
+            let caps = gst::Caps::builder("audio/x-raw")
+                .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
+                .field("rate", 192_000i32)
+                .field("channels", gst::IntRange::new(1, std::i32::MAX))
+                .field("layout", "interleaved")
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

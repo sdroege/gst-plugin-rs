@@ -67,7 +67,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             cc_caps: gst::Caps::builder("closedcaption/x-cea-608")
-                .field("format", &"raw")
+                .field("format", "raw")
                 .build(),
             passthrough: DEFAULT_PASSTHROUGH,
             latency: DEFAULT_LATENCY,
@@ -139,16 +139,16 @@ impl TranscriberBin {
 
         state
             .transcriber_queue
-            .set_property("max-size-buffers", &0u32)
+            .set_property("max-size-buffers", 0u32)
             .unwrap();
         state
             .transcriber_queue
-            .set_property("max-size-time", &0u64)
+            .set_property("max-size-time", 0u64)
             .unwrap();
 
         state.internal_bin.add(&state.transcription_bin)?;
 
-        state.textwrap.set_property("lines", &2u32).unwrap();
+        state.textwrap.set_property("lines", 2u32).unwrap();
 
         state.transcription_bin.set_locked_state(true);
 
@@ -208,7 +208,7 @@ impl TranscriberBin {
 
         state
             .cccombiner
-            .set_property("latency", &(100 * gst::ClockTime::MSECOND))
+            .set_property("latency", 100 * gst::ClockTime::MSECOND)
             .unwrap();
 
         self.audio_sinkpad
@@ -239,15 +239,15 @@ impl TranscriberBin {
         let max_size_time = settings.latency + settings.accumulate_time;
 
         for queue in &[&state.audio_queue_passthrough, &state.video_queue] {
-            queue.set_property("max-size-bytes", &0u32).unwrap();
-            queue.set_property("max-size-buffers", &0u32).unwrap();
-            queue.set_property("max-size-time", &max_size_time).unwrap();
+            queue.set_property("max-size-bytes", 0u32).unwrap();
+            queue.set_property("max-size-buffers", 0u32).unwrap();
+            queue.set_property("max-size-time", max_size_time).unwrap();
         }
 
         let latency_ms = settings.latency.mseconds() as u32;
         state
             .transcriber
-            .set_property("latency", &latency_ms)
+            .set_property("latency", latency_ms)
             .unwrap();
 
         if !settings.passthrough {
@@ -349,19 +349,19 @@ impl TranscriberBin {
 
         gst_debug!(CAT, obj: element, "setting CC mode {:?}", mode);
 
-        state.tttocea608.set_property("mode", &mode).unwrap();
+        state.tttocea608.set_property("mode", mode).unwrap();
 
         if mode.is_rollup() {
             state
                 .textwrap
-                .set_property("accumulate-time", &0u64)
+                .set_property("accumulate-time", 0u64)
                 .unwrap();
         } else {
             let accumulate_time = self.settings.lock().unwrap().accumulate_time;
 
             state
                 .textwrap
-                .set_property("accumulate-time", &accumulate_time)
+                .set_property("accumulate-time", accumulate_time)
                 .unwrap();
         }
     }
@@ -776,7 +776,7 @@ impl ElementImpl for TranscriberBin {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::new_simple("video/x-raw", &[]);
+            let caps = gst::Caps::builder("video/x-raw").build();
             let video_src_pad_template = gst::PadTemplate::new(
                 "src_video",
                 gst::PadDirection::Src,
@@ -792,7 +792,7 @@ impl ElementImpl for TranscriberBin {
             )
             .unwrap();
 
-            let caps = gst::Caps::new_simple("audio/x-raw", &[]);
+            let caps = gst::Caps::builder("audio/x-raw").build();
             let audio_src_pad_template = gst::PadTemplate::new(
                 "src_audio",
                 gst::PadDirection::Src,

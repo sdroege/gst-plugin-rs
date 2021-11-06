@@ -273,8 +273,7 @@ impl State {
         }
 
         buffer.set_duration(
-            gst::ClockTime::SECOND
-                .mul_div_ceil(*framerate.denom() as u64, *framerate.numer() as u64),
+            gst::ClockTime::SECOND.mul_div_ceil(framerate.denom() as u64, framerate.numer() as u64),
         );
     }
 
@@ -310,12 +309,12 @@ impl State {
 
                 let caps = match format {
                     Format::Cea708Cdp => gst::Caps::builder("closedcaption/x-cea-708")
-                        .field("format", &"cdp")
-                        .field("framerate", &framerate)
+                        .field("format", "cdp")
+                        .field("framerate", framerate)
                         .build(),
                     Format::Cea608 => gst::Caps::builder("closedcaption/x-cea-608")
-                        .field("format", &"s334-1a")
-                        .field("framerate", &framerate)
+                        .field("format", "s334-1a")
+                        .field("framerate", framerate)
                         .build(),
                 };
 
@@ -1226,14 +1225,14 @@ impl ElementImpl for MccParse {
                 );
 
                 let s = gst::Structure::builder("closedcaption/x-cea-708")
-                    .field("format", &"cdp")
-                    .field("framerate", &framerate)
+                    .field("format", "cdp")
+                    .field("framerate", framerate)
                     .build();
                 caps.append_structure(s);
 
                 let s = gst::Structure::builder("closedcaption/x-cea-608")
-                    .field("format", &"s334-1a")
-                    .field("framerate", &framerate)
+                    .field("format", "s334-1a")
+                    .field("framerate", framerate)
                     .build();
                 caps.append_structure(s);
             }
@@ -1246,7 +1245,7 @@ impl ElementImpl for MccParse {
             .unwrap();
 
             let caps = gst::Caps::builder("application/x-mcc")
-                .field("version", &gst::List::new(&[&1i32, &2i32]))
+                .field("version", gst::List::new([1i32, 2i32]))
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

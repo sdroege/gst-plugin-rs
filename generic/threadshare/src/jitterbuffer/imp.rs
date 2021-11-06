@@ -706,15 +706,12 @@ impl SrcHandler {
                 let n_packets = gap - latency.nseconds() / spacing.nseconds();
 
                 if do_lost {
-                    let s = gst::Structure::new(
-                        "GstRTPPacketLost",
-                        &[
-                            ("seqnum", &(lost_seqnum as u32)),
-                            ("timestamp", &(last_popped_pts + spacing)),
-                            ("duration", &(n_packets * spacing).nseconds()),
-                            ("retry", &0),
-                        ],
-                    );
+                    let s = gst::Structure::builder("GstRTPPacketLost")
+                        .field("seqnum", lost_seqnum as u32)
+                        .field("timestamp", last_popped_pts + spacing)
+                        .field("duration", (n_packets * spacing).nseconds())
+                        .field("retry", 0)
+                        .build();
 
                     events.push(gst::event::CustomDownstream::new(s));
                 }
@@ -736,15 +733,12 @@ impl SrcHandler {
                 state.last_popped_pts = Some(timestamp);
 
                 if do_lost {
-                    let s = gst::Structure::new(
-                        "GstRTPPacketLost",
-                        &[
-                            ("seqnum", &(lost_seqnum as u32)),
-                            ("timestamp", &timestamp),
-                            ("duration", &duration.nseconds()),
-                            ("retry", &0),
-                        ],
-                    );
+                    let s = gst::Structure::builder("GstRTPPacketLost")
+                        .field("seqnum", lost_seqnum as u32)
+                        .field("timestamp", timestamp)
+                        .field("duration", duration.nseconds())
+                        .field("retry", 0)
+                        .build();
 
                     events.push(gst::event::CustomDownstream::new(s));
                 }
@@ -1503,14 +1497,11 @@ impl ObjectImpl for JitterBuffer {
             }
             "stats" => {
                 let state = self.state.lock().unwrap();
-                let s = gst::Structure::new(
-                    "application/x-rtp-jitterbuffer-stats",
-                    &[
-                        ("num-pushed", &state.stats.num_pushed),
-                        ("num-lost", &state.stats.num_lost),
-                        ("num-late", &state.stats.num_late),
-                    ],
-                );
+                let s = gst::Structure::builder("application/x-rtp-jitterbuffer-stats")
+                    .field("num-pushed", state.stats.num_pushed)
+                    .field("num-lost", state.stats.num_lost)
+                    .field("num-late", state.stats.num_late)
+                    .build();
                 s.to_value()
             }
             "context" => {

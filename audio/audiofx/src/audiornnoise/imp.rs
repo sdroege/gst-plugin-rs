@@ -225,15 +225,12 @@ impl ElementImpl for AudioRNNoise {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::new_simple(
-                "audio/x-raw",
-                &[
-                    ("format", &gst_audio::AUDIO_FORMAT_F32.to_str()),
-                    ("rate", &48000),
-                    ("channels", &gst::IntRange::<i32>::new(1, std::i32::MAX)),
-                    ("layout", &"interleaved"),
-                ],
-            );
+            let caps = gst::Caps::builder("audio/x-raw")
+                .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
+                .field("rate", 48000)
+                .field("channels", gst::IntRange::new(1, std::i32::MAX))
+                .field("layout", "interleaved")
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

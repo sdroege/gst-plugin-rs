@@ -109,8 +109,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .set_property("location", &out_loc)
         .expect("Failed to set location property");
 
-    decrypter.set_property("receiver-key", &glib::Bytes::from_owned(receiver.private.0))?;
-    decrypter.set_property("sender-key", &glib::Bytes::from_owned(sender.public))?;
+    decrypter.set_property("receiver-key", glib::Bytes::from_owned(receiver.private.0))?;
+    decrypter.set_property("sender-key", glib::Bytes::from_owned(sender.public))?;
 
     let pipeline = gst::Pipeline::new(Some("test-pipeline"));
     pipeline

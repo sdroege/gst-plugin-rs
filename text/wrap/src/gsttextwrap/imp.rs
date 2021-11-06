@@ -632,7 +632,7 @@ impl ElementImpl for TextWrap {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let caps = gst::Caps::builder("text/x-raw")
-                .field("format", &"utf8")
+                .field("format", "utf8")
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

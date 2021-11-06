@@ -142,7 +142,7 @@ impl Harness {
         });
 
         let local_addr = futures::executor::block_on(local_addr_receiver).unwrap();
-        src.set_property("location", &format!("http://{}/", local_addr))
+        src.set_property("location", format!("http://{}/", local_addr))
             .unwrap();
 
         // Let the test setup anything needed on the HTTP source now
@@ -410,10 +410,10 @@ fn test_basic_request_inverted_defaults() {
             Response::new(Body::from("Hello World"))
         },
         |src| {
-            src.set_property("keep-alive", &false).unwrap();
-            src.set_property("compress", &true).unwrap();
-            src.set_property("iradio-mode", &false).unwrap();
-            src.set_property("user-agent", &"test user-agent").unwrap();
+            src.set_property("keep-alive", false).unwrap();
+            src.set_property("compress", true).unwrap();
+            src.set_property("iradio-mode", false).unwrap();
+            src.set_property("user-agent", "test user-agent").unwrap();
         },
     );
 
@@ -485,10 +485,10 @@ fn test_extra_headers() {
             src.set_property(
                 "extra-headers",
                 &gst::Structure::builder("headers")
-                    .field("foo", &"bar")
-                    .field("baz", &1i32)
-                    .field("list", &gst::List::new(&[&1i32, &2i32]))
-                    .field("array", &gst::Array::new(&[&1i32, &2i32]))
+                    .field("foo", "bar")
+                    .field("baz", 1i32)
+                    .field("list", gst::List::new([1i32, 2i32]))
+                    .field("array", gst::Array::new([1i32, 2i32]))
                     .build(),
             )
             .unwrap();
@@ -650,8 +650,8 @@ fn test_iradio_mode() {
     assert_eq!(
         caps,
         gst::Caps::builder("application/x-icy")
-            .field("metadata-interval", &8192i32)
-            .field("content-type", &"audio/mpeg; rate=44100")
+            .field("metadata-interval", 8192i32)
+            .field("content-type", "audio/mpeg; rate=44100")
             .build()
     );
 
@@ -726,10 +726,10 @@ fn test_audio_l16() {
     assert_eq!(
         caps,
         gst::Caps::builder("audio/x-unaligned-raw")
-            .field("format", &"S16BE")
-            .field("layout", &"interleaved")
-            .field("channels", &2i32)
-            .field("rate", &48_000i32)
+            .field("format", "S16BE")
+            .field("layout", "interleaved")
+            .field("channels", 2i32)
+            .field("rate", 48_000i32)
             .build()
     );
 }
@@ -760,8 +760,8 @@ fn test_authorization() {
             }
         },
         |src| {
-            src.set_property("user-id", &"user").unwrap();
-            src.set_property("user-pw", &"password").unwrap();
+            src.set_property("user-id", "user").unwrap();
+            src.set_property("user-pw", "password").unwrap();
         },
     );
 
@@ -860,7 +860,7 @@ fn test_network_error() {
     let mut h = Harness::new(
         |_req| unreachable!(),
         |src| {
-            src.set_property("location", &"http://0.0.0.0:0").unwrap();
+            src.set_property("location", "http://0.0.0.0:0").unwrap();
         },
     );
 

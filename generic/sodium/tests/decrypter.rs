@@ -166,7 +166,7 @@ fn test_pull_range() {
 
     let filesrc = gst::ElementFactory::make("filesrc", None).unwrap();
     filesrc
-        .set_property("location", &input_path.to_str().unwrap())
+        .set_property("location", input_path.to_str().unwrap())
         .expect("failed to set property");
 
     let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();

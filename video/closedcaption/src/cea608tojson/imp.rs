@@ -938,7 +938,7 @@ impl Cea608ToJson {
             EventView::Caps(..) => {
                 // We send our own caps downstream
                 let caps = gst::Caps::builder("application/x-json")
-                    .field("format", &"cea608")
+                    .field("format", "cea608")
                     .build();
                 self.srcpad.push_event(gst::event::Caps::new(&caps))
             }
@@ -1084,7 +1084,7 @@ impl ElementImpl for Cea608ToJson {
             .unwrap();
 
             let caps = gst::Caps::builder("closedcaption/x-cea-608")
-                .field("format", &"raw")
+                .field("format", "raw")
                 .build();
 
             let sink_pad_template = gst::PadTemplate::new(

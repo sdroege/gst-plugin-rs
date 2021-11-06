@@ -340,27 +340,24 @@ To be able to declare what kinds of pads an element can create (they are not nec
 In our case we only have always pads, one sink pad called “sink”, on which we can only accept RGB (BGRx to be exact) data with any width/height/framerate and one source pad called “src”, on which we will produce either RGB (BGRx) data or GRAY8 (8-bit grayscale) data. We do this by adding the following code to the class_init function.
 
 ```rust
-        let caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                (
-                    "format",
-                    &gst::List::new(&[
-                        &gst_video::VideoFormat::Bgrx.to_str(),
-                        &gst_video::VideoFormat::Gray8.to_str(),
-                    ]),
+        let caps = gst::Caps::builder("video/x-raw")
+            .field(
+                "format",
+                gst::List::new([
+                    gst_video::VideoFormat::Bgrx.to_str(),
+                    gst_video::VideoFormat::Gray8.to_str(),
+                ]),
+            )
+            .field("width", gst::IntRange::new(0, i32::MAX))
+            .field("height", gst::IntRange::new(0, i32::MAX))
+            .field(
+                "framerate",
+                gst::FractionRange::new(
+                    gst::Fraction::new(0, 1),
+                    gst::Fraction::new(i32::MAX, 1),
                 ),
-                ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                ),
-            ],
-        );
+            )
+            .build();
         let src_pad_template = gst::PadTemplate::new(
             "src",
             gst::PadDirection::Src,
@@ -371,21 +368,18 @@ In our case we only have always pads, one sink pad called “sink”, on which w
         klass.add_pad_template(src_pad_template);
 
 
-        let caps = gst::Caps::new_simple(
-            "video/x-raw",
-            &[
-                ("format", &gst_video::VideoFormat::Bgrx.to_str()),
-                ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                (
-                    "framerate",
-                    &gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
+        let caps = gst::Caps::builder("video/x-raw")
+            .field("format", gst_video::VideoFormat::Bgrx.to_str())
+            .field("width", gst::IntRange::new(0, i32::MAX))
+            .field("height", gst::IntRange:::new(0, i32::MAX))
+            .field(
+                "framerate",
+                gst::FractionRange::new(
+                    gst::Fraction::new(0, 1),
+                    gst::Fraction::new(i32::MAX, 1),
                 ),
-            ],
-        );
+            )
+            .build();
         let sink_pad_template = gst::PadTemplate::new(
             "sink",
             gst::PadDirection::Sink,

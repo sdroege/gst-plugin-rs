@@ -192,7 +192,7 @@ impl ObjectImpl for RegEx {
             "commands" => {
                 let mut state = self.state.lock().unwrap();
                 state.commands = vec![];
-                let commands: gst::Array = value.get().expect("type checked upstream");
+                let commands = value.get::<gst::ArrayRef>().expect("type checked upstream");
                 for command in commands.as_slice() {
                     let s = match command
                         .get::<Option<gst::Structure>>()
@@ -258,16 +258,16 @@ impl ObjectImpl for RegEx {
                     match command.operation {
                         Operation::ReplaceAll(ref replacement) => {
                             commands.push(
-                                gst::Structure::new(
-                                    "replace-all",
-                                    &[("pattern", &command.pattern), ("replacement", &replacement)],
-                                )
-                                .to_send_value(),
+                                gst::Structure::builder("replace-all")
+                                    .field("pattern", &command.pattern)
+                                    .field("replacement", replacement)
+                                    .build()
+                                    .to_send_value(),
                             );
                         }
                     }
                 }
-                gst::Array::from_owned(commands).to_value()
+                gst::Array::from(commands).to_value()
             }
             _ => unimplemented!(),
         }
@@ -293,7 +293,7 @@ impl ElementImpl for RegEx {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let caps = gst::Caps::builder("text/x-raw")
-                .field("format", &"utf8")
+                .field("format", "utf8")
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

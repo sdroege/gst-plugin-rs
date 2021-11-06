@@ -99,15 +99,12 @@ fn csound_filter_eos() {
     let num_channels = 1;
     let sr: i32 = 44_100;
 
-    let caps = gst::Caps::new_simple(
-        "audio/x-raw",
-        &[
-            ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-            ("rate", &sr),
-            ("channels", &num_channels),
-            ("layout", &"interleaved"),
-        ],
-    );
+    let caps = gst::Caps::builder("audio/x-raw")
+        .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
+        .field("rate", sr)
+        .field("channels", num_channels)
+        .field("layout", "interleaved")
+        .build();
 
     let mut h = build_harness(
         caps.clone(),
@@ -212,15 +209,12 @@ fn csound_filter_underflow() {
     let num_channels = 1;
     let sr: i32 = 44_100;
 
-    let caps = gst::Caps::new_simple(
-        "audio/x-raw",
-        &[
-            ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-            ("rate", &sr),
-            ("channels", &num_channels),
-            ("layout", &"interleaved"),
-        ],
-    );
+    let caps = gst::Caps::builder("audio/x-raw")
+        .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
+        .field("rate", sr)
+        .field("channels", num_channels)
+        .field("layout", "interleaved")
+        .build();
 
     let mut h = build_harness(
         caps.clone(),
@@ -294,27 +288,21 @@ fn csound_filter_caps_negotiation() {
     let ochannels = 1;
     let sr: i32 = 44_100;
 
-    let src_caps = gst::Caps::new_simple(
-        "audio/x-raw",
-        &[
-            ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-            ("rate", &sr),
-            ("channels", &ichannels),
-            ("layout", &"interleaved"),
-        ],
-    );
+    let src_caps = gst::Caps::builder("audio/x-raw")
+        .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
+        .field("rate", sr)
+        .field("channels", ichannels)
+        .field("layout", "interleaved")
+        .build();
 
     // Define the output caps which would be fixated
     // at the end of the caps negotiation
-    let sink_caps = gst::Caps::new_simple(
-        "audio/x-raw",
-        &[
-            ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-            ("rate", &gst::IntRange::<i32>::new(1, 48000)),
-            ("channels", &gst::IntRange::<i32>::new(1, 2)),
-            ("layout", &"interleaved"),
-        ],
-    );
+    let sink_caps = gst::Caps::builder("audio/x-raw")
+        .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
+        .field("rate", gst::IntRange::new(1i32, 48000))
+        .field("channels", gst::IntRange::new(1i32, 2))
+        .field("layout", "interleaved")
+        .build();
 
     // build the harness setting its src and sink caps,
     // also passing the csd score to the filter element
@@ -349,15 +337,12 @@ fn csound_filter_caps_negotiation() {
         .expect("pad has no caps");
 
     // our expected caps at the harness sinkpad
-    let expected_caps = gst::Caps::new_simple(
-        "audio/x-raw",
-        &[
-            ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-            ("rate", &44_100i32),
-            ("channels", &ochannels),
-            ("layout", &"interleaved"),
-        ],
-    );
+    let expected_caps = gst::Caps::builder("audio/x-raw")
+        .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
+        .field("rate", 44_100i32)
+        .field("channels", ochannels)
+        .field("layout", "interleaved")
+        .build();
 
     assert_eq!(harness_sink_caps, expected_caps);
 }
@@ -373,27 +358,21 @@ fn csound_filter_caps_negotiation_fail() {
     let ichannels = 2;
     let ochannels = 1;
 
-    let src_caps = gst::Caps::new_simple(
-        "audio/x-raw",
-        &[
-            ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-            ("rate", &44_100i32),
-            ("channels", &ichannels),
-            ("layout", &"interleaved"),
-        ],
-    );
+    let src_caps = gst::Caps::builder("audio/x-raw")
+        .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
+        .field("rate", 44_100i32)
+        .field("channels", ichannels)
+        .field("layout", "interleaved")
+        .build();
 
     // instead of having a range for channels/rate fields
     // we fixate them  to 2 and 48_000 respectively, which would cause the negotiation error
-    let sink_caps = gst::Caps::new_simple(
-        "audio/x-raw",
-        &[
-            ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-            ("rate", &48_000i32),
-            ("channels", &ichannels),
-            ("layout", &"interleaved"),
-        ],
-    );
+    let sink_caps = gst::Caps::builder("audio/x-raw")
+        .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
+        .field("rate", 48_000i32)
+        .field("channels", ichannels)
+        .field("layout", "interleaved")
+        .build();
 
     let mut h = build_harness(
         src_caps,

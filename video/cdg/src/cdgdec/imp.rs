@@ -54,7 +54,9 @@ impl ElementImpl for CdgDec {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::new_simple("video/x-cdg", &[("parsed", &true)]);
+            let sink_caps = gst::Caps::builder("video/x-cdg")
+                .field("parsed", true)
+                .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -63,15 +65,12 @@ impl ElementImpl for CdgDec {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::new_simple(
-                "video/x-raw",
-                &[
-                    ("format", &gst_video::VideoFormat::Rgba.to_str()),
-                    ("width", &(CDG_WIDTH as i32)),
-                    ("height", &(CDG_HEIGHT as i32)),
-                    ("framerate", &gst::Fraction::new(0, 1)),
-                ],
-            );
+            let src_caps = gst::Caps::builder("video/x-raw")
+                .field("format", gst_video::VideoFormat::Rgba.to_str())
+                .field("width", CDG_WIDTH as i32)
+                .field("height", CDG_HEIGHT as i32)
+                .field("framerate", gst::Fraction::new(0, 1))
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

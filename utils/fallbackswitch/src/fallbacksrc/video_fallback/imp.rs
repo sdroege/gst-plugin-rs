@@ -303,7 +303,7 @@ impl VideoFallbackSource {
                     .or_else(|_| -> Result<_, glib::BoolError> {
                         let identity =
                             gst::ElementFactory::make("identity", Some("fallback_clocksync"))?;
-                        identity.set_property("sync", &true).unwrap();
+                        identity.set_property("sync", true).unwrap();
                         Ok(identity)
                     })
                     .expect("No clocksync or identity found");
@@ -341,7 +341,7 @@ impl VideoFallbackSource {
                 ])
                 .unwrap();
 
-                if imagefreeze.set_property("is-live", &true).is_err() {
+                if imagefreeze.set_property("is-live", true).is_err() {
                     gst_error!(
                         CAT,
                         obj: element,
@@ -425,7 +425,7 @@ impl VideoFallbackSource {
                 videotestsrc
                     .set_property_from_str("pattern", "black")
                     .unwrap();
-                videotestsrc.set_property("is-live", &true).unwrap();
+                videotestsrc.set_property("is-live", true).unwrap();
 
                 videotestsrc.static_pad("src").unwrap()
             }

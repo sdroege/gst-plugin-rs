@@ -52,10 +52,10 @@ fn run_test(inline_headers: bool) {
         let caps = gst::Caps::builder("audio/x-vorbis")
             .field(
                 "streamheader",
-                &gst::Array::new(&[
-                    &gst::Buffer::from_slice(&data[0..packet_offsets[0]]),
-                    &gst::Buffer::from_slice(&data[packet_offsets[0]..packet_offsets[1]]),
-                    &gst::Buffer::from_slice(&data[packet_offsets[1]..packet_offsets[2]]),
+                gst::Array::new([
+                    gst::Buffer::from_slice(&data[0..packet_offsets[0]]),
+                    gst::Buffer::from_slice(&data[packet_offsets[0]..packet_offsets[1]]),
+                    gst::Buffer::from_slice(&data[packet_offsets[1]..packet_offsets[2]]),
                 ]),
             )
             .build();
@@ -92,10 +92,10 @@ fn run_test(inline_headers: bool) {
     assert_eq!(
         caps,
         gst::Caps::builder("audio/x-raw")
-            .field("format", &gst_audio::AUDIO_FORMAT_F32.to_str())
-            .field("rate", &44_100i32)
-            .field("channels", &1i32)
-            .field("layout", &"interleaved")
+            .field("format", gst_audio::AUDIO_FORMAT_F32.to_str())
+            .field("rate", 44_100i32)
+            .field("channels", 1i32)
+            .field("layout", "interleaved")
             .build()
     );
 }

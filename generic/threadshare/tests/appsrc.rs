@@ -33,12 +33,12 @@ fn push() {
 
     let mut h = gst_check::Harness::new("ts-appsrc");
 
-    let caps = gst::Caps::new_simple("foo/bar", &[]);
+    let caps = gst::Caps::builder("foo/bar").build();
     {
         let appsrc = h.element().unwrap();
         appsrc.set_property("caps", &caps).unwrap();
-        appsrc.set_property("do-timestamp", &true).unwrap();
-        appsrc.set_property("context", &"appsrc-push").unwrap();
+        appsrc.set_property("do-timestamp", true).unwrap();
+        appsrc.set_property("context", "appsrc-push").unwrap();
     }
 
     h.play();
@@ -99,12 +99,12 @@ fn pause_regular() {
 
     let mut h = gst_check::Harness::new("ts-appsrc");
 
-    let caps = gst::Caps::new_simple("foo/bar", &[]);
+    let caps = gst::Caps::builder("foo/bar").build();
     {
         let appsrc = h.element().unwrap();
         appsrc.set_property("caps", &caps).unwrap();
-        appsrc.set_property("do-timestamp", &true).unwrap();
-        appsrc.set_property("context", &"appsrc-pause").unwrap();
+        appsrc.set_property("do-timestamp", true).unwrap();
+        appsrc.set_property("context", "appsrc-pause").unwrap();
     }
 
     h.play();
@@ -169,12 +169,12 @@ fn flush_regular() {
 
     let mut h = gst_check::Harness::new("ts-appsrc");
 
-    let caps = gst::Caps::new_simple("foo/bar", &[]);
+    let caps = gst::Caps::builder("foo/bar").build();
     {
         let appsrc = h.element().unwrap();
         appsrc.set_property("caps", &caps).unwrap();
-        appsrc.set_property("do-timestamp", &true).unwrap();
-        appsrc.set_property("context", &"appsrc-flush").unwrap();
+        appsrc.set_property("do-timestamp", true).unwrap();
+        appsrc.set_property("context", "appsrc-flush").unwrap();
     }
 
     h.play();
@@ -228,13 +228,13 @@ fn pause_flush() {
 
     let mut h = gst_check::Harness::new("ts-appsrc");
 
-    let caps = gst::Caps::new_simple("foo/bar", &[]);
+    let caps = gst::Caps::builder("foo/bar").build();
     {
         let appsrc = h.element().unwrap();
         appsrc.set_property("caps", &caps).unwrap();
-        appsrc.set_property("do-timestamp", &true).unwrap();
+        appsrc.set_property("do-timestamp", true).unwrap();
         appsrc
-            .set_property("context", &"appsrc-pause_flush")
+            .set_property("context", "appsrc-pause_flush")
             .unwrap();
     }
 

@@ -40,12 +40,12 @@ fn test_replace_all() {
     {
         let regex = h.element().expect("Could not create regex");
 
-        let command = gst::Structure::new(
-            "replace-all",
-            &[("pattern", &"crap"), ("replacement", &"trap")],
-        );
+        let command = gst::Structure::builder("replace-all")
+            .field("pattern", "crap")
+            .field("replacement", "trap")
+            .build();
 
-        let commands = gst::Array::from_owned(vec![command.to_send_value()]);
+        let commands = gst::Array::from(vec![command.to_send_value()]);
 
         regex.set_property("commands", &commands).unwrap();
     }

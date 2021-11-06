@@ -128,8 +128,8 @@ fn test_parse() {
     assert_eq!(
         caps,
         gst::Caps::builder("closedcaption/x-cea-708")
-            .field("format", &"cdp")
-            .field("framerate", &gst::Fraction::new(30000, 1001))
+            .field("format", "cdp")
+            .field("framerate", gst::Fraction::new(30000, 1001))
             .build()
     );
 }

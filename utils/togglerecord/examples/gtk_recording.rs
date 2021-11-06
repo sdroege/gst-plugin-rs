@@ -33,12 +33,12 @@ fn create_pipeline() -> (
     let pipeline = gst::Pipeline::new(None);
 
     let video_src = gst::ElementFactory::make("videotestsrc", None).unwrap();
-    video_src.set_property("is-live", &true).unwrap();
+    video_src.set_property("is-live", true).unwrap();
     video_src.set_property_from_str("pattern", "ball").unwrap();
 
     let timeoverlay = gst::ElementFactory::make("timeoverlay", None).unwrap();
     timeoverlay
-        .set_property("font-desc", &"Monospace 20")
+        .set_property("font-desc", "Monospace 20")
         .unwrap();
 
     let video_tee = gst::ElementFactory::make("tee", None).unwrap();
@@ -62,12 +62,12 @@ fn create_pipeline() -> (
         };
 
     let video_enc = gst::ElementFactory::make("x264enc", None).unwrap();
-    video_enc.set_property("rc-lookahead", &10i32).unwrap();
-    video_enc.set_property("key-int-max", &30u32).unwrap();
+    video_enc.set_property("rc-lookahead", 10i32).unwrap();
+    video_enc.set_property("key-int-max", 30u32).unwrap();
     let video_parse = gst::ElementFactory::make("h264parse", None).unwrap();
 
     let audio_src = gst::ElementFactory::make("audiotestsrc", None).unwrap();
-    audio_src.set_property("is-live", &true).unwrap();
+    audio_src.set_property("is-live", true).unwrap();
     audio_src.set_property_from_str("wave", "ticks").unwrap();
 
     let audio_tee = gst::ElementFactory::make("tee", None).unwrap();
@@ -90,11 +90,9 @@ fn create_pipeline() -> (
     let mux = gst::ElementFactory::make("mp4mux", None).unwrap();
 
     let file_sink = gst::ElementFactory::make("filesink", None).unwrap();
-    file_sink
-        .set_property("location", &"recording.mp4")
-        .unwrap();
-    file_sink.set_property("async", &false).unwrap();
-    file_sink.set_property("sync", &false).unwrap();
+    file_sink.set_property("location", "recording.mp4").unwrap();
+    file_sink.set_property("async", false).unwrap();
+    file_sink.set_property("sync", false).unwrap();
 
     pipeline
         .add_many(&[
@@ -262,7 +260,7 @@ fn create_ui(app: &gtk::Application) {
             .unwrap()
             .get::<bool>()
             .unwrap();
-        togglerecord.set_property("record", &recording).unwrap();
+        togglerecord.set_property("record", recording).unwrap();
 
         button.set_label(if recording { "Stop" } else { "Record" });
     });

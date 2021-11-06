@@ -96,7 +96,7 @@ fn test_parse() {
     assert_eq!(
         caps,
         gst::Caps::builder("text/x-raw")
-            .field("format", &"utf8")
+            .field("format", "utf8")
             .build()
     );
 }

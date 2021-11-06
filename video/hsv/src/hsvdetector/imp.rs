@@ -360,21 +360,18 @@ impl ElementImpl for HsvDetector {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::new_simple(
-                "video/x-raw",
-                &[
-                    ("format", &gst::List::from_owned(video_output_formats())),
-                    ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                    ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                    (
-                        "framerate",
-                        &gst::FractionRange::new(
-                            gst::Fraction::new(0, 1),
-                            gst::Fraction::new(i32::MAX, 1),
-                        ),
+            let caps = gst::Caps::builder("video/x-raw")
+                .field("format", gst::List::from(video_output_formats()))
+                .field("width", gst::IntRange::new(0, i32::MAX))
+                .field("height", gst::IntRange::new(0, i32::MAX))
+                .field(
+                    "framerate",
+                    gst::FractionRange::new(
+                        gst::Fraction::new(0, 1),
+                        gst::Fraction::new(i32::MAX, 1),
                     ),
-                ],
-            );
+                )
+                .build();
 
             let src_pad_template = gst::PadTemplate::new(
                 "src",
@@ -385,21 +382,18 @@ impl ElementImpl for HsvDetector {
             .unwrap();
 
             // sink pad capabilities
-            let caps = gst::Caps::new_simple(
-                "video/x-raw",
-                &[
-                    ("format", &gst::List::from_owned(video_input_formats())),
-                    ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                    ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                    (
-                        "framerate",
-                        &gst::FractionRange::new(
-                            gst::Fraction::new(0, 1),
-                            gst::Fraction::new(i32::MAX, 1),
-                        ),
+            let caps = gst::Caps::builder("video/x-raw")
+                .field("format", gst::List::from(video_input_formats()))
+                .field("width", gst::IntRange::new(0, i32::MAX))
+                .field("height", gst::IntRange::new(0, i32::MAX))
+                .field(
+                    "framerate",
+                    gst::FractionRange::new(
+                        gst::Fraction::new(0, 1),
+                        gst::Fraction::new(i32::MAX, 1),
                     ),
-                ],
-            );
+                )
+                .build();
 
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
@@ -432,11 +426,11 @@ impl BaseTransformImpl for HsvDetector {
         let mut other_caps = caps.clone();
         if direction == gst::PadDirection::Src {
             for s in other_caps.make_mut().iter_mut() {
-                s.set("format", &gst::List::from_owned(video_input_formats()));
+                s.set("format", gst::List::from(video_input_formats()));
             }
         } else {
             for s in other_caps.make_mut().iter_mut() {
-                s.set("format", &gst::List::from_owned(video_output_formats()));
+                s.set("format", gst::List::from(video_output_formats()));
             }
         };
 

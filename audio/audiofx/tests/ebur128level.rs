@@ -137,10 +137,10 @@ fn run_test(layout: gst_audio::AudioLayout, format: gst_audio::AudioFormat) {
                     let _global_loudness = s.get::<f64>("global-loudness").unwrap();
                     let _relative_threshold = s.get::<f64>("relative-threshold").unwrap();
                     let _loudness_range = s.get::<f64>("loudness-range").unwrap();
-                    let sample_peak = s.get::<gst::Array>("sample-peak").unwrap();
+                    let sample_peak = s.get::<gst::ArrayRef>("sample-peak").unwrap();
                     assert_eq!(sample_peak.as_slice().len(), 2);
                     assert_eq!(sample_peak.as_slice()[0].type_(), glib::Type::F64);
-                    let true_peak = s.get::<gst::Array>("true-peak").unwrap();
+                    let true_peak = s.get::<gst::ArrayRef>("true-peak").unwrap();
                     assert_eq!(true_peak.as_slice().len(), 2);
                     assert_eq!(true_peak.as_slice()[0].type_(), glib::Type::F64);
                 }

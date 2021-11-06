@@ -210,18 +210,18 @@ impl ElementImpl for FlvDemux {
 
                 caps.append(
                     gst::Caps::builder("audio/mpeg")
-                        .field("mpegversion", &1i32)
+                        .field("mpegversion", 1i32)
                         .build(),
                 );
                 caps.append(
                     gst::Caps::builder("audio/x-raw")
-                        .field("layout", &"interleaved")
-                        .field("format", &gst::List::new(&[&"U8", &"S16LE"]))
+                        .field("layout", "interleaved")
+                        .field("format", gst::List::new(["U8", "S16LE"]))
                         .build(),
                 );
                 caps.append(
                     gst::Caps::builder("audio/x-adpcm")
-                        .field("layout", &"swf")
+                        .field("layout", "swf")
                         .build(),
                 );
                 caps.append(gst::Caps::builder("audio/x-nellymoser").build());
@@ -229,9 +229,9 @@ impl ElementImpl for FlvDemux {
                 caps.append(gst::Caps::builder("audio/x-mulaw").build());
                 caps.append(
                     gst::Caps::builder("audio/mpeg")
-                        .field("mpegversion", &4i32)
-                        .field("framed", &true)
-                        .field("stream-format", &"raw")
+                        .field("mpegversion", 4i32)
+                        .field("framed", true)
+                        .field("stream-format", "raw")
                         .build(),
                 );
                 caps.append(gst::Caps::builder("audio/x-speex").build());
@@ -250,7 +250,7 @@ impl ElementImpl for FlvDemux {
 
                 caps.append(
                     gst::Caps::builder("video/x-flash-video")
-                        .field("flvversion", &1i32)
+                        .field("flvversion", 1i32)
                         .build(),
                 );
                 caps.append(gst::Caps::builder("video/x-flash-screen").build());
@@ -259,13 +259,13 @@ impl ElementImpl for FlvDemux {
                 caps.append(gst::Caps::builder("video/x-flash-screen2").build());
                 caps.append(
                     gst::Caps::builder("video/x-h264")
-                        .field("stream-format", &"avc")
+                        .field("stream-format", "avc")
                         .build(),
                 );
                 caps.append(gst::Caps::builder("video/x-h263").build());
                 caps.append(
                     gst::Caps::builder("video/mpeg")
-                        .field("mpegversion", &4i32)
+                        .field("mpegversion", 4i32)
                         .build(),
                 );
             }
@@ -1269,44 +1269,44 @@ impl AudioFormat {
     fn to_caps(&self) -> Option<gst::Caps> {
         let mut caps = match self.format {
             flavors::SoundFormat::MP3 | flavors::SoundFormat::MP3_8KHZ => Some(
-                gst::Caps::new_simple("audio/mpeg", &[("mpegversion", &1i32), ("layer", &3i32)]),
+                gst::Caps::builder("audio/mpeg")
+                    .field("mpegversion", 1i32)
+                    .field("layer", 3i32)
+                    .build(),
             ),
             flavors::SoundFormat::PCM_NE | flavors::SoundFormat::PCM_LE => {
                 if self.rate != 0 && self.channels != 0 {
                     // Assume little-endian for "PCM_NE", it's probably more common and we have no
                     // way to know what the endianness of the system creating the stream was
-                    Some(gst::Caps::new_simple(
-                        "audio/x-raw",
-                        &[
-                            ("layout", &"interleaved"),
-                            ("format", &if self.width == 8 { "U8" } else { "S16LE" }),
-                        ],
-                    ))
+                    Some(
+                        gst::Caps::builder("audio/x-raw")
+                            .field("layout", "interleaved")
+                            .field("format", if self.width == 8 { "U8" } else { "S16LE" })
+                            .build(),
+                    )
                 } else {
                     None
                 }
             }
-            flavors::SoundFormat::ADPCM => Some(gst::Caps::new_simple(
-                "audio/x-adpcm",
-                &[("layout", &"swf")],
-            )),
+            flavors::SoundFormat::ADPCM => Some(
+                gst::Caps::builder("audio/x-adpcm")
+                    .field("layout", "swf")
+                    .build(),
+            ),
             flavors::SoundFormat::NELLYMOSER_16KHZ_MONO
             | flavors::SoundFormat::NELLYMOSER_8KHZ_MONO
             | flavors::SoundFormat::NELLYMOSER => {
-                Some(gst::Caps::new_simple("audio/x-nellymoser", &[]))
+                Some(gst::Caps::builder("audio/x-nellymoser").build())
             }
-            flavors::SoundFormat::PCM_ALAW => Some(gst::Caps::new_simple("audio/x-alaw", &[])),
-            flavors::SoundFormat::PCM_ULAW => Some(gst::Caps::new_simple("audio/x-mulaw", &[])),
+            flavors::SoundFormat::PCM_ALAW => Some(gst::Caps::builder("audio/x-alaw").build()),
+            flavors::SoundFormat::PCM_ULAW => Some(gst::Caps::builder("audio/x-mulaw").build()),
             flavors::SoundFormat::AAC => self.aac_sequence_header.as_ref().map(|header| {
-                gst::Caps::new_simple(
-                    "audio/mpeg",
-                    &[
-                        ("mpegversion", &4i32),
-                        ("framed", &true),
-                        ("stream-format", &"raw"),
-                        ("codec_data", &header),
-                    ],
-                )
+                gst::Caps::builder("audio/mpeg")
+                    .field("mpegversion", 4i32)
+                    .field("framed", true)
+                    .field("stream-format", "raw")
+                    .field("codec_data", header)
+                    .build()
             }),
             flavors::SoundFormat::SPEEX => {
                 use crate::bytes::*;
@@ -1351,10 +1351,11 @@ impl AudioFormat {
                 };
                 let comment = gst::Buffer::from_mut_slice(comment);
 
-                Some(gst::Caps::new_simple(
-                    "audio/x-speex",
-                    &[("streamheader", &gst::Array::new(&[&header, &comment]))],
-                ))
+                Some(
+                    gst::Caps::builder("audio/x-speex")
+                        .field("streamheader", gst::Array::new([header, comment]))
+                        .build(),
+                )
             }
             flavors::SoundFormat::DEVICE_SPECIFIC => {
                 // Nobody knows
@@ -1444,25 +1445,28 @@ impl VideoFormat {
 
     fn to_caps(&self) -> Option<gst::Caps> {
         let mut caps = match self.format {
-            flavors::CodecId::SORENSON_H263 => Some(gst::Caps::new_simple(
-                "video/x-flash-video",
-                &[("flvversion", &1i32)],
-            )),
-            flavors::CodecId::SCREEN => Some(gst::Caps::new_simple("video/x-flash-screen", &[])),
-            flavors::CodecId::VP6 => Some(gst::Caps::new_simple("video/x-vp6-flash", &[])),
-            flavors::CodecId::VP6A => Some(gst::Caps::new_simple("video/x-vp6-flash-alpha", &[])),
-            flavors::CodecId::SCREEN2 => Some(gst::Caps::new_simple("video/x-flash-screen2", &[])),
+            flavors::CodecId::SORENSON_H263 => Some(
+                gst::Caps::builder("video/x-flash-video")
+                    .field("flvversion", 1i32)
+                    .build(),
+            ),
+            flavors::CodecId::SCREEN => Some(gst::Caps::builder("video/x-flash-screen").build()),
+            flavors::CodecId::VP6 => Some(gst::Caps::builder("video/x-vp6-flash").build()),
+            flavors::CodecId::VP6A => Some(gst::Caps::builder("video/x-vp6-flash-alpha").build()),
+            flavors::CodecId::SCREEN2 => Some(gst::Caps::builder("video/x-flash-screen2").build()),
             flavors::CodecId::H264 => self.avc_sequence_header.as_ref().map(|header| {
-                gst::Caps::new_simple(
-                    "video/x-h264",
-                    &[("stream-format", &"avc"), ("codec_data", &header)],
-                )
+                gst::Caps::builder("video/x-h264")
+                    .field("stream-format", "avc")
+                    .field("codec_data", &header)
+                    .build()
             }),
-            flavors::CodecId::H263 => Some(gst::Caps::new_simple("video/x-h263", &[])),
-            flavors::CodecId::MPEG4Part2 => Some(gst::Caps::new_simple(
-                "video/mpeg",
-                &[("mpegversion", &4i32), ("systemstream", &false)],
-            )),
+            flavors::CodecId::H263 => Some(gst::Caps::builder("video/x-h263").build()),
+            flavors::CodecId::MPEG4Part2 => Some(
+                gst::Caps::builder("video/mpeg")
+                    .field("mpegversion", 4i32)
+                    .field("systemstream", false)
+                    .build(),
+            ),
             flavors::CodecId::JPEG => {
                 // Unused according to spec
                 None

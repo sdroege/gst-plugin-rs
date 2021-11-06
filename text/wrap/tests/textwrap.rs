@@ -39,7 +39,7 @@ fn test_columns() {
 
     {
         let wrap = h.element().expect("Could not create textwrap");
-        wrap.set_property("columns", &5u32).unwrap();
+        wrap.set_property("columns", 5u32).unwrap();
     }
 
     h.set_src_caps_str("text/x-raw, format=utf8");
@@ -77,8 +77,8 @@ fn test_lines() {
 
     {
         let wrap = h.element().expect("Could not create textwrap");
-        wrap.set_property("columns", &5u32).unwrap();
-        wrap.set_property("lines", &2u32).unwrap();
+        wrap.set_property("columns", 5u32).unwrap();
+        wrap.set_property("lines", 2u32).unwrap();
     }
 
     h.set_src_caps_str("text/x-raw, format=utf8");

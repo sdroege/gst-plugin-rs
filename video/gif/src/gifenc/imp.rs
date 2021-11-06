@@ -221,31 +221,25 @@ impl ElementImpl for GifEnc {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::new_simple(
-                "video/x-raw",
-                &[
-                    (
-                        "format",
-                        &gst::List::new(&[
-                            &gst_video::VideoFormat::Rgb.to_str(),
-                            &gst_video::VideoFormat::Rgba.to_str(),
-                        ]),
+            let sink_caps = gst::Caps::builder("video/x-raw")
+                .field(
+                    "format",
+                    gst::List::new([
+                        gst_video::VideoFormat::Rgb.to_str(),
+                        gst_video::VideoFormat::Rgba.to_str(),
+                    ]),
+                )
+                .field("width", gst::IntRange::new(1, std::u16::MAX as i32))
+                .field("height", gst::IntRange::new(1, std::u16::MAX as i32))
+                .field(
+                    "framerate",
+                    gst::FractionRange::new(
+                        gst::Fraction::new(1, 1),
+                        // frame-delay timing in gif is a multiple of 10ms -> max 100fps
+                        gst::Fraction::new(100, 1),
                     ),
-                    ("width", &gst::IntRange::<i32>::new(1, std::u16::MAX as i32)),
-                    (
-                        "height",
-                        &gst::IntRange::<i32>::new(1, std::u16::MAX as i32),
-                    ),
-                    (
-                        "framerate",
-                        &gst::FractionRange::new(
-                            gst::Fraction::new(1, 1),
-                            // frame-delay timing in gif is a multiple of 10ms -> max 100fps
-                            gst::Fraction::new(100, 1),
-                        ),
-                    ),
-                ],
-            );
+                )
+                .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -254,7 +248,7 @@ impl ElementImpl for GifEnc {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::new_simple("image/gif", &[]);
+            let src_caps = gst::Caps::builder("image/gif").build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -304,7 +298,7 @@ impl VideoEncoderImpl for GifEnc {
         }
 
         let output_state = element
-            .set_output_state(gst::Caps::new_simple("image/gif", &[]), Some(state))
+            .set_output_state(gst::Caps::builder("image/gif").build(), Some(state))
             .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
         element
             .negotiate(output_state)

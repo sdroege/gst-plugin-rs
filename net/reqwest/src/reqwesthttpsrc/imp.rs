@@ -429,11 +429,11 @@ impl ReqwestHttpSrc {
                     headers.append(field.clone(), value);
                 };
 
-                if let Ok(values) = value.get::<gst::Array>() {
+                if let Ok(values) = value.get::<gst::ArrayRef>() {
                     for value in values.as_slice() {
                         append_header(&field, value);
                     }
-                } else if let Ok(values) = value.get::<gst::List>() {
+                } else if let Ok(values) = value.get::<gst::ListRef>() {
                     for value in values.as_slice() {
                         append_header(&field, value);
                     }
@@ -552,7 +552,7 @@ impl ReqwestHttpSrc {
             .and_then(|s| s.parse::<i32>().ok())
             .map(|icy_metaint| {
                 gst::Caps::builder("application/x-icy")
-                    .field("metadata-interval", &icy_metaint)
+                    .field("metadata-interval", icy_metaint)
                     .build()
             });
 
@@ -578,10 +578,10 @@ impl ReqwestHttpSrc {
 
                 caps = Some(
                     gst::Caps::builder("audio/x-unaligned-raw")
-                        .field("format", &"S16BE")
-                        .field("layout", &"interleaved")
-                        .field("channels", &channels)
-                        .field("rate", &rate)
+                        .field("format", "S16BE")
+                        .field("layout", "interleaved")
+                        .field("channels", channels)
+                        .field("rate", rate)
                         .build(),
                 );
             }

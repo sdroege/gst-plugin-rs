@@ -30,10 +30,10 @@ fn test_mono_s16() {
     assert_eq!(
         caps,
         gst::Caps::builder("audio/x-raw")
-            .field("format", &gst_audio::AUDIO_FORMAT_S16.to_str())
-            .field("rate", &44_100i32)
-            .field("channels", &1i32)
-            .field("layout", &"interleaved")
+            .field("format", gst_audio::AUDIO_FORMAT_S16.to_str())
+            .field("rate", 44_100i32)
+            .field("channels", 1i32)
+            .field("layout", "interleaved")
             .build()
     );
 }
@@ -50,11 +50,11 @@ fn test_stereo_s32() {
     assert_eq!(
         caps,
         gst::Caps::builder("audio/x-raw")
-            .field("format", &gst_audio::AUDIO_FORMAT_S2432.to_str())
-            .field("rate", &44_100i32)
-            .field("channels", &2i32)
-            .field("layout", &"interleaved")
-            .field("channel-mask", &gst::Bitmask::new(0x3))
+            .field("format", gst_audio::AUDIO_FORMAT_S2432.to_str())
+            .field("rate", 44_100i32)
+            .field("channels", 2i32)
+            .field("layout", "interleaved")
+            .field("channel-mask", gst::Bitmask::new(0x3))
             .build()
     );
 }
@@ -74,7 +74,7 @@ fn do_test(data: &'static [u8], packet_sizes: &[usize], decoded_samples: &[usize
     h.play();
 
     let caps = gst::Caps::builder("audio/x-flac")
-        .field("framed", &true)
+        .field("framed", true)
         .build();
     h.set_src_caps(caps);
 

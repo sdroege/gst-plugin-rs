@@ -225,8 +225,7 @@ impl State {
 
         buffer.set_pts(self.last_position);
         buffer.set_duration(
-            gst::ClockTime::SECOND
-                .mul_div_ceil(*framerate.denom() as u64, *framerate.numer() as u64),
+            gst::ClockTime::SECOND.mul_div_ceil(framerate.denom() as u64, framerate.numer() as u64),
         );
     }
 
@@ -260,8 +259,8 @@ impl State {
                 self.framerate = Some(framerate);
 
                 let caps = gst::Caps::builder("closedcaption/x-cea-608")
-                    .field("format", &"raw")
-                    .field("framerate", &framerate)
+                    .field("format", "raw")
+                    .field("framerate", framerate)
                     .build();
                 self.framerate = Some(framerate);
 
@@ -1093,13 +1092,10 @@ impl ElementImpl for SccParse {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let caps = gst::Caps::builder("closedcaption/x-cea-608")
-                .field("format", &"raw")
+                .field("format", "raw")
                 .field(
                     "framerate",
-                    &gst::List::new(&[
-                        &gst::Fraction::new(30000, 1001),
-                        &gst::Fraction::new(30, 1),
-                    ]),
+                    gst::List::new([gst::Fraction::new(30000, 1001), gst::Fraction::new(30, 1)]),
                 )
                 .build();
             let src_pad_template = gst::PadTemplate::new(

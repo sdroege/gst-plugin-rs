@@ -318,12 +318,12 @@ impl ElementImpl for Ffv1Dec {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let sink_caps = gst::Caps::builder("video/x-ffv")
-                .field("ffvversion", &1)
-                .field("width", &gst::IntRange::<i32>::new(1, i32::MAX))
-                .field("height", &gst::IntRange::<i32>::new(1, i32::MAX))
+                .field("ffvversion", 1)
+                .field("width", gst::IntRange::new(1, i32::MAX))
+                .field("height", gst::IntRange::new(1, i32::MAX))
                 .field(
                     "framerate",
-                    &gst::FractionRange::new(
+                    gst::FractionRange::new(
                         gst::Fraction::new(0, 1),
                         gst::Fraction::new(i32::MAX, 1),
                     ),
@@ -338,12 +338,12 @@ impl ElementImpl for Ffv1Dec {
             .unwrap();
 
             let src_caps = gst::Caps::builder("video/x-raw")
-                .field("format", &gst::List::from_owned(get_all_video_formats()))
-                .field("width", &gst::IntRange::<i32>::new(1, i32::MAX))
-                .field("height", &gst::IntRange::<i32>::new(1, i32::MAX))
+                .field("format", gst::List::from(get_all_video_formats()))
+                .field("width", gst::IntRange::new(1, i32::MAX))
+                .field("height", gst::IntRange::new(1, i32::MAX))
                 .field(
                     "framerate",
-                    &gst::FractionRange::new(
+                    gst::FractionRange::new(
                         gst::Fraction::new(0, 1),
                         gst::Fraction::new(i32::MAX, 1),
                     ),

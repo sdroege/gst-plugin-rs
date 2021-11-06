@@ -1134,10 +1134,10 @@ impl AggregatorImpl for FallbackSwitch {
                 audio_info.rate() as u64 * audio_info.bpf() as u64,
             )
         } else if let Some(ref video_info) = pad_state.video_info {
-            if *video_info.fps().numer() > 0 {
+            if video_info.fps().numer() > 0 {
                 gst::ClockTime::SECOND.mul_div_floor(
-                    *video_info.fps().denom() as u64,
-                    *video_info.fps().numer() as u64,
+                    video_info.fps().denom() as u64,
+                    video_info.fps().numer() as u64,
                 )
             } else {
                 gst::ClockTime::NONE

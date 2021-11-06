@@ -78,7 +78,7 @@ fn encrypt_file() {
         .expect("failed to set property");
     enc.set_property("receiver-key", &*RECEIVER_PUBLIC)
         .expect("failed to set property");
-    enc.set_property("block-size", &1024u32)
+    enc.set_property("block-size", 1024u32)
         .expect("failed to set property");
 
     let mut h = gst_check::Harness::with_element(&enc, None, None);

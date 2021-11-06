@@ -315,7 +315,7 @@ impl ElementImpl for CCDetect {
             {
                 let caps = caps.get_mut().unwrap();
                 let s = gst::Structure::builder("closedcaption/x-cea-708")
-                    .field("format", &gst::List::new(&[&"cc_data", &"cdp"]))
+                    .field("format", gst::List::new(["cc_data", "cdp"]))
                     .build();
                 caps.append_structure(s);
             }

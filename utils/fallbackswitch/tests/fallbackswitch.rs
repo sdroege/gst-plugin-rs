@@ -371,30 +371,30 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
         .unwrap()
         .downcast::<gst_app::AppSrc>()
         .unwrap();
-    src.set_property("is-live", &true).unwrap();
-    src.set_property("format", &gst::Format::Time).unwrap();
-    src.set_property("min-latency", &(10i64)).unwrap();
+    src.set_property("is-live", true).unwrap();
+    src.set_property("format", gst::Format::Time).unwrap();
+    src.set_property("min-latency", 10i64).unwrap();
     src.set_property(
         "caps",
         &gst::Caps::builder("video/x-raw")
-            .field("format", &"ARGB")
-            .field("width", &320)
-            .field("height", &240)
-            .field("framerate", &gst::Fraction::new(1, 1))
+            .field("format", "ARGB")
+            .field("width", 320)
+            .field("height", 240)
+            .field("framerate", gst::Fraction::new(1, 1))
             .build(),
     )
     .unwrap();
 
     let switch = gst::ElementFactory::make("fallbackswitch", Some("switch")).unwrap();
     switch
-        .set_property("timeout", &(3 * gst::ClockTime::SECOND))
+        .set_property("timeout", 3 * gst::ClockTime::SECOND)
         .unwrap();
 
     let sink = gst::ElementFactory::make("appsink", Some("sink"))
         .unwrap()
         .downcast::<gst_app::AppSink>()
         .unwrap();
-    sink.set_property("sync", &false).unwrap();
+    sink.set_property("sync", false).unwrap();
 
     let queue = gst::ElementFactory::make("queue", None).unwrap();
 
@@ -410,19 +410,19 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
             .unwrap()
             .downcast::<gst_app::AppSrc>()
             .unwrap();
-        fallback_src.set_property("is-live", &live).unwrap();
+        fallback_src.set_property("is-live", live).unwrap();
         fallback_src
-            .set_property("format", &gst::Format::Time)
+            .set_property("format", gst::Format::Time)
             .unwrap();
-        fallback_src.set_property("min-latency", &(10i64)).unwrap();
+        fallback_src.set_property("min-latency", 10i64).unwrap();
         fallback_src
             .set_property(
                 "caps",
                 &gst::Caps::builder("video/x-raw")
-                    .field("format", &"ARGB")
-                    .field("width", &160)
-                    .field("height", &120)
-                    .field("framerate", &gst::Fraction::new(1, 1))
+                    .field("format", "ARGB")
+                    .field("width", 160)
+                    .field("height", 120)
+                    .field("framerate", gst::Fraction::new(1, 1))
                     .build(),
             )
             .unwrap();

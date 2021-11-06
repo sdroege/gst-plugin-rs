@@ -464,15 +464,12 @@ impl ElementImpl for CsoundFilter {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::new_simple(
-                "audio/x-raw",
-                &[
-                    ("format", &gst_audio::AUDIO_FORMAT_F64.to_str()),
-                    ("rate", &gst::IntRange::<i32>::new(1, i32::MAX)),
-                    ("channels", &gst::IntRange::<i32>::new(1, i32::MAX)),
-                    ("layout", &"interleaved"),
-                ],
-            );
+            let caps = gst::Caps::builder("audio/x-raw")
+                .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
+                .field("rate", gst::IntRange::new(1, i32::MAX))
+                .field("channels", gst::IntRange::new(1, i32::MAX))
+                .field("layout", "interleaved")
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

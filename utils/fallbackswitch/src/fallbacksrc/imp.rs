@@ -58,9 +58,9 @@ impl Default for Stats {
 impl Stats {
     fn to_structure(&self) -> gst::Structure {
         gst::Structure::builder("application/x-fallbacksrc-stats")
-            .field("num-retry", &self.num_retry)
-            .field("last-retry-reason", &self.last_retry_reason)
-            .field("buffering-percent", &self.buffering_percent)
+            .field("num-retry", self.num_retry)
+            .field("last-retry-reason", self.last_retry_reason)
+            .field("buffering-percent", self.buffering_percent)
             .build()
     }
 }
@@ -833,10 +833,10 @@ impl FallbackSrc {
                     .get::<&str>()
                     .expect("Wrong type returned from update-uri signal");
 
-                source.set_property("uri", &uri).unwrap();
-                source.set_property("use-buffering", &true).unwrap();
+                source.set_property("uri", uri).unwrap();
+                source.set_property("use-buffering", true).unwrap();
                 source
-                    .set_property("buffer-duration", &buffer_duration)
+                    .set_property("buffer-duration", buffer_duration)
                     .unwrap();
 
                 source
@@ -846,7 +846,7 @@ impl FallbackSrc {
 
         // Handle any async state changes internally, they don't affect the pipeline because we
         // convert everything to a live stream
-        source.set_property("async-handling", &true).unwrap();
+        source.set_property("async-handling", true).unwrap();
         // Don't let the bin handle state changes of the source. We want to do it manually to catch
         // possible errors and retry, without causing the whole bin state change to fail
         source.set_locked_state(true);
@@ -897,7 +897,7 @@ impl FallbackSrc {
         audiotestsrc
             .set_property_from_str("wave", "silence")
             .unwrap();
-        audiotestsrc.set_property("is-live", &true).unwrap();
+        audiotestsrc.set_property("is-live", true).unwrap();
 
         let srcpad = audiotestsrc.static_pad("src").unwrap();
         input
@@ -931,7 +931,7 @@ impl FallbackSrc {
         let clocksync = gst::ElementFactory::make("clocksync", None)
             .or_else(|_| -> Result<_, glib::BoolError> {
                 let identity = gst::ElementFactory::make("identity", None)?;
-                identity.set_property("sync", &true).unwrap();
+                identity.set_property("sync", true).unwrap();
                 Ok(identity)
             })
             .expect("No clocksync or identity found");
@@ -960,12 +960,12 @@ impl FallbackSrc {
             let src = FallbackSrc::from_instance(&element);
             src.handle_switch_active_pad_change(&element);
         });
-        switch.set_property("timeout", &timeout.nseconds()).unwrap();
+        switch.set_property("timeout", timeout.nseconds()).unwrap();
         switch
-            .set_property("min-upstream-latency", &min_latency.nseconds())
+            .set_property("min-upstream-latency", min_latency.nseconds())
             .unwrap();
         switch
-            .set_property("immediate-fallback", &immediate_fallback)
+            .set_property("immediate-fallback", immediate_fallback)
             .unwrap();
 
         gst::Element::link_pads(&fallback_input, Some("src"), &switch, Some("fallback_sink"))
@@ -1341,7 +1341,7 @@ impl FallbackSrc {
 
             gst_debug!(CAT, "image stream, inserting imagefreeze");
             element.add(&imagefreeze).unwrap();
-            imagefreeze.set_property("is-live", &true).unwrap();
+            imagefreeze.set_property("is-live", true).unwrap();
             if imagefreeze.sync_state_with_parent().is_err() {
                 gst_error!(CAT, obj: element, "imagefreeze failed to change state",);
                 return Err(gst::error_msg!(

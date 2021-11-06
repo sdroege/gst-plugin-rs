@@ -60,7 +60,7 @@ impl ElementImpl for CdgParse {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::new_simple("video/x-cdg", &[]);
+            let sink_caps = gst::Caps::builder("video/x-cdg").build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -69,15 +69,12 @@ impl ElementImpl for CdgParse {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::new_simple(
-                "video/x-cdg",
-                &[
-                    ("width", &(CDG_WIDTH as i32)),
-                    ("height", &(CDG_HEIGHT as i32)),
-                    ("framerate", &gst::Fraction::new(0, 1)),
-                    ("parsed", &true),
-                ],
-            );
+            let src_caps = gst::Caps::builder("video/x-cdg")
+                .field("width", CDG_WIDTH as i32)
+                .field("height", CDG_HEIGHT as i32)
+                .field("framerate", gst::Fraction::new(0, 1))
+                .field("parsed", true)
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -136,15 +133,12 @@ impl BaseParseImpl for CdgParse {
         let pad = element.src_pad();
         if pad.current_caps().is_none() {
             // Set src pad caps
-            let src_caps = gst::Caps::new_simple(
-                "video/x-cdg",
-                &[
-                    ("width", &(CDG_WIDTH as i32)),
-                    ("height", &(CDG_HEIGHT as i32)),
-                    ("framerate", &gst::Fraction::new(0, 1)),
-                    ("parsed", &true),
-                ],
-            );
+            let src_caps = gst::Caps::builder("video/x-cdg")
+                .field("width", CDG_WIDTH as i32)
+                .field("height", CDG_HEIGHT as i32)
+                .field("framerate", gst::Fraction::new(0, 1))
+                .field("parsed", true)
+                .build();
 
             pad.push_event(gst::event::Caps::new(&src_caps));
         }

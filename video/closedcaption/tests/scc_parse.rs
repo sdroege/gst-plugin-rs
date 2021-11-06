@@ -104,8 +104,8 @@ fn test_parse() {
     assert_eq!(
         caps,
         gst::Caps::builder("closedcaption/x-cea-608")
-            .field("format", &"raw")
-            .field("framerate", &gst::Fraction::new(30000, 1001))
+            .field("format", "raw")
+            .field("framerate", gst::Fraction::new(30000, 1001))
             .build()
     );
 }
@@ -195,8 +195,8 @@ fn test_timecodes() {
     assert_eq!(
         caps,
         gst::Caps::builder("closedcaption/x-cea-608")
-            .field("format", &"raw")
-            .field("framerate", &gst::Fraction::new(30000, 1001))
+            .field("format", "raw")
+            .field("framerate", gst::Fraction::new(30000, 1001))
             .build()
     );
 }

@@ -205,27 +205,24 @@ impl ElementImpl for Rgb2Gray {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             // On the src pad, we can produce BGRx and GRAY8 of any
             // width/height and with any framerate
-            let caps = gst::Caps::new_simple(
-                "video/x-raw",
-                &[
-                    (
-                        "format",
-                        &gst::List::new(&[
-                            &gst_video::VideoFormat::Bgrx.to_str(),
-                            &gst_video::VideoFormat::Gray8.to_str(),
-                        ]),
+            let caps = gst::Caps::builder("video/x-raw")
+                .field(
+                    "format",
+                    gst::List::new([
+                        gst_video::VideoFormat::Bgrx.to_str(),
+                        gst_video::VideoFormat::Gray8.to_str(),
+                    ]),
+                )
+                .field("width", gst::IntRange::new(0, i32::MAX))
+                .field("height", gst::IntRange::new(0, i32::MAX))
+                .field(
+                    "framerate",
+                    gst::FractionRange::new(
+                        gst::Fraction::new(0, 1),
+                        gst::Fraction::new(i32::MAX, 1),
                     ),
-                    ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                    ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                    (
-                        "framerate",
-                        &gst::FractionRange::new(
-                            gst::Fraction::new(0, 1),
-                            gst::Fraction::new(i32::MAX, 1),
-                        ),
-                    ),
-                ],
-            );
+                )
+                .build();
             // The src pad template must be named "src" for basetransform
             // and specific a pad that is always there
             let src_pad_template = gst::PadTemplate::new(
@@ -238,21 +235,18 @@ impl ElementImpl for Rgb2Gray {
 
             // On the sink pad, we can accept BGRx of any
             // width/height and with any framerate
-            let caps = gst::Caps::new_simple(
-                "video/x-raw",
-                &[
-                    ("format", &gst_video::VideoFormat::Bgrx.to_str()),
-                    ("width", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                    ("height", &gst::IntRange::<i32>::new(0, i32::MAX)),
-                    (
-                        "framerate",
-                        &gst::FractionRange::new(
-                            gst::Fraction::new(0, 1),
-                            gst::Fraction::new(i32::MAX, 1),
-                        ),
+            let caps = gst::Caps::builder("video/x-raw")
+                .field("format", gst_video::VideoFormat::Bgrx.to_str())
+                .field("width", gst::IntRange::new(0, i32::MAX))
+                .field("height", gst::IntRange::new(0, i32::MAX))
+                .field(
+                    "framerate",
+                    gst::FractionRange::new(
+                        gst::Fraction::new(0, 1),
+                        gst::Fraction::new(i32::MAX, 1),
                     ),
-                ],
-            );
+                )
+                .build();
             // The sink pad template must be named "sink" for basetransform
             // and specific a pad that is always there
             let sink_pad_template = gst::PadTemplate::new(

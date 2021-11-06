@@ -365,7 +365,7 @@ impl ElementImpl for Dav1dDec {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::new_simple("video/x-av1", &[]);
+            let sink_caps = gst::Caps::builder("video/x-av1").build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -374,21 +374,18 @@ impl ElementImpl for Dav1dDec {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::new_simple(
-                "video/x-raw",
-                &[
-                    ("format", &gst::List::from_owned(video_output_formats())),
-                    ("width", &gst::IntRange::<i32>::new(1, i32::MAX)),
-                    ("height", &gst::IntRange::<i32>::new(1, i32::MAX)),
-                    (
-                        "framerate",
-                        &gst::FractionRange::new(
-                            gst::Fraction::new(0, 1),
-                            gst::Fraction::new(i32::MAX, 1),
-                        ),
+            let src_caps = gst::Caps::builder("video/x-raw")
+                .field("format", gst::List::from(video_output_formats()))
+                .field("width", gst::IntRange::new(1, i32::MAX))
+                .field("height", gst::IntRange::new(1, i32::MAX))
+                .field(
+                    "framerate",
+                    gst::FractionRange::new(
+                        gst::Fraction::new(0, 1),
+                        gst::Fraction::new(i32::MAX, 1),
                     ),
-                ],
-            );
+                )
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,

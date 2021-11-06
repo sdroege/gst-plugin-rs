@@ -73,7 +73,7 @@ fn test_have_cc_data_notify() {
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data");
     h.element()
         .unwrap()
-        .set_property("window", &(500_000_000u64))
+        .set_property("window", 500_000_000u64)
         .unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));
@@ -139,7 +139,7 @@ fn test_cc_data_window() {
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data");
     h.element()
         .unwrap()
-        .set_property("window", &500_000_000u64)
+        .set_property("window", 500_000_000u64)
         .unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));
@@ -238,7 +238,7 @@ fn test_have_cdp_notify() {
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cdp");
     h.element()
         .unwrap()
-        .set_property("window", &500_000_000u64)
+        .set_property("window", 500_000_000u64)
         .unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));
@@ -307,7 +307,7 @@ fn test_malformed_cdp_notify() {
     let mut h = gst_check::Harness::new("ccdetect");
     h.set_src_caps_str("closedcaption/x-cea-708,format=cdp");
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cdp");
-    h.element().unwrap().set_property("window", &0u64).unwrap();
+    h.element().unwrap().set_property("window", 0u64).unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));
     let state_c = state.clone();
@@ -388,7 +388,7 @@ fn test_gap_events() {
     h.set_sink_caps_str("closedcaption/x-cea-708,format=cc_data");
     h.element()
         .unwrap()
-        .set_property("window", &500_000_000u64)
+        .set_property("window", 500_000_000u64)
         .unwrap();
 
     let state = Arc::new(Mutex::new(NotifyState::default()));

@@ -64,7 +64,9 @@ impl ElementImpl for ClaxonDec {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::new_simple("audio/x-flac", &[("framed", &true)]);
+            let sink_caps = gst::Caps::builder("audio/x-flac")
+                .field("framed", true)
+                .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
@@ -73,23 +75,20 @@ impl ElementImpl for ClaxonDec {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::new_simple(
-                "audio/x-raw",
-                &[
-                    (
-                        "format",
-                        &gst::List::new(&[
-                            &gst_audio::AudioFormat::S8.to_str(),
-                            &gst_audio::AUDIO_FORMAT_S16.to_str(),
-                            &gst_audio::AUDIO_FORMAT_S2432.to_str(),
-                            &gst_audio::AUDIO_FORMAT_S32.to_str(),
-                        ]),
-                    ),
-                    ("rate", &gst::IntRange::<i32>::new(1, 655_350)),
-                    ("channels", &gst::IntRange::<i32>::new(1, 8)),
-                    ("layout", &"interleaved"),
-                ],
-            );
+            let src_caps = gst::Caps::builder("audio/x-raw")
+                .field(
+                    "format",
+                    gst::List::new([
+                        gst_audio::AudioFormat::S8.to_str(),
+                        gst_audio::AUDIO_FORMAT_S16.to_str(),
+                        gst_audio::AUDIO_FORMAT_S2432.to_str(),
+                        gst_audio::AUDIO_FORMAT_S32.to_str(),
+                    ]),
+                )
+                .field("rate", gst::IntRange::new(1i32, 655_350))
+                .field("channels", gst::IntRange::new(1i32, 8))
+                .field("layout", "interleaved")
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -124,7 +123,7 @@ impl AudioDecoderImpl for ClaxonDec {
         let mut audio_info: Option<gst_audio::AudioInfo> = None;
 
         let s = caps.structure(0).unwrap();
-        if let Ok(Some(streamheaders)) = s.get_optional::<gst::Array>("streamheader") {
+        if let Ok(Some(streamheaders)) = s.get_optional::<gst::ArrayRef>("streamheader") {
             let streamheaders = streamheaders.as_slice();
 
             if streamheaders.len() < 2 {

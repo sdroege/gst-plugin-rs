@@ -157,11 +157,11 @@ impl MccEnc {
             );
         }
 
-        if *framerate.denom() == 1 {
-            let _ = write!(buffer, "Time Code Rate={}\r\n", *framerate.numer());
+        if framerate.denom() == 1 {
+            let _ = write!(buffer, "Time Code Rate={}\r\n", framerate.numer());
         } else {
-            assert_eq!(*framerate.denom(), 1001);
-            let _ = write!(buffer, "Time Code Rate={}DF\r\n", *framerate.numer() / 1000);
+            assert_eq!(framerate.denom(), 1001);
+            let _ = write!(buffer, "Time Code Rate={}DF\r\n", framerate.numer() / 1000);
         }
         let _ = write!(buffer, "\r\n");
 
@@ -388,9 +388,9 @@ impl MccEnc {
                     .field(
                         "version",
                         if framerate == gst::Fraction::new(60000, 1001) {
-                            &2i32
+                            2i32
                         } else {
-                            &1i32
+                            1i32
                         },
                     )
                     .build();
@@ -579,24 +579,24 @@ impl ElementImpl for MccEnc {
             {
                 let caps = caps.get_mut().unwrap();
 
-                let framerates = gst::List::new(&[
-                    &gst::Fraction::new(24, 1),
-                    &gst::Fraction::new(25, 1),
-                    &gst::Fraction::new(30000, 1001),
-                    &gst::Fraction::new(30, 1),
-                    &gst::Fraction::new(50, 1),
-                    &gst::Fraction::new(60000, 1001),
-                    &gst::Fraction::new(60, 1),
+                let framerates = gst::List::new([
+                    gst::Fraction::new(24, 1),
+                    gst::Fraction::new(25, 1),
+                    gst::Fraction::new(30000, 1001),
+                    gst::Fraction::new(30, 1),
+                    gst::Fraction::new(50, 1),
+                    gst::Fraction::new(60000, 1001),
+                    gst::Fraction::new(60, 1),
                 ]);
 
                 let s = gst::Structure::builder("closedcaption/x-cea-708")
-                    .field("format", &"cdp")
+                    .field("format", "cdp")
                     .field("framerate", &framerates)
                     .build();
                 caps.append_structure(s);
 
                 let s = gst::Structure::builder("closedcaption/x-cea-608")
-                    .field("format", &"s334-1a")
+                    .field("format", "s334-1a")
                     .field("framerate", &framerates)
                     .build();
                 caps.append_structure(s);

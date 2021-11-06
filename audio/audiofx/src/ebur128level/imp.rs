@@ -256,21 +256,18 @@ impl ElementImpl for EbuR128Level {
             let caps = gst::Caps::builder("audio/x-raw")
                 .field(
                     "format",
-                    &gst::List::new(&[
-                        &gst_audio::AUDIO_FORMAT_S16.to_str(),
-                        &gst_audio::AUDIO_FORMAT_S32.to_str(),
-                        &gst_audio::AUDIO_FORMAT_F32.to_str(),
-                        &gst_audio::AUDIO_FORMAT_F64.to_str(),
+                    gst::List::new([
+                        gst_audio::AUDIO_FORMAT_S16.to_str(),
+                        gst_audio::AUDIO_FORMAT_S32.to_str(),
+                        gst_audio::AUDIO_FORMAT_F32.to_str(),
+                        gst_audio::AUDIO_FORMAT_F64.to_str(),
                     ]),
                 )
-                .field(
-                    "layout",
-                    &gst::List::new(&[&"interleaved", &"non-interleaved"]),
-                )
+                .field("layout", gst::List::new(["interleaved", "non-interleaved"]))
                 // Limit from ebur128
-                .field("rate", &gst::IntRange::<i32>::new(1, 2_822_400))
+                .field("rate", gst::IntRange::new(1i32, 2_822_400))
                 // Limit from ebur128
-                .field("channels", &gst::IntRange::<i32>::new(1, 64))
+                .field("channels", gst::IntRange::new(1i32, 64))
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
@@ -499,9 +496,9 @@ impl BaseTransformImpl for EbuR128Level {
                     let stream_time = segment.as_ref().and_then(|s| s.to_stream_time(timestamp));
 
                     let mut s = gst::Structure::builder("ebur128-level")
-                        .field("timestamp", &timestamp)
-                        .field("running-time", &running_time)
-                        .field("stream-time", &stream_time)
+                        .field("timestamp", timestamp)
+                        .field("running-time", running_time)
+                        .field("stream-time", stream_time)
                         .build();
 
                     if state.ebur128.mode().contains(ebur128::Mode::M) {
@@ -568,7 +565,7 @@ impl BaseTransformImpl for EbuR128Level {
                             .collect::<Result<Vec<_>, _>>();
 
                         match peaks {
-                            Ok(peaks) => s.set("sample-peak", &gst::Array::from_owned(peaks)),
+                            Ok(peaks) => s.set("sample-peak", gst::Array::from(peaks)),
                             Err(err) => {
                                 gst_error!(CAT, obj: element, "Failed to get sample peaks: {}", err)
                             }
@@ -581,7 +578,7 @@ impl BaseTransformImpl for EbuR128Level {
                             .collect::<Result<Vec<_>, _>>();
 
                         match peaks {
-                            Ok(peaks) => s.set("true-peak", &gst::Array::from_owned(peaks)),
+                            Ok(peaks) => s.set("true-peak", gst::Array::from(peaks)),
                             Err(err) => {
                                 gst_error!(CAT, obj: element, "Failed to get true peaks: {}", err)
                             }

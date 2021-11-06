@@ -441,7 +441,7 @@ impl Transcriber {
                 );
 
                 let caps = gst::Caps::builder("text/x-raw")
-                    .field("format", &"utf8")
+                    .field("format", "utf8")
                     .build();
                 events.push(
                     gst::event::Caps::builder(&caps)
@@ -1275,7 +1275,7 @@ impl ElementImpl for Transcriber {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             let src_caps = gst::Caps::builder("text/x-raw")
-                .field("format", &"utf8")
+                .field("format", "utf8")
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
@@ -1286,9 +1286,9 @@ impl ElementImpl for Transcriber {
             .unwrap();
 
             let sink_caps = gst::Caps::builder("audio/x-raw")
-                .field("format", &"S16LE")
-                .field("rate", &gst::IntRange::<i32>::new(8000, 48000))
-                .field("channels", &1)
+                .field("format", "S16LE")
+                .field("rate", gst::IntRange::new(8000i32, 48000))
+                .field("channels", 1)
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

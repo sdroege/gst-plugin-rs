@@ -54,7 +54,7 @@ fn video_frame_to_memory_texture(
     let texture_id = frame.plane_data(0).unwrap().as_ptr() as usize;
 
     let pixel_aspect_ratio =
-        (*frame.info().par().numer() as f64) / (*frame.info().par().denom() as f64);
+        (frame.info().par().numer() as f64) / (frame.info().par().denom() as f64);
 
     if let Some(texture) = cached_textures.get(&texture_id) {
         used_textures.insert(texture_id);
