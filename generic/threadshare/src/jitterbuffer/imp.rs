@@ -369,7 +369,7 @@ impl SinkHandler {
             if state.clock_rate.is_none() {
                 drop(state);
                 let caps = element
-                    .emit_by_name("request-pt-map", &[&(pt as u32)])
+                    .try_emit_by_name("request-pt-map", &[&(pt as u32)])
                     .map_err(|_| gst::FlowError::Error)?
                     .ok_or(gst::FlowError::Error)?
                     .get::<Option<gst::Caps>>()

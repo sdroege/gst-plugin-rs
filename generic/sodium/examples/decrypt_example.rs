@@ -102,15 +102,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let typefind = gst::ElementFactory::make("typefind", None).unwrap();
     let filesink = gst::ElementFactory::make("filesink", None).unwrap();
 
-    filesrc
-        .set_property("location", &input_loc)
-        .expect("Failed to set location property");
-    filesink
-        .set_property("location", &out_loc)
-        .expect("Failed to set location property");
+    filesrc.set_property("location", &input_loc);
+    filesink.set_property("location", &out_loc);
 
-    decrypter.set_property("receiver-key", glib::Bytes::from_owned(receiver.private.0))?;
-    decrypter.set_property("sender-key", glib::Bytes::from_owned(sender.public))?;
+    decrypter.set_property("receiver-key", glib::Bytes::from_owned(receiver.private.0));
+    decrypter.set_property("sender-key", glib::Bytes::from_owned(sender.public));
 
     let pipeline = gst::Pipeline::new(Some("test-pipeline"));
     pipeline

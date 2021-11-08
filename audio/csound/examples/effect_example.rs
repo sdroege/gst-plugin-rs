@@ -89,7 +89,7 @@ fn create_pipeline() -> Result<gst::Pipeline, Box<dyn Error>> {
     let audio_sink = gst::parse_bin_from_description(AUDIO_SINK, true)?.upcast();
 
     let csoundfilter = gst::ElementFactory::make("csoundfilter", None)?;
-    csoundfilter.set_property("csd-text", &CSD)?;
+    csoundfilter.set_property("csd-text", &CSD);
 
     pipeline.add_many(&[&audio_src, &csoundfilter, &audio_sink])?;
 

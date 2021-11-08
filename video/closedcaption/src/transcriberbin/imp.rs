@@ -139,16 +139,12 @@ impl TranscriberBin {
 
         state
             .transcriber_queue
-            .set_property("max-size-buffers", 0u32)
-            .unwrap();
-        state
-            .transcriber_queue
-            .set_property("max-size-time", 0u64)
-            .unwrap();
+            .set_property("max-size-buffers", 0u32);
+        state.transcriber_queue.set_property("max-size-time", 0u64);
 
         state.internal_bin.add(&state.transcription_bin)?;
 
-        state.textwrap.set_property("lines", 2u32).unwrap();
+        state.textwrap.set_property("lines", 2u32);
 
         state.transcription_bin.set_locked_state(true);
 
@@ -208,8 +204,7 @@ impl TranscriberBin {
 
         state
             .cccombiner
-            .set_property("latency", 100 * gst::ClockTime::MSECOND)
-            .unwrap();
+            .set_property("latency", 100 * gst::ClockTime::MSECOND);
 
         self.audio_sinkpad
             .set_target(Some(&state.internal_bin.static_pad("audio_sink").unwrap()))?;
@@ -234,21 +229,18 @@ impl TranscriberBin {
 
         s.set("framerate", &state.framerate.unwrap());
 
-        state.cccapsfilter.set_property("caps", &cc_caps).unwrap();
+        state.cccapsfilter.set_property("caps", &cc_caps);
 
         let max_size_time = settings.latency + settings.accumulate_time;
 
         for queue in &[&state.audio_queue_passthrough, &state.video_queue] {
-            queue.set_property("max-size-bytes", 0u32).unwrap();
-            queue.set_property("max-size-buffers", 0u32).unwrap();
-            queue.set_property("max-size-time", max_size_time).unwrap();
+            queue.set_property("max-size-bytes", 0u32);
+            queue.set_property("max-size-buffers", 0u32);
+            queue.set_property("max-size-time", max_size_time);
         }
 
         let latency_ms = settings.latency.mseconds() as u32;
-        state
-            .transcriber
-            .set_property("latency", latency_ms)
-            .unwrap();
+        state.transcriber.set_property("latency", latency_ms);
 
         if !settings.passthrough {
             let audio_tee_pad = state.audio_tee.request_pad_simple("src_%u").unwrap();
@@ -349,20 +341,16 @@ impl TranscriberBin {
 
         gst_debug!(CAT, obj: element, "setting CC mode {:?}", mode);
 
-        state.tttocea608.set_property("mode", mode).unwrap();
+        state.tttocea608.set_property("mode", mode);
 
         if mode.is_rollup() {
-            state
-                .textwrap
-                .set_property("accumulate-time", 0u64)
-                .unwrap();
+            state.textwrap.set_property("accumulate-time", 0u64);
         } else {
             let accumulate_time = self.settings.lock().unwrap().accumulate_time;
 
             state
                 .textwrap
-                .set_property("accumulate-time", accumulate_time)
-                .unwrap();
+                .set_property("accumulate-time", accumulate_time);
         }
     }
 

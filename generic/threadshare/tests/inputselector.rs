@@ -36,20 +36,11 @@ fn test_active_pad() {
     let mut h1 = gst_check::Harness::with_element(&is, Some("sink_%u"), Some("src"));
     let mut h2 = gst_check::Harness::with_element(&is, Some("sink_%u"), None);
 
-    let active_pad = is
-        .property("active-pad")
-        .unwrap()
-        .get::<Option<gst::Pad>>()
-        .unwrap();
+    let active_pad = is.property::<Option<gst::Pad>>("active-pad");
     assert_eq!(active_pad, h1.srcpad().unwrap().peer());
 
-    is.set_property("active-pad", h2.srcpad().unwrap().peer())
-        .unwrap();
-    let active_pad = is
-        .property("active-pad")
-        .unwrap()
-        .get::<Option<gst::Pad>>()
-        .unwrap();
+    is.set_property("active-pad", h2.srcpad().unwrap().peer());
+    let active_pad = is.property::<Option<gst::Pad>>("active-pad");
     assert_eq!(active_pad, h2.srcpad().unwrap().peer());
 
     h1.set_src_caps_str("foo/bar");
@@ -85,8 +76,7 @@ fn test_active_pad() {
     /* Switch the active pad and push a buffer, we should receive stream-start, segment and caps
      * again */
     let buf = gst::Buffer::new();
-    is.set_property("active-pad", h1.srcpad().unwrap().peer())
-        .unwrap();
+    is.set_property("active-pad", h1.srcpad().unwrap().peer());
     assert_eq!(h1.push(buf), Ok(gst::FlowSuccess::Ok));
     assert_eq!(h1.buffers_received(), 3);
     assert_eq!(h1.events_received(), 6);

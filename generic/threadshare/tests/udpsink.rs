@@ -36,84 +36,40 @@ fn test_client_management() {
     let h = gst_check::Harness::new("ts-udpsink");
     let udpsink = h.element().unwrap();
 
-    let clients = udpsink
-        .property("clients")
-        .unwrap()
-        .get::<String>()
-        .unwrap();
+    let clients = udpsink.property::<String>("clients");
 
     assert_eq!(clients, "127.0.0.1:5004");
 
-    udpsink
-        .emit_by_name("add", &[&"192.168.1.1", &57i32])
-        .unwrap();
-    let clients = udpsink
-        .property("clients")
-        .unwrap()
-        .get::<String>()
-        .unwrap();
+    udpsink.emit_by_name("add", &[&"192.168.1.1", &57i32]);
+    let clients = udpsink.property::<String>("clients");
     assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
     /* Adding a client twice is not supported */
-    udpsink
-        .emit_by_name("add", &[&"192.168.1.1", &57i32])
-        .unwrap();
-    let clients = udpsink
-        .property("clients")
-        .unwrap()
-        .get::<String>()
-        .unwrap();
+    udpsink.emit_by_name("add", &[&"192.168.1.1", &57i32]);
+    let clients = udpsink.property::<String>("clients");
     assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
-    udpsink
-        .emit_by_name("remove", &[&"192.168.1.1", &57i32])
-        .unwrap();
-    let clients = udpsink
-        .property("clients")
-        .unwrap()
-        .get::<String>()
-        .unwrap();
+    udpsink.emit_by_name("remove", &[&"192.168.1.1", &57i32]);
+    let clients = udpsink.property::<String>("clients");
     assert_eq!(clients, "127.0.0.1:5004");
 
     /* Removing a non-existing client should not be a problem */
-    udpsink
-        .emit_by_name("remove", &[&"192.168.1.1", &57i32])
-        .unwrap();
-    let clients = udpsink
-        .property("clients")
-        .unwrap()
-        .get::<String>()
-        .unwrap();
+    udpsink.emit_by_name("remove", &[&"192.168.1.1", &57i32]);
+    let clients = udpsink.property::<String>("clients");
     assert_eq!(clients, "127.0.0.1:5004");
 
     /* Removing the default client is possible */
-    udpsink
-        .emit_by_name("remove", &[&"127.0.0.1", &5004i32])
-        .unwrap();
-    let clients = udpsink
-        .property("clients")
-        .unwrap()
-        .get::<String>()
-        .unwrap();
+    udpsink.emit_by_name("remove", &[&"127.0.0.1", &5004i32]);
+    let clients = udpsink.property::<String>("clients");
     assert_eq!(clients, "");
 
     /* The client properties is writable too */
-    udpsink
-        .set_property("clients", "127.0.0.1:5004,192.168.1.1:57")
-        .unwrap();
-    let clients = udpsink
-        .property("clients")
-        .unwrap()
-        .get::<String>()
-        .unwrap();
+    udpsink.set_property("clients", "127.0.0.1:5004,192.168.1.1:57");
+    let clients = udpsink.property::<String>("clients");
     assert_eq!(clients, "127.0.0.1:5004,192.168.1.1:57");
 
-    udpsink.emit_by_name("clear", &[]).unwrap();
-    let clients = udpsink
-        .property("clients")
-        .unwrap()
-        .get::<String>()
-        .unwrap();
+    udpsink.emit_by_name("clear", &[]);
+    let clients = udpsink.property::<String>("clients");
     assert_eq!(clients, "");
 }
 
@@ -125,7 +81,7 @@ fn test_chain() {
     h.set_src_caps_str("foo/bar");
     {
         let udpsink = h.element().unwrap();
-        udpsink.set_property("clients", "127.0.0.1:5005").unwrap();
+        udpsink.set_property("clients", "127.0.0.1:5005");
     }
 
     thread::spawn(move || {

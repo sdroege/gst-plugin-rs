@@ -66,8 +66,8 @@ fn main() {
     for i in 0..n_streams {
         let sink =
             gst::ElementFactory::make("fakesink", Some(format!("sink-{}", i).as_str())).unwrap();
-        sink.set_property("sync", false).unwrap();
-        sink.set_property("async", false).unwrap();
+        sink.set_property("sync", false);
+        sink.set_property("async", false);
 
         let counter_clone = Arc::clone(&counter);
         sink.static_pad("sink").unwrap().add_probe(
@@ -83,10 +83,8 @@ fn main() {
                 let source =
                     gst::ElementFactory::make("udpsrc", Some(format!("source-{}", i).as_str()))
                         .unwrap();
-                source.set_property("port", 40000i32 + i as i32).unwrap();
-                source
-                    .set_property("retrieve-sender-address", false)
-                    .unwrap();
+                source.set_property("port", 40000i32 + i as i32);
+                source.set_property("retrieve-sender-address", false);
 
                 source
             }
@@ -94,11 +92,9 @@ fn main() {
                 let source =
                     gst::ElementFactory::make("ts-udpsrc", Some(format!("source-{}", i).as_str()))
                         .unwrap();
-                source.set_property("port", 40000i32 + i as i32).unwrap();
-                source
-                    .set_property("context", format!("context-{}", (i as u32) % n_groups))
-                    .unwrap();
-                source.set_property("context-wait", wait).unwrap();
+                source.set_property("port", 40000i32 + i as i32);
+                source.set_property("context", format!("context-{}", (i as u32) % n_groups));
+                source.set_property("context-wait", wait);
 
                 source
             }
@@ -108,8 +104,8 @@ fn main() {
                     Some(format!("source-{}", i).as_str()),
                 )
                 .unwrap();
-                source.set_property("host", "127.0.0.1").unwrap();
-                source.set_property("port", 40000i32).unwrap();
+                source.set_property("host", "127.0.0.1");
+                source.set_property("port", 40000i32);
 
                 source
             }
@@ -119,12 +115,10 @@ fn main() {
                     Some(format!("source-{}", i).as_str()),
                 )
                 .unwrap();
-                source.set_property("host", "127.0.0.1").unwrap();
-                source.set_property("port", 40000i32).unwrap();
-                source
-                    .set_property("context", format!("context-{}", (i as u32) % n_groups))
-                    .unwrap();
-                source.set_property("context-wait", wait).unwrap();
+                source.set_property("host", "127.0.0.1");
+                source.set_property("port", 40000i32);
+                source.set_property("context", format!("context-{}", (i as u32) % n_groups));
+                source.set_property("context-wait", wait);
 
                 source
             }
@@ -134,11 +128,9 @@ fn main() {
                     Some(format!("source-{}", i).as_str()),
                 )
                 .unwrap();
-                source
-                    .set_property("samplesperbuffer", (wait as i32) * 8000 / 1000)
-                    .unwrap();
+                source.set_property("samplesperbuffer", (wait as i32) * 8000 / 1000);
 
-                sink.set_property("sync", true).unwrap();
+                sink.set_property("sync", true);
 
                 source
             }
@@ -146,13 +138,9 @@ fn main() {
                 let source =
                     gst::ElementFactory::make("ts-tonesrc", Some(format!("source-{}", i).as_str()))
                         .unwrap();
-                source
-                    .set_property("samples-per-buffer", (wait as u32) * 8000 / 1000)
-                    .unwrap();
-                source
-                    .set_property("context", format!("context-{}", (i as u32) % n_groups))
-                    .unwrap();
-                source.set_property("context-wait", wait).unwrap();
+                source.set_property("samples-per-buffer", (wait as u32) * 8000 / 1000);
+                source.set_property("context", format!("context-{}", (i as u32) % n_groups));
+                source.set_property("context-wait", wait);
 
                 source
             }

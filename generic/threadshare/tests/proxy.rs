@@ -45,11 +45,11 @@ fn test_push() {
     fakesrc.link(&proxysink).unwrap();
     proxysrc.link(&appsink).unwrap();
 
-    fakesrc.set_property("num-buffers", 3i32).unwrap();
-    proxysink.set_property("proxy-context", "test1").unwrap();
-    proxysrc.set_property("proxy-context", "test1").unwrap();
+    fakesrc.set_property("num-buffers", 3i32);
+    proxysink.set_property("proxy-context", "test1");
+    proxysrc.set_property("proxy-context", "test1");
 
-    appsink.set_property("emit-signals", true).unwrap();
+    appsink.set_property("emit-signals", true);
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 
@@ -60,7 +60,6 @@ fn test_push() {
             .new_sample(move |appsink| {
                 let sample = appsink
                     .emit_by_name("pull-sample", &[])
-                    .unwrap()
                     .unwrap()
                     .get::<gst::Sample>()
                     .unwrap();
@@ -117,8 +116,8 @@ fn test_from_pipeline_to_pipeline() {
     pipe_2.add_many(&[&pxsrc, &fakesink]).unwrap();
     pxsrc.link(&fakesink).unwrap();
 
-    pxsink.set_property("proxy-context", "test2").unwrap();
-    pxsrc.set_property("proxy-context", "test2").unwrap();
+    pxsink.set_property("proxy-context", "test2");
+    pxsrc.set_property("proxy-context", "test2");
 
     pipe_1.set_state(gst::State::Paused).unwrap();
     pipe_2.set_state(gst::State::Paused).unwrap();
@@ -149,11 +148,11 @@ fn test_from_pipeline_to_pipeline_and_back() {
     pipe_2.add_many(&[&pxsrc_2, &pxsink_2]).unwrap();
     pxsrc_2.link(&pxsink_2).unwrap();
 
-    pxsrc_1.set_property("proxy-context", "test3").unwrap();
-    pxsink_2.set_property("proxy-context", "test3").unwrap();
+    pxsrc_1.set_property("proxy-context", "test3");
+    pxsink_2.set_property("proxy-context", "test3");
 
-    pxsrc_2.set_property("proxy-context", "test4").unwrap();
-    pxsink_1.set_property("proxy-context", "test4").unwrap();
+    pxsrc_2.set_property("proxy-context", "test4");
+    pxsink_1.set_property("proxy-context", "test4");
 
     pipe_1.set_state(gst::State::Paused).unwrap();
     pipe_2.set_state(gst::State::Paused).unwrap();

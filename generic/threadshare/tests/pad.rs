@@ -772,7 +772,7 @@ fn setup(
 
     // Src
     let src_element = glib::Object::new::<ElementSrcTest>(&[]).unwrap();
-    src_element.set_property("context", &context_name).unwrap();
+    src_element.set_property("context", &context_name);
     pipeline.add(&src_element).unwrap();
 
     let mut last_element = src_element.clone().upcast::<gst::Element>();
@@ -969,12 +969,8 @@ fn src_tsqueue_sink_nominal() {
     let name = "src_tsqueue_sink";
 
     let ts_queue = gst::ElementFactory::make("ts-queue", Some("ts-queue")).unwrap();
-    ts_queue
-        .set_property("context", format!("{}_queue", name))
-        .unwrap();
-    ts_queue
-        .set_property("context-wait", THROTTLING_DURATION.as_millis() as u32)
-        .unwrap();
+    ts_queue.set_property("context", format!("{}_queue", name));
+    ts_queue.set_property("context-wait", THROTTLING_DURATION.as_millis() as u32);
 
     let (pipeline, src_element, _sink_element, receiver) = setup(name, Some(ts_queue), None);
 
@@ -1000,20 +996,12 @@ fn src_tsproxy_sink_nominal() {
     let name = "src_tsproxy_sink";
 
     let ts_proxy_sink = gst::ElementFactory::make("ts-proxysink", Some("ts-proxysink")).unwrap();
-    ts_proxy_sink
-        .set_property("proxy-context", format!("{}_proxy_context", name))
-        .unwrap();
+    ts_proxy_sink.set_property("proxy-context", format!("{}_proxy_context", name));
 
     let ts_proxy_src = gst::ElementFactory::make("ts-proxysrc", Some("ts-proxysrc")).unwrap();
-    ts_proxy_src
-        .set_property("proxy-context", format!("{}_proxy_context", name))
-        .unwrap();
-    ts_proxy_src
-        .set_property("context", format!("{}_context", name))
-        .unwrap();
-    ts_proxy_src
-        .set_property("context-wait", THROTTLING_DURATION.as_millis() as u32)
-        .unwrap();
+    ts_proxy_src.set_property("proxy-context", format!("{}_proxy_context", name));
+    ts_proxy_src.set_property("context", format!("{}_context", name));
+    ts_proxy_src.set_property("context-wait", THROTTLING_DURATION.as_millis() as u32);
 
     let (pipeline, src_element, _sink_element, receiver) =
         setup(name, Some(ts_proxy_sink), Some(ts_proxy_src));

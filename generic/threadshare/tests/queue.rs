@@ -42,9 +42,9 @@ fn test_push() {
     fakesrc.link(&queue).unwrap();
     queue.link(&appsink).unwrap();
 
-    fakesrc.set_property("num-buffers", 3i32).unwrap();
+    fakesrc.set_property("num-buffers", 3i32);
 
-    appsink.set_property("emit-signals", true).unwrap();
+    appsink.set_property("emit-signals", true);
 
     let samples = Arc::new(Mutex::new(Vec::new()));
 
@@ -55,7 +55,6 @@ fn test_push() {
             .new_sample(move |appsink| {
                 let sample = appsink
                     .emit_by_name("pull-sample", &[])
-                    .unwrap()
                     .unwrap()
                     .get::<gst::Sample>()
                     .unwrap();

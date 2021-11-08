@@ -142,8 +142,7 @@ impl Harness {
         });
 
         let local_addr = futures::executor::block_on(local_addr_receiver).unwrap();
-        src.set_property("location", format!("http://{}/", local_addr))
-            .unwrap();
+        src.set_property("location", format!("http://{}/", local_addr));
 
         // Let the test setup anything needed on the HTTP source now
         setup_func(&src);
@@ -410,10 +409,10 @@ fn test_basic_request_inverted_defaults() {
             Response::new(Body::from("Hello World"))
         },
         |src| {
-            src.set_property("keep-alive", false).unwrap();
-            src.set_property("compress", true).unwrap();
-            src.set_property("iradio-mode", false).unwrap();
-            src.set_property("user-agent", "test user-agent").unwrap();
+            src.set_property("keep-alive", false);
+            src.set_property("compress", true);
+            src.set_property("iradio-mode", false);
+            src.set_property("user-agent", "test user-agent");
         },
     );
 
@@ -490,8 +489,7 @@ fn test_extra_headers() {
                     .field("list", gst::List::new([1i32, 2i32]))
                     .field("array", gst::Array::new([1i32, 2i32]))
                     .build(),
-            )
-            .unwrap();
+            );
         },
     );
 
@@ -550,8 +548,7 @@ fn test_cookies_property() {
                     String::from("bar=2"),
                     String::from("baz=3"),
                 ],
-            )
-            .unwrap();
+            );
         },
     );
 
@@ -760,8 +757,8 @@ fn test_authorization() {
             }
         },
         |src| {
-            src.set_property("user-id", "user").unwrap();
-            src.set_property("user-pw", "password").unwrap();
+            src.set_property("user-id", "user");
+            src.set_property("user-pw", "password");
         },
     );
 
@@ -860,7 +857,7 @@ fn test_network_error() {
     let mut h = Harness::new(
         |_req| unreachable!(),
         |src| {
-            src.set_property("location", "http://0.0.0.0:0").unwrap();
+            src.set_property("location", "http://0.0.0.0:0");
         },
     );
 
@@ -1194,14 +1191,8 @@ fn test_proxy_prop_souphttpsrc_compatibility() {
     fn assert_proxy_set(set_to: Option<&str>, expected: Option<&str>) {
         // The same assertions should hold for "souphttpsrc".
         let src = gst::ElementFactory::make("reqwesthttpsrc", None).unwrap();
-        src.set_property("proxy", set_to).unwrap();
-        assert_eq!(
-            src.property("proxy")
-                .unwrap()
-                .get::<Option<&str>>()
-                .unwrap(),
-            expected
-        );
+        src.set_property("proxy", set_to);
+        assert_eq!(src.property::<Option<String>>("proxy").as_deref(), expected);
     }
 
     // Test env var proxy.
@@ -1275,7 +1266,7 @@ fn test_proxy() {
                 .unwrap()
         },
         |src| {
-            src.set_property("proxy", proxy_addr.to_string()).unwrap();
+            src.set_property("proxy", proxy_addr.to_string());
         },
     );
 

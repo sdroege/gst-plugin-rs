@@ -51,24 +51,24 @@ fn jb_pipeline() {
     let pipeline = gst::Pipeline::new(None);
 
     let src = gst::ElementFactory::make("audiotestsrc", Some("audiotestsrc")).unwrap();
-    src.set_property("is-live", true).unwrap();
-    src.set_property("num-buffers", BUFFER_NB).unwrap();
+    src.set_property("is-live", true);
+    src.set_property("num-buffers", BUFFER_NB);
 
     let enc = gst::ElementFactory::make("alawenc", Some("alawenc")).unwrap();
     let pay = gst::ElementFactory::make("rtppcmapay", Some("rtppcmapay")).unwrap();
 
     let jb = gst::ElementFactory::make("ts-jitterbuffer", Some("ts-jitterbuffer")).unwrap();
-    jb.set_property("context", "jb_pipeline").unwrap();
-    jb.set_property("context-wait", CONTEXT_WAIT).unwrap();
-    jb.set_property("latency", LATENCY).unwrap();
+    jb.set_property("context", "jb_pipeline");
+    jb.set_property("context-wait", CONTEXT_WAIT);
+    jb.set_property("latency", LATENCY);
 
     let depay = gst::ElementFactory::make("rtppcmadepay", Some("rtppcmadepay")).unwrap();
     let dec = gst::ElementFactory::make("alawdec", Some("alawdec")).unwrap();
 
     let sink = gst::ElementFactory::make("appsink", Some("appsink")).unwrap();
-    sink.set_property("sync", false).unwrap();
-    sink.set_property("async", false).unwrap();
-    sink.set_property("emit-signals", true).unwrap();
+    sink.set_property("sync", false);
+    sink.set_property("async", false);
+    sink.set_property("emit-signals", true);
 
     pipeline
         .add_many(&[&src, &enc, &pay, &jb, &depay, &dec, &sink])
@@ -82,7 +82,6 @@ fn jb_pipeline() {
             .new_sample(move |appsink| {
                 let _sample = appsink
                     .emit_by_name("pull-sample", &[])
-                    .unwrap()
                     .unwrap()
                     .get::<gst::Sample>()
                     .unwrap();
@@ -115,30 +114,28 @@ fn jb_ts_pipeline() {
     let pipeline = gst::Pipeline::new(None);
 
     let src = gst::ElementFactory::make("audiotestsrc", Some("audiotestsrc")).unwrap();
-    src.set_property("is-live", true).unwrap();
-    src.set_property("num-buffers", BUFFER_NB).unwrap();
+    src.set_property("is-live", true);
+    src.set_property("num-buffers", BUFFER_NB);
 
     let queue = gst::ElementFactory::make("ts-queue", Some("ts-queue")).unwrap();
-    queue
-        .set_property("context", "jb_ts_pipeline_queue")
-        .unwrap();
-    queue.set_property("context-wait", CONTEXT_WAIT).unwrap();
+    queue.set_property("context", "jb_ts_pipeline_queue");
+    queue.set_property("context-wait", CONTEXT_WAIT);
 
     let enc = gst::ElementFactory::make("alawenc", Some("alawenc")).unwrap();
     let pay = gst::ElementFactory::make("rtppcmapay", Some("rtppcmapay")).unwrap();
 
     let jb = gst::ElementFactory::make("ts-jitterbuffer", Some("ts-jitterbuffer")).unwrap();
-    jb.set_property("context", "jb_ts_pipeline").unwrap();
-    jb.set_property("context-wait", CONTEXT_WAIT).unwrap();
-    jb.set_property("latency", LATENCY).unwrap();
+    jb.set_property("context", "jb_ts_pipeline");
+    jb.set_property("context-wait", CONTEXT_WAIT);
+    jb.set_property("latency", LATENCY);
 
     let depay = gst::ElementFactory::make("rtppcmadepay", Some("rtppcmadepay")).unwrap();
     let dec = gst::ElementFactory::make("alawdec", Some("alawdec")).unwrap();
 
     let sink = gst::ElementFactory::make("appsink", Some("appsink")).unwrap();
-    sink.set_property("sync", false).unwrap();
-    sink.set_property("async", false).unwrap();
-    sink.set_property("emit-signals", true).unwrap();
+    sink.set_property("sync", false);
+    sink.set_property("async", false);
+    sink.set_property("emit-signals", true);
 
     pipeline
         .add_many(&[&src, &queue, &enc, &pay, &jb, &depay, &dec, &sink])
@@ -152,7 +149,6 @@ fn jb_ts_pipeline() {
             .new_sample(move |appsink| {
                 let _sample = appsink
                     .emit_by_name("pull-sample", &[])
-                    .unwrap()
                     .unwrap()
                     .get::<gst::Sample>()
                     .unwrap();

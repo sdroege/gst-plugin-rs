@@ -303,22 +303,20 @@ impl VideoFallbackSource {
                     .or_else(|_| -> Result<_, glib::BoolError> {
                         let identity =
                             gst::ElementFactory::make("identity", Some("fallback_clocksync"))?;
-                        identity.set_property("sync", true).unwrap();
+                        identity.set_property("sync", true);
                         Ok(identity)
                     })
                     .expect("No clocksync or identity found");
                 let queue = gst::ElementFactory::make("queue", Some("fallback_queue"))
                     .expect("No queue found");
-                queue
-                    .set_properties(&[
-                        ("max-size-buffers", &0u32),
-                        ("max-size-bytes", &0u32),
-                        (
-                            "max-size-time",
-                            &min_latency.max(5 * gst::ClockTime::SECOND).nseconds(),
-                        ),
-                    ])
-                    .unwrap();
+                queue.set_properties(&[
+                    ("max-size-buffers", &0u32),
+                    ("max-size-bytes", &0u32),
+                    (
+                        "max-size-time",
+                        &min_latency.max(5 * gst::ClockTime::SECOND).nseconds(),
+                    ),
+                ]);
 
                 source
                     .add_many(&[
@@ -341,7 +339,7 @@ impl VideoFallbackSource {
                 ])
                 .unwrap();
 
-                if imagefreeze.set_property("is-live", true).is_err() {
+                if imagefreeze.try_set_property("is-live", true).is_err() {
                     gst_error!(
                         CAT,
                         obj: element,
@@ -357,62 +355,60 @@ impl VideoFallbackSource {
                 let element_weak = element.downgrade();
                 let source_weak = source.downgrade();
                 let videoconvert_weak = videoconvert.downgrade();
-                typefind
-                    .connect("have-type", false, move |args| {
-                        let typefind = args[0].get::<gst::Element>().unwrap();
-                        let _probability = args[1].get::<u32>().unwrap();
-                        let caps = args[2].get::<gst::Caps>().unwrap();
+                typefind.connect("have-type", false, move |args| {
+                    let typefind = args[0].get::<gst::Element>().unwrap();
+                    let _probability = args[1].get::<u32>().unwrap();
+                    let caps = args[2].get::<gst::Caps>().unwrap();
 
-                        let element = match element_weak.upgrade() {
-                            Some(element) => element,
-                            None => return None,
-                        };
+                    let element = match element_weak.upgrade() {
+                        Some(element) => element,
+                        None => return None,
+                    };
 
-                        let source = match source_weak.upgrade() {
-                            Some(element) => element,
-                            None => return None,
-                        };
+                    let source = match source_weak.upgrade() {
+                        Some(element) => element,
+                        None => return None,
+                    };
 
-                        let videoconvert = match videoconvert_weak.upgrade() {
-                            Some(element) => element,
-                            None => return None,
-                        };
+                    let videoconvert = match videoconvert_weak.upgrade() {
+                        Some(element) => element,
+                        None => return None,
+                    };
 
-                        let s = caps.structure(0).unwrap();
-                        let decoder;
-                        if s.name() == "image/jpeg" {
-                            decoder = gst::ElementFactory::make("jpegdec", Some("decoder"))
-                                .expect("jpegdec not found");
-                        } else if s.name() == "image/png" {
-                            decoder = gst::ElementFactory::make("pngdec", Some("decoder"))
-                                .expect("pngdec not found");
-                        } else {
-                            gst_error!(CAT, obj: &element, "Unsupported caps {}", caps);
-                            gst::element_error!(
-                                element,
-                                gst::StreamError::Format,
-                                ["Unsupported caps {}", caps]
-                            );
-                            return None;
-                        }
+                    let s = caps.structure(0).unwrap();
+                    let decoder;
+                    if s.name() == "image/jpeg" {
+                        decoder = gst::ElementFactory::make("jpegdec", Some("decoder"))
+                            .expect("jpegdec not found");
+                    } else if s.name() == "image/png" {
+                        decoder = gst::ElementFactory::make("pngdec", Some("decoder"))
+                            .expect("pngdec not found");
+                    } else {
+                        gst_error!(CAT, obj: &element, "Unsupported caps {}", caps);
+                        gst::element_error!(
+                            element,
+                            gst::StreamError::Format,
+                            ["Unsupported caps {}", caps]
+                        );
+                        return None;
+                    }
 
-                        source.add(&decoder).unwrap();
-                        decoder.sync_state_with_parent().unwrap();
-                        if let Err(_err) =
-                            gst::Element::link_many(&[&typefind, &decoder, &videoconvert])
-                        {
-                            gst_error!(CAT, obj: &element, "Can't link fallback image decoder");
-                            gst::element_error!(
-                                element,
-                                gst::StreamError::Format,
-                                ["Can't link fallback image decoder"]
-                            );
-                            return None;
-                        }
+                    source.add(&decoder).unwrap();
+                    decoder.sync_state_with_parent().unwrap();
+                    if let Err(_err) =
+                        gst::Element::link_many(&[&typefind, &decoder, &videoconvert])
+                    {
+                        gst_error!(CAT, obj: &element, "Can't link fallback image decoder");
+                        gst::element_error!(
+                            element,
+                            gst::StreamError::Format,
+                            ["Can't link fallback image decoder"]
+                        );
+                        return None;
+                    }
 
-                        None
-                    })
-                    .unwrap();
+                    None
+                });
 
                 queue.static_pad("src").unwrap()
             }
@@ -422,10 +418,8 @@ impl VideoFallbackSource {
                         .expect("No videotestsrc found");
                 source.add_many(&[&videotestsrc]).unwrap();
 
-                videotestsrc
-                    .set_property_from_str("pattern", "black")
-                    .unwrap();
-                videotestsrc.set_property("is-live", true).unwrap();
+                videotestsrc.set_property_from_str("pattern", "black");
+                videotestsrc.set_property("is-live", true);
 
                 videotestsrc.static_pad("src").unwrap()
             }

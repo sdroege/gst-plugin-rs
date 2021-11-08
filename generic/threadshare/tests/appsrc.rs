@@ -36,9 +36,9 @@ fn push() {
     let caps = gst::Caps::builder("foo/bar").build();
     {
         let appsrc = h.element().unwrap();
-        appsrc.set_property("caps", &caps).unwrap();
-        appsrc.set_property("do-timestamp", true).unwrap();
-        appsrc.set_property("context", "appsrc-push").unwrap();
+        appsrc.set_property("caps", &caps);
+        appsrc.set_property("do-timestamp", true);
+        appsrc.set_property("context", "appsrc-push");
     }
 
     h.play();
@@ -49,14 +49,12 @@ fn push() {
             assert!(appsrc
                 .emit_by_name("push-buffer", &[&gst::Buffer::new()])
                 .unwrap()
-                .unwrap()
                 .get::<bool>()
                 .unwrap());
         }
 
         assert!(appsrc
             .emit_by_name("end-of-stream", &[])
-            .unwrap()
             .unwrap()
             .get::<bool>()
             .unwrap());
@@ -102,9 +100,9 @@ fn pause_regular() {
     let caps = gst::Caps::builder("foo/bar").build();
     {
         let appsrc = h.element().unwrap();
-        appsrc.set_property("caps", &caps).unwrap();
-        appsrc.set_property("do-timestamp", true).unwrap();
-        appsrc.set_property("context", "appsrc-pause").unwrap();
+        appsrc.set_property("caps", &caps);
+        appsrc.set_property("do-timestamp", true);
+        appsrc.set_property("context", "appsrc-pause");
     }
 
     h.play();
@@ -115,7 +113,6 @@ fn pause_regular() {
     assert!(appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
         .unwrap()
-        .unwrap()
         .get::<bool>()
         .unwrap());
 
@@ -124,7 +121,6 @@ fn pause_regular() {
     // Pre-pause buffer
     assert!(appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![5, 6, 7])])
-        .unwrap()
         .unwrap()
         .get::<bool>()
         .unwrap());
@@ -136,7 +132,6 @@ fn pause_regular() {
     // Buffer is queued during Paused
     assert!(appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![8, 9])])
-        .unwrap()
         .unwrap()
         .get::<bool>()
         .unwrap());
@@ -155,7 +150,6 @@ fn pause_regular() {
     assert!(appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
         .unwrap()
-        .unwrap()
         .get::<bool>()
         .unwrap());
 
@@ -172,9 +166,9 @@ fn flush_regular() {
     let caps = gst::Caps::builder("foo/bar").build();
     {
         let appsrc = h.element().unwrap();
-        appsrc.set_property("caps", &caps).unwrap();
-        appsrc.set_property("do-timestamp", true).unwrap();
-        appsrc.set_property("context", "appsrc-flush").unwrap();
+        appsrc.set_property("caps", &caps);
+        appsrc.set_property("do-timestamp", true);
+        appsrc.set_property("context", "appsrc-flush");
     }
 
     h.play();
@@ -184,7 +178,6 @@ fn flush_regular() {
     // Initial buffer
     assert!(appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
-        .unwrap()
         .unwrap()
         .get::<bool>()
         .unwrap());
@@ -197,7 +190,6 @@ fn flush_regular() {
     // Can't push buffer while flushing
     assert!(!appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-        .unwrap()
         .unwrap()
         .get::<bool>()
         .unwrap());
@@ -213,7 +205,6 @@ fn flush_regular() {
     // Can push again
     assert!(appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-        .unwrap()
         .unwrap()
         .get::<bool>()
         .unwrap());
@@ -231,11 +222,9 @@ fn pause_flush() {
     let caps = gst::Caps::builder("foo/bar").build();
     {
         let appsrc = h.element().unwrap();
-        appsrc.set_property("caps", &caps).unwrap();
-        appsrc.set_property("do-timestamp", true).unwrap();
-        appsrc
-            .set_property("context", "appsrc-pause_flush")
-            .unwrap();
+        appsrc.set_property("caps", &caps);
+        appsrc.set_property("do-timestamp", true);
+        appsrc.set_property("context", "appsrc-pause_flush");
     }
 
     h.play();
@@ -245,7 +234,6 @@ fn pause_flush() {
     // Initial buffer
     assert!(appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
-        .unwrap()
         .unwrap()
         .get::<bool>()
         .unwrap());
@@ -262,7 +250,6 @@ fn pause_flush() {
     // Can't push buffers while flushing
     assert!(!appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-        .unwrap()
         .unwrap()
         .get::<bool>()
         .unwrap());
@@ -282,7 +269,6 @@ fn pause_flush() {
     // Can push again
     assert!(appsrc
         .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-        .unwrap()
         .unwrap()
         .get::<bool>()
         .unwrap());

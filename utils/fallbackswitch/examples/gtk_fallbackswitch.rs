@@ -41,9 +41,7 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
         .upcast();
 
     let fallbackswitch = gst::ElementFactory::make("fallbackswitch", None).unwrap();
-    fallbackswitch
-        .set_property("timeout", gst::ClockTime::SECOND)
-        .unwrap();
+    fallbackswitch.set_property("timeout", gst::ClockTime::SECOND);
 
     let decodebin = gst::ElementFactory::make("decodebin", None).unwrap();
     let videoconvert = gst::ElementFactory::make("videoconvert", None).unwrap();
@@ -63,15 +61,15 @@ fn create_pipeline() -> (gst::Pipeline, gst::Pad, gst::Element, gtk::Widget) {
     let (video_sink, video_widget) =
         //if let Some(gtkglsink) = gst::ElementFactory::make("gtkglsink", None) {
         //    let glsinkbin = gst::ElementFactory::make("glsinkbin", None).unwrap();
-        //    glsinkbin.set_property("sink", &gtkglsink).unwrap();
+        //    glsinkbin.set_property("sink", &gtkglsink);
 
-        //    let widget = gtkglsink.get_property("widget").unwrap();
-        //    (glsinkbin, widget.get::<gtk::Widget>().unwrap().unwrap())
+        //    let widget = gtkglsink.property::<gtk::Widget>("widget");
+        //    (glsinkbin, widget)
         //} else
         {
             let sink = gst::ElementFactory::make("gtksink", None).unwrap();
-            let widget = sink.property("widget").unwrap();
-            (sink, widget.get::<gtk::Widget>().unwrap())
+            let widget = sink.property::<gtk::Widget>("widget");
+            (sink, widget)
         };
 
     pipeline

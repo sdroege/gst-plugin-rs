@@ -10,14 +10,10 @@ fn create_ui(app: &gtk::Application) {
     let src = gst::ElementFactory::make("videotestsrc", None).unwrap();
 
     let overlay = gst::ElementFactory::make("clockoverlay", None).unwrap();
-    overlay.set_property("font-desc", "Monospace 42").unwrap();
+    overlay.set_property("font-desc", "Monospace 42");
 
     let sink = gst::ElementFactory::make("gtk4paintablesink", None).unwrap();
-    let paintable = sink
-        .property("paintable")
-        .unwrap()
-        .get::<gdk::Paintable>()
-        .unwrap();
+    let paintable = sink.property::<gdk::Paintable>("paintable");
 
     pipeline.add_many(&[&src, &overlay, &sink]).unwrap();
     src.link_filtered(

@@ -38,9 +38,9 @@ fn test_push() {
     let caps = gst::Caps::builder("foo/bar").build();
     {
         let udpsrc = h.element().unwrap();
-        udpsrc.set_property("caps", &caps).unwrap();
-        udpsrc.set_property("port", 5000i32).unwrap();
-        udpsrc.set_property("context", "test-push").unwrap();
+        udpsrc.set_property("caps", &caps);
+        udpsrc.set_property("port", 5000i32);
+        udpsrc.set_property("context", "test-push");
     }
 
     h.play();
@@ -105,31 +105,27 @@ fn test_socket_reuse() {
 
     {
         let udpsrc = ts_src_h.element().unwrap();
-        udpsrc.set_property("port", 6000i32).unwrap();
-        udpsrc.set_property("context", "test-socket-reuse").unwrap();
+        udpsrc.set_property("port", 6000i32);
+        udpsrc.set_property("context", "test-socket-reuse");
     }
     ts_src_h.play();
 
     {
         let udpsrc = ts_src_h.element().unwrap();
-        let socket = udpsrc
-            .property("used-socket")
-            .unwrap()
-            .get::<gio::Socket>()
-            .unwrap();
+        let socket = udpsrc.property::<gio::Socket>("used-socket");
 
         let udpsink = sink_h.element().unwrap();
-        udpsink.set_property("socket", &socket).unwrap();
-        udpsink.set_property("host", "127.0.0.1").unwrap();
-        udpsink.set_property("port", 6001i32).unwrap();
+        udpsink.set_property("socket", &socket);
+        udpsink.set_property("host", "127.0.0.1");
+        udpsink.set_property("port", 6001i32);
     }
     sink_h.play();
     sink_h.set_src_caps_str("application/test");
 
     {
         let udpsrc = ts_src_h2.element().unwrap();
-        udpsrc.set_property("port", 6001i32).unwrap();
-        udpsrc.set_property("context", "test-socket-reuse").unwrap();
+        udpsrc.set_property("port", 6001i32);
+        udpsrc.set_property("context", "test-socket-reuse");
     }
     ts_src_h2.play();
 

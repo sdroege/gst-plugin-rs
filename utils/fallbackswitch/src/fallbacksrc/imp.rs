@@ -827,17 +827,14 @@ impl FallbackSrc {
 
                 let uri = element
                     .emit_by_name("update-uri", &[uri])
-                    .expect("Failed to emit update-uri signal")
                     .expect("No value returned");
                 let uri = uri
                     .get::<&str>()
                     .expect("Wrong type returned from update-uri signal");
 
-                source.set_property("uri", uri).unwrap();
-                source.set_property("use-buffering", true).unwrap();
-                source
-                    .set_property("buffer-duration", buffer_duration)
-                    .unwrap();
+                source.set_property("uri", uri);
+                source.set_property("use-buffering", true);
+                source.set_property("buffer-duration", buffer_duration);
 
                 source
             }
@@ -846,7 +843,7 @@ impl FallbackSrc {
 
         // Handle any async state changes internally, they don't affect the pipeline because we
         // convert everything to a live stream
-        source.set_property("async-handling", true).unwrap();
+        source.set_property("async-handling", true);
         // Don't let the bin handle state changes of the source. We want to do it manually to catch
         // possible errors and retry, without causing the whole bin state change to fail
         source.set_locked_state(true);
@@ -894,10 +891,8 @@ impl FallbackSrc {
             .expect("No audiotestsrc found");
         input.add_many(&[&audiotestsrc]).unwrap();
 
-        audiotestsrc
-            .set_property_from_str("wave", "silence")
-            .unwrap();
-        audiotestsrc.set_property("is-live", true).unwrap();
+        audiotestsrc.set_property_from_str("wave", "silence");
+        audiotestsrc.set_property("is-live", true);
 
         let srcpad = audiotestsrc.static_pad("src").unwrap();
         input
@@ -931,20 +926,18 @@ impl FallbackSrc {
         let clocksync = gst::ElementFactory::make("clocksync", None)
             .or_else(|_| -> Result<_, glib::BoolError> {
                 let identity = gst::ElementFactory::make("identity", None)?;
-                identity.set_property("sync", true).unwrap();
+                identity.set_property("sync", true);
                 Ok(identity)
             })
             .expect("No clocksync or identity found");
 
         // Workaround for issues caused by https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/-/issues/800
         let clocksync_queue = gst::ElementFactory::make("queue", None).expect("No queue found");
-        clocksync_queue
-            .set_properties(&[
-                ("max-size-buffers", &0u32),
-                ("max-size-bytes", &0u32),
-                ("max-size-time", &gst::ClockTime::SECOND),
-            ])
-            .unwrap();
+        clocksync_queue.set_properties(&[
+            ("max-size-buffers", &0u32),
+            ("max-size-bytes", &0u32),
+            ("max-size-time", &gst::ClockTime::SECOND),
+        ]);
 
         element
             .add_many(&[&fallback_input, &switch, &clocksync_queue, &clocksync])
@@ -960,13 +953,9 @@ impl FallbackSrc {
             let src = FallbackSrc::from_instance(&element);
             src.handle_switch_active_pad_change(&element);
         });
-        switch.set_property("timeout", timeout.nseconds()).unwrap();
-        switch
-            .set_property("min-upstream-latency", min_latency.nseconds())
-            .unwrap();
-        switch
-            .set_property("immediate-fallback", immediate_fallback)
-            .unwrap();
+        switch.set_property("timeout", timeout.nseconds());
+        switch.set_property("min-upstream-latency", min_latency.nseconds());
+        switch.set_property("immediate-fallback", immediate_fallback);
 
         gst::Element::link_pads(&fallback_input, Some("src"), &switch, Some("fallback_sink"))
             .unwrap();
@@ -1341,7 +1330,7 @@ impl FallbackSrc {
 
             gst_debug!(CAT, "image stream, inserting imagefreeze");
             element.add(&imagefreeze).unwrap();
-            imagefreeze.set_property("is-live", true).unwrap();
+            imagefreeze.set_property("is-live", true);
             if imagefreeze.sync_state_with_parent().is_err() {
                 gst_error!(CAT, obj: element, "imagefreeze failed to change state",);
                 return Err(gst::error_msg!(
@@ -2014,10 +2003,7 @@ impl FallbackSrc {
 
                 let prev_fallback_uri = video_stream
                     .fallback_input
-                    .property("uri")
-                    .unwrap()
-                    .get::<Option<String>>()
-                    .unwrap();
+                    .property::<Option<String>>("uri");
 
                 // This means previously videotestsrc was configured
                 // Something went wrong and there is no other way than to error out
@@ -2383,13 +2369,7 @@ impl FallbackSrc {
                 && state
                     .audio_stream
                     .as_ref()
-                    .and_then(|s| {
-                        s.switch
-                            .property("active-pad")
-                            .unwrap()
-                            .get::<Option<gst::Pad>>()
-                            .unwrap()
-                    })
+                    .and_then(|s| s.switch.property::<Option<gst::Pad>>("active-pad"))
                     .map(|p| p.name() == "fallback_sink")
                     .unwrap_or(true))
             || (have_video
@@ -2397,13 +2377,7 @@ impl FallbackSrc {
                 && state
                     .video_stream
                     .as_ref()
-                    .and_then(|s| {
-                        s.switch
-                            .property("active-pad")
-                            .unwrap()
-                            .get::<Option<gst::Pad>>()
-                            .unwrap()
-                    })
+                    .and_then(|s| s.switch.property::<Option<gst::Pad>>("active-pad"))
                     .map(|p| p.name() == "fallback_sink")
                     .unwrap_or(true))
     }

@@ -121,7 +121,7 @@ fn test_encode(video_info: &gst_video::VideoInfo) {
     let mut h = gst_check::Harness::new("rav1enc");
     {
         let rav1enc = h.element().unwrap();
-        rav1enc.set_property("speed-preset", 10u32).unwrap();
+        rav1enc.set_property("speed-preset", 10u32);
     }
     h.play();
     h.set_src_caps(video_info.to_caps().unwrap());

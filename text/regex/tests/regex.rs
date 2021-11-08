@@ -47,7 +47,7 @@ fn test_replace_all() {
 
         let commands = gst::Array::from(vec![command.to_send_value()]);
 
-        regex.set_property("commands", &commands).unwrap();
+        regex.set_property("commands", &commands);
     }
 
     h.set_src_caps_str("text/x-raw, format=utf8");

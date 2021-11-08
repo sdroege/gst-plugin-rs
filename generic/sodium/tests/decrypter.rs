@@ -73,15 +73,11 @@ fn test_pipeline() {
     };
 
     let filesrc = gst::ElementFactory::make("filesrc", None).unwrap();
-    filesrc
-        .set_property("location", &input_path.to_str().unwrap())
-        .expect("failed to set property");
+    filesrc.set_property("location", &input_path.to_str().unwrap());
 
     let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-    dec.set_property("sender-key", &*SENDER_PUBLIC)
-        .expect("failed to set property");
-    dec.set_property("receiver-key", &*RECEIVER_PRIVATE)
-        .expect("failed to set property");
+    dec.set_property("sender-key", &*SENDER_PUBLIC);
+    dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
 
     // the typefind element here is cause the decrypter only supports
     // operating in pull mode bu the filesink wants push-mode.
@@ -165,15 +161,11 @@ fn test_pull_range() {
     };
 
     let filesrc = gst::ElementFactory::make("filesrc", None).unwrap();
-    filesrc
-        .set_property("location", input_path.to_str().unwrap())
-        .expect("failed to set property");
+    filesrc.set_property("location", input_path.to_str().unwrap());
 
     let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-    dec.set_property("sender-key", &*SENDER_PUBLIC)
-        .expect("failed to set property");
-    dec.set_property("receiver-key", &*RECEIVER_PRIVATE)
-        .expect("failed to set property");
+    dec.set_property("sender-key", &*SENDER_PUBLIC);
+    dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
 
     pipeline
         .add_many(&[&filesrc, &dec])
@@ -284,34 +276,28 @@ fn test_state_changes() {
 
         // Set only receiver key
         let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-        dec.set_property("receiver-key", &*RECEIVER_PRIVATE)
-            .expect("failed to set property");
+        dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
         assert!(dec.change_state(gst::StateChange::NullToReady).is_err());
 
         // Set only sender key
         let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-        dec.set_property("sender-key", &*SENDER_PUBLIC)
-            .expect("failed to set property");
+        dec.set_property("sender-key", &*SENDER_PUBLIC);
         assert!(dec.change_state(gst::StateChange::NullToReady).is_err());
     }
 
     // NullToReady, no nonce provided
     {
         let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-        dec.set_property("sender-key", &*SENDER_PUBLIC)
-            .expect("failed to set property");
-        dec.set_property("receiver-key", &*RECEIVER_PRIVATE)
-            .expect("failed to set property");
+        dec.set_property("sender-key", &*SENDER_PUBLIC);
+        dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
         assert!(dec.change_state(gst::StateChange::NullToReady).is_ok());
     }
 
     // ReadyToNull
     {
         let dec = gst::ElementFactory::make("sodiumdecrypter", None).unwrap();
-        dec.set_property("sender-key", &*SENDER_PUBLIC)
-            .expect("failed to set property");
-        dec.set_property("receiver-key", &*RECEIVER_PRIVATE)
-            .expect("failed to set property");
+        dec.set_property("sender-key", &*SENDER_PUBLIC);
+        dec.set_property("receiver-key", &*RECEIVER_PRIVATE);
         assert!(dec.change_state(gst::StateChange::NullToReady).is_ok());
     }
 }

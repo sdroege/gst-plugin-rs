@@ -63,23 +63,20 @@ fn multiple_contexts_queue() {
     for i in 0..SRC_NB {
         let src =
             gst::ElementFactory::make("ts-udpsrc", Some(format!("src-{}", i).as_str())).unwrap();
-        src.set_property("context", format!("context-{}", (i as u32) % CONTEXT_NB))
-            .unwrap();
-        src.set_property("context-wait", CONTEXT_WAIT).unwrap();
-        src.set_property("port", (FIRST_PORT + i) as i32).unwrap();
+        src.set_property("context", format!("context-{}", (i as u32) % CONTEXT_NB));
+        src.set_property("context-wait", CONTEXT_WAIT);
+        src.set_property("port", (FIRST_PORT + i) as i32);
 
         let queue =
             gst::ElementFactory::make("ts-queue", Some(format!("queue-{}", i).as_str())).unwrap();
-        queue
-            .set_property("context", format!("context-{}", (i as u32) % CONTEXT_NB))
-            .unwrap();
-        queue.set_property("context-wait", CONTEXT_WAIT).unwrap();
+        queue.set_property("context", format!("context-{}", (i as u32) % CONTEXT_NB));
+        queue.set_property("context-wait", CONTEXT_WAIT);
 
         let sink =
             gst::ElementFactory::make("appsink", Some(format!("sink-{}", i).as_str())).unwrap();
-        sink.set_property("sync", false).unwrap();
-        sink.set_property("async", false).unwrap();
-        sink.set_property("emit-signals", true).unwrap();
+        sink.set_property("sync", false);
+        sink.set_property("async", false);
+        sink.set_property("emit-signals", true);
 
         pipeline.add_many(&[&src, &queue, &sink]).unwrap();
         gst::Element::link_many(&[&src, &queue, &sink]).unwrap();
@@ -91,7 +88,6 @@ fn multiple_contexts_queue() {
                 .new_sample(move |appsink| {
                     let _sample = appsink
                         .emit_by_name("pull-sample", &[])
-                        .unwrap()
                         .unwrap()
                         .get::<gst::Sample>()
                         .unwrap();
@@ -204,40 +200,33 @@ fn multiple_contexts_proxy() {
             Some(format!("src-{}", pipeline_index).as_str()),
         )
         .unwrap();
-        src.set_property("context", format!("context-{}", (i as u32) % CONTEXT_NB))
-            .unwrap();
-        src.set_property("context-wait", CONTEXT_WAIT).unwrap();
-        src.set_property("port", (FIRST_PORT + i) as i32).unwrap();
+        src.set_property("context", format!("context-{}", (i as u32) % CONTEXT_NB));
+        src.set_property("context-wait", CONTEXT_WAIT);
+        src.set_property("port", (FIRST_PORT + i) as i32);
 
         let proxysink = gst::ElementFactory::make(
             "ts-proxysink",
             Some(format!("proxysink-{}", pipeline_index).as_str()),
         )
         .unwrap();
-        proxysink
-            .set_property("proxy-context", format!("proxy-{}", pipeline_index))
-            .unwrap();
+        proxysink.set_property("proxy-context", format!("proxy-{}", pipeline_index));
         let proxysrc = gst::ElementFactory::make(
             "ts-proxysrc",
             Some(format!("proxysrc-{}", pipeline_index).as_str()),
         )
         .unwrap();
-        proxysrc
-            .set_property(
-                "context",
-                &format!("context-{}", (pipeline_index as u32) % CONTEXT_NB),
-            )
-            .unwrap();
-        proxysrc
-            .set_property("proxy-context", format!("proxy-{}", pipeline_index))
-            .unwrap();
+        proxysrc.set_property(
+            "context",
+            &format!("context-{}", (pipeline_index as u32) % CONTEXT_NB),
+        );
+        proxysrc.set_property("proxy-context", format!("proxy-{}", pipeline_index));
 
         let sink =
             gst::ElementFactory::make("appsink", Some(format!("sink-{}", pipeline_index).as_str()))
                 .unwrap();
-        sink.set_property("sync", false).unwrap();
-        sink.set_property("async", false).unwrap();
-        sink.set_property("emit-signals", true).unwrap();
+        sink.set_property("sync", false);
+        sink.set_property("async", false);
+        sink.set_property("emit-signals", true);
 
         pipeline
             .add_many(&[&src, &proxysink, &proxysrc, &sink])
@@ -252,7 +241,6 @@ fn multiple_contexts_proxy() {
                 .new_sample(move |appsink| {
                     let _sample = appsink
                         .emit_by_name("pull-sample", &[])
-                        .unwrap()
                         .unwrap()
                         .get::<gst::Sample>()
                         .unwrap();
@@ -349,22 +337,22 @@ fn eos() {
     let caps = gst::Caps::builder("foo/bar").build();
 
     let src = gst::ElementFactory::make("ts-appsrc", Some("src-eos")).unwrap();
-    src.set_property("caps", &caps).unwrap();
-    src.set_property("do-timestamp", true).unwrap();
-    src.set_property("context", &CONTEXT).unwrap();
+    src.set_property("caps", &caps);
+    src.set_property("do-timestamp", true);
+    src.set_property("context", &CONTEXT);
 
     let queue = gst::ElementFactory::make("ts-queue", Some("queue-eos")).unwrap();
-    queue.set_property("context", &CONTEXT).unwrap();
+    queue.set_property("context", &CONTEXT);
 
     let appsink = gst::ElementFactory::make("appsink", Some("sink-eos")).unwrap();
 
     pipeline.add_many(&[&src, &queue, &appsink]).unwrap();
     gst::Element::link_many(&[&src, &queue, &appsink]).unwrap();
 
-    appsink.set_property("sync", false).unwrap();
-    appsink.set_property("async", false).unwrap();
+    appsink.set_property("sync", false);
+    appsink.set_property("async", false);
 
-    appsink.set_property("emit-signals", true).unwrap();
+    appsink.set_property("emit-signals", true);
     let (sample_notifier, sample_notif_rcv) = mpsc::channel();
     let (eos_notifier, eos_notif_rcv) = mpsc::channel();
     let appsink = appsink.dynamic_cast::<gst_app::AppSink>().unwrap();
@@ -374,7 +362,6 @@ fn eos() {
                 gst_debug!(CAT, obj: appsink, "eos: pulling sample");
                 let _ = appsink
                     .emit_by_name("pull-sample", &[])
-                    .unwrap()
                     .unwrap()
                     .get::<gst::Sample>()
                     .unwrap();
@@ -391,7 +378,6 @@ fn eos() {
         gst_debug!(CAT, obj: src, "eos: pushing buffer");
         src.emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
             .unwrap()
-            .unwrap()
             .get::<bool>()
             .unwrap()
     }
@@ -406,7 +392,6 @@ fn eos() {
 
         assert!(src
             .emit_by_name("end-of-stream", &[])
-            .unwrap()
             .unwrap()
             .get::<bool>()
             .unwrap());
@@ -487,29 +472,24 @@ fn premature_shutdown() {
     let caps = gst::Caps::builder("foo/bar").build();
 
     let src = gst::ElementFactory::make("ts-appsrc", Some("src-ps")).unwrap();
-    src.set_property("caps", &caps).unwrap();
-    src.set_property("do-timestamp", true).unwrap();
-    src.set_property("context", "appsrc-context").unwrap();
-    src.set_property("context-wait", APPSRC_CONTEXT_WAIT)
-        .unwrap();
+    src.set_property("caps", &caps);
+    src.set_property("do-timestamp", true);
+    src.set_property("context", "appsrc-context");
+    src.set_property("context-wait", APPSRC_CONTEXT_WAIT);
 
     let queue = gst::ElementFactory::make("ts-queue", Some("queue-ps")).unwrap();
-    queue.set_property("context", "queue-context").unwrap();
-    queue
-        .set_property("context-wait", QUEUE_CONTEXT_WAIT)
-        .unwrap();
-    queue
-        .set_property("max-size-buffers", QUEUE_ITEMS_CAPACITY)
-        .unwrap();
+    queue.set_property("context", "queue-context");
+    queue.set_property("context-wait", QUEUE_CONTEXT_WAIT);
+    queue.set_property("max-size-buffers", QUEUE_ITEMS_CAPACITY);
 
     let appsink = gst::ElementFactory::make("appsink", Some("sink-ps")).unwrap();
 
     pipeline.add_many(&[&src, &queue, &appsink]).unwrap();
     gst::Element::link_many(&[&src, &queue, &appsink]).unwrap();
 
-    appsink.set_property("emit-signals", true).unwrap();
-    appsink.set_property("sync", false).unwrap();
-    appsink.set_property("async", false).unwrap();
+    appsink.set_property("emit-signals", true);
+    appsink.set_property("sync", false);
+    appsink.set_property("async", false);
 
     let (appsink_sender, appsink_receiver) = mpsc::channel();
 
@@ -520,7 +500,6 @@ fn premature_shutdown() {
                 gst_debug!(CAT, obj: appsink, "premature_shutdown: pulling sample");
                 let _sample = appsink
                     .emit_by_name("pull-sample", &[])
-                    .unwrap()
                     .unwrap()
                     .get::<gst::Sample>()
                     .unwrap();
@@ -540,7 +519,6 @@ fn premature_shutdown() {
             intent
         );
         src.emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
-            .unwrap()
             .unwrap()
             .get::<bool>()
             .unwrap()

@@ -33,13 +33,11 @@ fn create_pipeline() -> (
     let pipeline = gst::Pipeline::new(None);
 
     let video_src = gst::ElementFactory::make("videotestsrc", None).unwrap();
-    video_src.set_property("is-live", true).unwrap();
-    video_src.set_property_from_str("pattern", "ball").unwrap();
+    video_src.set_property("is-live", true);
+    video_src.set_property_from_str("pattern", "ball");
 
     let timeoverlay = gst::ElementFactory::make("timeoverlay", None).unwrap();
-    timeoverlay
-        .set_property("font-desc", "Monospace 20")
-        .unwrap();
+    timeoverlay.set_property("font-desc", "Monospace 20");
 
     let video_tee = gst::ElementFactory::make("tee", None).unwrap();
     let video_queue1 = gst::ElementFactory::make("queue", None).unwrap();
@@ -51,24 +49,24 @@ fn create_pipeline() -> (
     let (video_sink, video_widget) =
         if let Ok(gtkglsink) = gst::ElementFactory::make("gtkglsink", None) {
             let glsinkbin = gst::ElementFactory::make("glsinkbin", None).unwrap();
-            glsinkbin.set_property("sink", &gtkglsink).unwrap();
+            glsinkbin.set_property("sink", &gtkglsink);
 
-            let widget = gtkglsink.property("widget").unwrap();
-            (glsinkbin, widget.get::<gtk::Widget>().unwrap())
+            let widget = gtkglsink.property::<gtk::Widget>("widget");
+            (glsinkbin, widget)
         } else {
             let sink = gst::ElementFactory::make("gtksink", None).unwrap();
-            let widget = sink.property("widget").unwrap();
-            (sink, widget.get::<gtk::Widget>().unwrap())
+            let widget = sink.property::<gtk::Widget>("widget");
+            (sink, widget)
         };
 
     let video_enc = gst::ElementFactory::make("x264enc", None).unwrap();
-    video_enc.set_property("rc-lookahead", 10i32).unwrap();
-    video_enc.set_property("key-int-max", 30u32).unwrap();
+    video_enc.set_property("rc-lookahead", 10i32);
+    video_enc.set_property("key-int-max", 30u32);
     let video_parse = gst::ElementFactory::make("h264parse", None).unwrap();
 
     let audio_src = gst::ElementFactory::make("audiotestsrc", None).unwrap();
-    audio_src.set_property("is-live", true).unwrap();
-    audio_src.set_property_from_str("wave", "ticks").unwrap();
+    audio_src.set_property("is-live", true);
+    audio_src.set_property_from_str("wave", "ticks");
 
     let audio_tee = gst::ElementFactory::make("tee", None).unwrap();
     let audio_queue1 = gst::ElementFactory::make("queue", None).unwrap();
@@ -90,9 +88,9 @@ fn create_pipeline() -> (
     let mux = gst::ElementFactory::make("mp4mux", None).unwrap();
 
     let file_sink = gst::ElementFactory::make("filesink", None).unwrap();
-    file_sink.set_property("location", "recording.mp4").unwrap();
-    file_sink.set_property("async", false).unwrap();
-    file_sink.set_property("sync", false).unwrap();
+    file_sink.set_property("location", "recording.mp4");
+    file_sink.set_property("async", false);
+    file_sink.set_property("sync", false);
 
     pipeline
         .add_many(&[
@@ -255,12 +253,8 @@ fn create_ui(app: &gtk::Application) {
             None => return,
         };
 
-        let recording = !togglerecord
-            .property("record")
-            .unwrap()
-            .get::<bool>()
-            .unwrap();
-        togglerecord.set_property("record", recording).unwrap();
+        let recording = !togglerecord.property::<bool>("record");
+        togglerecord.set_property("record", recording);
 
         button.set_label(if recording { "Stop" } else { "Record" });
     });
