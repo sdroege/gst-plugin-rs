@@ -12,7 +12,7 @@ endif
 
 cargo = find_program('cargo', version:'>=1.40')
 cargo_wrapper = find_program('cargo_wrapper.py')
-cargo_c = find_program('cargo-cbuild', required: false)
+cargo_c = find_program('cargo-cbuild', version:'>=0.9.3', required: false)
 rustc = find_program('rustc', version:'>=1.52')
 
 if not cargo_c.found()
