@@ -143,6 +143,7 @@ struct Consumer {
     encoders: Vec<VideoEncoder>,
     /// None if congestion control was disabled
     congestion_controller: Option<CongestionController>,
+    sdp: Option<gst_sdp::SDPMessage>,
 }
 
 #[derive(PartialEq)]
@@ -828,13 +829,59 @@ impl Consumer {
         let appsrc = make_element("appsrc", None)?;
         self.pipeline.add(&appsrc).unwrap();
 
-        let (enc, filter, pay) =
+        let pay_filter = make_element("capsfilter", None)?;
+        self.pipeline.add(&pay_filter).unwrap();
+
+        let (enc, raw_filter, pay) =
             setup_encoding(&self.pipeline, &appsrc, codec, Some(webrtc_pad.ssrc), false)?;
+
+        // At this point, the peer has provided its answer, and we want to
+        // let the payloader / encoder perform negotiation according to that.
+        //
+        // This means we need to unset our codec preferences, as they would now
+        // conflict with what the peer actually requested (see webrtcbin's
+        // caps query implementation), and instead install a capsfilter downstream
+        // of the payloader with caps constructed from the relevant SDP media.
+        let transceiver = webrtc_pad
+            .pad
+            .property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
+        transceiver.set_property("codec-preferences", None::<gst::Caps>);
+
+        let mut global_caps = gst::Caps::new_simple("application/x-unknown", &[]);
+
+        let sdp = self.sdp.as_ref().unwrap();
+        let sdp_media = sdp.media(webrtc_pad.media_idx).unwrap();
+
+        sdp.attributes_to_caps(global_caps.get_mut().unwrap())
+            .unwrap();
+        sdp_media
+            .attributes_to_caps(global_caps.get_mut().unwrap())
+            .unwrap();
+
+        let caps = sdp_media
+            .caps_from_media(payload)
+            .unwrap()
+            .intersect(&global_caps);
+        let s = caps.structure(0).unwrap();
+        let mut filtered_s = gst::Structure::new_empty("application/x-rtp");
+
+        filtered_s.extend(s.iter().filter_map(|(key, value)| {
+            if key.starts_with("a-") {
+                None
+            } else {
+                Some((key, value.to_owned()))
+            }
+        }));
+        filtered_s.set("ssrc", webrtc_pad.ssrc);
+
+        let caps = gst::Caps::builder_full().structure(filtered_s).build();
+
+        pay_filter.set_property("caps", caps);
 
         if codec.is_video {
             let enc = VideoEncoder::new(
                 enc.clone(),
-                filter.clone(),
+                raw_filter.clone(),
                 &webrtc_pad.in_caps,
                 &self.peer_id,
             );
@@ -866,7 +913,9 @@ impl Consumer {
             .sync_children_states()
             .with_context(|| format!("Connecting input stream for {}", self.peer_id))?;
 
-        let srcpad = pay.static_pad("src").unwrap();
+        pay.link(&pay_filter)?;
+
+        let srcpad = pay_filter.static_pad("src").unwrap();
 
         srcpad
             .link(&webrtc_pad.pad)
@@ -1348,6 +1397,7 @@ impl WebRTCSink {
                 WebRTCSinkCongestionControl::Homegrown => Some(CongestionController::new(peer_id)),
             },
             encoders: Vec::new(),
+            sdp: None,
         };
 
         state
@@ -1558,6 +1608,8 @@ impl WebRTCSink {
 
         if let Some(consumer) = state.consumers.get_mut(peer_id) {
             let sdp = desc.sdp();
+
+            consumer.sdp = Some(sdp.to_owned());
 
             for webrtc_pad in consumer.webrtc_pads.values_mut() {
                 let media_idx = webrtc_pad.media_idx;
