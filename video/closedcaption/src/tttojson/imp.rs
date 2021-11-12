@@ -22,6 +22,7 @@ use gst::subclass::prelude::*;
 
 use once_cell::sync::Lazy;
 
+use std::cmp::min;
 use std::sync::Mutex;
 
 use crate::ttutils::{Cea608Mode, Chunk, Line, Lines, TextStyle};
@@ -91,11 +92,13 @@ impl TtToJson {
             clear: Some(false),
         };
 
+        let mut row = min(15usize.saturating_sub(text.lines().count()), 13usize) as u32;
+
         for phrase in text.lines() {
             lines.lines.push(Line {
                 carriage_return: Some(true),
                 column: Some(0),
-                row: Some(13),
+                row: Some(row),
                 chunks: vec![Chunk {
                     // Default CEA 608 styling
                     style: TextStyle::White,
@@ -103,6 +106,8 @@ impl TtToJson {
                     text: phrase.to_string(),
                 }],
             });
+
+            row = min(14u32, row + 1);
         }
 
         let json = serde_json::to_string(&lines).map_err(|err| {
