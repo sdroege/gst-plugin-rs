@@ -159,7 +159,7 @@ impl Cea608Overlay {
 
         if self.settings.lock().unwrap().black_background {
             let attrs = pango::AttrList::new();
-            let attr = pango::AttrColor::new_background(0, 0, 0).upcast();
+            let attr = pango::AttrColor::new_background(0, 0, 0);
             attrs.insert(attr);
             layout.set_attributes(Some(&attrs));
         }
