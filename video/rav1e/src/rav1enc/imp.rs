@@ -130,7 +130,7 @@ impl Context {
                             } else {
                                 rav1e::prelude::FrameTypeOverride::No
                             },
-                            opaque: Some(Box::new(frame_number)),
+                            opaque: Some(rav1e::prelude::Opaque::new(frame_number)),
                         }),
                     ))
                 } else {
@@ -167,7 +167,7 @@ impl Context {
                             } else {
                                 rav1e::prelude::FrameTypeOverride::No
                             },
-                            opaque: Some(Box::new(frame_number)),
+                            opaque: Some(rav1e::prelude::Opaque::new(frame_number)),
                         }),
                     ))
                 } else {
