@@ -8,8 +8,6 @@ ignore = [
     # Waiting for https://github.com/chronotope/chrono/pull/578
     "RUSTSEC-2020-0071",
     "RUSTSEC-2020-0159",
-    # Waiting for https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/174
-    "RUSTSEC-2021-0124",
 ]
 
 [licenses]
