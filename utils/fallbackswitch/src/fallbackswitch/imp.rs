@@ -725,7 +725,7 @@ impl ObjectImpl for FallbackSwitch {
                     "immediate-fallback",
                     "Immediate fallback",
                     "Forward the fallback stream immediately at startup, when the primary stream is slow to start up and immediate output is required",
-                    DEFAULT_AUTO_SWITCH,
+                    DEFAULT_IMMEDIATE_FALLBACK,
                     glib::ParamFlags::READWRITE| gst::PARAM_FLAG_MUTABLE_READY,
                 ),
             ]
