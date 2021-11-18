@@ -13,7 +13,7 @@ use glib::subclass::prelude::*;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info, gst_trace, gst_warning};
-use m3u8_rs::playlist::MediaPlaylistType;
+use m3u8_rs::MediaPlaylistType;
 use once_cell::sync::Lazy;
 use std::fs;
 use std::io::Write;

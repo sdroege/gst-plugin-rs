@@ -86,18 +86,13 @@ version = "0.1"
 name = "pin-project-lite"
 version = "0.1"
 
-# ignore duplicated nom dependency because cexpr, m3u8-rs depends on an old version
+# ignore duplicated nom dependency because cexpr depends on an old version
 # https://github.com/jethrogb/rust-cexpr/issues/26
 [[bans.skip]]
 name = "nom"
 version = "5"
 
-# ignore duplicated arrayvec dependency because nom 5 depends on an old version
-[[bans.skip]]
-name = "arrayvec"
-version = "0.5"
-
-# ignore duplicated nom dependency because tokio v0.2 depends on an old version
+# ignore duplicated bytes/mio dependency because tokio v0.2 depends on an old version
 [[bans.skip]]
 name = "bytes"
 version = "0.5"
@@ -137,10 +132,14 @@ name = "ansi_term"
 version = "0.11"
 
 # ignore duplicated system-deps dependency because dav1d depends on an old version
-# https://github.com/rusoto/rusoto/pull/1915
 [[bans.skip]]
 name = "system-deps"
 version = "3"
+
+[[bans.skip]]
+name = "version-compare"
+version = "0.0"
+
 [[bans.skip]]
 name = "cfg-expr"
 version = "0.7"
