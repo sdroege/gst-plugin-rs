@@ -1396,7 +1396,7 @@ impl WebRTCSink {
 
         let mut consumer = Consumer {
             pipeline: pipeline.clone(),
-            webrtcbin,
+            webrtcbin: webrtcbin.clone(),
             webrtc_pads: HashMap::new(),
             peer_id: peer_id.to_string(),
             congestion_controller: match settings.cc_heuristic {
@@ -1454,6 +1454,10 @@ impl WebRTCSink {
                 }
             }
         });
+
+        pipeline.set_state(gst::State::Ready)?;
+
+        element.emit_by_name("new-webrtcbin", &[&peer_id.to_value(), &webrtcbin.to_value()])?;
 
         pipeline.set_state(gst::State::Playing)?;
 
@@ -2022,6 +2026,29 @@ impl ObjectImpl for WebRTCSink {
             }
             _ => unimplemented!(),
         }
+    }
+
+    fn signals() -> &'static [glib::subclass::Signal] {
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![
+                 /*
+                  * RsWebRTCSink::new-webrtcbin:
+                  * @peer_id: Identifier of the peer associated with the consumer added
+                  * @webrtcbin: The new webrtcbin
+                  *
+                  * This signal can be used to tweak @webrtcbin, creating a data
+                  * channel for example.
+                  */
+                glib::subclass::Signal::builder(
+                    "new-webrtcbin",
+                    &[String::static_type().into(), gst::Element::static_type().into()],
+                    glib::types::Type::UNIT.into(),
+                )
+                .build(),
+            ]
+        });
+
+        SIGNALS.as_ref()
     }
 
     fn constructed(&self, obj: &Self::Type) {
