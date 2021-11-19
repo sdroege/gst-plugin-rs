@@ -30,6 +30,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 const RTP_TWCC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
+const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
 const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
     WebRTCSinkCongestionControl::Homegrown;
 
@@ -37,6 +38,8 @@ const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
 struct Settings {
     video_caps: gst::Caps,
     audio_caps: gst::Caps,
+    turn_server: Option<String>,
+    stun_server: Option<String>,
     cc_heuristic: WebRTCSinkCongestionControl,
 }
 
@@ -188,6 +191,8 @@ impl Default for Settings {
                 .map(|s| gst::Structure::new_empty(s))
                 .collect::<gst::Caps>(),
             cc_heuristic: WebRTCSinkCongestionControl::Homegrown,
+            stun_server: DEFAULT_STUN_SERVER.map(String::from),
+            turn_server: None,
         }
     }
 }
@@ -1222,7 +1227,7 @@ impl WebRTCSink {
 
     /// Called by the signaller to add a new consumer
     pub fn add_consumer(&self, element: &super::WebRTCSink, peer_id: &str) -> Result<(), Error> {
-        let cc_heuristic = self.settings.lock().unwrap().cc_heuristic;
+        let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
 
         if state.consumers.contains_key(peer_id) {
@@ -1238,6 +1243,18 @@ impl WebRTCSink {
         webrtcbin
             .set_property_from_str("bundle-policy", "max-bundle")
             .unwrap();
+
+        if let Some(stun_server) = settings.stun_server.as_ref() {
+            webrtcbin
+                .set_property("stun-server", stun_server.to_value())
+                .unwrap();
+        }
+
+        if let Some(turn_server) = settings.turn_server.as_ref() {
+            webrtcbin
+                .set_property("turn-server", turn_server.to_value())
+                .unwrap();
+        }
 
         pipeline.add(&webrtcbin).unwrap();
 
@@ -1382,7 +1399,7 @@ impl WebRTCSink {
             webrtcbin,
             webrtc_pads: HashMap::new(),
             peer_id: peer_id.to_string(),
-            congestion_controller: match cc_heuristic {
+            congestion_controller: match settings.cc_heuristic {
                 WebRTCSinkCongestionControl::Disabled => None,
                 WebRTCSinkCongestionControl::Homegrown => Some(CongestionController::new(peer_id)),
             },
@@ -1898,6 +1915,20 @@ impl ObjectImpl for WebRTCSink {
                     gst::Caps::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpec::new_string(
+                    "stun-server",
+                    "STUN Server",
+                    "The STUN server of the form stun://hostname:port",
+                    DEFAULT_STUN_SERVER,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpec::new_string(
+                    "turn-server",
+                    "TURN Server",
+                    "The TURN server of the form turn(s)://username:password@host:port.",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
                 glib::ParamSpec::new_enum(
                     "congestion-control",
                     "Congestion control",
@@ -1934,6 +1965,18 @@ impl ObjectImpl for WebRTCSink {
                     .expect("type checked upstream")
                     .unwrap_or_else(|| gst::Caps::new_empty());
             }
+            "stun-server" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.stun_server = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream")
+            }
+            "turn-server" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.turn_server = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream")
+            }
             "congestion-control" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.cc_heuristic = value
@@ -1957,6 +2000,14 @@ impl ObjectImpl for WebRTCSink {
             "congestion-control" => {
                 let settings = self.settings.lock().unwrap();
                 settings.cc_heuristic.to_value()
+            }
+            "stun-server" => {
+                let settings = self.settings.lock().unwrap();
+                settings.stun_server.to_value()
+            }
+            "turn-server" => {
+                let settings = self.settings.lock().unwrap();
+                settings.turn_server.to_value()
             }
             _ => unimplemented!(),
         }
