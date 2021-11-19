@@ -1419,6 +1419,7 @@ impl WebRTCSink {
 
         let mut bus_stream = pipeline.bus().unwrap().stream();
         let element_clone = element.downgrade();
+        let pipeline_clone = pipeline.downgrade();
         let peer_id_clone = peer_id.to_owned();
 
         task::spawn(async move {
@@ -1429,6 +1430,16 @@ impl WebRTCSink {
                         gst::MessageView::Error(err) => {
                             gst_error!(CAT, "Consumer {} error: {}", peer_id_clone, err.error());
                             let _ = this.remove_consumer(&element, &peer_id_clone, true);
+                        }
+                        gst::MessageView::StateChanged(state_changed) => {
+                            if let Some(pipeline) = pipeline_clone.upgrade(){
+                                if Some(pipeline.clone().upcast()) == state_changed.src() {
+                                    pipeline.debug_to_dot_file_with_ts(gst::DebugGraphDetails::all(),
+                                        format!("webrtcsink-peer-{}-{:?}-to-{:?}", peer_id_clone,
+                                        state_changed.old(),
+                                        state_changed.current()));
+                                }
+                            }
                         }
                         gst::MessageView::Eos(..) => {
                             gst_error!(
