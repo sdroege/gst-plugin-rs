@@ -345,7 +345,7 @@ impl ObjectSubclass for Signaller {
 impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::new_string(
+            vec![glib::ParamSpecString::new(
                 "address",
                 "Address",
                 "Address of the signalling server",

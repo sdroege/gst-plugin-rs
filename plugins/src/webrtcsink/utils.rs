@@ -55,14 +55,10 @@ impl StreamProducer {
 
         gst_debug!(CAT, "Adding consumer");
 
-        consumer.set_property("max-buffers", 0u64).unwrap();
-        consumer.set_property("max-bytes", 0u64).unwrap();
-        consumer
-            .set_property("max-time", 500 * gst::ClockTime::MSECOND)
-            .unwrap();
-        consumer
-            .set_property_from_str("leaky-type", "downstream")
-            .unwrap();
+        consumer.set_property("max-buffers", 0u64);
+        consumer.set_property("max-bytes", 0u64);
+        consumer.set_property("max-time", 500 * gst::ClockTime::MSECOND);
+        consumer.set_property_from_str("leaky-type", "downstream");
 
         // Forward force-keyunit events upstream to the appsink
         let srcpad = consumer.static_pad("src").unwrap();
