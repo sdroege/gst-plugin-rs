@@ -1245,15 +1245,11 @@ impl WebRTCSink {
             .unwrap();
 
         if let Some(stun_server) = settings.stun_server.as_ref() {
-            webrtcbin
-                .set_property("stun-server", stun_server.to_value())
-                .unwrap();
+            webrtcbin.set_property("stun-server", stun_server).unwrap();
         }
 
         if let Some(turn_server) = settings.turn_server.as_ref() {
-            webrtcbin
-                .set_property("turn-server", turn_server.to_value())
-                .unwrap();
+            webrtcbin.set_property("turn-server", turn_server).unwrap();
         }
 
         pipeline.add(&webrtcbin).unwrap();
@@ -1432,12 +1428,17 @@ impl WebRTCSink {
                             let _ = this.remove_consumer(&element, &peer_id_clone, true);
                         }
                         gst::MessageView::StateChanged(state_changed) => {
-                            if let Some(pipeline) = pipeline_clone.upgrade(){
+                            if let Some(pipeline) = pipeline_clone.upgrade() {
                                 if Some(pipeline.clone().upcast()) == state_changed.src() {
-                                    pipeline.debug_to_dot_file_with_ts(gst::DebugGraphDetails::all(),
-                                        format!("webrtcsink-peer-{}-{:?}-to-{:?}", peer_id_clone,
-                                        state_changed.old(),
-                                        state_changed.current()));
+                                    pipeline.debug_to_dot_file_with_ts(
+                                        gst::DebugGraphDetails::all(),
+                                        format!(
+                                            "webrtcsink-peer-{}-{:?}-to-{:?}",
+                                            peer_id_clone,
+                                            state_changed.old(),
+                                            state_changed.current()
+                                        ),
+                                    );
                                 }
                             }
                         }
@@ -1457,7 +1458,7 @@ impl WebRTCSink {
 
         pipeline.set_state(gst::State::Ready)?;
 
-        element.emit_by_name("new-webrtcbin", &[&peer_id.to_value(), &webrtcbin.to_value()])?;
+        element.emit_by_name("new-webrtcbin", &[&peer_id, &webrtcbin])?;
 
         pipeline.set_state(gst::State::Playing)?;
 
@@ -2031,17 +2032,20 @@ impl ObjectImpl for WebRTCSink {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
-                 /*
-                  * RsWebRTCSink::new-webrtcbin:
-                  * @peer_id: Identifier of the peer associated with the consumer added
-                  * @webrtcbin: The new webrtcbin
-                  *
-                  * This signal can be used to tweak @webrtcbin, creating a data
-                  * channel for example.
-                  */
+                /*
+                 * RsWebRTCSink::new-webrtcbin:
+                 * @peer_id: Identifier of the peer associated with the consumer added
+                 * @webrtcbin: The new webrtcbin
+                 *
+                 * This signal can be used to tweak @webrtcbin, creating a data
+                 * channel for example.
+                 */
                 glib::subclass::Signal::builder(
                     "new-webrtcbin",
-                    &[String::static_type().into(), gst::Element::static_type().into()],
+                    &[
+                        String::static_type().into(),
+                        gst::Element::static_type().into(),
+                    ],
                     glib::types::Type::UNIT.into(),
                 )
                 .build(),
