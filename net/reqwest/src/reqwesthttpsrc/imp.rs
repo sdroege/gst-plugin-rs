@@ -672,42 +672,42 @@ impl ObjectImpl for ReqwestHttpSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "location",
                     "Location",
                     "URL to read from",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "user-agent",
                     "User-Agent",
                     "Value of the User-Agent HTTP request header field",
                     DEFAULT_USER_AGENT.into(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "is-live",
                     "Is Live",
                     "Act like a live source",
                     DEFAULT_IS_LIVE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "user-id",
                     "User-id",
                     "HTTP location URI user id for authentication",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "user-pw",
                     "User-pw",
                     "HTTP location URI user password for authentication",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "timeout",
                     "Timeout",
                     "Value in seconds to timeout a blocking I/O (0 = No timeout).",
@@ -716,56 +716,56 @@ impl ObjectImpl for ReqwestHttpSrc {
                     DEFAULT_TIMEOUT,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "compress",
                     "Compress",
                     "Allow compressed content encodings",
                     DEFAULT_COMPRESS,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "extra-headers",
                     "Extra Headers",
                     "Extra headers to append to the HTTP request",
                     gst::Structure::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "cookies",
                     "Cookies",
                     "HTTP request cookies",
                     Vec::<String>::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "iradio-mode",
                     "I-Radio Mode",
                     "Enable internet radio mode (ask server to send shoutcast/icecast metadata interleaved with the actual stream data",
                     DEFAULT_IRADIO_MODE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "keep-alive",
                     "Keep Alive",
                     "Use HTTP persistent connections",
                     DEFAULT_KEEP_ALIVE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "proxy",
                     "Proxy",
                     "HTTP proxy server URI",
                     Some(""),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "proxy-id",
                     "Proxy-id",
                     "HTTP proxy URI user id for authentication",
                     Some(""),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "proxy-pw",
                     "Proxy-pw",
                     "HTTP proxy URI user password for authentication",

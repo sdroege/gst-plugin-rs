@@ -96,14 +96,14 @@ impl ObjectImpl for AudioEcho {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_uint64("max-delay",
+                glib::ParamSpecUInt64::new("max-delay",
                     "Maximum Delay",
                     "Maximum delay of the echo in nanoseconds (can't be changed in PLAYING or PAUSED state)",
                     0, u64::MAX - 1,
                     DEFAULT_MAX_DELAY.nseconds(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_uint64(
+                glib::ParamSpecUInt64::new(
                     "delay",
                     "Delay",
                     "Delay of the echo in nanoseconds",
@@ -112,7 +112,7 @@ impl ObjectImpl for AudioEcho {
                     DEFAULT_DELAY.nseconds(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_double(
+                glib::ParamSpecDouble::new(
                     "intensity",
                     "Intensity",
                     "Intensity of the echo",
@@ -121,7 +121,7 @@ impl ObjectImpl for AudioEcho {
                     DEFAULT_INTENSITY,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_double(
+                glib::ParamSpecDouble::new(
                     "feedback",
                     "Feedback",
                     "Amount of feedback",

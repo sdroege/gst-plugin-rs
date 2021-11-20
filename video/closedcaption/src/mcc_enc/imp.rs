@@ -495,14 +495,14 @@ impl ObjectImpl for MccEnc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "uuid",
                     "UUID",
                     "UUID for the output file",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "creation-date",
                     "Creation Date",
                     "Creation date for the output file",

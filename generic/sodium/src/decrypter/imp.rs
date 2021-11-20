@@ -598,14 +598,14 @@ impl ObjectImpl for Decrypter {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "receiver-key",
                     "Receiver Key",
                     "The private key of the Reeiver",
                     glib::Bytes::static_type(),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "sender-key",
                     "Sender Key",
                     "The public key of the Sender",

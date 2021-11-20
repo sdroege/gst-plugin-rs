@@ -384,28 +384,28 @@ impl ObjectImpl for HlsSink3 {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "location",
                     "File Location",
                     "Location of the file to write",
                     Some(DEFAULT_LOCATION),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "playlist-location",
                     "Playlist Location",
                     "Location of the playlist to write.",
                     Some(DEFAULT_PLAYLIST_LOCATION),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "playlist-root",
                     "Playlist Root",
                     "Location of the playlist to write.",
                     None,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "max-files",
                     "Max files",
                     "Maximum number of files to keep on disk. Once the maximum is reached, old files start to be deleted to make room for new ones.",
@@ -414,7 +414,7 @@ impl ObjectImpl for HlsSink3 {
                     DEFAULT_MAX_NUM_SEGMENT_FILES,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "target-duration",
                     "Target duration",
                     "The target duration in seconds of a segment/file. (0 - disabled, useful for management of segment duration by the streaming server)",
@@ -423,7 +423,7 @@ impl ObjectImpl for HlsSink3 {
                     DEFAULT_TARGET_DURATION,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "playlist-length",
                     "Playlist length",
                     "Length of HLS playlist. To allow players to conform to section 6.3.3 of the HLS specification, this should be at least 3. If set to 0, the playlist will be infinite.",
@@ -432,14 +432,14 @@ impl ObjectImpl for HlsSink3 {
                     DEFAULT_PLAYLIST_LENGTH,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "playlist-type",
                     "Playlist Type",
                     "The type of the playlist to use. When VOD type is set, the playlist will be live until the pipeline ends execution.",
                     None,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "send-keyframe-requests",
                     "Send Keyframe Requests",
                     "Send keyframe requests to ensure correct fragmentation. If this is disabled then the input must have keyframes in regular intervals.",

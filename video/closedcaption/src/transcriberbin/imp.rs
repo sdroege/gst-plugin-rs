@@ -564,14 +564,14 @@ impl ObjectImpl for TranscriberBin {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "passthrough",
                     "Passthrough",
                     "Whether transcription should occur",
                     DEFAULT_PASSTHROUGH,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "latency",
                     "Latency",
                     "Amount of milliseconds to allow the transcriber",
@@ -580,7 +580,7 @@ impl ObjectImpl for TranscriberBin {
                     DEFAULT_LATENCY.mseconds() as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "accumulate-time",
                     "accumulate-time",
                     "Cut-off time for textwrap accumulation, in milliseconds (0=do not accumulate). \
@@ -590,7 +590,7 @@ impl ObjectImpl for TranscriberBin {
                     DEFAULT_ACCUMULATE.mseconds() as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_enum(
+                glib::ParamSpecEnum::new(
                     "mode",
                     "Mode",
                     "Which closed caption mode to operate in",
@@ -598,14 +598,14 @@ impl ObjectImpl for TranscriberBin {
                     DEFAULT_MODE as i32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "cc-caps",
                     "Closed Caption caps",
                     "The expected format of the closed captions",
                     gst::Caps::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_object(
+                glib::ParamSpecObject::new(
                     "transcriber",
                     "Transcriber",
                     "The transcriber element to use",

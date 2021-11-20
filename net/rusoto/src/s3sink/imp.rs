@@ -434,28 +434,28 @@ impl ObjectImpl for S3Sink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "bucket",
                     "S3 Bucket",
                     "The bucket of the file to write",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "key",
                     "S3 Key",
                     "The key of the file to write",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "region",
                     "AWS Region",
                     "An AWS region (e.g. eu-west-2).",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_uint64(
+                glib::ParamSpecUInt64::new(
                     "part-size",
                     "Part size",
                     "A size (in bytes) of an individual part used for multipart upload.",
@@ -464,21 +464,21 @@ impl ObjectImpl for S3Sink {
                     DEFAULT_BUFFER_SIZE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "uri",
                     "URI",
                     "The S3 object URI",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "access-key",
                     "Access Key",
                     "AWS Access Key",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "secret-access-key",
                     "Secret Access Key",
                     "AWS Secret Access Key",

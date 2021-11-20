@@ -1064,7 +1064,7 @@ impl ObjectImpl for TtToCea608 {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_enum(
+                glib::ParamSpecEnum::new(
                     "mode",
                     "Mode",
                     "Which mode to operate in",
@@ -1072,7 +1072,7 @@ impl ObjectImpl for TtToCea608 {
                     DEFAULT_MODE as i32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_int(
+                glib::ParamSpecInt::new(
                     "origin-row",
                     "Origin row",
                     "Origin row, (-1=automatic)",
@@ -1081,7 +1081,7 @@ impl ObjectImpl for TtToCea608 {
                     DEFAULT_ORIGIN_ROW,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "origin-column",
                     "Origin column",
                     "Origin column",

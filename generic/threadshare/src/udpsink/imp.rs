@@ -966,14 +966,14 @@ impl ObjectImpl for UdpSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "context",
                     "Context",
                     "Context name to share threads with",
                     Some(DEFAULT_CONTEXT),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "context-wait",
                     "Context Wait",
                     "Throttle poll loop to run at most once every this many ms",
@@ -982,21 +982,21 @@ impl ObjectImpl for UdpSink {
                     DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "sync",
                     "Sync",
                     "Sync on the clock",
                     DEFAULT_SYNC,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "bind-address",
                     "Bind Address",
                     "Address to bind the socket to",
                     Some(DEFAULT_BIND_ADDRESS),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_int(
+                glib::ParamSpecInt::new(
                     "bind-port",
                     "Bind Port",
                     "Port to bind the socket to",
@@ -1005,14 +1005,14 @@ impl ObjectImpl for UdpSink {
                     DEFAULT_BIND_PORT,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "bind-address-v6",
                     "Bind Address V6",
                     "Address to bind the V6 socket to",
                     Some(DEFAULT_BIND_ADDRESS_V6),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_int(
+                glib::ParamSpecInt::new(
                     "bind-port-v6",
                     "Bind Port",
                     "Port to bind the V6 socket to",
@@ -1021,49 +1021,49 @@ impl ObjectImpl for UdpSink {
                     DEFAULT_BIND_PORT_V6,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_object(
+                glib::ParamSpecObject::new(
                     "socket",
                     "Socket",
                     "Socket to use for UDP transmission. (None == allocate)",
                     gio::Socket::static_type(),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_object(
+                glib::ParamSpecObject::new(
                     "used-socket",
                     "Used Socket",
                     "Socket currently in use for UDP transmission. (None = no socket)",
                     gio::Socket::static_type(),
                     glib::ParamFlags::READABLE,
                 ),
-                glib::ParamSpec::new_object(
+                glib::ParamSpecObject::new(
                     "socket-v6",
                     "Socket V6",
                     "IPV6 Socket to use for UDP transmission. (None == allocate)",
                     gio::Socket::static_type(),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_object(
+                glib::ParamSpecObject::new(
                     "used-socket-v6",
                     "Used Socket V6",
                     "V6 Socket currently in use for UDP transmission. (None = no socket)",
                     gio::Socket::static_type(),
                     glib::ParamFlags::READABLE,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "auto-multicast",
                     "Auto multicast",
                     "Automatically join/leave the multicast groups, FALSE means user has to do it himself",
                     DEFAULT_AUTO_MULTICAST,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "loop",
                     "Loop",
                     "Set the multicast loop parameter.",
                     DEFAULT_LOOP,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "ttl",
                     "Time To Live",
                     "Used for setting the unicast TTL parameter",
@@ -1072,7 +1072,7 @@ impl ObjectImpl for UdpSink {
                     DEFAULT_TTL,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "ttl-mc",
                     "Time To Live Multicast",
                     "Used for setting the multicast TTL parameter",
@@ -1081,7 +1081,7 @@ impl ObjectImpl for UdpSink {
                     DEFAULT_TTL_MC,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_int(
+                glib::ParamSpecInt::new(
                     "qos-dscp",
                     "QoS DSCP",
                     "Quality of Service, differentiated services code point (-1 default)",
@@ -1090,7 +1090,7 @@ impl ObjectImpl for UdpSink {
                     DEFAULT_QOS_DSCP,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "clients",
                     "Clients",
                     "A comma separated list of host:port pairs with destinations",

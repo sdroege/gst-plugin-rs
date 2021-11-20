@@ -568,14 +568,14 @@ impl ObjectImpl for TcpClientSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "context",
                     "Context",
                     "Context name to share threads with",
                     Some(DEFAULT_CONTEXT),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "context-wait",
                     "Context Wait",
                     "Throttle poll loop to run at most once every this many ms",
@@ -584,14 +584,14 @@ impl ObjectImpl for TcpClientSrc {
                     DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "host",
                     "Host",
                     "The host IP address to receive packets from",
                     DEFAULT_HOST,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_int(
+                glib::ParamSpecInt::new(
                     "port",
                     "Port",
                     "Port to receive packets from",
@@ -600,14 +600,14 @@ impl ObjectImpl for TcpClientSrc {
                     DEFAULT_PORT,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "caps",
                     "Caps",
                     "Caps to use",
                     gst::Caps::static_type(),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "blocksize",
                     "Blocksize",
                     "Size in bytes to read per buffer (-1 = default)",

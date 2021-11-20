@@ -233,7 +233,7 @@ impl ObjectSubclass for TtToJson {
 impl ObjectImpl for TtToJson {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::new_enum(
+            vec![glib::ParamSpecEnum::new(
                 "mode",
                 "Mode",
                 "Which mode to operate in",

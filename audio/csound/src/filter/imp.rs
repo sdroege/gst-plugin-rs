@@ -347,14 +347,14 @@ impl ObjectImpl for CsoundFilter {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "loop",
                     "Loop",
                     "loop over the score (can be changed in PLAYING or PAUSED state)",
                     DEFAULT_LOOP,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "location",
                     "Location",
                     "Location of the csd file to be used by csound.
@@ -362,7 +362,7 @@ impl ObjectImpl for CsoundFilter {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "csd-text",
                     "CSD-text",
                     "The content of a csd file passed as a String.
@@ -370,7 +370,7 @@ impl ObjectImpl for CsoundFilter {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_double(
+                glib::ParamSpecDouble::new(
                     "score-offset",
                     "Score Offset",
                     "Score offset in seconds to start the performance",

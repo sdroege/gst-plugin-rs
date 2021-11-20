@@ -682,7 +682,7 @@ impl ObjectImpl for FallbackSwitch {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_uint64(
+                glib::ParamSpecUInt64::new(
                     "timeout",
                     "Timeout",
                     "Timeout in nanoseconds",
@@ -691,21 +691,21 @@ impl ObjectImpl for FallbackSwitch {
                     DEFAULT_TIMEOUT.nseconds() as u64,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_object(
+                glib::ParamSpecObject::new(
                     "active-pad",
                     "Active Pad",
                     "Currently active pad. Writes are ignored if auto-switch=true",
                     gst::Pad::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "auto-switch",
                     "Automatically switch pads",
                     "Automatically switch pads (If true, prefer primary sink, otherwise manual selection via the active-pad property)",
                     DEFAULT_AUTO_SWITCH,
                     glib::ParamFlags::READWRITE| gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_enum(
+                glib::ParamSpecEnum::new(
                     "primary-health",
                     "Primary stream state",
                     "Reports the health of the primary stream on the sink pad",
@@ -713,7 +713,7 @@ impl ObjectImpl for FallbackSwitch {
                     DEFAULT_STREAM_HEALTH as i32,
                     glib::ParamFlags::READABLE,
                 ),
-                glib::ParamSpec::new_enum(
+                glib::ParamSpecEnum::new(
                     "fallback-health",
                     "Fallback stream state",
                     "Reports the health of the fallback stream on the fallback_sink pad",
@@ -721,7 +721,7 @@ impl ObjectImpl for FallbackSwitch {
                     DEFAULT_STREAM_HEALTH as i32,
                     glib::ParamFlags::READABLE,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "immediate-fallback",
                     "Immediate fallback",
                     "Forward the fallback stream immediately at startup, when the primary stream is slow to start up and immediate output is required",

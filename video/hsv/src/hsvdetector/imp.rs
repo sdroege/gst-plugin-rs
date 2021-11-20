@@ -165,7 +165,7 @@ impl ObjectImpl for HsvDetector {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_float(
+                glib::ParamSpecFloat::new(
                     "hue-ref",
                     "Hue reference",
                     "Hue reference in degrees",
@@ -174,7 +174,7 @@ impl ObjectImpl for HsvDetector {
                     DEFAULT_HUE_REF,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_float(
+                glib::ParamSpecFloat::new(
                     "hue-var",
                     "Hue variation",
                     "Allowed hue variation from the reference hue angle, in degrees",
@@ -183,7 +183,7 @@ impl ObjectImpl for HsvDetector {
                     DEFAULT_HUE_VAR,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_float(
+                glib::ParamSpecFloat::new(
                     "saturation-ref",
                     "Saturation reference",
                     "Reference saturation value",
@@ -192,7 +192,7 @@ impl ObjectImpl for HsvDetector {
                     DEFAULT_SATURATION_REF,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_float(
+                glib::ParamSpecFloat::new(
                     "saturation-var",
                     "Saturation variation",
                     "Allowed saturation variation from the reference value",
@@ -201,7 +201,7 @@ impl ObjectImpl for HsvDetector {
                     DEFAULT_SATURATION_VAR,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_float(
+                glib::ParamSpecFloat::new(
                     "value-ref",
                     "Value reference",
                     "Reference value value",
@@ -210,7 +210,7 @@ impl ObjectImpl for HsvDetector {
                     DEFAULT_VALUE_REF,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_float(
+                glib::ParamSpecFloat::new(
                     "value-var",
                     "Value variation",
                     "Allowed value variation from the reference value",

@@ -498,7 +498,7 @@ impl ObjectImpl for TextWrap {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "dictionary",
                     "Dictionary",
                     "Path to a dictionary to load at runtime to perform hyphenation, see \
@@ -506,7 +506,7 @@ impl ObjectImpl for TextWrap {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "columns",
                     "Columns",
                     "Maximum number of columns for any given line",
@@ -515,7 +515,7 @@ impl ObjectImpl for TextWrap {
                     DEFAULT_COLUMNS,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "lines",
                     "Lines",
                     "Split input buffer into output buffers with max lines (0=do not split)",
@@ -524,7 +524,7 @@ impl ObjectImpl for TextWrap {
                     DEFAULT_LINES,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_uint64(
+                glib::ParamSpecUInt64::new(
                     "accumulate-time",
                     "accumulate-time",
                     "Cut-off time for input text accumulation (0=do not accumulate)",

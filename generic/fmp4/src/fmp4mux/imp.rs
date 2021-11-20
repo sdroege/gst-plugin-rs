@@ -1110,7 +1110,7 @@ impl ObjectImpl for FMP4Mux {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
                 // TODO: Add chunk-duration property separate from fragment-size
-                glib::ParamSpec::new_uint64(
+                glib::ParamSpecUInt64::new(
                     "fragment-duration",
                     "Fragment Duration",
                     "Duration for each FMP4 fragment",
@@ -1119,7 +1119,7 @@ impl ObjectImpl for FMP4Mux {
                     DEFAULT_FRAGMENT_DURATION.nseconds(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_enum(
+                glib::ParamSpecEnum::new(
                     "header-update-mode",
                     "Header update mode",
                     "Mode for updating the header at the end of the stream",
@@ -1127,14 +1127,14 @@ impl ObjectImpl for FMP4Mux {
                     DEFAULT_HEADER_UPDATE_MODE as i32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "write-mfra",
                     "Write mfra box",
                     "Write fragment random access box at the end of the stream",
                     DEFAULT_WRITE_MFRA,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "write-mehd",
                     "Write mehd box",
                     "Write movie extends header box with the duration at the end of the stream (needs a header-update-mode enabled)",

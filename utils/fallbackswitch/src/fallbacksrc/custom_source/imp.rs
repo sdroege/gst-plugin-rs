@@ -63,7 +63,7 @@ impl ObjectSubclass for CustomSource {
 impl ObjectImpl for CustomSource {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::new_object(
+            vec![glib::ParamSpecObject::new(
                 "source",
                 "Source",
                 "Source",

@@ -709,14 +709,14 @@ impl ObjectImpl for UdpSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             let mut properties = vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "context",
                     "Context",
                     "Context name to share threads with",
                     Some(DEFAULT_CONTEXT),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "context-wait",
                     "Context Wait",
                     "Throttle poll loop to run at most once every this many ms",
@@ -725,14 +725,14 @@ impl ObjectImpl for UdpSrc {
                     DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "address",
                     "Address",
                     "Address/multicast group to listen on",
                     DEFAULT_ADDRESS,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_int(
+                glib::ParamSpecInt::new(
                     "port",
                     "Port",
                     "Port to listen on",
@@ -741,21 +741,21 @@ impl ObjectImpl for UdpSrc {
                     DEFAULT_PORT,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "reuse",
                     "Reuse",
                     "Allow reuse of the port",
                     DEFAULT_REUSE,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "caps",
                     "Caps",
                     "Caps to use",
                     gst::Caps::static_type(),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "mtu",
                     "MTU",
                     "Maximum expected packet size. This directly defines the allocation size of the receive buffer pool",
@@ -764,7 +764,7 @@ impl ObjectImpl for UdpSrc {
                     DEFAULT_MTU,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "retrieve-sender-address",
                     "Retrieve sender address",
                     "Whether to retrieve the sender address and add it to buffers as meta. Disabling this might result in minor performance improvements in certain scenarios",
@@ -775,14 +775,14 @@ impl ObjectImpl for UdpSrc {
 
             #[cfg(not(windows))]
             {
-                properties.push(glib::ParamSpec::new_object(
+                properties.push(glib::ParamSpecObject::new(
                     "socket",
                     "Socket",
                     "Socket to use for UDP reception. (None == allocate)",
                     gio::Socket::static_type(),
                     glib::ParamFlags::READWRITE,
                 ));
-                properties.push(glib::ParamSpec::new_object(
+                properties.push(glib::ParamSpecObject::new(
                     "used-socket",
                     "Used Socket",
                     "Socket currently in use for UDP reception. (None = no socket)",

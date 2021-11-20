@@ -1752,21 +1752,21 @@ impl ObjectImpl for ToggleRecord {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "record",
                     "Record",
                     "Enable/disable recording",
                     DEFAULT_RECORD,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "recording",
                     "Recording",
                     "Whether recording is currently taking place",
                     DEFAULT_RECORD,
                     glib::ParamFlags::READABLE,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "is-live",
                     "Live mode",
                     "Live mode: no \"gap eating\", forward incoming segment",

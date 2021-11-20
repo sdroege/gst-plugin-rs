@@ -717,14 +717,14 @@ impl ObjectImpl for Queue {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "context",
                     "Context",
                     "Context name to share threads with",
                     Some(DEFAULT_CONTEXT),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "context-wait",
                     "Context Wait",
                     "Throttle poll loop to run at most once every this many ms",
@@ -733,7 +733,7 @@ impl ObjectImpl for Queue {
                     DEFAULT_CONTEXT_WAIT.as_millis() as u32,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "max-size-buffers",
                     "Max Size Buffers",
                     "Maximum number of buffers to queue (0=unlimited)",
@@ -742,7 +742,7 @@ impl ObjectImpl for Queue {
                     DEFAULT_MAX_SIZE_BUFFERS,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "max-size-bytes",
                     "Max Size Bytes",
                     "Maximum number of bytes to queue (0=unlimited)",
@@ -751,7 +751,7 @@ impl ObjectImpl for Queue {
                     DEFAULT_MAX_SIZE_BYTES,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_uint64(
+                glib::ParamSpecUInt64::new(
                     "max-size-time",
                     "Max Size Time",
                     "Maximum number of nanoseconds to queue (0=unlimited)",

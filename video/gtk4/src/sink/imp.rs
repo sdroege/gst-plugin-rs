@@ -69,7 +69,7 @@ impl ObjectSubclass for PaintableSink {
 impl ObjectImpl for PaintableSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::new_object(
+            vec![glib::ParamSpecObject::new(
                 "paintable",
                 "Paintable",
                 "The Paintable the sink renders to",

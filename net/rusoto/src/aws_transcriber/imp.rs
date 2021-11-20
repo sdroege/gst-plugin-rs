@@ -1088,7 +1088,7 @@ impl ObjectImpl for Transcriber {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "language-code",
                     "Language Code",
                     "The Language of the Stream, see \
@@ -1097,7 +1097,7 @@ impl ObjectImpl for Transcriber {
                     Some("en-US"),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "latency",
                     "Latency",
                     "Amount of milliseconds to allow AWS transcribe",
@@ -1106,7 +1106,7 @@ impl ObjectImpl for Transcriber {
                     DEFAULT_LATENCY.mseconds() as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "lateness",
                     "Lateness",
                     "Amount of milliseconds to introduce as lateness",
@@ -1115,7 +1115,7 @@ impl ObjectImpl for Transcriber {
                     DEFAULT_LATENESS.mseconds() as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "vocabulary-name",
                     "Vocabulary Name",
                     "The name of a custom vocabulary, see \
@@ -1124,14 +1124,14 @@ impl ObjectImpl for Transcriber {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "session-id",
                     "Session ID",
                     "The ID of the transcription session, must be length 36",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_enum(
+                glib::ParamSpecEnum::new(
                     "results-stability",
                     "Results stability",
                     "Defines how fast results should stabilize",
@@ -1139,14 +1139,14 @@ impl ObjectImpl for Transcriber {
                     DEFAULT_STABILITY as i32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "access-key",
                     "Access Key",
                     "AWS Access Key",
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "secret-access-key",
                     "Secret Access Key",
                     "AWS Secret Access Key",

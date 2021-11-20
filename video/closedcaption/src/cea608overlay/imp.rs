@@ -611,7 +611,7 @@ impl ObjectImpl for Cea608Overlay {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_int(
+                glib::ParamSpecInt::new(
                     "field",
                     "Field",
                     "The field to render the caption for when available, (-1=automatic)",
@@ -620,14 +620,14 @@ impl ObjectImpl for Cea608Overlay {
                     DEFAULT_FIELD,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_boolean(
+                glib::ParamSpecBoolean::new(
                     "black-background",
                     "Black background",
                     "Whether a black background should be drawn behind text",
                     DEFAULT_BLACK_BACKGROUND,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
-                glib::ParamSpec::new_uint64(
+                glib::ParamSpecUInt64::new(
                     "timeout",
                     "Timeout",
                     "Duration after which to erase overlay when no cc data has arrived for the selected field",

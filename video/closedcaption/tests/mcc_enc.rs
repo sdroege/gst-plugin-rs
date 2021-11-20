@@ -96,7 +96,7 @@ Time Code Rate=30DF\r\n\
         enc.set_property("uuid", "14720C04-857D-40E2-86FC-F080DE44CE74");
         enc.set_property(
             "creation-date",
-            glib::DateTime::new_utc(2018, 12, 27, 17, 34, 47.0).unwrap(),
+            glib::DateTime::from_utc(2018, 12, 27, 17, 34, 47.0).unwrap(),
         );
     }
 

@@ -83,14 +83,14 @@ impl ObjectImpl for VideoFallbackSource {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_string(
+                glib::ParamSpecString::new(
                     "uri",
                     "URI",
                     "URI to use for video in case the main stream doesn't work",
                     None,
                     glib::ParamFlags::READWRITE | glib::ParamFlags::CONSTRUCT_ONLY,
                 ),
-                glib::ParamSpec::new_uint64(
+                glib::ParamSpecUInt64::new(
                     "min-latency",
                     "Minimum Latency",
                     "Minimum Latency",

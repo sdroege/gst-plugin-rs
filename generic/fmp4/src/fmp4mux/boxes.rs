@@ -375,8 +375,8 @@ pub(super) fn create_fmp4_header(cfg: super::HeaderConfiguration) -> Result<gst:
 fn write_moov(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), Error> {
     use gst::glib;
 
-    let base = glib::DateTime::new_utc(1904, 1, 1, 0, 0, 0.0)?;
-    let now = glib::DateTime::new_now_utc()?;
+    let base = glib::DateTime::from_utc(1904, 1, 1, 0, 0, 0.0)?;
+    let now = glib::DateTime::now_utc()?;
     let creation_time =
         u64::try_from(now.difference(&base).as_seconds()).expect("time before 1904");
 

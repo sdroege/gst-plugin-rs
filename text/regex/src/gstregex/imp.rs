@@ -156,17 +156,17 @@ impl ObjectSubclass for RegEx {
 impl ObjectImpl for RegEx {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpec::new_array(
+            vec![gst::ParamSpecArray::new(
                 "commands",
                 "Commands",
                 "A set of commands to apply on input text",
-                &glib::ParamSpec::new_boxed(
+                Some(&glib::ParamSpecBoxed::new(
                     "command",
                     "Command",
                     "A command to apply on input text",
                     gst::Structure::static_type(),
                     glib::ParamFlags::READWRITE,
-                ),
+                )),
                 glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
             )]
         });

@@ -390,21 +390,21 @@ impl ObjectImpl for Encrypter {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "receiver-key",
                     "Receiver Key",
                     "The public key of the Receiver",
                     glib::Bytes::static_type(),
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpec::new_boxed(
+                glib::ParamSpecBoxed::new(
                     "sender-key",
                     "Sender Key",
                     "The private key of the Sender",
                     glib::Bytes::static_type(),
                     glib::ParamFlags::WRITABLE,
                 ),
-                glib::ParamSpec::new_uint(
+                glib::ParamSpecUInt::new(
                     "block-size",
                     "Block Size",
                     "The block-size of the chunks",
