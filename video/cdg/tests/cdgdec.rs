@@ -39,13 +39,9 @@ fn test_cdgdec() {
     filesrc.set_property("location", input_path.to_str().unwrap());
     {
         let child_proxy = filesrc.dynamic_cast_ref::<gst::ChildProxy>().unwrap();
-        child_proxy
-            .set_child_property("real-filesrc::num-buffers", &1)
-            .expect("failed to set 'num-buffers' property");
+        child_proxy.set_child_property("real-filesrc::num-buffers", 1);
         let blocksize: u32 = 24; // One CDG instruction
-        child_proxy
-            .set_child_property("real-filesrc::blocksize", &blocksize)
-            .expect("failed to set 'blocksize' property");
+        child_proxy.set_child_property("real-filesrc::blocksize", blocksize);
     }
 
     let parse = gst::ElementFactory::make("cdgparse", None).unwrap();
