@@ -144,6 +144,7 @@ impl HlsSink3 {
     ) -> Result<String, String> {
         gst_info!(
             CAT,
+            obj: element,
             "Starting the formatting of the fragment-id: {}",
             fragment_id
         );
@@ -157,7 +158,12 @@ impl HlsSink3 {
 
         let settings = self.settings.lock().unwrap();
         let segment_file_location = settings.segment_formatter.segment(fragment_id);
-        gst_trace!(CAT, "Segment location formatted: {}", segment_file_location);
+        gst_trace!(
+            CAT,
+            obj: element,
+            "Segment location formatted: {}",
+            segment_file_location
+        );
 
         state.current_segment_location = Some(segment_file_location.clone());
 
@@ -174,6 +180,7 @@ impl HlsSink3 {
 
         gst_info!(
             CAT,
+            obj: element,
             "New segment location: {:?}",
             state.current_segment_location.as_ref()
         );
@@ -203,12 +210,17 @@ impl HlsSink3 {
         Ok(gio::WriteOutputStream::new(file).upcast())
     }
 
-    fn delete_fragment<P>(&self, location: &P)
+    fn delete_fragment<P>(&self, element: &super::HlsSink3, location: &P)
     where
         P: AsRef<path::Path>,
     {
         let _ = fs::remove_file(location).map_err(|err| {
-            gst_warning!(CAT, "Could not delete segment file: {}", err.to_string());
+            gst_warning!(
+                CAT,
+                obj: element,
+                "Could not delete segment file: {}",
+                err.to_string()
+            );
         });
     }
 
@@ -225,7 +237,7 @@ impl HlsSink3 {
             State::Started(s) => s,
         };
 
-        gst_info!(CAT, "COUNT {}", state.playlist.len());
+        gst_info!(CAT, obj: element, "COUNT {}", state.playlist.len());
 
         // Only add fragment if it's complete.
         if let Some(fragment_closed) = fragment_closed_at {
@@ -256,7 +268,11 @@ impl HlsSink3 {
                 &[&playlist_location],
             )
             .ok_or_else(|| {
-                gst_error!(CAT, "Could not get stream to write playlist content",);
+                gst_error!(
+                    CAT,
+                    obj: element,
+                    "Could not get stream to write playlist content",
+                );
                 gst::StateChangeError
             })?
             .into_write();
@@ -265,11 +281,21 @@ impl HlsSink3 {
             .playlist
             .write_to(&mut playlist_stream)
             .map_err(|err| {
-                gst_error!(CAT, "Could not write new playlist: {}", err.to_string());
+                gst_error!(
+                    CAT,
+                    obj: element,
+                    "Could not write new playlist: {}",
+                    err.to_string()
+                );
                 gst::StateChangeError
             })?;
         playlist_stream.flush().map_err(|err| {
-            gst_error!(CAT, "Could not flush playlist: {}", err.to_string());
+            gst_error!(
+                CAT,
+                obj: element,
+                "Could not flush playlist: {}",
+                err.to_string()
+            );
             gst::StateChangeError
         })?;
 
@@ -281,7 +307,7 @@ impl HlsSink3 {
                     if !element
                         .emit_by_name::<bool>(SIGNAL_DELETE_FRAGMENT, &[&old_segment_location])
                     {
-                        gst_error!(CAT, "Could not delete fragment");
+                        gst_error!(CAT, obj: element, "Could not delete fragment");
                     }
                 }
             }
@@ -605,7 +631,7 @@ impl ObjectImpl for HlsSink3 {
                     let fragment_location = args[1].get::<String>().expect("signal arg");
                     let hlssink3 = HlsSink3::from_instance(&element);
 
-                    hlssink3.delete_fragment(&fragment_location);
+                    hlssink3.delete_fragment(&element, &fragment_location);
                     Some(true.to_value())
                 })
                 .accumulator(|_hint, ret, value| {
@@ -649,16 +675,20 @@ impl ObjectImpl for HlsSink3 {
         settings.splitmuxsink.connect("format-location", false, {
             let element_weak = obj.downgrade();
             move |args| {
+                let element = match element_weak.upgrade() {
+                    Some(element) => element,
+                    None => return Some(None::<String>.to_value()),
+                };
+                let hlssink3 = HlsSink3::from_instance(&element);
+
                 let fragment_id = args[1].get::<u32>().unwrap();
 
-                gst_info!(CAT, "Got fragment-id: {}", fragment_id);
+                gst_info!(CAT, obj: &element, "Got fragment-id: {}", fragment_id);
 
-                let element: super::HlsSink3 = element_weak.upgrade()? as _;
-                let hlssink3 = HlsSink3::from_instance(&element);
                 match hlssink3.on_format_location(&element, fragment_id) {
                     Ok(segment_location) => Some(segment_location.to_value()),
                     Err(err) => {
-                        gst_error!(CAT, "on format-location handler: {}", err);
+                        gst_error!(CAT, obj: &element, "on format-location handler: {}", err);
                         Some("unknown_segment".to_value())
                     }
                 }
