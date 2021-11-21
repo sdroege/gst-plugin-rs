@@ -53,11 +53,7 @@ fn test_push() {
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
-                let sample = appsink
-                    .emit_by_name("pull-sample", &[])
-                    .unwrap()
-                    .get::<gst::Sample>()
-                    .unwrap();
+                let sample = appsink.pull_sample().unwrap();
 
                 samples_clone.lock().unwrap().push(sample);
 

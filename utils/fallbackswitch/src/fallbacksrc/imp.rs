@@ -825,12 +825,7 @@ impl FallbackSrc {
                 let source = gst::ElementFactory::make("uridecodebin3", Some("uridecodebin"))
                     .expect("No uridecodebin3 found");
 
-                let uri = element
-                    .emit_by_name("update-uri", &[uri])
-                    .expect("No value returned");
-                let uri = uri
-                    .get::<&str>()
-                    .expect("Wrong type returned from update-uri signal");
+                let uri = element.emit_by_name::<glib::GString>("update-uri", &[uri]);
 
                 source.set_property("uri", uri);
                 source.set_property("use-buffering", true);

@@ -46,18 +46,10 @@ fn push() {
     {
         let appsrc = h.element().unwrap();
         for _ in 0..3 {
-            assert!(appsrc
-                .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-                .unwrap()
-                .get::<bool>()
-                .unwrap());
+            assert!(appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::new()]));
         }
 
-        assert!(appsrc
-            .emit_by_name("end-of-stream", &[])
-            .unwrap()
-            .get::<bool>()
-            .unwrap());
+        assert!(appsrc.emit_by_name::<bool>("end-of-stream", &[]));
     }
 
     for _ in 0..3 {
@@ -110,31 +102,21 @@ fn pause_regular() {
     let appsrc = h.element().unwrap();
 
     // Initial buffer
-    assert!(appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(
+        appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
+    );
 
     let _ = h.pull().unwrap();
 
     // Pre-pause buffer
-    assert!(appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![5, 6, 7])])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::from_slice(vec![5, 6, 7])]));
 
     appsrc
         .change_state(gst::StateChange::PlayingToPaused)
         .unwrap();
 
     // Buffer is queued during Paused
-    assert!(appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![8, 9])])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::from_slice(vec![8, 9])]));
 
     appsrc
         .change_state(gst::StateChange::PausedToPlaying)
@@ -147,11 +129,7 @@ fn pause_regular() {
     let _ = h.pull().unwrap();
 
     // Can push again
-    assert!(appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::new()]));
 
     let _ = h.pull().unwrap();
     assert!(h.try_pull().is_none());
@@ -176,11 +154,9 @@ fn flush_regular() {
     let appsrc = h.element().unwrap();
 
     // Initial buffer
-    assert!(appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(
+        appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
+    );
 
     let _ = h.pull().unwrap();
 
@@ -188,11 +164,7 @@ fn flush_regular() {
     assert!(h.push_upstream_event(gst::event::FlushStart::new()));
 
     // Can't push buffer while flushing
-    assert!(!appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(!appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::new()]));
 
     assert!(h.try_pull().is_none());
 
@@ -203,11 +175,7 @@ fn flush_regular() {
     assert!(h.try_pull().is_none());
 
     // Can push again
-    assert!(appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::new()]));
 
     let _ = h.pull().unwrap();
     assert!(h.try_pull().is_none());
@@ -232,11 +200,9 @@ fn pause_flush() {
     let appsrc = h.element().unwrap();
 
     // Initial buffer
-    assert!(appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(
+        appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::from_slice(vec![1, 2, 3, 4])])
+    );
 
     let _ = h.pull().unwrap();
 
@@ -248,11 +214,7 @@ fn pause_flush() {
     assert!(h.push_upstream_event(gst::event::FlushStart::new()));
 
     // Can't push buffers while flushing
-    assert!(!appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(!appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::new()]));
 
     assert!(h.try_pull().is_none());
 
@@ -267,11 +229,7 @@ fn pause_flush() {
     assert!(h.try_pull().is_none());
 
     // Can push again
-    assert!(appsrc
-        .emit_by_name("push-buffer", &[&gst::Buffer::new()])
-        .unwrap()
-        .get::<bool>()
-        .unwrap());
+    assert!(appsrc.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::new()]));
 
     let _ = h.pull().unwrap();
     assert!(h.try_pull().is_none());

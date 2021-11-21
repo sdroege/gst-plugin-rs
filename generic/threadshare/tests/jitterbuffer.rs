@@ -80,11 +80,7 @@ fn jb_pipeline() {
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
-                let _sample = appsink
-                    .emit_by_name("pull-sample", &[])
-                    .unwrap()
-                    .get::<gst::Sample>()
-                    .unwrap();
+                let _sample = appsink.pull_sample().unwrap();
 
                 sender.send(()).unwrap();
                 Ok(gst::FlowSuccess::Ok)
@@ -147,11 +143,7 @@ fn jb_ts_pipeline() {
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
-                let _sample = appsink
-                    .emit_by_name("pull-sample", &[])
-                    .unwrap()
-                    .get::<gst::Sample>()
-                    .unwrap();
+                let _sample = appsink.pull_sample().unwrap();
 
                 sender.send(()).unwrap();
                 Ok(gst::FlowSuccess::Ok)

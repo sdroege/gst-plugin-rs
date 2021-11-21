@@ -86,11 +86,7 @@ fn multiple_contexts_queue() {
         appsink.set_callbacks(
             gst_app::AppSinkCallbacks::builder()
                 .new_sample(move |appsink| {
-                    let _sample = appsink
-                        .emit_by_name("pull-sample", &[])
-                        .unwrap()
-                        .get::<gst::Sample>()
-                        .unwrap();
+                    let _sample = appsink.pull_sample().unwrap();
 
                     sender_clone.send(()).unwrap();
                     Ok(gst::FlowSuccess::Ok)
@@ -239,11 +235,7 @@ fn multiple_contexts_proxy() {
         appsink.set_callbacks(
             gst_app::AppSinkCallbacks::builder()
                 .new_sample(move |appsink| {
-                    let _sample = appsink
-                        .emit_by_name("pull-sample", &[])
-                        .unwrap()
-                        .get::<gst::Sample>()
-                        .unwrap();
+                    let _sample = appsink.pull_sample().unwrap();
 
                     sender_clone.send(()).unwrap();
                     Ok(gst::FlowSuccess::Ok)
@@ -360,11 +352,7 @@ fn eos() {
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
                 gst_debug!(CAT, obj: appsink, "eos: pulling sample");
-                let _ = appsink
-                    .emit_by_name("pull-sample", &[])
-                    .unwrap()
-                    .get::<gst::Sample>()
-                    .unwrap();
+                let _ = appsink.pull_sample().unwrap();
 
                 sample_notifier.send(()).unwrap();
 
@@ -376,10 +364,7 @@ fn eos() {
 
     fn push_buffer(src: &gst::Element) -> bool {
         gst_debug!(CAT, obj: src, "eos: pushing buffer");
-        src.emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
-            .unwrap()
-            .get::<bool>()
-            .unwrap()
+        src.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
     }
 
     let pipeline_clone = pipeline.clone();
@@ -390,11 +375,7 @@ fn eos() {
 
         sample_notif_rcv.recv().unwrap();
 
-        assert!(src
-            .emit_by_name("end-of-stream", &[])
-            .unwrap()
-            .get::<bool>()
-            .unwrap());
+        assert!(src.emit_by_name::<bool>("end-of-stream", &[]));
 
         eos_notif_rcv.recv().unwrap();
 
@@ -498,11 +479,7 @@ fn premature_shutdown() {
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
                 gst_debug!(CAT, obj: appsink, "premature_shutdown: pulling sample");
-                let _sample = appsink
-                    .emit_by_name("pull-sample", &[])
-                    .unwrap()
-                    .get::<gst::Sample>()
-                    .unwrap();
+                let _sample = appsink.pull_sample().unwrap();
 
                 appsink_sender.send(()).unwrap();
 
@@ -518,10 +495,7 @@ fn premature_shutdown() {
             "premature_shutdown: pushing buffer {}",
             intent
         );
-        src.emit_by_name("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
-            .unwrap()
-            .get::<bool>()
-            .unwrap()
+        src.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
     }
 
     let pipeline_clone = pipeline.clone();

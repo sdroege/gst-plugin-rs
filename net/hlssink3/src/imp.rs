@@ -162,10 +162,11 @@ impl HlsSink3 {
         state.current_segment_location = Some(segment_file_location.clone());
 
         let fragment_stream = element
-            .emit_by_name(SIGNAL_GET_FRAGMENT_STREAM, &[&segment_file_location])
-            .expect("Error while getting fragment stream")
-            .get::<gio::OutputStream>()
-            .map_err(|err| err.to_string())?;
+            .emit_by_name::<Option<gio::OutputStream>>(
+                SIGNAL_GET_FRAGMENT_STREAM,
+                &[&segment_file_location],
+            )
+            .ok_or_else(|| String::from("Error while getting fragment stream"))?;
 
         settings
             .giostreamsink
@@ -250,15 +251,12 @@ impl HlsSink3 {
         // Acquires the playlist file handle so we can update it with new content. By default, this
         // is expected to be the same file every time.
         let mut playlist_stream = element
-            .emit_by_name(SIGNAL_GET_PLAYLIST_STREAM, &[&playlist_location])
-            .expect("Error while getting playlist stream")
-            .get::<gio::OutputStream>()
-            .map_err(|err| {
-                gst_error!(
-                    CAT,
-                    "Could not get stream to write playlist content: {}",
-                    err.to_string()
-                );
+            .emit_by_name::<Option<gio::OutputStream>>(
+                SIGNAL_GET_PLAYLIST_STREAM,
+                &[&playlist_location],
+            )
+            .ok_or_else(|| {
+                gst_error!(CAT, "Could not get stream to write playlist content",);
                 gst::StateChangeError
             })?
             .into_write();
@@ -280,9 +278,11 @@ impl HlsSink3 {
             if state.old_segment_locations.len() > max_num_segments {
                 for _ in 0..state.old_segment_locations.len() - max_num_segments {
                     let old_segment_location = state.old_segment_locations.remove(0);
-                    let _ = element
-                        .emit_by_name(SIGNAL_DELETE_FRAGMENT, &[&old_segment_location])
-                        .expect("Error while processing signal handler");
+                    if !element
+                        .emit_by_name::<bool>(SIGNAL_DELETE_FRAGMENT, &[&old_segment_location])
+                    {
+                        gst_error!(CAT, "Could not delete fragment");
+                    }
                 }
             }
         }
