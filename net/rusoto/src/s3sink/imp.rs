@@ -9,7 +9,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_trace};
+use gst::{gst_debug, gst_error, gst_info, gst_log, gst_trace, gst_warning};
 
 use gst_base::subclass::prelude::*;
 
@@ -23,6 +23,7 @@ use rusoto_s3::{
 
 use once_cell::sync::Lazy;
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use crate::s3url::*;
@@ -87,6 +88,7 @@ struct Settings {
     buffer_size: u64,
     access_key: Option<String>,
     secret_access_key: Option<String>,
+    metadata: Option<gst::Structure>,
 }
 
 impl Settings {
@@ -118,6 +120,29 @@ impl Settings {
             self.key.as_ref().unwrap()
         )
     }
+
+    fn to_metadata(&self, element: &super::S3Sink) -> Option<HashMap<String, String>> {
+        self.metadata.as_ref().map(|structure| {
+            let mut hash = HashMap::new();
+
+            for (key, value) in structure.iter() {
+                if let Ok(Ok(value_str)) = value.transform::<String>().map(|v| v.get()) {
+                    gst_log!(CAT, obj: element, "metadata '{}' -> '{}'", key, value_str);
+                    hash.insert(key.to_string(), value_str);
+                } else {
+                    gst_warning!(
+                        CAT,
+                        obj: element,
+                        "Failed to convert metadata '{}' to string ('{:?}')",
+                        key,
+                        value
+                    );
+                }
+            }
+
+            hash
+        })
+    }
 }
 
 impl Default for Settings {
@@ -130,6 +155,7 @@ impl Default for Settings {
             buffer_size: DEFAULT_BUFFER_SIZE,
             access_key: None,
             secret_access_key: None,
+            metadata: None,
         }
     }
 }
@@ -242,6 +268,7 @@ impl S3Sink {
             bucket: url.bucket.clone(),
             key: url.object.clone(),
             content_type: settings.content_type.clone(),
+            metadata: settings.to_metadata(&self.instance()),
             ..Default::default()
         }
     }
@@ -485,6 +512,13 @@ impl ObjectImpl for S3Sink {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecBoxed::new(
+                    "metadata",
+                    "Metadata",
+                    "A map of metadata to store with the object in S3; field values need to be convertible to strings.",
+                    gst::Structure::static_type(),
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -554,6 +588,9 @@ impl ObjectImpl for S3Sink {
             "secret-access-key" => {
                 settings.secret_access_key = value.get().expect("type checked upstream");
             }
+            "metadata" => {
+                settings.metadata = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -576,6 +613,7 @@ impl ObjectImpl for S3Sink {
             }
             "access-key" => settings.access_key.to_value(),
             "secret-access-key" => settings.secret_access_key.to_value(),
+            "metadata" => settings.metadata.to_value(),
             _ => unimplemented!(),
         }
     }
