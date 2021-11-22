@@ -500,6 +500,14 @@ impl ObjectImpl for S3Sink {
     ) {
         let mut settings = self.settings.lock().unwrap();
 
+        gst_debug!(
+            CAT,
+            obj: obj,
+            "Setting property '{}' to '{:?}'",
+            pspec.name(),
+            value
+        );
+
         match pspec.name() {
             "bucket" => {
                 settings.bucket = value
