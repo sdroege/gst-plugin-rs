@@ -6,50 +6,49 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use glib::GEnum;
 use gst::glib;
 use gst::prelude::*;
 
 mod imp;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
-#[genum(type_name = "GstRsPngCompressionLevel")]
+#[enum_type(name = "GstRsPngCompressionLevel")]
 pub(crate) enum CompressionLevel {
-    #[genum(name = "Default: Use the default compression level.", nick = "default")]
+    #[enum_value(name = "Default: Use the default compression level.", nick = "default")]
     Default,
-    #[genum(name = "Fast: A fast compression algorithm.", nick = "fast")]
+    #[enum_value(name = "Fast: A fast compression algorithm.", nick = "fast")]
     Fast,
-    #[genum(
+    #[enum_value(
         name = "Best: Uses the algorithm with the best results.",
         nick = "best"
     )]
     Best,
-    #[genum(name = "Huffman: Huffman compression.", nick = "huffman")]
+    #[enum_value(name = "Huffman: Huffman compression.", nick = "huffman")]
     Huffman,
-    #[genum(name = "Rle: Rle compression.", nick = "rle")]
+    #[enum_value(name = "Rle: Rle compression.", nick = "rle")]
     Rle,
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
-#[genum(type_name = "GstRsPngFilterType")]
+#[enum_type(name = "GstRsPngFilterType")]
 pub(crate) enum FilterType {
-    #[genum(
+    #[enum_value(
         name = "NoFilter: No filtering applied to the output.",
         nick = "nofilter"
     )]
     NoFilter,
-    #[genum(name = "Sub: filter applied to each pixel.", nick = "sub")]
+    #[enum_value(name = "Sub: filter applied to each pixel.", nick = "sub")]
     Sub,
-    #[genum(name = "Up: Up filter similar to Sub.", nick = "up")]
+    #[enum_value(name = "Up: Up filter similar to Sub.", nick = "up")]
     Up,
-    #[genum(
+    #[enum_value(
         name = "Avg: The Average filter uses the average of the two neighboring pixels.",
         nick = "avg"
     )]
     Avg,
-    #[genum(
+    #[enum_value(
         name = "Paeth: The Paeth filter computes a simple linear function of the three neighboring pixels.",
         nick = "paeth"
     )]

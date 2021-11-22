@@ -21,18 +21,18 @@ use gst::prelude::*;
 mod imp;
 mod packet;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
-#[genum(type_name = "GstAwsTranscriberResultStability")]
+#[enum_type(name = "GstAwsTranscriberResultStability")]
 pub enum AwsTranscriberResultStability {
-    #[genum(name = "High: stabilize results as fast as possible", nick = "high")]
+    #[enum_value(name = "High: stabilize results as fast as possible", nick = "high")]
     High = 0,
-    #[genum(
+    #[enum_value(
         name = "Medium: balance between stability and accuracy",
         nick = "medium"
     )]
     Medium = 1,
-    #[genum(
+    #[enum_value(
         name = "Low: relatively less stable partial transcription results with higher accuracy",
         nick = "low"
     )]

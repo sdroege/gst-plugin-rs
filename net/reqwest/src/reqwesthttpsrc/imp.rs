@@ -112,8 +112,8 @@ fn proxy_from_str(s: Option<String>) -> Result<Option<String>, glib::Error> {
 
 const REQWEST_CLIENT_CONTEXT: &str = "gst.reqwest.client";
 
-#[derive(Clone, Debug, glib::GBoxed)]
-#[gboxed(type_name = "ReqwestClientContext")]
+#[derive(Clone, Debug, glib::Boxed)]
+#[boxed_type(name = "ReqwestClientContext")]
 struct ClientContext(Arc<ClientContextInner>);
 
 #[derive(Debug)]

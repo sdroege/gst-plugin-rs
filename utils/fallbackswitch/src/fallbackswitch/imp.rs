@@ -26,13 +26,13 @@ use once_cell::sync::Lazy;
 
 use std::sync::{Mutex, RwLock};
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
-#[genum(type_name = "GstFallbackSwitchStreamHealth")]
+#[enum_type(name = "GstFallbackSwitchStreamHealth")]
 pub(crate) enum StreamHealth {
-    #[genum(name = "Data flow is inactive or late", nick = "inactive")]
+    #[enum_value(name = "Data flow is inactive or late", nick = "inactive")]
     Inactive = 0,
-    #[genum(name = "Data is currently flowing in the stream", nick = "present")]
+    #[enum_value(name = "Data is currently flowing in the stream", nick = "present")]
     Present = 1,
 }
 

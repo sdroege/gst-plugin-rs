@@ -33,22 +33,22 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-#[glib::gflags("EbuR128LevelMode")]
+#[glib::flags(name = "EbuR128LevelMode")]
 enum Mode {
-    #[gflags(name = "Calculate momentary loudness (400ms)", nick = "momentary")]
+    #[flags_value(name = "Calculate momentary loudness (400ms)", nick = "momentary")]
     MOMENTARY = 0b00000001,
-    #[gflags(name = "Calculate short-term loudness (3s)", nick = "short-term")]
+    #[flags_value(name = "Calculate short-term loudness (3s)", nick = "short-term")]
     SHORT_TERM = 0b00000010,
-    #[gflags(
+    #[flags_value(
         name = "Calculate relative threshold and global loudness",
         nick = "global"
     )]
     GLOBAL = 0b00000100,
-    #[gflags(name = "Calculate loudness range", nick = "loudness-range")]
+    #[flags_value(name = "Calculate loudness range", nick = "loudness-range")]
     LOUDNESS_RANGE = 0b00001000,
-    #[gflags(name = "Calculate sample peak", nick = "sample-peak")]
+    #[flags_value(name = "Calculate sample peak", nick = "sample-peak")]
     SAMPLE_PEAK = 0b00010000,
-    #[gflags(name = "Calculate true peak", nick = "true-peak")]
+    #[flags_value(name = "Calculate true peak", nick = "true-peak")]
     TRUE_PEAK = 0b00100000,
 }
 

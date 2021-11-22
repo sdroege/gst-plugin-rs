@@ -108,9 +108,9 @@ pub(crate) struct FragmentOffset {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, glib::GEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, glib::Enum)]
 #[repr(i32)]
-#[genum(type_name = "GstFMP4MuxHeaderUpdateMode")]
+#[enum_type(name = "GstFMP4MuxHeaderUpdateMode")]
 pub(crate) enum HeaderUpdateMode {
     None,
     Rewrite,

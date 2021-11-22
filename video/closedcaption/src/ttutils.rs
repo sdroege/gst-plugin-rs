@@ -19,10 +19,10 @@ use gst::glib;
 use serde::{Deserialize, Serialize};
 
 #[derive(
-    Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum,
+    Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum,
 )]
 #[repr(u32)]
-#[genum(type_name = "GstTtToCea608Mode")]
+#[enum_type(name = "GstTtToCea608Mode")]
 pub enum Cea608Mode {
     PopOn,
     PaintOn,

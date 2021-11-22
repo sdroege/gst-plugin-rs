@@ -21,7 +21,6 @@ use futures::future::BoxFuture;
 use futures::lock::Mutex as FutMutex;
 use futures::prelude::*;
 
-use glib::GBoxed;
 use gst::glib;
 
 use gst::prelude::*;
@@ -61,8 +60,8 @@ pub enum Item {
     Event(gst::Event),
 }
 
-#[derive(Clone, Debug, GBoxed)]
-#[gboxed(type_name = "TsTestItemSender")]
+#[derive(Clone, Debug, glib::Boxed)]
+#[boxed_type(name = "TsTestItemSender")]
 struct ItemSender {
     sender: mpsc::Sender<Item>,
 }

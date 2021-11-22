@@ -22,9 +22,9 @@ mod custom_source;
 mod imp;
 mod video_fallback;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
-#[genum(type_name = "GstFallbackSourceRetryReason")]
+#[enum_type(name = "GstFallbackSourceRetryReason")]
 enum RetryReason {
     None,
     Error,
@@ -33,9 +33,9 @@ enum RetryReason {
     Timeout,
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
-#[genum(type_name = "GstFallbackSourceStatus")]
+#[enum_type(name = "GstFallbackSourceStatus")]
 enum Status {
     Stopped,
     Buffering,
