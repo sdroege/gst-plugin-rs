@@ -12,12 +12,14 @@ mod audioecho;
 mod audioloudnorm;
 mod audiornnoise;
 mod ebur128level;
+mod hrtfrender;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     audioecho::register(plugin)?;
     audioloudnorm::register(plugin)?;
     audiornnoise::register(plugin)?;
     ebur128level::register(plugin)?;
+    hrtfrender::register(plugin)?;
     Ok(())
 }
 
