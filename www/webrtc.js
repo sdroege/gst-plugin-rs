@@ -93,7 +93,6 @@ function Session(our_id, peer_id, closed_callback) {
 
     this.setError = function(text) {
         console.error(text);
-        console.log(this);
         var span = document.getElementById("status-" + this.our_id);
         span.textContent = text;
         span.classList.add('error');
@@ -114,22 +113,30 @@ function Session(our_id, peer_id, closed_callback) {
         });
     };
 
+    this.onRemoteDescriptionSet = function() {
+        this.setStatus("Remote SDP set");
+        this.setStatus("Got SDP offer");
+        this.peer_connection.createAnswer()
+        .then(this.onLocalDescription.bind(this)).catch(this.setError);
+    }
+
     // SDP offer received from peer, set remote description and create an answer
     this.onIncomingSDP = function(sdp) {
-        this.peer_connection.setRemoteDescription(sdp).then(() => {
-            this.setStatus("Remote SDP set");
-            if (sdp.type != "offer")
-                return;
-            this.setStatus("Got SDP offer");
-            this.peer_connection.createAnswer()
-            .then(this.onLocalDescription.bind(this)).catch(this.setError);
-        }).catch(this.setError);
+        var thiz = this;
+        this.peer_connection.setRemoteDescription(sdp)
+            .then(this.onRemoteDescriptionSet.bind(this))
+            .catch(function(e) {
+                thiz.setError(e)
+            });
     };
 
     // ICE candidate received from peer, add it to the peer connection
     this.onIncomingICE = function(ice) {
         var candidate = new RTCIceCandidate(ice);
-        this.peer_connection.addIceCandidate(candidate).catch(this.setError);
+        var thiz = this;
+        this.peer_connection.addIceCandidate(candidate).catch(function(e) {
+            thiz.setError(e)
+        });
     };
 
     this.onServerMessage = function(event) {
