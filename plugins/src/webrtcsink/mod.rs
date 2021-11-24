@@ -110,13 +110,13 @@ impl WebRTCSink {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::GEnum)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
-#[genum(type_name = "GstWebRTCSinkCongestionControl")]
+#[enum_type(name = "GstWebRTCSinkCongestionControl")]
 pub enum WebRTCSinkCongestionControl {
-    #[genum(name = "Disabled: no congestion control is applied", nick = "disabled")]
+    #[enum_value(name = "Disabled: no congestion control is applied", nick = "disabled")]
     Disabled,
-    #[genum(name = "Homegrown: simple sender-side heuristic", nick = "homegrown")]
+    #[enum_value(name = "Homegrown: simple sender-side heuristic", nick = "homegrown")]
     Homegrown,
 }
 
