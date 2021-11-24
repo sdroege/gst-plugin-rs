@@ -31,6 +31,8 @@ const RTP_TWCC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
+const DEFAULT_MIN_BITRATE: u32 = 1000;
+const DEFAULT_MAX_BITRATE: u32 = 8192000;
 const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
     WebRTCSinkCongestionControl::Homegrown;
 
@@ -41,6 +43,8 @@ struct Settings {
     turn_server: Option<String>,
     stun_server: Option<String>,
     cc_heuristic: WebRTCSinkCongestionControl,
+    min_bitrate: u32,
+    max_bitrate: u32,
 }
 
 /// Represents a codec we can offer
@@ -115,6 +119,9 @@ struct CongestionController {
     last_update_time: Option<std::time::Instant>,
     /// For logging purposes
     peer_id: String,
+
+    min_bitrate: u32,
+    max_bitrate: u32,
 }
 
 #[derive(Debug)]
@@ -194,6 +201,8 @@ impl Default for Settings {
             cc_heuristic: WebRTCSinkCongestionControl::Homegrown,
             stun_server: DEFAULT_STUN_SERVER.map(String::from),
             turn_server: None,
+            min_bitrate: DEFAULT_MIN_BITRATE,
+            max_bitrate: DEFAULT_MAX_BITRATE,
         }
     }
 }
@@ -475,13 +484,15 @@ impl VideoEncoder {
 }
 
 impl CongestionController {
-    fn new(peer_id: &str) -> Self {
+    fn new(peer_id: &str, min_bitrate: u32, max_bitrate: u32) -> Self {
         Self {
             target_bitrate: 0,
             bitrate_ema: None,
             bitrate_emvar: 0.,
             last_update_time: None,
             peer_id: peer_id.to_string(),
+            min_bitrate,
+            max_bitrate,
         }
     }
 
@@ -629,7 +640,10 @@ impl CongestionController {
     }
 
     fn clamp_bitrate(&mut self, bitrate: i32, n_encoders: i32) {
-        self.target_bitrate = bitrate.clamp(1000 * n_encoders, 8192000 * n_encoders);
+        self.target_bitrate = bitrate.clamp(
+            self.min_bitrate as i32 * n_encoders,
+            self.max_bitrate as i32 * n_encoders,
+        );
     }
 
     fn control(
@@ -1394,7 +1408,11 @@ impl WebRTCSink {
             peer_id: peer_id.to_string(),
             congestion_controller: match settings.cc_heuristic {
                 WebRTCSinkCongestionControl::Disabled => None,
-                WebRTCSinkCongestionControl::Homegrown => Some(CongestionController::new(peer_id)),
+                WebRTCSinkCongestionControl::Homegrown => Some(CongestionController::new(
+                    peer_id,
+                    settings.min_bitrate,
+                    settings.max_bitrate,
+                )),
             },
             encoders: Vec::new(),
             sdp: None,
@@ -1946,6 +1964,24 @@ impl ObjectImpl for WebRTCSink {
                     DEFAULT_CONGESTION_CONTROL as i32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecUInt::new(
+                    "min-bitrate",
+                    "Minimal Bitrate",
+                    "Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm",
+                    1,
+                    u32::MAX as u32,
+                    DEFAULT_MIN_BITRATE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpecUInt::new(
+                    "max-bitrate",
+                    "Minimal Bitrate",
+                    "Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm",
+                    1,
+                    u32::MAX as u32,
+                    DEFAULT_MAX_BITRATE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -1992,6 +2028,14 @@ impl ObjectImpl for WebRTCSink {
                     .get::<WebRTCSinkCongestionControl>()
                     .expect("type checked upstream");
             }
+            "min-bitrate" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.min_bitrate = value.get::<u32>().expect("type checked upstream");
+            }
+            "max-bitrate" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.max_bitrate = value.get::<u32>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -2017,6 +2061,14 @@ impl ObjectImpl for WebRTCSink {
             "turn-server" => {
                 let settings = self.settings.lock().unwrap();
                 settings.turn_server.to_value()
+            }
+            "min-bitrate" => {
+                let settings = self.settings.lock().unwrap();
+                settings.min_bitrate.to_value()
+            }
+            "max-bitrate" => {
+                let settings = self.settings.lock().unwrap();
+                settings.max_bitrate.to_value()
             }
             _ => unimplemented!(),
         }
