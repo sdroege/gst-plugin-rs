@@ -150,6 +150,15 @@ version = "0.7"
 name = "crc"
 version = "1.8"
 
+# ignore duplicated num-complex/rustfft dependency because nnnoiseless depends on an old version
+# https://github.com/jneem/nnnoiseless/pull/16
+[[bans.skip]]
+name = "num-complex"
+version = "0.3"
+[[bans.skip]]
+name = "rustfft"
+version = "5"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
