@@ -379,6 +379,22 @@ impl Transcriber {
     ) {
         let lateness = self.settings.lock().unwrap().lateness;
 
+        if alternative.items.len() <= state.partial_index {
+            gst_error!(
+                CAT,
+                obj: element,
+                "sanity check failed, alternative length {} < partial_index {}",
+                alternative.items.len(),
+                state.partial_index
+            );
+
+            if !partial {
+                state.partial_index = 0;
+            }
+
+            return;
+        }
+
         for item in &alternative.items[state.partial_index..] {
             let start_time =
                 gst::ClockTime::from_nseconds((item.start_time as f64 * 1_000_000_000.0) as u64)
