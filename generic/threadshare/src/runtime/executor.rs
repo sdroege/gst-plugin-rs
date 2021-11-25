@@ -706,14 +706,85 @@ mod tests {
     const SLEEP_DURATION: Duration = Duration::from_millis(SLEEP_DURATION_MS);
     const DELAY: Duration = Duration::from_millis(SLEEP_DURATION_MS * 10);
 
-    #[tokio::test]
-    async fn drain_sub_tasks() {
+    #[test]
+    fn block_on_task_id() {
+        gst::init().unwrap();
+
+        crate::runtime::executor::block_on(async {
+            let (_ctx, task_id) = Context::current_task().unwrap();
+            assert_eq!(task_id, super::TaskId(0));
+
+            /* Adding the sub task fails
+            let res = Context::add_sub_task(async move {
+                let (_ctx, task_id) = Context::current_task().unwrap();
+                assert_eq!(task_id, super::TaskId(0));
+                Ok(())
+            });
+            assert!(res.is_ok());
+            */
+        });
+    }
+
+    #[test]
+    fn context_task_id() {
+        gst::init().unwrap();
+
+        let context = Context::acquire("context_task_id", SLEEP_DURATION).unwrap();
+        let join_handle = context.spawn(async {
+            let (_ctx, task_id) = Context::current_task().unwrap();
+            assert_eq!(task_id, super::TaskId(0));
+        });
+        futures::executor::block_on(join_handle).unwrap();
+
+        let ctx_weak = context.downgrade();
+        let join_handle = context.spawn(async move {
+            let (_ctx, task_id) = Context::current_task().unwrap();
+            assert_eq!(task_id, super::TaskId(1));
+
+            let res = Context::add_sub_task(async move {
+                let (_ctx, task_id) = Context::current_task().unwrap();
+                assert_eq!(task_id, super::TaskId(1));
+                Ok(())
+            });
+            assert!(res.is_ok());
+
+            ctx_weak
+                .upgrade()
+                .unwrap()
+                .spawn(async {
+                    let (_ctx, task_id) = Context::current_task().unwrap();
+                    assert_eq!(task_id, super::TaskId(2));
+
+                    let res = Context::add_sub_task(async move {
+                        let (_ctx, task_id) = Context::current_task().unwrap();
+                        assert_eq!(task_id, super::TaskId(2));
+                        Ok(())
+                    });
+                    assert!(res.is_ok());
+                    assert!(Context::drain_sub_tasks().await.is_ok());
+
+                    let (_ctx, task_id) = Context::current_task().unwrap();
+                    assert_eq!(task_id, super::TaskId(2));
+                })
+                .await
+                .unwrap();
+
+            assert!(Context::drain_sub_tasks().await.is_ok());
+
+            let (_ctx, task_id) = Context::current_task().unwrap();
+            assert_eq!(task_id, super::TaskId(1));
+        });
+        futures::executor::block_on(join_handle).unwrap();
+    }
+
+    #[test]
+    fn drain_sub_tasks() {
         // Setup
         gst::init().unwrap();
 
         let context = Context::acquire("drain_sub_tasks", SLEEP_DURATION).unwrap();
 
-        let join_handle = context.spawn(async move {
+        let join_handle = context.spawn(async {
             let (sender, mut receiver) = mpsc::channel(1);
             let sender: Arc<Mutex<mpsc::Sender<Item>>> = Arc::new(Mutex::new(sender));
 
@@ -754,36 +825,10 @@ mod tests {
             receiver
         });
 
-        let mut receiver = join_handle.await.unwrap();
+        let mut receiver = futures::executor::block_on(join_handle).unwrap();
 
         // The last sub task should be simply dropped at this point
         assert_eq!(receiver.try_next().unwrap(), None);
-    }
-
-    #[tokio::test]
-    async fn block_on_within_tokio() {
-        gst::init().unwrap();
-
-        let context = Context::acquire("block_on_within_tokio", SLEEP_DURATION).unwrap();
-
-        let bytes_sent = crate::runtime::executor::block_on(context.spawn(async {
-            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
-            let socket = UdpSocket::bind(saddr).unwrap();
-            let mut socket = tokio::net::UdpSocket::from_std(socket).unwrap();
-            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4000);
-            socket.send_to(&[0; 10], saddr).await.unwrap()
-        }))
-        .unwrap();
-        assert_eq!(bytes_sent, 10);
-
-        let elapsed = crate::runtime::executor::block_on(context.spawn(async {
-            let now = Instant::now();
-            crate::runtime::time::delay_for(DELAY).await;
-            now.elapsed()
-        }))
-        .unwrap();
-        // Due to throttling, `Delay` may be fired earlier
-        assert!(elapsed + SLEEP_DURATION / 2 >= DELAY);
     }
 
     #[test]

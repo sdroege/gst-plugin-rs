@@ -68,18 +68,18 @@ pub fn interval(interval: Duration) -> impl Stream<Item = ()> {
 mod tests {
     use std::time::{Duration, Instant};
 
-    use crate::runtime::Context;
+    use crate::runtime::{executor, Context};
 
     const MAX_THROTTLING: Duration = Duration::from_millis(10);
     const DELAY: Duration = Duration::from_millis(12);
 
-    #[tokio::test]
-    async fn delay_for() {
+    #[test]
+    fn delay_for() {
         gst::init().unwrap();
 
         let context = Context::acquire("delay_for", MAX_THROTTLING).unwrap();
 
-        let elapsed = crate::runtime::executor::block_on(context.spawn(async {
+        let elapsed = executor::block_on(context.spawn(async {
             let now = Instant::now();
             crate::runtime::time::delay_for(DELAY).await;
             now.elapsed()
@@ -90,13 +90,13 @@ mod tests {
         assert!(elapsed + MAX_THROTTLING / 2 >= DELAY);
     }
 
-    #[tokio::test]
-    async fn delay_for_at_least() {
+    #[test]
+    fn delay_for_at_least() {
         gst::init().unwrap();
 
         let context = Context::acquire("delay_for_at_least", MAX_THROTTLING).unwrap();
 
-        let elapsed = crate::runtime::executor::block_on(context.spawn(async {
+        let elapsed = executor::block_on(context.spawn(async {
             let now = Instant::now();
             crate::runtime::time::delay_for_at_least(DELAY).await;
             now.elapsed()
