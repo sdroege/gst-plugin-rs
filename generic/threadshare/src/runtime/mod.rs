@@ -31,6 +31,7 @@
 //! See this [talk] ([slides]) for a presentation of the motivations and principles,
 //! and this [blog post].
 //!
+//! FIXME change this.
 //! Current implementation uses the crate [`tokio`].
 //!
 //! Most `Element`s implementations should use the high-level features provided by [`PadSrc`] &

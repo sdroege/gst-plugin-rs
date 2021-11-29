@@ -14,8 +14,8 @@ gio = { git = "https://github.com/gtk-rs/gtk-rs-core" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-pin-project = "1"
 once_cell = "1"
+pin-project-lite = "0.2.7"
 tokio = { git = "https://github.com/fengalin/tokio", tag = "tokio-0.2.13-throttling.1", features = ["io-util", "macros", "rt-core", "sync", "stream", "time", "tcp", "udp", "rt-util"] }
 futures = { version = "0.3", features = ["thread-pool"] }
 rand = "0.8"

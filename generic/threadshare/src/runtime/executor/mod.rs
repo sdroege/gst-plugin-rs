@@ -34,6 +34,27 @@
 //! [`PadSink`]: ../pad/struct.PadSink.html
 
 mod context;
-pub use context::{
-    block_on, block_on_or_add_sub_task, yield_now, Context, JoinHandle, SubTaskOutput, TaskId,
-};
+pub use context::{block_on, block_on_or_add_sub_task, yield_now, Context};
+
+mod scheduler;
+use scheduler::{Handle, HandleWeak, Scheduler};
+
+mod join;
+pub use join::JoinHandle;
+
+mod task;
+pub use task::{SubTaskOutput, TaskId};
+
+struct CallOnDrop<F: FnOnce()>(Option<F>);
+
+impl<F: FnOnce()> CallOnDrop<F> {
+    fn new(f: F) -> Self {
+        CallOnDrop(Some(f))
+    }
+}
+
+impl<F: FnOnce()> Drop for CallOnDrop<F> {
+    fn drop(&mut self) {
+        self.0.take().unwrap()()
+    }
+}
