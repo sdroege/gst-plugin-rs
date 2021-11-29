@@ -1,5 +1,5 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
-// Copyright (C) 2019-2020 François Laignel <fengalin@free.fr>
+// Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Library General Public
@@ -15,24 +15,6 @@
 // License along with this library; if not, write to the
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
-
-//! The `Executor` for the `threadshare` GStreamer plugins framework.
-//!
-//! The [`threadshare`]'s `Executor` consists in a set of [`Context`]s. Each [`Context`] is
-//! identified by a `name` and runs a loop in a dedicated `thread`. Users can use the [`Context`]
-//! to spawn `Future`s. `Future`s are asynchronous processings which allow waiting for resources
-//! in a non-blocking way. Examples of non-blocking operations are:
-//!
-//! * Waiting for an incoming packet on a Socket.
-//! * Waiting for an asynchronous `Mutex` `lock` to succeed.
-//! * Waiting for a time related `Future`.
-//!
-//! `Element` implementations should use [`PadSrc`] & [`PadSink`] which provides high-level features.
-//!
-//! [`threadshare`]: ../../index.html
-//! [`Context`]: struct.Context.html
-//! [`PadSrc`]: ../pad/struct.PadSrc.html
-//! [`PadSink`]: ../pad/struct.PadSink.html
 
 use futures::channel::oneshot;
 use futures::future::BoxFuture;
@@ -54,7 +36,7 @@ use std::task::Poll;
 use std::thread;
 use std::time::Duration;
 
-use super::RUNTIME_CAT;
+use crate::runtime::RUNTIME_CAT;
 
 // We are bound to using `sync` for the `runtime` `Mutex`es. Attempts to use `async` `Mutex`es
 // lead to the following issues:
