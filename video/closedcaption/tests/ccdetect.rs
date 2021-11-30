@@ -32,18 +32,10 @@ fn init() {
     });
 }
 
+#[derive(Default)]
 struct NotifyState {
     cc608_count: u32,
     cc708_count: u32,
-}
-
-impl Default for NotifyState {
-    fn default() -> Self {
-        NotifyState {
-            cc608_count: 0,
-            cc708_count: 0,
-        }
-    }
 }
 
 macro_rules! assert_push_data {
@@ -399,13 +391,10 @@ fn test_gap_events() {
     assert_push_data!(h, state, valid_cc608_data, ClockTime::ZERO, 1, 0);
 
     /* pushing gap event within the window changes nothing */
-    assert_eq!(
-        h.push_event(gst::event::Gap::new(
-            ClockTime::from_nseconds(100_000_000),
-            ClockTime::from_nseconds(1)
-        )),
-        true
-    );
+    assert!(h.push_event(gst::event::Gap::new(
+        ClockTime::from_nseconds(100_000_000),
+        ClockTime::from_nseconds(1)
+    )),);
 
     {
         let state_guard = state.lock().unwrap();
@@ -414,13 +403,10 @@ fn test_gap_events() {
     }
 
     /* pushing gap event outside the window moves cc608 property to false */
-    assert_eq!(
-        h.push_event(gst::event::Gap::new(
-            ClockTime::from_nseconds(1_000_000_000),
-            ClockTime::from_nseconds(1)
-        )),
-        true
-    );
+    assert!(h.push_event(gst::event::Gap::new(
+        ClockTime::from_nseconds(1_000_000_000),
+        ClockTime::from_nseconds(1)
+    )),);
 
     {
         let state_guard = state.lock().unwrap();

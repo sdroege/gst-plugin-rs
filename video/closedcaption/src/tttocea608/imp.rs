@@ -657,7 +657,7 @@ impl TtToCea608 {
                 if j == 0 {
                     prepend_space = self.open_line(
                         element,
-                        &mut state,
+                        state,
                         settings,
                         chunk,
                         mut_list,
@@ -665,7 +665,7 @@ impl TtToCea608 {
                         row as i32,
                         line.carriage_return,
                     );
-                } else if self.open_chunk(element, &mut state, chunk, mut_list, col) {
+                } else if self.open_chunk(element, state, chunk, mut_list, col) {
                     prepend_space = false;
                     col += 1;
                 }
@@ -754,7 +754,7 @@ impl TtToCea608 {
 
                             self.open_line(
                                 element,
-                                &mut state,
+                                state,
                                 settings,
                                 chunk,
                                 mut_list,

@@ -90,6 +90,7 @@ pub(crate) struct FragmentHeaderConfiguration<'a> {
     start_dts: Option<gst::ClockTime>,
     end_pts: gst::ClockTime,
     end_dts: Option<gst::ClockTime>,
+    #[allow(dead_code)]
     dts_offset: Option<gst::ClockTime>,
 }
 

@@ -967,21 +967,11 @@ impl PadSrcHandler for SrcHandler {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Stats {
     num_pushed: u64,
     num_lost: u64,
     num_late: u64,
-}
-
-impl Default for Stats {
-    fn default() -> Self {
-        Self {
-            num_pushed: 0,
-            num_lost: 0,
-            num_late: 0,
-        }
-    }
 }
 
 // Shared state between element, sink and source pad

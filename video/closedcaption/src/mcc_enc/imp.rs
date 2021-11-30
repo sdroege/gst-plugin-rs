@@ -52,19 +52,10 @@ impl Default for State {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 struct Settings {
     uuid: Option<String>,
     creation_date: Option<glib::DateTime>,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            uuid: None,
-            creation_date: None,
-        }
-    }
 }
 
 pub struct MccEnc {

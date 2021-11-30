@@ -189,7 +189,7 @@ fn test_pull_range() {
 
     // get the seeking capabilities
     let (seekable, start, stop) = q.result();
-    assert_eq!(seekable, true);
+    assert!(seekable);
     assert_eq!(
         start,
         gst::GenericFormattedValue::Bytes(Some(gst::format::Bytes(0)))

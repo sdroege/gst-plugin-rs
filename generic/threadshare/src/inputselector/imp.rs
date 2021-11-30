@@ -350,19 +350,10 @@ impl Default for State {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Pads {
     pad_serial: u32,
     sink_pads: HashMap<gst::Pad, PadSink>,
-}
-
-impl Default for Pads {
-    fn default() -> Pads {
-        Pads {
-            pad_serial: 0,
-            sink_pads: HashMap::new(),
-        }
-    }
 }
 
 #[derive(Debug)]

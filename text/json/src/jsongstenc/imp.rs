@@ -47,23 +47,9 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct State {
-    start_ts: Option<gst::ClockTime>,
-    end_ts: Option<gst::ClockTime>,
-    current_line: String,
     format: Option<String>,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            start_ts: None,
-            end_ts: None,
-            current_line: "".to_string(),
-            format: None,
-        }
-    }
 }
 
 pub struct JsonGstEnc {

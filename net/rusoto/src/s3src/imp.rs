@@ -43,20 +43,11 @@ impl Default for StreamingState {
     }
 }
 
+#[derive(Default)]
 struct Settings {
     url: Option<GstS3Url>,
     access_key: Option<String>,
     secret_access_key: Option<String>,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Settings {
-            url: None,
-            access_key: None,
-            secret_access_key: None,
-        }
-    }
 }
 
 #[derive(Default)]

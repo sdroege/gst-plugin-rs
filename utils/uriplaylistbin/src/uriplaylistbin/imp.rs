@@ -57,21 +57,11 @@ impl std::error::Error for PlaylistError {
 }
 
 /// Number of different streams currently handled by the element
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 struct StreamsTopology {
     audio: u32,
     video: u32,
     text: u32,
-}
-
-impl Default for StreamsTopology {
-    fn default() -> Self {
-        Self {
-            audio: 0,
-            video: 0,
-            text: 0,
-        }
-    }
 }
 
 impl StreamsTopology {
@@ -246,7 +236,6 @@ enum ItemState {
         stream_selected_msg: Option<gst::Message>,
         concat_sink_pads: Vec<(gst::Element, gst::Pad)>,
         sender: crossbeam_channel::Sender<bool>,
-        receiver: crossbeam_channel::Receiver<bool>,
     },
     /// Buffers are flowing
     Streaming {
@@ -544,7 +533,6 @@ impl Item {
             ItemState::WaitingForPads {
                 uridecodebin,
                 sender,
-                receiver,
                 stream_collection_msg,
                 concat_sink_pads,
                 ..
@@ -552,7 +540,6 @@ impl Item {
                 inner.state = ItemState::Blocked {
                     uridecodebin: uridecodebin.clone(),
                     sender: sender.clone(),
-                    receiver: receiver.clone(),
                     concat_sink_pads: concat_sink_pads.clone(),
                     stream_collection_msg: stream_collection_msg.copy(),
                     stream_selected_msg: None,

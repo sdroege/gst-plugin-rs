@@ -35,18 +35,10 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+#[derive(Default)]
 struct State {
     buffers: Vec<gst::Buffer>,
     total_size: usize,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            buffers: vec![],
-            total_size: 0,
-        }
-    }
 }
 
 struct Decoder<'a> {

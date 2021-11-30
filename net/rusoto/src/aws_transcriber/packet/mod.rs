@@ -29,6 +29,7 @@ const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISO_HDLC);
 struct Prelude {
     total_bytes: u32,
     header_bytes: u32,
+    #[allow(dead_code)]
     prelude_crc: u32,
 }
 
@@ -41,9 +42,11 @@ pub struct Header {
 
 #[derive(Debug)]
 pub struct Packet<'a> {
+    #[allow(dead_code)]
     prelude: Prelude,
     headers: Vec<Header>,
     pub payload: &'a [u8],
+    #[allow(dead_code)]
     msg_crc: u32,
 }
 

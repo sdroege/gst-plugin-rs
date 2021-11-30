@@ -56,6 +56,7 @@ pub struct TranscribeParse {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 struct Alternative {
+    #[allow(dead_code)]
     confidence: serde_json::Value,
     content: String,
 }
@@ -73,6 +74,7 @@ struct Item {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Results {
+    #[allow(dead_code)]
     transcripts: serde_json::Value,
     items: Vec<Item>,
 }
@@ -80,7 +82,9 @@ struct Results {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct Transcript {
+    #[allow(dead_code)]
     job_name: String,
+    #[allow(dead_code)]
     account_id: String,
     results: Results,
 }

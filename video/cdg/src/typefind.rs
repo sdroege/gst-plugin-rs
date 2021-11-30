@@ -78,8 +78,8 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         gst::Rank::None,
         Some("cdg"),
         Some(&Caps::builder("video/x-cdg").build()),
-        |mut typefind| {
-            let proba = compute_probability(&mut typefind);
+        |typefind| {
+            let proba = compute_probability(typefind);
 
             if proba != gst::TypeFindProbability::None {
                 typefind.suggest(proba, &Caps::builder("video/x-cdg").build());

@@ -142,7 +142,7 @@ fn test_one_timed_buffer_and_eos() {
         }
     }
 
-    assert_eq!(h.events_in_queue() == 1, true);
+    assert_eq!(h.events_in_queue(), 1);
 
     let event = h.pull_event().unwrap();
     assert_eq!(event.type_(), gst::EventType::Eos);

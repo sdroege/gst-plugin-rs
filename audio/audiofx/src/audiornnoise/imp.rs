@@ -154,9 +154,9 @@ impl AudioRNNoise {
             buffer.set_pts(pts);
 
             let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
-            let mut out_data = out_map.as_mut_slice_of::<f32>().unwrap();
+            let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
 
-            state.process(in_data, &mut out_data);
+            state.process(in_data, out_data);
         }
 
         let srcpad = element.static_pad("src").unwrap();
@@ -189,9 +189,9 @@ impl AudioRNNoise {
             buffer.set_pts(pts);
 
             let mut out_map = buffer.map_writable().map_err(|_| gst::FlowError::Error)?;
-            let mut out_data = out_map.as_mut_slice_of::<f32>().unwrap();
+            let out_data = out_map.as_mut_slice_of::<f32>().unwrap();
 
-            state.process(in_data, &mut out_data);
+            state.process(in_data, out_data);
         }
 
         Ok(GenerateOutputSuccess::Buffer(buffer))

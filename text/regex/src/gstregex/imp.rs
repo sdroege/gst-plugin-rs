@@ -44,14 +44,9 @@ struct Command {
     operation: Operation,
 }
 
+#[derive(Default)]
 struct State {
     commands: Vec<Command>,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self { commands: vec![] }
-    }
 }
 
 pub struct RegEx {
