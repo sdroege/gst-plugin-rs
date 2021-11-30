@@ -15,7 +15,7 @@ use std::ops::Mul;
 use std::sync::Mutex;
 
 use super::utils::{make_element, StreamProducer};
-use super::WebRTCSinkCongestionControl;
+use super::{WebRTCSinkCongestionControl, WebRTCSinkMitigationMode};
 use crate::signaller::Signaller;
 use std::collections::BTreeMap;
 
@@ -93,11 +93,13 @@ struct WebRTCPad {
 /// stream according to the bitrate, thresholds hardcoded for now
 struct VideoEncoder {
     factory_name: String,
+    codec_name: String,
     element: gst::Element,
     filter: gst::Element,
     halved_framerate: gst::Fraction,
     full_width: i32,
     peer_id: String,
+    mitigation_mode: WebRTCSinkMitigationMode,
 }
 
 struct CongestionController {
@@ -151,6 +153,7 @@ struct Consumer {
     /// None if congestion control was disabled
     congestion_controller: Option<CongestionController>,
     sdp: Option<gst_sdp::SDPMessage>,
+    stats: gst::Structure,
 }
 
 #[derive(PartialEq)]
@@ -408,6 +411,7 @@ impl VideoEncoder {
         filter: gst::Element,
         in_caps: &gst::Caps,
         peer_id: &str,
+        codec_name: &str,
     ) -> Self {
         let s = in_caps.structure(0).unwrap();
 
@@ -419,11 +423,13 @@ impl VideoEncoder {
 
         Self {
             factory_name: element.factory().unwrap().name().into(),
+            codec_name: codec_name.to_string(),
             element,
             filter,
             halved_framerate,
             full_width,
             peer_id: peer_id.to_string(),
+            mitigation_mode: WebRTCSinkMitigationMode::NONE,
         }
     }
 
@@ -435,7 +441,7 @@ impl VideoEncoder {
         }
     }
 
-    fn set_bitrate(&self, element: &super::WebRTCSink, bitrate: i32) {
+    fn set_bitrate(&mut self, element: &super::WebRTCSink, bitrate: i32) {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.set_property("target-bitrate", bitrate),
             "x264enc" | "nvh264enc" => self
@@ -456,15 +462,20 @@ impl VideoEncoder {
         if bitrate < 500000 {
             s.set("width", 360i32.min(self.full_width));
             s.set("framerate", self.halved_framerate);
+            self.mitigation_mode =
+                WebRTCSinkMitigationMode::DOWNSAMPLED | WebRTCSinkMitigationMode::DOWNSCALED;
         } else if bitrate < 1000000 {
             s.set("width", 360i32.min(self.full_width));
             s.remove_field("framerate");
+            self.mitigation_mode = WebRTCSinkMitigationMode::DOWNSCALED;
         } else if bitrate < 2000000 {
             s.set("width", 720i32.min(self.full_width));
             s.remove_field("framerate");
+            self.mitigation_mode = WebRTCSinkMitigationMode::DOWNSCALED;
         } else {
             s.remove_field("width");
             s.remove_field("framerate");
+            self.mitigation_mode = WebRTCSinkMitigationMode::NONE;
         }
 
         let caps = gst::Caps::builder_full().structure(s).build();
@@ -480,6 +491,14 @@ impl VideoEncoder {
         );
 
         self.filter.set_property("caps", caps);
+    }
+
+    fn gather_stats(&self) -> gst::Structure {
+        gst::Structure::builder("application/x-webrtcsink-video-encoder-stats")
+            .field("bitrate", self.bitrate())
+            .field("mitigation-mode", self.mitigation_mode)
+            .field("codec-name", self.codec_name.as_str())
+            .build()
     }
 }
 
@@ -650,7 +669,7 @@ impl CongestionController {
         &mut self,
         element: &super::WebRTCSink,
         stats: &gst::StructureRef,
-        encoders: &Vec<VideoEncoder>,
+        encoders: &mut Vec<VideoEncoder>,
     ) {
         let n_encoders = encoders.len() as i32;
 
@@ -696,7 +715,7 @@ impl CongestionController {
                 }
             }
 
-            for encoder in encoders {
+            for encoder in encoders.iter_mut() {
                 encoder.set_bitrate(element, self.target_bitrate / n_encoders);
             }
         }
@@ -759,6 +778,25 @@ impl State {
 }
 
 impl Consumer {
+    fn gather_stats(&self) -> gst::Structure {
+        let mut ret = self.stats.to_owned();
+
+        let encoder_stats: Vec<_> = self
+            .encoders
+            .iter()
+            .map(VideoEncoder::gather_stats)
+            .map(|s| s.to_send_value())
+            .collect();
+
+        let our_stats = gst::Structure::builder("application/x-webrtcsink-consumer-stats")
+            .field("video-encoders", gst::Array::from(encoder_stats))
+            .build();
+
+        ret.set("consumer-stats", our_stats);
+
+        ret
+    }
+
     fn generate_ssrc(&self) -> u32 {
         loop {
             let ret = fastrand::u32(..);
@@ -893,11 +931,12 @@ impl Consumer {
         pay_filter.set_property("caps", caps);
 
         if codec.is_video {
-            let enc = VideoEncoder::new(
+            let mut enc = VideoEncoder::new(
                 enc.clone(),
                 raw_filter.clone(),
                 &webrtc_pad.in_caps,
                 &self.peer_id,
+                codec.caps.structure(0).unwrap().name(),
             );
 
             if let Some(congestion_controller) = self.congestion_controller.as_mut() {
@@ -1416,6 +1455,7 @@ impl WebRTCSink {
             },
             encoders: Vec::new(),
             sdp: None,
+            stats: gst::Structure::new_empty("application/x-webrtc-stats"),
         };
 
         state
@@ -1511,8 +1551,9 @@ impl WebRTCSink {
 
         if let Some(consumer) = state.consumers.get_mut(peer_id) {
             if let Some(congestion_controller) = consumer.congestion_controller.as_mut() {
-                congestion_controller.control(element, stats, &consumer.encoders);
+                congestion_controller.control(element, stats, &mut consumer.encoders);
             }
+            consumer.stats = stats.to_owned();
         }
     }
 
@@ -1834,6 +1875,18 @@ impl WebRTCSink {
         Ok(())
     }
 
+    fn gather_stats(&self) -> gst::Structure {
+        gst::Structure::from_iter(
+            "application/x-webrtcsink-stats",
+            self.state
+                .lock()
+                .unwrap()
+                .consumers
+                .iter()
+                .map(|(name, consumer)| (name.as_str(), consumer.gather_stats().to_send_value())),
+        )
+    }
+
     fn sink_event(&self, pad: &gst::Pad, element: &super::WebRTCSink, event: gst::Event) -> bool {
         use gst::EventView;
 
@@ -1982,6 +2035,13 @@ impl ObjectImpl for WebRTCSink {
                     DEFAULT_MAX_BITRATE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecBoxed::new(
+                    "stats",
+                    "Consumer statistics",
+                    "Statistics for the current consumers",
+                    gst::Structure::static_type(),
+                    glib::ParamFlags::READABLE,
+                ),
             ]
         });
 
@@ -2070,6 +2130,7 @@ impl ObjectImpl for WebRTCSink {
                 let settings = self.settings.lock().unwrap();
                 settings.max_bitrate.to_value()
             }
+            "stats" => self.gather_stats().to_value(),
             _ => unimplemented!(),
         }
     }
