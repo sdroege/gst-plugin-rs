@@ -125,12 +125,6 @@ version = "0.11"
 name = "num-rational"
 version = "0.3"
 
-# ignore duplicated ansi_term dependency because clap depends on an old version
-# https://github.com/clap-rs/clap/pull/2402
-[[bans.skip]]
-name = "ansi_term"
-version = "0.11"
-
 # ignore duplicated system-deps dependency because dav1d depends on an old version
 [[bans.skip]]
 name = "system-deps"
@@ -149,15 +143,6 @@ version = "0.7"
 [[bans.skip]]
 name = "crc"
 version = "1.8"
-
-# ignore duplicated num-complex/rustfft dependency because nnnoiseless depends on an old version
-# https://github.com/jneem/nnnoiseless/pull/16
-[[bans.skip]]
-name = "num-complex"
-version = "0.3"
-[[bans.skip]]
-name = "rustfft"
-version = "5"
 
 [sources]
 unknown-registry = "deny"
