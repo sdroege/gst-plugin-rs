@@ -1262,8 +1262,9 @@ impl UriPlaylistBin {
 
                     // proxy sticky events
                     src.sticky_events_foreach(|event| {
+                        use std::ops::ControlFlow;
                         let _ = ghost.store_sticky_event(&event);
-                        Ok(Some(event))
+                        ControlFlow::Continue(gst::EventForeachAction::Keep)
                     });
 
                     unsafe {

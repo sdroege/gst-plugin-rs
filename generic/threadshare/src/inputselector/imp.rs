@@ -115,8 +115,9 @@ impl InputSelectorPadSinkHandler {
                 if state.active_sinkpad.as_ref() == Some(pad.gst_pad()) {
                     if inner.send_sticky || state.switched_pad {
                         pad.gst_pad().sticky_events_foreach(|event| {
+                            use std::ops::ControlFlow;
                             stickies.push(event.clone());
-                            Ok(Some(event))
+                            ControlFlow::Continue(gst::EventForeachAction::Keep)
                         });
 
                         inner.send_sticky = false;
