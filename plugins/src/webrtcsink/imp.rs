@@ -548,13 +548,14 @@ impl CongestionController {
             twcc_stats
         );
 
-        if delay_factor > 0.01 {
+        if delay_factor > 0.1 {
             CongestionControlOp::Decrease(if delay_factor < 0.64 {
                 gst_trace!(
                     CAT,
                     obj: element,
-                    "consumer {}: low delay factor",
-                    self.peer_id
+                    "consumer {}: low delay factor {}",
+                    self.peer_id,
+                    delay_factor,
                 );
                 0.96
             } else {
@@ -566,16 +567,35 @@ impl CongestionController {
                 );
                 delay_factor.sqrt().sqrt().clamp(0.8, 0.96)
             })
-        } else if delta_of_delta > 1000000 || loss_percentage > 2.0 {
-            CongestionControlOp::Decrease(if loss_percentage > 0. && loss_percentage < 2.0 {
-                gst_trace!(CAT, obj: element, "consumer {}: low loss", self.peer_id);
+        } else if delta_of_delta > 1000000 {
+            CongestionControlOp::Decrease(if loss_percentage < 10. {
+                gst_trace!(
+                    CAT,
+                    obj: element,
+                    "consumer {}: moderate loss high delta",
+                    self.peer_id
+                );
                 0.97
             } else {
-                gst_log!(CAT, obj: element, "consumer: {}: high loss", self.peer_id);
+                gst_log!(
+                    CAT,
+                    obj: element,
+                    "consumer: {}: high loss high delta",
+                    self.peer_id
+                );
                 ((100. - loss_percentage) / 100.).clamp(0.7, 0.98)
             })
-        } else if loss_percentage > 0.01 {
-            gst_trace!(CAT, obj: element, "consumer {}: tiny loss", self.peer_id);
+        } else if loss_percentage > 10. {
+            CongestionControlOp::Decrease(
+                ((100. - (0.5 * loss_percentage)) / 100.).clamp(0.7, 0.98),
+            )
+        } else if loss_percentage > 2. {
+            gst_trace!(
+                CAT,
+                obj: element,
+                "consumer {}: moderate loss",
+                self.peer_id
+            );
             CongestionControlOp::Hold
         } else {
             gst_trace!(
