@@ -724,6 +724,14 @@ impl CongestionController {
 
 impl State {
     fn finalize_consumer(&mut self, element: &super::WebRTCSink, consumer: Consumer, signal: bool) {
+        consumer.pipeline.debug_to_dot_file_with_ts(
+            gst::DebugGraphDetails::all(),
+            format!(
+                "removing-peer-{}-",
+                consumer.peer_id,
+            ),
+        );
+
         for webrtc_pad in consumer.webrtc_pads.values() {
             if let Some(producer) = self
                 .streams
