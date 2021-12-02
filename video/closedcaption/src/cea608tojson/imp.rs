@@ -387,8 +387,8 @@ fn eia608_to_text(cc_data: u16) -> String {
     unsafe {
         let bufsz = ffi::eia608_to_text(std::ptr::null_mut(), 0, cc_data);
         let mut data = Vec::with_capacity((bufsz + 1) as usize);
-        data.set_len(bufsz as usize);
         ffi::eia608_to_text(data.as_ptr() as *mut _, (bufsz + 1) as usize, cc_data);
+        data.set_len(bufsz as usize);
         String::from_utf8_unchecked(data)
     }
 }

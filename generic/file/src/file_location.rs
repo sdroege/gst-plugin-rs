@@ -39,7 +39,7 @@ impl FileLocation {
             }
             Err(err) => Err(glib::Error::new(
                 gst::URIError::BadUri,
-                format!("Couldn't parse URI {}: {}", uri_str, err.to_string()).as_str(),
+                format!("Couldn't parse URI {}: {}", uri_str, err).as_str(),
             )),
         }
     }
@@ -74,12 +74,7 @@ impl FileLocation {
         let parent_canonical = parent_dir.canonicalize().map_err(|err| {
             glib::Error::new(
                 gst::URIError::BadReference,
-                format!(
-                    "Could not resolve path {}: {}",
-                    location_str,
-                    err.to_string(),
-                )
-                .as_str(),
+                format!("Could not resolve path {}: {}", location_str, err,).as_str(),
             )
         })?;
 

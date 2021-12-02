@@ -251,7 +251,7 @@ fn main() -> Result<(), Error> {
                     msg.src()
                         .map(|s| String::from(s.path_string()))
                         .unwrap_or_else(|| "None".into()),
-                    err.error().to_string(),
+                    err.error(),
                     err.debug().unwrap_or_else(|| "".into()),
                 );
                 break;

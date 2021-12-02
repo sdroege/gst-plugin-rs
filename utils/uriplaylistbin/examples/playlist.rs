@@ -93,7 +93,7 @@ fn main() -> anyhow::Result<()> {
         .map(|uri| {
             let p = Path::new(&uri);
             match p.canonicalize() {
-                Ok(p) => format!("file://{}", p.to_str().unwrap().to_string()),
+                Ok(p) => format!("file://{}", p.to_str().unwrap()),
                 _ => uri,
             }
         })
