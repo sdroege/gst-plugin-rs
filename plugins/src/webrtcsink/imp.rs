@@ -2023,7 +2023,7 @@ impl ObjectImpl for WebRTCSink {
                     "Defines how congestion is controlled, if at all",
                     WebRTCSinkCongestionControl::static_type(),
                     DEFAULT_CONGESTION_CONTROL as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
                 glib::ParamSpecUInt::new(
                     "min-bitrate",
@@ -2092,9 +2092,29 @@ impl ObjectImpl for WebRTCSink {
             }
             "congestion-control" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.cc_heuristic = value
+                let new_heuristic = value
                     .get::<WebRTCSinkCongestionControl>()
                     .expect("type checked upstream");
+                if new_heuristic != settings.cc_heuristic {
+                    settings.cc_heuristic = new_heuristic;
+
+                    let mut state = self.state.lock().unwrap();
+                    for (peer_id, consumer) in state.consumers.iter_mut() {
+                        match new_heuristic {
+                            WebRTCSinkCongestionControl::Disabled => {
+                                consumer.congestion_controller.take();
+                            },
+                            WebRTCSinkCongestionControl::Homegrown => {
+                                let _ = consumer.congestion_controller.insert(
+                                    CongestionController::new(
+                                        peer_id,
+                                        settings.min_bitrate,
+                                        settings.max_bitrate,
+                                ));
+                            }
+                        }
+                    }
+                }
             }
             "min-bitrate" => {
                 let mut settings = self.settings.lock().unwrap();
