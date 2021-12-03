@@ -80,7 +80,14 @@
   }
 
   const fetchStats = () => {
-    ws = new WebSocket("ws://127.0.0.1:8484");
+    const urlParams = new URLSearchParams(window.location.search);
+    var remote_server = urlParams.get('remote-url');
+    if (!remote_server)
+      remote_server = "127.0.0.1:8484"
+    const ws_url = `ws://${remote_server}`;
+
+    console.info(`Logging to ${ws_url}`);
+    ws = new WebSocket(ws_url);
 
     ws.onerror = () => {
       websocketStatus = WebSocketStatus.Error
