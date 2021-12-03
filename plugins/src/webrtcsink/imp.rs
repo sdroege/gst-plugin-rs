@@ -349,8 +349,7 @@ fn setup_encoding(
         "nvh264enc" => {
             enc.set_property("bitrate", 2048u32);
             enc.set_property("gop-size", 2560i32);
-            enc.set_property_from_str("rc-mode", "cbr");
-            enc.set_property("vbv-buffer-size", 120u32);
+            enc.set_property_from_str("rc-mode", "cbr-ld-hq");
             enc.set_property("zerolatency", true);
         }
         _ => (),
