@@ -32,6 +32,10 @@ const RTP_TWCC_URI: &str =
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
 const DEFAULT_MIN_BITRATE: u32 = 1000;
+
+/* I have found higher values to cause packet loss *somewhere* in
+ * my local network, possibly related to chrome's pretty low UDP
+ * buffer sizes */
 const DEFAULT_MAX_BITRATE: u32 = 8192000;
 const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
     WebRTCSinkCongestionControl::Homegrown;
@@ -154,6 +158,8 @@ struct Consumer {
     congestion_controller: Option<CongestionController>,
     sdp: Option<gst_sdp::SDPMessage>,
     stats: gst::Structure,
+
+    max_bitrate: u32,
 }
 
 #[derive(PartialEq)]
@@ -953,12 +959,8 @@ impl Consumer {
                 /* If congestion control is disabled, we simply use the highest
                  * known "safe" value for the bitrate.
                  *
-                 * I have found higher values to cause packet loss *somewhere* in
-                 * my local network, possibly related to chrome's pretty low UDP
-                 * buffer sizes, this probably should be exposed as a property
-                 * eventually.
                  */
-                enc.set_bitrate(element, 8192000i32);
+                enc.set_bitrate(element, self.max_bitrate as i32);
             }
 
             self.encoders.push(enc);
@@ -1464,6 +1466,7 @@ impl WebRTCSink {
             encoders: Vec::new(),
             sdp: None,
             stats: gst::Structure::new_empty("application/x-webrtc-stats"),
+            max_bitrate: settings.max_bitrate,
         };
 
         state
