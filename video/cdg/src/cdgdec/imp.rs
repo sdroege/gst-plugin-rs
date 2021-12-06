@@ -201,7 +201,7 @@ impl VideoDecoderImpl for CdgDec {
         &self,
         element: &Self::Type,
         query: gst::query::Allocation<&mut gst::QueryRef>,
-    ) -> Result<(), gst::ErrorMessage> {
+    ) -> Result<(), gst::LoggableError> {
         if query
             .find_allocation_meta::<gst_video::VideoMeta>()
             .is_some()
@@ -211,7 +211,7 @@ impl VideoDecoderImpl for CdgDec {
                 let mut config = pool.config();
                 config.add_option(&gst_video::BUFFER_POOL_OPTION_VIDEO_META);
                 pool.set_config(config)
-                    .map_err(|e| gst::error_msg!(gst::CoreError::Negotiation, [&e.message]))?;
+                    .map_err(|_| gst::loggable_error!(CAT, "Failed to configure buffer pool"))?;
             }
         }
 

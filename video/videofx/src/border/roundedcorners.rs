@@ -612,7 +612,7 @@ impl BaseTransformImpl for RoundedCorners {
         element: &Self::Type,
         decide_query: Option<gst::query::Allocation<&gst::QueryRef>>,
         mut query: gst::query::Allocation<&mut gst::QueryRef>,
-    ) -> Result<(), gst::ErrorMessage> {
+    ) -> Result<(), gst::LoggableError> {
         query.add_allocation_meta::<gst_video::VideoMeta>(None);
         self.parent_propose_allocation(element, decide_query, query)
     }

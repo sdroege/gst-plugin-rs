@@ -226,7 +226,7 @@ impl BaseSinkImpl for PaintableSink {
         &self,
         element: &Self::Type,
         mut query: gst::query::Allocation<&mut gst::QueryRef>,
-    ) -> Result<(), gst::ErrorMessage> {
+    ) -> Result<(), gst::LoggableError> {
         query.add_allocation_meta::<gst_video::VideoMeta>(None);
 
         // TODO: Provide a preferred "window size" here for higher-resolution rendering
