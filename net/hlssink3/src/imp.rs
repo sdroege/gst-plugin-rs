@@ -319,16 +319,11 @@ impl HlsSink3 {
 
     fn segment_filename(&self, state: &mut StartedState) -> String {
         assert!(state.current_segment_location.is_some());
-        let segment_filename = state.current_segment_location.take().unwrap();
+        let segment_filename = path_basename(state.current_segment_location.take().unwrap());
 
         let settings = self.settings.lock().unwrap();
         if let Some(playlist_root) = &settings.playlist_root {
-            format!(
-                "{}{}{}",
-                playlist_root,
-                std::path::MAIN_SEPARATOR,
-                segment_filename
-            )
+            format!("{}/{}", playlist_root, segment_filename)
         } else {
             segment_filename
         }
@@ -427,7 +422,7 @@ impl ObjectImpl for HlsSink3 {
                 glib::ParamSpecString::new(
                     "playlist-root",
                     "Playlist Root",
-                    "Location of the playlist to write.",
+                    "Base path for the segments in the playlist file.",
                     None,
                     glib::ParamFlags::READWRITE,
                 ),
@@ -492,7 +487,9 @@ impl ObjectImpl for HlsSink3 {
                     .get::<Option<String>>()
                     .expect("type checked upstream")
                     .unwrap_or_else(|| DEFAULT_LOCATION.into());
-                settings.segment_formatter = SegmentFormatter::new(&settings.location).unwrap();
+                settings.segment_formatter = SegmentFormatter::new(&settings.location).expect(
+                    "A string containing `%03d` pattern must be used (can be any number from 0-9)",
+                );
                 settings
                     .splitmuxsink
                     .set_property("location", &settings.location);
@@ -866,6 +863,29 @@ impl ElementImpl for HlsSink3 {
             settings.audio_sink = false;
         } else {
             settings.video_sink = false;
+        }
+    }
+}
+
+/// The content of the last item of a path separated by `/` character.
+fn path_basename(name: impl AsRef<str>) -> String {
+    name.as_ref().split('/').last().unwrap().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_extract_basenames() {
+        for (input, output) in [
+            ("", ""),
+            ("value", "value"),
+            ("/my/nice/path.ts", "path.ts"),
+            ("file.ts", "file.ts"),
+            ("https://localhost/output/file.vtt", "file.vtt"),
+        ] {
+            assert_eq!(path_basename(input), output);
         }
     }
 }

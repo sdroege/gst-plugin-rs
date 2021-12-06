@@ -163,10 +163,10 @@ pub enum PlaylistRenderState {
 /// part003.ts
 /// part004.ts
 /// ```
-/// Then we can use the segment pattern value as `"part%03.ts"`:
+/// Then we can use the segment pattern value as `"part%03d.ts"`:
 ///
 /// ```rust,ignore
-/// let formatter = SegmentFormatter::new("part%03.ts").unwrap();
+/// let formatter = SegmentFormatter::new("part%03d.ts").unwrap();
 /// assert_eq!(formatter.segment(1), "part001.ts");
 /// assert_eq!(formatter.segment(2), "part002.ts");
 /// assert_eq!(formatter.segment(3), "part003.ts");
