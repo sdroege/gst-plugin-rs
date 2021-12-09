@@ -34,6 +34,15 @@ copyleft = "allow"
 allow-osi-fsf-free = "either"
 confidence-threshold = 0.8
 
+# https://github.com/hsivonen/encoding_rs/issues/75
+[[licenses.clarify]]
+name = "encoding_rs"
+version = "*"
+expression = "(Apache-2.0 OR MIT) AND BSD-3-Clause"
+license-files = [
+    { path = "COPYRIGHT", hash = 0x39f8ad31 }
+]
+
 [bans]
 multiple-versions = "deny"
 highlight = "all"
