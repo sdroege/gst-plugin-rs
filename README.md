@@ -176,6 +176,13 @@ gst-launch-1.0 webrtcsink congestion-control=disabled
 
 [simple tool]: https://github.com/tylertreat/comcast
 
+## Monitoring tool
+
+An example server / client application for monitoring per-consumer stats
+can be found [here].
+
+[here]: plugins/examples/README.md
+
 ## License
 
 All code in this repository is licensed under the [MIT license].

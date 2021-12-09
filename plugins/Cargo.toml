@@ -31,6 +31,7 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-subscriber = { version = "0.2", features = ["registry", "env-filter"] }
 tracing-log = "0.1"
 uuid = { version = "0.8", features = ["v4"] }
+clap = { version = "3.0.0-rc.1", features = ["derive"] }
 
 [lib]
 name = "webrtcsink"

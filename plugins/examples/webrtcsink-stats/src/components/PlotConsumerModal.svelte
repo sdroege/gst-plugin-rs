@@ -25,10 +25,11 @@
     let traces = []
     let layout = {
       legend: {traceorder: 'reversed'},
+      height: 800,
     }
     let ctr = 1;
     let domain_step = 1.0 / consumer.stats.size
-    let domain_margin = domain_step / consumer.stats.size
+    let domain_margin = 0.05
 
     for (let key of consumer.stats.keys()) {
       let trace = {
@@ -112,7 +113,7 @@
 <style lang="scss">
   .modal {
     &-body {
-      width: 700px;
+      width: 1000px;
       padding: 20px 15px 10px;
       gap: 15px 0;
       .id {

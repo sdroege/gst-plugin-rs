@@ -16,9 +16,19 @@
   let timeout: ReturnType<typeof setTimeout> | undefined = undefined
 
   const updateConsumerStats = (consumer: ConsumerType, stats: Object) => {
+    let target_bitrate = 0
+    let fec_percentage = 0
+    let keyframe_requests = 0
+    let retransmission_requests = 0
+    let bitrate_sent = 0
+    let bitrate_recv = 0
+    let packet_loss = 0
+    let delta_of_delta = 0
+
     if (stats["consumer-stats"]["video-encoders"].length > 0) {
       let venc = stats["consumer-stats"]["video-encoders"][0]
-      consumer.stats["target_bitrate"] = venc["bitrate"]
+      target_bitrate = venc["bitrate"]
+      fec_percentage = venc["fec-percentage"]
       consumer.video_codec = venc["codec-name"]
 
       let mitigation_mode = MitigationMode.None
@@ -41,22 +51,32 @@
       }
 
       consumer.mitigation_mode = mitigation_mode
-    } else {
-      consumer.stats["target_bitrate"] = 0
     }
+
 
     for (let svalue of Object.values(stats)) {
       if (svalue["type"] == "transport") {
         let twcc_stats = svalue["gst-twcc-stats"]
         if (twcc_stats !== undefined) {
-          consumer.stats["bitrate_sent"] = twcc_stats["bitrate-sent"]
-          consumer.stats["bitrate_recv"] = twcc_stats["bitrate-recv"]
-          consumer.stats["packet_loss"] = twcc_stats["packet-loss-pct"]
-          consumer.stats["delta_of_delta"] = twcc_stats["avg-delta-of-delta"]
+          bitrate_sent = twcc_stats["bitrate-sent"]
+          bitrate_recv = twcc_stats["bitrate-recv"]
+          packet_loss = twcc_stats["packet-loss-pct"]
+          delta_of_delta = twcc_stats["avg-delta-of-delta"]
         }
+      } else if (svalue["type"] == "outbound-rtp") {
+        keyframe_requests += svalue["pli-count"]
+        retransmission_requests += svalue["nack-count"]
       }
     }
 
+    consumer.stats["target_bitrate"] = target_bitrate
+    consumer.stats["fec_percentage"] = fec_percentage
+    consumer.stats["bitrate_sent"] = bitrate_sent
+    consumer.stats["bitrate_recv"] = bitrate_recv
+    consumer.stats["packet_loss"] = packet_loss
+    consumer.stats["delta_of_delta"] = delta_of_delta
+    consumer.stats["keyframe_requests"] = keyframe_requests
+    consumer.stats["retransmission_requests"] = retransmission_requests
   }
 
   const fetchStats = () => {
@@ -93,10 +113,13 @@
             mitigation_mode: MitigationMode.None,
             stats: new Map([
               ["target_bitrate", 0],
+              ["fec_percentage", 0],
               ["bitrate_sent", 0],
               ["bitrate_recv", 0],
               ["packet_loss", 0],
-              ["delta_of_delta", 0]
+              ["delta_of_delta", 0],
+              ["keyframe_requests", 0],
+              ["retransmission_requests", 0],
             ]),
           }
           consumers.set(key, consumer)

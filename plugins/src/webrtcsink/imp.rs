@@ -39,6 +39,8 @@ const DEFAULT_MIN_BITRATE: u32 = 1000;
 const DEFAULT_MAX_BITRATE: u32 = 8192000;
 const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
     WebRTCSinkCongestionControl::Homegrown;
+const DEFAULT_DO_FEC: bool = true;
+const DEFAULT_DO_RETRANSMISSION: bool = true;
 
 /// User configuration
 struct Settings {
@@ -49,6 +51,8 @@ struct Settings {
     cc_heuristic: WebRTCSinkCongestionControl,
     min_bitrate: u32,
     max_bitrate: u32,
+    do_fec: bool,
+    do_retransmission: bool,
 }
 
 /// Represents a codec we can offer
@@ -104,6 +108,7 @@ struct VideoEncoder {
     full_width: i32,
     peer_id: String,
     mitigation_mode: WebRTCSinkMitigationMode,
+    transceiver: gst_webrtc::WebRTCRTPTransceiver,
 }
 
 struct CongestionController {
@@ -212,6 +217,8 @@ impl Default for Settings {
             turn_server: None,
             min_bitrate: DEFAULT_MIN_BITRATE,
             max_bitrate: DEFAULT_MAX_BITRATE,
+            do_fec: DEFAULT_DO_FEC,
+            do_retransmission: DEFAULT_DO_RETRANSMISSION,
         }
     }
 }
@@ -320,13 +327,14 @@ fn setup_encoding(
             enc.set_property("target-bitrate", 2560000i32);
             enc.set_property("cpu-used", -16i32);
             enc.set_property("keyframe-max-dist", 2000i32);
+            enc.set_property_from_str("keyframe-mode", "disabled");
             enc.set_property_from_str("end-usage", "cbr");
             enc.set_property("buffer-initial-size", 100i32);
             enc.set_property("buffer-optimal-size", 120i32);
-            enc.set_property("buffer-size", 300i32);
+            enc.set_property("buffer-size", 150i32);
             enc.set_property("resize-allowed", true);
             enc.set_property("max-intra-bitrate", 250i32);
-
+            enc.set_property_from_str("error-resilient", "default");
             pay.set_property_from_str("picture-id-mode", "15-bit");
         }
         "x264enc" => {
@@ -418,6 +426,7 @@ impl VideoEncoder {
         in_caps: &gst::Caps,
         peer_id: &str,
         codec_name: &str,
+        transceiver: gst_webrtc::WebRTCRTPTransceiver,
     ) -> Self {
         let s = in_caps.structure(0).unwrap();
 
@@ -436,6 +445,7 @@ impl VideoEncoder {
             full_width,
             peer_id: peer_id.to_string(),
             mitigation_mode: WebRTCSinkMitigationMode::NONE,
+            transceiver,
         }
     }
 
@@ -504,6 +514,10 @@ impl VideoEncoder {
             .field("bitrate", self.bitrate())
             .field("mitigation-mode", self.mitigation_mode)
             .field("codec-name", self.codec_name.as_str())
+            .field(
+                "fec-percentage",
+                self.transceiver.property::<u32>("fec-percentage"),
+            )
             .build()
     }
 }
@@ -741,8 +755,23 @@ impl CongestionController {
                 }
             }
 
+            let target_bitrate = self.target_bitrate / n_encoders;
+
+            let fec_ratio = {
+                if target_bitrate <= 2000000 || self.max_bitrate <= 2000000 {
+                    0f64
+                } else {
+                    (target_bitrate as f64 - 2000000f64) / (self.max_bitrate as f64 - 2000000f64)
+                }
+            };
+
+            let fec_percentage = (fec_ratio * 50f64) as u32;
+
             for encoder in encoders.iter_mut() {
-                encoder.set_bitrate(element, self.target_bitrate / n_encoders);
+                encoder.set_bitrate(element, target_bitrate);
+                encoder
+                    .transceiver
+                    .set_property("fec-percentage", fec_percentage);
             }
         }
     }
@@ -752,10 +781,7 @@ impl State {
     fn finalize_consumer(&mut self, element: &super::WebRTCSink, consumer: Consumer, signal: bool) {
         consumer.pipeline.debug_to_dot_file_with_ts(
             gst::DebugGraphDetails::all(),
-            format!(
-                "removing-peer-{}-",
-                consumer.peer_id,
-            ),
+            format!("removing-peer-{}-", consumer.peer_id,),
         );
 
         for webrtc_pad in consumer.webrtc_pads.values() {
@@ -842,7 +868,12 @@ impl Consumer {
     }
 
     /// Request a sink pad on our webrtcbin, and set its transceiver's codec_preferences
-    fn request_webrtcbin_pad(&mut self, element: &super::WebRTCSink, stream: &InputStream) {
+    fn request_webrtcbin_pad(
+        &mut self,
+        element: &super::WebRTCSink,
+        settings: &Settings,
+        stream: &InputStream,
+    ) {
         let ssrc = self.generate_ssrc();
         let media_idx = self.webrtc_pads.len() as i32;
 
@@ -874,6 +905,14 @@ impl Consumer {
         );
 
         transceiver.set_property("codec-preferences", &payloader_caps);
+
+        if stream.sink_pad.name().starts_with("video_") {
+            if settings.do_fec {
+                transceiver.set_property("fec-type", gst_webrtc::WebRTCFECType::UlpRed);
+            }
+
+            transceiver.set_property("do-nack", settings.do_retransmission);
+        }
 
         self.webrtc_pads.insert(
             ssrc,
@@ -971,16 +1010,17 @@ impl Consumer {
                 &webrtc_pad.in_caps,
                 &self.peer_id,
                 codec.caps.structure(0).unwrap().name(),
+                transceiver,
             );
 
             if let Some(congestion_controller) = self.congestion_controller.as_mut() {
                 congestion_controller.target_bitrate += enc.bitrate();
+                enc.transceiver.set_property("fec-percentage", 0u32);
             } else {
                 /* If congestion control is disabled, we simply use the highest
-                 * known "safe" value for the bitrate.
-                 *
-                 */
+                 * known "safe" value for the bitrate. */
                 enc.set_bitrate(element, self.max_bitrate as i32);
+                enc.transceiver.set_property("fec-percentage", 50u32);
             }
 
             self.encoders.push(enc);
@@ -1492,7 +1532,7 @@ impl WebRTCSink {
         state
             .streams
             .iter()
-            .for_each(|(_, stream)| consumer.request_webrtcbin_pad(element, &stream));
+            .for_each(|(_, stream)| consumer.request_webrtcbin_pad(element, &settings, &stream));
 
         let clock = element.clock();
 
@@ -1624,6 +1664,11 @@ impl WebRTCSink {
                     break;
                 }
             }
+
+            consumer.pipeline.debug_to_dot_file_with_ts(
+                gst::DebugGraphDetails::all(),
+                format!("webrtcsink-peer-{}-remote-description-set", peer_id,),
+            );
 
             let element_clone = element.downgrade();
             let webrtcbin = consumer.webrtcbin.downgrade();
@@ -2073,6 +2118,20 @@ impl ObjectImpl for WebRTCSink {
                     gst::Structure::static_type(),
                     glib::ParamFlags::READABLE,
                 ),
+                glib::ParamSpecBoolean::new(
+                    "do-fec",
+                    "Do Forward Error Correction",
+                    "Whether the element should negotiate and send FEC data",
+                    DEFAULT_DO_FEC,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY
+                ),
+                glib::ParamSpecBoolean::new(
+                    "do-retransmission",
+                    "Do retransmission",
+                    "Whether the element should offer to honor retransmission requests",
+                    DEFAULT_DO_RETRANSMISSION,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY
+                ),
             ]
         });
 
@@ -2126,14 +2185,15 @@ impl ObjectImpl for WebRTCSink {
                         match new_heuristic {
                             WebRTCSinkCongestionControl::Disabled => {
                                 consumer.congestion_controller.take();
-                            },
+                            }
                             WebRTCSinkCongestionControl::Homegrown => {
                                 let _ = consumer.congestion_controller.insert(
                                     CongestionController::new(
                                         peer_id,
                                         settings.min_bitrate,
                                         settings.max_bitrate,
-                                ));
+                                    ),
+                                );
                             }
                         }
                     }
@@ -2146,6 +2206,14 @@ impl ObjectImpl for WebRTCSink {
             "max-bitrate" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_bitrate = value.get::<u32>().expect("type checked upstream");
+            }
+            "do-fec" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.do_fec = value.get::<bool>().expect("type checked upstream");
+            }
+            "do-retransmission" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.do_retransmission = value.get::<bool>().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
@@ -2180,6 +2248,14 @@ impl ObjectImpl for WebRTCSink {
             "max-bitrate" => {
                 let settings = self.settings.lock().unwrap();
                 settings.max_bitrate.to_value()
+            }
+            "do-fec" => {
+                let settings = self.settings.lock().unwrap();
+                settings.do_fec.to_value()
+            }
+            "do-retransmission" => {
+                let settings = self.settings.lock().unwrap();
+                settings.do_retransmission.to_value()
             }
             "stats" => self.gather_stats().to_value(),
             _ => unimplemented!(),
@@ -2269,6 +2345,8 @@ impl ElementImpl for WebRTCSink {
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
+        gst_error!(CAT, "pad being requested");
+
         if element.current_state() > gst::State::Ready {
             gst_error!(CAT, "element pads can only be requested before starting");
             return None;

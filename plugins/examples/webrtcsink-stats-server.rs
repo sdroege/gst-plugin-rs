@@ -6,12 +6,30 @@ use anyhow::Error;
 use async_std::net::{TcpListener, TcpStream};
 use async_std::task;
 use async_tungstenite::tungstenite::Message as WsMessage;
+use clap::Parser;
 use futures::channel::mpsc;
 use futures::prelude::*;
 use gst::glib::Type;
 use gst::prelude::*;
-use tracing::info;
+use tracing::{debug, info, trace};
 use tracing_subscriber::prelude::*;
+
+#[derive(Parser, Debug)]
+#[clap(about, version, author)]
+/// Program arguments
+struct Args {
+    /// URI of file to serve. Must hold at least one audio and video stream
+    uri: String,
+    /// Disable Forward Error Correction
+    #[clap(long)]
+    disable_fec: bool,
+    /// Disable retransmission
+    #[clap(long)]
+    disable_retransmission: bool,
+    /// Disable congestion control
+    #[clap(long)]
+    disable_congestion_control: bool,
+}
 
 fn serialize_value(val: &gst::glib::Value) -> Option<serde_json::Value> {
     match val.type_() {
@@ -68,7 +86,7 @@ struct State {
     listeners: Vec<Listener>,
 }
 
-async fn run() -> Result<(), Error> {
+async fn run(args: Args) -> Result<(), Error> {
     tracing_log::LogTracer::init().expect("Failed to set logger");
     let env_filter = tracing_subscriber::EnvFilter::try_from_env("WEBRTCSINK_STATS_LOG")
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
@@ -93,8 +111,24 @@ async fn run() -> Result<(), Error> {
     let listener = try_socket.expect("Failed to bind");
     info!("Listening on: {}", addr);
 
-    let pipeline =
-        gst::parse_launch("webrtcsink name=ws videotestsrc ! queue ! ws. audiotestsrc ! ws.")?;
+    info!("Disable FEC: {}", args.disable_fec);
+
+    let pipeline_str = format!(
+        "webrtcsink name=ws do-retransmission={} do-fec={} congestion-control={} \
+                                uridecodebin name=d uri={} \
+                                d. ! video/x-raw ! queue ! ws.video_0 \
+                                d. ! audio/x-raw ! queue ! ws.audio_0",
+        !args.disable_retransmission,
+        !args.disable_fec,
+        if args.disable_congestion_control {
+            "disabled"
+        } else {
+            "homegrown"
+        },
+        args.uri
+    );
+
+    let pipeline = gst::parse_launch(&pipeline_str)?;
     let ws = pipeline
         .downcast_ref::<gst::Bin>()
         .unwrap()
@@ -110,7 +144,7 @@ async fn run() -> Result<(), Error> {
             if let Some(ws) = ws_clone.upgrade() {
                 let stats = ws.property::<gst::Structure>("stats");
                 let stats = serialize_value(&stats.to_value()).unwrap();
-                info!("Stats: {}", serde_json::to_string_pretty(&stats).unwrap());
+                debug!("Stats: {}", serde_json::to_string_pretty(&stats).unwrap());
                 let msg = WsMessage::Text(serde_json::to_string(&stats).unwrap());
 
                 let listeners = state_clone.lock().unwrap().listeners.clone();
@@ -163,7 +197,7 @@ async fn accept_connection(state: Arc<Mutex<State>>, stream: TcpStream) {
 
     task::spawn(async move {
         while let Some(msg) = receiver.next().await {
-            info!("Sending to one listener!");
+            trace!("Sending to one listener!");
             if ws_stream.send(msg).await.is_err() {
                 info!("Listener errored out");
                 receiver.close();
@@ -175,5 +209,7 @@ async fn accept_connection(state: Arc<Mutex<State>>, stream: TcpStream) {
 fn main() -> Result<(), Error> {
     gst::init()?;
 
-    task::block_on(run())
+    let args = Args::parse();
+
+    task::block_on(run(args))
 }
