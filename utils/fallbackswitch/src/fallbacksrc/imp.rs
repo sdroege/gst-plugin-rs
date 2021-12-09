@@ -1573,9 +1573,9 @@ impl FallbackSrc {
         let running_time = if let Some((_, start)) =
             pts.zip(segment.start()).filter(|(pts, start)| pts < start)
         {
-            Some(start)
+            segment.to_running_time(start)
         } else if let Some((_, stop)) = pts.zip(segment.stop()).filter(|(pts, stop)| pts >= stop) {
-            Some(stop)
+            segment.to_running_time(stop)
         } else {
             segment.to_running_time(pts)
         };
