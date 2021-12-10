@@ -105,7 +105,7 @@ struct VideoEncoder {
     element: gst::Element,
     filter: gst::Element,
     halved_framerate: gst::Fraction,
-    full_width: i32,
+    video_info: gst_video::VideoInfo,
     peer_id: String,
     mitigation_mode: WebRTCSinkMitigationMode,
     transceiver: gst_webrtc::WebRTCRTPTransceiver,
@@ -423,18 +423,12 @@ impl VideoEncoder {
     fn new(
         element: gst::Element,
         filter: gst::Element,
-        in_caps: &gst::Caps,
+        video_info: gst_video::VideoInfo,
         peer_id: &str,
         codec_name: &str,
         transceiver: gst_webrtc::WebRTCRTPTransceiver,
     ) -> Self {
-        let s = in_caps.structure(0).unwrap();
-
-        let halved_framerate = s
-            .get::<gst::Fraction>("framerate")
-            .unwrap()
-            .mul(gst::Fraction::new(1, 2));
-        let full_width = s.get::<i32>("width").unwrap();
+        let halved_framerate = video_info.fps().mul(gst::Fraction::new(1, 2));
 
         Self {
             factory_name: element.factory().unwrap().name().into(),
@@ -442,7 +436,7 @@ impl VideoEncoder {
             element,
             filter,
             halved_framerate,
-            full_width,
+            video_info,
             peer_id: peer_id.to_string(),
             mitigation_mode: WebRTCSinkMitigationMode::NONE,
             transceiver,
@@ -455,6 +449,20 @@ impl VideoEncoder {
             "x264enc" | "nvh264enc" => (self.element.property::<u32>("bitrate") * 1000) as i32,
             _ => unreachable!(),
         }
+    }
+
+    fn scale_height_round_2(&self, height: i32) -> i32 {
+        let ratio = gst_video::calculate_display_ratio(
+            self.video_info.width(),
+            self.video_info.height(),
+            self.video_info.par(),
+            gst::Fraction::new(1, 1),
+        )
+        .unwrap();
+
+        let width = height.mul_div_ceil(ratio.numer(), ratio.denom()).unwrap();
+
+        width + 1 >> 1 << 1
     }
 
     fn set_bitrate(&mut self, element: &super::WebRTCSink, bitrate: i32) {
@@ -476,21 +484,38 @@ impl VideoEncoder {
         // Hardcoded thresholds, may be tuned further in the future, and
         // adapted according to the codec in use
         if bitrate < 500000 {
-            s.set("width", 360i32.min(self.full_width));
+            let height = 360i32.min(self.video_info.height() as i32);
+            let width = self.scale_height_round_2(height);
+
+            s.set("height", height);
+            s.set("width", width);
             s.set("framerate", self.halved_framerate);
+
             self.mitigation_mode =
                 WebRTCSinkMitigationMode::DOWNSAMPLED | WebRTCSinkMitigationMode::DOWNSCALED;
         } else if bitrate < 1000000 {
-            s.set("width", 360i32.min(self.full_width));
+            let height = 360i32.min(self.video_info.height() as i32);
+            let width = self.scale_height_round_2(height);
+
+            s.set("height", height);
+            s.set("width", width);
             s.remove_field("framerate");
+
             self.mitigation_mode = WebRTCSinkMitigationMode::DOWNSCALED;
         } else if bitrate < 2000000 {
-            s.set("width", 720i32.min(self.full_width));
+            let height = 720i32.min(self.video_info.height() as i32);
+            let width = self.scale_height_round_2(height);
+
+            s.set("height", height);
+            s.set("width", width);
             s.remove_field("framerate");
+
             self.mitigation_mode = WebRTCSinkMitigationMode::DOWNSCALED;
         } else {
+            s.remove_field("height");
             s.remove_field("width");
             s.remove_field("framerate");
+
             self.mitigation_mode = WebRTCSinkMitigationMode::NONE;
         }
 
@@ -1004,10 +1029,11 @@ impl Consumer {
         pay_filter.set_property("caps", caps);
 
         if codec.is_video {
+            let video_info = gst_video::VideoInfo::from_caps(&webrtc_pad.in_caps)?;
             let mut enc = VideoEncoder::new(
                 enc.clone(),
                 raw_filter.clone(),
-                &webrtc_pad.in_caps,
+                video_info,
                 &self.peer_id,
                 codec.caps.structure(0).unwrap().name(),
                 transceiver,
@@ -1551,7 +1577,13 @@ impl WebRTCSink {
                     let this = Self::from_instance(&element);
                     match msg.view() {
                         gst::MessageView::Error(err) => {
-                            gst_error!(CAT, "Consumer {} error: {}", peer_id_clone, err.error());
+                            gst_error!(
+                                CAT,
+                                "Consumer {} error: {}, details: {:?}",
+                                peer_id_clone,
+                                err.error(),
+                                err.debug()
+                            );
                             let _ = this.remove_consumer(&element, &peer_id_clone, true);
                         }
                         gst::MessageView::StateChanged(state_changed) => {
@@ -2345,8 +2377,6 @@ impl ElementImpl for WebRTCSink {
         _name: Option<String>,
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
-        gst_error!(CAT, "pad being requested");
-
         if element.current_state() > gst::State::Ready {
             gst_error!(CAT, "element pads can only be requested before starting");
             return None;
