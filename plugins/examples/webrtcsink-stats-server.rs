@@ -111,8 +111,6 @@ async fn run(args: Args) -> Result<(), Error> {
     let listener = try_socket.expect("Failed to bind");
     info!("Listening on: {}", addr);
 
-    info!("Disable FEC: {}", args.disable_fec);
-
     let pipeline_str = format!(
         "webrtcsink name=ws do-retransmission={} do-fec={} congestion-control={} \
                                 uridecodebin name=d uri={} \

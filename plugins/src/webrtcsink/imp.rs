@@ -2217,6 +2217,11 @@ impl ObjectImpl for WebRTCSink {
                         match new_heuristic {
                             WebRTCSinkCongestionControl::Disabled => {
                                 consumer.congestion_controller.take();
+                                for encoder in &mut consumer.encoders {
+                                    encoder
+                                        .set_bitrate(&self.instance(), consumer.max_bitrate as i32);
+                                    encoder.transceiver.set_property("fec-percentage", 50u32);
+                                }
                             }
                             WebRTCSinkCongestionControl::Homegrown => {
                                 let _ = consumer.congestion_controller.insert(
