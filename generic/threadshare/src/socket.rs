@@ -24,12 +24,14 @@ use gst::{gst_debug, gst_error, gst_log};
 
 use once_cell::sync::Lazy;
 
-use std::io;
-
 use gio::prelude::*;
 
 use std::error;
 use std::fmt;
+use std::io;
+use std::net::UdpSocket;
+
+use crate::runtime::Async;
 
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
@@ -302,7 +304,7 @@ unsafe fn dup_socket(socket: usize) -> usize {
     socket
 }
 
-pub fn wrap_socket(socket: &tokio::net::UdpSocket) -> Result<GioSocketWrapper, gst::ErrorMessage> {
+pub fn wrap_socket(socket: &Async<UdpSocket>) -> Result<GioSocketWrapper, gst::ErrorMessage> {
     #[cfg(unix)]
     unsafe {
         let fd = libc::dup(socket.as_raw_fd());
@@ -328,9 +330,7 @@ pub fn wrap_socket(socket: &tokio::net::UdpSocket) -> Result<GioSocketWrapper, g
     }
     #[cfg(windows)]
     unsafe {
-        // FIXME: Needs https://github.com/tokio-rs/tokio/pull/806
-        // and https://github.com/carllerche/mio/pull/859
-        let fd = unreachable!(); //dup_socket(socket.as_raw_socket() as _) as _;
+        let fd = socket.as_raw_socket();
 
         // This is unsafe because it allows us to share the fd between the socket and the
         // GIO socket below, but safety of this is the job of the application

@@ -1,22 +1,8 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
 // Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
 //
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Library General Public
-// License as published by the Free Software Foundation; either
-// version 2 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// Library General Public License for more details.
-//
-// You should have received a copy of the GNU Library General Public
-// License along with this library; if not, write to the
-// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
-// Boston, MA 02110-1335, USA.
+// Take a look at the license at the top of the repository in the LICENSE file.
 
-use futures::channel::oneshot;
 use futures::prelude::*;
 
 use std::fmt;
@@ -26,53 +12,55 @@ use std::task::Poll;
 
 use super::context::Context;
 use super::TaskId;
-use super::{Handle, HandleWeak, Scheduler};
+use super::{Handle, Scheduler};
 
 #[derive(Debug)]
 pub struct JoinError(TaskId);
 
 impl fmt::Display for JoinError {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(fmt, "{:?} was Canceled", self.0)
+        write!(fmt, "{:?} was cancelled", self.0)
     }
 }
 
 impl std::error::Error for JoinError {}
 
 pub struct JoinHandle<T> {
-    receiver: oneshot::Receiver<T>,
-    handle: HandleWeak,
+    task: Option<async_task::Task<T>>,
     task_id: TaskId,
+    scheduler: Handle,
 }
 
 unsafe impl<T: Send> Send for JoinHandle<T> {}
 unsafe impl<T: Send> Sync for JoinHandle<T> {}
 
 impl<T> JoinHandle<T> {
-    pub(super) fn new(receiver: oneshot::Receiver<T>, handle: &Handle, task_id: TaskId) -> Self {
+    pub(super) fn new(task_id: TaskId, task: async_task::Task<T>, scheduler: &Handle) -> Self {
         JoinHandle {
-            receiver,
-            handle: handle.downgrade(),
+            task: Some(task),
             task_id,
+            scheduler: scheduler.clone(),
         }
     }
 
     pub fn is_current(&self) -> bool {
         if let Some((cur_scheduler, task_id)) = Scheduler::current().zip(TaskId::current()) {
-            self.handle.upgrade().map_or(false, |self_scheduler| {
-                self_scheduler == cur_scheduler && task_id == self.task_id
-            })
+            cur_scheduler == self.scheduler && task_id == self.task_id
         } else {
             false
         }
     }
 
-    pub fn context(&self) -> Option<Context> {
-        self.handle.upgrade().map(Context::from)
+    pub fn context(&self) -> Context {
+        Context::from(self.scheduler.clone())
     }
 
     pub fn task_id(&self) -> TaskId {
         self.task_id
+    }
+
+    pub fn cancel(mut self) {
+        let _ = self.task.take().map(|task| task.cancel());
     }
 }
 
@@ -84,22 +72,30 @@ impl<T> Future for JoinHandle<T> {
             panic!("Trying to join task {:?} from itself", self.as_ref());
         }
 
-        self.as_mut()
-            .receiver
-            .poll_unpin(cx)
-            .map_err(|_| JoinError(self.task_id))
+        if let Some(task) = self.as_mut().task.as_mut() {
+            // Unfortunately, we can't detect whether the task has panicked
+            // because the `async_task::Task` `Future` implementation
+            // `expect`s and we can't `panic::catch_unwind` here because of `&mut cx`.
+            // One solution for this would be to use our own `async_task` impl.
+            task.poll_unpin(cx).map(Ok)
+        } else {
+            Poll::Ready(Err(JoinError(self.task_id)))
+        }
+    }
+}
+
+impl<T> Drop for JoinHandle<T> {
+    fn drop(&mut self) {
+        if let Some(task) = self.task.take() {
+            task.detach();
+        }
     }
 }
 
 impl<T> fmt::Debug for JoinHandle<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let context_name = self
-            .handle
-            .upgrade()
-            .map(|handle| handle.context_name().to_owned());
-
         fmt.debug_struct("JoinHandle")
-            .field("context", &context_name)
+            .field("context", &self.scheduler.context_name())
             .field("task_id", &self.task_id)
             .finish()
     }

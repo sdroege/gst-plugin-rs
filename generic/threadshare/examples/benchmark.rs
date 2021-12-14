@@ -190,7 +190,7 @@ fn main() {
 
             if let Some(prev_reset_instant) = prev_reset_instant {
                 println!(
-                    "{:>5.1} / s / stream",
+                    "{:>6.2} / s / stream",
                     (count as f32) * throughput_factor
                         / ((reset_instant - prev_reset_instant).as_millis() as f32)
                 );

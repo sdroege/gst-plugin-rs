@@ -729,13 +729,13 @@ macro_rules! exec_action {
 
         let join_handle = {
             let mut task_inner = $task_inner.lock().unwrap();
-            let join_handle = $context.awake_and_spawn(action_fut);
+            let join_handle = $context.spawn_and_awake(action_fut);
             task_inner.spawned_task_id = Some(join_handle.task_id());
 
             join_handle
         };
 
-        let (this, res) = join_handle.map(|res| res.unwrap()).await;
+        let (this, res) = join_handle.await.unwrap();
         $self = this;
 
         match res {
@@ -989,7 +989,7 @@ impl StateMachine {
                     // Unprepare is not joined by an ack_rx but by joining the state machine
                     // handle, so we don't need to keep track of the spwaned_task_id
                     context
-                        .awake_and_spawn(async move {
+                        .spawn_and_awake(async move {
                             self.task_impl.unprepare().await;
 
                             while Context::current_has_sub_tasks() {
@@ -1094,13 +1094,13 @@ impl StateMachine {
 
         let join_handle = {
             let mut task_inner = task_inner.lock().unwrap();
-            let join_handle = context.awake_and_spawn(loop_fut);
+            let join_handle = context.spawn_and_awake(loop_fut);
             task_inner.spawned_task_id = Some(join_handle.task_id());
 
             join_handle
         };
 
-        join_handle.map(|res| res.unwrap()).await
+        join_handle.await.unwrap()
     }
 
     async fn run_loop(&mut self, task_inner: Arc<Mutex<TaskInner>>) -> Result<(), gst::FlowError> {
@@ -1601,7 +1601,7 @@ mod tests {
         let task = Task::default();
 
         let (mut prepare_sender, prepare_receiver) = mpsc::channel(1);
-        task.prepare(TaskPrepareTest { prepare_receiver }, context.clone())
+        task.prepare(TaskPrepareTest { prepare_receiver }, context)
             .unwrap();
 
         let start_ctx = Context::acquire("prepare_start_ok_requester", Duration::ZERO).unwrap();
@@ -2264,7 +2264,7 @@ mod tests {
                 async move {
                     gst_debug!(RUNTIME_CAT, "pause_from_loop: entering iteration");
 
-                    tokio::time::delay_for(Duration::from_millis(50)).await;
+                    crate::runtime::time::delay_for(Duration::from_millis(50)).await;
 
                     gst_debug!(RUNTIME_CAT, "pause_from_loop: pause from iteration");
                     assert_eq!(
@@ -2715,14 +2715,14 @@ mod tests {
         gst::init().unwrap();
 
         struct TaskTimerTest {
-            timer: Option<tokio::time::Delay>,
+            timer: Option<crate::runtime::Timer>,
             timer_elapsed_sender: Option<oneshot::Sender<()>>,
         }
 
         impl TaskImpl for TaskTimerTest {
             fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    self.timer = Some(tokio::time::delay_for(Duration::from_millis(50)));
+                    self.timer = Some(crate::runtime::time::delay_for(Duration::from_millis(50)));
                     gst_debug!(RUNTIME_CAT, "start_timer: started");
                     Ok(())
                 }

@@ -1,30 +1,19 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
 // Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
 //
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Library General Public
-// License as published by the Free Software Foundation; either
-// version 2 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// Library General Public License for more details.
-//
-// You should have received a copy of the GNU Library General Public
-// License along with this library; if not, write to the
-// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
-// Boston, MA 02110-1335, USA.
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 use futures::prelude::*;
 
-use gst::{gst_debug, gst_trace};
+use gst::{gst_debug, gst_error, gst_trace, gst_warning};
 
 use once_cell::sync::Lazy;
 
 use std::collections::HashMap;
 use std::io;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::task::{self, Poll};
 use std::time::Duration;
 
 use super::{Handle, HandleWeak, JoinHandle, Scheduler, SubTaskOutput, TaskId};
@@ -55,7 +44,12 @@ static CONTEXTS: Lazy<Mutex<HashMap<Arc<str>, ContextWeak>>> =
 ///
 /// Note that you must not pass any futures here that wait for the currently active task in one way
 /// or another as this would deadlock!
-pub fn block_on_or_add_sub_task<Fut: Future + Send + 'static>(future: Fut) -> Option<Fut::Output> {
+#[track_caller]
+pub fn block_on_or_add_sub_task<Fut>(future: Fut) -> Option<Fut::Output>
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
     if let Some((cur_context, cur_task_id)) = Context::current_task() {
         gst_debug!(
             RUNTIME_CAT,
@@ -84,18 +78,45 @@ pub fn block_on_or_add_sub_task<Fut: Future + Send + 'static>(future: Fut) -> Op
 /// # Panics
 ///
 /// This function panics if called within a [`Context`] thread.
-pub fn block_on<F: Future>(future: F) -> F::Output {
-    assert!(!Context::is_context_thread());
+#[track_caller]
+pub fn block_on<Fut>(future: Fut) -> Fut::Output
+where
+    Fut: Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    if let Some(context) = Context::current() {
+        let msg = format!("Attempt to block within Context {}", context.name());
+        gst_error!(RUNTIME_CAT, "{}", msg);
+        panic!("{}", msg);
+    }
 
     // Not running in a Context thread so we can block
     gst_debug!(RUNTIME_CAT, "Blocking on new dummy context");
     Scheduler::block_on(future)
 }
 
-/// Yields execution back to the runtime
+/// Yields execution back to the runtime.
 #[inline]
-pub async fn yield_now() {
-    tokio::task::yield_now().await;
+pub fn yield_now() -> YieldNow {
+    YieldNow::default()
+}
+
+#[derive(Debug, Default)]
+#[must_use = "futures do nothing unless you `.await` or poll them"]
+pub struct YieldNow(bool);
+
+impl Future for YieldNow {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
+        if !self.0 {
+            self.0 = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        } else {
+            Poll::Ready(())
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -178,10 +199,39 @@ impl Context {
         Scheduler::current().map(Context).zip(TaskId::current())
     }
 
-    pub fn enter<F, R>(&self, f: F) -> R
+    /// Executes the provided function relatively to this [`Context`].
+    ///
+    /// Usefull to initialze i/o sources and timers from outside
+    /// of a [`Context`].
+    ///
+    /// # Panic
+    ///
+    /// This will block current thread and would panic if run
+    /// from the [`Context`].
+    #[track_caller]
+    pub fn enter<F, O>(&self, f: F) -> O
     where
-        F: FnOnce() -> R,
+        F: FnOnce() -> O + Send + 'static,
+        O: Send + 'static,
     {
+        if let Some(cur) = Context::current().as_ref() {
+            if cur == self {
+                panic!(
+                    "Attempt to enter Context {} within itself, this would deadlock",
+                    self.name()
+                );
+            } else {
+                gst_warning!(
+                    RUNTIME_CAT,
+                    "Entering Context {} within {}",
+                    self.name(),
+                    cur.name()
+                );
+            }
+        } else {
+            gst_debug!(RUNTIME_CAT, "Entering Context {}", self.name());
+        }
+
         self.0.enter(f)
     }
 
@@ -190,15 +240,15 @@ impl Context {
         Fut: Future + Send + 'static,
         Fut::Output: Send + 'static,
     {
-        self.0.spawn(future, false)
+        self.0.spawn(future)
     }
 
-    pub fn awake_and_spawn<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
+    pub fn spawn_and_awake<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
     where
         Fut: Future + Send + 'static,
         Fut::Output: Send + 'static,
     {
-        self.0.spawn(future, true)
+        self.0.spawn_and_awake(future)
     }
 
     pub fn current_has_sub_tasks() -> bool {
@@ -256,6 +306,7 @@ mod tests {
 
     use super::super::Scheduler;
     use super::Context;
+    use crate::runtime::Async;
 
     type Item = i32;
 
@@ -301,24 +352,27 @@ mod tests {
 
     #[test]
     fn context_task_id() {
+        use super::TaskId;
+
         gst::init().unwrap();
 
         let context = Context::acquire("context_task_id", SLEEP_DURATION).unwrap();
         let join_handle = context.spawn(async {
             let (ctx, task_id) = Context::current_task().unwrap();
             assert_eq!(ctx.name(), "context_task_id");
-            assert_eq!(task_id, super::TaskId(0));
+            assert_eq!(task_id, TaskId(0));
         });
         futures::executor::block_on(join_handle).unwrap();
+        // TaskId(0) is vacant again
 
         let ctx_weak = context.downgrade();
         let join_handle = context.spawn(async move {
             let (_ctx, task_id) = Context::current_task().unwrap();
-            assert_eq!(task_id, super::TaskId(1));
+            assert_eq!(task_id, TaskId(0));
 
             let res = Context::add_sub_task(async move {
                 let (_ctx, task_id) = Context::current_task().unwrap();
-                assert_eq!(task_id, super::TaskId(1));
+                assert_eq!(task_id, TaskId(0));
                 Ok(())
             });
             assert!(res.is_ok());
@@ -328,18 +382,18 @@ mod tests {
                 .unwrap()
                 .spawn(async {
                     let (_ctx, task_id) = Context::current_task().unwrap();
-                    assert_eq!(task_id, super::TaskId(2));
+                    assert_eq!(task_id, TaskId(1));
 
                     let res = Context::add_sub_task(async move {
                         let (_ctx, task_id) = Context::current_task().unwrap();
-                        assert_eq!(task_id, super::TaskId(2));
+                        assert_eq!(task_id, TaskId(1));
                         Ok(())
                     });
                     assert!(res.is_ok());
                     assert!(Context::drain_sub_tasks().await.is_ok());
 
                     let (_ctx, task_id) = Context::current_task().unwrap();
-                    assert_eq!(task_id, super::TaskId(2));
+                    assert_eq!(task_id, TaskId(1));
                 })
                 .await
                 .unwrap();
@@ -347,7 +401,7 @@ mod tests {
             assert!(Context::drain_sub_tasks().await.is_ok());
 
             let (_ctx, task_id) = Context::current_task().unwrap();
-            assert_eq!(task_id, super::TaskId(1));
+            assert_eq!(task_id, TaskId(0));
         });
         futures::executor::block_on(join_handle).unwrap();
     }
@@ -417,18 +471,17 @@ mod tests {
 
         let bytes_sent = crate::runtime::executor::block_on(context.spawn(async {
             let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5001);
-            let socket = UdpSocket::bind(saddr).unwrap();
-            let mut socket = tokio::net::UdpSocket::from_std(socket).unwrap();
-            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4000);
+            let socket = Async::<UdpSocket>::bind(saddr).unwrap();
+            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4001);
             socket.send_to(&[0; 10], saddr).await.unwrap()
         }))
         .unwrap();
         assert_eq!(bytes_sent, 10);
 
         let elapsed = crate::runtime::executor::block_on(context.spawn(async {
-            let now = Instant::now();
+            let start = Instant::now();
             crate::runtime::time::delay_for(DELAY).await;
-            now.elapsed()
+            start.elapsed()
         }))
         .unwrap();
         // Due to throttling, `Delay` may be fired earlier
@@ -436,16 +489,19 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn block_on_from_context() {
         gst::init().unwrap();
 
         let context = Context::acquire("block_on_from_context", SLEEP_DURATION).unwrap();
-        let join_handle = context.spawn(async {
-            crate::runtime::executor::block_on(async {
-                crate::runtime::time::delay_for(DELAY).await;
-            });
-        });
+
         // Panic: attempt to `runtime::executor::block_on` within a `Context` thread
+        let join_handle = context.spawn(async {
+            crate::runtime::executor::block_on(crate::runtime::time::delay_for(DELAY));
+        });
+
+        // Panic: task has failed
+        // (enforced by `async-task`, see comment in `Future` impl for `JoinHanlde`).
         futures::executor::block_on(join_handle).unwrap_err();
     }
 
@@ -454,26 +510,22 @@ mod tests {
         gst::init().unwrap();
 
         let elapsed = crate::runtime::executor::block_on(async {
-            let context = Context::acquire("enter_context_from_tokio", SLEEP_DURATION).unwrap();
-            let mut socket = context
+            let context = Context::acquire("enter_context_from_executor", SLEEP_DURATION).unwrap();
+            let socket = context
                 .enter(|| {
                     let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5002);
-                    let socket = UdpSocket::bind(saddr).unwrap();
-                    tokio::net::UdpSocket::from_std(socket)
+                    Async::<UdpSocket>::bind(saddr)
                 })
                 .unwrap();
 
-            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4000);
+            let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4002);
             let bytes_sent = socket.send_to(&[0; 10], saddr).await.unwrap();
             assert_eq!(bytes_sent, 10);
 
-            context.enter(|| {
-                futures::executor::block_on(async {
-                    let now = Instant::now();
-                    crate::runtime::time::delay_for(DELAY).await;
-                    now.elapsed()
-                })
-            })
+            let (start, timer) =
+                context.enter(|| (Instant::now(), crate::runtime::time::delay_for(DELAY)));
+            timer.await;
+            start.elapsed()
         });
 
         // Due to throttling, `Delay` may be fired earlier
@@ -485,24 +537,22 @@ mod tests {
         gst::init().unwrap();
 
         let context = Context::acquire("enter_context_from_sync", SLEEP_DURATION).unwrap();
-        let mut socket = context
+        let socket = context
             .enter(|| {
                 let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5003);
-                let socket = UdpSocket::bind(saddr).unwrap();
-                tokio::net::UdpSocket::from_std(socket)
+                Async::<UdpSocket>::bind(saddr)
             })
             .unwrap();
 
-        let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4000);
+        let saddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4003);
         let bytes_sent = futures::executor::block_on(socket.send_to(&[0; 10], saddr)).unwrap();
         assert_eq!(bytes_sent, 10);
 
-        let elapsed = context.enter(|| {
-            futures::executor::block_on(async {
-                let now = Instant::now();
-                crate::runtime::time::delay_for(DELAY).await;
-                now.elapsed()
-            })
+        let (start, timer) =
+            context.enter(|| (Instant::now(), crate::runtime::time::delay_for(DELAY)));
+        let elapsed = crate::runtime::executor::block_on(async move {
+            timer.await;
+            start.elapsed()
         });
         // Due to throttling, `Delay` may be fired earlier
         assert!(elapsed + SLEEP_DURATION / 2 >= DELAY);

@@ -29,14 +29,14 @@ use once_cell::sync::Lazy;
 
 use std::i32;
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 use std::u16;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task};
+use crate::runtime::{Async, Context, PadSrc, PadSrcRef, PadSrcWeak, Task};
 
 use crate::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead};
 
@@ -83,10 +83,10 @@ impl Default for Settings {
 }
 
 #[derive(Debug)]
-struct UdpReader(tokio::net::UdpSocket);
+struct UdpReader(Async<UdpSocket>);
 
 impl UdpReader {
-    fn new(socket: tokio::net::UdpSocket) -> Self {
+    fn new(socket: Async<UdpSocket>) -> Self {
         UdpReader(socket)
     }
 }
@@ -438,8 +438,6 @@ impl UdpSrc {
             })?;
 
         let socket = if let Some(ref wrapped_socket) = settings_guard.socket {
-            use std::net::UdpSocket;
-
             let socket: UdpSocket;
 
             #[cfg(unix)]
@@ -452,10 +450,10 @@ impl UdpSrc {
             }
 
             let socket = context.enter(|| {
-                tokio::net::UdpSocket::from_std(socket).map_err(|err| {
+                Async::<UdpSocket>::try_from(socket).map_err(|err| {
                     gst::error_msg!(
                         gst::ResourceError::OpenRead,
-                        ["Failed to setup socket for tokio: {}", err]
+                        ["Failed to setup Async socket: {}", err]
                     )
                 })
             })?;
@@ -555,10 +553,10 @@ impl UdpSrc {
             })?;
 
             let socket = context.enter(|| {
-                tokio::net::UdpSocket::from_std(socket.into()).map_err(|err| {
+                Async::<UdpSocket>::try_from(socket).map_err(|err| {
                     gst::error_msg!(
                         gst::ResourceError::OpenRead,
-                        ["Failed to setup socket for tokio: {}", err]
+                        ["Failed to setup Async socket: {}", err]
                     )
                 })
             })?;
@@ -568,7 +566,8 @@ impl UdpSrc {
                 match addr {
                     IpAddr::V4(addr) => {
                         socket
-                            .join_multicast_v4(addr, Ipv4Addr::new(0, 0, 0, 0))
+                            .as_ref()
+                            .join_multicast_v4(&addr, &Ipv4Addr::new(0, 0, 0, 0))
                             .map_err(|err| {
                                 gst::error_msg!(
                                     gst::ResourceError::OpenRead,
@@ -577,7 +576,7 @@ impl UdpSrc {
                             })?;
                     }
                     IpAddr::V6(addr) => {
-                        socket.join_multicast_v6(&addr, 0).map_err(|err| {
+                        socket.as_ref().join_multicast_v6(&addr, 0).map_err(|err| {
                             gst::error_msg!(
                                 gst::ResourceError::OpenRead,
                                 ["Failed to join multicast group: {}", err]
@@ -592,7 +591,7 @@ impl UdpSrc {
             socket
         };
 
-        let port: i32 = socket.local_addr().unwrap().port().into();
+        let port: i32 = socket.as_ref().local_addr().unwrap().port().into();
         let settings = if settings_guard.port != port {
             settings_guard.port = port;
             let settings = settings_guard.clone();
@@ -834,7 +833,7 @@ impl ObjectImpl for UdpSrc {
                 settings.context = value
                     .get::<Option<String>>()
                     .expect("type checked upstream")
-                    .unwrap_or_else(|| "".into());
+                    .unwrap_or_else(|| DEFAULT_CONTEXT.into());
             }
             "context-wait" => {
                 settings.context_wait = Duration::from_millis(

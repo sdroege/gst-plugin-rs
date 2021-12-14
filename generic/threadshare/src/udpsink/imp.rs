@@ -31,11 +31,11 @@ use gst::{
 use once_cell::sync::Lazy;
 
 use crate::runtime::prelude::*;
-use crate::runtime::{self, Context, PadSink, PadSinkRef, Task};
+use crate::runtime::{self, Async, Context, PadSink, PadSinkRef, Task};
 use crate::socket::{wrap_socket, GioSocketWrapper};
 
 use std::mem;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Mutex as StdMutex;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -124,8 +124,8 @@ struct UdpSinkPadHandlerInner {
     sync: bool,
     segment: Option<gst::Segment>,
     latency: Option<gst::ClockTime>,
-    socket: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
-    socket_v6: Arc<Mutex<Option<tokio::net::UdpSocket>>>,
+    socket: Arc<Mutex<Option<Async<UdpSocket>>>>,
+    socket_v6: Arc<Mutex<Option<Async<UdpSocket>>>>,
     #[allow(clippy::rc_buffer)]
     clients: Arc<Vec<SocketAddr>>,
     clients_to_configure: Vec<SocketAddr>,
@@ -202,8 +202,8 @@ impl UdpSinkPadHandlerInner {
 
 #[derive(Debug)]
 enum SocketQualified {
-    Ipv4(tokio::net::UdpSocket),
-    Ipv6(tokio::net::UdpSocket),
+    Ipv4(Async<UdpSocket>),
+    Ipv6(Async<UdpSocket>),
 }
 
 #[derive(Clone, Debug)]
@@ -259,8 +259,8 @@ impl UdpSinkPadHandler {
     fn configure_client(
         &self,
         settings: &Settings,
-        socket: &mut Option<tokio::net::UdpSocket>,
-        socket_v6: &mut Option<tokio::net::UdpSocket>,
+        socket: &mut Option<Async<UdpSocket>>,
+        socket_v6: &mut Option<Async<UdpSocket>>,
         client: &SocketAddr,
     ) -> Result<(), gst::ErrorMessage> {
         if client.ip().is_multicast() {
@@ -269,7 +269,8 @@ impl UdpSinkPadHandler {
                     if let Some(socket) = socket.as_mut() {
                         if settings.auto_multicast {
                             socket
-                                .join_multicast_v4(addr, Ipv4Addr::new(0, 0, 0, 0))
+                                .as_ref()
+                                .join_multicast_v4(&addr, &Ipv4Addr::new(0, 0, 0, 0))
                                 .map_err(|err| {
                                     error_msg!(
                                         gst::ResourceError::OpenWrite,
@@ -278,7 +279,7 @@ impl UdpSinkPadHandler {
                                 })?;
                         }
                         if settings.multicast_loop {
-                            socket.set_multicast_loop_v4(true).map_err(|err| {
+                            socket.as_ref().set_multicast_loop_v4(true).map_err(|err| {
                                 error_msg!(
                                     gst::ResourceError::OpenWrite,
                                     ["Failed to set multicast loop: {}", err]
@@ -286,6 +287,7 @@ impl UdpSinkPadHandler {
                             })?;
                         }
                         socket
+                            .as_ref()
                             .set_multicast_ttl_v4(settings.ttl_mc)
                             .map_err(|err| {
                                 error_msg!(
@@ -298,7 +300,7 @@ impl UdpSinkPadHandler {
                 IpAddr::V6(addr) => {
                     if let Some(socket) = socket_v6.as_mut() {
                         if settings.auto_multicast {
-                            socket.join_multicast_v6(&addr, 0).map_err(|err| {
+                            socket.as_ref().join_multicast_v6(&addr, 0).map_err(|err| {
                                 error_msg!(
                                     gst::ResourceError::OpenWrite,
                                     ["Failed to join multicast group: {}", err]
@@ -306,7 +308,7 @@ impl UdpSinkPadHandler {
                             })?;
                         }
                         if settings.multicast_loop {
-                            socket.set_multicast_loop_v6(true).map_err(|err| {
+                            socket.as_ref().set_multicast_loop_v6(true).map_err(|err| {
                                 error_msg!(
                                     gst::ResourceError::OpenWrite,
                                     ["Failed to set multicast loop: {}", err]
@@ -321,7 +323,7 @@ impl UdpSinkPadHandler {
             match client.ip() {
                 IpAddr::V4(_) => {
                     if let Some(socket) = socket.as_mut() {
-                        socket.set_ttl(settings.ttl).map_err(|err| {
+                        socket.as_ref().set_ttl(settings.ttl).map_err(|err| {
                             error_msg!(
                                 gst::ResourceError::OpenWrite,
                                 ["Failed to set unicast ttl: {}", err]
@@ -331,7 +333,7 @@ impl UdpSinkPadHandler {
                 }
                 IpAddr::V6(_) => {
                     if let Some(socket) = socket_v6.as_mut() {
-                        socket.set_ttl(settings.ttl).map_err(|err| {
+                        socket.as_ref().set_ttl(settings.ttl).map_err(|err| {
                             error_msg!(
                                 gst::ResourceError::OpenWrite,
                                 ["Failed to set unicast ttl: {}", err]
@@ -348,8 +350,8 @@ impl UdpSinkPadHandler {
     fn unconfigure_client(
         &self,
         settings: &Settings,
-        socket: &mut Option<tokio::net::UdpSocket>,
-        socket_v6: &mut Option<tokio::net::UdpSocket>,
+        socket: &mut Option<Async<UdpSocket>>,
+        socket_v6: &mut Option<Async<UdpSocket>>,
         client: &SocketAddr,
     ) -> Result<(), gst::ErrorMessage> {
         if client.ip().is_multicast() {
@@ -358,7 +360,8 @@ impl UdpSinkPadHandler {
                     if let Some(socket) = socket.as_mut() {
                         if settings.auto_multicast {
                             socket
-                                .leave_multicast_v4(addr, Ipv4Addr::new(0, 0, 0, 0))
+                                .as_ref()
+                                .leave_multicast_v4(&addr, &Ipv4Addr::new(0, 0, 0, 0))
                                 .map_err(|err| {
                                     error_msg!(
                                         gst::ResourceError::OpenWrite,
@@ -371,12 +374,15 @@ impl UdpSinkPadHandler {
                 IpAddr::V6(addr) => {
                     if let Some(socket) = socket_v6.as_mut() {
                         if settings.auto_multicast {
-                            socket.leave_multicast_v6(&addr, 0).map_err(|err| {
-                                error_msg!(
-                                    gst::ResourceError::OpenWrite,
-                                    ["Failed to join multicast group: {}", err]
-                                )
-                            })?;
+                            socket
+                                .as_ref()
+                                .leave_multicast_v6(&addr, 0)
+                                .map_err(|err| {
+                                    error_msg!(
+                                        gst::ResourceError::OpenWrite,
+                                        ["Failed to join multicast group: {}", err]
+                                    )
+                                })?;
                         }
                     }
                 }
@@ -485,7 +491,7 @@ impl UdpSinkPadHandler {
 
             if let Some(socket) = socket.as_mut() {
                 gst_log!(CAT, obj: element, "Sending to {:?}", &client);
-                socket.send_to(&data, client).await.map_err(|err| {
+                socket.send_to(&data, *client).await.map_err(|err| {
                     element_error!(
                         element,
                         gst::StreamError::Failed,
@@ -524,7 +530,9 @@ impl UdpSinkPadHandler {
         let now = element.current_running_time();
 
         match running_time.into().opt_checked_sub(now) {
-            Ok(Some(delay)) => runtime::time::delay_for(delay.into()).await,
+            Ok(Some(delay)) => {
+                let _ = runtime::time::delay_for(delay.into()).await;
+            }
             _ => runtime::executor::yield_now().await,
         }
     }
@@ -731,13 +739,13 @@ impl UdpSink {
         let socket_qualified: SocketQualified;
 
         if let Some(ref wrapped_socket) = wrapped_socket {
-            let socket = wrapped_socket.get();
+            let socket: UdpSocket = wrapped_socket.get();
 
             let socket = context.enter(|| {
-                tokio::net::UdpSocket::from_std(socket).map_err(|err| {
+                Async::<UdpSocket>::try_from(socket).map_err(|err| {
                     error_msg!(
                         gst::ResourceError::OpenWrite,
-                        ["Failed to setup socket for tokio: {}", err]
+                        ["Failed to setup Async socket: {}", err]
                     )
                 })
             })?;
@@ -811,10 +819,10 @@ impl UdpSink {
             })?;
 
             let socket = context.enter(|| {
-                tokio::net::UdpSocket::from_std(socket.into()).map_err(|err| {
+                Async::<UdpSocket>::try_from(socket).map_err(|err| {
                     error_msg!(
                         gst::ResourceError::OpenWrite,
-                        ["Failed to setup socket for tokio: {}", err]
+                        ["Failed to setup Async socket: {}", err]
                     )
                 })
             })?;
@@ -1253,7 +1261,7 @@ impl ObjectImpl for UdpSink {
                 settings.context = value
                     .get::<Option<String>>()
                     .expect("type checked upstream")
-                    .unwrap_or_else(|| "".into());
+                    .unwrap_or_else(|| DEFAULT_CONTEXT.into());
             }
             "context-wait" => {
                 settings.context_wait = Duration::from_millis(

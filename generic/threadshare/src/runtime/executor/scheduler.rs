@@ -1,119 +1,147 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
 // Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
 //
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Library General Public
-// License as published by the Free Software Foundation; either
-// version 2 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// Library General Public License for more details.
-//
-// You should have received a copy of the GNU Library General Public
-// License along with this library; if not, write to the
-// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
-// Boston, MA 02110-1335, USA.
+// Take a look at the license at the top of the repository in the LICENSE file.
+
+use concurrent_queue::ConcurrentQueue;
 
 use futures::channel::oneshot;
+use futures::pin_mut;
 
 use gio::glib::clone::Downgrade;
-use gst::{gst_debug, gst_trace};
+use gst::{gst_debug, gst_error, gst_trace, gst_warning};
 
 use std::cell::RefCell;
 use std::future::Future;
+use std::panic;
 use std::sync::mpsc as sync_mpsc;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Condvar, Mutex, Weak};
+use std::task::Poll;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use super::task::{SubTaskOutput, TaskFuture, TaskId, TaskQueue};
-use super::{CallOnDrop, JoinHandle};
+use waker_fn::waker_fn;
+
+use super::task::{SubTaskOutput, TaskId, TaskQueue};
+use super::{CallOnDrop, JoinHandle, Reactor, Source};
 use crate::runtime::RUNTIME_CAT;
 
 thread_local! {
-    static CURRENT_SCHEDULER: RefCell<Option<Weak<Scheduler>>> = RefCell::new(None);
+    static CURRENT_SCHEDULER: RefCell<Option<HandleWeak>> = RefCell::new(None);
 }
+
+#[derive(Debug)]
+struct CleanUpOps(Arc<Source>);
 
 #[derive(Debug)]
 pub(super) struct Scheduler {
     context_name: Arc<str>,
     max_throttling: Duration,
-    task_queue: Mutex<TaskQueue>,
-    rt_handle: Mutex<tokio::runtime::Handle>,
-    shutdown: Mutex<Option<SchedulerShutdown>>,
+    tasks: TaskQueue,
+    cleanup_ops: ConcurrentQueue<CleanUpOps>,
+    must_awake: Mutex<bool>,
+    must_awake_cvar: Condvar,
 }
 
 impl Scheduler {
     pub const DUMMY_NAME: &'static str = "DUMMY";
 
     pub fn start(context_name: &str, max_throttling: Duration) -> Handle {
-        let context_name = Arc::from(context_name);
+        // Name the thread so that it appears in panic messages.
+        let thread = thread::Builder::new().name(context_name.to_string());
 
         let (handle_sender, handle_receiver) = sync_mpsc::channel();
         let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+        let context_name = Arc::from(context_name);
         let thread_ctx_name = Arc::clone(&context_name);
-        let join = thread::spawn(move || {
-            gst_debug!(
-                RUNTIME_CAT,
-                "Started Scheduler thread for Context '{}'",
-                thread_ctx_name
-            );
+        let join = thread
+            .spawn(move || {
+                gst_debug!(
+                    RUNTIME_CAT,
+                    "Started Scheduler thread for Context {}",
+                    thread_ctx_name
+                );
 
-            let (mut rt, handle) = Scheduler::init(thread_ctx_name, max_throttling);
-            handle_sender.send(handle.clone()).unwrap();
+                let handle = Scheduler::init(Arc::clone(&thread_ctx_name), max_throttling);
+                let this = Arc::clone(&handle.0.scheduler);
+                handle_sender.send(handle.clone()).unwrap();
 
-            let _ = rt.block_on(shutdown_receiver);
-        });
+                match this.block_on_priv(shutdown_receiver) {
+                    Ok(_) => {
+                        gst_debug!(
+                            RUNTIME_CAT,
+                            "Scheduler thread shut down for Context {}",
+                            thread_ctx_name
+                        );
+                    }
+                    Err(e) => {
+                        gst_error!(
+                            RUNTIME_CAT,
+                            "Scheduler thread shut down due to an error within Context {}",
+                            thread_ctx_name
+                        );
+
+                        // We are shutting down on our own initiative
+                        if let Ok(mut shutdown) = handle.0.shutdown.lock() {
+                            shutdown.clear();
+                        }
+
+                        panic::resume_unwind(e);
+                    }
+                }
+            })
+            .expect("Failed to spawn Scheduler thread");
 
         let handle = handle_receiver.recv().expect("Context thread init failed");
-        *handle.0.shutdown.lock().unwrap() = Some(SchedulerShutdown {
-            context_name,
-            sender: Some(shutdown_sender),
-            join: Some(join),
-        });
+        handle.set_shutdown(shutdown_sender, join);
 
         handle
     }
 
-    fn init(context_name: Arc<str>, max_throttling: Duration) -> (tokio::runtime::Runtime, Handle) {
-        let runtime = tokio::runtime::Builder::new()
-            .basic_scheduler()
-            .enable_all()
-            .max_throttling(max_throttling)
-            .build()
-            .expect("Couldn't build the runtime");
+    fn init(context_name: Arc<str>, max_throttling: Duration) -> Handle {
+        let handle = CURRENT_SCHEDULER.with(|cur_scheduler| {
+            let mut cur_scheduler = cur_scheduler.borrow_mut();
+            if cur_scheduler.is_some() {
+                panic!("Attempt to initialize an Scheduler on thread where another Scheduler is running.");
+            }
 
-        let scheduler = Arc::new(Scheduler {
-            context_name: context_name.clone(),
-            max_throttling,
-            task_queue: Mutex::new(TaskQueue::new(context_name)),
-            rt_handle: Mutex::new(runtime.handle().clone()),
-            shutdown: Mutex::new(None),
+            let handle = Handle::new(Arc::new(Scheduler {
+                context_name: context_name.clone(),
+                max_throttling,
+                tasks: TaskQueue::new(context_name),
+                cleanup_ops: ConcurrentQueue::bounded(1000),
+                must_awake: Mutex::new(false),
+                must_awake_cvar: Condvar::new(),
+            }));
+
+            *cur_scheduler = Some(handle.downgrade());
+
+            handle
         });
 
-        CURRENT_SCHEDULER.with(|cur_scheduler| {
-            *cur_scheduler.borrow_mut() = Some(scheduler.downgrade());
-        });
+        Reactor::init(handle.max_throttling());
 
-        (runtime, scheduler.into())
+        handle
     }
 
-    pub fn block_on<F: Future>(future: F) -> <F as Future>::Output {
+    pub fn block_on<F>(future: F) -> F::Output
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
         assert!(
             !Scheduler::is_scheduler_thread(),
-            "Attempt at blocking on from an existing Scheduler thread."
+            "Attempt to block within an existing Scheduler thread."
         );
-        let (mut rt, handle) = Scheduler::init(Scheduler::DUMMY_NAME.into(), Duration::ZERO);
+        let handle = Scheduler::init(Scheduler::DUMMY_NAME.into(), Duration::ZERO);
+        let this = Arc::clone(&handle.0.scheduler);
 
-        let handle_clone = handle.clone();
-        let task = handle.0.task_queue.lock().unwrap().add(async move {
+        let (task_id, task) = this.tasks.add(async move {
             let res = future.await;
 
             let task_id = TaskId::current().unwrap();
-            while handle_clone.has_sub_tasks(task_id) {
-                if handle_clone.drain_sub_tasks(task_id).await.is_err() {
+            while handle.has_sub_tasks(task_id) {
+                if handle.drain_sub_tasks(task_id).await.is_err() {
                     break;
                 }
             }
@@ -121,8 +149,7 @@ impl Scheduler {
             res
         });
 
-        let task_id = task.id();
-        gst_trace!(RUNTIME_CAT, "Blocking on current thread with {:?}", task_id,);
+        gst_trace!(RUNTIME_CAT, "Blocking on current thread with {:?}", task_id);
 
         let _guard = CallOnDrop::new(|| {
             gst_trace!(
@@ -130,71 +157,199 @@ impl Scheduler {
                 "Blocking on current thread with {:?} done",
                 task_id,
             );
-
-            handle.remove_task(task_id);
         });
 
-        rt.block_on(task)
+        match this.block_on_priv(task) {
+            Ok(res) => res,
+            Err(e) => {
+                gst_error!(
+                    RUNTIME_CAT,
+                    "Panic blocking on Context {}",
+                    &Scheduler::DUMMY_NAME
+                );
+
+                panic::resume_unwind(e);
+            }
+        }
     }
 
-    pub(super) fn is_scheduler_thread() -> bool {
+    fn block_on_priv<F>(&self, future: F) -> std::thread::Result<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let waker = waker_fn(|| ());
+        let cx = &mut std::task::Context::from_waker(&waker);
+        pin_mut!(future);
+
+        let _guard = CallOnDrop::new(|| Scheduler::close(Arc::clone(&self.context_name)));
+
+        let mut last;
+        loop {
+            last = Instant::now();
+
+            if let Poll::Ready(t) = future.as_mut().poll(cx) {
+                break Ok(t);
+            }
+
+            Reactor::with_mut(|reactor| {
+                while let Ok(op) = self.cleanup_ops.pop() {
+                    let _ = reactor.remove_io(&op.0);
+                }
+
+                reactor.react().ok()
+            });
+
+            loop {
+                match self.tasks.pop_runnable() {
+                    Err(_) => break,
+                    Ok(runnable) => {
+                        panic::catch_unwind(|| runnable.run()).map_err(|err| {
+                            gst_error!(
+                                RUNTIME_CAT,
+                                "A task has panicked within Context {}",
+                                self.context_name
+                            );
+
+                            err
+                        })?;
+                    }
+                }
+            }
+
+            let mut must_awake = self.must_awake.lock().unwrap();
+            let mut must_awake = loop {
+                if let Some(wait_duration) = self.max_throttling.checked_sub(last.elapsed()) {
+                    let result = self
+                        .must_awake_cvar
+                        .wait_timeout(must_awake, wait_duration)
+                        .unwrap();
+
+                    must_awake = result.0;
+                    if *must_awake {
+                        break must_awake;
+                    }
+                } else {
+                    break must_awake;
+                }
+            };
+
+            *must_awake = false;
+        }
+    }
+
+    fn wake_up(&self) {
+        let mut must_awake = self.must_awake.lock().unwrap();
+        *must_awake = true;
+        self.must_awake_cvar.notify_one();
+    }
+
+    fn close(context_name: Arc<str>) {
+        gst_trace!(
+            RUNTIME_CAT,
+            "Closing Scheduler for Context {}",
+            context_name,
+        );
+
+        Reactor::close();
+
+        let _ = CURRENT_SCHEDULER.try_with(|cur_scheduler| {
+            *cur_scheduler.borrow_mut() = None;
+        });
+    }
+
+    pub fn is_scheduler_thread() -> bool {
         CURRENT_SCHEDULER.with(|cur_scheduler| cur_scheduler.borrow().is_some())
     }
 
-    pub(super) fn current() -> Option<Handle> {
+    pub fn current() -> Option<Handle> {
         CURRENT_SCHEDULER.with(|cur_scheduler| {
             cur_scheduler
                 .borrow()
                 .as_ref()
-                .and_then(Weak::upgrade)
-                .map(Handle::from)
+                .and_then(HandleWeak::upgrade)
+        })
+    }
+
+    pub fn is_current(&self) -> bool {
+        CURRENT_SCHEDULER.with(|cur_scheduler| {
+            cur_scheduler
+                .borrow()
+                .as_ref()
+                .and_then(HandleWeak::upgrade)
+                .map_or(false, |cur| {
+                    std::ptr::eq(self, Arc::as_ptr(&cur.0.scheduler))
+                })
         })
     }
 }
 
 impl Drop for Scheduler {
     fn drop(&mut self) {
-        // No more strong handlers point to this
-        // Scheduler, so remove its thread local key.
-        let _ = CURRENT_SCHEDULER.try_with(|cur_scheduler| {
-            *cur_scheduler.borrow_mut() = None;
-        });
-
         gst_debug!(
             RUNTIME_CAT,
-            "Terminated: Scheduler for Context '{}'",
+            "Terminated: Scheduler for Context {}",
             self.context_name
         );
     }
 }
 
 #[derive(Debug)]
-pub(super) struct SchedulerShutdown {
-    context_name: Arc<str>,
+struct SchedulerShutdown {
+    scheduler: Arc<Scheduler>,
     sender: Option<oneshot::Sender<()>>,
     join: Option<thread::JoinHandle<()>>,
 }
 
-impl Drop for SchedulerShutdown {
-    fn drop(&mut self) {
-        gst_debug!(
-            RUNTIME_CAT,
-            "Shutting down Scheduler thread for Context '{}'",
-            self.context_name
-        );
-        self.sender.take().unwrap();
+impl SchedulerShutdown {
+    fn new(scheduler: Arc<Scheduler>) -> Self {
+        SchedulerShutdown {
+            scheduler,
+            sender: None,
+            join: None,
+        }
+    }
 
-        gst_trace!(
-            RUNTIME_CAT,
-            "Waiting for Scheduler to shutdown for Context '{}'",
-            self.context_name
-        );
-        let _ = self.join.take().unwrap().join();
+    fn clear(&mut self) {
+        self.sender = None;
+        self.join = None;
     }
 }
 
+impl Drop for SchedulerShutdown {
+    fn drop(&mut self) {
+        if let Some(sender) = self.sender.take() {
+            gst_debug!(
+                RUNTIME_CAT,
+                "Shutting down Scheduler thread for Context {}",
+                self.scheduler.context_name
+            );
+            drop(sender);
+
+            // Don't block shutting down itself
+            if !self.scheduler.is_current() {
+                if let Some(join_handler) = self.join.take() {
+                    gst_trace!(
+                        RUNTIME_CAT,
+                        "Waiting for Scheduler thread to shutdown for Context {}",
+                        self.scheduler.context_name
+                    );
+
+                    let _ = join_handler.join();
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+struct HandleInner {
+    scheduler: Arc<Scheduler>,
+    shutdown: Mutex<SchedulerShutdown>,
+}
+
 #[derive(Clone, Debug)]
-pub(super) struct HandleWeak(Weak<Scheduler>);
+pub(super) struct HandleWeak(Weak<HandleInner>);
 
 impl HandleWeak {
     pub(super) fn upgrade(&self) -> Option<Handle> {
@@ -203,97 +358,91 @@ impl HandleWeak {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct Handle(Arc<Scheduler>);
+pub(super) struct Handle(Arc<HandleInner>);
 
 impl Handle {
+    fn new(scheduler: Arc<Scheduler>) -> Self {
+        Handle(Arc::new(HandleInner {
+            shutdown: Mutex::new(SchedulerShutdown::new(Arc::clone(&scheduler))),
+            scheduler,
+        }))
+    }
+
+    fn set_shutdown(&self, sender: oneshot::Sender<()>, join: thread::JoinHandle<()>) {
+        let mut shutdown = self.0.shutdown.lock().unwrap();
+        shutdown.sender = Some(sender);
+        shutdown.join = Some(join);
+    }
+
     pub fn context_name(&self) -> &str {
-        &self.0.context_name
+        &self.0.scheduler.context_name
     }
 
     pub fn max_throttling(&self) -> Duration {
-        self.0.max_throttling
+        self.0.scheduler.max_throttling
     }
 
-    pub fn enter<F, R>(&self, f: F) -> R
+    /// Executes the provided function relatively to this [`Scheduler`]'s [`Reactor`].
+    ///
+    /// Usefull to initialze i/o sources and timers from outside
+    /// of a [`Scheduler`].
+    ///
+    /// # Panic
+    ///
+    /// This will block current thread and would panic if run
+    /// from the [`Scheduler`].
+    pub fn enter<F, O>(&self, f: F) -> O
     where
-        F: FnOnce() -> R,
+        F: FnOnce() -> O + Send + 'static,
+        O: Send + 'static,
     {
-        self.0.rt_handle.lock().unwrap().enter(f)
+        assert!(!self.0.scheduler.is_current());
+
+        let task = self.0.scheduler.tasks.add_sync(f);
+        self.0.scheduler.wake_up();
+        futures::executor::block_on(task)
     }
 
-    pub fn add_task<F: Future>(&self, future: F) -> TaskFuture<F> {
-        let task = self.0.task_queue.lock().unwrap().add(future);
-        task
-    }
-
-    pub fn remove_task(&self, task_id: TaskId) {
-        self.0.task_queue.lock().unwrap().remove(task_id);
-    }
-
-    pub fn spawn<F>(&self, future: F, must_awake: bool) -> JoinHandle<F::Output>
+    pub fn spawn<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
-        let task = self.add_task(future);
-        let task_id = task.id();
-        let (sender, receiver) = oneshot::channel();
+        let (task_id, task) = self.0.scheduler.tasks.add(future);
+        JoinHandle::new(task_id, task, self)
+    }
 
-        gst_trace!(
-            RUNTIME_CAT,
-            "Spawning new task_id {:?} on context {}",
-            task.id(),
-            self.0.context_name
-        );
+    pub fn spawn_and_awake<F>(&self, future: F) -> JoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let (task_id, task) = self.0.scheduler.tasks.add(future);
+        self.0.scheduler.wake_up();
+        JoinHandle::new(task_id, task, self)
+    }
 
-        let this = self.clone();
-        let spawn_fut = async move {
-            gst_trace!(
-                RUNTIME_CAT,
-                "Running task_id {:?} on context {}",
-                task_id,
-                this.context_name()
-            );
-
-            let _guard = CallOnDrop::new(|| {
-                gst_trace!(
-                    RUNTIME_CAT,
-                    "Task {:?} on context {} done",
-                    task_id,
-                    this.context_name()
-                );
-
-                this.0.task_queue.lock().unwrap().remove(task_id);
-            });
-
-            let _ = sender.send(task.await);
-        };
-
-        if must_awake {
-            let _ = self.0.rt_handle.lock().unwrap().awake_and_spawn(spawn_fut);
-        } else {
-            let _ = self.0.rt_handle.lock().unwrap().spawn(spawn_fut);
+    pub fn remove_soure(&self, source: Arc<Source>) {
+        if self
+            .0
+            .scheduler
+            .cleanup_ops
+            .push(CleanUpOps(source))
+            .is_err()
+        {
+            gst_warning!(RUNTIME_CAT, "scheduler: cleanup_ops is full");
         }
-
-        JoinHandle::new(receiver, self, task_id)
     }
 
     pub fn has_sub_tasks(&self, task_id: TaskId) -> bool {
-        let ret = self.0.task_queue.lock().unwrap().has_sub_tasks(task_id);
-        ret
+        self.0.scheduler.tasks.has_sub_tasks(task_id)
     }
 
     pub fn add_sub_task<T>(&self, task_id: TaskId, sub_task: T) -> Result<(), T>
     where
         T: Future<Output = SubTaskOutput> + Send + 'static,
     {
-        let res = self
-            .0
-            .task_queue
-            .lock()
-            .unwrap()
-            .add_sub_task(task_id, sub_task);
-        res
+        self.0.scheduler.tasks.add_sub_task(task_id, sub_task)
     }
 
     pub fn downgrade(&self) -> HandleWeak {
@@ -301,19 +450,56 @@ impl Handle {
     }
 
     pub async fn drain_sub_tasks(&self, task_id: TaskId) -> SubTaskOutput {
-        let sub_tasks_fut = self.0.task_queue.lock().unwrap().drain_sub_tasks(task_id);
+        let sub_tasks_fut = self.0.scheduler.tasks.drain_sub_tasks(task_id);
         sub_tasks_fut.await
-    }
-}
-
-impl From<Arc<Scheduler>> for Handle {
-    fn from(arc: Arc<Scheduler>) -> Self {
-        Handle(arc)
     }
 }
 
 impl PartialEq for Handle {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::Timer;
+    use super::*;
+
+    #[test]
+    fn block_on_task_join_handle() {
+        use std::sync::mpsc;
+
+        let (join_sender, join_receiver) = mpsc::channel();
+        let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+
+        std::thread::spawn(move || {
+            let handle =
+                Scheduler::init("block_on_task_join_handle".into(), Duration::from_millis(2));
+            let join_handle = handle.spawn(async {
+                Timer::after(Duration::from_millis(5)).await;
+                42
+            });
+
+            let _ = join_sender.send(join_handle);
+            let _ = handle.0.scheduler.block_on_priv(shutdown_receiver);
+        });
+
+        let task_join_handle = join_receiver.recv().unwrap();
+        let res = Scheduler::block_on(task_join_handle).unwrap();
+
+        let _ = shutdown_sender.send(());
+
+        assert_eq!(res, 42);
+    }
+
+    #[test]
+    fn block_on_timer() {
+        let res = Scheduler::block_on(async {
+            Timer::after(Duration::from_millis(5)).await;
+            42
+        });
+
+        assert_eq!(res, 42);
     }
 }

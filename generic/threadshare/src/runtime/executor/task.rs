@@ -1,20 +1,10 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
 // Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
 //
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Library General Public
-// License as published by the Free Software Foundation; either
-// version 2 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// Library General Public License for more details.
-//
-// You should have received a copy of the GNU Library General Public
-// License along with this library; if not, write to the
-// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
-// Boston, MA 02110-1335, USA.
+// Take a look at the license at the top of the repository in the LICENSE file.
+
+use async_task::Runnable;
+use concurrent_queue::ConcurrentQueue;
 
 use futures::future::BoxFuture;
 use futures::prelude::*;
@@ -23,13 +13,16 @@ use gst::{gst_log, gst_trace, gst_warning};
 
 use pin_project_lite::pin_project;
 
+use slab::Slab;
+
 use std::cell::Cell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::fmt;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::task::Poll;
 
+use super::CallOnDrop;
 use crate::runtime::RUNTIME_CAT;
 
 thread_local! {
@@ -37,15 +30,9 @@ thread_local! {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
-pub struct TaskId(pub(super) u64);
+pub struct TaskId(pub(super) usize);
 
 impl TaskId {
-    const LAST: TaskId = TaskId(u64::MAX);
-
-    fn next(task_id: Self) -> Self {
-        TaskId(task_id.0.wrapping_add(1))
-    }
-
     pub(super) fn current() -> Option<TaskId> {
         CURRENT_TASK_ID.try_with(Cell::get).ok().flatten()
     }
@@ -60,12 +47,6 @@ pin_project! {
         future: F,
     }
 
-}
-
-impl<F: Future> TaskFuture<F> {
-    pub fn id(&self) -> TaskId {
-        self.id
-    }
 }
 
 impl<F: Future> Future for TaskFuture<F> {
@@ -129,57 +110,144 @@ impl fmt::Debug for Task {
 
 #[derive(Debug)]
 pub(super) struct TaskQueue {
-    last_task_id: TaskId,
-    tasks: HashMap<TaskId, Task>,
+    runnables: Arc<ConcurrentQueue<Runnable>>,
+    // FIXME good point about using a slab is that it's probably faster than a HashMap
+    // However since we reuse the vacant entries, we get the same TaskId
+    // which can harm debugging. If this is not acceptable, I'll switch back to using
+    // a HashMap.
+    tasks: Arc<Mutex<Slab<Task>>>,
     context_name: Arc<str>,
 }
 
 impl TaskQueue {
     pub fn new(context_name: Arc<str>) -> Self {
         TaskQueue {
-            last_task_id: TaskId::LAST,
-            tasks: HashMap::default(),
+            runnables: Arc::new(ConcurrentQueue::unbounded()),
+            tasks: Arc::new(Mutex::new(Slab::new())),
             context_name,
         }
     }
 
-    pub fn add<F: Future>(&mut self, future: F) -> TaskFuture<F> {
-        self.last_task_id = TaskId::next(self.last_task_id);
-        self.tasks
-            .insert(self.last_task_id, Task::new(self.last_task_id));
+    pub fn add<F>(&self, future: F) -> (TaskId, async_task::Task<<F as Future>::Output>)
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let tasks_clone = Arc::clone(&self.tasks);
+        let mut tasks = self.tasks.lock().unwrap();
+        let task_id = TaskId(tasks.vacant_entry().key());
 
-        TaskFuture {
-            id: self.last_task_id,
-            future,
-        }
+        let context_name = Arc::clone(&self.context_name);
+        let task_fut = async move {
+            gst_trace!(
+                RUNTIME_CAT,
+                "Running {:?} on context {}",
+                task_id,
+                context_name
+            );
+
+            let _guard = CallOnDrop::new(move || {
+                if let Some(task) = tasks_clone.lock().unwrap().try_remove(task_id.0) {
+                    if !task.sub_tasks.is_empty() {
+                        gst_warning!(
+                            RUNTIME_CAT,
+                            "Task {:?} on context {} has {} pending sub tasks",
+                            task_id,
+                            context_name,
+                            task.sub_tasks.len(),
+                        );
+                    }
+                }
+
+                gst_trace!(
+                    RUNTIME_CAT,
+                    "Done {:?} on context {}",
+                    task_id,
+                    context_name
+                );
+            });
+
+            TaskFuture {
+                id: task_id,
+                future,
+            }
+            .await
+        };
+
+        let runnables = Arc::clone(&self.runnables);
+        let (runnable, task) = async_task::spawn(task_fut, move |runnable| {
+            runnables.push(runnable).unwrap();
+        });
+        tasks.insert(Task::new(task_id));
+        drop(tasks);
+
+        runnable.schedule();
+
+        (task_id, task)
     }
 
-    pub fn remove(&mut self, task_id: TaskId) {
-        if let Some(task) = self.tasks.remove(&task_id) {
-            if !task.sub_tasks.is_empty() {
-                gst_warning!(
+    pub fn add_sync<F, O>(&self, f: F) -> async_task::Task<O>
+    where
+        F: FnOnce() -> O + Send + 'static,
+        O: Send + 'static,
+    {
+        let tasks_clone = Arc::clone(&self.tasks);
+        let mut tasks = self.tasks.lock().unwrap();
+        let task_id = TaskId(tasks.vacant_entry().key());
+
+        let context_name = Arc::clone(&self.context_name);
+        let task_fut = async move {
+            gst_trace!(
+                RUNTIME_CAT,
+                "Executing sync function on context {} as {:?}",
+                context_name,
+                task_id,
+            );
+
+            let _guard = CallOnDrop::new(move || {
+                let _ = tasks_clone.lock().unwrap().try_remove(task_id.0);
+
+                gst_trace!(
                     RUNTIME_CAT,
-                    "Task {:?} on context {} has {} pending sub tasks",
+                    "Done executing sync function on context {} as {:?}",
+                    context_name,
                     task_id,
-                    self.context_name,
-                    task.sub_tasks.len(),
                 );
-            }
-        }
+            });
+
+            f()
+        };
+
+        let runnables = Arc::clone(&self.runnables);
+        let (runnable, task) = async_task::spawn(task_fut, move |runnable| {
+            runnables.push(runnable).unwrap();
+        });
+        tasks.insert(Task::new(task_id));
+        drop(tasks);
+
+        runnable.schedule();
+
+        task
+    }
+
+    pub fn pop_runnable(&self) -> Result<Runnable, concurrent_queue::PopError> {
+        self.runnables.pop()
     }
 
     pub fn has_sub_tasks(&self, task_id: TaskId) -> bool {
         self.tasks
-            .get(&task_id)
+            .lock()
+            .unwrap()
+            .get(task_id.0)
             .map(|t| !t.sub_tasks.is_empty())
             .unwrap_or(false)
     }
 
-    pub fn add_sub_task<T>(&mut self, task_id: TaskId, sub_task: T) -> Result<(), T>
+    pub fn add_sub_task<T>(&self, task_id: TaskId, sub_task: T) -> Result<(), T>
     where
         T: Future<Output = SubTaskOutput> + Send + 'static,
     {
-        match self.tasks.get_mut(&task_id) {
+        match self.tasks.lock().unwrap().get_mut(task_id.0) {
             Some(task) => {
                 gst_trace!(
                     RUNTIME_CAT,
@@ -198,12 +266,14 @@ impl TaskQueue {
     }
 
     pub fn drain_sub_tasks(
-        &mut self,
+        &self,
         task_id: TaskId,
     ) -> impl Future<Output = SubTaskOutput> + Send + 'static {
         let sub_tasks = self
             .tasks
-            .get_mut(&task_id)
+            .lock()
+            .unwrap()
+            .get_mut(task_id.0)
             .map(|task| (task.drain_sub_tasks(), Arc::clone(&self.context_name)));
 
         async move {

@@ -614,7 +614,7 @@ impl ObjectImpl for ProxySink {
                 settings.proxy_context = value
                     .get::<Option<String>>()
                     .expect("type checked upstream")
-                    .unwrap_or_else(|| "".into());
+                    .unwrap_or_else(|| DEFAULT_PROXY_CONTEXT.into());
             }
             _ => unimplemented!(),
         }
@@ -1221,7 +1221,7 @@ impl ObjectImpl for ProxySrc {
                 settings.proxy_context = value
                     .get::<Option<String>>()
                     .expect("type checked upstream")
-                    .unwrap_or_else(|| "".into());
+                    .unwrap_or_else(|| DEFAULT_PROXY_CONTEXT.into());
             }
             _ => unimplemented!(),
         }

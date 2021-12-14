@@ -1,20 +1,7 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
 // Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
 //
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Library General Public
-// License as published by the Free Software Foundation; either
-// version 2 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// Library General Public License for more details.
-//
-// You should have received a copy of the GNU Library General Public
-// License along with this library; if not, write to the
-// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
-// Boston, MA 02110-1335, USA.
+// Take a look at the license at the top of the repository in the LICENSE file.
 
 //! The `Executor` for the `threadshare` GStreamer plugins framework.
 //!
@@ -33,17 +20,28 @@
 //! [`PadSrc`]: ../pad/struct.PadSrc.html
 //! [`PadSink`]: ../pad/struct.PadSink.html
 
+pub mod async_wrapper;
+pub use async_wrapper::Async;
+
 mod context;
 pub use context::{block_on, block_on_or_add_sub_task, yield_now, Context};
-
-mod scheduler;
-use scheduler::{Handle, HandleWeak, Scheduler};
 
 mod join;
 pub use join::JoinHandle;
 
+pub mod reactor;
+use reactor::{Reactor, Readable, ReadableOwned, Source, Writable, WritableOwned};
+
+// We need the `Mutex<bool>` to work in pair with `Condvar`.
+#[allow(clippy::mutex_atomic)]
+mod scheduler;
+use scheduler::{Handle, HandleWeak, Scheduler};
+
 mod task;
 pub use task::{SubTaskOutput, TaskId};
+
+pub mod timer;
+pub use timer::Timer;
 
 struct CallOnDrop<F: FnOnce()>(Option<F>);
 

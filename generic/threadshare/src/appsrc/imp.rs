@@ -617,7 +617,7 @@ impl ObjectImpl for AppSrc {
                 settings.context = value
                     .get::<Option<String>>()
                     .expect("type checked upstream")
-                    .unwrap_or_else(|| "".into());
+                    .unwrap_or_else(|| DEFAULT_CONTEXT.into());
             }
             "context-wait" => {
                 settings.context_wait = Duration::from_millis(

@@ -28,19 +28,18 @@ use gst::{gst_debug, gst_error, gst_log, gst_trace};
 use once_cell::sync::Lazy;
 
 use std::io;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 use std::u16;
 use std::u32;
 
-use tokio::io::AsyncReadExt;
-
 use crate::runtime::prelude::*;
 use crate::runtime::task;
 use crate::runtime::{Context, PadSrc, PadSrcRef, PadSrcWeak, Task, TaskState};
 
+use crate::runtime::Async;
 use crate::socket::{Socket, SocketError, SocketRead};
 
 const DEFAULT_HOST: Option<&str> = Some("127.0.0.1");
@@ -73,10 +72,10 @@ impl Default for Settings {
     }
 }
 
-struct TcpClientReader(tokio::net::TcpStream);
+struct TcpClientReader(Async<TcpStream>);
 
 impl TcpClientReader {
-    pub fn new(socket: tokio::net::TcpStream) -> Self {
+    pub fn new(socket: Async<TcpStream>) -> Self {
         TcpClientReader(socket)
     }
 }
@@ -294,7 +293,7 @@ impl TaskImpl for TcpClientSrcTask {
         async move {
             gst_log!(CAT, obj: &self.element, "Preparing task connecting to {:?}", self.saddr);
 
-            let socket = tokio::net::TcpStream::connect(self.saddr)
+            let socket = Async::<TcpStream>::connect(self.saddr)
                 .await
                 .map_err(|err| {
                     gst::error_msg!(
@@ -647,7 +646,7 @@ impl ObjectImpl for TcpClientSrc {
                 settings.context = value
                     .get::<Option<String>>()
                     .expect("type checked upstream")
-                    .unwrap_or_else(|| "".into());
+                    .unwrap_or_else(|| DEFAULT_CONTEXT.into());
             }
             "context-wait" => {
                 settings.context_wait = Duration::from_millis(
