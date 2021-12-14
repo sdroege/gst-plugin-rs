@@ -1086,7 +1086,7 @@ impl ToggleRecord {
         // Check whether all secondary streams are in eos. If so, update recording
         // state to Stopped
         if rec_state.recording_state != RecordingState::Stopped {
-            let mut others_eos = true;
+            let mut all_others_eos = true;
 
             // Check eos state of all secondary streams
             self.other_streams.lock().0.iter().all(|s| {
@@ -1096,12 +1096,12 @@ impl ToggleRecord {
 
                 let s = s.state.lock();
                 if !s.eos {
-                    others_eos = false;
+                    all_others_eos = false;
                 }
-                others_eos
+                all_others_eos
             });
 
-            if others_eos {
+            if all_others_eos {
                 gst_debug!(
                     CAT,
                     obj: pad,
@@ -1110,6 +1110,46 @@ impl ToggleRecord {
 
                 rec_state.recording_state = RecordingState::Stopped;
                 return true;
+            }
+        }
+
+        false
+    }
+
+    // should be called only if main stream stops being in eos state
+    fn check_and_update_stream_start(
+        &self,
+        pad: &gst::Pad,
+        stream: &Stream,
+        stream_state: &mut StreamState,
+        rec_state: &mut State,
+    ) -> bool {
+        stream_state.eos = false;
+
+        // Check whether no secondary streams are in eos. If so, update recording
+        // state according to the record property
+        if rec_state.recording_state == RecordingState::Stopped {
+            let mut all_others_not_eos = false;
+
+            // Check eos state of all secondary streams
+            self.other_streams.lock().0.iter().any(|s| {
+                if s == stream {
+                    return false;
+                }
+
+                let s = s.state.lock();
+                if !s.eos {
+                    all_others_not_eos = true;
+                }
+                all_others_not_eos
+            });
+
+            if !all_others_not_eos {
+                let settings = self.settings.lock();
+                if settings.record {
+                    gst_debug!(CAT, obj: pad, "Restarting recording after EOS");
+                    rec_state.recording_state = RecordingState::Starting;
+                }
             }
         }
 
@@ -1360,6 +1400,34 @@ impl ToggleRecord {
                     }
                     _ => false,
                 };
+            }
+            EventView::StreamStart(..) => {
+                let main_state = if stream != self.main_stream {
+                    Some(self.main_stream.state.lock())
+                } else {
+                    None
+                };
+                let mut state = stream.state.lock();
+                state.eos = false;
+
+                let main_is_eos = if let Some(main_state) = main_state {
+                    main_state.eos
+                } else {
+                    false
+                };
+
+                if !main_is_eos {
+                    let mut rec_state = self.state.lock();
+                    recording_state_changed = self.check_and_update_stream_start(
+                        pad,
+                        &stream,
+                        &mut state,
+                        &mut rec_state,
+                    );
+                }
+
+                self.main_stream_cond.notify_all();
+                gst_debug!(CAT, obj: pad, "Stream is not EOS now");
             }
             EventView::Eos(..) => {
                 let main_state = if stream != self.main_stream {
