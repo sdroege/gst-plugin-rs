@@ -153,6 +153,11 @@ version = "0.7"
 name = "crc"
 version = "1.8"
 
+# ignore duplicated itoa dependency because http/hyper/serde_urlencoded depend on an old version
+[[bans.skip]]
+name = "itoa"
+version = "0.4"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
