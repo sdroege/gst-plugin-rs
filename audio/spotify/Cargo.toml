@@ -11,9 +11,9 @@ rust-version.workspace = true
 [dependencies]
 gst.workspace = true
 gst-base.workspace = true
-librespot-core = "0.4"
-librespot-playback = "0.4"
-tokio = { version = "1", features = ["rt-multi-thread"] }
+librespot-core = "0.5"
+librespot-playback = { version = "0.5", features = ['passthrough-decoder'] }
+tokio = { version = "1.0", features = ["rt-multi-thread"] }
 futures = "0.3"
 anyhow = "1.0"
 url = "2.3"

@@ -52,7 +52,7 @@ enum Message {
 }
 
 struct State {
-    player: Player,
+    player: Arc<Player>,
 
     /// receiver sending buffer to streaming thread
     receiver: mpsc::Receiver<Message>,
@@ -321,11 +321,10 @@ struct BufferSink {
 
 impl Sink for BufferSink {
     fn write(&mut self, packet: AudioPacket, _converter: &mut Converter) -> SinkResult<()> {
-        let oggdata = match packet {
-            AudioPacket::OggData(data) => data,
-            AudioPacket::Samples(_) => unimplemented!(),
+        let buffer = match packet {
+            AudioPacket::Samples(_) => unreachable!(),
+            AudioPacket::Raw(ogg) => gst::Buffer::from_slice(ogg),
         };
-        let buffer = gst::Buffer::from_slice(oggdata);
 
         // ignore if sending fails as that means the source element is being shutdown
         let _ = self.sender.send(Message::Buffer(buffer));
@@ -360,7 +359,7 @@ impl URIHandlerImpl for SpotifyAudioSrc {
         // allow to configure auth and cache settings from the URI
         for (key, value) in url.query_pairs() {
             match key.as_ref() {
-                "username" | "password" | "cache-credentials" | "cache-files" => {
+                "access-token" | "cache-credentials" | "cache-files" => {
                     self.obj().set_property(&key, value.as_ref());
                 }
                 _ => {
@@ -435,10 +434,10 @@ impl SpotifyAudioSrc {
         let (sender, receiver) = mpsc::sync_channel(2);
         let sender_clone = sender.clone();
 
-        let (mut player, mut player_event_channel) =
-            Player::new(player_config, session, Box::new(NoOpVolume), || {
-                Box::new(BufferSink { sender })
-            });
+        let player = Player::new(player_config, session, Box::new(NoOpVolume), || {
+            Box::new(BufferSink { sender })
+        });
+        let mut player_event_channel = player.get_player_event_channel();
 
         player.load(track, true, 0);
 

@@ -12109,6 +12109,18 @@
                     }
                 },
                 "properties": {
+                    "access-token": {
+                        "blurb": "Spotify access token, requires 'streaming' scope",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
                     "bitrate": {
                         "blurb": "Spotify audio bitrate in kbit/s",
                         "conditionally-available": false,
