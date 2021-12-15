@@ -186,10 +186,16 @@ impl TaskQueue {
         (task_id, task)
     }
 
-    pub fn add_sync<F, O>(&self, f: F) -> async_task::Task<O>
+    /// Adds a task to be blocked on immediately.
+    ///
+    /// # Safety
+    ///
+    /// The function and its output must outlive the execution
+    /// of the resulting task and the retrieval of the result.
+    pub unsafe fn add_sync<F, O>(&self, f: F) -> async_task::Task<O>
     where
-        F: FnOnce() -> O + Send + 'static,
-        O: Send + 'static,
+        F: FnOnce() -> O + Send,
+        O: Send,
     {
         let tasks_clone = Arc::clone(&self.tasks);
         let mut tasks = self.tasks.lock().unwrap();
@@ -219,7 +225,9 @@ impl TaskQueue {
         };
 
         let runnables = Arc::clone(&self.runnables);
-        let (runnable, task) = async_task::spawn(task_fut, move |runnable| {
+        // This is the unsafe call for which the lifetime must hold
+        // until the the Future is Ready and its Output retrieved.
+        let (runnable, task) = async_task::spawn_unchecked(task_fut, move |runnable| {
             runnables.push(runnable).unwrap();
         });
         tasks.insert(Task::new(task_id));

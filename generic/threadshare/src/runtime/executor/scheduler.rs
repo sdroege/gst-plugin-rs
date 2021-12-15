@@ -391,14 +391,17 @@ impl Handle {
     ///
     /// This will block current thread and would panic if run
     /// from the [`Scheduler`].
-    pub fn enter<F, O>(&self, f: F) -> O
+    pub fn enter<'a, F, O>(&'a self, f: F) -> O
     where
-        F: FnOnce() -> O + Send + 'static,
-        O: Send + 'static,
+        F: FnOnce() -> O + Send + 'a,
+        O: Send + 'a,
     {
         assert!(!self.0.scheduler.is_current());
 
-        let task = self.0.scheduler.tasks.add_sync(f);
+        // Safety: bounding `self` to `'a` and blocking on the task
+        // ensures that the lifetime bounds satisfy the safety
+        // requirements for `TaskQueue::add_sync`.
+        let task = unsafe { self.0.scheduler.tasks.add_sync(f) };
         self.0.scheduler.wake_up();
         futures::executor::block_on(task)
     }
@@ -501,5 +504,14 @@ mod tests {
         });
 
         assert_eq!(res, 42);
+    }
+
+    #[test]
+    fn enter_non_static() {
+        let handle = Scheduler::start("enter_non_static", Duration::from_millis(2));
+
+        let mut flag = false;
+        handle.enter(|| flag = true);
+        assert!(flag);
     }
 }

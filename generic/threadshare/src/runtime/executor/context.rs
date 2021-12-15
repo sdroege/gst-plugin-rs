@@ -209,10 +209,10 @@ impl Context {
     /// This will block current thread and would panic if run
     /// from the [`Context`].
     #[track_caller]
-    pub fn enter<F, O>(&self, f: F) -> O
+    pub fn enter<'a, F, O>(&'a self, f: F) -> O
     where
-        F: FnOnce() -> O + Send + 'static,
-        O: Send + 'static,
+        F: FnOnce() -> O + Send + 'a,
+        O: Send + 'a,
     {
         if let Some(cur) = Context::current().as_ref() {
             if cur == self {
