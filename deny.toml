@@ -158,6 +158,11 @@ version = "1.8"
 name = "itoa"
 version = "0.4"
 
+# ignore duplicated heck dependency because various crates depend on an old version
+[[bans.skip]]
+name = "heck"
+version = "0.3"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
