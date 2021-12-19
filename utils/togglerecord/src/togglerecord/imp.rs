@@ -1410,11 +1410,9 @@ impl ToggleRecord {
                 let mut state = stream.state.lock();
                 state.eos = false;
 
-                let main_is_eos = if let Some(main_state) = main_state {
-                    main_state.eos
-                } else {
-                    false
-                };
+                let main_is_eos = main_state
+                    .as_ref()
+                    .map_or(false, |main_state| main_state.eos);
 
                 if !main_is_eos {
                     let mut rec_state = self.state.lock();
@@ -1438,11 +1436,9 @@ impl ToggleRecord {
                 let mut state = stream.state.lock();
                 state.eos = true;
 
-                let main_is_eos = if let Some(main_state) = main_state {
-                    main_state.eos
-                } else {
-                    true
-                };
+                let main_is_eos = main_state
+                    .as_ref()
+                    .map_or(true, |main_state| main_state.eos);
 
                 if main_is_eos {
                     let mut rec_state = self.state.lock();
