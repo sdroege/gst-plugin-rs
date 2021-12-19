@@ -1216,6 +1216,12 @@ impl ToggleRecord {
         };
 
         let out_running_time = {
+            let main_state = if stream != self.main_stream {
+                Some(self.main_stream.state.lock())
+            } else {
+                None
+            };
+
             let mut state = stream.state.lock();
 
             if state.discont_pending {
@@ -1260,6 +1266,7 @@ impl ToggleRecord {
 
             // Unlock before pushing
             drop(state);
+            drop(main_state);
 
             for e in events.drain(..) {
                 stream.srcpad.push_event(e);
