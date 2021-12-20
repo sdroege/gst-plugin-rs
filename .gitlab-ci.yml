@@ -201,6 +201,7 @@ gst-build:
   script:
     - P=$(pwd)
     - cd ..
+    - rm -rf gstreamer
     - git clone --depth 1 https://gitlab.freedesktop.org/gstreamer/gstreamer.git --branch main
     - cd gstreamer
     - ln -s $P subprojects/gst-plugins-rs
