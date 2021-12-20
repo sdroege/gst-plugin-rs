@@ -24,6 +24,9 @@ useful alternative.
   `Signallable` interface as defined [here](plugins/src/webrtcsink/mod.rs). The
   [default signaller](plugins/src/signaller/mod.rs) can be used as an example.
 
+  An [example project] is also available to use as a boilerplate for implementing
+  and using a custom signaller.
+
 * Sandboxed consumers: when a consumer is added, its encoder / payloader / webrtcbin
   elements run in a separately managed pipeline. This provides a certain level of
   sandboxing, as opposed to having those elements running inside the element itself.
@@ -52,6 +55,8 @@ control.
 If more granular control is required, applications should use `webrtcbin` directly,
 `webrtcsink` will focus on trying to just do the right thing, although it might
 expose interfaces to guide and tune the heuristics it employs.
+
+[example project]: https://github.com/centricular/webrtcsink-custom-signaller
 
 ## Building
 
