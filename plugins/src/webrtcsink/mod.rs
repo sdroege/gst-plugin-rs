@@ -1,7 +1,7 @@
-use anyhow::Error;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::ObjectSubclassExt;
+use std::error::Error;
 
 mod imp;
 mod utils;
@@ -13,15 +13,31 @@ glib::wrapper! {
 unsafe impl Send for WebRTCSink {}
 unsafe impl Sync for WebRTCSink {}
 
+#[derive(thiserror::Error, Debug)]
+pub enum WebRTCSinkError {
+    #[error("no consumer with id")]
+    NoConsumerWithId(String),
+    #[error("consumer refused media")]
+    ConsumerRefusedMedia { peer_id: String, media_idx: u32 },
+    #[error("consumer did not provide valid payload for media")]
+    ConsumerNoValidPayload { peer_id: String, media_idx: u32 },
+    #[error("SDP mline index is currently mandatory")]
+    MandatorySdpMlineIndex,
+    #[error("duplicate consumer id")]
+    DuplicateConsumerId(String),
+    #[error("error setting up consumer pipeline")]
+    ConsumerPipelineError { peer_id: String, details: String },
+}
+
 pub trait Signallable: Sync + Send + 'static {
-    fn start(&mut self, element: &WebRTCSink) -> Result<(), Error>;
+    fn start(&mut self, element: &WebRTCSink) -> Result<(), Box<dyn Error>>;
 
     fn handle_sdp(
         &mut self,
         element: &WebRTCSink,
         peer_id: &str,
         sdp: &gst_webrtc::WebRTCSessionDescription,
-    ) -> Result<(), Error>;
+    ) -> Result<(), Box<dyn Error>>;
 
     /// sdp_mid is exposed for future proofing, see
     /// https://gitlab.freedesktop.org/gstreamer/gst-plugins-bad/-/issues/1174,
@@ -34,7 +50,7 @@ pub trait Signallable: Sync + Send + 'static {
         candidate: &str,
         sdp_mline_index: Option<u32>,
         sdp_mid: Option<String>,
-    ) -> Result<(), Error>;
+    ) -> Result<(), Box<dyn Error>>;
 
     fn consumer_removed(&mut self, element: &WebRTCSink, peer_id: &str);
 
@@ -70,7 +86,7 @@ impl WebRTCSink {
         &self,
         peer_id: &str,
         sdp: &gst_webrtc::WebRTCSessionDescription,
-    ) -> Result<(), Error> {
+    ) -> Result<(), WebRTCSinkError> {
         let ws = imp::WebRTCSink::from_instance(self);
 
         ws.handle_sdp(self, peer_id, sdp)
@@ -85,25 +101,25 @@ impl WebRTCSink {
         sdp_mline_index: Option<u32>,
         sdp_mid: Option<String>,
         candidate: &str,
-    ) -> Result<(), Error> {
+    ) -> Result<(), WebRTCSinkError> {
         let ws = imp::WebRTCSink::from_instance(self);
 
         ws.handle_ice(self, peer_id, sdp_mline_index, sdp_mid, candidate)
     }
 
-    pub fn handle_signalling_error(&self, error: anyhow::Error) {
+    pub fn handle_signalling_error(&self, error: Box<dyn Error + Send + Sync>) {
         let ws = imp::WebRTCSink::from_instance(self);
 
-        ws.handle_signalling_error(self, error);
+        ws.handle_signalling_error(self, anyhow::anyhow!(error));
     }
 
-    pub fn add_consumer(&self, peer_id: &str) -> Result<(), Error> {
+    pub fn add_consumer(&self, peer_id: &str) -> Result<(), WebRTCSinkError> {
         let ws = imp::WebRTCSink::from_instance(self);
 
         ws.add_consumer(self, peer_id)
     }
 
-    pub fn remove_consumer(&self, peer_id: &str) -> Result<(), Error> {
+    pub fn remove_consumer(&self, peer_id: &str) -> Result<(), WebRTCSinkError> {
         let ws = imp::WebRTCSink::from_instance(self);
 
         ws.remove_consumer(self, peer_id, false)

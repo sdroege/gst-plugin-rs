@@ -1,6 +1,7 @@
 use crate::webrtcsink::{Signallable, WebRTCSink};
 use gst::glib;
 use gst::subclass::prelude::ObjectSubclassExt;
+use std::error::Error;
 
 mod imp;
 
@@ -12,7 +13,7 @@ unsafe impl Send for Signaller {}
 unsafe impl Sync for Signaller {}
 
 impl Signallable for Signaller {
-    fn start(&mut self, element: &WebRTCSink) -> Result<(), anyhow::Error> {
+    fn start(&mut self, element: &WebRTCSink) -> Result<(), Box<dyn Error>> {
         let signaller = imp::Signaller::from_instance(self);
         signaller.start(element);
 
@@ -24,7 +25,7 @@ impl Signallable for Signaller {
         element: &WebRTCSink,
         peer_id: &str,
         sdp: &gst_webrtc::WebRTCSessionDescription,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Box<dyn Error>> {
         let signaller = imp::Signaller::from_instance(self);
         signaller.handle_sdp(element, peer_id, sdp);
         Ok(())
@@ -37,7 +38,7 @@ impl Signallable for Signaller {
         candidate: &str,
         sdp_mline_index: Option<u32>,
         sdp_mid: Option<String>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Box<dyn Error>> {
         let signaller = imp::Signaller::from_instance(self);
         signaller.handle_ice(element, peer_id, candidate, sdp_mline_index, sdp_mid);
         Ok(())

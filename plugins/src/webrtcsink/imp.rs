@@ -15,7 +15,7 @@ use std::ops::Mul;
 use std::sync::Mutex;
 
 use super::utils::{make_element, StreamProducer};
-use super::{WebRTCSinkCongestionControl, WebRTCSinkMitigationMode};
+use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
 use crate::signaller::Signaller;
 use std::collections::BTreeMap;
 
@@ -1387,19 +1387,28 @@ impl WebRTCSink {
     }
 
     /// Called by the signaller to add a new consumer
-    pub fn add_consumer(&self, element: &super::WebRTCSink, peer_id: &str) -> Result<(), Error> {
+    pub fn add_consumer(
+        &self,
+        element: &super::WebRTCSink,
+        peer_id: &str,
+    ) -> Result<(), WebRTCSinkError> {
         let settings = self.settings.lock().unwrap();
         let mut state = self.state.lock().unwrap();
 
         if state.consumers.contains_key(peer_id) {
-            return Err(anyhow!("We already have a consumer with id {}", peer_id));
+            return Err(WebRTCSinkError::DuplicateConsumerId(peer_id.to_string()));
         }
 
         gst_info!(CAT, obj: element, "Adding consumer {}", peer_id);
 
         let pipeline = gst::Pipeline::new(Some(&format!("consumer-pipeline-{}", peer_id)));
 
-        let webrtcbin = make_element("webrtcbin", None)?;
+        let webrtcbin = make_element("webrtcbin", None).map_err(|err| {
+            WebRTCSinkError::ConsumerPipelineError {
+                peer_id: peer_id.to_string(),
+                details: err.to_string(),
+            }
+        })?;
 
         webrtcbin.set_property_from_str("bundle-policy", "max-bundle");
 
@@ -1615,11 +1624,21 @@ impl WebRTCSink {
             }
         });
 
-        pipeline.set_state(gst::State::Ready)?;
+        pipeline.set_state(gst::State::Ready).map_err(|err| {
+            WebRTCSinkError::ConsumerPipelineError {
+                peer_id: peer_id.to_string(),
+                details: err.to_string(),
+            }
+        })?;
 
         element.emit_by_name::<()>("new-webrtcbin", &[&peer_id, &webrtcbin]);
 
-        pipeline.set_state(gst::State::Playing)?;
+        pipeline.set_state(gst::State::Playing).map_err(|err| {
+            WebRTCSinkError::ConsumerPipelineError {
+                peer_id: peer_id.to_string(),
+                details: err.to_string(),
+            }
+        })?;
 
         state.consumers.insert(peer_id.to_string(), consumer);
 
@@ -1632,11 +1651,11 @@ impl WebRTCSink {
         element: &super::WebRTCSink,
         peer_id: &str,
         signal: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<(), WebRTCSinkError> {
         let mut state = self.state.lock().unwrap();
 
         if !state.consumers.contains_key(peer_id) {
-            return Err(anyhow!("No consumer with ID {}", peer_id));
+            return Err(WebRTCSinkError::NoConsumerWithId(peer_id.to_string()));
         }
 
         state.remove_consumer(element, peer_id, signal);
@@ -1747,11 +1766,11 @@ impl WebRTCSink {
         sdp_mline_index: Option<u32>,
         _sdp_mid: Option<String>,
         candidate: &str,
-    ) -> Result<(), Error> {
+    ) -> Result<(), WebRTCSinkError> {
         let state = self.state.lock().unwrap();
 
-        let sdp_mline_index = sdp_mline_index
-            .ok_or_else(|| anyhow!("SDP mline index is not optional at this time"))?;
+        let sdp_mline_index =
+            sdp_mline_index.ok_or_else(|| WebRTCSinkError::MandatorySdpMlineIndex)?;
 
         if let Some(consumer) = state.consumers.get(peer_id) {
             gst_trace!(CAT, "adding ice candidate for peer {}", peer_id);
@@ -1760,7 +1779,7 @@ impl WebRTCSink {
                 .emit_by_name::<()>("add-ice-candidate", &[&sdp_mline_index, &candidate]);
             Ok(())
         } else {
-            Err(anyhow!("No consumer with ID {}", peer_id))
+            Err(WebRTCSinkError::NoConsumerWithId(peer_id.to_string()))
         }
     }
 
@@ -1770,7 +1789,7 @@ impl WebRTCSink {
         element: &super::WebRTCSink,
         peer_id: &str,
         desc: &gst_webrtc::WebRTCSessionDescription,
-    ) -> Result<(), Error> {
+    ) -> Result<(), WebRTCSinkError> {
         let mut state = self.state.lock().unwrap();
 
         if let Some(consumer) = state.consumers.get_mut(peer_id) {
@@ -1786,7 +1805,11 @@ impl WebRTCSink {
                     if media.attribute_val("inactive").is_some() {
                         gst_warning!(CAT, "consumer {} refused media {}", peer_id, media_idx);
                         state.remove_consumer(element, peer_id, true);
-                        return Err(anyhow!("consumer {} refused media {}", peer_id, media_idx));
+
+                        return Err(WebRTCSinkError::ConsumerRefusedMedia {
+                            peer_id: peer_id.to_string(),
+                            media_idx,
+                        });
                     }
                 }
 
@@ -1803,12 +1826,13 @@ impl WebRTCSink {
                         peer_id,
                         media_idx
                     );
+
                     state.remove_consumer(element, peer_id, true);
-                    return Err(anyhow!(
-                        "consumer {} did not provide valid payload for media index {}",
-                        peer_id,
-                        media_idx
-                    ));
+
+                    return Err(WebRTCSinkError::ConsumerNoValidPayload {
+                        peer_id: peer_id.to_string(),
+                        media_idx,
+                    });
                 }
             }
 
@@ -1830,7 +1854,7 @@ impl WebRTCSink {
 
             Ok(())
         } else {
-            Err(anyhow!("No consumer with ID {}", peer_id))
+            Err(WebRTCSinkError::NoConsumerWithId(peer_id.to_string()))
         }
     }
 

@@ -1845,6 +1845,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "smallvec",
+ "thiserror",
  "tracing",
  "tracing-log",
  "tracing-subscriber",

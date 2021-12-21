@@ -178,10 +178,9 @@ impl Signaller {
                                     "Unknown message from server: {}",
                                     msg
                                 );
-                                element.handle_signalling_error(anyhow!(
-                                    "Unknown message from server: {}",
-                                    msg
-                                ));
+                                element.handle_signalling_error(
+                                    anyhow!("Unknown message from server: {}", msg).into(),
+                                );
                             }
                         }
                         Ok(WsMessage::Close(reason)) => {
@@ -195,7 +194,9 @@ impl Signaller {
                         }
                         Ok(_) => (),
                         Err(err) => {
-                            element.handle_signalling_error(anyhow!("Error receiving: {}", err));
+                            element.handle_signalling_error(
+                                anyhow!("Error receiving: {}", err).into(),
+                            );
                             break;
                         }
                     }
@@ -223,7 +224,7 @@ impl Signaller {
         task::spawn(async move {
             let this = Self::from_instance(&this);
             if let Err(err) = this.connect(&element_clone).await {
-                element_clone.handle_signalling_error(err);
+                element_clone.handle_signalling_error(err.into());
             }
         });
     }
@@ -251,7 +252,7 @@ impl Signaller {
                     .await
                 {
                     if let Some(element) = element.upgrade() {
-                        element.handle_signalling_error(anyhow!("Error: {}", err));
+                        element.handle_signalling_error(anyhow!("Error: {}", err).into());
                     }
                 }
             });
@@ -284,7 +285,7 @@ impl Signaller {
                     .await
                 {
                     if let Some(element) = element.upgrade() {
-                        element.handle_signalling_error(anyhow!("Error: {}", err));
+                        element.handle_signalling_error(anyhow!("Error: {}", err).into());
                     }
                 }
             });
@@ -327,7 +328,7 @@ impl Signaller {
                     .await
                 {
                     if let Some(element) = element.upgrade() {
-                        element.handle_signalling_error(anyhow!("Error: {}", err));
+                        element.handle_signalling_error(anyhow!("Error: {}", err).into());
                     }
                 }
             });
