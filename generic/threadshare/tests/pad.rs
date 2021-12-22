@@ -30,7 +30,6 @@ use gst::{gst_debug, gst_info, gst_log};
 
 use once_cell::sync::Lazy;
 
-use std::boxed::Box;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
