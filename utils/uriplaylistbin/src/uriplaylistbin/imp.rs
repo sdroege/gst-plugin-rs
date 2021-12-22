@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use gst::glib;
 use gst::prelude::*;
@@ -123,6 +123,10 @@ struct State {
     streaming: Vec<Item>,
     // items which have been fully played, waiting to be cleaned up
     done: Vec<Item>,
+
+    // read-only properties
+    current_iteration: u32,
+    current_uri_index: u64,
 }
 
 impl State {
@@ -141,6 +145,8 @@ impl State {
             blocked: None,
             streaming: vec![],
             done: vec![],
+            current_iteration: 0,
+            current_uri_index: 0,
         }
     }
 
@@ -717,6 +723,24 @@ impl ObjectImpl for UriPlaylistBin {
                     1,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecUInt::new(
+                    "current-iteration",
+                    "Current iteration",
+                    "The index of the current playlist iteration, or 0 if the iterations property is 0 (unlimited playlist)",
+                    0,
+                    u32::MAX,
+                    0,
+                    glib::ParamFlags::READABLE,
+                ),
+                glib::ParamSpecUInt64::new(
+                    "current-uri-index",
+                    "Current URI",
+                    "The index from the uris property of the current URI being played",
+                    0,
+                    u64::MAX,
+                    0,
+                    glib::ParamFlags::READABLE,
+                ),
             ]
         });
 
@@ -768,6 +792,22 @@ impl ObjectImpl for UriPlaylistBin {
             "iterations" => {
                 let settings = self.settings.lock().unwrap();
                 settings.iterations.to_value()
+            }
+            "current-iteration" => {
+                let state = self.state.lock().unwrap();
+                state
+                    .as_ref()
+                    .map(|state| state.current_iteration)
+                    .unwrap_or(0)
+                    .to_value()
+            }
+            "current-uri-index" => {
+                let state = self.state.lock().unwrap();
+                state
+                    .as_ref()
+                    .map(|state| state.current_uri_index)
+                    .unwrap_or(0)
+                    .to_value()
             }
             _ => unimplemented!(),
         }
@@ -980,6 +1020,8 @@ impl UriPlaylistBin {
                 // unblock last item
                 state.unblock_item(element);
 
+                self.update_current(state_guard);
+
                 return Ok(());
             }
         };
@@ -1115,6 +1157,8 @@ impl UriPlaylistBin {
                 }
 
                 state.waiting_for_stream_collection = None;
+
+                self.update_current(state_guard);
             }
         }
         Ok(())
@@ -1431,6 +1475,8 @@ impl UriPlaylistBin {
                 item.set_blocked();
                 state.blocked = Some(item);
 
+                self.update_current(state_guard);
+
                 true
             } else {
                 false
@@ -1569,6 +1615,41 @@ impl UriPlaylistBin {
                     [&error_msg],
                     details: details.build()
                 );
+            }
+        }
+
+        self.update_current(self.state.lock().unwrap());
+    }
+
+    fn update_current(&self, mut state_guard: MutexGuard<Option<State>>) {
+        let (uris_len, infinite) = {
+            let settings = self.settings.lock().unwrap();
+
+            (settings.uris.len(), settings.iterations == 0)
+        };
+
+        if let Some(state) = state_guard.as_mut() {
+            // first streaming item is the one actually being played
+            if let Some(current) = state.streaming.get(0) {
+                let (mut current_iteration, current_uri_index) = (
+                    (current.index() / uris_len) as u32,
+                    (current.index() % uris_len) as u64,
+                );
+
+                if infinite {
+                    current_iteration = 0;
+                }
+
+                let element = self.instance();
+
+                if current_iteration != state.current_iteration {
+                    state.current_iteration = current_iteration;
+                    element.notify("current-iteration");
+                }
+                if current_uri_index != state.current_uri_index {
+                    state.current_uri_index = current_uri_index;
+                    element.notify("current-uri-index");
+                }
             }
         }
     }

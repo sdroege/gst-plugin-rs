@@ -76,7 +76,7 @@ fn test(
     n_streams: u32,
     iterations: u32,
     check_streams: bool,
-) -> Vec<gst::Message> {
+) -> (Vec<gst::Message>, u32, u64) {
     init();
 
     let playlist_len = medias.len() * (iterations as usize);
@@ -98,6 +98,9 @@ fn test(
 
     playlist.set_property("uris", &uris);
     playlist.set_property("iterations", &iterations);
+
+    assert_eq!(playlist.property::<u32>("current-iteration"), 0);
+    assert_eq!(playlist.property::<u64>("current-uri-index"), 0);
 
     let mq_clone = mq.clone();
     playlist.connect_pad_added(move |_playlist, src_pad| {
@@ -185,9 +188,12 @@ fn test(
         }
     }
 
+    let current_iteration = playlist.property::<u32>("current-iteration");
+    let current_uri_index = playlist.property::<u64>("current-uri-index");
+
     pipeline.set_state(gst::State::Null).unwrap();
 
-    events
+    (events, current_iteration, current_uri_index)
 }
 
 fn assert_eos(msg: gst::Message) {
@@ -234,66 +240,88 @@ fn assert_stream_selected(msg: gst::Message, n_streams: usize) -> gst::Object {
 
 #[test]
 fn single_audio() {
-    let events = test(vec![TestMedia::ogg()], 1, 1, true).into_iter();
-    assert_eos(events.last().unwrap());
+    let (events, current_iteration, current_uri_index) = test(vec![TestMedia::ogg()], 1, 1, true);
+    assert_eos(events.into_iter().last().unwrap());
+    assert_eq!(current_iteration, 0);
+    assert_eq!(current_uri_index, 0);
 }
 
 #[test]
 fn single_video() {
-    let events = test(vec![TestMedia::mkv()], 2, 1, true).into_iter();
-    assert_eos(events.last().unwrap());
+    let (events, current_iteration, current_uri_index) = test(vec![TestMedia::mkv()], 2, 1, true);
+    assert_eos(events.into_iter().last().unwrap());
+    assert_eq!(current_iteration, 0);
+    assert_eq!(current_uri_index, 0);
 }
 
 #[test]
 fn multi_audio() {
-    let events = test(
+    let (events, current_iteration, current_uri_index) = test(
         vec![TestMedia::ogg(), TestMedia::ogg(), TestMedia::ogg()],
         1,
         1,
         true,
-    )
-    .into_iter();
-    assert_eos(events.last().unwrap());
+    );
+    assert_eos(events.into_iter().last().unwrap());
+    assert_eq!(current_iteration, 0);
+    assert_eq!(current_uri_index, 2);
 }
 
 #[test]
 fn multi_audio_video() {
-    let events = test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 1, true).into_iter();
-    assert_eos(events.last().unwrap());
+    let (events, current_iteration, current_uri_index) =
+        test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 1, true);
+    assert_eos(events.into_iter().last().unwrap());
+    assert_eq!(current_iteration, 0);
+    assert_eq!(current_uri_index, 1);
 }
 
 #[test]
 fn iterations() {
-    let events = test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 2, true).into_iter();
-    assert_eos(events.last().unwrap());
+    let (events, current_iteration, current_uri_index) =
+        test(vec![TestMedia::mkv(), TestMedia::mkv()], 2, 2, true);
+    assert_eos(events.into_iter().last().unwrap());
+    assert_eq!(current_iteration, 1);
+    assert_eq!(current_uri_index, 1);
 }
 
 #[test]
 fn nb_streams_increasing() {
-    let events = test(vec![TestMedia::ogg(), TestMedia::mkv()], 2, 1, false).into_iter();
-    assert_eos(events.last().unwrap());
+    let (events, current_iteration, current_uri_index) =
+        test(vec![TestMedia::ogg(), TestMedia::mkv()], 2, 1, false);
+    assert_eos(events.into_iter().last().unwrap());
+    assert_eq!(current_iteration, 0);
+    assert_eq!(current_uri_index, 1);
 }
 
 #[test]
 fn missing_file() {
-    let events = test(
+    let (events, current_iteration, current_uri_index) = test(
         vec![TestMedia::ogg(), TestMedia::missing_file()],
         1,
         1,
         false,
-    )
-    .into_iter();
-    assert_error(events.last().unwrap(), TestMedia::missing_file());
+    );
+    assert_error(
+        events.into_iter().last().unwrap(),
+        TestMedia::missing_file(),
+    );
+    assert_eq!(current_iteration, 0);
+    assert_eq!(current_uri_index, 0);
 }
 
 #[test]
 fn missing_http() {
-    let events = test(
+    let (events, current_iteration, current_uri_index) = test(
         vec![TestMedia::ogg(), TestMedia::missing_http()],
         1,
         1,
         false,
-    )
-    .into_iter();
-    assert_error(events.last().unwrap(), TestMedia::missing_http());
+    );
+    assert_error(
+        events.into_iter().last().unwrap(),
+        TestMedia::missing_http(),
+    );
+    assert_eq!(current_iteration, 0);
+    assert_eq!(current_uri_index, 0);
 }
