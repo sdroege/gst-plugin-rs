@@ -617,6 +617,15 @@ struct Playlist {
 
 impl Playlist {
     fn new(uris: Vec<String>, iterations: u32) -> Self {
+        Self {
+            items: Self::create_items(uris, iterations),
+        }
+    }
+
+    fn create_items(
+        uris: Vec<String>,
+        iterations: u32,
+    ) -> Box<dyn Iterator<Item = Item> + Send + Sync> {
         fn infinite_iter(uris: Vec<String>) -> Box<dyn Iterator<Item = Item> + Send + Sync> {
             Box::new(
                 uris.into_iter()
@@ -642,13 +651,11 @@ impl Playlist {
             )
         }
 
-        let items = if iterations == 0 {
+        if iterations == 0 {
             infinite_iter(uris)
         } else {
             finite_iter(uris, iterations)
-        };
-
-        Self { items }
+        }
     }
 
     fn next(&mut self) -> Result<Option<Item>, PlaylistError> {
