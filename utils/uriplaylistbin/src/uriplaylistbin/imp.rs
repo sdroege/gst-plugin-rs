@@ -613,12 +613,15 @@ struct ItemInner {
 
 struct Playlist {
     items: Box<dyn Iterator<Item = Item> + Send>,
+
+    uris: Vec<String>,
 }
 
 impl Playlist {
     fn new(uris: Vec<String>, iterations: u32) -> Self {
         Self {
-            items: Self::create_items(uris, iterations),
+            items: Self::create_items(uris.clone(), iterations),
+            uris,
         }
     }
 
@@ -663,6 +666,11 @@ impl Playlist {
             None => return Ok(None),
             Some(item) => item,
         };
+
+        if item.index() == usize::MAX {
+            // prevent overflow with infinite playlist
+            self.items = Self::create_items(self.uris.clone(), 0);
+        }
 
         item.set_waiting_for_stream_collection()?;
 
