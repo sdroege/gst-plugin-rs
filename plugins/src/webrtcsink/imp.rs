@@ -1945,10 +1945,19 @@ impl WebRTCSink {
         while let Some(msg) = stream.next().await {
             match msg.view() {
                 gst::MessageView::Error(err) => {
+                    pipe.0.debug_to_dot_file_with_ts(
+                        gst::DebugGraphDetails::all(),
+                        format!("webrtcsink-discovery-error"),
+                    );
                     return Err(err.error().into());
                 }
                 gst::MessageView::Eos(_) => {
                     let caps = pay.static_pad("src").unwrap().current_caps().unwrap();
+
+                    pipe.0.debug_to_dot_file_with_ts(
+                        gst::DebugGraphDetails::all(),
+                        format!("webrtcsink-discovery-done"),
+                    );
 
                     if let Some(s) = caps.structure(0) {
                         let mut s = s.to_owned();
