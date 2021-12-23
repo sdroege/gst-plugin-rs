@@ -27,6 +27,9 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+const CUDA_MEMORY_FEATURE: &str = "memory:CUDAMemory";
+const GL_MEMORY_FEATURE: &str = "memory:GLMemory";
+
 const RTP_TWCC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
@@ -240,22 +243,45 @@ impl Default for State {
     }
 }
 
+fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error> {
+    assert!(caps.is_fixed());
+
+    for feature in caps.features(0) {
+        if feature.contains(CUDA_MEMORY_FEATURE) {
+            return Ok(gst::parse_bin_from_description(
+                "cudaupload ! cudaconvert ! cudascale ! videorate drop-only=true",
+                true,
+            )?
+            .upcast());
+        } else if feature.contains(GL_MEMORY_FEATURE) {
+            return Ok(gst::parse_bin_from_description(
+                "glupload ! glcolorconvert ! glcolorscale ! videorate drop-only=true skip-to-first=true",
+                true,
+            )?
+            .upcast());
+        }
+    }
+
+    Ok(gst::parse_bin_from_description(
+        "videoconvert ! videoscale ! videorate drop-only=true skip-to-first=true",
+        true,
+    )?
+    .upcast())
+}
+
 /// Bit of an awkward function, but the goal here is to keep
 /// most of the encoding code for consumers in line with
 /// the codec discovery code, and this gets the job done.
 fn setup_encoding(
     pipeline: &gst::Pipeline,
     src: &gst::Element,
+    input_caps: &gst::Caps,
     codec: &Codec,
     ssrc: Option<u32>,
     twcc: bool,
 ) -> Result<(gst::Element, gst::Element, gst::Element), Error> {
     let conv = match codec.is_video {
-        true => gst::parse_bin_from_description(
-            "videoconvert ! videoscale ! videorate drop-only=true",
-            true,
-        )?
-        .upcast(),
+        true => make_converter_for_video_caps(input_caps)?.upcast(),
         false => gst::parse_bin_from_description("audioresample ! audioconvert", true)?.upcast(),
     };
 
@@ -300,19 +326,21 @@ fn setup_encoding(
             .with_context(|| "Linking encoding elements")?;
     }
 
-    // Quirk: nvh264enc can perform conversion from RGB formats, but
-    // doesn't advertise / negotiate colorimetry correctly, leading
-    // to incorrect color display in Chrome (but interestingly not in
-    // Firefox). In any case, restrict to exclude RGB formats altogether,
-    // and let videoconvert do the conversion properly if needed.
-    let conv_caps = if codec.encoder.name() == "nvh264enc" {
-        gst::Caps::builder("video/x-raw")
-            .field("format", &gst::List::new(&[&"NV12", &"YV12", &"I420"]))
-            .field("pixel-aspect-ratio", gst::Fraction::new(1, 1))
-            .build()
-    } else if codec.is_video {
-        gst::Caps::builder("video/x-raw")
-            .field("pixel-aspect-ratio", gst::Fraction::new(1, 1))
+    let conv_caps = if codec.is_video {
+        let mut structure_builder = gst::Structure::builder("video/x-raw")
+            .field("pixel-aspect-ratio", gst::Fraction::new(1, 1));
+
+        if codec.encoder.name() == "nvh264enc" {
+            // Quirk: nvh264enc can perform conversion from RGB formats, but
+            // doesn't advertise / negotiate colorimetry correctly, leading
+            // to incorrect color display in Chrome (but interestingly not in
+            // Firefox). In any case, restrict to exclude RGB formats altogether,
+            // and let videoconvert do the conversion properly if needed.
+            structure_builder = structure_builder.field("format", &gst::List::new(&[&"NV12", &"YV12", &"I420"]));
+        }
+
+        gst::Caps::builder_full_with_any_features()
+            .structure(structure_builder.build())
             .build()
     } else {
         gst::Caps::builder("audio/x-raw").build()
@@ -516,7 +544,9 @@ impl VideoEncoder {
             self.mitigation_mode = WebRTCSinkMitigationMode::NONE;
         }
 
-        let caps = gst::Caps::builder_full().structure(s).build();
+        let caps = gst::Caps::builder_full_with_any_features()
+            .structure(s)
+            .build();
 
         gst_log!(
             CAT,
@@ -978,8 +1008,14 @@ impl Consumer {
         let pay_filter = make_element("capsfilter", None)?;
         self.pipeline.add(&pay_filter).unwrap();
 
-        let (enc, raw_filter, pay) =
-            setup_encoding(&self.pipeline, &appsrc, codec, Some(webrtc_pad.ssrc), false)?;
+        let (enc, raw_filter, pay) = setup_encoding(
+            &self.pipeline,
+            &appsrc,
+            &webrtc_pad.in_caps,
+            codec,
+            Some(webrtc_pad.ssrc),
+            false,
+        )?;
 
         // At this point, the peer has provided its answer, and we want to
         // let the payloader / encoder perform negotiation according to that.
@@ -1798,7 +1834,17 @@ impl WebRTCSink {
                  * very well equipped to deal with this at the moment */
                 if let Some(media) = sdp.media(media_idx) {
                     if media.attribute_val("inactive").is_some() {
-                        gst_warning!(CAT, "consumer {} refused media {}", peer_id, media_idx);
+                        let media_str = sdp
+                            .media(webrtc_pad.media_idx)
+                            .and_then(|media| media.as_text().ok());
+
+                        gst_warning!(
+                            CAT,
+                            "consumer {} refused media {}: {:?}",
+                            peer_id,
+                            media_idx,
+                            media_str
+                        );
                         state.remove_consumer(element, peer_id, true);
 
                         return Err(WebRTCSinkError::ConsumerRefusedMedia {
@@ -1860,17 +1906,24 @@ impl WebRTCSink {
     ) -> Result<gst::Structure, Error> {
         let pipe = PipelineWrapper(gst::Pipeline::new(None));
 
-        let src = match codec.is_video {
-            true => make_element("videotestsrc", None)?,
-            false => make_element("audiotestsrc", None)?,
+        let src = if codec.is_video {
+            make_element("videotestsrc", None)?
+        } else {
+            make_element("audiotestsrc", None)?
         };
-        let capsfilter = make_element("capsfilter", None)?;
+        let mut elements = Vec::new();
+        elements.push(src.clone());
 
-        pipe.0.add_many(&[&src, &capsfilter]).unwrap();
-        src.link(&capsfilter)
+        elements.push(make_converter_for_video_caps(caps)?);
+
+        let capsfilter = make_element("capsfilter", None)?;
+        elements.push(capsfilter.clone());
+        let elements_slice = &elements.iter().collect::<Vec<_>>();
+        pipe.0.add_many(elements_slice).unwrap();
+        gst::Element::link_many(elements_slice)
             .with_context(|| format!("Running discovery pipeline for caps {}", caps))?;
 
-        let (_, _, pay) = setup_encoding(&pipe.0, &capsfilter, codec, None, true)?;
+        let (_, _, pay) = setup_encoding(&pipe.0, &capsfilter, &caps, codec, None, true)?;
 
         let sink = make_element("fakesink", None)?;
 
@@ -2368,7 +2421,17 @@ impl ElementImpl for WebRTCSink {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::builder("video/x-raw").build();
+            let caps = gst::Caps::builder_full()
+                .structure(gst::Structure::builder("video/x-raw").build())
+                .structure_with_features(
+                    gst::Structure::builder("video/x-raw").build(),
+                    gst::CapsFeatures::new(&[CUDA_MEMORY_FEATURE]),
+                )
+                .structure_with_features(
+                    gst::Structure::builder("video/x-raw").build(),
+                    gst::CapsFeatures::new(&[GL_MEMORY_FEATURE]),
+                )
+                .build();
             let video_pad_template = gst::PadTemplate::new(
                 "video_%u",
                 gst::PadDirection::Sink,
