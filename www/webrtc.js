@@ -52,6 +52,8 @@ function Session(our_id, peer_id, closed_callback) {
     this.peer_id = peer_id;
     this.our_id = our_id;
     this.closed_callback = closed_callback;
+    this.data_channel = null;
+    this.input = null;
 
     this.getVideoElement = function() {
         return document.getElementById("stream-" + this.our_id);
@@ -76,6 +78,9 @@ function Session(our_id, peer_id, closed_callback) {
             this.ws_conn.close();
             this.ws_conn = null;
         }
+
+        this.input && this.input.detach();
+        this.data_channel = null;
     };
 
     this.handleIncomingError = function(error) {
@@ -240,20 +245,36 @@ function Session(our_id, peer_id, closed_callback) {
         this.peer_connection.onaddstream = this.onRemoteStreamAdded.bind(this);
 
         this.peer_connection.ondatachannel = (event) => {
-            console.log('Data channel created');
-            let receive_channel = event.channel;
-            let buffer = [];
+            console.log(`Data channel created: ${event.channel.label}`);
+            this.data_channel = event.channel;
 
-            receive_channel.onopen = (event) => {
-                console.log ("Receive channel opened");
+            video_element = this.getVideoElement();
+            if (video_element) {
+                this.input = new Input(video_element, (data) => {
+                    if (this.data_channel) {
+                        console.log(`Navigation data: ${data}`);
+                        this.data_channel.send(data);
+                    }
+                });
             }
-            receive_channel.onclose = (event) => {
-                console.log ("Receive channel closed");
+
+            this.data_channel.onopen = (event) => {
+                console.log("Receive channel opened, attaching input");
+                this.input.attach();
             }
-            receive_channel.onerror = (event) => {
-                console.log ("Error on receive channel", event.data);
+            this.data_channel.onclose = (event) => {
+                console.info("Receive channel closed");
+                this.input && this.input.detach();
+                this.data_channel = null;
             }
-            receive_channel.onmessage = (event) => {
+            this.data_channel.onerror = (event) => {
+                this.input && this.input.detach();
+                console.warn("Error on receive channel", event.data);
+                this.data_channel = null;
+            }
+
+            let buffer = [];
+            this.data_channel.onmessage = (event) => {
                 if (typeof event.data === 'string' || event.data instanceof String) {
                     if (event.data == 'BEGIN_IMAGE')
                         buffer = [];

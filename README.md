@@ -135,6 +135,27 @@ for the list of properties.
 
 [the source code]: plugins/src/signaller/imp.rs
 
+
+### Enable 'navigation' a.k.a user interactivity with the content
+
+`webrtcsink` implements the [`GstNavigation`] interface which allows interacting
+with the content, for example move with your mouse, entering keys with the
+keyboard, etc... On top of that a `WebRTCDataChannel` based protocol has been
+implemented and can be activated with the `enable-data-channel-navigation=true`
+property. The [demo](www/) implements the protocol and you can easily test this
+feature, using the [`wpesrc`] for example.
+
+As an example, the following pipeline allows you to navigate the GStreamer
+documentation inside the video running within your web browser (in
+http://127.0.0.1:8000 if you followed previous steps of that readme):
+
+```
+gst-launch-1.0 wpesrc location=https://gstreamer.freedesktop.org/documentation/ ! webrtcsink enable-data-channel-navigation=true
+```
+
+[`GstNavigation`]: https://gstreamer.freedesktop.org/documentation/video/gstnavigation.html
+[`wpesrc`]: https://gstreamer.freedesktop.org/documentation/wpe/wpesrc.html
+
 ## Testing congestion control
 
 For the purpose of testing congestion in a reproducible manner, a

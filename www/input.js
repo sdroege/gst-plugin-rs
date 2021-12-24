@@ -55,7 +55,7 @@ class Input {
         this.buttonMask = 0;
 
         /**
-         * @type {Guacamole.Keyboard}
+         * @type {Keyboard}
          */
         this.keyboard = null;
 
@@ -117,7 +117,7 @@ class Input {
      */
     _mouseButtonMovement(event) {
         const down = (event.type === 'mousedown' ? 1 : 0);
-        var mtype = "m";
+        var data = {};
 
         if (event.type === 'mousemove' && !this.m) return;
 
@@ -133,12 +133,20 @@ class Input {
         }
 
         if (document.pointerLockElement) {
-            mtype = "m2";
+            // FIXME - mark as relative!
+            console.warn("FIXME: Make event relative!")
             this.x = event.movementX;
             this.y = event.movementY;
         } else if (event.type === 'mousemove') {
             this.x = this._clientToServerX(event.clientX);
             this.y = this._clientToServerY(event.clientY);
+            data["event"] = "MouseMove"
+        }
+
+        if (event.type === 'mousedown') {
+            data["event"] = "MouseButtonPress";
+        } else if (event.type === 'mouseup') {
+            data["event"] = "MouseButtonRelease";
         }
 
         if (event.type === 'mousedown' || event.type === 'mouseup') {
@@ -148,16 +156,14 @@ class Input {
             } else {
                 this.buttonMask &= ~mask;
             }
+
+            data["button"] = this.buttonMask;
         }
 
-        var toks = [
-            mtype,
-            this.x,
-            this.y,
-            this.buttonMask
-        ];
+        data["x"] = this.x;
+        data["y"] = this.y;
 
-        this.send(toks.join(","));
+        this.send(JSON.stringify(data));
     }
 
     /**
@@ -165,56 +171,45 @@ class Input {
      * @param {TouchEvent} event
      */
     _touch(event) {
-        var mtype = "m";
         var mask = 1;
+        var data = {};
 
         if (event.type === 'touchstart') {
             this.buttonMask |= mask;
+            data["event"] = "MouseButtonPress";
+            data["button"] = this.buttonMask;
         } else if (event.type === 'touchend') {
             this.buttonMask &= ~mask;
+            data["event"] = "MouseButtonRelease";
+            data["button"] = this.buttonMask;
         } else if (event.type === 'touchmove') {
             event.preventDefault();
+            data["event"] = "MouseMove";
         }
 
         this.x = this._clientToServerX(event.changedTouches[0].clientX);
         this.y = this._clientToServerY(event.changedTouches[0].clientY);
 
-        var toks = [
-            mtype,
-            this.x,
-            this.y,
-            this.buttonMask
-        ];
+        data["x"] = this.x;
+        data["y"] = this.y;
 
-        this.send(toks.join(","));
+        this.send(JSON.stringify(data));
     }
 
     /**
      * Handles mouse wheel events and sends them to WebRTC app.
-     * @param {MouseWheelEvent} event
+     * @param {MouseEvent} event
      */
-    _mouseWheel(event) {
-        var mtype = (document.pointerLockElement ? "m2" : "m");
-        var button = 3;
-        if (event.deltaY < 0) {
-            button = 4;
-        }
-        var mask = 1 << button;
-        var toks;
-        // Simulate button press and release.
-        for (var i = 0; i < 2; i++) {
-            if (i === 0)
-                this.buttonMask |= mask;
-            else
-                this.buttonMask &= ~mask;
-            toks = [
-                mtype,
-                this.x,
-                this.y,
-                this.buttonMask
-            ];
-            this.send(toks.join(","));
-        }
+    _wheel(event) {
+        let data = {
+            "event": "MouseScroll",
+            "x": this.x,
+            "y": this.y,
+            "delta_x": -event.deltaX,
+            "delta_y": -event.deltaY,
+        };
+
+        this.send(JSON.stringify(data));
 
         event.preventDefault();
     }
@@ -262,23 +257,10 @@ class Input {
     }
 
     /**
-     * Sends WebRTC app command to toggle display of the remote mouse pointer.
-     */
-    _pointerLock() {
-        if (document.pointerLockElement) {
-            this.send("p,1");
-        } else {
-            this.send("p,0");
-        }
-    }
-
-    /**
      * Sends WebRTC app command to hide the remote pointer when exiting pointer lock.
      */
     _exitPointerLock() {
         document.exitPointerLock();
-        // hide the pointer.
-        this.send("p,0");
     }
 
     /**
@@ -295,13 +277,26 @@ class Input {
         const vpWidth = frameW * multi;
         const vpHeight = (frameH * multi);
 
+        var elem = this.element;
+        var offsetLeft = 0;
+        var offsetTop = 0;
+        do {
+            if (!isNaN(elem.offsetLeft)) {
+                offsetLeft += elem.offsetLeft;
+            }
+
+            if (!isNaN(elem.offsetTop)) {
+                offsetTop += elem.offsetTop;
+            }
+        } while (elem = elem.offsetParent);
+
         this.m = {
             mouseMultiX: frameW / vpWidth,
             mouseMultiY: frameH / vpHeight,
             mouseOffsetX: Math.max((windowW - vpWidth) / 2.0, 0),
             mouseOffsetY: Math.max((windowH - vpHeight) / 2.0, 0),
-            centerOffsetX: (document.documentElement.clientWidth - this.element.offsetWidth) / 2.0,
-            centerOffsetY: (document.documentElement.clientHeight - this.element.offsetHeight) / 2.0,
+            offsetLeft: offsetLeft,
+            offsetTop: offsetTop,
             scrollX: window.scrollX,
             scrollY: window.scrollY,
             frameW,
@@ -314,7 +309,7 @@ class Input {
      * @param {Integer} clientX
      */
     _clientToServerX(clientX) {
-        let serverX = Math.round((clientX - this.m.mouseOffsetX - this.m.centerOffsetX + this.m.scrollX) * this.m.mouseMultiX);
+        var serverX = Math.round((clientX - this.m.mouseOffsetX - this.m.offsetLeft + this.m.scrollX) * this.m.mouseMultiX);
 
         if (serverX === this.m.frameW - 1) serverX = this.m.frameW;
         if (serverX > this.m.frameW) serverX = this.m.frameW;
@@ -328,68 +323,13 @@ class Input {
      * @param {Integer} clientY
      */
     _clientToServerY(clientY) {
-        let serverY = Math.round((clientY - this.m.mouseOffsetY - this.m.centerOffsetY + this.m.scrollY) * this.m.mouseMultiY);
+        let serverY = Math.round((clientY - this.m.mouseOffsetY - this.m.offsetTop + this.m.scrollY) * this.m.mouseMultiY);
 
         if (serverY === this.m.frameH - 1) serverY = this.m.frameH;
         if (serverY > this.m.frameH) serverY = this.m.frameH;
         if (serverY < 0) serverY = 0;
 
         return serverY;
-    }
-
-    /**
-     * Sends command to WebRTC app to connect virtual joystick and initializes the local GamepadManger.
-     * @param {GamepadEvent} event
-     */
-    _gamepadConnected(event) {
-        console.log("Gamepad connected at index %d: %s. %d buttons, %d axes.",
-            event.gamepad.index, event.gamepad.id,
-            event.gamepad.buttons.length, event.gamepad.axes.length);
-
-        if (this.ongamepadconnected !== null) {
-            this.ongamepadconnected(event.gamepad.id);
-        }
-
-        // Initialize the gamepad manager.
-        this.gamepadManager = new GamepadManager(event.gamepad, this._gamepadButton.bind(this), this._gamepadAxis.bind(this), this._gamepadDisconnect.bind(this));
-
-        // Send joystick connect message over data channel.
-        this.send("js,c," + this.gamepadManager.numAxes + "," + this.gamepadManager.numButtons);
-    }
-
-    /**
-     * Sends joystick disconnect command to WebRTC app.
-     */
-    _gamepadDisconnect() {
-        console.log("Gamepad disconnected");
-
-        if (this.ongamepaddisconneceted !== null) {
-            this.ongamepaddisconneceted();
-        }
-
-        this.send("js,d")
-    }
-
-    /**
-     * Send gamepad button to WebRTC app.
-     *
-     * @param {number} gp_num  - the gamepad number
-     * @param {number} btn_num - the uinput converted button number
-     * @param {number} val - the button value, 1 or 0 for pressed or not-pressed.
-     */
-    _gamepadButton(gp_num, btn_num, val) {
-        this.send("js,b," + btn_num + "," + val);
-    }
-
-    /**
-     * Send the gamepad axis to the WebRTC app.
-     *
-     * @param {number} gp_num - the gamepad number
-     * @param {number} axis_num - the uinput converted axis number
-     * @param {number} val - the normalize value between [0, 255]
-     */
-    _gamepadAxis(gp_num, axis_num, val) {
-        this.send("js,a," + axis_num + "," + val)
     }
 
     /**
@@ -405,7 +345,8 @@ class Input {
         this.keyboard.reset();
 
         // Reset stuck keys on server side.
-        this.send("kr");
+        // FIXME: How to implement resetting keyboard with the GstNavigation interface
+        // this.send("kr");
     }
 
     /**
@@ -438,26 +379,16 @@ class Input {
      */
     attach() {
         this.listeners.push(addListener(this.element, 'resize', this._windowMath, this));
-        this.listeners.push(addListener(this.element, 'mousewheel', this._mouseWheel, this));
+        this.listeners.push(addListener(this.element, 'wheel', this._wheel, this));
         this.listeners.push(addListener(this.element, 'contextmenu', this._contextMenu, this));
         this.listeners.push(addListener(this.element.parentElement, 'fullscreenchange', this._onFullscreenChange, this));
-        this.listeners.push(addListener(document, 'pointerlockchange', this._pointerLock, this));
         this.listeners.push(addListener(window, 'keydown', this._key, this));
         this.listeners.push(addListener(window, 'keyup', this._key, this));
         this.listeners.push(addListener(window, 'resize', this._windowMath, this));
         this.listeners.push(addListener(window, 'resize', this._resizeStart, this));
 
-        // Gamepad support
-        this.listeners.push(addListener(window, 'gamepadconnected', this._gamepadConnected, this));
-        this.listeners.push(addListener(window, 'gamepaddisconnected', this._gamepadDisconnect, this));
-
         if ('ontouchstart' in window) {
-            this.listeners.push(addListener(window, 'touchstart', this._touch, this));
-            this.listeners.push(addListener(this.element, 'touchend', this._touch, this));
-            this.listeners.push(addListener(this.element, 'touchmove', this._touch, this));
-
-            console.log("Enabling mouse pointer display for touch devices.");
-            this.send("p,1");
+            console.warning("FIXME: Enabling mouse pointer display for touch devices.");
         } else {
             this.listeners.push(addListener(this.element, 'mousemove', this._mouseButtonMovement, this));
             this.listeners.push(addListener(this.element, 'mousedown', this._mouseButtonMovement, this));
@@ -471,12 +402,12 @@ class Input {
         }, this));
 
         // Using guacamole keyboard because it has the keysym translations.
-        this.keyboard = new Guacamole.Keyboard(window);
+        this.keyboard = new Keyboard(window);
         this.keyboard.onkeydown = (keysym) => {
-            this.send("kd," + keysym);
+            this.send(JSON.stringify( {"event": "KeyPress", "key": keysym}));
         };
         this.keyboard.onkeyup = (keysym) => {
-            this.send("ku," + keysym);
+            this.send(JSON.stringify( {"event": "KeyRelease", "key": keysym}));
         };
 
         this._windowMath();
@@ -490,7 +421,8 @@ class Input {
             this.keyboard.onkeyup = null;
             this.keyboard.reset();
             delete this.keyboard;
-            this.send("kr");
+            // FIXME: How to implement resetting keyboard with the GstNavigation interface
+            // this.send("kr");
         }
     }
 

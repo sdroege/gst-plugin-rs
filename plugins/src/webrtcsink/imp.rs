@@ -2,8 +2,11 @@ use anyhow::Context;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
+use gst_video::prelude::*;
+use gst_video::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info, gst_log, gst_trace, gst_warning};
 use gst_rtp::prelude::*;
+use gst_webrtc::WebRTCDataChannel;
 
 use async_std::task;
 use futures::prelude::*;
@@ -44,6 +47,7 @@ const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
     WebRTCSinkCongestionControl::Homegrown;
 const DEFAULT_DO_FEC: bool = true;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
+const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
 
 /// User configuration
 struct Settings {
@@ -56,6 +60,7 @@ struct Settings {
     max_bitrate: u32,
     do_fec: bool,
     do_retransmission: bool,
+    enable_data_channel_navigation: bool,
 }
 
 /// Represents a codec we can offer
@@ -190,10 +195,29 @@ struct State {
     audio_serial: u32,
     video_serial: u32,
     streams: HashMap<String, InputStream>,
+    navigation_handler: Option<NavigationEventHandler>,
 }
 
+fn create_navigation_event<N: IsA< gst_video::Navigation>>(sink: &N, msg: &str) {
+    let event: Result<gst_video::NavigationEvent, _> = serde_json::from_str(msg);
+
+    if let Ok(event) = event {
+        sink.send_event(event.structure());
+    } else {
+        gst_error!(CAT, "Invalid navigation event: {:?}", msg);
+    }
+
+
+}
 /// Simple utility for tearing down a pipeline cleanly
 struct PipelineWrapper(gst::Pipeline);
+
+// Structure to generate GstNavigation event from a WebRTCDataChannel
+#[derive(Debug)]
+struct NavigationEventHandler {
+    channel: WebRTCDataChannel,
+    message_sig: glib::SignalHandlerId,
+}
 
 /// Our instance structure
 #[derive(Default)]
@@ -220,6 +244,7 @@ impl Default for Settings {
             max_bitrate: DEFAULT_MAX_BITRATE,
             do_fec: DEFAULT_DO_FEC,
             do_retransmission: DEFAULT_DO_RETRANSMISSION,
+            enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
         }
     }
 }
@@ -239,6 +264,7 @@ impl Default for State {
             audio_serial: 0,
             video_serial: 0,
             streams: HashMap::new(),
+            navigation_handler: None,
         }
     }
 }
@@ -1167,6 +1193,33 @@ impl InputStream {
     }
 }
 
+impl NavigationEventHandler {
+    pub fn new(
+        element: &super::WebRTCSink,
+        webrtcbin: &gst::Element,
+    ) -> Self {
+
+        let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
+            "create-data-channel",
+            &[&"input", &None::<gst::Structure>],
+        );
+
+        let weak_element = element.downgrade();
+        Self {
+            message_sig: channel.connect("on-message-string", false, move |values| {
+                if let Some(element) = weak_element.upgrade() {
+                    let _channel = values[0].get::<WebRTCDataChannel>().unwrap();
+                    let msg = values[1].get::<&str>().unwrap();
+                    create_navigation_event(&element, msg);
+                }
+
+                None
+            }),
+            channel,
+        }
+    }
+}
+
 impl WebRTCSink {
     /// Build an ordered map of Codecs, given user-provided audio / video caps */
     fn lookup_codecs(&self) -> BTreeMap<i32, Codec> {
@@ -1664,6 +1717,11 @@ impl WebRTCSink {
         })?;
 
         element.emit_by_name::<()>("new-webrtcbin", &[&peer_id, &webrtcbin]);
+        if settings.enable_data_channel_navigation {
+            state.navigation_handler = Some(
+                NavigationEventHandler::new(&element, &webrtcbin)
+            );
+        }
 
         pipeline.set_state(gst::State::Playing).map_err(|err| {
             WebRTCSinkError::ConsumerPipelineError {
@@ -2161,7 +2219,7 @@ impl ObjectSubclass for WebRTCSink {
     const NAME: &'static str = "RsWebRTCSink";
     type Type = super::WebRTCSink;
     type ParentType = gst::Bin;
-    type Interfaces = (gst::ChildProxy,);
+    type Interfaces = (gst::ChildProxy, gst_video::Navigation);
 }
 
 impl ObjectImpl for WebRTCSink {
@@ -2241,6 +2299,13 @@ impl ObjectImpl for WebRTCSink {
                     "Do retransmission",
                     "Whether the element should offer to honor retransmission requests",
                     DEFAULT_DO_RETRANSMISSION,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY
+                ),
+                glib::ParamSpecBoolean::new(
+                    "enable-data-channel-navigation",
+                    "Enable data channel navigation",
+                    "Enable navigation events through a dedicated WebRTCDataChannel",
+                    DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY
                 ),
             ]
@@ -2331,6 +2396,10 @@ impl ObjectImpl for WebRTCSink {
                 let mut settings = self.settings.lock().unwrap();
                 settings.do_retransmission = value.get::<bool>().expect("type checked upstream");
             }
+            "enable-data-channel-navigation" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.enable_data_channel_navigation = value.get::<bool>().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -2372,6 +2441,10 @@ impl ObjectImpl for WebRTCSink {
             "do-retransmission" => {
                 let settings = self.settings.lock().unwrap();
                 settings.do_retransmission.to_value()
+            }
+            "enable-data-channel-navigation" => {
+                let settings = self.settings.lock().unwrap();
+                settings.enable_data_channel_navigation.to_value()
             }
             "stats" => self.gather_stats().to_value(),
             _ => unimplemented!(),
@@ -2583,5 +2656,25 @@ impl ChildProxyImpl for WebRTCSink {
             ),
             _ => None,
         }
+    }
+}
+
+impl NavigationImpl for WebRTCSink {
+    fn send_event(&self, _imp: &Self::Type, event_def: gst::Structure) {
+        let mut state = self.state.lock().unwrap();
+        let event = gst::event::Navigation::new(event_def);
+
+        state
+            .streams
+            .iter_mut()
+            .for_each(|(_, stream)| {
+                if stream.sink_pad.name().starts_with("video_") {
+                    gst_log!(CAT, "Navigating to: {:?}", event);
+                    // FIXME: Handle multi tracks.
+                    if !stream.sink_pad.push_event(event.clone()) {
+                        gst_info!(CAT, "Could not send event: {:?}", event);
+                    }
+                }
+            });
     }
 }
