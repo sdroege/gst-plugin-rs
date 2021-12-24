@@ -27,6 +27,7 @@ parser.add_argument('--addr', default='0.0.0.0', help='Address to listen on')
 parser.add_argument('--port', default=8443, type=int, help='Port to listen on')
 parser.add_argument('--keepalive-timeout', dest='keepalive_timeout', default=30, type=int, help='Timeout for keepalive (in seconds)')
 parser.add_argument('--disable-ssl', default=False, help='Disable ssl', action='store_true')
+parser.add_argument('--hide-local-candidates', '-hd', default=False, help='Hide local Ice candidates', action='store_true')
 
 options = parser.parse_args(sys.argv[1:])
 
@@ -150,6 +151,14 @@ async def connection_handler(ws, uid):
         else:
             # We're in a session, route message to connected peer
             msg = json.loads(msg)
+
+            if options.hide_local_candidates:
+                candidate = msg.get("ice", {}).get("candidate")
+                if candidate:
+                    if candidate.split()[4].endswith(".local"):
+                        logger.info(f"Ignoring local candidate: {candidate}")
+                        continue
+
             other_id = msg['peer-id']
             try:
                 wso, oaddr, status = peers[other_id]
