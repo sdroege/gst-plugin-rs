@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Asymptotic Inc.
+// Copyright (C) 2021, Daily
 //      Author: Sanchayan Maity <sanchayan@asymptotic.io>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
