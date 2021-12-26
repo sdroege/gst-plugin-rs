@@ -67,11 +67,13 @@ pub trait SignallableObject: AsRef<glib::Object> + Signallable {}
 
 impl<T: AsRef<glib::Object> + Signallable> SignallableObject for T {}
 
-impl WebRTCSink {
-    pub fn new() -> Self {
+impl Default for WebRTCSink {
+    fn default() -> Self {
         glib::Object::new(&[]).unwrap()
     }
+}
 
+impl WebRTCSink {
     pub fn with_signaller(signaller: Box<dyn SignallableObject>) -> Self {
         let ret: WebRTCSink = glib::Object::new(&[]).unwrap();
 

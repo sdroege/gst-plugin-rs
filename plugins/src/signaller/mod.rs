@@ -55,8 +55,8 @@ impl Signallable for Signaller {
     }
 }
 
-impl Signaller {
-    pub fn new() -> Self {
+impl Default for Signaller {
+    fn default() -> Self {
         glib::Object::new(&[]).unwrap()
     }
 }

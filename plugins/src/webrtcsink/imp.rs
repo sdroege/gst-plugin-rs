@@ -84,8 +84,6 @@ struct WebRTCPad {
     pad: gst::Pad,
     /// The (fixed) caps of the corresponding input stream
     in_caps: gst::Caps,
-    /// Our offer caps
-    caps: gst::Caps,
     /// The m= line index in the SDP
     media_idx: u32,
     ssrc: u32,
@@ -225,7 +223,7 @@ impl Default for Settings {
 
 impl Default for State {
     fn default() -> Self {
-        let signaller = Signaller::new();
+        let signaller = Signaller::default();
 
         Self {
             signaller: Box::new(signaller),
@@ -461,7 +459,7 @@ impl VideoEncoder {
 
         let width = height.mul_div_ceil(ratio.numer(), ratio.denom()).unwrap();
 
-        width + 1 >> 1 << 1
+        (width + 1) & !1
     }
 
     fn set_bitrate(&mut self, element: &super::WebRTCSink, bitrate: i32) {
@@ -838,7 +836,7 @@ impl State {
             && element.current_state() == gst::State::Playing
             && self.codec_discovery_done
         {
-            if let Err(err) = self.signaller.start(&element) {
+            if let Err(err) = self.signaller.start(element) {
                 gst_error!(CAT, obj: element, "error: {}", err);
                 gst::element_error!(
                     element,
@@ -943,7 +941,6 @@ impl Consumer {
             WebRTCPad {
                 pad,
                 in_caps: stream.in_caps.as_ref().unwrap().clone(),
-                caps: payloader_caps,
                 media_idx: media_idx as u32,
                 ssrc,
                 stream_name: stream.sink_pad.name().to_string(),
@@ -1030,8 +1027,8 @@ impl Consumer {
         if codec.is_video {
             let video_info = gst_video::VideoInfo::from_caps(&webrtc_pad.in_caps)?;
             let mut enc = VideoEncoder::new(
-                enc.clone(),
-                raw_filter.clone(),
+                enc,
+                raw_filter,
                 video_info,
                 &self.peer_id,
                 codec.caps.structure(0).unwrap().name(),
@@ -1151,7 +1148,7 @@ impl WebRTCSink {
         /* Now iterate user-provided codec preferences and determine
          * whether we can fulfill these preferences */
         let settings = self.settings.lock().unwrap();
-        let mut payload = (96..128).into_iter();
+        let mut payload = 96..128;
 
         settings
             .video_caps
@@ -1566,7 +1563,7 @@ impl WebRTCSink {
         state
             .streams
             .iter()
-            .for_each(|(_, stream)| consumer.request_webrtcbin_pad(element, &settings, &stream));
+            .for_each(|(_, stream)| consumer.request_webrtcbin_pad(element, &settings, stream));
 
         let clock = element.clock();
 
@@ -1728,7 +1725,7 @@ impl WebRTCSink {
                 let mut interval =
                     async_std::stream::interval(std::time::Duration::from_millis(100));
 
-                while let Some(_) = interval.next().await {
+                while interval.next().await.is_some() {
                     let element_clone = element_clone.clone();
                     let peer_id_clone = peer_id_clone.clone();
                     if let Some(webrtcbin) = webrtcbin.upgrade() {
@@ -1768,8 +1765,7 @@ impl WebRTCSink {
     ) -> Result<(), WebRTCSinkError> {
         let state = self.state.lock().unwrap();
 
-        let sdp_mline_index =
-            sdp_mline_index.ok_or_else(|| WebRTCSinkError::MandatorySdpMlineIndex)?;
+        let sdp_mline_index = sdp_mline_index.ok_or(WebRTCSinkError::MandatorySdpMlineIndex)?;
 
         if let Some(consumer) = state.consumers.get(peer_id) {
             gst_trace!(CAT, "adding ice candidate for peer {}", peer_id);
@@ -1945,7 +1941,7 @@ impl WebRTCSink {
         let futs = codecs
             .iter()
             .filter(|(_, codec)| codec.is_video == is_video)
-            .map(|(_, codec)| WebRTCSink::run_discovery_pipeline(element, &codec, &sink_caps));
+            .map(|(_, codec)| WebRTCSink::run_discovery_pipeline(element, codec, &sink_caps));
 
         for ret in futures::future::join_all(futs).await {
             match ret {
@@ -2044,10 +2040,8 @@ impl WebRTCSink {
                         .for_each(|(_, mut stream)| {
                             if stream.sink_pad.upcast_ref::<gst::Pad>() == pad {
                                 stream.in_caps = Some(e.caps().to_owned());
-                            } else {
-                                if stream.in_caps.is_none() {
-                                    all_pads_have_caps = false;
-                                }
+                            } else if stream.in_caps.is_none() {
+                                all_pads_have_caps = false;
                             }
                         });
 
@@ -2206,14 +2200,14 @@ impl ObjectImpl for WebRTCSink {
                 settings.video_caps = value
                     .get::<Option<gst::Caps>>()
                     .expect("type checked upstream")
-                    .unwrap_or_else(|| gst::Caps::new_empty());
+                    .unwrap_or_else(gst::Caps::new_empty);
             }
             "audio-caps" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.audio_caps = value
                     .get::<Option<gst::Caps>>()
                     .expect("type checked upstream")
-                    .unwrap_or_else(|| gst::Caps::new_empty());
+                    .unwrap_or_else(gst::Caps::new_empty);
             }
             "stun-server" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -2422,7 +2416,7 @@ impl ElementImpl for WebRTCSink {
             name
         };
 
-        let sink_pad = gst::GhostPad::builder_with_template(&templ, Some(name.as_str()))
+        let sink_pad = gst::GhostPad::builder_with_template(templ, Some(name.as_str()))
             .event_function(|pad, parent, event| {
                 WebRTCSink::catch_panic_pad_function(
                     parent,

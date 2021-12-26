@@ -138,7 +138,7 @@ async fn run(args: Args) -> Result<(), Error> {
     task::spawn(async move {
         let mut interval = async_std::stream::interval(std::time::Duration::from_millis(100));
 
-        while let Some(_) = interval.next().await {
+        while interval.next().await.is_some() {
             if let Some(ws) = ws_clone.upgrade() {
                 let stats = ws.property::<gst::Structure>("stats");
                 let stats = serialize_value(&stats.to_value()).unwrap();
