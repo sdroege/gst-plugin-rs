@@ -42,3 +42,11 @@ The element also implements an URI handler which accepts credentials and cache s
 ```console
 gst-launch-1.0 playbin3 uri=spotify:track:3i3P1mGpV9eRlfKccjDjwi?access-token=$ACCESS_TOKEN\&cache-credentials=cache\&cache-files=cache
 ```
+
+## spotifylyricssrc
+
+The `spotifylyricssrc` element can be used to retrieve the lyrics of a song from Spotify.
+
+```
+gst-launch-1.0 spotifylyricssrc access-token=$ACCESS_TOKEN track=spotify:track:3yMFBuIdPBdJkkzaPBDjKY ! txt. videotestsrc pattern=black ! video/x-raw,width=1920,height=1080 ! textoverlay name=txt shaded-background=yes valignment=center halignment=center ! autovideosink
+```

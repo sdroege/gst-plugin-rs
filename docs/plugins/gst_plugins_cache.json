@@ -12209,6 +12209,134 @@
                     }
                 },
                 "rank": "primary"
+            },
+            "spotifylyricssrc": {
+                "author": "Guillaume Desmottes <guillaume@desmottes.be>",
+                "description": "Spotify lyrics source",
+                "hierarchy": [
+                    "GstSpotifyLyricsSrc",
+                    "GstPushSrc",
+                    "GstBaseSrc",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Source/Text",
+                "pad-templates": {
+                    "src": {
+                        "caps": "text/x-raw:\n         format: utf8\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "access-token": {
+                        "blurb": "Spotify access token, requires 'streaming' scope",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "background-color": {
+                        "blurb": "The background color of the lyrics, in ARGB",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
+                    },
+                    "cache-credentials": {
+                        "blurb": "Directory where to cache Spotify credentials",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "cache-files": {
+                        "blurb": "Directory where to cache downloaded files from Spotify",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "cache-max-size": {
+                        "blurb": "The max allowed size of the cache, in bytes, or 0 to disable the cache limit",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "18446744073709551615",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint64",
+                        "writable": true
+                    },
+                    "highlight-text-color": {
+                        "blurb": "The text color of the highlighted lyrics, in ARGB",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
+                    },
+                    "text-color": {
+                        "blurb": "The text color of the lyrics, in ARGB",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "-1",
+                        "min": "0",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": false
+                    },
+                    "track": {
+                        "blurb": "Spotify track URI, in the form 'spotify:track:$SPOTIFY_ID'",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "primary"
             }
         },
         "filename": "gstspotify",

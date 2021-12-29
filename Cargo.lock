@@ -2976,6 +2976,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-base",
  "librespot-core",
+ "librespot-metadata",
  "librespot-playback",
  "tokio",
  "url",
