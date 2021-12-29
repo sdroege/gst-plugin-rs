@@ -14,6 +14,7 @@
  */
 use gst::glib;
 
+mod common;
 mod spotifyaudiosrc;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
