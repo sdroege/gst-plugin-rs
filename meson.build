@@ -59,6 +59,7 @@ plugins = {
   'gst-plugin-webp': 'libgstrswebp',
   'gst-plugin-videofx': 'libgstvideofx',
   'gst-plugin-uriplaylistbin': 'libgsturiplaylistbin',
+  'gst-plugin-spotify': 'libgstspotify',
 }
 
 extra_env = {}

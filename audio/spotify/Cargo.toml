@@ -1,0 +1,44 @@
+[package]
+name = "gst-plugin-spotify"
+version = "0.8.0"
+authors = ["Guillaume Desmottes <guillaume@desmottes.be>"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+license = "MIT/Apache-2.0"
+description = "Spotify GStreamer Plugin"
+edition = "2021"
+rust-version = "1.56"
+
+[dependencies]
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+once_cell = "1.0"
+librespot = { version = "0.3", default-features = false }
+tokio = "1.0"
+futures = "0.3"
+anyhow = "1.0"
+
+[lib]
+name = "gstspotify"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../version-helper" }
+
+[features]
+# GStreamer 1.14 is required for static linking
+static = ["gst/v1_14"]
+capi = []
+
+[package.metadata.capi]
+min_version = "0.8.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

@@ -43,6 +43,10 @@ You will find the following plugins in this repository:
     - `lewton`: A Vorbis decoder based on the
       [lewton](https://github.com/RustAudio/lewton) library.
 
+    - `spotify`: A plugin to access content from [Spotify](https://www.spotify.com/)
+      based on the [librespot](https://github.com/librespot-org/) library.
+
+
   * `video`
     - `cdg`: A parser and renderer for
       [CD+G karaoke data](https://docs.rs/cdg/0.1.0/cdg/).
