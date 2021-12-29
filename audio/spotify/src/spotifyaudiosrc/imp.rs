@@ -8,7 +8,6 @@
 
 use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 
-use anyhow::bail;
 use futures::future::{AbortHandle, Abortable, Aborted};
 use once_cell::sync::Lazy;
 use tokio::{runtime, task::JoinHandle};
@@ -18,10 +17,6 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::{base_src::CreateSuccess, prelude::*};
 
-use librespot::core::{
-    cache::Cache, config::SessionConfig, session::Session, spotify_id::SpotifyId,
-};
-use librespot::discovery::Credentials;
 use librespot::playback::{
     audio_backend::{Sink, SinkResult},
     config::PlayerConfig,
@@ -67,12 +62,7 @@ struct State {
 
 #[derive(Default)]
 struct Settings {
-    username: String,
-    password: String,
-    cache_credentials: String,
-    cache_files: String,
-    cache_max_size: u64,
-    track: String,
+    common: crate::common::Settings,
     bitrate: Bitrate,
 }
 
@@ -99,120 +89,39 @@ impl ObjectSubclass for SpotifyAudioSrc {
 impl ObjectImpl for SpotifyAudioSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            let mut props = crate::common::Settings::properties();
             let default = Settings::default();
 
-            vec![glib::ParamSpecString::builder("username")
-                    .nick("Username")
-                    .blurb("Spotify device username from https://www.spotify.com/us/account/set-device-password/")
-                    .default_value(Some(default.username.as_str()))
+            props.push(
+                glib::ParamSpecEnum::builder_with_default::<Bitrate>("bitrate", default.bitrate)
+                    .nick("Spotify bitrate")
+                    .blurb("Spotify audio bitrate in kbit/s")
                     .mutable_ready()
                     .build(),
-                glib::ParamSpecString::builder("password")
-                    .nick("Password")
-                    .blurb("Spotify device password from https://www.spotify.com/us/account/set-device-password/")
-                    .default_value(Some(default.password.as_str()))
-                    .mutable_ready()
-                    .build(),
-                glib::ParamSpecString::builder("cache-credentials")
-                    .nick("Credentials cache")
-                    .blurb("Directory where to cache Spotify credentials")
-                    .default_value(Some(default.cache_credentials.as_str()))
-                    .mutable_ready()
-                    .build(),
-                glib::ParamSpecString::builder("cache-files")
-                    .nick("Files cache")
-                    .blurb("Directory where to cache downloaded files from Spotify")
-                    .default_value(Some(default.cache_files.as_str()))
-                    .mutable_ready()
-                    .build(),
-                glib::ParamSpecUInt64::builder("cache-max-size")
-                    .nick("Cache max size")
-                    .blurb("The max allowed size of the cache, in bytes, or 0 to disable the cache limit")
-                    .default_value(default.cache_max_size)
-                    .mutable_ready()
-                    .build(),
-                glib::ParamSpecString::builder("track")
-                    .nick("Spotify URI")
-                    .blurb("Spotify track URI, in the form 'spotify:track:$SPOTIFY_ID'")
-                    .default_value(Some(default.track.as_str()))
-                    .mutable_ready()
-                    .build(),
-                 glib::ParamSpecEnum::builder_with_default::<Bitrate>("bitrate", default.bitrate)
-                     .nick("Spotify bitrate")
-                     .blurb("Spotify audio bitrate in kbit/s")
-                     .mutable_ready()
-                     .build()
-            ]
+            );
+            props
         });
 
         PROPERTIES.as_ref()
     }
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        let mut settings = self.settings.lock().unwrap();
+
         match pspec.name() {
-            "username" => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.username = value.get().expect("type checked upstream");
-            }
-            "password" => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.password = value.get().expect("type checked upstream");
-            }
-            "cache-credentials" => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.cache_credentials = value.get().expect("type checked upstream");
-            }
-            "cache-files" => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.cache_files = value.get().expect("type checked upstream");
-            }
-            "cache-max-size" => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.cache_max_size = value.get().expect("type checked upstream");
-            }
-            "track" => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.track = value.get().expect("type checked upstream");
-            }
             "bitrate" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.bitrate = value.get().expect("type checked upstream");
             }
-            _ => unimplemented!(),
+            _ => settings.common.set_property(value, pspec),
         }
     }
 
     fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let settings = self.settings.lock().unwrap();
+
         match pspec.name() {
-            "username" => {
-                let settings = self.settings.lock().unwrap();
-                settings.username.to_value()
-            }
-            "password" => {
-                let settings = self.settings.lock().unwrap();
-                settings.password.to_value()
-            }
-            "cache-credentials" => {
-                let settings = self.settings.lock().unwrap();
-                settings.cache_credentials.to_value()
-            }
-            "cache-files" => {
-                let settings = self.settings.lock().unwrap();
-                settings.cache_files.to_value()
-            }
-            "cache-max-size" => {
-                let settings = self.settings.lock().unwrap();
-                settings.cache_max_size.to_value()
-            }
-            "track" => {
-                let settings = self.settings.lock().unwrap();
-                settings.track.to_value()
-            }
-            "bitrate" => {
-                let settings = self.settings.lock().unwrap();
-                settings.bitrate.to_value()
-            }
-            _ => unimplemented!(),
+            "bitrate" => settings.bitrate.to_value(),
+            _ => settings.common.property(pspec),
         }
     }
 }
@@ -390,10 +299,10 @@ impl URIHandlerImpl for SpotifyAudioSrc {
     fn uri(&self) -> Option<String> {
         let settings = self.settings.lock().unwrap();
 
-        if settings.track.is_empty() {
+        if settings.common.track.is_empty() {
             None
         } else {
-            Some(settings.track.clone())
+            Some(settings.common.track.clone())
         }
     }
 
@@ -452,62 +361,22 @@ impl SpotifyAudioSrc {
             }
         }
 
-        let (credentials, cache, track, bitrate) = {
-            let settings = self.settings.lock().unwrap();
+        let src = self.obj();
 
-            let credentials_cache = if settings.cache_credentials.is_empty() {
-                None
-            } else {
-                Some(&settings.cache_credentials)
+        let (session, track, bitrate) = {
+            let (common, bitrate) = {
+                let settings = self.settings.lock().unwrap();
+                let bitrate = settings.bitrate.into();
+
+                (settings.common.clone(), bitrate)
             };
 
-            let files_cache = if settings.cache_files.is_empty() {
-                None
-            } else {
-                Some(&settings.cache_files)
-            };
-
-            let max_size = if settings.cache_max_size != 0 {
-                Some(settings.cache_max_size)
-            } else {
-                None
-            };
-
-            let cache = Cache::new(credentials_cache, None, files_cache, max_size)?;
-
-            let credentials = match cache.credentials() {
-                Some(cached_cred) => {
-                    gst::debug!(CAT, imp: self, "reuse credentials from cache",);
-                    cached_cred
-                }
-                None => {
-                    gst::debug!(CAT, imp: self, "credentials not in cache",);
-
-                    if settings.username.is_empty() {
-                        bail!("username is not set and credentials are not in cache");
-                    }
-                    if settings.password.is_empty() {
-                        bail!("password is not set and credentials are not in cache");
-                    }
-
-                    let cred = Credentials::with_password(&settings.username, &settings.password);
-                    cache.save_credentials(&cred);
-                    cred
-                }
-            };
-
-            if settings.track.is_empty() {
-                bail!("track is not set")
-            }
-
-            let bitrate = settings.bitrate.into();
+            let session = common.connect_session(src.clone(), &CAT).await?;
+            let track = common.track_id()?;
             gst::debug!(CAT, imp: self, "Requesting bitrate {:?}", bitrate);
 
-            (credentials, cache, settings.track.clone(), bitrate)
+            (session, track, bitrate)
         };
-
-        let (session, _credentials) =
-            Session::connect(SessionConfig::default(), credentials, Some(cache), false).await?;
 
         let player_config = PlayerConfig {
             passthrough: true,
@@ -523,11 +392,6 @@ impl SpotifyAudioSrc {
             Player::new(player_config, session, Box::new(NoOpVolume), || {
                 Box::new(BufferSink { sender })
             });
-
-        let track = match SpotifyId::from_uri(&track) {
-            Ok(track) => track,
-            Err(_) => bail!("Failed to create Spotify URI from track"),
-        };
 
         player.load(track, true, 0);
 
