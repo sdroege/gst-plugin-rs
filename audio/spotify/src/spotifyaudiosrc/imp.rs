@@ -250,6 +250,7 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
         if let Err(err) = RUNTIME.block_on(async move { self.setup().await }) {
             let details = format!("{:?}", err);
+            gst_error!(CAT, obj: src, "failed to start: {}", details);
             gst::element_error!(src, gst::ResourceError::Settings, [&details]);
             return Err(gst::error_msg!(gst::ResourceError::Settings, [&details]));
         }
