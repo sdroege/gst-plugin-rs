@@ -17,7 +17,7 @@ hex = "0.4"
 smallvec = "1.0"
 
 # example
-clap = { version = "2.33", optional = true }
+clap = { version = "3", optional = true, features = ["derive"] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 

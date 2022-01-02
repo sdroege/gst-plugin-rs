@@ -30,8 +30,21 @@ use std::error::Error;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-use clap::{App, Arg};
+use clap::Parser;
 use serde::{Deserialize, Serialize};
+
+#[derive(Parser, Debug)]
+#[clap(version, author)]
+#[clap(about = "Encrypt a file with in the gstsodium10 format")]
+struct Args {
+    /// File to encrypt
+    #[clap(short, long)]
+    input: String,
+
+    /// File to decrypt
+    #[clap(short, long)]
+    output: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Keys {
@@ -47,34 +60,10 @@ impl Keys {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let matches = App::new("Encrypt a file with in the gstsodium10 format")
-        .version("1.0")
-        .author("Jordan Petridis <jordan@centricular.com>")
-        .arg(
-            Arg::with_name("input")
-                .short("i")
-                .long("input")
-                .value_name("FILE")
-                .help("File to encrypt")
-                .required(true)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("output")
-                .short("o")
-                .long("output")
-                .value_name("FILE")
-                .help("File to decrypt")
-                .required(true)
-                .takes_value(true),
-        )
-        .get_matches();
+    let args = Args::parse();
 
     gst::init()?;
     gstsodium::plugin_register_static().expect("Failed to register sodium plugin");
-
-    let input_loc = matches.value_of("input").unwrap();
-    let out_loc = matches.value_of("output").unwrap();
 
     let receiver_keys = {
         let mut r = PathBuf::new();
@@ -101,8 +90,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let encrypter = gst::ElementFactory::make("sodiumencrypter", None).unwrap();
     let filesink = gst::ElementFactory::make("filesink", None).unwrap();
 
-    filesrc.set_property("location", &input_loc);
-    filesink.set_property("location", &out_loc);
+    filesrc.set_property("location", &args.input);
+    filesink.set_property("location", &args.output);
 
     encrypter.set_property("receiver-key", glib::Bytes::from_owned(receiver.public));
     encrypter.set_property("sender-key", glib::Bytes::from_owned(sender.private.0));

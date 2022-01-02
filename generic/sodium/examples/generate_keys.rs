@@ -22,10 +22,24 @@
 //
 // SPDX-License-Identifier: MIT
 
-use clap::{App, Arg};
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use sodiumoxide::crypto::box_;
 use std::fs::File;
+use std::path::PathBuf;
+
+#[derive(Parser, Debug)]
+#[clap(version, author)]
+#[clap(about = "Generate a pair of Sodium's crypto_box_curve25519xsalsa20poly1305 keys.")]
+struct Args {
+    /// Path to write the Keys
+    #[clap(short, long, parse(from_os_str))]
+    path: PathBuf,
+
+    /// Write a JSON file instead of a key.prv/key.pub pair
+    #[clap(short, long)]
+    json: bool,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Keys {
@@ -39,30 +53,27 @@ impl Keys {
         Keys { public, private }
     }
 
-    fn write_to_file(&self, path: &str, json: bool) {
+    fn write_to_file(&self, mut path: PathBuf, json: bool) {
         if json {
-            let path = if !path.ends_with(".json") {
-                format!("{}.json", path)
-            } else {
-                path.into()
-            };
+            if !path.ends_with(".json") {
+                path.set_extension("json");
+            }
 
-            let file =
-                File::create(&path).unwrap_or_else(|_| panic!("Failed to create file at {}", path));
+            let file = File::create(&path)
+                .unwrap_or_else(|_| panic!("Failed to create file at {}", path.display()));
             serde_json::to_writer(file, &self)
-                .unwrap_or_else(|_| panic!("Failed to write to file at {}", path));
+                .unwrap_or_else(|_| panic!("Failed to write to file at {}", path.display()));
         } else {
             use std::io::Write;
-            use std::path::PathBuf;
 
-            let mut private = PathBuf::from(path);
+            let mut private = path.clone();
             private.set_extension("prv");
             let mut file = File::create(&private)
                 .unwrap_or_else(|_| panic!("Failed to create file at {}", private.display()));
             file.write_all(&self.private.0)
                 .unwrap_or_else(|_| panic!("Failed to write to file at {}", private.display()));
 
-            let mut public = PathBuf::from(path);
+            let mut public = path.clone();
             public.set_extension("pub");
             let mut file = File::create(&public)
                 .unwrap_or_else(|_| panic!("Failed to create file at {}", public.display()));
@@ -73,29 +84,9 @@ impl Keys {
 }
 
 fn main() {
-    let matches = App::new("Generate the keys to be used with the sodium element")
-        .version("1.0")
-        .author("Jordan Petridis <jordan@centricular.com>")
-        .about("Generate a pair of Sodium's crypto_box_curve25519xsalsa20poly1305 keys.")
-        .arg(
-            Arg::with_name("path")
-                .long("path")
-                .short("p")
-                .value_name("FILE")
-                .help("Path to write the Keys")
-                .required(true)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("json")
-                .long("json")
-                .short("j")
-                .help("Write a JSON file instead of a key.prv/key.pub pair"),
-        )
-        .get_matches();
+    let args = Args::parse();
 
     let keys = Keys::new();
 
-    let path = matches.value_of("path").unwrap();
-    keys.write_to_file(path, matches.is_present("json"));
+    keys.write_to_file(args.path, args.json);
 }
