@@ -249,7 +249,7 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
     for feature in caps.features(0) {
         if feature.contains(CUDA_MEMORY_FEATURE) {
             return Ok(gst::parse_bin_from_description(
-                "cudaupload ! cudaconvert ! cudascale ! videorate drop-only=true",
+                "cudaupload ! cudaconvert ! cudascale ! videorate drop-only=true skip-to-first=true",
                 true,
             )?
             .upcast());
