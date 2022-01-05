@@ -213,7 +213,12 @@ impl Scheduler {
             }
 
             let mut must_awake = self.must_awake.lock().unwrap();
-            let mut must_awake = loop {
+            loop {
+                if *must_awake {
+                    *must_awake = false;
+                    break;
+                }
+
                 if let Some(wait_duration) = self.max_throttling.checked_sub(last.elapsed()) {
                     let result = self
                         .must_awake_cvar
@@ -221,15 +226,11 @@ impl Scheduler {
                         .unwrap();
 
                     must_awake = result.0;
-                    if *must_awake {
-                        break must_awake;
-                    }
                 } else {
-                    break must_awake;
+                    *must_awake = false;
+                    break;
                 }
-            };
-
-            *must_awake = false;
+            }
         }
     }
 
