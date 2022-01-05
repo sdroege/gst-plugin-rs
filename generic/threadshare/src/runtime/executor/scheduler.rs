@@ -200,21 +200,16 @@ impl Scheduler {
                 reactor.react().ok()
             });
 
-            loop {
-                match self.tasks.pop_runnable() {
-                    Err(_) => break,
-                    Ok(runnable) => {
-                        panic::catch_unwind(|| runnable.run()).map_err(|err| {
-                            gst_error!(
-                                RUNTIME_CAT,
-                                "A task has panicked within Context {}",
-                                self.context_name
-                            );
+            while let Ok(runnable) = self.tasks.pop_runnable() {
+                panic::catch_unwind(|| runnable.run()).map_err(|err| {
+                    gst_error!(
+                        RUNTIME_CAT,
+                        "A task has panicked within Context {}",
+                        self.context_name
+                    );
 
-                            err
-                        })?;
-                    }
-                }
+                    err
+                })?;
             }
 
             let mut must_awake = self.must_awake.lock().unwrap();
