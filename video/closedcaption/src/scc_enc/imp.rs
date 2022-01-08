@@ -28,6 +28,8 @@ use once_cell::sync::Lazy;
 use std::io::Write;
 use std::sync::Mutex;
 
+const DEFAULT_OUTPUT_PADDING: bool = true;
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "sccenc",
@@ -36,12 +38,26 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     )
 });
 
+#[derive(Clone, Debug)]
+struct Settings {
+    output_padding: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            output_padding: DEFAULT_OUTPUT_PADDING,
+        }
+    }
+}
+
 #[derive(Debug)]
 struct State {
     need_headers: bool,
     expected_timecode: Option<ValidVideoTimeCode>,
     internal_buffer: Vec<gst::Buffer>,
     framerate: Option<gst::Fraction>,
+    settings: Settings,
 }
 
 impl Default for State {
@@ -51,6 +67,7 @@ impl Default for State {
             expected_timecode: None,
             internal_buffer: Vec::with_capacity(64),
             framerate: None,
+            settings: Settings::default(),
         }
     }
 }
@@ -87,6 +104,24 @@ impl State {
 
             return Err(gst::FlowError::Error);
         };
+
+        if !self.settings.output_padding {
+            let map = buffer.map_readable().map_err(|_| {
+                gst::element_error!(
+                    element,
+                    gst::StreamError::Format,
+                    ["Failed to map buffer readable"]
+                );
+
+                gst::FlowError::Error
+            })?;
+
+            if map[0] == 0x80 && map[1] == 0x80 {
+                return Ok(None);
+            }
+
+            drop(map);
+        }
 
         let mut timecode = buffer
             .meta::<gst_video::VideoTimeCodeMeta>()
@@ -219,6 +254,7 @@ pub struct SccEnc {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,
     state: Mutex<State>,
+    settings: Mutex<Settings>,
 }
 
 impl SccEnc {
@@ -377,6 +413,7 @@ impl ObjectSubclass for SccEnc {
             srcpad,
             sinkpad,
             state: Mutex::new(State::default()),
+            settings: Mutex::new(Settings::default()),
         }
     }
 }
@@ -387,6 +424,48 @@ impl ObjectImpl for SccEnc {
 
         obj.add_pad(&self.sinkpad).unwrap();
         obj.add_pad(&self.srcpad).unwrap();
+    }
+
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![glib::ParamSpecBoolean::new(
+                "output-padding",
+                "Output padding",
+                "Whether the encoder should output padding captions. \
+                The element will never add padding, but will encode padding \
+                buffers it receives if this property is set to true.",
+                DEFAULT_OUTPUT_PADDING,
+                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+            )]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.name() {
+            "output-padding" => {
+                self.settings.lock().unwrap().output_padding =
+                    value.get().expect("type checked upstream");
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "output-padding" => {
+                let settings = self.settings.lock().unwrap();
+                settings.output_padding.to_value()
+            }
+            _ => unimplemented!(),
+        }
     }
 }
 
@@ -445,7 +524,13 @@ impl ElementImpl for SccEnc {
         gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
-            gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {
+            gst::StateChange::ReadyToPaused => {
+                // Reset the whole state
+                let mut state = self.state.lock().unwrap();
+                *state = State::default();
+                state.settings = self.settings.lock().unwrap().clone();
+            }
+            gst::StateChange::PausedToReady => {
                 // Reset the whole state
                 let mut state = self.state.lock().unwrap();
                 *state = State::default();
