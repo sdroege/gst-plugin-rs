@@ -62,7 +62,7 @@ expose interfaces to guide and tune the heuristics it employs.
 
 ### Prerequisites
 
-The element has only been tested for now against GStreamer master.
+The element has only been tested for now against GStreamer main.
 
 For testing, it is recommended to simply build GStreamer locally and run
 in the uninstalled devenv.
@@ -72,7 +72,8 @@ in the uninstalled devenv.
 > on your distribution.
 
 ```
-git clone https://gitlab.freedesktop.org/meh/gstreamer/-/tree/webrtcsink
+git clone --depth 1 --single-branch --branch main https://gitlab.freedesktop.org/gstreamer/gstreamer 
+cd gstreamer
 meson build
 ninja -C build
 ninja -C build devenv
