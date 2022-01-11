@@ -176,14 +176,24 @@ extra_env_str = ','.join(extra_env_list)
 plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
 pkgconfig_install_dir = get_option('libdir') / 'pkgconfig'
 
-# Always build the target so we don't have to list all source files as input
+# Use all files checked in git to  figure out when to rebuild
+tmp = run_command(['git', 'ls-files', '.'])
+files = tmp.stdout().split()
+if tmp.returncode() == 0 and files.length() > 0
+  build_always_stale = false
+else
+  warning('Could not retrieve list of files, always building the target')
+  build_always_stale = true
+endif
+
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
   output: output,
   console: true,
   install: true,
   install_dir: plugins_install_dir,
-  build_always_stale: true,
+  input: files,
+  build_always_stale: build_always_stale,
   depends: depends,
   command: [cargo_wrapper,
     'build',
