@@ -32,7 +32,7 @@
 
 mod git;
 
-use chrono::TimeZone;
+use chrono::{Datelike, TimeZone};
 use std::convert::TryInto;
 use std::time::SystemTime;
 use std::{env, fs, path};
@@ -68,15 +68,15 @@ pub fn info() {
     // If there is a git repository, extract the version information from there.
     // Otherwise assume this is a release and use Cargo.toml mtime as date.
     let (commit_id, commit_date) = git_info.unwrap_or_else(|| {
-        let date = cargo_mtime_date(crate_dir).expect("Failed to get Cargo.toml mtime");
-        ("RELEASE".into(), date)
+        let date = cargo_mtime_date(crate_dir).unwrap_or_else(chrono::Utc::now);
+        ("RELEASE".into(), date.format("%Y-%m-%d").to_string())
     });
 
     println!("cargo:rustc-env=COMMIT_ID={}", commit_id);
     println!("cargo:rustc-env=BUILD_REL_DATE={}", commit_date);
 }
 
-fn cargo_mtime_date(crate_dir: path::PathBuf) -> Option<String> {
+fn cargo_mtime_date(crate_dir: path::PathBuf) -> Option<chrono::DateTime<chrono::Utc>> {
     let mut cargo_toml = crate_dir;
     cargo_toml.push("Cargo.toml");
 
@@ -85,5 +85,10 @@ fn cargo_mtime_date(crate_dir: path::PathBuf) -> Option<String> {
     let unix_time = mtime.duration_since(SystemTime::UNIX_EPOCH).ok()?;
     let dt = chrono::Utc.timestamp(unix_time.as_secs().try_into().ok()?, 0);
 
-    Some(dt.format("%Y-%m-%d").to_string())
+    // FIXME: Work around https://github.com/rust-lang/cargo/issues/10285
+    if dt.date().year() < 2015 {
+        return None;
+    }
+
+    Some(dt)
 }
