@@ -13,4 +13,4 @@ edition = "2021"
 rust-version = "1.56"
 
 [dependencies]
-chrono = { version = "0.4.19", default-features = false, features = ["std"] }
+chrono = { version = "0.4.19", default-features = false, features = ["std", "clock"] }
