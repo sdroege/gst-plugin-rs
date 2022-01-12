@@ -537,8 +537,7 @@ impl FMP4Mux {
             let mut buffers = drain_gops
                 .into_iter()
                 .rev()
-                .map(|gop| gop.buffers)
-                .flatten()
+                .flat_map(|gop| gop.buffers)
                 .collect::<Vec<Buffer>>();
 
             // TODO: Write prft boxes before moof
@@ -1472,7 +1471,7 @@ impl ElementImpl for DASHMP4Mux {
                 "sink",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Always,
-                &std::array::IntoIter::new([
+                &[
                     gst::Structure::builder("video/x-h264")
                         .field("stream-format", gst::List::new(&[&"avc", &"avc3"]))
                         .field("alignment", "au")
@@ -1491,7 +1490,8 @@ impl ElementImpl for DASHMP4Mux {
                         .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
                         .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
                         .build(),
-                ])
+                ]
+                .into_iter()
                 .collect::<gst::Caps>(),
             )
             .unwrap();

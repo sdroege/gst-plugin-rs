@@ -137,7 +137,7 @@ impl Frame {
         let overlays = frame
             .buffer()
             .iter_meta::<gst_video::VideoOverlayCompositionMeta>()
-            .map(|meta| {
+            .flat_map(|meta| {
                 meta.overlay()
                     .iter()
                     .filter_map(|rect| {
@@ -168,7 +168,6 @@ impl Frame {
                     })
                     .collect::<Vec<_>>()
             })
-            .flatten()
             .collect();
 
         Ok(Self { frame, overlays })

@@ -441,7 +441,7 @@ fn write_mvhd(
 
     // Matrix
     v.extend(
-        std::array::IntoIter::new([
+        [
             (1u32 << 16).to_be_bytes(),
             0u32.to_be_bytes(),
             0u32.to_be_bytes(),
@@ -451,7 +451,8 @@ fn write_mvhd(
             0u32.to_be_bytes(),
             0u32.to_be_bytes(),
             (16384u32 << 16).to_be_bytes(),
-        ])
+        ]
+        .into_iter()
         .flatten(),
     );
 
@@ -525,7 +526,7 @@ fn write_tkhd(
 
     // Matrix
     v.extend(
-        std::array::IntoIter::new([
+        [
             (1u32 << 16).to_be_bytes(),
             0u32.to_be_bytes(),
             0u32.to_be_bytes(),
@@ -535,7 +536,8 @@ fn write_tkhd(
             0u32.to_be_bytes(),
             0u32.to_be_bytes(),
             (16384u32 << 16).to_be_bytes(),
-        ])
+        ]
+        .into_iter()
         .flatten(),
     );
 

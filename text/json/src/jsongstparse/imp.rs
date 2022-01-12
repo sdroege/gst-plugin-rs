@@ -220,8 +220,7 @@ impl JsonGstParse {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock().unwrap();
 
-        let drain;
-        if let Some(buffer) = buffer {
+        let drain = if let Some(buffer) = buffer {
             let buffer = buffer.into_mapped_buffer_readable().map_err(|_| {
                 gst::element_error!(
                     element,
@@ -233,10 +232,10 @@ impl JsonGstParse {
             })?;
 
             state.reader.push(buffer);
-            drain = false;
+            false
         } else {
-            drain = true;
-        }
+            true
+        };
 
         loop {
             let seeking = state.seeking;

@@ -109,13 +109,12 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
 
     let mut q = url.query_pairs();
     let v = q.next();
-    let version;
 
-    match v {
-        Some((ref k, ref v)) if k == "version" => version = Some((*v).to_string()),
-        None => version = None,
+    let version = match v {
+        Some((ref k, ref v)) if k == "version" => Some((*v).to_string()),
+        None => None,
         Some(_) => return Err("Bad query, only 'version' is supported".to_owned()),
-    }
+    };
 
     if q.next() != None {
         return Err("Extra query terms, only 'version' is supported".to_owned());
