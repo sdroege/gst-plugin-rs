@@ -60,6 +60,7 @@ plugins = {
   'gst-plugin-videofx': 'libgstvideofx',
   'gst-plugin-uriplaylistbin': 'libgsturiplaylistbin',
   'gst-plugin-spotify': 'libgstspotify',
+  'gst-plugin-textahead': 'libgsttextahead',
 }
 
 extra_env = {}

@@ -85,6 +85,8 @@ You will find the following plugins in this repository:
 
     - `wrap`: A plugin to perform text wrapping with hyphenation.
 
+    - `ahead`: A plugin to display upcoming text buffers ahead.
+
   * `utils`
     - `fallbackswitch`: Aggregator element that allows falling back to a
       different sink pad after a timeout.
