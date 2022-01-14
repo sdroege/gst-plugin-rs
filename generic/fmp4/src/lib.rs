@@ -5,6 +5,7 @@
 // <https://mozilla.org/MPL/2.0/>.
 //
 // SPDX-License-Identifier: MPL-2.0
+#![allow(clippy::non_send_fields_in_send_ty)]
 
 use gst::glib;
 

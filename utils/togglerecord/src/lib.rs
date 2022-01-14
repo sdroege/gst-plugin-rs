@@ -14,6 +14,7 @@
 // License along with this library; if not, write to the
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
+#![allow(clippy::non_send_fields_in_send_ty)]
 
 use gst::glib;
 

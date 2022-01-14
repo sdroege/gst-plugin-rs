@@ -35,6 +35,7 @@ struct Harness {
 }
 
 /// Messages sent from our test harness
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Clone)]
 enum Message {
     Buffer(gst::Buffer),
