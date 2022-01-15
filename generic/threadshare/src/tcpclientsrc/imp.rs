@@ -15,6 +15,8 @@
 // License along with this library; if not, write to the
 // Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
 // Boston, MA 02110-1335, USA.
+//
+// SPDX-License-Identifier: LGPL-2.1-or-later
 
 use futures::future::BoxFuture;
 use futures::lock::Mutex as FutMutex;

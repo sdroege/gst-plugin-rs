@@ -1,3 +1,8 @@
+// Copyright (C) 2020 Guillaume Desmottes <guillaume.desmottes@collabora.com>
+//
+// Licensed under the MIT license, see the LICENSE file or <http://opensource.org/licenses/MIT>
+//
+// SPDX-License-Identifier: MIT
 use std::path::Path;
 use std::process::Command;
 

@@ -5,6 +5,8 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+//
+// SPDX-License-Identifier: MIT/Apache-2.0
 #![allow(clippy::non_send_fields_in_send_ty)]
 
 mod ffv1dec;
