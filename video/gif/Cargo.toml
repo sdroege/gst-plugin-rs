@@ -9,14 +9,14 @@ rust-version = "1.56"
 description = "GStreamer GIF plugin"
 
 [dependencies]
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.18", version = "0.18" }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.18", version = "0.18" }
 gif = "0.11"
 atomic_refcell = "0.1"
 once_cell = "1"
 
 [dev-dependencies]
-gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "0.18", version = "0.18" }
 
 [lib]
 name = "gstgif"
@@ -28,7 +28,7 @@ name = "testvideosrc2gif"
 path = "examples/testvideosrc2gif.rs"
 
 [build-dependencies]
-gst-plugin-version-helper = { path="../../version-helper" }
+gst-plugin-version-helper = { path = "../../version-helper", version = "0.7" }
 
 [features]
 # GStreamer 1.14 is required for static linking
