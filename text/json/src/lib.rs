@@ -1,19 +1,10 @@
 // Copyright (C) 2020 Mathieu Duponchelle <mathieu@centricular.com>
 //
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Library General Public
-// License as published by the Free Software Foundation; either
-// version 2 of the License, or (at your option) any later version.
+// This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at
+// <https://mozilla.org/MPL/2.0/>.
 //
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// Library General Public License for more details.
-//
-// You should have received a copy of the GNU Library General Public
-// License along with this library; if not, write to the
-// Free Software Foundation, Inc., 51 Franklin Street, Suite 500,
-// Boston, MA 02110-1335, USA.
+// SPDX-License-Identifier: MPL-2.0
 #![allow(clippy::non_send_fields_in_send_ty)]
 #![recursion_limit = "128"]
 
@@ -34,7 +25,8 @@ gst::plugin_define!(
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),
-    "LGPL",
+    // FIXME: MPL-2.0 is only allowed since 1.18.3 (as unknown) and 1.20 (as known)
+    "MPL",
     env!("CARGO_PKG_NAME"),
     env!("CARGO_PKG_NAME"),
     env!("CARGO_PKG_REPOSITORY"),
