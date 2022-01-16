@@ -1,4 +1,4 @@
-# gst-plugins-rs [![crates.io](https://img.shields.io/crates/v/gst-plugin.svg)](https://crates.io/crates/gst-plugin) [![pipeline status](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/badges/master/pipeline.svg)](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/commits/master)
+# gst-plugins-rs [![crates.io](https://img.shields.io/crates/v/gst-plugin.svg)](https://crates.io/crates/gst-plugin) [![pipeline status](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/badges/main/pipeline.svg)](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/commits/main)
 
 Repository containing various [GStreamer](https://gstreamer.freedesktop.org/)
 plugins and elements written in the [Rust programming

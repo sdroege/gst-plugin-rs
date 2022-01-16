@@ -1,6 +1,6 @@
 # How to write GStreamer Elements in Rust Part 2: A raw audio sine wave source
 
-In this part, a raw audio sine wave source element is going to be written. The final code can be found [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/blob/master/gst-plugin-tutorial/src/sinesrc.rs).
+In this part, a raw audio sine wave source element is going to be written. The final code can be found [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/blob/main/gst-plugin-tutorial/src/sinesrc.rs).
 
 ### Table of Contents
 
@@ -405,7 +405,7 @@ fn plugin_init(plugin: &gst::Plugin) -> bool {
 }
 ```
 
-Also a couple of new crates have to be added to `Cargo.toml` and `src/lib.rs`, but you best check the code in the [repository](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/tree/master/gst-plugin-tutorial) for details.
+Also a couple of new crates have to be added to `Cargo.toml` and `src/lib.rs`, but you best check the code in the [repository](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/tree/main/gst-plugin-tutorial) for details.
 
 ### Caps Negotiation
 

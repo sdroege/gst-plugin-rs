@@ -6,7 +6,7 @@ In this first part we’re going to write a plugin that contains a video filter 
 
 This will show the basics of how to write a GStreamer plugin and element in Rust: the basic setup for registering a type and implementing it in Rust, and how to use the various GStreamer API and APIs from the Rust standard library to do the processing.
 
-The final code for this plugin can be found [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/tree/master/gst-plugin-tutorial), and it is based on latest git version of the [gstreamer](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs). At least Rust 1.32 is required for all this. You also need to have GStreamer (at least version 1.8) installed for your platform, see e.g. the GStreamer bindings [installation instructions](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/blob/master/README.md).
+The final code for this plugin can be found [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/tree/main/gst-plugin-tutorial), and it is based on latest git version of the [gstreamer](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs). At least Rust 1.32 is required for all this. You also need to have GStreamer (at least version 1.8) installed for your platform, see e.g. the GStreamer bindings [installation instructions](https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/blob/main/README.md).
 
 # Table of contents
 
@@ -875,7 +875,7 @@ Also keep in mind that the usage of the property values in the `bgrx_to_gray` fu
 
 We hope the code walkthrough above was useful to understand how to implement GStreamer plugins and elements in Rust. If you have any questions, feel free to ask them in the IRC channel (#gstreamer on freenode) and on our [mailing list](https://lists.freedesktop.org/mailman/listinfo/gstreamer-devel).
 
-The same approach also works for audio filters or anything that can be handled in some way with the API of the `BaseTransform` base class. You can find another filter, an audio echo filter, using the same approach [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/blob/master/gst-plugin-audiofx/src/audioecho.rs).
+The same approach also works for audio filters or anything that can be handled in some way with the API of the `BaseTransform` base class. You can find another filter, an audio echo filter, using the same approach [here](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/blob/main/gst-plugin-audiofx/src/audioecho.rs).
 
 In the [next tutorial](tutorial-2.md) in this series we’ll discuss how to use another base class to implement another kind of element, but for the time being you can also check the [git repository](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs) for various other element implementations.
 
