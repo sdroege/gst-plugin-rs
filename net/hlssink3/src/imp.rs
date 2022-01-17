@@ -577,7 +577,7 @@ impl ObjectImpl for HlsSink3 {
                         .expect("playlist-stream signal arg");
                     let playlist_location =
                         args[1].get::<String>().expect("playlist-stream signal arg");
-                    let hlssink3 = HlsSink3::from_instance(&element);
+                    let hlssink3 = element.imp();
 
                     Some(
                         hlssink3
@@ -603,7 +603,7 @@ impl ObjectImpl for HlsSink3 {
                         .expect("fragment-stream signal arg");
                     let fragment_location =
                         args[1].get::<String>().expect("fragment-stream signal arg");
-                    let hlssink3 = HlsSink3::from_instance(&element);
+                    let hlssink3 = element.imp();
 
                     Some(
                         hlssink3
@@ -626,7 +626,7 @@ impl ObjectImpl for HlsSink3 {
                 .class_handler(|_, args| {
                     let element = args[0].get::<super::HlsSink3>().expect("signal arg");
                     let fragment_location = args[1].get::<String>().expect("signal arg");
-                    let hlssink3 = HlsSink3::from_instance(&element);
+                    let hlssink3 = element.imp();
 
                     hlssink3.delete_fragment(&element, &fragment_location);
                     Some(true.to_value())
@@ -676,7 +676,7 @@ impl ObjectImpl for HlsSink3 {
                     Some(element) => element,
                     None => return Some(None::<String>.to_value()),
                 };
-                let hlssink3 = HlsSink3::from_instance(&element);
+                let hlssink3 = element.imp();
 
                 let fragment_id = args[1].get::<u32>().unwrap();
 

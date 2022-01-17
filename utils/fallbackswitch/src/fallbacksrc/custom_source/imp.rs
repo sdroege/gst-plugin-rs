@@ -208,7 +208,7 @@ impl CustomSource {
                     None => return,
                     Some(element) => element,
                 };
-                let src = CustomSource::from_instance(&element);
+                let src = element.imp();
 
                 if let Err(msg) = src.handle_source_pad_added(&element, pad) {
                     element.post_error_message(msg);
@@ -220,7 +220,7 @@ impl CustomSource {
                     None => return,
                     Some(element) => element,
                 };
-                let src = CustomSource::from_instance(&element);
+                let src = element.imp();
 
                 src.handle_source_pad_removed(&element, pad);
             });
@@ -231,7 +231,7 @@ impl CustomSource {
                     None => return,
                     Some(element) => element,
                 };
-                let src = CustomSource::from_instance(&element);
+                let src = element.imp();
 
                 src.handle_source_no_more_pads(&element);
             });

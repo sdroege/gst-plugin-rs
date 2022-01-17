@@ -617,7 +617,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
 
         async move {
             if let EventView::FlushStop(_) = event.view() {
-                let udpsink = UdpSink::from_instance(&element);
+                let udpsink = element.imp();
                 return udpsink.task.flush_stop().is_ok();
             } else if let Some(sender) = sender.lock().await.as_mut() {
                 if sender.send(TaskItem::Event(event)).await.is_err() {
@@ -1128,7 +1128,7 @@ impl ObjectImpl for UdpSink {
                     let port = args[2].get::<i32>().expect("signal arg");
 
                     if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
-                        let udpsink = UdpSink::from_instance(&element);
+                        let udpsink = element.imp();
                         udpsink.add_client(addr);
                     }
 
@@ -1147,7 +1147,7 @@ impl ObjectImpl for UdpSink {
                     let port = args[2].get::<i32>().expect("signal arg");
 
                     if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
-                        let udpsink = UdpSink::from_instance(&element);
+                        let udpsink = element.imp();
                         udpsink.remove_client(addr);
                     }
 
@@ -1159,7 +1159,7 @@ impl ObjectImpl for UdpSink {
                     .class_handler(|_, args| {
                         let element = args[0].get::<super::UdpSink>().expect("signal arg");
 
-                        let udpsink = UdpSink::from_instance(&element);
+                        let udpsink = element.imp();
                         udpsink.clear_clients(std::iter::empty());
 
                         None

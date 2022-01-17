@@ -304,7 +304,7 @@ impl SinkHandler {
         element: &super::JitterBuffer,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let jb = JitterBuffer::from_instance(element);
+        let jb = element.imp();
         let mut state = jb.state.lock().unwrap();
 
         let (max_misorder_time, max_dropout_time) = {
@@ -499,7 +499,7 @@ impl SinkHandler {
             if let Err(err) = self.store(&mut inner, pad, element, buf) {
                 match err {
                     gst::FlowError::CustomError => {
-                        let jb = JitterBuffer::from_instance(element);
+                        let jb = element.imp();
                         let mut state = jb.state.lock().unwrap();
                         for gap_packet in self.reset(&mut inner, &mut state, element) {
                             buffers.push_back(gap_packet.buffer);
@@ -510,7 +510,7 @@ impl SinkHandler {
             }
         }
 
-        let jb = JitterBuffer::from_instance(element);
+        let jb = element.imp();
         let mut state = jb.state.lock().unwrap();
 
         let (latency, context_wait) = {
@@ -611,7 +611,7 @@ impl PadSinkHandler for SinkHandler {
 
             gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
-            let jb = JitterBuffer::from_instance(&element);
+            let jb = element.imp();
 
             let mut forward = true;
             match event.view() {
@@ -669,7 +669,7 @@ impl SrcHandler {
         discont: &mut bool,
     ) -> Vec<gst::Event> {
         let (latency, do_lost) = {
-            let jb = JitterBuffer::from_instance(element);
+            let jb = element.imp();
             let settings = jb.settings.lock().unwrap();
             (settings.latency, settings.do_lost)
         };
@@ -755,7 +755,7 @@ impl SrcHandler {
         &self,
         element: &super::JitterBuffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let jb = JitterBuffer::from_instance(element);
+        let jb = element.imp();
 
         let (lost_events, buffer, seq) = {
             let mut state = jb.state.lock().unwrap();
@@ -1061,7 +1061,7 @@ impl TaskImpl for JitterBufferTask {
             self.src_pad_handler.clear();
             self.sink_pad_handler.clear();
 
-            let jb = JitterBuffer::from_instance(&self.element);
+            let jb = self.element.imp();
             *jb.state.lock().unwrap() = State::default();
 
             gst_log!(CAT, obj: &self.element, "Task started");
@@ -1072,7 +1072,7 @@ impl TaskImpl for JitterBufferTask {
 
     fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async move {
-            let jb = JitterBuffer::from_instance(&self.element);
+            let jb = self.element.imp();
             let (latency, context_wait) = {
                 let settings = jb.settings.lock().unwrap();
                 (settings.latency, settings.context_wait)
@@ -1208,7 +1208,7 @@ impl TaskImpl for JitterBufferTask {
         async move {
             gst_log!(CAT, obj: &self.element, "Stopping task");
 
-            let jb = JitterBuffer::from_instance(&self.element);
+            let jb = self.element.imp();
             let mut jb_state = jb.state.lock().unwrap();
 
             if let Some((_, abort_handle)) = jb_state.wait_handle.take() {
@@ -1405,7 +1405,7 @@ impl ObjectImpl for JitterBuffer {
             .action()
             .class_handler(|_, args| {
                 let element = args[0].get::<super::JitterBuffer>().expect("signal arg");
-                let jb = JitterBuffer::from_instance(&element);
+                let jb = element.imp();
                 jb.clear_pt_map(&element);
                 None
             })

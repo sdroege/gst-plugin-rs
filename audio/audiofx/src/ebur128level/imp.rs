@@ -130,7 +130,7 @@ impl ObjectImpl for EbuR128Level {
                     .action()
                     .class_handler(|_token, args| {
                         let this = args[0].get::<super::EbuR128Level>().unwrap();
-                        let imp = EbuR128Level::from_instance(&this);
+                        let imp = this.imp();
 
                         gst_info!(CAT, obj: &this, "Resetting measurements",);
                         imp.reset.store(true, atomic::Ordering::SeqCst);

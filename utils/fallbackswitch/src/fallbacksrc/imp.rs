@@ -612,7 +612,7 @@ impl ObjectImpl for FallbackSrc {
                     .action()
                     .class_handler(|_token, args| {
                         let element = args[0].get::<super::FallbackSrc>().expect("signal arg");
-                        let src = FallbackSrc::from_instance(&element);
+                        let src = element.imp();
                         let mut state_guard = src.state.lock().unwrap();
                         let state = match &mut *state_guard {
                             None => {
@@ -840,7 +840,7 @@ impl FallbackSrc {
                 None => return,
                 Some(element) => element,
             };
-            let src = FallbackSrc::from_instance(&element);
+            let src = element.imp();
 
             if let Err(msg) = src.handle_source_pad_added(&element, pad) {
                 element.post_error_message(msg);
@@ -852,7 +852,7 @@ impl FallbackSrc {
                 None => return,
                 Some(element) => element,
             };
-            let src = FallbackSrc::from_instance(&element);
+            let src = element.imp();
 
             src.handle_source_pad_removed(&element, pad);
         });
@@ -936,7 +936,7 @@ impl FallbackSrc {
                 Some(element) => element,
             };
 
-            let src = FallbackSrc::from_instance(&element);
+            let src = element.imp();
             src.handle_switch_active_pad_change(&element);
         });
         switch.set_property("timeout", timeout.nseconds());
@@ -962,7 +962,7 @@ impl FallbackSrc {
                         Some(element) => element,
                     };
 
-                    let src = FallbackSrc::from_instance(&element);
+                    let src = element.imp();
                     src.proxy_pad_chain(&element, pad, buffer)
                 }
             })
@@ -1350,7 +1350,7 @@ impl FallbackSrc {
                 Some(element) => element,
             };
 
-            let src = FallbackSrc::from_instance(&element);
+            let src = element.imp();
 
             match info.data {
                 Some(gst::PadProbeData::Event(ref ev)) if ev.type_() == gst::EventType::Eos => {
@@ -1446,7 +1446,7 @@ impl FallbackSrc {
                         _ => unreachable!(),
                     };
 
-                    let src = FallbackSrc::from_instance(&element);
+                    let src = element.imp();
 
                     if let Err(msg) = src.handle_pad_blocked(&element, pad, pts) {
                         element.post_error_message(msg);
@@ -2066,7 +2066,7 @@ impl FallbackSrc {
 
         let source_weak = state.source.downgrade();
         element.call_async(move |element| {
-            let src = FallbackSrc::from_instance(element);
+            let src = element.imp();
 
             let source = match source_weak.upgrade() {
                 None => return,
@@ -2150,7 +2150,7 @@ impl FallbackSrc {
 
                     gst_debug!(CAT, obj: &element, "Woke up, retrying");
                     element.call_async(|element| {
-                        let src = FallbackSrc::from_instance(element);
+                        let src = element.imp();
 
                         let mut state_guard = src.state.lock().unwrap();
                         let state = match &mut *state_guard {
@@ -2288,7 +2288,7 @@ impl FallbackSrc {
                 };
 
                 element.call_async(move |element| {
-                    let src = FallbackSrc::from_instance(element);
+                    let src = element.imp();
 
                     gst_debug!(CAT, obj: element, "Source restart timeout triggered");
                     let mut state_guard = src.state.lock().unwrap();

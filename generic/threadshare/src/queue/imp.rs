@@ -96,7 +96,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
-            let queue = Queue::from_instance(&element);
+            let queue = element.imp();
             queue
                 .enqueue_item(&element, DataQueueItem::Buffer(buffer))
                 .await
@@ -116,7 +116,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", list);
-            let queue = Queue::from_instance(&element);
+            let queue = element.imp();
             queue
                 .enqueue_item(&element, DataQueueItem::BufferList(list))
                 .await
@@ -167,7 +167,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         let element = element.clone().downcast::<super::Queue>().unwrap();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            let queue = Queue::from_instance(&element);
+            let queue = element.imp();
 
             if let EventView::FlushStop(..) = event.view() {
                 if let Err(err) = queue.task.flush_stop() {
@@ -342,7 +342,7 @@ impl TaskImpl for QueueTask {
         async move {
             gst_log!(CAT, obj: &self.element, "Starting task");
 
-            let queue = Queue::from_instance(&self.element);
+            let queue = self.element.imp();
             let mut last_res = queue.last_res.lock().unwrap();
 
             self.dataqueue.start();
@@ -368,7 +368,7 @@ impl TaskImpl for QueueTask {
             };
 
             let pad = self.src_pad.upgrade().expect("PadSrc no longer exists");
-            let queue = Queue::from_instance(&self.element);
+            let queue = self.element.imp();
             let res = QueuePadSrcHandler::push_item(&pad, queue, item).await;
             match res {
                 Ok(()) => {
@@ -405,7 +405,7 @@ impl TaskImpl for QueueTask {
         async move {
             gst_log!(CAT, obj: &self.element, "Stopping task");
 
-            let queue = Queue::from_instance(&self.element);
+            let queue = self.element.imp();
             let mut last_res = queue.last_res.lock().unwrap();
 
             self.dataqueue.stop();
@@ -427,7 +427,7 @@ impl TaskImpl for QueueTask {
         async move {
             gst_log!(CAT, obj: &self.element, "Starting task flush");
 
-            let queue = Queue::from_instance(&self.element);
+            let queue = self.element.imp();
             let mut last_res = queue.last_res.lock().unwrap();
 
             self.dataqueue.clear();

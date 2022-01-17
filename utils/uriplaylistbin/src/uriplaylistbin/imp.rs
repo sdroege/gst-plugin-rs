@@ -840,7 +840,7 @@ impl BinImpl for UriPlaylistBin {
             }
             gst::MessageView::Error(error) => {
                 // find item which raised the error
-                let self_ = UriPlaylistBin::from_instance(element);
+                let self_ = element.imp();
                 let mut state_guard = self_.state.lock().unwrap();
                 let state = state_guard.as_mut().unwrap();
 
@@ -1050,7 +1050,7 @@ impl UriPlaylistBin {
                 Some(element) => element,
                 None => return,
             };
-            let self_ = UriPlaylistBin::from_instance(&element);
+            let self_ = element.imp();
 
             let item = {
                 let mut state_guard = self_.state.lock().unwrap();
@@ -1289,7 +1289,7 @@ impl UriPlaylistBin {
                                     Some(element) => element,
                                     None => return gst::PadProbeReturn::Remove,
                                 };
-                                let self_ = UriPlaylistBin::from_instance(&element);
+                                let self_ = element.imp();
 
                                 let item = {
                                     let mut state_guard = self_.state.lock().unwrap();
@@ -1427,7 +1427,7 @@ impl UriPlaylistBin {
                                     item.index()
                                 );
 
-                                let self_ = UriPlaylistBin::from_instance(&element);
+                                let self_ = element.imp();
                                 {
                                     let mut state_guard = self_.state.lock().unwrap();
                                     let state = state_guard.as_mut().unwrap();

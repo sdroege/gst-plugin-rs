@@ -302,7 +302,7 @@ impl TranscriberBin {
                             Some(element) => element,
                         };
 
-                        let this = TranscriberBin::from_instance(&element);
+                        let this = element.imp();
 
                         this.disable_transcription_bin(&element);
 
@@ -858,7 +858,7 @@ impl BinImpl for TranscriberBin {
                         bin.notify("passthrough");
                         drop(settings);
                         bin.call_async(move |bin| {
-                            let thiz = TranscriberBin::from_instance(bin);
+                            let thiz = bin.imp();
                             thiz.block_and_update(bin, true);
                         });
                     } else {

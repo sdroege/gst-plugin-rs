@@ -586,7 +586,7 @@ impl ObjectImpl for AppSrc {
                 .class_handler(|_, args| {
                     let element = args[0].get::<super::AppSrc>().expect("signal arg");
                     let buffer = args[1].get::<gst::Buffer>().expect("signal arg");
-                    let appsrc = AppSrc::from_instance(&element);
+                    let appsrc = element.imp();
 
                     Some(appsrc.push_buffer(&element, buffer).to_value())
                 })
@@ -595,7 +595,7 @@ impl ObjectImpl for AppSrc {
                     .action()
                     .class_handler(|_, args| {
                         let element = args[0].get::<super::AppSrc>().expect("signal arg");
-                        let appsrc = AppSrc::from_instance(&element);
+                        let appsrc = element.imp();
 
                         Some(appsrc.end_of_stream(&element).to_value())
                     })

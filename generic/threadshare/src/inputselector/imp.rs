@@ -95,7 +95,7 @@ impl InputSelectorPadSinkHandler {
         element: &super::InputSelector,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let inputselector = InputSelector::from_instance(element);
+        let inputselector = element.imp();
 
         let (stickies, is_active, sync_future, switched_pad) = {
             let mut state = inputselector.state.lock().unwrap();

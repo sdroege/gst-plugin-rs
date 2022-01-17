@@ -488,7 +488,7 @@ mod imp_sink {
                 .downcast::<super::ElementSinkTest>()
                 .unwrap();
             async move {
-                let elem_sink_test = ElementSinkTest::from_instance(&element);
+                let elem_sink_test = element.imp();
                 elem_sink_test
                     .forward_item(&element, Item::Buffer(buffer))
                     .await
@@ -508,7 +508,7 @@ mod imp_sink {
                 .downcast::<super::ElementSinkTest>()
                 .unwrap();
             async move {
-                let elem_sink_test = ElementSinkTest::from_instance(&element);
+                let elem_sink_test = element.imp();
                 elem_sink_test
                     .forward_item(&element, Item::BufferList(list))
                     .await
@@ -548,7 +548,7 @@ mod imp_sink {
                 .downcast::<super::ElementSinkTest>()
                 .unwrap();
             async move {
-                let elem_sink_test = ElementSinkTest::from_instance(&element);
+                let elem_sink_test = element.imp();
 
                 if let EventView::FlushStop(..) = event.view() {
                     elem_sink_test.start(&element);
@@ -806,7 +806,7 @@ fn nominal_scenario(
     src_element: ElementSrcTest,
     mut receiver: mpsc::Receiver<Item>,
 ) {
-    let elem_src_test = imp_src::ElementSrcTest::from_instance(&src_element);
+    let elem_src_test = src_element.imp();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1018,7 +1018,7 @@ fn start_pause_start() {
 
     let (pipeline, src_element, _sink_element, mut receiver) = setup(scenario_name, None, None);
 
-    let elem_src_test = imp_src::ElementSrcTest::from_instance(&src_element);
+    let elem_src_test = src_element.imp();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1096,7 +1096,7 @@ fn start_stop_start() {
 
     let (pipeline, src_element, _sink_element, mut receiver) = setup(scenario_name, None, None);
 
-    let elem_src_test = imp_src::ElementSrcTest::from_instance(&src_element);
+    let elem_src_test = src_element.imp();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1209,7 +1209,7 @@ fn start_flush() {
 
     let (pipeline, src_element, sink_element, mut receiver) = setup(scenario_name, None, None);
 
-    let elem_src_test = imp_src::ElementSrcTest::from_instance(&src_element);
+    let elem_src_test = src_element.imp();
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
@@ -1249,7 +1249,7 @@ fn start_flush() {
         .try_push(Item::Buffer(gst::Buffer::from_slice(vec![1, 2, 3, 4])))
         .unwrap();
 
-    let elem_sink_test = imp_sink::ElementSinkTest::from_instance(&sink_element);
+    let elem_sink_test = sink_element.imp();
 
     elem_sink_test.push_flush_start(&sink_element);
 
