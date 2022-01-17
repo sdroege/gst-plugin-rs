@@ -74,14 +74,14 @@ impl ObjectSubclass for TextAhead {
                 TextAhead::catch_panic_pad_function(
                     parent,
                     || Err(gst::FlowError::Error),
-                    |self_, element| self_.sink_chain(pad, element, buffer),
+                    |imp, element| imp.sink_chain(pad, element, buffer),
                 )
             })
             .event_function(|pad, parent, event| {
                 TextAhead::catch_panic_pad_function(
                     parent,
                     || false,
-                    |self_, element| self_.sink_event(pad, element, event),
+                    |imp, element| imp.sink_event(pad, element, event),
                 )
             })
             .build();

@@ -46,8 +46,8 @@ impl PaintableSink {
     }
 
     fn pending_frame(&self) -> Option<Frame> {
-        let self_ = self.imp();
-        self_.pending_frame.lock().unwrap().take()
+        let imp = self.imp();
+        imp.pending_frame.lock().unwrap().take()
     }
 
     fn initialize_paintable(
@@ -84,13 +84,13 @@ impl PaintableSink {
 
         **paintable_storage = Some(paintable);
 
-        let self_ = self.imp();
-        *self_.sender.lock().unwrap() = Some(sender);
+        let imp = self.imp();
+        *imp.sender.lock().unwrap() = Some(sender);
     }
 
     fn do_action(&self, action: SinkEvent) -> glib::Continue {
-        let self_ = self.imp();
-        let paintable = self_.paintable.lock().unwrap().clone();
+        let imp = self.imp();
+        let paintable = imp.paintable.lock().unwrap().clone();
         let paintable = match paintable {
             Some(paintable) => paintable,
             None => return glib::Continue(false),

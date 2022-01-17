@@ -840,8 +840,8 @@ impl BinImpl for UriPlaylistBin {
             }
             gst::MessageView::Error(error) => {
                 // find item which raised the error
-                let self_ = element.imp();
-                let mut state_guard = self_.state.lock().unwrap();
+                let imp = element.imp();
+                let mut state_guard = imp.state.lock().unwrap();
                 let state = state_guard.as_mut().unwrap();
 
                 let src = error.src().unwrap();
@@ -1050,10 +1050,10 @@ impl UriPlaylistBin {
                 Some(element) => element,
                 None => return,
             };
-            let self_ = element.imp();
+            let imp = element.imp();
 
             let item = {
-                let mut state_guard = self_.state.lock().unwrap();
+                let mut state_guard = imp.state.lock().unwrap();
                 let state = state_guard.as_mut().unwrap();
                 state.waiting_for_ss_eos.as_ref().cloned()
             };
@@ -1092,7 +1092,7 @@ impl UriPlaylistBin {
 
                 item.add_blocked_pad(src_pad.clone());
             } else {
-                self_.process_decodebin_pad(src_pad);
+                imp.process_decodebin_pad(src_pad);
             }
         });
 
@@ -1289,10 +1289,10 @@ impl UriPlaylistBin {
                                     Some(element) => element,
                                     None => return gst::PadProbeReturn::Remove,
                                 };
-                                let self_ = element.imp();
+                                let imp = element.imp();
 
                                 let item = {
-                                    let mut state_guard = self_.state.lock().unwrap();
+                                    let mut state_guard = imp.state.lock().unwrap();
                                     let state = state_guard.as_mut().unwrap();
                                     state.waiting_for_ss_eos.as_ref().cloned()
                                 };
@@ -1300,7 +1300,7 @@ impl UriPlaylistBin {
                                 if let Some(item) = item {
                                     if item.dec_waiting_eos_ss() {
                                         gst_debug!(CAT, obj: &element, "streamsynchronizer has been flushed, reorganize pipeline to fit new streams topology and unblock item");
-                                        self_.handle_topology_change(&element);
+                                        imp.handle_topology_change(&element);
                                         gst::PadProbeReturn::Drop
                                     } else {
                                         gst::PadProbeReturn::Drop
@@ -1427,9 +1427,9 @@ impl UriPlaylistBin {
                                     item.index()
                                 );
 
-                                let self_ = element.imp();
+                                let imp = element.imp();
                                 {
-                                    let mut state_guard = self_.state.lock().unwrap();
+                                    let mut state_guard = imp.state.lock().unwrap();
                                     let state = state_guard.as_mut().unwrap();
 
                                     let index = item.index();
@@ -1446,8 +1446,8 @@ impl UriPlaylistBin {
                                     }
                                 }
 
-                                if let Err(e) = self_.start_next_item(&element) {
-                                    self_.failed(&element, e);
+                                if let Err(e) = imp.start_next_item(&element) {
+                                    imp.failed(&element, e);
                                 }
                             }
 
