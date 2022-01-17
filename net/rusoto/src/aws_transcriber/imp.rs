@@ -599,7 +599,7 @@ impl Transcriber {
                 }
             };
 
-            let transcribe = Self::from_instance(&element);
+            let transcribe = element.imp();
             if let Err(err) = transcribe.loop_fn(&element, &mut receiver) {
                 element_error!(
                     &element,
@@ -963,7 +963,7 @@ impl Transcriber {
         let element_weak = element.downgrade();
         let future = async move {
             while let Some(element) = element_weak.upgrade() {
-                let transcribe = Self::from_instance(&element);
+                let transcribe = element.imp();
                 let msg = match ws_stream.next().await {
                     Some(msg) => msg,
                     None => {

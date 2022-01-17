@@ -394,7 +394,7 @@ impl JsonGstParse {
                 }
             };
 
-            let parse = Self::from_instance(&element);
+            let parse = element.imp();
             parse.loop_fn(&element);
         });
         if res.is_err() {

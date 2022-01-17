@@ -228,7 +228,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst_log!(SINK_CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
-            let proxysink = ProxySink::from_instance(&element);
+            let proxysink = element.imp();
             proxysink
                 .enqueue_item(&element, DataQueueItem::Buffer(buffer))
                 .await
@@ -248,7 +248,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
             gst_log!(SINK_CAT, obj: pad.gst_pad(), "Handling {:?}", list);
-            let proxysink = ProxySink::from_instance(&element);
+            let proxysink = element.imp();
             proxysink
                 .enqueue_item(&element, DataQueueItem::BufferList(list))
                 .await
@@ -306,7 +306,7 @@ impl PadSinkHandler for ProxySinkPadHandler {
         let element = element.clone().downcast::<super::ProxySink>().unwrap();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            let proxysink = ProxySink::from_instance(&element);
+            let proxysink = element.imp();
 
             match event.view() {
                 EventView::Eos(..) => {
@@ -873,7 +873,7 @@ impl TaskImpl for ProxySrcTask {
         async move {
             gst_log!(SRC_CAT, obj: &self.element, "Starting task");
 
-            let proxysrc = ProxySrc::from_instance(&self.element);
+            let proxysrc = self.element.imp();
             let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
             let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
@@ -904,7 +904,7 @@ impl TaskImpl for ProxySrcTask {
             };
 
             let pad = self.src_pad.upgrade().expect("PadSrc no longer exists");
-            let proxysrc = ProxySrc::from_instance(&self.element);
+            let proxysrc = self.element.imp();
             let res = ProxySrcPadHandler::push_item(&pad, proxysrc, item).await;
             match res {
                 Ok(()) => {
@@ -948,7 +948,7 @@ impl TaskImpl for ProxySrcTask {
         async move {
             gst_log!(SRC_CAT, obj: &self.element, "Stopping task");
 
-            let proxysrc = ProxySrc::from_instance(&self.element);
+            let proxysrc = self.element.imp();
             let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
             let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
@@ -971,7 +971,7 @@ impl TaskImpl for ProxySrcTask {
         async move {
             gst_log!(SRC_CAT, obj: &self.element, "Starting task flush");
 
-            let proxysrc = ProxySrc::from_instance(&self.element);
+            let proxysrc = self.element.imp();
             let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
             let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
 
