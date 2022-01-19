@@ -1077,10 +1077,10 @@ impl BaseSrcImpl for ReqwestHttpSrc {
     }
 
     fn query(&self, element: &Self::Type, query: &mut gst::QueryRef) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         match query.view_mut() {
-            QueryView::Scheduling(ref mut q) => {
+            QueryViewMut::Scheduling(q) => {
                 q.set(
                     gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED,
                     1,

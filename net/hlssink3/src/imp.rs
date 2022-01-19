@@ -362,7 +362,7 @@ impl BinImpl for HlsSink3 {
         use gst::MessageView;
 
         match msg.view() {
-            MessageView::Element(ref msg) => {
+            MessageView::Element(msg) => {
                 let event_is_from_splitmuxsink = {
                     let settings = self.settings.lock().unwrap();
 

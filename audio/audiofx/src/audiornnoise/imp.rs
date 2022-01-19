@@ -352,7 +352,7 @@ impl BaseTransformImpl for AudioRNNoise {
         query: &mut gst::QueryRef,
     ) -> bool {
         if direction == gst::PadDirection::Src {
-            if let gst::QueryView::Latency(ref mut q) = query.view_mut() {
+            if let gst::QueryViewMut::Latency(q) = query.view_mut() {
                 let sink_pad = element.static_pad("sink").expect("Sink pad not found");
                 let mut upstream_query = gst::query::Latency::new();
                 if sink_pad.peer_query(&mut upstream_query) {

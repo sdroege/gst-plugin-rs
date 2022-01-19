@@ -436,7 +436,7 @@ impl Item {
 
     // from the WaitingForStreamCollection state, called when we received the item stream collection
     // and its stream topology matches what is currently being processed by the element.
-    fn set_waiting_for_pads(&self, n_streams: u32, msg: gst::message::StreamCollection) {
+    fn set_waiting_for_pads(&self, n_streams: u32, msg: &gst::message::StreamCollection) {
         let mut inner = self.inner.lock().unwrap();
         assert!(matches!(
             inner.state,
@@ -463,7 +463,7 @@ impl Item {
     // from the WaitingForStreamCollection state, called when we received the item stream collection
     // but its stream topology does not match what is currently being processed by the element,
     // having to wait until streamsynchronizer is flushed to internally reorganize the element.
-    fn set_waiting_for_ss_eos(&self, waiting_eos: u32, msg: gst::message::StreamCollection) {
+    fn set_waiting_for_ss_eos(&self, waiting_eos: u32, msg: &gst::message::StreamCollection) {
         let mut inner = self.inner.lock().unwrap();
         let (sender, receiver) = crossbeam_channel::unbounded::<bool>();
 
@@ -1111,7 +1111,7 @@ impl UriPlaylistBin {
     fn handle_stream_collection(
         &self,
         element: &super::UriPlaylistBin,
-        stream_collection_msg: gst::message::StreamCollection,
+        stream_collection_msg: &gst::message::StreamCollection,
     ) -> Result<(), PlaylistError> {
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().unwrap();
@@ -1168,7 +1168,7 @@ impl UriPlaylistBin {
     fn handle_stream_selected(
         &self,
         element: &super::UriPlaylistBin,
-        stream_selected_msg: gst::message::StreamsSelected,
+        stream_selected_msg: &gst::message::StreamsSelected,
     ) -> bool {
         let mut state_guard = self.state.lock().unwrap();
         let state = state_guard.as_mut().unwrap();

@@ -426,7 +426,7 @@ impl BaseSrcImpl for S3Src {
     }
 
     fn query(&self, src: &Self::Type, query: &mut gst::QueryRef) -> bool {
-        if let gst::QueryView::Scheduling(ref mut q) = query.view_mut() {
+        if let gst::QueryViewMut::Scheduling(q) = query.view_mut() {
             q.set(
                 gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED,
                 1,

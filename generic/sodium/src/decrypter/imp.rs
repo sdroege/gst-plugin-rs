@@ -285,12 +285,12 @@ impl Decrypter {
         element: &super::Decrypter,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
-            QueryView::Scheduling(mut q) => {
+            QueryViewMut::Scheduling(q) => {
                 let mut peer_query = gst::query::Scheduling::new();
                 let res = self.sinkpad.peer_query(&mut peer_query);
                 if !res {
@@ -305,7 +305,7 @@ impl Decrypter {
                 gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
-            QueryView::Duration(ref mut q) => {
+            QueryViewMut::Duration(q) => {
                 if q.format() != gst::Format::Bytes {
                     return pad.query_default(Some(element), query);
                 }

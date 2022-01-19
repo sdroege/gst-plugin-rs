@@ -268,12 +268,12 @@ impl Encrypter {
         element: &super::Encrypter,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
-            QueryView::Seeking(mut q) => {
+            QueryViewMut::Seeking(q) => {
                 let format = q.format();
                 q.set(
                     false,
@@ -283,7 +283,7 @@ impl Encrypter {
                 gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
-            QueryView::Duration(ref mut q) => {
+            QueryViewMut::Duration(q) => {
                 if q.format() != gst::Format::Bytes {
                     return pad.query_default(Some(element), query);
                 }

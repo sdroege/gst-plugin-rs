@@ -406,12 +406,12 @@ impl TextWrap {
         element: &super::TextWrap,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
-            QueryView::Latency(ref mut q) => {
+            QueryViewMut::Latency(q) => {
                 let mut peer_query = gst::query::Latency::new();
 
                 let ret = self.sinkpad.peer_query(&mut peer_query);

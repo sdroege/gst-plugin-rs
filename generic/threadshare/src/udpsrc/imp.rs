@@ -234,21 +234,21 @@ impl PadSrcHandler for UdpSrcPadHandler {
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         let ret = match query.view_mut() {
-            QueryView::Latency(ref mut q) => {
+            QueryViewMut::Latency(q) => {
                 q.set(true, gst::ClockTime::ZERO, gst::ClockTime::NONE);
                 true
             }
-            QueryView::Scheduling(ref mut q) => {
+            QueryViewMut::Scheduling(q) => {
                 q.set(gst::SchedulingFlags::SEQUENTIAL, 1, -1, 0);
                 q.add_scheduling_modes(&[gst::PadMode::Push]);
                 true
             }
-            QueryView::Caps(ref mut q) => {
+            QueryViewMut::Caps(q) => {
                 let caps = if let Some(caps) = self.0.configured_caps.lock().unwrap().as_ref() {
                     q.filter()
                         .map(|f| f.intersect_with_mode(caps, gst::CapsIntersectMode::First))

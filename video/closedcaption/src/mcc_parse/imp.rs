@@ -945,7 +945,7 @@ impl MccParse {
 
     fn perform_seek(
         &self,
-        event: &gst::event::Seek<&gst::EventRef>,
+        event: &gst::event::Seek<gst::EventRef>,
         element: &super::MccParse,
     ) -> bool {
         if self.state.lock().unwrap().pull.is_none() {
@@ -1045,7 +1045,7 @@ impl MccParse {
 
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
-            EventView::Seek(e) => self.perform_seek(&e, element),
+            EventView::Seek(e) => self.perform_seek(e, element),
             _ => pad.event_default(Some(element), event),
         }
     }
@@ -1056,12 +1056,12 @@ impl MccParse {
         element: &super::MccParse,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
-            QueryView::Seeking(mut q) => {
+            QueryViewMut::Seeking(q) => {
                 let state = self.state.lock().unwrap();
 
                 let fmt = q.format();
@@ -1081,7 +1081,7 @@ impl MccParse {
                     false
                 }
             }
-            QueryView::Position(ref mut q) => {
+            QueryViewMut::Position(q) => {
                 // For Time answer ourselfs, otherwise forward
                 if q.format() == gst::Format::Time {
                     let state = self.state.lock().unwrap();
@@ -1091,7 +1091,7 @@ impl MccParse {
                     self.sinkpad.peer_query(query)
                 }
             }
-            QueryView::Duration(ref mut q) => {
+            QueryViewMut::Duration(q) => {
                 // For Time answer ourselfs, otherwise forward
                 let state = self.state.lock().unwrap();
                 if q.format() == gst::Format::Time {

@@ -225,7 +225,7 @@ impl BinImpl for ProgressBin {
             // to stdout. Otherwise we pass through to the default message
             // handling of the parent class, i.e. forwarding to the parent
             // bins and the application.
-            MessageView::Element(ref msg)
+            MessageView::Element(msg)
                 if msg.src().as_ref() == Some(self.progress.upcast_ref())
                     && msg
                         .structure()

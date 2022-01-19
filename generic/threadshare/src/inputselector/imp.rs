@@ -287,12 +287,12 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         match query.view_mut() {
-            QueryView::Latency(ref mut q) => {
+            QueryViewMut::Latency(q) => {
                 let mut ret = true;
                 let mut min_latency = gst::ClockTime::ZERO;
                 let mut max_latency = gst::ClockTime::NONE;

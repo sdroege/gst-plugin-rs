@@ -384,12 +384,12 @@ impl TranscriberBin {
         element: &super::TranscriberBin,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
-            QueryView::Latency(ref mut q) => {
+            QueryViewMut::Latency(q) => {
                 let mut upstream_query = gst::query::Latency::new();
 
                 let ret = pad.query_default(Some(element), &mut upstream_query);
@@ -840,7 +840,7 @@ impl BinImpl for TranscriberBin {
         use gst::MessageView;
 
         match msg.view() {
-            MessageView::Error(ref m) => {
+            MessageView::Error(m) => {
                 /* We must have a state here */
                 let s = self.state.lock().unwrap();
 

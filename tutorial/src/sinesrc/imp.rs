@@ -488,13 +488,13 @@ impl BaseSrcImpl for SineSrc {
     }
 
     fn query(&self, element: &Self::Type, query: &mut gst::QueryRef) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         match query.view_mut() {
             // In Live mode we will have a latency equal to the number of samples in each buffer.
             // We can't output samples before they were produced, and the last sample of a buffer
             // is produced that much after the beginning, leading to this latency calculation
-            QueryView::Latency(ref mut q) => {
+            QueryViewMut::Latency(q) => {
                 let settings = *self.settings.lock().unwrap();
                 let state = self.state.lock().unwrap();
 

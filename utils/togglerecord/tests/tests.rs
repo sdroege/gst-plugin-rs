@@ -229,7 +229,7 @@ fn recv_buffers(
                 use gst::EventView;
 
                 match event.view() {
-                    EventView::Gap(ref e) => {
+                    EventView::Gap(e) => {
                         let (ts, duration) = e.get();
 
                         res.push((segment.to_running_time(ts), Some(ts), duration));
@@ -242,7 +242,7 @@ fn recv_buffers(
                         saw_eos = true;
                         return (res, saw_eos);
                     }
-                    EventView::Segment(ref e) => {
+                    EventView::Segment(e) => {
                         *segment = e.segment().clone().downcast().unwrap();
                     }
                     _ => (),

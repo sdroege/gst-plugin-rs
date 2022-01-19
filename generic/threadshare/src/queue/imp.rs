@@ -288,11 +288,11 @@ impl PadSrcHandler for QueuePadSrcHandler {
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
-        if let QueryView::Scheduling(ref mut q) = query.view_mut() {
+        if let QueryViewMut::Scheduling(q) = query.view_mut() {
             let mut new_query = gst::query::Scheduling::new();
             let res = queue.sink_pad.gst_pad().peer_query(&mut new_query);
             if !res {

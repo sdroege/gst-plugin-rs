@@ -1578,7 +1578,7 @@ impl ToggleRecord {
         element: &super::ToggleRecord,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         let stream = match self.pads.lock().get(pad) {
             None => {
@@ -1594,7 +1594,7 @@ impl ToggleRecord {
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
         match query.view_mut() {
-            QueryView::Scheduling(ref mut q) => {
+            QueryViewMut::Scheduling(q) => {
                 let mut new_query = gst::query::Scheduling::new();
                 let res = stream.sinkpad.peer_query(&mut new_query);
                 if !res {
@@ -1616,7 +1616,7 @@ impl ToggleRecord {
                 gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
-            QueryView::Seeking(ref mut q) => {
+            QueryViewMut::Seeking(q) => {
                 // Seeking is not possible here
                 let format = q.format();
                 q.set(
@@ -1629,7 +1629,7 @@ impl ToggleRecord {
                 true
             }
             // Position and duration is always the current recording position
-            QueryView::Position(ref mut q) => {
+            QueryViewMut::Position(q) => {
                 if q.format() == gst::Format::Time {
                     let state = stream.state.lock();
                     let rec_state = self.state.lock();
@@ -1663,7 +1663,7 @@ impl ToggleRecord {
                     false
                 }
             }
-            QueryView::Duration(ref mut q) => {
+            QueryViewMut::Duration(q) => {
                 if q.format() == gst::Format::Time {
                     let state = stream.state.lock();
                     let rec_state = self.state.lock();

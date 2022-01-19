@@ -783,18 +783,18 @@ impl BinImpl for FallbackSrc {
         use gst::MessageView;
 
         match msg.view() {
-            MessageView::Buffering(ref m) => {
+            MessageView::Buffering(m) => {
                 // Don't forward upwards, we handle this internally
                 self.handle_buffering(bin, m);
             }
-            MessageView::StreamsSelected(ref m) => {
+            MessageView::StreamsSelected(m) => {
                 // Don't forward upwards, we are exposing streams based on properties
                 // TODO: Do stream configuration via our own stream collection and handling
                 // of stream select events
                 // TODO: Also needs updating of StreamCollection handling in CustomSource
                 self.handle_streams_selected(bin, m);
             }
-            MessageView::Error(ref m) => {
+            MessageView::Error(m) => {
                 if !self.handle_error(bin, m) {
                     self.parent_handle_message(bin, msg);
                 }
@@ -1440,7 +1440,7 @@ impl FallbackSrc {
                     let pts = match info.data {
                         Some(gst::PadProbeData::Buffer(ref buffer)) => buffer.pts(),
                         Some(gst::PadProbeData::Event(ref ev)) => match ev.view() {
-                            gst::EventView::Gap(ref ev) => Some(ev.get().0),
+                            gst::EventView::Gap(ev) => Some(ev.get().0),
                             _ => return gst::PadProbeReturn::Pass,
                         },
                         _ => unreachable!(),

@@ -406,10 +406,10 @@ impl FlvDemux {
         element: &super::FlvDemux,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         match query.view_mut() {
-            QueryView::Position(ref mut q) => {
+            QueryViewMut::Position(q) => {
                 let fmt = q.format();
                 if fmt == gst::Format::Time {
                     if self.sinkpad.peer_query(q.query_mut()) {
@@ -428,7 +428,7 @@ impl FlvDemux {
                     false
                 }
             }
-            QueryView::Duration(ref mut q) => {
+            QueryViewMut::Duration(q) => {
                 let fmt = q.format();
                 if fmt == gst::Format::Time {
                     if self.sinkpad.peer_query(q.query_mut()) {

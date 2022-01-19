@@ -299,7 +299,7 @@ impl State {
         Ok(ret)
     }
 
-    fn handle_gap(&mut self, gap: gst::event::Gap<&gst::EventRef>) -> Vec<gst::Buffer> {
+    fn handle_gap(&mut self, gap: &gst::event::Gap<gst::EventRef>) -> Vec<gst::Buffer> {
         let mut ret = vec![];
 
         let (pts, duration) = gap.get();
@@ -362,7 +362,7 @@ impl JsonToVtt {
         gst_log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
-            EventView::CustomUpstream(ref ev) => {
+            EventView::CustomUpstream(ev) => {
                 if gst_video::ForceKeyUnitEvent::is(ev) {
                     match gst_video::UpstreamForceKeyUnitEvent::parse(ev) {
                         Ok(fku_event) => {

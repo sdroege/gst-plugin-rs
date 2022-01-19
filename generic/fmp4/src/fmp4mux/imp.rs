@@ -950,12 +950,12 @@ impl FMP4Mux {
         element: &super::FMP4Mux,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_trace!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
-            QueryView::Caps(mut q) => {
+            QueryViewMut::Caps(q) => {
                 let state = self.state.lock().unwrap();
 
                 let allowed_caps = if let Some(ref caps) = state.caps {
@@ -996,17 +996,17 @@ impl FMP4Mux {
         element: &super::FMP4Mux,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_trace!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
-            QueryView::Seeking(mut q) => {
+            QueryViewMut::Seeking(q) => {
                 // We can't really handle seeking, it would break everything
                 q.set(false, gst::ClockTime::ZERO.into(), gst::ClockTime::NONE);
                 true
             }
-            QueryView::Latency(mut q) => {
+            QueryViewMut::Latency(q) => {
                 if !self.sinkpad.peer_query(q.query_mut()) {
                     return false;
                 }

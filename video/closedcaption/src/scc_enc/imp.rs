@@ -337,12 +337,12 @@ impl SccEnc {
         element: &super::SccEnc,
         query: &mut gst::QueryRef,
     ) -> bool {
-        use gst::QueryView;
+        use gst::QueryViewMut;
 
         gst_log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
-            QueryView::Seeking(mut q) => {
+            QueryViewMut::Seeking(q) => {
                 // We don't support any seeking at all
                 let fmt = q.format();
                 q.set(
