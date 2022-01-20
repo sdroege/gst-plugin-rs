@@ -1972,7 +1972,9 @@ impl WebRTCSink {
         let mut elements = Vec::new();
         elements.push(src.clone());
 
-        elements.push(make_converter_for_video_caps(caps)?);
+        if codec.is_video {
+            elements.push(make_converter_for_video_caps(caps)?);
+        }
 
         let capsfilter = make_element("capsfilter", None)?;
         elements.push(capsfilter.clone());
