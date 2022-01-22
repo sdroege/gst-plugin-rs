@@ -656,7 +656,7 @@ fn test_iradio_mode() {
     );
 
     {
-        if let Some(tag_event) = srcpad.sticky_event::<gst::event::Tag<_>>(0) {
+        if let Some(tag_event) = srcpad.sticky_event::<gst::event::Tag>(0) {
             let tags = tag_event.tag();
             assert_eq!(tags.get::<gst::tags::Organization>().unwrap().get(), "Name");
             assert_eq!(tags.get::<gst::tags::Genre>().unwrap().get(), "Genre");

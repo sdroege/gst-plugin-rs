@@ -275,7 +275,7 @@ impl VideoEncoderImpl for GifEnc {
     fn propose_allocation(
         &self,
         element: &Self::Type,
-        query: &mut gst::query::Allocation<gst::QueryRef>,
+        query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
         query.add_allocation_meta::<gst_video::VideoMeta>(None);
         self.parent_propose_allocation(element, query)

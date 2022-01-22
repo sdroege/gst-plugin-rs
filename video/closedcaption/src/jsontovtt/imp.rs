@@ -299,7 +299,7 @@ impl State {
         Ok(ret)
     }
 
-    fn handle_gap(&mut self, gap: &gst::event::Gap<gst::EventRef>) -> Vec<gst::Buffer> {
+    fn handle_gap(&mut self, gap: &gst::event::Gap) -> Vec<gst::Buffer> {
         let mut ret = vec![];
 
         let (pts, duration) = gap.get();

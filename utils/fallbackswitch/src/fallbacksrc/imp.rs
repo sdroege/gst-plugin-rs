@@ -1243,7 +1243,7 @@ impl FallbackSrc {
 
         let mut is_image = false;
 
-        if let Some(ev) = pad.sticky_event::<gst::event::StreamStart<_>>(0) {
+        if let Some(ev) = pad.sticky_event::<gst::event::StreamStart>(0) {
             let stream = ev.stream();
 
             if let Some(stream) = stream {
@@ -1547,7 +1547,7 @@ impl FallbackSrc {
             None => return Ok(()),
         };
 
-        let segment = match pad.sticky_event::<gst::event::Segment<_>>(0) {
+        let segment = match pad.sticky_event::<gst::event::Segment>(0) {
             Some(ev) => ev.segment().clone(),
             None => {
                 gst_warning!(CAT, obj: element, "Have no segment event yet");

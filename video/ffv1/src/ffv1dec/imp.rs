@@ -458,7 +458,7 @@ impl VideoDecoderImpl for Ffv1Dec {
     fn decide_allocation(
         &self,
         element: &Self::Type,
-        query: &mut gst::query::Allocation<gst::QueryRef>,
+        query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
         let supported = query
             .find_allocation_meta::<gst_video::VideoMeta>()
