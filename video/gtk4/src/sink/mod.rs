@@ -107,6 +107,12 @@ impl PaintableSink {
     }
 }
 
+impl Default for PaintableSink {
+    fn default() -> Self {
+        PaintableSink::new(None)
+    }
+}
+
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),
