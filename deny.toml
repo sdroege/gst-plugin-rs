@@ -67,12 +67,6 @@ version = "0.11"
 name = "cfg-if"
 version = "0.1"
 
-# ignore duplicated nom dependency because cexpr depends on an old version
-# https://github.com/jethrogb/rust-cexpr/issues/26
-[[bans.skip]]
-name = "nom"
-version = "5"
-
 # ignore duplicated rustc_version dependency because various crates depend on an old version
 [[bans.skip]]
 name = "rustc_version"
@@ -126,6 +120,12 @@ version = "0.4"
 [[bans.skip]]
 name = "heck"
 version = "0.3"
+
+# ignore duplicated env_logger dependency because librespot depends on an old version
+# https://github.com/librespot-org/librespot/pull/957
+[[bans.skip]]
+name = "env_logger"
+version = "0.8"
 
 [sources]
 unknown-registry = "deny"
