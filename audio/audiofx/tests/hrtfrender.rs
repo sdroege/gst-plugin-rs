@@ -10,46 +10,11 @@ use gst::glib;
 use gst::prelude::*;
 
 use once_cell::sync::Lazy;
-use std::io::{Cursor, Write};
 
 static CONFIG: Lazy<glib::Bytes> = Lazy::new(|| {
-    let mut buff = Cursor::new(vec![0u8; 1024]);
-
-    write_config(&mut buff).unwrap();
-    glib::Bytes::from_owned(buff.get_ref().to_owned())
+    let buff = include_bytes!("test.hrir");
+    glib::Bytes::from_owned(buff)
 });
-
-// Generates a fake config
-fn write_config(writer: &mut impl Write) -> std::io::Result<()> {
-    const SAMPLE_RATE: u32 = 44_100;
-    const LENGTH: u32 = 2;
-    const VERTEX_COUNT: u32 = 2;
-    const INDEX_COUNT: u32 = 2 * 3;
-
-    writer.write_all(b"HRIR")?;
-    writer.write_all(&SAMPLE_RATE.to_le_bytes())?;
-    writer.write_all(&LENGTH.to_le_bytes())?;
-    writer.write_all(&VERTEX_COUNT.to_le_bytes())?;
-    writer.write_all(&INDEX_COUNT.to_le_bytes())?;
-
-    // Write Indices
-    for _ in 0..INDEX_COUNT {
-        writer.write_all(&0u32.to_le_bytes())?;
-    }
-
-    // Write Vertices
-    for _ in 0..VERTEX_COUNT {
-        for _ in 0..3 {
-            writer.write_all(&0u32.to_le_bytes())?;
-        }
-
-        for _ in 0..LENGTH * 2 {
-            writer.write_all(&0f32.to_le_bytes())?;
-        }
-    }
-
-    Ok(())
-}
 
 fn init() {
     use std::sync::Once;
