@@ -147,12 +147,19 @@ impl Dav1dDec {
         let input_data = input_buffer
             .map_readable()
             .map_err(|_| gst::FlowError::Error)?;
-        let pictures = decoder
-            .decode(input_data, frame_number, timestamp, duration, || {})
-            .map_err(|e| {
-                gst_error!(CAT, "Decoding failed (error code: {})", e);
-                gst::FlowError::Error
-            })?;
+        let pictures = match decoder.decode(input_data, frame_number, timestamp, duration, || {}) {
+            Ok(pictures) => pictures,
+            Err(err) => {
+                gst_error!(CAT, "Decoding failed (error code: {})", err);
+                return gst_video::video_decoder_error!(
+                    element,
+                    1,
+                    gst::StreamError::Decode,
+                    ["Decoding failed (error code {})", err]
+                )
+                .map(|_| vec![]);
+            }
+        };
 
         let mut decoded_pictures = vec![];
         for pic in pictures {
