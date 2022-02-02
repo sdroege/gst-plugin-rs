@@ -462,7 +462,10 @@ impl ElementImpl for Rav1Enc {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::builder("video/x-av1").build();
+            let src_caps = gst::Caps::builder("video/x-av1")
+                .field("stream-format", "obu-stream")
+                .field("alignment", "tu")
+                .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
                 gst::PadDirection::Src,
@@ -635,7 +638,13 @@ impl VideoEncoderImpl for Rav1Enc {
         });
 
         let output_state = element
-            .set_output_state(gst::Caps::builder("video/x-av1").build(), Some(state))
+            .set_output_state(
+                gst::Caps::builder("video/x-av1")
+                    .field("stream-format", "obu-stream")
+                    .field("alignment", "tu")
+                    .build(),
+                Some(state),
+            )
             .map_err(|_| gst::loggable_error!(CAT, "Failed to set output state"))?;
         element
             .negotiate(output_state)
