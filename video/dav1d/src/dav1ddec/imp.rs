@@ -396,7 +396,14 @@ impl ElementImpl for Dav1dDec {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::builder("video/x-av1").build();
+            let sink_caps = if gst::version() >= (1, 19, 0, 0) {
+                gst::Caps::builder("video/x-av1")
+                    .field("stream-format", "obu-stream")
+                    .field("alignment", gst::List::new(["frame", "tu"]))
+                    .build()
+            } else {
+                gst::Caps::builder("video/x-av1").build()
+            };
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
                 gst::PadDirection::Sink,
