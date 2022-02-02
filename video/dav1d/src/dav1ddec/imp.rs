@@ -45,6 +45,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 impl Dav1dDec {
     pub fn gst_video_format_from_dav1d_picture(
         &self,
+        element: &super::Dav1dDec,
         pic: &dav1d::Picture,
     ) -> gst_video::VideoFormat {
         let bpc = pic.bits_per_component();
@@ -57,7 +58,7 @@ impl Dav1dDec {
             (dav1d::PixelLayout::I422, _) => "I422",
             (dav1d::PixelLayout::I444, _) => "Y444",
             (dav1d::PixelLayout::Unknown, _) => {
-                gst_warning!(CAT, "Unsupported dav1d format");
+                gst_warning!(CAT, obj: element, "Unsupported dav1d format");
                 return gst_video::VideoFormat::Unknown;
             }
         };
@@ -81,7 +82,7 @@ impl Dav1dDec {
             }
         };
         f.parse::<gst_video::VideoFormat>().unwrap_or_else(|_| {
-            gst_warning!(CAT, "Unsupported dav1d format: {}", f);
+            gst_warning!(CAT, obj: element, "Unsupported dav1d format: {}", f);
             gst_video::VideoFormat::Unknown
         })
     }
@@ -127,13 +128,14 @@ impl Dav1dDec {
         Ok(())
     }
 
-    fn flush_decoder(&self) {
+    fn flush_decoder(&self, _element: &super::Dav1dDec) {
         let decoder = self.decoder.lock().unwrap();
         decoder.flush();
     }
 
     fn decode(
         &self,
+        element: &super::Dav1dDec,
         input_buffer: &gst::BufferRef,
         frame: &gst_video::VideoCodecFrame,
     ) -> Result<Vec<(dav1d::Picture, gst_video::VideoFormat)>, gst::FlowError> {
@@ -154,7 +156,7 @@ impl Dav1dDec {
 
         let mut decoded_pictures = vec![];
         for pic in pictures {
-            let format = self.gst_video_format_from_dav1d_picture(&pic);
+            let format = self.gst_video_format_from_dav1d_picture(element, &pic);
             if format != gst_video::VideoFormat::Unknown {
                 decoded_pictures.push((pic, format));
             } else {
@@ -166,6 +168,7 @@ impl Dav1dDec {
 
     pub fn decoded_picture_as_buffer(
         &self,
+        element: &super::Dav1dDec,
         pic: &dav1d::Picture,
         output_state: gst_video::VideoCodecState<gst_video::video_codec_state::Readable>,
     ) -> Result<gst::Buffer, gst::FlowError> {
@@ -196,6 +199,7 @@ impl Dav1dDec {
             } else {
                 gst_trace!(
                     gst::CAT_PERFORMANCE,
+                    obj: element,
                     "Copying decoded video frame component {:?}",
                     component
                 );
@@ -260,7 +264,7 @@ impl Dav1dDec {
             .expect("Output state not set. Shouldn't happen!");
         let offset = pic.offset() as i32;
         if let Some(mut frame) = element.frame(offset) {
-            let output_buffer = self.decoded_picture_as_buffer(pic, output_state)?;
+            let output_buffer = self.decoded_picture_as_buffer(element, pic, output_state)?;
             frame.set_output_buffer(output_buffer);
             element.finish_frame(frame)?;
         } else {
@@ -270,21 +274,22 @@ impl Dav1dDec {
         self.forward_pending_pictures(element)
     }
 
-    fn drop_decoded_pictures(&self) {
+    fn drop_decoded_pictures(&self, element: &super::Dav1dDec) {
         let mut decoder = self.decoder.lock().unwrap();
         while let Ok(pic) = decoder.get_picture() {
-            gst_debug!(CAT, "Dropping picture");
+            gst_debug!(CAT, obj: element, "Dropping picture");
             drop(pic);
         }
     }
 
     fn pending_pictures(
         &self,
+        element: &super::Dav1dDec,
     ) -> Result<Vec<(dav1d::Picture, gst_video::VideoFormat)>, gst::FlowError> {
         let mut decoder = self.decoder.lock().unwrap();
         let mut pictures = vec![];
         while let Ok(pic) = decoder.get_picture() {
-            let format = self.gst_video_format_from_dav1d_picture(&pic);
+            let format = self.gst_video_format_from_dav1d_picture(element, &pic);
             if format == gst_video::VideoFormat::Unknown {
                 return Err(gst::FlowError::NotNegotiated);
             }
@@ -297,7 +302,7 @@ impl Dav1dDec {
         &self,
         element: &super::Dav1dDec,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        for (pic, format) in self.pending_pictures()? {
+        for (pic, format) in self.pending_pictures(element)? {
             self.handle_picture(element, &pic, format)?;
         }
         Ok(gst::FlowSuccess::Ok)
@@ -432,7 +437,7 @@ impl VideoDecoderImpl for Dav1dDec {
         frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let input_buffer = frame.input_buffer().expect("frame without input buffer");
-        for (pic, format) in self.decode(input_buffer, &frame)? {
+        for (pic, format) in self.decode(element, input_buffer, &frame)? {
             self.handle_picture(element, &pic, format)?;
         }
 
@@ -441,21 +446,21 @@ impl VideoDecoderImpl for Dav1dDec {
 
     fn flush(&self, element: &Self::Type) -> bool {
         gst_info!(CAT, obj: element, "Flushing");
-        self.flush_decoder();
-        self.drop_decoded_pictures();
+        self.flush_decoder(element);
+        self.drop_decoded_pictures(element);
         true
     }
 
     fn drain(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_info!(CAT, obj: element, "Draining");
-        self.flush_decoder();
+        self.flush_decoder(element);
         self.forward_pending_pictures(element)?;
         self.parent_drain(element)
     }
 
     fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_info!(CAT, obj: element, "Finishing");
-        self.flush_decoder();
+        self.flush_decoder(element);
         self.forward_pending_pictures(element)?;
         self.parent_finish(element)
     }
