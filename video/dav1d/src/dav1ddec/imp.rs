@@ -21,7 +21,8 @@ use std::i32;
 use std::sync::Mutex;
 
 #[derive(Default)]
-struct NegotiationInfos {
+struct State {
+    decoder: dav1d::Decoder,
     input_state:
         Option<gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>>,
     output_info: Option<gst_video::VideoInfo>,
@@ -30,8 +31,7 @@ struct NegotiationInfos {
 
 #[derive(Default)]
 pub struct Dav1dDec {
-    decoder: Mutex<dav1d::Decoder>,
-    negotiation_infos: Mutex<NegotiationInfos>,
+    state: Mutex<Option<State>>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -93,9 +93,11 @@ impl Dav1dDec {
         pic: &dav1d::Picture,
         format: gst_video::VideoFormat,
     ) -> Result<(), gst::FlowError> {
+        let mut state_guard = self.state.lock().unwrap();
+        let state = state_guard.as_mut().unwrap();
+
         let negotiate = {
-            let negotiation_infos = self.negotiation_infos.lock().unwrap();
-            match negotiation_infos.output_info {
+            match state.output_info {
                 Some(ref i) => {
                     (i.width() != pic.width())
                         || (i.height() != pic.height() || (i.format() != format))
@@ -113,24 +115,26 @@ impl Dav1dDec {
             pic.width(),
             pic.height()
         );
-        let output_state = {
-            let negotiation_infos = self.negotiation_infos.lock().unwrap();
-            let input_state = negotiation_infos.input_state.as_ref();
-            element.set_output_state(format, pic.width(), pic.height(), input_state)
-        }?;
+
+        let input_state = state.input_state.as_ref().cloned();
+        drop(state_guard);
+
+        let output_state =
+            element.set_output_state(format, pic.width(), pic.height(), input_state.as_ref())?;
         element.negotiate(output_state)?;
         let out_state = element.output_state().unwrap();
-        {
-            let mut negotiation_infos = self.negotiation_infos.lock().unwrap();
-            negotiation_infos.output_info = Some(out_state.info());
-        }
+
+        let mut state_guard = self.state.lock().unwrap();
+        let state = state_guard.as_mut().unwrap();
+        state.output_info = Some(out_state.info());
 
         Ok(())
     }
 
     fn flush_decoder(&self, _element: &super::Dav1dDec) {
-        let decoder = self.decoder.lock().unwrap();
-        decoder.flush();
+        let mut state_guard = self.state.lock().unwrap();
+        let state = state_guard.as_mut().unwrap();
+        state.decoder.flush();
     }
 
     fn decode(
@@ -139,7 +143,9 @@ impl Dav1dDec {
         input_buffer: &gst::BufferRef,
         frame: &gst_video::VideoCodecFrame,
     ) -> Result<Vec<(dav1d::Picture, gst_video::VideoFormat)>, gst::FlowError> {
-        let mut decoder = self.decoder.lock().unwrap();
+        let mut state_guard = self.state.lock().unwrap();
+        let state = state_guard.as_mut().unwrap();
+
         let timestamp = frame.dts().map(|ts| *ts as i64);
         let duration = frame.duration().map(|d| *d as i64);
 
@@ -147,19 +153,23 @@ impl Dav1dDec {
         let input_data = input_buffer
             .map_readable()
             .map_err(|_| gst::FlowError::Error)?;
-        let pictures = match decoder.decode(input_data, frame_number, timestamp, duration, || {}) {
-            Ok(pictures) => pictures,
-            Err(err) => {
-                gst_error!(CAT, "Decoding failed (error code: {})", err);
-                return gst_video::video_decoder_error!(
-                    element,
-                    1,
-                    gst::StreamError::Decode,
-                    ["Decoding failed (error code {})", err]
-                )
-                .map(|_| vec![]);
-            }
-        };
+        let pictures =
+            match state
+                .decoder
+                .decode(input_data, frame_number, timestamp, duration, || {})
+            {
+                Ok(pictures) => pictures,
+                Err(err) => {
+                    gst_error!(CAT, "Decoding failed (error code: {})", err);
+                    return gst_video::video_decoder_error!(
+                        element,
+                        1,
+                        gst::StreamError::Decode,
+                        ["Decoding failed (error code {})", err]
+                    )
+                    .map(|_| vec![]);
+                }
+            };
 
         let mut decoded_pictures = vec![];
         for pic in pictures {
@@ -183,7 +193,10 @@ impl Dav1dDec {
         let mut strides = vec![];
         let mut acc_offset: usize = 0;
 
-        let video_meta_supported = self.negotiation_infos.lock().unwrap().video_meta_supported;
+        let mut state_guard = self.state.lock().unwrap();
+        let state = state_guard.as_mut().unwrap();
+        let video_meta_supported = state.video_meta_supported;
+        drop(state_guard);
 
         let info = output_state.info();
         let mut out_buffer = gst::Buffer::new();
@@ -282,8 +295,10 @@ impl Dav1dDec {
     }
 
     fn drop_decoded_pictures(&self, element: &super::Dav1dDec) {
-        let mut decoder = self.decoder.lock().unwrap();
-        while let Ok(pic) = decoder.get_picture() {
+        let mut state_guard = self.state.lock().unwrap();
+        let state = state_guard.as_mut().unwrap();
+
+        while let Ok(pic) = state.decoder.get_picture() {
             gst_debug!(CAT, obj: element, "Dropping picture");
             drop(pic);
         }
@@ -293,9 +308,11 @@ impl Dav1dDec {
         &self,
         element: &super::Dav1dDec,
     ) -> Result<Vec<(dav1d::Picture, gst_video::VideoFormat)>, gst::FlowError> {
-        let mut decoder = self.decoder.lock().unwrap();
+        let mut state_guard = self.state.lock().unwrap();
+        let state = state_guard.as_mut().unwrap();
+
         let mut pictures = vec![];
-        while let Ok(pic) = decoder.get_picture() {
+        while let Ok(pic) = state.decoder.get_picture() {
             let format = self.gst_video_format_from_dav1d_picture(element, &pic);
             if format == gst_video::VideoFormat::Unknown {
                 return Err(gst::FlowError::NotNegotiated);
@@ -418,24 +435,39 @@ impl ElementImpl for Dav1dDec {
 impl VideoDecoderImpl for Dav1dDec {
     fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         {
-            let mut infos = self.negotiation_infos.lock().unwrap();
-            infos.output_info = None;
+            let mut state_guard = self.state.lock().unwrap();
+            *state_guard = Some(State {
+                decoder: dav1d::Decoder::new(),
+                input_state: None,
+                output_info: None,
+                video_meta_supported: false,
+            });
         }
 
         self.parent_start(element)
     }
 
+    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+        {
+            let mut state_guard = self.state.lock().unwrap();
+            *state_guard = None;
+        }
+
+        self.parent_stop(element)
+    }
+
     fn set_format(
         &self,
         element: &Self::Type,
-        state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
+        input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         {
-            let mut infos = self.negotiation_infos.lock().unwrap();
-            infos.input_state = Some(state.clone());
+            let mut state_guard = self.state.lock().unwrap();
+            let state = state_guard.as_mut().unwrap();
+            state.input_state = Some(input_state.clone());
         }
 
-        self.parent_set_format(element, state)
+        self.parent_set_format(element, input_state)
     }
 
     fn handle_frame(
@@ -477,9 +509,13 @@ impl VideoDecoderImpl for Dav1dDec {
         element: &Self::Type,
         query: &mut gst::query::Allocation,
     ) -> Result<(), gst::LoggableError> {
-        self.negotiation_infos.lock().unwrap().video_meta_supported = query
-            .find_allocation_meta::<gst_video::VideoMeta>()
-            .is_some();
+        {
+            let mut state_guard = self.state.lock().unwrap();
+            let state = state_guard.as_mut().unwrap();
+            state.video_meta_supported = query
+                .find_allocation_meta::<gst_video::VideoMeta>()
+                .is_some();
+        }
 
         self.parent_decide_allocation(element, query)
     }
