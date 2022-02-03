@@ -50,15 +50,24 @@ impl Dav1dDec {
     ) -> gst_video::VideoFormat {
         let bpc = pic.bits_per_component();
         let format_desc = match (pic.pixel_layout(), bpc) {
-            // (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(8))) => "GRAY8",
+            (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(8))) => "GRAY8",
+            #[cfg(target_endian = "little")]
+            (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(16))) => "GRAY16_LE",
+            #[cfg(target_endian = "big")]
+            (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(16))) => "GRAY16_BE",
             // (dav1d::PixelLayout::I400, Some(dav1d::BitsPerComponent(10))) => "GRAY10_LE32",
-            (dav1d::PixelLayout::I400, _) => return gst_video::VideoFormat::Unknown,
             (dav1d::PixelLayout::I420, _) => "I420",
             (dav1d::PixelLayout::I422, Some(dav1d::BitsPerComponent(8))) => "Y42B",
             (dav1d::PixelLayout::I422, _) => "I422",
             (dav1d::PixelLayout::I444, _) => "Y444",
-            (dav1d::PixelLayout::Unknown, _) => {
-                gst_warning!(CAT, obj: element, "Unsupported dav1d format");
+            (layout, bpc) => {
+                gst_warning!(
+                    CAT,
+                    obj: element,
+                    "Unsupported dav1d format {:?}/{:?}",
+                    layout,
+                    bpc
+                );
                 return gst_video::VideoFormat::Unknown;
             }
         };
@@ -244,18 +253,25 @@ impl Dav1dDec {
         let mut out_buffer = gst::Buffer::new();
         let mut_buffer = out_buffer.get_mut().unwrap();
 
-        // FIXME: For gray support we would need to deal only with the Y component.
-        assert!(info.is_yuv());
-        for component in [
-            dav1d::PlanarImageComponent::Y,
-            dav1d::PlanarImageComponent::U,
-            dav1d::PlanarImageComponent::V,
-        ]
-        .iter()
-        {
-            let dest_stride: u32 = info.stride()[*component as usize].try_into().unwrap();
-            let plane = pic.plane(*component);
-            let (src_stride, height) = pic.plane_data_geometry(*component);
+        let components = if info.is_yuv() {
+            const YUV_COMPONENTS: [dav1d::PlanarImageComponent; 3] = [
+                dav1d::PlanarImageComponent::Y,
+                dav1d::PlanarImageComponent::U,
+                dav1d::PlanarImageComponent::V,
+            ];
+            &YUV_COMPONENTS[..]
+        } else if info.is_gray() {
+            const GRAY_COMPONENTS: [dav1d::PlanarImageComponent; 1] =
+                [dav1d::PlanarImageComponent::Y];
+
+            &GRAY_COMPONENTS[..]
+        } else {
+            unreachable!();
+        };
+        for &component in components {
+            let dest_stride: u32 = info.stride()[component as usize].try_into().unwrap();
+            let plane = pic.plane(component);
+            let (src_stride, height) = pic.plane_data_geometry(component);
             let mem = if video_meta_supported || src_stride == dest_stride {
                 gst::Memory::from_slice(plane)
             } else {
@@ -401,12 +417,16 @@ impl Dav1dDec {
 
 fn video_output_formats() -> Vec<glib::SendValue> {
     let values = [
-        // gst_video::VideoFormat::Gray8,
+        gst_video::VideoFormat::Gray8,
+        #[cfg(target_endian = "little")]
+        gst_video::VideoFormat::Gray16Le,
+        #[cfg(target_endian = "big")]
+        gst_video::VideoFormat::Gray16Be,
+        // #[cfg(target_endian = "little")]
+        // gst_video::VideoFormat::Gray10Le32,
         gst_video::VideoFormat::I420,
         gst_video::VideoFormat::Y42b,
         gst_video::VideoFormat::Y444,
-        // #[cfg(target_endian = "little")]
-        // gst_video::VideoFormat::Gray10Le32,
         #[cfg(target_endian = "little")]
         gst_video::VideoFormat::I42010le,
         #[cfg(target_endian = "little")]
