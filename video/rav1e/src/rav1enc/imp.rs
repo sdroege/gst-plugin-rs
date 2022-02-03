@@ -441,7 +441,7 @@ impl ElementImpl for Rav1Enc {
                         gst_video::VideoFormat::I42012le.to_str(),
                         gst_video::VideoFormat::I42212le.to_str(),
                         gst_video::VideoFormat::Y44412le.to_str(),
-                        // &gst_video::VideoFormat::Gray8.to_str(),
+                        gst_video::VideoFormat::Gray8.to_str(),
                     ]),
                 )
                 .field("width", gst::IntRange::new(1, std::i32::MAX))
@@ -528,7 +528,7 @@ impl VideoEncoderImpl for Rav1Enc {
                     gst_video::VideoFormat::Y444
                     | gst_video::VideoFormat::Y44410le
                     | gst_video::VideoFormat::Y44412le => color::ChromaSampling::Cs444,
-                    // gst_video::VideoFormat::Gray8 => color::ChromaSampling::Cs400,
+                    gst_video::VideoFormat::Gray8 => color::ChromaSampling::Cs400,
                     _ => unreachable!(),
                 },
                 chroma_sample_position: match video_info.chroma_site() {
