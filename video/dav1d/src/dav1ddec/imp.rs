@@ -20,7 +20,6 @@ use once_cell::sync::Lazy;
 use std::i32;
 use std::sync::{Mutex, MutexGuard};
 
-#[derive(Default)]
 struct State {
     decoder: dav1d::Decoder,
     input_state:
@@ -530,7 +529,12 @@ impl VideoDecoderImpl for Dav1dDec {
         {
             let mut state_guard = self.state.lock().unwrap();
             *state_guard = Some(State {
-                decoder: dav1d::Decoder::new(),
+                decoder: dav1d::Decoder::new().map_err(|err| {
+                    gst::error_msg!(
+                        gst::LibraryError::Init,
+                        ["Failed to create decoder instance: {}", err]
+                    )
+                })?,
                 input_state: None,
                 output_info: None,
                 video_meta_supported: false,
