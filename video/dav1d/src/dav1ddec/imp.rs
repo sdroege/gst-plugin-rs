@@ -158,7 +158,7 @@ impl Dav1dDec {
         element: &super::Dav1dDec,
         state_guard: &mut MutexGuard<Option<State>>,
         input_buffer: gst::Buffer,
-        frame: &gst_video::VideoCodecFrame,
+        frame: gst_video::VideoCodecFrame,
     ) -> Result<std::ops::ControlFlow<(), ()>, gst::FlowError> {
         gst_trace!(
             CAT,
@@ -192,6 +192,7 @@ impl Dav1dDec {
             }
             Err(err) => {
                 gst_error!(CAT, "Sending data failed (error code: {})", err);
+                element.release_frame(frame);
                 return gst_video::video_decoder_error!(
                     element,
                     1,
@@ -574,7 +575,7 @@ impl VideoDecoderImpl for Dav1dDec {
         {
             let mut state_guard = self.state.lock().unwrap();
             state_guard = self.forward_pending_pictures(element, state_guard)?;
-            if self.send_data(element, &mut state_guard, input_buffer, &frame)?
+            if self.send_data(element, &mut state_guard, input_buffer, frame)?
                 == std::ops::ControlFlow::Continue(())
             {
                 loop {
