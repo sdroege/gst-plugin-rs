@@ -856,7 +856,12 @@ impl CongestionController {
 }
 
 impl State {
-    fn finalize_consumer(&mut self, element: &super::WebRTCSink, consumer: Consumer, signal: bool) {
+    fn finalize_consumer(
+        &mut self,
+        element: &super::WebRTCSink,
+        consumer: &Consumer,
+        signal: bool,
+    ) {
         consumer.pipeline.debug_to_dot_file_with_ts(
             gst::DebugGraphDetails::all(),
             format!("removing-peer-{}-", consumer.peer_id,),
@@ -881,9 +886,12 @@ impl State {
         }
     }
 
-    fn remove_consumer(&mut self, element: &super::WebRTCSink, peer_id: &str, signal: bool) {
+    fn remove_consumer(&mut self, element: &super::WebRTCSink, peer_id: &str, signal: bool) -> Option<Consumer> {
         if let Some(consumer) = self.consumers.remove(peer_id) {
-            self.finalize_consumer(element, consumer, signal);
+            self.finalize_consumer(element, &consumer, signal);
+            Some(consumer)
+        } else {
+            None
         }
     }
 
@@ -1748,7 +1756,10 @@ impl WebRTCSink {
             return Err(WebRTCSinkError::NoConsumerWithId(peer_id.to_string()));
         }
 
-        state.remove_consumer(element, peer_id, signal);
+        if let Some(consumer) = state.remove_consumer(element, peer_id, signal) {
+            drop(state);
+            element.emit_by_name::<()>("consumer-removed", &[&peer_id, &consumer.webrtcbin]);
+        }
 
         Ok(())
     }
@@ -1841,7 +1852,7 @@ impl WebRTCSink {
             });
 
             if remove {
-                state.finalize_consumer(element, consumer, true);
+                state.finalize_consumer(element, &consumer, true);
             } else {
                 state.consumers.insert(consumer.peer_id.clone(), consumer);
             }
@@ -2466,6 +2477,24 @@ impl ObjectImpl for WebRTCSink {
                  */
                 glib::subclass::Signal::builder(
                     "new-webrtcbin",
+                    &[
+                        String::static_type().into(),
+                        gst::Element::static_type().into(),
+                    ],
+                    glib::types::Type::UNIT.into(),
+                )
+                .build(),
+
+                /*
+                 * RsWebRTCSink::consumer_removed:
+                 * @consumer_id: Identifier of the consumer that was removed
+                 * @webrtcbin: The webrtcbin connected to the newly removed consumer
+                 *
+                 * This signal is emitted right after the connection with a consumer
+                 * has been dropped.
+                 */
+                glib::subclass::Signal::builder(
+                    "consumer-removed",
                     &[
                         String::static_type().into(),
                         gst::Element::static_type().into(),
