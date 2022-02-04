@@ -1724,7 +1724,7 @@ impl WebRTCSink {
             }
         })?;
 
-        element.emit_by_name::<()>("new-webrtcbin", &[&peer_id, &webrtcbin]);
+        element.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
         if settings.enable_data_channel_navigation {
             state.navigation_handler = Some(
                 NavigationEventHandler::new(&element, &webrtcbin)
@@ -2468,15 +2468,15 @@ impl ObjectImpl for WebRTCSink {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
                 /*
-                 * RsWebRTCSink::new-webrtcbin:
-                 * @peer_id: Identifier of the peer associated with the consumer added
+                 * RsWebRTCSink::consumer-added:
+                 * @consumer_id: Identifier of the consumer added
                  * @webrtcbin: The new webrtcbin
                  *
                  * This signal can be used to tweak @webrtcbin, creating a data
                  * channel for example.
                  */
                 glib::subclass::Signal::builder(
-                    "new-webrtcbin",
+                    "consumer-added",
                     &[
                         String::static_type().into(),
                         gst::Element::static_type().into(),
