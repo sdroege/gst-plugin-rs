@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-videofx"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Sanchayan Maity <sanchayan@asymptotic.io>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MPL-2.0"
