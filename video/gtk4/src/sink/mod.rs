@@ -65,22 +65,22 @@ impl PaintableSink {
         // created.
         let (send, recv) = mpsc::channel();
         context.invoke(glib::clone!(
-            @weak self as s =>
+            @weak self as sink =>
             move || {
                 let paintable = Fragile::new(SinkPaintable::new());
                 send.send(paintable).expect("Somehow we dropped the receiver");
+
+                receiver.attach(
+                    None,
+                    glib::clone!(
+                        @weak sink => @default-return glib::Continue(false),
+                        move |action| sink.do_action(action)
+                    ),
+                );
             }
         ));
 
         let paintable = recv.recv().expect("Somehow we dropped the sender");
-
-        receiver.attach(
-            None,
-            glib::clone!(
-                @weak self as sink => @default-return glib::Continue(false),
-                move |action| sink.do_action(action)
-            ),
-        );
 
         **paintable_storage = Some(paintable);
 
