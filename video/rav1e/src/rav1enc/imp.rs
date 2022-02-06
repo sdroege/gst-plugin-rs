@@ -19,15 +19,29 @@ use rav1e::config;
 use rav1e::data;
 use std::sync::Mutex;
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstRav1eEncTune")]
+pub enum Tune {
+    Psnr,
+    Psychovisual,
+}
+
 const DEFAULT_SPEED_PRESET: u32 = 6;
 const DEFAULT_LOW_LATENCY: bool = false;
 const DEFAULT_MIN_KEY_FRAME_INTERVAL: u64 = 12;
 const DEFAULT_MAX_KEY_FRAME_INTERVAL: u64 = 240;
+const DEFAULT_SWITCH_FRAME_INTERVAL: u64 = 0;
 const DEFAULT_BITRATE: i32 = 0;
 const DEFAULT_QUANTIZER: usize = 100;
+const DEFAULT_MIN_QUANTIZER: u8 = 0;
 const DEFAULT_TILE_COLS: usize = 0;
 const DEFAULT_TILE_ROWS: usize = 0;
 const DEFAULT_TILES: usize = 0;
+const DEFAULT_RDO_LOOKAHEAD_FRAMES: i32 = -1;
+const DEFAULT_TUNE: Tune = Tune::Psychovisual;
+const DEFAULT_RESERVOIR_FRAME_DELAY: i32 = i32::MIN;
+const DEFAULT_ERROR_RESILIENT: bool = false;
 const DEFAULT_THREADS: usize = 0;
 
 #[derive(Debug, Clone, Copy)]
@@ -36,11 +50,17 @@ struct Settings {
     low_latency: bool,
     min_key_frame_interval: u64,
     max_key_frame_interval: u64,
+    switch_frame_interval: u64,
     bitrate: i32,
     quantizer: usize,
+    min_quantizer: u8,
     tile_cols: usize,
     tile_rows: usize,
     tiles: usize,
+    rdo_lookahead_frames: i32,
+    tune: Tune,
+    reservoir_frame_delay: i32,
+    error_resilient: bool,
     threads: usize,
 }
 
@@ -51,11 +71,17 @@ impl Default for Settings {
             low_latency: DEFAULT_LOW_LATENCY,
             min_key_frame_interval: DEFAULT_MIN_KEY_FRAME_INTERVAL,
             max_key_frame_interval: DEFAULT_MAX_KEY_FRAME_INTERVAL,
+            switch_frame_interval: DEFAULT_SWITCH_FRAME_INTERVAL,
             bitrate: DEFAULT_BITRATE,
             quantizer: DEFAULT_QUANTIZER,
+            min_quantizer: DEFAULT_MIN_QUANTIZER,
             tile_cols: DEFAULT_TILE_COLS,
             tile_rows: DEFAULT_TILE_ROWS,
             tiles: DEFAULT_TILES,
+            rdo_lookahead_frames: DEFAULT_RDO_LOOKAHEAD_FRAMES,
+            tune: DEFAULT_TUNE,
+            reservoir_frame_delay: DEFAULT_RESERVOIR_FRAME_DELAY,
+            error_resilient: DEFAULT_ERROR_RESILIENT,
             threads: DEFAULT_THREADS,
         }
     }
@@ -251,6 +277,15 @@ impl ObjectImpl for Rav1Enc {
                     DEFAULT_MAX_KEY_FRAME_INTERVAL,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecUInt64::new(
+                    "switch-frame-interval",
+                    "Switch Frame Interval",
+                    "Switch Frame Interval",
+                    0,
+                    std::u64::MAX,
+                    DEFAULT_SWITCH_FRAME_INTERVAL,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
                 glib::ParamSpecInt::new(
                     "bitrate",
                     "Bitrate",
@@ -267,6 +302,15 @@ impl ObjectImpl for Rav1Enc {
                     0,
                     std::u32::MAX,
                     DEFAULT_QUANTIZER as u32,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpecUInt::new(
+                    "min-quantizer",
+                    "Min Quantizer",
+                    "Min Quantizer",
+                    0,
+                    std::u8::MAX as u32,
+                    DEFAULT_MIN_QUANTIZER as u32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpecUInt::new(
@@ -294,6 +338,39 @@ impl ObjectImpl for Rav1Enc {
                     0,
                     std::u32::MAX,
                     DEFAULT_TILES as u32,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpecInt::new(
+                    "rdo-lookahead-frames",
+                    "RDO Lookahead Frames",
+                    "RDO Lookahead Frames",
+                    -1,
+                    std::i32::MAX,
+                    DEFAULT_RDO_LOOKAHEAD_FRAMES,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpecEnum::new(
+                    "tune",
+                    "Tune",
+                    "Tune",
+                    Tune::static_type(),
+                    DEFAULT_TUNE as i32,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpecInt::new(
+                    "reservoir-frame-delay",
+                    "Reservoir Frame Delay",
+                    "Reservoir Frame Delay",
+                    std::i32::MIN,
+                    std::i32::MAX,
+                    DEFAULT_RESERVOIR_FRAME_DELAY,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpecBoolean::new(
+                    "error-resilient",
+                    "Error Resilient",
+                    "Error Resilient",
+                    DEFAULT_ERROR_RESILIENT,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
                 glib::ParamSpecUInt::new(
@@ -335,6 +412,10 @@ impl ObjectImpl for Rav1Enc {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_key_frame_interval = value.get().expect("type checked upstream");
             }
+            "switch-frame-interval" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.switch_frame_interval = value.get().expect("type checked upstream");
+            }
             "bitrate" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.bitrate = value.get().expect("type checked upstream");
@@ -342,6 +423,10 @@ impl ObjectImpl for Rav1Enc {
             "quantizer" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.quantizer = value.get::<u32>().expect("type checked upstream") as usize;
+            }
+            "min-quantizer" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.min_quantizer = value.get::<u32>().expect("type checked upstream") as u8;
             }
             "tile-cols" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -354,6 +439,22 @@ impl ObjectImpl for Rav1Enc {
             "tiles" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.tiles = value.get::<u32>().expect("type checked upstream") as usize;
+            }
+            "rdo-lookahead-frames" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.rdo_lookahead_frames = value.get::<i32>().expect("type checked upstream");
+            }
+            "tune" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.tune = value.get::<Tune>().expect("type checked upstream");
+            }
+            "reservoir-frame-delay" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.reservoir_frame_delay = value.get::<i32>().expect("type checked upstream");
+            }
+            "error-resilient" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.error_resilient = value.get::<bool>().expect("type checked upstream");
             }
             "threads" => {
                 let mut settings = self.settings.lock().unwrap();
@@ -381,6 +482,10 @@ impl ObjectImpl for Rav1Enc {
                 let settings = self.settings.lock().unwrap();
                 settings.max_key_frame_interval.to_value()
             }
+            "switch-frame-interval" => {
+                let settings = self.settings.lock().unwrap();
+                settings.switch_frame_interval.to_value()
+            }
             "bitrate" => {
                 let settings = self.settings.lock().unwrap();
                 settings.bitrate.to_value()
@@ -388,6 +493,10 @@ impl ObjectImpl for Rav1Enc {
             "quantizer" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.quantizer as u32).to_value()
+            }
+            "min-quantizer" => {
+                let settings = self.settings.lock().unwrap();
+                (settings.min_quantizer as u32).to_value()
             }
             "tile-cols" => {
                 let settings = self.settings.lock().unwrap();
@@ -400,6 +509,22 @@ impl ObjectImpl for Rav1Enc {
             "tiles" => {
                 let settings = self.settings.lock().unwrap();
                 (settings.tiles as u32).to_value()
+            }
+            "rdo-lookahead-frames" => {
+                let settings = self.settings.lock().unwrap();
+                (settings.rdo_lookahead_frames as i32).to_value()
+            }
+            "tune" => {
+                let settings = self.settings.lock().unwrap();
+                settings.tune.to_value()
+            }
+            "reservoir-frame-delay" => {
+                let settings = self.settings.lock().unwrap();
+                settings.reservoir_frame_delay.to_value()
+            }
+            "error-resilient" => {
+                let settings = self.settings.lock().unwrap();
+                settings.error_resilient.to_value()
             }
             "threads" => {
                 let settings = self.settings.lock().unwrap();
@@ -614,11 +739,28 @@ impl VideoEncoderImpl for Rav1Enc {
                 low_latency: settings.low_latency,
                 min_key_frame_interval: settings.min_key_frame_interval,
                 max_key_frame_interval: settings.max_key_frame_interval,
+                switch_frame_interval: settings.switch_frame_interval,
                 bitrate: settings.bitrate,
                 quantizer: settings.quantizer,
+                min_quantizer: settings.min_quantizer,
                 tile_cols: settings.tile_cols,
                 tile_rows: settings.tile_rows,
                 tiles: settings.tiles,
+                rdo_lookahead_frames: if settings.rdo_lookahead_frames < 0 {
+                    config::SpeedSettings::rdo_lookahead_frames(settings.speed_preset as usize)
+                } else {
+                    settings.rdo_lookahead_frames as usize
+                },
+                tune: match settings.tune {
+                    Tune::Psnr => rav1e::prelude::Tune::Psnr,
+                    Tune::Psychovisual => rav1e::prelude::Tune::Psychovisual,
+                },
+                reservoir_frame_delay: if settings.reservoir_frame_delay == i32::MIN {
+                    None
+                } else {
+                    Some(settings.reservoir_frame_delay)
+                },
+                error_resilient: settings.error_resilient,
                 ..Default::default()
             })
             .with_threads(settings.threads);
