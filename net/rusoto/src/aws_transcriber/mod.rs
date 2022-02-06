@@ -15,6 +15,7 @@ mod packet;
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
 #[enum_type(name = "GstAwsTranscriberResultStability")]
+#[non_exhaustive]
 pub enum AwsTranscriberResultStability {
     #[enum_value(name = "High: stabilize results as fast as possible", nick = "high")]
     High = 0,
