@@ -124,83 +124,76 @@ impl Context {
 
     fn send_frame(
         &mut self,
-        in_frame: Option<(u32, &gst_video::VideoFrameRef<&gst::BufferRef>)>,
+        frame_number: u32,
+        in_frame: &gst_video::VideoFrameRef<&gst::BufferRef>,
         force_keyframe: bool,
     ) -> Result<(), data::EncoderStatus> {
         match self {
             Context::Eight(ref mut context) => {
-                if let Some((frame_number, in_frame)) = in_frame {
-                    let mut enc_frame = context.new_frame();
-                    enc_frame.planes[0].copy_from_raw_u8(
-                        in_frame.plane_data(0).unwrap(),
-                        in_frame.plane_stride()[0] as usize,
+                let mut enc_frame = context.new_frame();
+                enc_frame.planes[0].copy_from_raw_u8(
+                    in_frame.plane_data(0).unwrap(),
+                    in_frame.plane_stride()[0] as usize,
+                    1,
+                );
+
+                if in_frame.n_planes() > 1 {
+                    enc_frame.planes[1].copy_from_raw_u8(
+                        in_frame.plane_data(1).unwrap(),
+                        in_frame.plane_stride()[1] as usize,
                         1,
                     );
-
-                    if in_frame.n_planes() > 1 {
-                        enc_frame.planes[1].copy_from_raw_u8(
-                            in_frame.plane_data(1).unwrap(),
-                            in_frame.plane_stride()[1] as usize,
-                            1,
-                        );
-                        enc_frame.planes[2].copy_from_raw_u8(
-                            in_frame.plane_data(2).unwrap(),
-                            in_frame.plane_stride()[2] as usize,
-                            1,
-                        );
-                    }
-
-                    context.send_frame((
-                        enc_frame,
-                        Some(rav1e::data::FrameParameters {
-                            frame_type_override: if force_keyframe {
-                                rav1e::prelude::FrameTypeOverride::Key
-                            } else {
-                                rav1e::prelude::FrameTypeOverride::No
-                            },
-                            opaque: Some(rav1e::prelude::Opaque::new(frame_number)),
-                        }),
-                    ))
-                } else {
-                    context.send_frame(None)
+                    enc_frame.planes[2].copy_from_raw_u8(
+                        in_frame.plane_data(2).unwrap(),
+                        in_frame.plane_stride()[2] as usize,
+                        1,
+                    );
                 }
+
+                context.send_frame((
+                    enc_frame,
+                    Some(rav1e::data::FrameParameters {
+                        frame_type_override: if force_keyframe {
+                            rav1e::prelude::FrameTypeOverride::Key
+                        } else {
+                            rav1e::prelude::FrameTypeOverride::No
+                        },
+                        opaque: Some(rav1e::prelude::Opaque::new(frame_number)),
+                    }),
+                ))
             }
             Context::Sixteen(ref mut context) => {
-                if let Some((frame_number, in_frame)) = in_frame {
-                    let mut enc_frame = context.new_frame();
-                    enc_frame.planes[0].copy_from_raw_u8(
-                        in_frame.plane_data(0).unwrap(),
-                        in_frame.plane_stride()[0] as usize,
+                let mut enc_frame = context.new_frame();
+                enc_frame.planes[0].copy_from_raw_u8(
+                    in_frame.plane_data(0).unwrap(),
+                    in_frame.plane_stride()[0] as usize,
+                    2,
+                );
+
+                if in_frame.n_planes() > 1 {
+                    enc_frame.planes[1].copy_from_raw_u8(
+                        in_frame.plane_data(1).unwrap(),
+                        in_frame.plane_stride()[1] as usize,
                         2,
                     );
-
-                    if in_frame.n_planes() > 1 {
-                        enc_frame.planes[1].copy_from_raw_u8(
-                            in_frame.plane_data(1).unwrap(),
-                            in_frame.plane_stride()[1] as usize,
-                            2,
-                        );
-                        enc_frame.planes[2].copy_from_raw_u8(
-                            in_frame.plane_data(2).unwrap(),
-                            in_frame.plane_stride()[2] as usize,
-                            2,
-                        );
-                    }
-
-                    context.send_frame((
-                        enc_frame,
-                        Some(rav1e::data::FrameParameters {
-                            frame_type_override: if force_keyframe {
-                                rav1e::prelude::FrameTypeOverride::Key
-                            } else {
-                                rav1e::prelude::FrameTypeOverride::No
-                            },
-                            opaque: Some(rav1e::prelude::Opaque::new(frame_number)),
-                        }),
-                    ))
-                } else {
-                    context.send_frame(None)
+                    enc_frame.planes[2].copy_from_raw_u8(
+                        in_frame.plane_data(2).unwrap(),
+                        in_frame.plane_stride()[2] as usize,
+                        2,
+                    );
                 }
+
+                context.send_frame((
+                    enc_frame,
+                    Some(rav1e::data::FrameParameters {
+                        frame_type_override: if force_keyframe {
+                            rav1e::prelude::FrameTypeOverride::Key
+                        } else {
+                            rav1e::prelude::FrameTypeOverride::No
+                        },
+                        opaque: Some(rav1e::prelude::Opaque::new(frame_number)),
+                    }),
+                ))
             }
         }
     }
@@ -895,9 +888,6 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let mut state_guard = self.state.lock().unwrap();
         if let Some(ref mut state) = *state_guard {
-            if let Err(data::EncoderStatus::Failure) = state.context.send_frame(None, false) {
-                return Err(gst::FlowError::Error);
-            }
             state.context.flush();
             self.output_frames(element, state)?;
         }
@@ -936,7 +926,8 @@ impl VideoEncoderImpl for Rav1Enc {
             })?;
 
         match state.context.send_frame(
-            Some((frame.system_frame_number(), &in_frame)),
+            frame.system_frame_number(),
+            &in_frame,
             frame
                 .flags()
                 .contains(gst_video::VideoCodecFrameFlags::FORCE_KEYFRAME),
