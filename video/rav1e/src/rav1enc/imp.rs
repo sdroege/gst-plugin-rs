@@ -637,7 +637,6 @@ impl VideoEncoderImpl for Rav1Enc {
 
         let settings = self.settings.lock().unwrap();
 
-        // TODO: More properties, HDR information
         let cfg = config::Config::new()
             .with_encoder_config(config::EncoderConfig {
                 width: video_info.width() as usize,
@@ -699,6 +698,22 @@ impl VideoEncoderImpl for Rav1Enc {
                         gst_video::VideoTransferFunction::Bt202012 => {
                             color::TransferCharacteristics::BT2020_12Bit
                         }
+                        #[cfg(feature = "hdr")]
+                        gst_video::VideoTransferFunction::Bt202010 => {
+                            color::TransferCharacteristics::BT2020_10Bit
+                        }
+                        #[cfg(feature = "hdr")]
+                        gst_video::VideoTransferFunction::Smpte2084 => {
+                            color::TransferCharacteristics::SMPTE2084
+                        }
+                        #[cfg(feature = "hdr")]
+                        gst_video::VideoTransferFunction::AribStdB67 => {
+                            color::TransferCharacteristics::HLG
+                        }
+                        #[cfg(feature = "hdr")]
+                        gst_video::VideoTransferFunction::Bt601 => {
+                            color::TransferCharacteristics::BT601
+                        }
                         gst_video::VideoTransferFunction::Gamma18
                         | gst_video::VideoTransferFunction::Gamma20
                         | gst_video::VideoTransferFunction::Gamma22
@@ -716,6 +731,18 @@ impl VideoEncoderImpl for Rav1Enc {
                         }
                         gst_video::VideoColorPrimaries::Film => color::ColorPrimaries::GenericFilm,
                         gst_video::VideoColorPrimaries::Bt2020 => color::ColorPrimaries::BT2020,
+                        #[cfg(feature = "hdr")]
+                        gst_video::VideoColorPrimaries::Smptest428 => color::ColorPrimaries::XYZ,
+                        #[cfg(feature = "hdr")]
+                        gst_video::VideoColorPrimaries::Smpterp431 => {
+                            color::ColorPrimaries::SMPTE431
+                        }
+                        #[cfg(feature = "hdr")]
+                        gst_video::VideoColorPrimaries::Smpteeg432 => {
+                            color::ColorPrimaries::SMPTE432
+                        }
+                        #[cfg(feature = "hdr")]
+                        gst_video::VideoColorPrimaries::Ebu3213 => color::ColorPrimaries::EBU3213,
                         gst_video::VideoColorPrimaries::Adobergb | _ => {
                             color::ColorPrimaries::Unspecified
                         }
@@ -726,6 +753,60 @@ impl VideoEncoderImpl for Rav1Enc {
                         transfer_characteristics: transfer,
                         matrix_coefficients: matrix,
                     })
+                },
+                mastering_display: {
+                    #[cfg(feature = "hdr")]
+                    {
+                        state
+                            .caps()
+                            .and_then(|caps| {
+                                gst_video::VideoMasteringDisplayInfo::from_caps(caps).ok()
+                            })
+                            .map(|info| rav1e::prelude::color::MasteringDisplay {
+                                primaries: [
+                                    rav1e::prelude::color::ChromaticityPoint {
+                                        x: info.display_primaries()[0].x,
+                                        y: info.display_primaries()[0].y,
+                                    },
+                                    rav1e::prelude::color::ChromaticityPoint {
+                                        x: info.display_primaries()[1].x,
+                                        y: info.display_primaries()[1].y,
+                                    },
+                                    rav1e::prelude::color::ChromaticityPoint {
+                                        x: info.display_primaries()[2].x,
+                                        y: info.display_primaries()[2].y,
+                                    },
+                                ],
+                                white_point: rav1e::prelude::color::ChromaticityPoint {
+                                    x: info.white_point().x,
+                                    y: info.white_point().y,
+                                },
+                                max_luminance: info.max_display_mastering_luminance(),
+                                min_luminance: info.min_display_mastering_luminance(),
+                            })
+                    }
+                    #[cfg(not(feature = "hdr"))]
+                    {
+                        None
+                    }
+                },
+                content_light: {
+                    #[cfg(feature = "hdr")]
+                    {
+                        state
+                            .caps()
+                            .and_then(|caps| {
+                                gst_video::VideoContentLightLevel::from_caps(caps).ok()
+                            })
+                            .map(|info| rav1e::prelude::color::ContentLight {
+                                max_content_light_level: info.max_content_light_level(),
+                                max_frame_average_light_level: info.max_frame_average_light_level(),
+                            })
+                    }
+                    #[cfg(not(feature = "hdr"))]
+                    {
+                        None
+                    }
                 },
                 speed_settings: config::SpeedSettings::from_preset(settings.speed_preset as usize),
                 time_base: if video_info.fps() != gst::Fraction::new(0, 1) {

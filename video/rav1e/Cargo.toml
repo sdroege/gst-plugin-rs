@@ -26,10 +26,12 @@ path = "src/lib.rs"
 gst-plugin-version-helper = { path="../../version-helper" }
 
 [features]
+default = ["hdr"]
 # GStreamer 1.14 is required for static linking
 static = ["gst/v1_14"]
 capi = []
 asm = ["rav1e/asm"]
+hdr = ["gst-video/v1_18"]
 
 [package.metadata.capi]
 min_version = "0.8.0"
