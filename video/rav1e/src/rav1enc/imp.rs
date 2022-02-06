@@ -981,6 +981,10 @@ impl Rav1Enc {
                 Err(data::EncoderStatus::Encoded) => {
                     gst_debug!(CAT, obj: element, "Encoded but not output frame yet",);
                 }
+                Err(data::EncoderStatus::NeedMoreData) => {
+                    gst_debug!(CAT, obj: element, "Encoded but need more data",);
+                    return Ok(gst::FlowSuccess::Ok);
+                }
                 Err(data::EncoderStatus::Failure) => {
                     gst::element_error!(
                         element,
