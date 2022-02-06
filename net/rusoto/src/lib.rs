@@ -16,6 +16,8 @@ mod s3src;
 mod s3url;
 mod s3utils;
 
+pub use aws_transcriber::AwsTranscriberResultStability;
+
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     s3sink::register(plugin)?;
     s3src::register(plugin)?;
