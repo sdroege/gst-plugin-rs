@@ -19,7 +19,7 @@ use rav1e::config;
 use rav1e::data;
 use std::sync::Mutex;
 
-const DEFAULT_SPEED_PRESET: u32 = 5;
+const DEFAULT_SPEED_PRESET: u32 = 6;
 const DEFAULT_LOW_LATENCY: bool = false;
 const DEFAULT_MIN_KEY_FRAME_INTERVAL: u64 = 12;
 const DEFAULT_MAX_KEY_FRAME_INTERVAL: u64 = 240;
