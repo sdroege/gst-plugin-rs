@@ -2502,6 +2502,35 @@ impl ObjectImpl for WebRTCSink {
                     glib::types::Type::UNIT.into(),
                 )
                 .build(),
+
+                /*
+                 * RsWebRTCSink::get_consumers:
+                 *
+                 * List all consumers (by ID).
+                 */
+                glib::subclass::Signal::builder(
+                    "get-consumers",
+                    &[],
+                    <Vec<String>>::static_type().into(),
+                )
+                .action()
+                .class_handler(|_, args| {
+                    let element = args[0].get::<super::WebRTCSink>().expect("signal arg");
+                    let this = element.imp();
+
+                    let res = Some(
+                        this.state
+                            .lock()
+                            .unwrap()
+                            .consumers
+                            .keys()
+                            .cloned()
+                            .collect::<Vec<String>>()
+                            .to_value(),
+                    );
+                    res
+                })
+                .build(),
             ]
         });
 
