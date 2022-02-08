@@ -1724,7 +1724,6 @@ impl WebRTCSink {
             }
         })?;
 
-        element.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
         if settings.enable_data_channel_navigation {
             state.navigation_handler = Some(
                 NavigationEventHandler::new(&element, &webrtcbin)
@@ -1739,6 +1738,9 @@ impl WebRTCSink {
         })?;
 
         state.consumers.insert(peer_id.to_string(), consumer);
+
+        drop(state);
+        element.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
 
         Ok(())
     }
