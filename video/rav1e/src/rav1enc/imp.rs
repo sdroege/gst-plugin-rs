@@ -93,6 +93,13 @@ enum Context {
 }
 
 impl Context {
+    fn container_sequence_header(&self) -> Vec<u8> {
+        match self {
+            Context::Eight(ref context) => context.container_sequence_header(),
+            Context::Sixteen(ref context) => context.container_sequence_header(),
+        }
+    }
+
     fn receive_packet(
         &mut self,
     ) -> Result<(data::FrameType, u64, u32, Vec<u8>), data::EncoderStatus> {
@@ -840,8 +847,8 @@ impl VideoEncoderImpl for Rav1Enc {
             .with_threads(settings.threads);
         // TODO: RateControlConfig
 
-        *self.state.lock().unwrap() = Some(State {
-            context: if video_info.format_info().depth()[0] > 8 {
+        let context =
+            if video_info.format_info().depth()[0] > 8 {
                 Context::Sixteen(cfg.new_context().map_err(|err| {
                     gst::loggable_error!(CAT, "Failed to create context: {:?}", err)
                 })?)
@@ -849,7 +856,12 @@ impl VideoEncoderImpl for Rav1Enc {
                 Context::Eight(cfg.new_context().map_err(|err| {
                     gst::loggable_error!(CAT, "Failed to create context: {:?}", err)
                 })?)
-            },
+            };
+        let container_sequence_header =
+            gst::Buffer::from_mut_slice(context.container_sequence_header());
+
+        *self.state.lock().unwrap() = Some(State {
+            context,
             video_info,
         });
 
@@ -858,6 +870,7 @@ impl VideoEncoderImpl for Rav1Enc {
                 gst::Caps::builder("video/x-av1")
                     .field("stream-format", "obu-stream")
                     .field("alignment", "tu")
+                    .field("codec_data", container_sequence_header)
                     .build(),
                 Some(state),
             )
