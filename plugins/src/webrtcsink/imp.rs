@@ -389,7 +389,7 @@ fn setup_encoding(
             pay.set_property_from_str("picture-id-mode", "15-bit");
         }
         "x264enc" => {
-            enc.set_property("bitrate", 25608u32);
+            enc.set_property("bitrate", 2048u32);
             enc.set_property_from_str("tune", "zerolatency");
             enc.set_property_from_str("speed-preset", "ultrafast");
             enc.set_property("threads", 12u32);
