@@ -538,12 +538,8 @@ impl VideoEncoder {
             _ => unreachable!(),
         }
 
-        let mut s = self
-            .filter
-            .property::<gst::Caps>("caps")
-            .structure(0)
-            .unwrap()
-            .to_owned();
+        let current_caps = self.filter.property::<gst::Caps>("caps");
+        let mut s = current_caps.structure(0).unwrap().to_owned();
 
         // Hardcoded thresholds, may be tuned further in the future, and
         // adapted according to the codec in use
@@ -587,17 +583,19 @@ impl VideoEncoder {
             .structure(s)
             .build();
 
-        gst_log!(
-            CAT,
-            obj: element,
-            "consumer {}: setting bitrate {} and caps {} on encoder {:?}",
-            self.peer_id,
-            bitrate,
-            caps,
-            self.element
-        );
+        if !caps.is_strictly_equal(&current_caps) {
+            gst_log!(
+                CAT,
+                obj: element,
+                "consumer {}: setting bitrate {} and caps {} on encoder {:?}",
+                self.peer_id,
+                bitrate,
+                caps,
+                self.element
+            );
 
-        self.filter.set_property("caps", caps);
+            self.filter.set_property("caps", caps);
+        }
     }
 
     fn gather_stats(&self) -> gst::Structure {
