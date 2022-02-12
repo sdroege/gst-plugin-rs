@@ -105,21 +105,26 @@ version = "0.7"
 name = "crc"
 version = "1.8"
 
-# ignore duplicated itoa dependency because http/hyper/serde_urlencoded depend on an old version
-[[bans.skip]]
-name = "itoa"
-version = "0.4"
-
 # ignore duplicated heck dependency because various crates depend on an old version
 [[bans.skip]]
 name = "heck"
 version = "0.3"
 
 # ignore duplicated env_logger dependency because librespot depends on an old version
-# https://github.com/librespot-org/librespot/pull/957
 [[bans.skip]]
 name = "env_logger"
 version = "0.8"
+
+# ignore duplicated sha-1/digest/block-buffer dependencies because librespot depends on an old version
+[[bans.skip]]
+name = "block-buffer"
+version = "0.9"
+[[bans.skip]]
+name = "digest"
+version = "0.9"
+[[bans.skip]]
+name = "sha-1"
+version = "0.9"
 
 [sources]
 unknown-registry = "deny"
