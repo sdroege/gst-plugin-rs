@@ -8,6 +8,7 @@
 //
 // SPDX-License-Identifier: MIT/Apache-2.0
 
+use atomic_refcell::AtomicRefCell;
 use gst::glib;
 use gst::gst_debug;
 use gst::subclass::prelude::*;
@@ -220,7 +221,7 @@ struct State {
 
 #[derive(Default)]
 pub struct Rav1Enc {
-    state: Mutex<Option<State>>,
+    state: AtomicRefCell<Option<State>>,
     settings: Mutex<Settings>,
 }
 
@@ -608,7 +609,7 @@ impl ElementImpl for Rav1Enc {
 
 impl VideoEncoderImpl for Rav1Enc {
     fn stop(&self, _element: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        *self.state.lock().unwrap() = None;
+        *self.state.borrow_mut() = None;
 
         Ok(())
     }
@@ -860,7 +861,7 @@ impl VideoEncoderImpl for Rav1Enc {
         let container_sequence_header =
             gst::Buffer::from_mut_slice(context.container_sequence_header());
 
-        *self.state.lock().unwrap() = Some(State {
+        *self.state.borrow_mut() = Some(State {
             context,
             video_info,
         });
@@ -885,7 +886,7 @@ impl VideoEncoderImpl for Rav1Enc {
     fn flush(&self, element: &Self::Type) -> bool {
         gst_debug!(CAT, obj: element, "Flushing");
 
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
             state.context.flush();
             while let Ok(_) | Err(data::EncoderStatus::Encoded) = state.context.receive_packet() {
@@ -899,7 +900,7 @@ impl VideoEncoderImpl for Rav1Enc {
     fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
         gst_debug!(CAT, obj: element, "Finishing");
 
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
             state.context.flush();
             self.output_frames(element, state)?;
@@ -913,7 +914,7 @@ impl VideoEncoderImpl for Rav1Enc {
         element: &Self::Type,
         frame: gst_video::VideoCodecFrame,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let mut state_guard = self.state.lock().unwrap();
+        let mut state_guard = self.state.borrow_mut();
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
         self.output_frames(element, state)?;
