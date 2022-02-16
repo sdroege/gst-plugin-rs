@@ -132,6 +132,12 @@ version = "0.9"
 name = "sha-1"
 version = "0.9"
 
+# ignore duplicated miniz_oxide dependency because flate2 depends on an old version
+# https://github.com/rust-lang/flate2-rs/pull/293
+[[bans.skip]]
+name = "miniz_oxide"
+version = "0.4"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
