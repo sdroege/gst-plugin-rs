@@ -5,7 +5,7 @@ authors = ["Natanael Mojica <neithanmo@gmail.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.57"
 description = "An PNG encoder/decoder written in pure Rust"
 
 [dependencies]

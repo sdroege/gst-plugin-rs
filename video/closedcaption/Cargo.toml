@@ -4,7 +4,7 @@ version = "0.9.0"
 authors = ["Sebastian Dröge <sebastian@centricular.com>", "Jordan Petridis <jordan@centricular.com>", "Matthew Waters <matthew@centricular.com>"]
 license = "MPL-2.0"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.57"
 description = "Rust Closed Caption Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 

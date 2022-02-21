@@ -6,7 +6,7 @@ repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
 description = "lewton Vorbis Decoder Plugin"
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.57"
 
 [dependencies]
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
