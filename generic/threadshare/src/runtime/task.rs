@@ -1451,7 +1451,7 @@ mod tests {
                 state: TaskState::Error,
                 ..
             } => (),
-            other => unreachable!(other),
+            _ => unreachable!(),
         }
 
         assert_eq!(
