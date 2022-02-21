@@ -25,7 +25,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log};
 use smallvec::SmallVec;
 use sodiumoxide::crypto::box_;
 
@@ -170,7 +169,7 @@ impl Encrypter {
         element: &super::Encrypter,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         let mut buffers = BufferVec::new();
         let mut state_guard = self.state.lock().unwrap();
@@ -197,7 +196,7 @@ impl Encrypter {
 
         for buffer in buffers {
             self.srcpad.push(buffer).map_err(|err| {
-                gst_error!(CAT, obj: element, "Failed to push buffer {:?}", err);
+                gst::error!(CAT, obj: element, "Failed to push buffer {:?}", err);
                 err
             })?;
         }
@@ -208,7 +207,7 @@ impl Encrypter {
     fn sink_event(&self, pad: &gst::Pad, element: &super::Encrypter, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Caps(_) => {
@@ -240,7 +239,7 @@ impl Encrypter {
 
                 for buffer in buffers {
                     if let Err(err) = self.srcpad.push(buffer) {
-                        gst_error!(CAT, obj: element, "Failed to push buffer at EOS {:?}", err);
+                        gst::error!(CAT, obj: element, "Failed to push buffer at EOS {:?}", err);
                         return false;
                     }
                 }
@@ -254,7 +253,7 @@ impl Encrypter {
     fn src_event(&self, pad: &gst::Pad, element: &super::Encrypter, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Seek(_) => false,
@@ -270,7 +269,7 @@ impl Encrypter {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -280,7 +279,7 @@ impl Encrypter {
                     gst::GenericFormattedValue::Other(format, -1),
                     gst::GenericFormattedValue::Other(format, -1),
                 );
-                gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
+                gst::log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
             QueryViewMut::Duration(q) => {
@@ -292,14 +291,14 @@ impl Encrypter {
                 let mut peer_query = gst::query::Duration::new(gst::Format::Bytes);
 
                 if !self.sinkpad.peer_query(&mut peer_query) {
-                    gst_error!(CAT, "Failed to query upstream duration");
+                    gst::error!(CAT, "Failed to query upstream duration");
                     return false;
                 }
 
                 let size = match peer_query.result().try_into().unwrap() {
                     Some(gst::format::Bytes(size)) => size,
                     None => {
-                        gst_error!(CAT, "Failed to query upstream duration");
+                        gst::error!(CAT, "Failed to query upstream duration");
 
                         return false;
                     }
@@ -321,7 +320,7 @@ impl Encrypter {
                 // add static offsets
                 let size = size + crate::HEADERS_SIZE as u64;
 
-                gst_debug!(CAT, obj: pad, "Setting duration bytes: {}", size);
+                gst::debug!(CAT, obj: pad, "Setting duration bytes: {}", size);
                 q.set(gst::format::Bytes(size));
 
                 true
@@ -516,7 +515,7 @@ impl ElementImpl for Encrypter {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_debug!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::debug!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

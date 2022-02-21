@@ -7,7 +7,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::{glib, gst_debug, gst_info, gst_log, subclass::prelude::*};
+use gst::{glib, subclass::prelude::*};
 use gst_base::{
     prelude::*,
     subclass::base_transform::{InputBuffer, PrepareOutputBufferSuccess},
@@ -306,7 +306,7 @@ impl ObjectImpl for RoundedCorners {
                 if settings.border_radius_px != border_radius {
                     settings.changed = true;
                     settings.border_radius_px = border_radius;
-                    gst_info!(
+                    gst::info!(
                         CAT,
                         obj: obj,
                         "Changing border radius from {} to {}",
@@ -408,7 +408,7 @@ impl BaseTransformImpl for RoundedCorners {
     fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let _ = self.state.lock().unwrap().take();
 
-        gst_info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -460,7 +460,7 @@ impl BaseTransformImpl for RoundedCorners {
             output_caps
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Transformed caps from {} to {} in direction {:?}",
@@ -489,7 +489,7 @@ impl BaseTransformImpl for RoundedCorners {
             Ok(info) => info,
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Configured for caps {} to {}",
@@ -531,7 +531,7 @@ impl BaseTransformImpl for RoundedCorners {
         let mut settings = self.settings.lock().unwrap();
         if settings.changed {
             settings.changed = false;
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Caps or border radius changed, generating alpha mask"
@@ -571,7 +571,7 @@ impl BaseTransformImpl for RoundedCorners {
 
         match inbuf {
             InputBuffer::Writable(outbuf) => {
-                gst_log!(
+                gst::log!(
                     CAT,
                     obj: element,
                     "Received writable input buffer of size: {}",
@@ -583,7 +583,7 @@ impl BaseTransformImpl for RoundedCorners {
                 self.add_video_meta(outbuf, out_info, alpha_plane_offset, true)
             }
             InputBuffer::Readable(buf) => {
-                gst_log!(
+                gst::log!(
                     CAT,
                     obj: element,
                     "Received readable input buffer of size: {}",

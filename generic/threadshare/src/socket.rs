@@ -22,7 +22,6 @@ use futures::future::BoxFuture;
 
 use gst::glib;
 use gst::prelude::*;
-use gst::{gst_debug, gst_error, gst_log};
 
 use once_cell::sync::Lazy;
 
@@ -75,7 +74,7 @@ impl<T: SocketRead> Socket<T> {
     ) -> Result<Self, glib::BoolError> {
         // FIXME couldn't we just delegate this to caller?
         buffer_pool.set_active(true).map_err(|err| {
-            gst_error!(
+            gst::error!(
                 SOCKET_CAT,
                 obj: &element,
                 "Failed to prepare socket: {}",
@@ -125,7 +124,7 @@ impl<T: SocketRead> Socket<T> {
     // tokio::net::UdpSocket which don't implement pollable functions.
     #[allow(clippy::should_implement_trait)]
     pub async fn next(&mut self) -> Option<SocketStreamItem> {
-        gst_log!(SOCKET_CAT, obj: &self.element, "Trying to read data");
+        gst::log!(SOCKET_CAT, obj: &self.element, "Trying to read data");
 
         if self.mapped_buffer.is_none() {
             match self.buffer_pool.acquire_buffer(None) {
@@ -133,7 +132,7 @@ impl<T: SocketRead> Socket<T> {
                     self.mapped_buffer = Some(buffer.into_mapped_buffer_writable().unwrap());
                 }
                 Err(err) => {
-                    gst_debug!(SOCKET_CAT, obj: &self.element, "Failed to acquire buffer {:?}", err);
+                    gst::debug!(SOCKET_CAT, obj: &self.element, "Failed to acquire buffer {:?}", err);
                     return Some(Err(SocketError::Gst(err)));
                 }
             }
@@ -150,7 +149,7 @@ impl<T: SocketRead> Socket<T> {
                     let running_time = time.opt_checked_sub(self.base_time).ok().flatten();
                     // FIXME maybe we should check if running_time.is_none
                     // so as to display another message
-                    gst_debug!(
+                    gst::debug!(
                         SOCKET_CAT,
                         obj: &self.element,
                         "Read {} bytes at {} (clock {})",
@@ -160,7 +159,7 @@ impl<T: SocketRead> Socket<T> {
                     );
                     running_time
                 } else {
-                    gst_debug!(SOCKET_CAT, obj: &self.element, "Read {} bytes", len);
+                    gst::debug!(SOCKET_CAT, obj: &self.element, "Read {} bytes", len);
                     gst::ClockTime::NONE
                 };
 
@@ -176,7 +175,7 @@ impl<T: SocketRead> Socket<T> {
                 Some(Ok((buffer, saddr)))
             }
             Err(err) => {
-                gst_debug!(SOCKET_CAT, obj: &self.element, "Read error {:?}", err);
+                gst::debug!(SOCKET_CAT, obj: &self.element, "Read error {:?}", err);
 
                 Some(Err(SocketError::Io(err)))
             }
@@ -187,7 +186,7 @@ impl<T: SocketRead> Socket<T> {
 impl<T: SocketRead> Drop for Socket<T> {
     fn drop(&mut self) {
         if let Err(err) = self.buffer_pool.set_active(false) {
-            gst_error!(SOCKET_CAT, obj: &self.element, "Failed to unprepare socket: {}", err);
+            gst::error!(SOCKET_CAT, obj: &self.element, "Failed to unprepare socket: {}", err);
         }
     }
 }

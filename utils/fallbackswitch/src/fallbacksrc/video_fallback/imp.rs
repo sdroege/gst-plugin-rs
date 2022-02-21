@@ -10,7 +10,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_warning};
 
 use std::sync::{atomic::AtomicBool, atomic::Ordering, Mutex};
 
@@ -107,7 +106,7 @@ impl ObjectImpl for VideoFallbackSource {
             "uri" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing URI from {:?} to {:?}",
@@ -119,7 +118,7 @@ impl ObjectImpl for VideoFallbackSource {
             "min-latency" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing Minimum Latency from {} to {}",
@@ -212,13 +211,13 @@ impl BinImpl for VideoFallbackSource {
                     .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
                     .is_err()
                 {
-                    gst_warning!(CAT, obj: bin, "Got error {:?}", err);
+                    gst::warning!(CAT, obj: bin, "Got error {:?}", err);
                     self.parent_handle_message(bin, msg)
                 } else {
                     // Suppress error message if we posted error previously.
                     // Otherwise parent fallbacksrc would be confused by
                     // multiple error message.
-                    gst_debug!(CAT, obj: bin, "Ignore error {:?}", err);
+                    gst::debug!(CAT, obj: bin, "Ignore error {:?}", err);
                 }
             }
             _ => self.parent_handle_message(bin, msg),
@@ -243,12 +242,12 @@ impl VideoFallbackSource {
             .unwrap()
             .set_uri(uri)
         {
-            gst_warning!(CAT, obj: element, "Failed to set URI: {}", err);
+            gst::warning!(CAT, obj: element, "Failed to set URI: {}", err);
             return None;
         }
 
         if filesrc.set_state(gst::State::Ready).is_err() {
-            gst_warning!(CAT, obj: element, "Couldn't set state READY");
+            gst::warning!(CAT, obj: element, "Couldn't set state READY");
             let _ = filesrc.set_state(gst::State::Null);
             return None;
         }
@@ -258,7 +257,7 @@ impl VideoFallbackSource {
         // via open() and fstat() in there.
         let pad = filesrc.static_pad("src").unwrap();
         if pad.set_active(true).is_err() {
-            gst_warning!(CAT, obj: element, "Couldn't active pad");
+            gst::warning!(CAT, obj: element, "Couldn't active pad");
             let _ = filesrc.set_state(gst::State::Null);
             return None;
         }
@@ -272,7 +271,7 @@ impl VideoFallbackSource {
         min_latency: gst::ClockTime,
         uri: Option<&str>,
     ) -> gst::Element {
-        gst_debug!(CAT, obj: element, "Creating source with uri {:?}", uri);
+        gst::debug!(CAT, obj: element, "Creating source with uri {:?}", uri);
 
         let source = gst::Bin::new(None);
         let filesrc = self.file_src_for_uri(element, uri);
@@ -331,7 +330,7 @@ impl VideoFallbackSource {
                 .unwrap();
 
                 if imagefreeze.try_set_property("is-live", true).is_err() {
-                    gst_error!(
+                    gst::error!(
                         CAT,
                         obj: element,
                         "imagefreeze does not support live mode, this will probably misbehave"
@@ -375,7 +374,7 @@ impl VideoFallbackSource {
                         decoder = gst::ElementFactory::make("pngdec", Some("decoder"))
                             .expect("pngdec not found");
                     } else {
-                        gst_error!(CAT, obj: &element, "Unsupported caps {}", caps);
+                        gst::error!(CAT, obj: &element, "Unsupported caps {}", caps);
                         gst::element_error!(
                             element,
                             gst::StreamError::Format,
@@ -389,7 +388,7 @@ impl VideoFallbackSource {
                     if let Err(_err) =
                         gst::Element::link_many(&[&typefind, &decoder, &videoconvert])
                     {
-                        gst_error!(CAT, obj: &element, "Can't link fallback image decoder");
+                        gst::error!(CAT, obj: &element, "Can't link fallback image decoder");
                         gst::element_error!(
                             element,
                             gst::StreamError::Format,
@@ -431,11 +430,11 @@ impl VideoFallbackSource {
         &self,
         element: &super::VideoFallbackSource,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_debug!(CAT, obj: element, "Starting");
+        gst::debug!(CAT, obj: element, "Starting");
 
         let mut state_guard = self.state.lock().unwrap();
         if state_guard.is_some() {
-            gst_error!(CAT, obj: element, "State struct wasn't cleared");
+            gst::error!(CAT, obj: element, "State struct wasn't cleared");
             return Err(gst::StateChangeError);
         }
 
@@ -454,7 +453,7 @@ impl VideoFallbackSource {
     }
 
     fn stop(&self, element: &super::VideoFallbackSource) {
-        gst_debug!(CAT, obj: element, "Stopping");
+        gst::debug!(CAT, obj: element, "Stopping");
 
         let mut state_guard = self.state.lock().unwrap();
         let state = match state_guard.take() {
@@ -468,6 +467,6 @@ impl VideoFallbackSource {
         let _ = self.srcpad.set_target(None::<&gst::Pad>);
         element.remove(&state.source).unwrap();
         self.got_error.store(false, Ordering::Relaxed);
-        gst_debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, obj: element, "Stopped");
     }
 }

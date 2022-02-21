@@ -24,7 +24,6 @@ use futures::prelude::*;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log, gst_trace};
 
 use once_cell::sync::Lazy;
 
@@ -95,7 +94,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         let element = element.clone().downcast::<super::Queue>().unwrap();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
+            gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
             let queue = element.imp();
             queue
                 .enqueue_item(&element, DataQueueItem::Buffer(buffer))
@@ -115,7 +114,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         let element = element.clone().downcast::<super::Queue>().unwrap();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", list);
+            gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", list);
             let queue = element.imp();
             queue
                 .enqueue_item(&element, DataQueueItem::BufferList(list))
@@ -133,11 +132,11 @@ impl PadSinkHandler for QueuePadSinkHandler {
     ) -> bool {
         use gst::EventView;
 
-        gst_debug!(CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
+        gst::debug!(CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
 
         if let EventView::FlushStart(..) = event.view() {
             if let Err(err) = queue.task.flush_start() {
-                gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
                 gst::element_error!(
                     element,
                     gst::StreamError::Failed,
@@ -148,7 +147,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
             }
         }
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized {:?}", event);
+        gst::log!(CAT, obj: pad.gst_pad(), "Forwarding non-serialized {:?}", event);
         queue.src_pad.gst_pad().push_event(event)
     }
 
@@ -161,7 +160,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
     ) -> BoxFuture<'static, bool> {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
+        gst::log!(CAT, obj: pad.gst_pad(), "Handling serialized {:?}", event);
 
         let pad_weak = pad.downgrade();
         let element = element.clone().downcast::<super::Queue>().unwrap();
@@ -171,7 +170,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
 
             if let EventView::FlushStop(..) = event.view() {
                 if let Err(err) = queue.task.flush_stop() {
-                    gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
                     gst::element_error!(
                         element,
                         gst::StreamError::Failed,
@@ -182,7 +181,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
                 }
             }
 
-            gst_log!(CAT, obj: pad.gst_pad(), "Queuing serialized {:?}", event);
+            gst::log!(CAT, obj: pad.gst_pad(), "Queuing serialized {:?}", event);
             queue
                 .enqueue_item(&element, DataQueueItem::Event(event))
                 .await
@@ -198,14 +197,14 @@ impl PadSinkHandler for QueuePadSinkHandler {
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         if query.is_serialized() {
             // FIXME: How can we do this?
-            gst_log!(CAT, obj: pad.gst_pad(), "Dropping serialized {:?}", query);
+            gst::log!(CAT, obj: pad.gst_pad(), "Dropping serialized {:?}", query);
             false
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
+            gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
             queue.src_pad.gst_pad().peer_query(query)
         }
     }
@@ -226,15 +225,15 @@ impl QueuePadSrcHandler {
 
         match item {
             DataQueueItem::Buffer(buffer) => {
-                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
+                gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
                 pad.push(buffer).await.map(drop)
             }
             DataQueueItem::BufferList(list) => {
-                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", list);
+                gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", list);
                 pad.push_list(list).await.map(drop)
             }
             DataQueueItem::Event(event) => {
-                gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
+                gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
                 pad.push_event(event).await;
                 Ok(())
             }
@@ -254,17 +253,17 @@ impl PadSrcHandler for QueuePadSrcHandler {
     ) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         match event.view() {
             EventView::FlushStart(..) => {
                 if let Err(err) = queue.task.flush_start() {
-                    gst_error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
+                    gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
                 }
             }
             EventView::FlushStop(..) => {
                 if let Err(err) = queue.task.flush_stop() {
-                    gst_error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
+                    gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
                     gst::element_error!(
                         element,
                         gst::StreamError::Failed,
@@ -277,7 +276,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
             _ => (),
         }
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
+        gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
         queue.sink_pad.gst_pad().push_event(event)
     }
 
@@ -290,7 +289,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         if let QueryViewMut::Scheduling(q) = query.view_mut() {
             let mut new_query = gst::query::Scheduling::new();
@@ -299,7 +298,7 @@ impl PadSrcHandler for QueuePadSrcHandler {
                 return res;
             }
 
-            gst_log!(CAT, obj: pad.gst_pad(), "Upstream returned {:?}", new_query);
+            gst::log!(CAT, obj: pad.gst_pad(), "Upstream returned {:?}", new_query);
 
             let (flags, min, max, align) = new_query.result();
             q.set(flags, min, max, align);
@@ -311,11 +310,11 @@ impl PadSrcHandler for QueuePadSrcHandler {
                     .filter(|m| m != &gst::PadMode::Pull)
                     .collect::<Vec<_>>(),
             );
-            gst_log!(CAT, obj: pad.gst_pad(), "Returning {:?}", q.query_mut());
+            gst::log!(CAT, obj: pad.gst_pad(), "Returning {:?}", q.query_mut());
             return true;
         }
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
+        gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", query);
         queue.sink_pad.gst_pad().peer_query(query)
     }
 }
@@ -340,7 +339,7 @@ impl QueueTask {
 impl TaskImpl for QueueTask {
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst_log!(CAT, obj: &self.element, "Starting task");
+            gst::log!(CAT, obj: &self.element, "Starting task");
 
             let queue = self.element.imp();
             let mut last_res = queue.last_res.lock().unwrap();
@@ -349,7 +348,7 @@ impl TaskImpl for QueueTask {
 
             *last_res = Ok(gst::FlowSuccess::Ok);
 
-            gst_log!(CAT, obj: &self.element, "Task started");
+            gst::log!(CAT, obj: &self.element, "Task started");
             Ok(())
         }
         .boxed()
@@ -362,7 +361,7 @@ impl TaskImpl for QueueTask {
             let item = match item {
                 Some(item) => item,
                 None => {
-                    gst_log!(CAT, obj: &self.element, "DataQueue Stopped");
+                    gst::log!(CAT, obj: &self.element, "DataQueue Stopped");
                     return Err(gst::FlowError::Flushing);
                 }
             };
@@ -372,20 +371,20 @@ impl TaskImpl for QueueTask {
             let res = QueuePadSrcHandler::push_item(&pad, queue, item).await;
             match res {
                 Ok(()) => {
-                    gst_log!(CAT, obj: &self.element, "Successfully pushed item");
+                    gst::log!(CAT, obj: &self.element, "Successfully pushed item");
                     *queue.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
                 }
                 Err(gst::FlowError::Flushing) => {
-                    gst_debug!(CAT, obj: &self.element, "Flushing");
+                    gst::debug!(CAT, obj: &self.element, "Flushing");
                     *queue.last_res.lock().unwrap() = Err(gst::FlowError::Flushing);
                 }
                 Err(gst::FlowError::Eos) => {
-                    gst_debug!(CAT, obj: &self.element, "EOS");
+                    gst::debug!(CAT, obj: &self.element, "EOS");
                     *queue.last_res.lock().unwrap() = Err(gst::FlowError::Eos);
                     pad.push_event(gst::event::Eos::new()).await;
                 }
                 Err(err) => {
-                    gst_error!(CAT, obj: &self.element, "Got error {}", err);
+                    gst::error!(CAT, obj: &self.element, "Got error {}", err);
                     gst::element_error!(
                         &self.element,
                         gst::StreamError::Failed,
@@ -403,7 +402,7 @@ impl TaskImpl for QueueTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst_log!(CAT, obj: &self.element, "Stopping task");
+            gst::log!(CAT, obj: &self.element, "Stopping task");
 
             let queue = self.element.imp();
             let mut last_res = queue.last_res.lock().unwrap();
@@ -417,7 +416,7 @@ impl TaskImpl for QueueTask {
 
             *last_res = Err(gst::FlowError::Flushing);
 
-            gst_log!(CAT, obj: &self.element, "Task stopped");
+            gst::log!(CAT, obj: &self.element, "Task stopped");
             Ok(())
         }
         .boxed()
@@ -425,7 +424,7 @@ impl TaskImpl for QueueTask {
 
     fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst_log!(CAT, obj: &self.element, "Starting task flush");
+            gst::log!(CAT, obj: &self.element, "Starting task flush");
 
             let queue = self.element.imp();
             let mut last_res = queue.last_res.lock().unwrap();
@@ -438,7 +437,7 @@ impl TaskImpl for QueueTask {
 
             *last_res = Err(gst::FlowError::Flushing);
 
-            gst_log!(CAT, obj: &self.element, "Task flush started");
+            gst::log!(CAT, obj: &self.element, "Task flush started");
             Ok(())
         }
         .boxed()
@@ -513,7 +512,7 @@ impl Queue {
                 }
                 let mut pending_queue_grd = self.pending_queue.lock().unwrap();
 
-                gst_log!(CAT, obj: element, "Trying to empty pending queue");
+                gst::log!(CAT, obj: element, "Trying to empty pending queue");
 
                 if let Some(pending_queue) = pending_queue_grd.as_mut() {
                     let mut failed_item = None;
@@ -530,17 +529,17 @@ impl Queue {
 
                         receiver
                     } else {
-                        gst_log!(CAT, obj: element, "Pending queue is empty now");
+                        gst::log!(CAT, obj: element, "Pending queue is empty now");
                         *pending_queue_grd = None;
                         return;
                     }
                 } else {
-                    gst_log!(CAT, obj: element, "Flushing, dropping pending queue");
+                    gst::log!(CAT, obj: element, "Flushing, dropping pending queue");
                     return;
                 }
             };
 
-            gst_log!(CAT, obj: element, "Waiting for more queue space");
+            gst::log!(CAT, obj: element, "Waiting for more queue space");
             let _ = more_queue_space_receiver.await;
         }
     }
@@ -553,7 +552,7 @@ impl Queue {
         let wait_fut = {
             let dataqueue = self.dataqueue.lock().unwrap();
             let dataqueue = dataqueue.as_ref().ok_or_else(|| {
-                gst_error!(CAT, obj: element, "No DataQueue");
+                gst::error!(CAT, obj: element, "No DataQueue");
                 gst::FlowError::Error
             })?;
 
@@ -580,20 +579,20 @@ impl Queue {
 
                     pending_queue.as_mut().unwrap().items.push_back(item);
 
-                    gst_log!(
+                    gst::log!(
                         CAT,
                         obj: element,
                         "Queue is full - Pushing first item on pending queue"
                     );
 
                     if schedule_now {
-                        gst_log!(CAT, obj: element, "Scheduling pending queue now");
+                        gst::log!(CAT, obj: element, "Scheduling pending queue now");
                         pending_queue.as_mut().unwrap().scheduled = true;
 
                         let wait_fut = self.schedule_pending_queue(element);
                         Some(wait_fut)
                     } else {
-                        gst_log!(CAT, obj: element, "Scheduling pending queue later");
+                        gst::log!(CAT, obj: element, "Scheduling pending queue later");
                         None
                     }
                 } else {
@@ -606,7 +605,7 @@ impl Queue {
         };
 
         if let Some(wait_fut) = wait_fut {
-            gst_log!(CAT, obj: element, "Blocking until queue has space again");
+            gst::log!(CAT, obj: element, "Blocking until queue has space again");
             wait_fut.await;
         }
 
@@ -614,7 +613,7 @@ impl Queue {
     }
 
     fn prepare(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Preparing");
+        gst::debug!(CAT, obj: element, "Preparing");
 
         let settings = self.settings.lock().unwrap().clone();
 
@@ -657,13 +656,13 @@ impl Queue {
                 )
             })?;
 
-        gst_debug!(CAT, obj: element, "Prepared");
+        gst::debug!(CAT, obj: element, "Prepared");
 
         Ok(())
     }
 
     fn unprepare(&self, element: &super::Queue) {
-        gst_debug!(CAT, obj: element, "Unpreparing");
+        gst::debug!(CAT, obj: element, "Unpreparing");
 
         self.task.unprepare().unwrap();
 
@@ -672,20 +671,20 @@ impl Queue {
 
         *self.last_res.lock().unwrap() = Ok(gst::FlowSuccess::Ok);
 
-        gst_debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, obj: element, "Unprepared");
     }
 
     fn stop(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Stopping");
+        gst::debug!(CAT, obj: element, "Stopping");
         self.task.stop()?;
-        gst_debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
     fn start(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Starting");
+        gst::debug!(CAT, obj: element, "Starting");
         self.task.start()?;
-        gst_debug!(CAT, obj: element, "Started");
+        gst::debug!(CAT, obj: element, "Started");
         Ok(())
     }
 }
@@ -869,7 +868,7 @@ impl ElementImpl for Queue {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};
 
 use once_cell::sync::Lazy;
 
@@ -160,7 +159,7 @@ fn cc_data_buffer(
     let data = cc_data.to_be_bytes();
 
     if cc_data != 0x8080 {
-        gst_log!(
+        gst::log!(
             CAT,
             obj: element,
             "{} -> {}: {}",
@@ -169,7 +168,7 @@ fn cc_data_buffer(
             eia608_to_text(cc_data)
         );
     } else {
-        gst_trace!(CAT, obj: element, "{} -> {}: padding", pts, pts + duration);
+        gst::trace!(CAT, obj: element, "{} -> {}: padding", pts, pts + duration);
     }
 
     buf_mut.copy_from_slice(0, &data).unwrap();
@@ -213,7 +212,7 @@ impl State {
         if self.last_frame_no < self.max_frame_no {
             self.last_frame_no += 1;
         } else {
-            gst_debug!(CAT, obj: element, "More text than bandwidth!");
+            gst::debug!(CAT, obj: element, "More text than bandwidth!");
         }
 
         let next_pts = (self.last_frame_no * gst::ClockTime::SECOND)
@@ -561,7 +560,7 @@ impl TtToCea608 {
         let frame_no = pts.mul_div_round(fps_n, fps_d).unwrap().seconds();
 
         if state.last_frame_no == 0 {
-            gst_debug!(CAT, obj: element, "Initial skip to frame no {}", frame_no);
+            gst::debug!(CAT, obj: element, "Initial skip to frame no {}", frame_no);
             state.last_frame_no = pts.mul_div_floor(fps_n, fps_d).unwrap().seconds();
         }
 
@@ -613,14 +612,14 @@ impl TtToCea608 {
         let mut prev_char = 0;
 
         for line in &lines.lines {
-            gst_log!(CAT, obj: element, "Processing {:?}", line);
+            gst::log!(CAT, obj: element, "Processing {:?}", line);
 
             if let Some(line_row) = line.row {
                 row = line_row;
             }
 
             if row > 14 {
-                gst_warning!(
+                gst::warning!(
                     CAT,
                     obj: element,
                     "Dropping line after 15th row: {:?}",
@@ -687,7 +686,7 @@ impl TtToCea608 {
                     let mut cc_data = eia608_from_utf8_1(&encoded);
 
                     if cc_data == 0 {
-                        gst_warning!(CAT, obj: element, "Not translating UTF8: {}", c);
+                        gst::warning!(CAT, obj: element, "Not translating UTF8: {}", c);
                         cc_data = *SPACE;
                     }
 
@@ -756,7 +755,7 @@ impl TtToCea608 {
                         }
                     } else if col > 31 {
                         if chars.peek().is_some() {
-                            gst_warning!(
+                            gst::warning!(
                                 CAT,
                                 obj: element,
                                 "Dropping characters after 32nd column: {}",
@@ -805,7 +804,7 @@ impl TtToCea608 {
         element: &super::TtToCea608,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: element, "Handling {:?}", buffer);
+        gst::log!(CAT, obj: element, "Handling {:?}", buffer);
 
         let pts = buffer.pts().ok_or_else(|| {
             gst::element_error!(
@@ -826,7 +825,7 @@ impl TtToCea608 {
         })?;
 
         let data = buffer.map_readable().map_err(|_| {
-            gst_error!(CAT, obj: pad, "Can't map buffer readable");
+            gst::error!(CAT, obj: pad, "Can't map buffer readable");
 
             gst::FlowError::Error
         })?;
@@ -843,7 +842,7 @@ impl TtToCea608 {
         match state.json_input {
             false => {
                 let data = std::str::from_utf8(&data).map_err(|err| {
-                    gst_error!(CAT, obj: pad, "Can't decode utf8: {}", err);
+                    gst::error!(CAT, obj: pad, "Can't decode utf8: {}", err);
 
                     gst::FlowError::Error
                 })?;
@@ -877,7 +876,7 @@ impl TtToCea608 {
             }
             true => {
                 lines = serde_json::from_slice(&data).map_err(|err| {
-                    gst_error!(CAT, obj: pad, "Failed to parse input as json: {}", err);
+                    gst::error!(CAT, obj: pad, "Failed to parse input as json: {}", err);
 
                     gst::FlowError::Error
                 })?;
@@ -893,7 +892,7 @@ impl TtToCea608 {
     }
 
     fn sink_event(&self, pad: &gst::Pad, element: &super::TtToCea608, event: gst::Event) -> bool {
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         use gst::EventView;
 
@@ -905,7 +904,7 @@ impl TtToCea608 {
                 };
 
                 if downstream_caps.is_empty() {
-                    gst_error!(CAT, obj: pad, "Empty downstream caps");
+                    gst::error!(CAT, obj: pad, "Empty downstream caps");
                     return false;
                 }
 
@@ -925,7 +924,7 @@ impl TtToCea608 {
                 let s = upstream_caps.structure(0).unwrap();
                 state.json_input = s.name() == "application/x-json";
 
-                gst_debug!(CAT, obj: pad, "Pushing caps {}", caps);
+                gst::debug!(CAT, obj: pad, "Pushing caps {}", caps);
 
                 let new_event = gst::event::Caps::new(&downstream_caps);
 
@@ -946,7 +945,7 @@ impl TtToCea608 {
                 if state.last_frame_no == 0 {
                     state.last_frame_no = timestamp.mul_div_floor(fps_n, fps_d).unwrap().seconds();
 
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Initial skip to frame no {}",
@@ -1213,7 +1212,7 @@ impl ElementImpl for TtToCea608 {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

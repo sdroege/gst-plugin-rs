@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_log, gst_trace, gst_warning};
 
 use gst_base::subclass::prelude::*;
 
@@ -132,10 +131,10 @@ impl Settings {
 
             for (key, value) in structure.iter() {
                 if let Ok(Ok(value_str)) = value.transform::<String>().map(|v| v.get()) {
-                    gst_log!(CAT, obj: element, "metadata '{}' -> '{}'", key, value_str);
+                    gst::log!(CAT, obj: element, "metadata '{}' -> '{}'", key, value_str);
                     hash.insert(key.to_string(), value_str);
                 } else {
-                    gst_warning!(
+                    gst::warning!(
                         CAT,
                         obj: element,
                         "Failed to convert metadata '{}' to string ('{:?}')",
@@ -207,7 +206,7 @@ impl S3Sink {
                     let settings = self.settings.lock().unwrap();
                     match settings.multipart_upload_on_error {
                         OnError::Abort => {
-                            gst_log!(
+                            gst::log!(
                                 CAT,
                                 obj: element,
                                 "Aborting multipart upload request with id: {}",
@@ -215,13 +214,13 @@ impl S3Sink {
                             );
                             match self.abort_multipart_upload_request(state) {
                                 Ok(()) => {
-                                    gst_log!(
+                                    gst::log!(
                                         CAT,
                                         obj: element,
                                         "Aborting multipart upload request succeeded."
                                     );
                                 }
-                                Err(err) => gst_error!(
+                                Err(err) => gst::error!(
                                     CAT,
                                     obj: element,
                                     "Aborting multipart upload failed: {}",
@@ -230,7 +229,7 @@ impl S3Sink {
                             }
                         }
                         OnError::Complete => {
-                            gst_log!(
+                            gst::log!(
                                 CAT,
                                 obj: element,
                                 "Completing multipart upload request with id: {}",
@@ -238,13 +237,13 @@ impl S3Sink {
                             );
                             match self.complete_multipart_upload_request(state) {
                                 Ok(()) => {
-                                    gst_log!(
+                                    gst::log!(
                                         CAT,
                                         obj: element,
                                         "Complete multipart upload request succeeded."
                                     );
                                 }
-                                Err(err) => gst_error!(
+                                Err(err) => gst::error!(
                                     CAT,
                                     obj: element,
                                     "Completing multipart upload failed: {}",
@@ -266,7 +265,7 @@ impl S3Sink {
             e_tag: output.e_tag,
             part_number: Some(part_number),
         });
-        gst_info!(CAT, obj: element, "Uploaded part {}", part_number);
+        gst::info!(CAT, obj: element, "Uploaded part {}", part_number);
 
         Ok(())
     }
@@ -547,7 +546,7 @@ impl S3Sink {
             return Ok(());
         }
 
-        gst_debug!(CAT, obj: object, "Setting uri to {:?}", url_str);
+        gst::debug!(CAT, obj: object, "Setting uri to {:?}", url_str);
 
         let url_str = url_str.unwrap();
         match parse_s3_url(url_str) {
@@ -656,7 +655,7 @@ impl ObjectImpl for S3Sink {
     ) {
         let mut settings = self.settings.lock().unwrap();
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: obj,
             "Setting property '{}' to '{:?}'",
@@ -804,7 +803,7 @@ impl BaseSinkImpl for S3Sink {
     fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         let mut state = self.state.lock().unwrap();
         *state = State::Stopped;
-        gst_info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -819,7 +818,7 @@ impl BaseSinkImpl for S3Sink {
             return Err(gst::FlowError::Error);
         }
 
-        gst_trace!(CAT, obj: element, "Rendering {:?}", buffer);
+        gst::trace!(CAT, obj: element, "Rendering {:?}", buffer);
         let map = buffer.map_readable().map_err(|_| {
             gst::element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
@@ -829,7 +828,7 @@ impl BaseSinkImpl for S3Sink {
             Ok(_) => Ok(gst::FlowSuccess::Ok),
             Err(err) => match err {
                 Some(error_message) => {
-                    gst_error!(
+                    gst::error!(
                         CAT,
                         obj: element,
                         "Multipart upload failed: {}",
@@ -839,7 +838,7 @@ impl BaseSinkImpl for S3Sink {
                     Err(gst::FlowError::Error)
                 }
                 _ => {
-                    gst_info!(CAT, obj: element, "Upload interrupted. Flushing...");
+                    gst::info!(CAT, obj: element, "Upload interrupted. Flushing...");
                     Err(gst::FlowError::Flushing)
                 }
             },
@@ -855,7 +854,7 @@ impl BaseSinkImpl for S3Sink {
     fn event(&self, element: &Self::Type, event: gst::Event) -> bool {
         if let gst::EventView::Eos(_) = event.view() {
             if let Err(error_message) = self.finalize_upload(element) {
-                gst_error!(
+                gst::error!(
                     CAT,
                     obj: element,
                     "Failed to finalize the upload: {}",

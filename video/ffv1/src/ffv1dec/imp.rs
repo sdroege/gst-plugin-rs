@@ -436,7 +436,7 @@ impl VideoDecoderImpl for Ffv1Dec {
             .expect("Could not map input buffer for read");
 
         let decoded_frame = decoder.decode_frame(input_buffer.as_slice()).map_err(|e| {
-            gst::gst_error!(CAT, "Decoding failed: {}", e);
+            gst::error!(CAT, "Decoding failed: {}", e);
             gst::FlowError::Error
         })?;
 

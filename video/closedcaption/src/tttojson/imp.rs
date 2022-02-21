@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::glib;
-use gst::gst_log;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
@@ -124,7 +123,7 @@ impl TtToJson {
     fn sink_event(&self, pad: &gst::Pad, element: &super::TtToJson, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Caps(_) => {

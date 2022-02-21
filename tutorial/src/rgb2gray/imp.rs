@@ -11,7 +11,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_info};
 use gst_base::subclass::prelude::*;
 use gst_video::subclass::prelude::*;
 
@@ -134,7 +133,7 @@ impl ObjectImpl for Rgb2Gray {
             "invert" => {
                 let mut settings = self.settings.lock().unwrap();
                 let invert = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing invert from {} to {}",
@@ -146,7 +145,7 @@ impl ObjectImpl for Rgb2Gray {
             "shift" => {
                 let mut settings = self.settings.lock().unwrap();
                 let shift = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing shift from {} to {}",
@@ -322,7 +321,7 @@ impl BaseTransformImpl for Rgb2Gray {
             gray_caps
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Transformed caps from {} to {} in direction {:?}",

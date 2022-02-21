@@ -7,10 +7,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use gst::element_error;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{element_error, gst_debug, gst_error, gst_log, gst_trace, gst_warning};
 
 use crate::jsontovtt::fku::ForceKeyUnitRequest;
 use crate::ttutils::Lines;
@@ -248,31 +248,31 @@ impl State {
         let mut ret = vec![];
 
         let data = buffer.map_readable().map_err(|_| {
-            gst_error!(CAT, obj: pad, "Can't map buffer readable");
+            gst::error!(CAT, obj: pad, "Can't map buffer readable");
 
             gst::FlowError::Error
         })?;
 
         let lines: Lines = serde_json::from_slice(&data).map_err(|err| {
-            gst_error!(CAT, obj: pad, "Failed to parse input as json: {}", err);
+            gst::error!(CAT, obj: pad, "Failed to parse input as json: {}", err);
 
             gst::FlowError::Error
         })?;
 
         let pts = buffer.pts().ok_or_else(|| {
-            gst_error!(CAT, obj: pad, "Require timestamped buffers");
+            gst::error!(CAT, obj: pad, "Require timestamped buffers");
             gst::FlowError::Error
         })?;
 
         let duration = buffer.duration().ok_or_else(|| {
-            gst_error!(CAT, obj: pad, "Require buffers with duration");
+            gst::error!(CAT, obj: pad, "Require buffers with duration");
             gst::FlowError::Error
         })?;
 
         let (pts, duration) = match clamp(&self.segment, pts, Some(duration)) {
             Some((pts, duration)) => (pts, duration.unwrap()),
             None => {
-                gst_warning!(
+                gst::warning!(
                     CAT,
                     obj: pad,
                     "Dropping buffer outside segment: {:?}",
@@ -307,7 +307,7 @@ impl State {
         let (pts, duration) = match clamp(&self.segment, pts, duration) {
             Some((pts, duration)) => (pts, duration),
             None => {
-                gst_warning!(CAT, "Ignoring gap outside segment");
+                gst::warning!(CAT, "Ignoring gap outside segment");
                 return ret;
             }
         };
@@ -326,7 +326,7 @@ impl State {
     fn handle_eos(&mut self) -> Vec<gst::Buffer> {
         let mut ret = vec![];
 
-        gst_log!(CAT, "handling EOS, {}", self.pending.len());
+        gst::log!(CAT, "handling EOS, {}", self.pending.len());
         self.drain(&mut ret, None);
 
         ret
@@ -340,7 +340,7 @@ impl JsonToVtt {
         _element: &super::JsonToVtt,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_trace!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::trace!(CAT, obj: pad, "Handling buffer {:?}", buffer);
         let mut state = self.state.lock().unwrap();
 
         let buffers = state.handle_buffer(pad, buffer)?;
@@ -359,20 +359,20 @@ impl JsonToVtt {
     fn src_event(&self, pad: &gst::Pad, element: &super::JsonToVtt, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::CustomUpstream(ev) => {
                 if gst_video::ForceKeyUnitEvent::is(ev) {
                     match gst_video::UpstreamForceKeyUnitEvent::parse(ev) {
                         Ok(fku_event) => {
-                            gst_log!(CAT, obj: pad, "Handling fku {:?}", fku_event);
+                            gst::log!(CAT, obj: pad, "Handling fku {:?}", fku_event);
 
                             if fku_event.running_time.is_some() {
                                 self.handle_fku(ForceKeyUnitRequest::new_from_event(&fku_event));
                             }
                         }
-                        Err(_) => gst_warning!(
+                        Err(_) => gst::warning!(
                             CAT,
                             obj: element,
                             "Invalid force-key-unit event received from downstream: {:?}",
@@ -390,10 +390,10 @@ impl JsonToVtt {
     fn sink_event(&self, pad: &gst::Pad, element: &super::JsonToVtt, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Eos(..) => {
-                gst_log!(CAT, obj: pad, "Handling EOS");
+                gst::log!(CAT, obj: pad, "Handling EOS");
                 let mut state = self.state.lock().unwrap();
                 let buffers = state.handle_eos();
                 drop(state);
@@ -407,13 +407,13 @@ impl JsonToVtt {
                 };
 
                 if downstream_caps.is_empty() {
-                    gst_error!(CAT, obj: pad, "Empty downstream caps");
+                    gst::error!(CAT, obj: pad, "Empty downstream caps");
                     return false;
                 }
 
                 downstream_caps.fixate();
 
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "Negotiating for downstream caps {}",
@@ -454,7 +454,7 @@ impl JsonToVtt {
                 pad.event_default(Some(element), event)
             }
             EventView::Gap(ev) => {
-                gst_log!(CAT, obj: pad, "Handling gap {:?}", ev);
+                gst::log!(CAT, obj: pad, "Handling gap {:?}", ev);
                 let mut state = self.state.lock().unwrap();
                 let buffers = state.handle_gap(ev);
                 drop(state);
@@ -582,7 +582,7 @@ impl ElementImpl for JsonToVtt {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::ReadyToPaused {
             let mut state = self.state.lock().unwrap();

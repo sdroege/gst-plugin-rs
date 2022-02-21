@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log};
 
 use gst_base::subclass::prelude::*;
 
@@ -225,7 +224,7 @@ impl HrtfRender {
         let mut outbuf =
             gst_audio::AudioBufferRef::from_buffer_ref_writable(outbuf, &state.outinfo).map_err(
                 |err| {
-                    gst_error!(CAT, obj: element, "Failed to map buffer : {}", err);
+                    gst::error!(CAT, obj: element, "Failed to map buffer : {}", err);
                     gst::FlowError::Error
                 },
             )?;
@@ -249,13 +248,13 @@ impl HrtfRender {
 
         while state.adapter.available() >= inblksz {
             let inbuf = state.adapter.take_buffer(inblksz).map_err(|_| {
-                gst_error!(CAT, obj: element, "Failed to map buffer");
+                gst::error!(CAT, obj: element, "Failed to map buffer");
                 gst::FlowError::Error
             })?;
 
             let inbuf = gst_audio::AudioBuffer::from_buffer_readable(inbuf, &state.ininfo)
                 .map_err(|_| {
-                    gst_error!(CAT, obj: element, "Failed to map buffer");
+                    gst::error!(CAT, obj: element, "Failed to map buffer");
                     gst::FlowError::Error
                 })?;
 
@@ -497,7 +496,7 @@ impl ObjectImpl for HrtfRender {
 
                 if let Some(state) = state_guard.as_mut() {
                     if objs.len() != state.ininfo.channels() as usize {
-                        gst::gst_warning!(
+                        gst::warning!(
                             CAT,
                             "Could not update spatial objects, expected {} channels, got {}",
                             state.ininfo.channels(),
@@ -647,7 +646,7 @@ impl BaseTransformImpl for HrtfRender {
             full_blocks * state.output_block_size()
         };
 
-        gst_log!(
+        gst::log!(
             CAT,
             obj: element,
             "Adapter size: {}, input size {}, transformed size {}",
@@ -694,7 +693,7 @@ impl BaseTransformImpl for HrtfRender {
             other_caps = filter.intersect_with_mode(&other_caps, gst::CapsIntersectMode::First);
         }
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Transformed caps from {} to {} in direction {:?}",
@@ -772,7 +771,7 @@ impl BaseTransformImpl for HrtfRender {
             adapter: gst_base::UniqueAdapter::new(),
         });
 
-        gst_debug!(CAT, obj: element, "Configured for caps {}", incaps);
+        gst::debug!(CAT, obj: element, "Configured for caps {}", incaps);
 
         Ok(())
     }
@@ -780,7 +779,7 @@ impl BaseTransformImpl for HrtfRender {
     fn sink_event(&self, element: &Self::Type, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_debug!(CAT, "Handling event {:?}", event);
+        gst::debug!(CAT, "Handling event {:?}", event);
 
         match event.view() {
             EventView::FlushStop(_) => {
@@ -794,7 +793,7 @@ impl BaseTransformImpl for HrtfRender {
             }
             EventView::Eos(_) => {
                 if self.drain(element).is_err() {
-                    gst::gst_warning!(CAT, "Failed to drain internal buffer");
+                    gst::warning!(CAT, "Failed to drain internal buffer");
                     gst::element_warning!(
                         element,
                         gst::CoreError::Event,

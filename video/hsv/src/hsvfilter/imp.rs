@@ -9,7 +9,6 @@
 // SPDX-License-Identifier: MIT/Apache-2.0
 
 use gst::glib;
-use gst::gst_info;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
@@ -187,7 +186,7 @@ impl ObjectImpl for HsvFilter {
             "hue-shift" => {
                 let mut settings = self.settings.lock().unwrap();
                 let hue_shift = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing hue-shift from {} to {}",
@@ -199,7 +198,7 @@ impl ObjectImpl for HsvFilter {
             "saturation-mul" => {
                 let mut settings = self.settings.lock().unwrap();
                 let saturation_mul = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing saturation-mul from {} to {}",
@@ -211,7 +210,7 @@ impl ObjectImpl for HsvFilter {
             "saturation-off" => {
                 let mut settings = self.settings.lock().unwrap();
                 let saturation_off = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing saturation-off from {} to {}",
@@ -223,7 +222,7 @@ impl ObjectImpl for HsvFilter {
             "value-mul" => {
                 let mut settings = self.settings.lock().unwrap();
                 let value_mul = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing value-mul from {} to {}",
@@ -235,7 +234,7 @@ impl ObjectImpl for HsvFilter {
             "value-off" => {
                 let mut settings = self.settings.lock().unwrap();
                 let value_off = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing value-off from {} to {}",

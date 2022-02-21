@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_trace, gst_warning};
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -114,35 +113,35 @@ impl FMP4Mux {
         state: &mut State,
         buffer: gst::Buffer,
     ) -> Result<(), gst::FlowError> {
-        gst_trace!(CAT, obj: element, "Handling buffer {:?}", buffer);
+        gst::trace!(CAT, obj: element, "Handling buffer {:?}", buffer);
 
         let segment = match state.segment {
             Some(ref segment) => segment,
             None => {
-                gst_error!(CAT, obj: element, "Got buffer before segment");
+                gst::error!(CAT, obj: element, "Got buffer before segment");
                 return Err(gst::FlowError::Error);
             }
         };
 
         if state.caps.is_none() {
-            gst_error!(CAT, obj: element, "Got buffer before caps");
+            gst::error!(CAT, obj: element, "Got buffer before caps");
             return Err(gst::FlowError::NotNegotiated);
         }
 
         let intra_only = state.intra_only;
 
         if !intra_only && buffer.dts().is_none() {
-            gst_error!(CAT, obj: element, "Require DTS for video streams");
+            gst::error!(CAT, obj: element, "Require DTS for video streams");
             return Err(gst::FlowError::Error);
         }
 
         if intra_only && buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
-            gst_error!(CAT, obj: element, "Intra-only stream with delta units");
+            gst::error!(CAT, obj: element, "Intra-only stream with delta units");
             return Err(gst::FlowError::Error);
         }
 
         let pts = buffer.pts().ok_or_else(|| {
-            gst_error!(CAT, obj: element, "Require timestamped buffers");
+            gst::error!(CAT, obj: element, "Require timestamped buffers");
             gst::FlowError::Error
         })?;
         let duration = buffer.duration();
@@ -150,11 +149,11 @@ impl FMP4Mux {
 
         let pts = match segment.to_running_time_full(pts) {
             (_, None) => {
-                gst_error!(CAT, obj: element, "Couldn't convert PTS to running time");
+                gst::error!(CAT, obj: element, "Couldn't convert PTS to running time");
                 return Err(gst::FlowError::Error);
             }
             (pts_signum, _) if pts_signum < 0 => {
-                gst_error!(CAT, obj: element, "Negative PTSs are not supported");
+                gst::error!(CAT, obj: element, "Negative PTSs are not supported");
                 return Err(gst::FlowError::Error);
             }
             (_, Some(pts)) => pts,
@@ -162,7 +161,7 @@ impl FMP4Mux {
 
         let end_pts = match segment.to_running_time_full(end_pts) {
             (_, None) => {
-                gst_error!(
+                gst::error!(
                     CAT,
                     obj: element,
                     "Couldn't convert end PTS to running time"
@@ -170,7 +169,7 @@ impl FMP4Mux {
                 return Err(gst::FlowError::Error);
             }
             (pts_signum, _) if pts_signum < 0 => {
-                gst_error!(CAT, obj: element, "Negative PTSs are not supported");
+                gst::error!(CAT, obj: element, "Negative PTSs are not supported");
                 return Err(gst::FlowError::Error);
             }
             (_, Some(pts)) => pts,
@@ -185,7 +184,7 @@ impl FMP4Mux {
 
             let dts = match segment.to_running_time_full(dts) {
                 (_, None) => {
-                    gst_error!(CAT, obj: element, "Couldn't convert DTS to running time");
+                    gst::error!(CAT, obj: element, "Couldn't convert DTS to running time");
                     return Err(gst::FlowError::Error);
                 }
                 (pts_signum, Some(dts)) if pts_signum < 0 => {
@@ -195,7 +194,7 @@ impl FMP4Mux {
 
                     let dts_offset = state.dts_offset.unwrap();
                     if dts > dts_offset {
-                        gst_warning!(CAT, obj: element, "DTS before first DTS");
+                        gst::warning!(CAT, obj: element, "DTS before first DTS");
                         gst::ClockTime::ZERO
                     } else {
                         dts_offset - dts
@@ -212,7 +211,7 @@ impl FMP4Mux {
 
             let end_dts = match segment.to_running_time_full(end_dts) {
                 (_, None) => {
-                    gst_error!(
+                    gst::error!(
                         CAT,
                         obj: element,
                         "Couldn't convert end DTS to running time"
@@ -226,7 +225,7 @@ impl FMP4Mux {
 
                     let dts_offset = state.dts_offset.unwrap();
                     if dts > dts_offset {
-                        gst_warning!(CAT, obj: element, "End DTS before first DTS");
+                        gst::warning!(CAT, obj: element, "End DTS before first DTS");
                         gst::ClockTime::ZERO
                     } else {
                         dts_offset - dts
@@ -244,7 +243,7 @@ impl FMP4Mux {
         };
 
         if !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Starting new GOP at PTS {} DTS {}",
@@ -266,7 +265,7 @@ impl FMP4Mux {
             state.queued_gops.push_front(gop);
 
             if let Some(prev_gop) = state.queued_gops.get_mut(1) {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Updating previous GOP starting at PTS {} to end PTS {} DTS {}",
@@ -281,7 +280,7 @@ impl FMP4Mux {
                     // Don't bother logging this for intra-only streams as it would be for every
                     // single buffer.
                     if !intra_only {
-                        gst_debug!(
+                        gst::debug!(
                             CAT,
                             obj: element,
                             "Previous GOP has final earliest PTS at {}",
@@ -293,7 +292,7 @@ impl FMP4Mux {
 
                     state.queued_duration =
                         prev_gop.end_pts - state.queued_gops.back().unwrap().earliest_pts;
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Queued duration updated to {}",
@@ -302,7 +301,7 @@ impl FMP4Mux {
                 } else if intra_only {
                     state.queued_duration =
                         prev_gop.end_pts - state.queued_gops.back().unwrap().earliest_pts;
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Queued duration updated to {}",
@@ -327,7 +326,7 @@ impl FMP4Mux {
             });
 
             if gop.earliest_pts > pts && !gop.final_earliest_pts {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Updating current GOP earliest PTS from {} to {}",
@@ -338,7 +337,7 @@ impl FMP4Mux {
                 gop.earliest_pts_position = pts_position;
 
                 if let Some(prev_gop) = state.queued_gops.get_mut(1) {
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Updating previous GOP starting PTS {} end time from {} to {}",
@@ -357,7 +356,7 @@ impl FMP4Mux {
             // lower PTS then it wouldn't be possible to display it in time anymore, i.e. the
             // stream would be invalid.
             if gop.start_pts <= dts && !gop.final_earliest_pts {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "GOP has final earliest PTS at {}",
@@ -368,7 +367,7 @@ impl FMP4Mux {
                 if let Some(prev_gop) = state.queued_gops.get_mut(1) {
                     state.queued_duration =
                         prev_gop.end_pts - state.queued_gops.back().unwrap().earliest_pts;
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Queued duration updated to {}",
@@ -377,7 +376,7 @@ impl FMP4Mux {
                 }
             }
         } else {
-            gst_warning!(
+            gst::warning!(
                 CAT,
                 obj: element,
                 "Waiting for keyframe at the beginning of the stream"
@@ -407,7 +406,7 @@ impl FMP4Mux {
 
         if state.last_force_keyunit_time.is_none() && oldest_gop.final_earliest_pts {
             let fku_running_time = earliest_pts + settings.fragment_duration;
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Sending first force-keyunit event for running time {}",
@@ -426,7 +425,7 @@ impl FMP4Mux {
         {
             let fku_running_time =
                 state.last_force_keyunit_time.unwrap() + settings.fragment_duration;
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Sending force-keyunit event for running time {}",
@@ -464,7 +463,7 @@ impl FMP4Mux {
         // equal to the fragment duration then drain out all complete GOPs, otherwise all
         // except for the newest complete GOP.
         let drain_gops = if at_eos {
-            gst_info!(CAT, obj: element, "Draining at EOS");
+            gst::info!(CAT, obj: element, "Draining at EOS");
             state.queued_duration = gst::ClockTime::ZERO;
             state
                 .queued_gops
@@ -505,7 +504,7 @@ impl FMP4Mux {
             let end_dts = drain_gops[0].end_dts;
             let dts_offset = state.dts_offset;
 
-            gst_info!(
+            gst::info!(
                 CAT,
                 obj: element,
                 "Draining {} worth of buffers starting at PTS {} DTS {}, DTS offset {}",
@@ -558,7 +557,7 @@ impl FMP4Mux {
                     dts_offset,
                 })
                 .map_err(|err| {
-                    gst_error!(
+                    gst::error!(
                         CAT,
                         obj: element,
                         "Failed to create FMP4 fragment header: {}",
@@ -618,7 +617,7 @@ impl FMP4Mux {
             });
             state.end_pts = Some(end_pts);
 
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Queued duration updated to {} after draining",
@@ -641,7 +640,7 @@ impl FMP4Mux {
                     buffer_list.as_mut().unwrap().get_mut().unwrap().add(mfra);
                 }
                 Err(err) => {
-                    gst_error!(CAT, obj: element, "Failed to create mfra box: {}", err);
+                    gst::error!(CAT, obj: element, "Failed to create mfra box: {}", err);
                 }
             }
         }
@@ -682,7 +681,7 @@ impl FMP4Mux {
             duration: if at_eos { duration } else { None },
         })
         .map_err(|err| {
-            gst_error!(CAT, obj: element, "Failed to create FMP4 header: {}", err);
+            gst::error!(CAT, obj: element, "Failed to create FMP4 header: {}", err);
             gst::FlowError::Error
         })?;
 
@@ -753,7 +752,7 @@ impl FMP4Mux {
         }
 
         if let Some(buffers) = buffers {
-            gst_trace!(CAT, obj: element, "Pushing buffer list {:?}", buffers);
+            gst::trace!(CAT, obj: element, "Pushing buffer list {:?}", buffers);
             self.srcpad.push_list(buffers)?;
         }
 
@@ -763,17 +762,17 @@ impl FMP4Mux {
     fn sink_event(&self, pad: &gst::Pad, element: &super::FMP4Mux, mut event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_trace!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::trace!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Segment(ev) => {
                 let segment = match ev.segment().downcast_ref::<gst::ClockTime>() {
                     Some(segment) => {
-                        gst_info!(CAT, obj: pad, "Received segment {:?}", segment);
+                        gst::info!(CAT, obj: pad, "Received segment {:?}", segment);
                         segment.clone()
                     }
                     None => {
-                        gst_warning!(
+                        gst::warning!(
                             CAT,
                             obj: pad,
                             "Received non-TIME segment, replacing with default TIME segment"
@@ -793,7 +792,7 @@ impl FMP4Mux {
             EventView::Caps(ev) => {
                 let caps = ev.caps_owned();
 
-                gst_info!(CAT, obj: pad, "Received caps {:?}", caps);
+                gst::info!(CAT, obj: pad, "Received caps {:?}", caps);
                 let caps = {
                     let settings = self.settings.lock().unwrap().clone();
                     let mut state = self.state.lock().unwrap();
@@ -803,13 +802,13 @@ impl FMP4Mux {
                     match s.name() {
                         "video/x-h264" | "video/x-h265" => {
                             if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
-                                gst_error!(CAT, obj: pad, "Received caps without codec_data");
+                                gst::error!(CAT, obj: pad, "Received caps without codec_data");
                                 return false;
                             }
                         }
                         "audio/mpeg" => {
                             if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
-                                gst_error!(CAT, obj: pad, "Received caps without codec_data");
+                                gst::error!(CAT, obj: pad, "Received caps without codec_data");
                                 return false;
                             }
                             state.intra_only = true;
@@ -851,10 +850,10 @@ impl FMP4Mux {
 
                 match drained {
                     Ok(Some(buffers)) => {
-                        gst_trace!(CAT, obj: element, "Pushing buffer list {:?}", buffers);
+                        gst::trace!(CAT, obj: element, "Pushing buffer list {:?}", buffers);
 
                         if let Err(err) = self.srcpad.push_list(buffers) {
-                            gst_error!(
+                            gst::error!(
                                 CAT,
                                 obj: element,
                                 "Failed pushing EOS buffers downstream: {:?}",
@@ -864,7 +863,7 @@ impl FMP4Mux {
                     }
                     Ok(None) => {}
                     Err(err) => {
-                        gst_error!(CAT, obj: element, "Failed draining at EOS: {:?}", err);
+                        gst::error!(CAT, obj: element, "Failed draining at EOS: {:?}", err);
                     }
                 }
 
@@ -889,7 +888,7 @@ impl FMP4Mux {
 
                                         self.srcpad.push_event(gst::event::Caps::new(&caps));
                                         if let Err(err) = self.srcpad.push_list(buffer_list) {
-                                            gst_error!(
+                                            gst::error!(
                                                 CAT,
                                                 obj: element,
                                                 "Failed pushing updated header buffer downstream: {:?}",
@@ -897,13 +896,13 @@ impl FMP4Mux {
                                             );
                                         }
                                     } else {
-                                        gst_error!(CAT, obj: element, "Can't rewrite header because downstream is not seekable");
+                                        gst::error!(CAT, obj: element, "Can't rewrite header because downstream is not seekable");
                                     }
                                 }
                                 super::HeaderUpdateMode::Update => {
                                     self.srcpad.push_event(gst::event::Caps::new(&caps));
                                     if let Err(err) = self.srcpad.push_list(buffer_list) {
-                                        gst_error!(
+                                        gst::error!(
                                             CAT,
                                             obj: element,
                                             "Failed pushing updated header buffer downstream: {:?}",
@@ -915,7 +914,7 @@ impl FMP4Mux {
                         }
                         Ok(None) => {}
                         Err(err) => {
-                            gst_error!(
+                            gst::error!(
                                 CAT,
                                 obj: element,
                                 "Failed to generate updated header: {:?}",
@@ -952,7 +951,7 @@ impl FMP4Mux {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_trace!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::trace!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Caps(q) => {
@@ -982,7 +981,7 @@ impl FMP4Mux {
     fn src_event(&self, pad: &gst::Pad, element: &super::FMP4Mux, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_trace!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::trace!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Seek(_ev) => false,
@@ -998,7 +997,7 @@ impl FMP4Mux {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_trace!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::trace!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -1013,7 +1012,7 @@ impl FMP4Mux {
 
                 let settings = self.settings.lock().unwrap();
                 let (live, min, max) = q.result();
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: pad,
                     "Upstream latency: live {}, min {}, max {}",
@@ -1025,7 +1024,7 @@ impl FMP4Mux {
                     min + settings.fragment_duration,
                     max.opt_add(settings.fragment_duration),
                 );
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: pad,
                     "Returning latency: live {}, min {}, max {}",
@@ -1221,7 +1220,7 @@ impl ElementImpl for FMP4Mux {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         let res = self.parent_change_state(element, transition)?;
 

@@ -13,8 +13,6 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 
-use gst::{gst_debug, gst_trace};
-
 use crate::sink::frame::{Frame, Texture};
 
 use std::cell::RefCell;
@@ -77,7 +75,7 @@ impl PaintableImpl for SinkPaintable {
         let paintables = self.paintables.borrow();
 
         if !paintables.is_empty() {
-            gst_trace!(CAT, obj: paintable, "Snapshotting frame");
+            gst::trace!(CAT, obj: paintable, "Snapshotting frame");
 
             let (frame_width, frame_height) =
                 paintables.first().map(|p| (p.width, p.height)).unwrap();
@@ -127,7 +125,7 @@ impl PaintableImpl for SinkPaintable {
                 snapshot.pop();
             }
         } else {
-            gst_trace!(CAT, obj: paintable, "Snapshotting black frame");
+            gst::trace!(CAT, obj: paintable, "Snapshotting black frame");
             snapshot.append_color(
                 &gdk::RGBA::BLACK,
                 &graphene::Rect::new(0f32, 0f32, width as f32, height as f32),
@@ -139,7 +137,7 @@ impl PaintableImpl for SinkPaintable {
 impl SinkPaintable {
     pub(super) fn handle_frame_changed(&self, obj: &super::SinkPaintable, frame: Option<Frame>) {
         if let Some(frame) = frame {
-            gst_trace!(CAT, obj: obj, "Received new frame");
+            gst::trace!(CAT, obj: obj, "Received new frame");
 
             let new_paintables = frame.into_textures(&mut *self.cached_textures.borrow_mut());
             let new_size = new_paintables
@@ -153,7 +151,7 @@ impl SinkPaintable {
                 .map(|p| (f32::round(p.width) as u32, f32::round(p.height) as u32));
 
             if Some(new_size) != old_size {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: obj,
                     "Size changed from {:?} to {:?}",

@@ -26,9 +26,7 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst::EventView;
-use gst::{
-    element_error, error_msg, gst_debug, gst_error, gst_info, gst_log, gst_trace, gst_warning,
-};
+use gst::{element_error, error_msg};
 
 use once_cell::sync::Lazy;
 
@@ -175,11 +173,11 @@ impl UdpSinkPadHandlerInner {
 
     fn remove_client(&mut self, gst_pad: &gst::Pad, addr: SocketAddr) {
         if !self.clients.contains(&addr) {
-            gst_warning!(CAT, obj: gst_pad, "Not removing unknown client {:?}", &addr);
+            gst::warning!(CAT, obj: gst_pad, "Not removing unknown client {:?}", &addr);
             return;
         }
 
-        gst_info!(CAT, obj: gst_pad, "Removing client {:?}", addr);
+        gst::info!(CAT, obj: gst_pad, "Removing client {:?}", addr);
 
         Arc::make_mut(&mut self.clients).retain(|addr2| addr != *addr2);
 
@@ -189,11 +187,11 @@ impl UdpSinkPadHandlerInner {
 
     fn add_client(&mut self, gst_pad: &gst::Pad, addr: SocketAddr) {
         if self.clients.contains(&addr) {
-            gst_warning!(CAT, obj: gst_pad, "Not adding client {:?} again", &addr);
+            gst::warning!(CAT, obj: gst_pad, "Not adding client {:?} again", &addr);
             return;
         }
 
-        gst_info!(CAT, obj: gst_pad, "Adding client {:?}", addr);
+        gst::info!(CAT, obj: gst_pad, "Adding client {:?}", addr);
 
         Arc::make_mut(&mut self.clients).push(addr);
 
@@ -492,7 +490,7 @@ impl UdpSinkPadHandler {
             };
 
             if let Some(socket) = socket.as_mut() {
-                gst_log!(CAT, obj: element, "Sending to {:?}", &client);
+                gst::log!(CAT, obj: element, "Sending to {:?}", &client);
                 socket.send_to(&data, *client).await.map_err(|err| {
                     element_error!(
                         element,
@@ -513,7 +511,7 @@ impl UdpSinkPadHandler {
             }
         }
 
-        gst_log!(
+        gst::log!(
             CAT,
             obj: element,
             "Sent buffer {:?} to all clients",
@@ -571,7 +569,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         async move {
             if let Some(sender) = sender.lock().await.as_mut() {
                 if sender.send(TaskItem::Buffer(buffer)).await.is_err() {
-                    gst_debug!(CAT, obj: &element, "Flushing");
+                    gst::debug!(CAT, obj: &element, "Flushing");
                     return Err(gst::FlowError::Flushing);
                 }
             }
@@ -594,7 +592,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
             if let Some(sender) = sender.lock().await.as_mut() {
                 for buffer in list.iter_owned() {
                     if sender.send(TaskItem::Buffer(buffer)).await.is_err() {
-                        gst_debug!(CAT, obj: &element, "Flushing");
+                        gst::debug!(CAT, obj: &element, "Flushing");
                         return Err(gst::FlowError::Flushing);
                     }
                 }
@@ -621,7 +619,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
                 return udpsink.task.flush_stop().is_ok();
             } else if let Some(sender) = sender.lock().await.as_mut() {
                 if sender.send(TaskItem::Event(event)).await.is_err() {
-                    gst_debug!(CAT, obj: &element, "Flushing");
+                    gst::debug!(CAT, obj: &element, "Flushing");
                 }
             }
 
@@ -665,7 +663,7 @@ impl UdpSinkTask {
 impl TaskImpl for UdpSinkTask {
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst_log!(CAT, obj: &self.element, "Starting task");
+            gst::log!(CAT, obj: &self.element, "Starting task");
 
             let (sender, receiver) = mpsc::channel(0);
 
@@ -674,7 +672,7 @@ impl TaskImpl for UdpSinkTask {
 
             self.receiver = Some(receiver);
 
-            gst_log!(CAT, obj: &self.element, "Task started");
+            gst::log!(CAT, obj: &self.element, "Task started");
             Ok(())
         }
         .boxed()
@@ -781,7 +779,7 @@ impl UdpSink {
             };
 
             let saddr = SocketAddr::new(bind_addr, bind_port as u16);
-            gst_debug!(CAT, obj: element, "Binding to {:?}", saddr);
+            gst::debug!(CAT, obj: element, "Binding to {:?}", saddr);
 
             let socket = match family {
                 SocketFamily::Ipv4 => socket2::Socket::new(
@@ -799,7 +797,7 @@ impl UdpSink {
             let socket = match socket {
                 Ok(socket) => socket,
                 Err(err) => {
-                    gst_warning!(
+                    gst::warning!(
                         CAT,
                         obj: element,
                         "Failed to create {} socket: {}",
@@ -858,7 +856,7 @@ impl UdpSink {
     }
 
     fn prepare(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Preparing");
+        gst::debug!(CAT, obj: element, "Preparing");
 
         let context = {
             let settings = self.settings.lock().unwrap();
@@ -884,31 +882,31 @@ impl UdpSink {
                 )
             })?;
 
-        gst_debug!(CAT, obj: element, "Started preparing");
+        gst::debug!(CAT, obj: element, "Started preparing");
 
         Ok(())
     }
 
     fn unprepare(&self, element: &super::UdpSink) {
-        gst_debug!(CAT, obj: element, "Unpreparing");
+        gst::debug!(CAT, obj: element, "Unpreparing");
 
         self.task.unprepare().unwrap();
         self.sink_pad_handler.unprepare();
 
-        gst_debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, obj: element, "Unprepared");
     }
 
     fn stop(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Stopping");
+        gst::debug!(CAT, obj: element, "Stopping");
         self.task.stop()?;
-        gst_debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
     fn start(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Starting");
+        gst::debug!(CAT, obj: element, "Starting");
         self.task.start()?;
-        gst_debug!(CAT, obj: element, "Started");
+        gst::debug!(CAT, obj: element, "Started");
         Ok(())
     }
 }
@@ -933,7 +931,7 @@ impl UdpSink {
 fn try_into_socket_addr(element: &super::UdpSink, host: &str, port: i32) -> Result<SocketAddr, ()> {
     let addr: IpAddr = match host.parse() {
         Err(err) => {
-            gst_error!(CAT, obj: element, "Failed to parse host {}: {}", host, err);
+            gst::error!(CAT, obj: element, "Failed to parse host {}: {}", host, err);
             return Err(());
         }
         Ok(addr) => addr,
@@ -941,7 +939,7 @@ fn try_into_socket_addr(element: &super::UdpSink, host: &str, port: i32) -> Resu
 
     let port: u16 = match port.try_into() {
         Err(err) => {
-            gst_error!(CAT, obj: element, "Invalid port {}: {}", port, err);
+            gst::error!(CAT, obj: element, "Invalid port {}: {}", port, err);
             return Err(());
         }
         Ok(port) => port,
@@ -1247,7 +1245,7 @@ impl ObjectImpl for UdpSink {
                         rsplit[0]
                             .parse::<i32>()
                             .map_err(|err| {
-                                gst_error!(CAT, obj: obj, "Invalid port {}: {}", rsplit[0], err);
+                                gst::error!(CAT, obj: obj, "Invalid port {}: {}", rsplit[0], err);
                             })
                             .and_then(|port| try_into_socket_addr(obj, rsplit[1], port))
                             .ok()
@@ -1373,7 +1371,7 @@ impl ElementImpl for UdpSink {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

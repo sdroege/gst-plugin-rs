@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_log, gst_trace, gst_warning};
 
 use once_cell::sync::Lazy;
 use parking_lot::{Condvar, Mutex};
@@ -353,7 +352,7 @@ impl ToggleRecord {
         let data = match data.clip(&state, &state.in_segment) {
             Some(data) => data,
             None => {
-                gst_log!(CAT, obj: pad, "Dropping raw data outside segment");
+                gst::log!(CAT, obj: pad, "Dropping raw data outside segment");
                 return Ok(HandleResult::Drop);
             }
         };
@@ -385,7 +384,7 @@ impl ToggleRecord {
         // get the wrong state
         self.main_stream_cond.notify_all();
 
-        gst_log!(
+        gst::log!(
             CAT,
             obj: pad,
             "Main stream current running time {}-{} (position: {}-{})",
@@ -401,12 +400,12 @@ impl ToggleRecord {
         let mut rec_state = self.state.lock();
         let settings_changed = match rec_state.recording_state {
             RecordingState::Recording if !settings.record => {
-                gst_debug!(CAT, obj: pad, "Stopping recording");
+                gst::debug!(CAT, obj: pad, "Stopping recording");
                 rec_state.recording_state = RecordingState::Stopping;
                 true
             }
             RecordingState::Stopped if settings.record => {
-                gst_debug!(CAT, obj: pad, "Starting recording");
+                gst::debug!(CAT, obj: pad, "Starting recording");
                 rec_state.recording_state = RecordingState::Starting;
                 true
             }
@@ -417,19 +416,19 @@ impl ToggleRecord {
             RecordingState::Recording => {
                 // Remember where we stopped last, in case of EOS
                 rec_state.last_recording_stop = current_running_time_end;
-                gst_log!(CAT, obj: pad, "Passing buffer (recording)");
+                gst::log!(CAT, obj: pad, "Passing buffer (recording)");
                 Ok(HandleResult::Pass(data))
             }
             RecordingState::Stopping => {
                 if !data.is_keyframe() {
                     // Remember where we stopped last, in case of EOS
                     rec_state.last_recording_stop = current_running_time_end;
-                    gst_log!(CAT, obj: pad, "Passing non-keyframe buffer (stopping)");
+                    gst::log!(CAT, obj: pad, "Passing non-keyframe buffer (stopping)");
 
                     drop(rec_state);
                     drop(state);
                     if settings_changed {
-                        gst_debug!(CAT, obj: pad, "Requesting a new keyframe");
+                        gst::debug!(CAT, obj: pad, "Requesting a new keyframe");
                         stream
                             .sinkpad
                             .push_event(gst_video::UpstreamForceKeyUnitEvent::builder().build());
@@ -445,7 +444,7 @@ impl ToggleRecord {
                     .opt_checked_sub(rec_state.last_recording_start)
                     .ok()
                     .flatten();
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "Stopping at {}, started at {}, current duration {}, previous accumulated recording duration {}",
@@ -469,12 +468,12 @@ impl ToggleRecord {
                                 .unwrap_or(false)
                     })
                 {
-                    gst_log!(CAT, obj: pad, "Waiting for other streams to stop");
+                    gst::log!(CAT, obj: pad, "Waiting for other streams to stop");
                     self.main_stream_cond.wait(&mut state);
                 }
 
                 if state.flushing {
-                    gst_debug!(CAT, obj: pad, "Flushing");
+                    gst::debug!(CAT, obj: pad, "Flushing");
                     return Ok(HandleResult::Flushing);
                 }
 
@@ -485,7 +484,7 @@ impl ToggleRecord {
                 rec_state.last_recording_start = None;
                 rec_state.last_recording_stop = None;
 
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "Stopped at {}, recording duration {}",
@@ -495,7 +494,7 @@ impl ToggleRecord {
 
                 // Then become Stopped and drop this buffer. We always stop right before
                 // a keyframe
-                gst_log!(CAT, obj: pad, "Dropping buffer (stopped)");
+                gst::log!(CAT, obj: pad, "Dropping buffer (stopped)");
 
                 drop(rec_state);
                 drop(state);
@@ -504,18 +503,18 @@ impl ToggleRecord {
                 Ok(HandleResult::Drop)
             }
             RecordingState::Stopped => {
-                gst_log!(CAT, obj: pad, "Dropping buffer (stopped)");
+                gst::log!(CAT, obj: pad, "Dropping buffer (stopped)");
                 Ok(HandleResult::Drop)
             }
             RecordingState::Starting => {
                 // If this is no keyframe, we can directly go out again here and drop the frame
                 if !data.is_keyframe() {
-                    gst_log!(CAT, obj: pad, "Dropping non-keyframe buffer (starting)");
+                    gst::log!(CAT, obj: pad, "Dropping non-keyframe buffer (starting)");
 
                     drop(rec_state);
                     drop(state);
                     if settings_changed {
-                        gst_debug!(CAT, obj: pad, "Requesting a new keyframe");
+                        gst::debug!(CAT, obj: pad, "Requesting a new keyframe");
                         stream
                             .sinkpad
                             .push_event(gst_video::UpstreamForceKeyUnitEvent::builder().build());
@@ -532,7 +531,7 @@ impl ToggleRecord {
                             .saturating_sub(rec_state.recording_duration)
                             .nseconds()
                     }) as i64;
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "Starting at {}, previous accumulated recording duration {}",
@@ -562,18 +561,18 @@ impl ToggleRecord {
                                 .unwrap_or(false)
                     })
                 {
-                    gst_log!(CAT, obj: pad, "Waiting for other streams to start");
+                    gst::log!(CAT, obj: pad, "Waiting for other streams to start");
                     self.main_stream_cond.wait(&mut state);
                 }
 
                 if state.flushing {
-                    gst_debug!(CAT, obj: pad, "Flushing");
+                    gst::debug!(CAT, obj: pad, "Flushing");
                     return Ok(HandleResult::Flushing);
                 }
 
                 let mut rec_state = self.state.lock();
                 rec_state.recording_state = RecordingState::Recording;
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "Started at {}, recording duration {}",
@@ -581,7 +580,7 @@ impl ToggleRecord {
                     rec_state.recording_duration
                 );
 
-                gst_log!(CAT, obj: pad, "Passing buffer (recording)");
+                gst::log!(CAT, obj: pad, "Passing buffer (recording)");
 
                 drop(rec_state);
                 drop(state);
@@ -630,7 +629,7 @@ impl ToggleRecord {
 
         let data = match data.clip(&state, &state.in_segment) {
             None => {
-                gst_log!(CAT, obj: pad, "Dropping raw data outside segment");
+                gst::log!(CAT, obj: pad, "Dropping raw data outside segment");
                 return Ok(HandleResult::Drop);
             }
             Some(data) => data,
@@ -653,7 +652,7 @@ impl ToggleRecord {
             .opt_max(state.current_running_time_end)
             .or(current_running_time_end);
 
-        gst_log!(
+        gst::log!(
             CAT,
             obj: pad,
             "Secondary stream current running time {}-{} (position: {}-{}",
@@ -705,7 +704,7 @@ impl ToggleRecord {
             && !main_state.eos
             && !state.flushing
         {
-            gst_log!(
+            gst::log!(
                 CAT,
                 obj: pad,
                 "Waiting at {}-{} in {:?} state, main stream at {}-{}",
@@ -724,7 +723,7 @@ impl ToggleRecord {
         }
 
         if state.flushing {
-            gst_debug!(CAT, obj: pad, "Flushing");
+            gst::debug!(CAT, obj: pad, "Flushing");
             return Ok(HandleResult::Flushing);
         }
 
@@ -733,7 +732,7 @@ impl ToggleRecord {
         if main_state.eos {
             // If we have no start or stop position (we never recorded) then we're EOS too now
             if rec_state.last_recording_stop.is_none() || rec_state.last_recording_start.is_none() {
-                gst_debug!(CAT, obj: pad, "Main stream EOS and recording never started",);
+                gst::debug!(CAT, obj: pad, "Main stream EOS and recording never started",);
                 return Ok(HandleResult::Eos(self.check_and_update_eos(
                     pad,
                     stream,
@@ -754,7 +753,7 @@ impl ToggleRecord {
             {
                 // Otherwise if we're before the recording start but the end of the buffer is after
                 // the start and we can clip, clip the buffer and pass it onwards.
-                gst_debug!(
+                gst::debug!(
                         CAT,
                         obj: pad,
                         "Main stream EOS and we're not EOS yet (overlapping recording start, {} < {} < {})",
@@ -779,12 +778,12 @@ impl ToggleRecord {
                 segment.set_start(clip_start);
                 segment.set_stop(clip_stop);
 
-                gst_log!(CAT, obj: pad, "Clipping to segment {:?}", segment);
+                gst::log!(CAT, obj: pad, "Clipping to segment {:?}", segment);
 
                 if let Some(data) = data.clip(&*state, &segment) {
                     return Ok(HandleResult::Pass(data));
                 } else {
-                    gst_warning!(CAT, obj: pad, "Complete buffer clipped!");
+                    gst::warning!(CAT, obj: pad, "Complete buffer clipped!");
                     return Ok(HandleResult::Drop);
                 }
             } else if current_running_time
@@ -794,7 +793,7 @@ impl ToggleRecord {
                 // Otherwise if the buffer starts before the recording start, drop it. This
                 // means that we either can't clip, or that the end is also before the
                 // recording start
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "Main stream EOS and we're not EOS yet (before recording start, {} < {})",
@@ -812,7 +811,7 @@ impl ToggleRecord {
             {
                 // Similarly if the end is after the recording stop but the start is before and we
                 // can clip, clip the buffer and pass it through.
-                gst_debug!(
+                gst::debug!(
                         CAT,
                         obj: pad,
                         "Main stream EOS and we're not EOS yet (overlapping recording end, {} < {} < {})",
@@ -837,12 +836,12 @@ impl ToggleRecord {
                 segment.set_start(clip_start);
                 segment.set_stop(clip_stop);
 
-                gst_log!(CAT, obj: pad, "Clipping to segment {:?}", segment,);
+                gst::log!(CAT, obj: pad, "Clipping to segment {:?}", segment,);
 
                 if let Some(data) = data.clip(&*state, &segment) {
                     return Ok(HandleResult::Pass(data));
                 } else {
-                    gst_warning!(CAT, obj: pad, "Complete buffer clipped!");
+                    gst::warning!(CAT, obj: pad, "Complete buffer clipped!");
                     return Ok(HandleResult::Eos(self.check_and_update_eos(
                         pad,
                         stream,
@@ -857,7 +856,7 @@ impl ToggleRecord {
                 // Otherwise if the end of the buffer is after the recording stop, we're EOS
                 // now. This means that we either couldn't clip or that the start is also after
                 // the recording stop
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "Main stream EOS and we're EOS too (after recording end, {} > {})",
@@ -880,7 +879,7 @@ impl ToggleRecord {
                     .opt_le(rec_state.last_recording_stop)
                     .unwrap_or(false));
 
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "Main stream EOS and we're not EOS yet (before recording end, {} <= {} <= {})",
@@ -905,7 +904,7 @@ impl ToggleRecord {
                 assert!(current_running_time
                     .opt_ge(rec_state.last_recording_start)
                     .unwrap_or(false));
-                gst_log!(CAT, obj: pad, "Passing buffer (recording)");
+                gst::log!(CAT, obj: pad, "Passing buffer (recording)");
                 Ok(HandleResult::Pass(data))
             }
             RecordingState::Stopping => {
@@ -913,7 +912,7 @@ impl ToggleRecord {
                 let last_recording_stop = match rec_state.last_recording_stop {
                     Some(last_recording_stop) => last_recording_stop,
                     None => {
-                        gst_log!(
+                        gst::log!(
                             CAT,
                             obj: pad,
                             "Passing buffer (stopping: waiting for keyframe)",
@@ -930,7 +929,7 @@ impl ToggleRecord {
                 if current_running_time_end
                     .map_or(false, |cur_rt_end| cur_rt_end <= last_recording_stop)
                 {
-                    gst_log!(
+                    gst::log!(
                         CAT,
                         obj: pad,
                         "Passing buffer (stopping: {} <= {})",
@@ -943,7 +942,7 @@ impl ToggleRecord {
                     && current_running_time_end
                         .map_or(false, |cur_rt_end| cur_rt_end > last_recording_stop)
                 {
-                    gst_log!(
+                    gst::log!(
                         CAT,
                         obj: pad,
                         "Passing buffer (stopping: {} < {} < {})",
@@ -961,16 +960,16 @@ impl ToggleRecord {
                     let mut segment = state.in_segment.clone();
                     segment.set_stop(clip_stop);
 
-                    gst_log!(CAT, obj: pad, "Clipping to segment {:?}", segment,);
+                    gst::log!(CAT, obj: pad, "Clipping to segment {:?}", segment,);
 
                     if let Some(data) = data.clip(&*state, &segment) {
                         Ok(HandleResult::Pass(data))
                     } else {
-                        gst_warning!(CAT, obj: pad, "Complete buffer clipped!");
+                        gst::warning!(CAT, obj: pad, "Complete buffer clipped!");
                         Ok(HandleResult::Drop)
                     }
                 } else {
-                    gst_log!(
+                    gst::log!(
                         CAT,
                         obj: pad,
                         "Dropping buffer (stopping: {} > {})",
@@ -988,7 +987,7 @@ impl ToggleRecord {
                     .unwrap_or(false));
 
                 // We're properly stopped
-                gst_log!(CAT, obj: pad, "Dropping buffer (stopped)");
+                gst::log!(CAT, obj: pad, "Dropping buffer (stopped)");
                 Ok(HandleResult::Drop)
             }
             RecordingState::Starting => {
@@ -996,7 +995,7 @@ impl ToggleRecord {
                 let last_recording_start = match rec_state.last_recording_start {
                     Some(last_recording_start) => last_recording_start,
                     None => {
-                        gst_log!(
+                        gst::log!(
                             CAT,
                             obj: pad,
                             "Dropping buffer (starting: waiting for keyframe)",
@@ -1011,7 +1010,7 @@ impl ToggleRecord {
                 let current_running_time = current_running_time.expect("checked_above");
 
                 if current_running_time >= last_recording_start {
-                    gst_log!(
+                    gst::log!(
                         CAT,
                         obj: pad,
                         "Passing buffer (starting: {} >= {})",
@@ -1024,7 +1023,7 @@ impl ToggleRecord {
                     && current_running_time_end
                         .map_or(false, |cur_rt_end| cur_rt_end > last_recording_start)
                 {
-                    gst_log!(
+                    gst::log!(
                         CAT,
                         obj: pad,
                         "Passing buffer (starting: {} < {} < {})",
@@ -1042,16 +1041,16 @@ impl ToggleRecord {
                     let mut segment = state.in_segment.clone();
                     segment.set_start(clip_start);
 
-                    gst_log!(CAT, obj: pad, "Clipping to segment {:?}", segment);
+                    gst::log!(CAT, obj: pad, "Clipping to segment {:?}", segment);
 
                     if let Some(data) = data.clip(&*state, &segment) {
                         Ok(HandleResult::Pass(data))
                     } else {
-                        gst_warning!(CAT, obj: pad, "Complete buffer clipped!");
+                        gst::warning!(CAT, obj: pad, "Complete buffer clipped!");
                         Ok(HandleResult::Drop)
                     }
                 } else {
-                    gst_log!(
+                    gst::log!(
                         CAT,
                         obj: pad,
                         "Dropping buffer (starting: {} < {})",
@@ -1093,7 +1092,7 @@ impl ToggleRecord {
             });
 
             if all_others_eos {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "All streams are in EOS state, change state to Stopped"
@@ -1138,7 +1137,7 @@ impl ToggleRecord {
             if !all_others_not_eos {
                 let settings = self.settings.lock();
                 if settings.record {
-                    gst_debug!(CAT, obj: pad, "Restarting recording after EOS");
+                    gst::debug!(CAT, obj: pad, "Restarting recording after EOS");
                     rec_state.recording_state = RecordingState::Starting;
                 }
             }
@@ -1162,7 +1161,7 @@ impl ToggleRecord {
             gst::FlowError::Error
         })?;
 
-        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         {
             let state = stream.state.lock();
@@ -1216,7 +1215,7 @@ impl ToggleRecord {
             let mut state = stream.state.lock();
 
             if state.discont_pending {
-                gst_debug!(CAT, obj: pad, "Pending discont");
+                gst::debug!(CAT, obj: pad, "Pending discont");
                 let buffer = buffer.make_mut();
                 buffer.set_flags(gst::BufferFlags::DISCONT);
                 state.discont_pending = false;
@@ -1244,11 +1243,11 @@ impl ToggleRecord {
                         .build(),
                 );
                 state.segment_pending = false;
-                gst_debug!(CAT, obj: pad, "Pending Segment {:?}", &state.out_segment);
+                gst::debug!(CAT, obj: pad, "Pending Segment {:?}", &state.out_segment);
             }
 
             if !state.pending_events.is_empty() {
-                gst_debug!(CAT, obj: pad, "Pushing pending events");
+                gst::debug!(CAT, obj: pad, "Pushing pending events");
             }
 
             events.append(&mut state.pending_events);
@@ -1266,7 +1265,7 @@ impl ToggleRecord {
             out_running_time
         };
 
-        gst_log!(
+        gst::log!(
             CAT,
             obj: pad,
             "Pushing buffer with running time {}: {:?}",
@@ -1296,7 +1295,7 @@ impl ToggleRecord {
             Some(stream) => stream.clone(),
         };
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         let mut forward = true;
         let mut send_pending = false;
@@ -1330,12 +1329,12 @@ impl ToggleRecord {
                 let s = caps.structure(0).unwrap();
                 if s.name().starts_with("audio/") {
                     state.audio_info = gst_audio::AudioInfo::from_caps(caps).ok();
-                    gst_log!(CAT, obj: pad, "Got audio caps {:?}", state.audio_info);
+                    gst::log!(CAT, obj: pad, "Got audio caps {:?}", state.audio_info);
                     state.video_info = None;
                 } else if s.name().starts_with("video/") {
                     state.audio_info = None;
                     state.video_info = gst_video::VideoInfo::from_caps(caps).ok();
-                    gst_log!(CAT, obj: pad, "Got video caps {:?}", state.video_info);
+                    gst::log!(CAT, obj: pad, "Got video caps {:?}", state.video_info);
                 } else {
                     state.audio_info = None;
                     state.video_info = None;
@@ -1374,12 +1373,12 @@ impl ToggleRecord {
                 state.current_running_time = None;
                 state.current_running_time_end = None;
 
-                gst_debug!(CAT, obj: pad, "Got new Segment {:?}", state.in_segment);
+                gst::debug!(CAT, obj: pad, "Got new Segment {:?}", state.in_segment);
 
                 forward = false;
             }
             EventView::Gap(e) => {
-                gst_debug!(CAT, obj: pad, "Handling Gap event {:?}", event);
+                gst::debug!(CAT, obj: pad, "Handling Gap event {:?}", event);
                 let (pts, duration) = e.get();
                 let handle_result = if stream == self.main_stream {
                     self.handle_main_stream(element, pad, &stream, (pts, duration))
@@ -1423,7 +1422,7 @@ impl ToggleRecord {
                 }
 
                 self.main_stream_cond.notify_all();
-                gst_debug!(CAT, obj: pad, "Stream is not EOS now");
+                gst::debug!(CAT, obj: pad, "Stream is not EOS now");
             }
             EventView::Eos(..) => {
                 let main_state = if stream != self.main_stream {
@@ -1445,7 +1444,7 @@ impl ToggleRecord {
                 }
 
                 self.main_stream_cond.notify_all();
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: pad,
                     "Stream is EOS now, sending any pending events"
@@ -1470,7 +1469,7 @@ impl ToggleRecord {
         {
             let mut state = stream.state.lock();
             if state.segment_pending {
-                gst_log!(CAT, obj: pad, "Storing event for later pushing");
+                gst::log!(CAT, obj: pad, "Storing event for later pushing");
                 state.pending_events.push(event);
                 return true;
             }
@@ -1498,10 +1497,10 @@ impl ToggleRecord {
         }
 
         if forward {
-            gst_log!(CAT, obj: pad, "Forwarding event {:?}", event);
+            gst::log!(CAT, obj: pad, "Forwarding event {:?}", event);
             stream.srcpad.push_event(event)
         } else {
-            gst_log!(CAT, obj: pad, "Dropping event {:?}", event);
+            gst::log!(CAT, obj: pad, "Dropping event {:?}", event);
             true
         }
     }
@@ -1524,7 +1523,7 @@ impl ToggleRecord {
             Some(stream) => stream.clone(),
         };
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
 
         stream.srcpad.peer_query(query)
     }
@@ -1552,7 +1551,7 @@ impl ToggleRecord {
             Some(stream) => stream.clone(),
         };
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         let forward = !matches!(event.view(), EventView::Seek(..));
 
@@ -1564,10 +1563,10 @@ impl ToggleRecord {
         drop(rec_state);
 
         if forward {
-            gst_log!(CAT, obj: pad, "Forwarding event {:?}", event);
+            gst::log!(CAT, obj: pad, "Forwarding event {:?}", event);
             stream.sinkpad.push_event(event)
         } else {
-            gst_log!(CAT, obj: pad, "Dropping event {:?}", event);
+            gst::log!(CAT, obj: pad, "Dropping event {:?}", event);
             false
         }
     }
@@ -1592,7 +1591,7 @@ impl ToggleRecord {
             Some(stream) => stream.clone(),
         };
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
         match query.view_mut() {
             QueryViewMut::Scheduling(q) => {
                 let mut new_query = gst::query::Scheduling::new();
@@ -1601,7 +1600,7 @@ impl ToggleRecord {
                     return res;
                 }
 
-                gst_log!(CAT, obj: pad, "Downstream returned {:?}", new_query);
+                gst::log!(CAT, obj: pad, "Downstream returned {:?}", new_query);
 
                 let (flags, min, max, align) = new_query.result();
                 q.set(flags, min, max, align);
@@ -1613,7 +1612,7 @@ impl ToggleRecord {
                         .filter(|m| m != &gst::PadMode::Pull)
                         .collect::<Vec<_>>(),
                 );
-                gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
+                gst::log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
             QueryViewMut::Seeking(q) => {
@@ -1625,7 +1624,7 @@ impl ToggleRecord {
                     gst::GenericFormattedValue::new(format, -1),
                 );
 
-                gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
+                gst::log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
             // Position and duration is always the current recording position
@@ -1643,7 +1642,7 @@ impl ToggleRecord {
                             .ok()
                             .flatten()
                         {
-                            gst_debug!(
+                            gst::debug!(
                                 CAT,
                                 obj: pad,
                                 "Returning position {} = {} - ({} + {})",
@@ -1655,7 +1654,7 @@ impl ToggleRecord {
                             recording_duration += delta;
                         }
                     } else {
-                        gst_debug!(CAT, obj: pad, "Returning position {}", recording_duration);
+                        gst::debug!(CAT, obj: pad, "Returning position {}", recording_duration);
                     }
                     q.set(recording_duration);
                     true
@@ -1677,7 +1676,7 @@ impl ToggleRecord {
                             .ok()
                             .flatten()
                         {
-                            gst_debug!(
+                            gst::debug!(
                                 CAT,
                                 obj: pad,
                                 "Returning duration {} = {} - ({} + {})",
@@ -1689,7 +1688,7 @@ impl ToggleRecord {
                             recording_duration += delta;
                         }
                     } else {
-                        gst_debug!(CAT, obj: pad, "Returning duration {}", recording_duration);
+                        gst::debug!(CAT, obj: pad, "Returning duration {}", recording_duration);
                     }
                     q.set(recording_duration);
                     true
@@ -1698,7 +1697,7 @@ impl ToggleRecord {
                 }
             }
             _ => {
-                gst_log!(CAT, obj: pad, "Forwarding query {:?}", query);
+                gst::log!(CAT, obj: pad, "Forwarding query {:?}", query);
                 stream.sinkpad.peer_query(query)
             }
         }
@@ -1852,7 +1851,7 @@ impl ObjectImpl for ToggleRecord {
             "record" => {
                 let mut settings = self.settings.lock();
                 let record = value.get().expect("type checked upstream");
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: obj,
                     "Setting record from {:?} to {:?}",
@@ -1865,7 +1864,7 @@ impl ObjectImpl for ToggleRecord {
             "is-live" => {
                 let mut settings = self.settings.lock();
                 let live = value.get().expect("type checked upstream");
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: obj,
                     "Setting live from {:?} to {:?}",
@@ -1972,7 +1971,7 @@ impl ElementImpl for ToggleRecord {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

@@ -19,7 +19,6 @@
 
 use futures::future::{self, abortable, AbortHandle};
 
-use gst::gst_debug;
 use gst::prelude::*;
 
 use once_cell::sync::Lazy;
@@ -128,10 +127,10 @@ impl DataQueue {
     pub fn start(&self) {
         let mut inner = self.0.lock().unwrap();
         if inner.state == DataQueueState::Started {
-            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Started");
+            gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Started");
             return;
         }
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Starting data queue");
+        gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Starting data queue");
         inner.state = DataQueueState::Started;
         inner.wake();
     }
@@ -139,10 +138,10 @@ impl DataQueue {
     pub fn stop(&self) {
         let mut inner = self.0.lock().unwrap();
         if inner.state == DataQueueState::Stopped {
-            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Stopped");
+            gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue already Stopped");
             return;
         }
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Stopping data queue");
+        gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Stopping data queue");
         inner.state = DataQueueState::Stopped;
         inner.wake();
     }
@@ -150,7 +149,7 @@ impl DataQueue {
     pub fn clear(&self) {
         let mut inner = self.0.lock().unwrap();
 
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Clearing data queue");
+        gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Clearing data queue");
 
         let src_pad = inner.src_pad.clone();
         for item in inner.queue.drain(..) {
@@ -164,14 +163,14 @@ impl DataQueue {
             }
         }
 
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue cleared");
+        gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue cleared");
     }
 
     pub fn push(&self, item: DataQueueItem) -> Result<(), DataQueueItem> {
         let mut inner = self.0.lock().unwrap();
 
         if inner.state == DataQueueState::Stopped {
-            gst_debug!(
+            gst::debug!(
                 DATA_QUEUE_CAT,
                 obj: &inner.element,
                 "Rejecting item {:?} in state {:?}",
@@ -181,7 +180,7 @@ impl DataQueue {
             return Err(item);
         }
 
-        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Pushing item {:?}", item);
+        gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Pushing item {:?}", item);
 
         let (count, bytes) = item.size();
         let queue_ts = inner.queue.iter().filter_map(|i| i.timestamp()).next();
@@ -189,14 +188,14 @@ impl DataQueue {
 
         if let Some(max) = inner.max_size_buffers {
             if max <= inner.cur_size_buffers {
-                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (buffers): {} <= {}", max, inner.cur_size_buffers);
+                gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (buffers): {} <= {}", max, inner.cur_size_buffers);
                 return Err(item);
             }
         }
 
         if let Some(max) = inner.max_size_bytes {
             if max <= inner.cur_size_bytes {
-                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (bytes): {} <= {}", max, inner.cur_size_bytes);
+                gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (bytes): {} <= {}", max, inner.cur_size_bytes);
                 return Err(item);
             }
         }
@@ -210,7 +209,7 @@ impl DataQueue {
             };
 
             if max <= level {
-                gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (time): {} <= {}", max, level);
+                gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Queue is full (time): {} <= {}", max, level);
                 return Err(item);
             }
         }
@@ -233,10 +232,10 @@ impl DataQueue {
                 match inner.state {
                     DataQueueState::Started => match inner.queue.pop_front() {
                         None => {
-                            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue is empty");
+                            gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue is empty");
                         }
                         Some(item) => {
-                            gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Popped item {:?}", item);
+                            gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Popped item {:?}", item);
 
                             let (count, bytes) = item.size();
                             inner.cur_size_buffers -= count;
@@ -246,7 +245,7 @@ impl DataQueue {
                         }
                     },
                     DataQueueState::Stopped => {
-                        gst_debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue Stopped");
+                        gst::debug!(DATA_QUEUE_CAT, obj: &inner.element, "Data queue Stopped");
                         return None;
                     }
                 }

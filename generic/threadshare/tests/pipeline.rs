@@ -19,7 +19,6 @@
 
 use gst::glib;
 use gst::prelude::*;
-use gst::{gst_debug, gst_error};
 
 use once_cell::sync::Lazy;
 
@@ -110,13 +109,13 @@ fn multiple_contexts_queue() {
 
         for _ in 0..BUFFER_NB {
             for dest in &destinations {
-                gst_debug!(CAT, "multiple_contexts_queue: sending buffer to {:?}", dest);
+                gst::debug!(CAT, "multiple_contexts_queue: sending buffer to {:?}", dest);
                 socket.send_to(&buffer, dest).unwrap();
                 std::thread::sleep(std::time::Duration::from_millis(CONTEXT_WAIT as u64));
             }
         }
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             "multiple_contexts_queue: waiting for all buffers notifications"
         );
@@ -147,7 +146,7 @@ fn multiple_contexts_queue() {
                 }
             }
             MessageView::Error(err) => {
-                gst_error!(
+                gst::error!(
                     CAT,
                     "multiple_contexts_queue: Error from {:?}: {} ({:?})",
                     err.src().map(|s| s.path_string()),
@@ -165,9 +164,9 @@ fn multiple_contexts_queue() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    gst_debug!(CAT, "Starting main loop for multiple_contexts_queue...");
+    gst::debug!(CAT, "Starting main loop for multiple_contexts_queue...");
     l.run();
-    gst_debug!(CAT, "Stopping main loop for multiple_contexts_queue...");
+    gst::debug!(CAT, "Stopping main loop for multiple_contexts_queue...");
 }
 
 #[test]
@@ -259,13 +258,13 @@ fn multiple_contexts_proxy() {
 
         for _ in 0..BUFFER_NB {
             for dest in &destinations {
-                gst_debug!(CAT, "multiple_contexts_proxy: sending buffer to {:?}", dest);
+                gst::debug!(CAT, "multiple_contexts_proxy: sending buffer to {:?}", dest);
                 socket.send_to(&buffer, dest).unwrap();
                 std::thread::sleep(std::time::Duration::from_millis(CONTEXT_WAIT as u64));
             }
         }
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             "multiple_contexts_proxy: waiting for all buffers notifications"
         );
@@ -296,7 +295,7 @@ fn multiple_contexts_proxy() {
                 }
             }
             MessageView::Error(err) => {
-                gst_error!(
+                gst::error!(
                     CAT,
                     "multiple_contexts_proxy: Error from {:?}: {} ({:?})",
                     err.src().map(|s| s.path_string()),
@@ -314,9 +313,9 @@ fn multiple_contexts_proxy() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    gst_debug!(CAT, "Starting main loop for multiple_contexts_proxy...");
+    gst::debug!(CAT, "Starting main loop for multiple_contexts_proxy...");
     l.run();
-    gst_debug!(CAT, "Stopping main loop for multiple_contexts_proxy...");
+    gst::debug!(CAT, "Stopping main loop for multiple_contexts_proxy...");
 }
 
 #[test]
@@ -353,7 +352,7 @@ fn eos() {
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
-                gst_debug!(CAT, obj: appsink, "eos: pulling sample");
+                gst::debug!(CAT, obj: appsink, "eos: pulling sample");
                 let _ = appsink.pull_sample().unwrap();
 
                 sample_notifier.send(()).unwrap();
@@ -365,7 +364,7 @@ fn eos() {
     );
 
     fn push_buffer(src: &gst::Element) -> bool {
-        gst_debug!(CAT, obj: src, "eos: pushing buffer");
+        gst::debug!(CAT, obj: src, "eos: pushing buffer");
         src.emit_by_name::<bool>("push-buffer", &[&gst::Buffer::from_slice(vec![0; 1024])])
     }
 
@@ -418,7 +417,7 @@ fn eos() {
                     }
                 }
                 MessageView::Error(err) => {
-                    gst_error!(
+                    gst::error!(
                         CAT,
                         "eos: Error from {:?}: {} ({:?})",
                         err.src().map(|s| s.path_string()),
@@ -436,9 +435,9 @@ fn eos() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    gst_debug!(CAT, "Starting main loop for eos...");
+    gst::debug!(CAT, "Starting main loop for eos...");
     l.run();
-    gst_debug!(CAT, "Stopping main loop for eos...");
+    gst::debug!(CAT, "Stopping main loop for eos...");
 }
 
 #[test]
@@ -480,7 +479,7 @@ fn premature_shutdown() {
     appsink.set_callbacks(
         gst_app::AppSinkCallbacks::builder()
             .new_sample(move |appsink| {
-                gst_debug!(CAT, obj: appsink, "premature_shutdown: pulling sample");
+                gst::debug!(CAT, obj: appsink, "premature_shutdown: pulling sample");
                 let _sample = appsink.pull_sample().unwrap();
 
                 appsink_sender.send(()).unwrap();
@@ -491,7 +490,7 @@ fn premature_shutdown() {
     );
 
     fn push_buffer(src: &gst::Element, intent: &str) -> bool {
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: src,
             "premature_shutdown: pushing buffer {}",
@@ -503,7 +502,7 @@ fn premature_shutdown() {
     let pipeline_clone = pipeline.clone();
     let l_clone = l.clone();
     let mut scenario = Some(move || {
-        gst_debug!(CAT, "premature_shutdown: STEP 1: Playing");
+        gst::debug!(CAT, "premature_shutdown: STEP 1: Playing");
         // Initialize the dataflow
         assert!(push_buffer(&src, "(initial)"));
 
@@ -516,26 +515,26 @@ fn premature_shutdown() {
 
         assert!(push_buffer(&src, "before Playing -> Paused"));
 
-        gst_debug!(CAT, "premature_shutdown: STEP 2: Playing -> Paused");
+        gst::debug!(CAT, "premature_shutdown: STEP 2: Playing -> Paused");
         pipeline_clone.set_state(gst::State::Paused).unwrap();
 
-        gst_debug!(CAT, "premature_shutdown: STEP 3: Paused -> Playing");
+        gst::debug!(CAT, "premature_shutdown: STEP 3: Paused -> Playing");
         pipeline_clone.set_state(gst::State::Playing).unwrap();
 
-        gst_debug!(CAT, "premature_shutdown: Playing again");
+        gst::debug!(CAT, "premature_shutdown: Playing again");
 
-        gst_debug!(CAT, "Waiting for buffer sent before Playing -> Paused");
+        gst::debug!(CAT, "Waiting for buffer sent before Playing -> Paused");
         appsink_receiver.recv().unwrap();
 
         assert!(push_buffer(&src, "after Paused -> Playing"));
-        gst_debug!(CAT, "Waiting for buffer sent after Paused -> Playing");
+        gst::debug!(CAT, "Waiting for buffer sent after Paused -> Playing");
         appsink_receiver.recv().unwrap();
 
         // Fill up the (dataqueue) and abruptly shutdown
         assert!(push_buffer(&src, "filling 1"));
         assert!(push_buffer(&src, "filling 2"));
 
-        gst_debug!(CAT, "premature_shutdown: STEP 4: Playing -> Null");
+        gst::debug!(CAT, "premature_shutdown: STEP 4: Playing -> Null");
 
         pipeline_clone.set_state(gst::State::Null).unwrap();
 
@@ -567,7 +566,7 @@ fn premature_shutdown() {
                     }
                 }
                 MessageView::Error(err) => {
-                    gst_error!(
+                    gst::error!(
                         CAT,
                         "premature_shutdown: Error from {:?}: {} ({:?})",
                         err.src().map(|s| s.path_string()),
@@ -585,7 +584,7 @@ fn premature_shutdown() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    gst_debug!(CAT, "Starting main loop for premature_shutdown...");
+    gst::debug!(CAT, "Starting main loop for premature_shutdown...");
     l.run();
-    gst_debug!(CAT, "Stopped main loop for premature_shutdown...");
+    gst::debug!(CAT, "Stopped main loop for premature_shutdown...");
 }

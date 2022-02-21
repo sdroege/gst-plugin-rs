@@ -13,7 +13,6 @@ use std::{io, io::Write, sync::Arc};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error};
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 
@@ -129,7 +128,7 @@ impl State {
             gst_video::VideoFormat::Rgb => png::ColorType::Rgb,
             gst_video::VideoFormat::Rgba => png::ColorType::Rgba,
             _ => {
-                gst_error!(CAT, "format is not supported yet");
+                gst::error!(CAT, "format is not supported yet");
                 unreachable!()
             }
         };
@@ -310,7 +309,7 @@ impl VideoEncoderImpl for PngEncoder {
         state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
         let video_info = state.info();
-        gst_debug!(CAT, obj: element, "Setting format {:?}", video_info);
+        gst::debug!(CAT, obj: element, "Setting format {:?}", video_info);
         {
             let settings = self.settings.lock();
             let mut state = State::new(video_info);
@@ -334,7 +333,7 @@ impl VideoEncoderImpl for PngEncoder {
         let mut state_guard = self.state.lock();
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Sending frame {}",

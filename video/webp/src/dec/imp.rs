@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_log, gst_trace};
 
 use libwebp_sys as ffi;
 use once_cell::sync::Lazy;
@@ -140,7 +139,7 @@ impl WebPDec {
         _element: &super::WebPDec,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.lock().unwrap();
 
@@ -238,7 +237,7 @@ impl WebPDec {
     fn sink_event(&self, pad: &gst::Pad, element: &super::WebPDec, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::FlushStop(..) => {
                 let mut state = self.state.lock().unwrap();
@@ -259,7 +258,7 @@ impl WebPDec {
     fn src_event(&self, pad: &gst::Pad, element: &super::WebPDec, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(..) => false,
             _ => pad.event_default(Some(element), event),
@@ -371,7 +370,7 @@ impl ElementImpl for WebPDec {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         if transition == gst::StateChange::PausedToReady {
             *self.state.lock().unwrap() = State::default();

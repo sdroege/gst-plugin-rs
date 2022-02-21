@@ -6,7 +6,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use gst::gst_debug;
 use gst::prelude::*;
 
 use once_cell::sync::Lazy;
@@ -345,7 +344,7 @@ impl std::ops::Deref for Pipeline {
 fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
     init();
 
-    gst_debug!(TEST_CAT, "Setting up pipeline");
+    gst::debug!(TEST_CAT, "Setting up pipeline");
 
     let clock = gst_check::TestClock::new();
     clock.set_time(gst::ClockTime::ZERO);
@@ -430,11 +429,11 @@ fn setup_pipeline(with_live_fallback: Option<bool>) -> Pipeline {
                     None
                 }
             }) {
-                gst_debug!(TEST_CAT, "Processing clock ID at {}", clock_id.time());
+                gst::debug!(TEST_CAT, "Processing clock ID at {}", clock_id.time());
                 if let Some(clock_id) = clock.process_next_clock_id() {
-                    gst_debug!(TEST_CAT, "Processed clock ID at {}", clock_id.time());
+                    gst::debug!(TEST_CAT, "Processed clock ID at {}", clock_id.time());
                     if clock_id.time().is_zero() {
-                        gst_debug!(TEST_CAT, "Stopping clock thread");
+                        gst::debug!(TEST_CAT, "Stopping clock thread");
                         return;
                     }
                 }
@@ -529,7 +528,7 @@ fn set_time(pipeline: &Pipeline, time: gst::ClockTime) {
         .downcast::<gst_check::TestClock>()
         .unwrap();
 
-    gst_debug!(TEST_CAT, "Setting time to {}", time);
+    gst::debug!(TEST_CAT, "Setting time to {}", time);
     clock.set_time(gst::ClockTime::SECOND + time);
 }
 
@@ -544,7 +543,7 @@ fn wait_eos(pipeline: &Pipeline) {
         use std::{thread, time};
 
         if sink.is_eos() {
-            gst_debug!(TEST_CAT, "Waited for EOS");
+            gst::debug!(TEST_CAT, "Waited for EOS");
             break;
         }
         thread::sleep(time::Duration::from_millis(10));

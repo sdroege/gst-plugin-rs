@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_log};
 
 use std::default::Default;
 use std::fs::File;
@@ -124,7 +123,7 @@ impl TextWrap {
         state.options = if let Some(dictionary) = &settings.dictionary {
             let dict_file = match File::open(dictionary) {
                 Err(err) => {
-                    gst_error!(CAT, obj: element, "Failed to open dictionary file: {}", err);
+                    gst::error!(CAT, obj: element, "Failed to open dictionary file: {}", err);
                     return;
                 }
                 Ok(dict_file) => dict_file,
@@ -133,7 +132,7 @@ impl TextWrap {
             let mut reader = io::BufReader::new(dict_file);
             let standard = match Standard::any_from_reader(&mut reader) {
                 Err(err) => {
-                    gst_error!(
+                    gst::error!(
                         CAT,
                         obj: element,
                         "Failed to load standard from file: {}",
@@ -165,22 +164,22 @@ impl TextWrap {
         self.update_wrapper(element);
 
         let mut pts = buffer.pts().ok_or_else(|| {
-            gst_error!(CAT, obj: element, "Need timestamped buffers");
+            gst::error!(CAT, obj: element, "Need timestamped buffers");
             gst::FlowError::Error
         })?;
 
         let duration = buffer.duration().ok_or_else(|| {
-            gst_error!(CAT, obj: element, "Need buffers with duration");
+            gst::error!(CAT, obj: element, "Need buffers with duration");
             gst::FlowError::Error
         })?;
 
         let data = buffer.map_readable().map_err(|_| {
-            gst_error!(CAT, obj: element, "Can't map buffer readable");
+            gst::error!(CAT, obj: element, "Can't map buffer readable");
             gst::FlowError::Error
         })?;
 
         let data = std::str::from_utf8(&data).map_err(|err| {
-            gst_error!(CAT, obj: element, "Can't decode utf8: {}", err);
+            gst::error!(CAT, obj: element, "Can't decode utf8: {}", err);
 
             gst::FlowError::Error
         })?;
@@ -254,7 +253,7 @@ impl TextWrap {
                             .map(|l| l.to_string())
                             .collect::<Vec<String>>()
                             .join("\n");
-                        gst_info!(
+                        gst::info!(
                             CAT,
                             obj: element,
                             "Outputting contents {}, ts: {}, duration: {}",
@@ -315,7 +314,7 @@ impl TextWrap {
                     let data = chunk.join("\n");
                     let duration: gst::ClockTime =
                         duration_per_word * data.split_whitespace().count() as u64;
-                    gst_info!(CAT, "Pushing lines {}", data);
+                    gst::info!(CAT, "Pushing lines {}", data);
                     let mut buf = gst::Buffer::from_mut_slice(data.into_bytes());
 
                     {
@@ -350,7 +349,7 @@ impl TextWrap {
     }
 
     fn sink_event(&self, pad: &gst::Pad, element: &super::TextWrap, event: gst::Event) -> bool {
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         use gst::EventView;
 
@@ -408,7 +407,7 @@ impl TextWrap {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
@@ -419,7 +418,7 @@ impl TextWrap {
                 if ret {
                     let (live, min, _) = peer_query.result();
                     let our_latency: gst::ClockTime = self.settings.lock().unwrap().accumulate_time;
-                    gst_info!(
+                    gst::info!(
                         CAT,
                         obj: element,
                         "Reporting our latency {} + {}",
@@ -567,7 +566,7 @@ impl ObjectImpl for TextWrap {
                 settings.accumulate_time =
                     gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
                 if settings.accumulate_time != old_accumulate_time {
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: obj,
                         "Accumulate time changed: {}",
@@ -652,7 +651,7 @@ impl ElementImpl for TextWrap {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_info!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::info!(CAT, obj: element, "Changing state {:?}", transition);
 
         if let gst::StateChange::PausedToReady = transition {
             let mut state = self.state.lock().unwrap();

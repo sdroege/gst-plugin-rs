@@ -17,7 +17,6 @@ use glib::prelude::*;
 use glib::Sender;
 
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_trace};
 use gst_base::subclass::prelude::*;
 use gst_video::subclass::prelude::*;
 
@@ -92,7 +91,7 @@ impl ObjectImpl for PaintableSink {
                 let paintable = match &*paintable {
                     Some(ref paintable) => paintable,
                     None => {
-                        gst_error!(CAT, obj: obj, "Failed to create paintable");
+                        gst::error!(CAT, obj: obj, "Failed to create paintable");
                         return None::<&gtk::gdk::Paintable>.to_value();
                     }
                 };
@@ -101,7 +100,7 @@ impl ObjectImpl for PaintableSink {
                 match paintable.try_get() {
                     Ok(paintable) => paintable.to_value(),
                     Err(_) => {
-                        gst_error!(
+                        gst::error!(
                             CAT,
                             obj: obj,
                             "Can't retrieve Paintable from non-main thread"
@@ -189,7 +188,7 @@ impl ElementImpl for PaintableSink {
                 }
 
                 if paintable.is_none() {
-                    gst_error!(CAT, obj: element, "Failed to create paintable");
+                    gst::error!(CAT, obj: element, "Failed to create paintable");
                     return Err(gst::StateChangeError);
                 }
             }
@@ -212,7 +211,7 @@ impl ElementImpl for PaintableSink {
 
 impl BaseSinkImpl for PaintableSink {
     fn set_caps(&self, element: &Self::Type, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        gst_debug!(CAT, obj: element, "Setting caps {:?}", caps);
+        gst::debug!(CAT, obj: element, "Setting caps {:?}", caps);
 
         let video_info = gst_video::VideoInfo::from_caps(caps)
             .map_err(|_| gst::loggable_error!(CAT, "Invalid caps"))?;
@@ -242,28 +241,28 @@ impl VideoSinkImpl for PaintableSink {
         element: &Self::Type,
         buffer: &gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_trace!(CAT, obj: element, "Rendering buffer {:?}", buffer);
+        gst::trace!(CAT, obj: element, "Rendering buffer {:?}", buffer);
 
         let info = self.info.lock().unwrap();
         let info = info.as_ref().ok_or_else(|| {
-            gst_error!(CAT, obj: element, "Received no caps yet");
+            gst::error!(CAT, obj: element, "Received no caps yet");
             gst::FlowError::NotNegotiated
         })?;
 
         let frame = Frame::new(buffer, info).map_err(|err| {
-            gst_error!(CAT, obj: element, "Failed to map video frame");
+            gst::error!(CAT, obj: element, "Failed to map video frame");
             err
         })?;
         self.pending_frame.lock().unwrap().replace(frame);
 
         let sender = self.sender.lock().unwrap();
         let sender = sender.as_ref().ok_or_else(|| {
-            gst_error!(CAT, obj: element, "Have no main thread sender");
+            gst::error!(CAT, obj: element, "Have no main thread sender");
             gst::FlowError::Error
         })?;
 
         sender.send(SinkEvent::FrameChanged).map_err(|_| {
-            gst_error!(CAT, obj: element, "Have main thread receiver shut down");
+            gst::error!(CAT, obj: element, "Have main thread receiver shut down");
             gst::FlowError::Error
         })?;
 

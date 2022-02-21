@@ -8,7 +8,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gio::prelude::*;
-use gst::gst_info;
 use gst::prelude::*;
 use once_cell::sync::Lazy;
 use std::io::Write;
@@ -174,7 +173,7 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    gst_info!(
+    gst::info!(
         CAT,
         "hlssink3_video_pipeline: waiting for {} buffers",
         BUFFER_NB
@@ -281,7 +280,7 @@ fn test_hlssink3_element_with_audio_content() -> Result<(), ()> {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    gst_info!(CAT, "audio_pipeline: waiting for {} buffers", BUFFER_NB);
+    gst::info!(CAT, "audio_pipeline: waiting for {} buffers", BUFFER_NB);
 
     let mut eos = false;
     let bus = pipeline.bus().unwrap();
@@ -378,7 +377,7 @@ fn test_hlssink3_write_correct_playlist_content() -> Result<(), ()> {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    gst_info!(
+    gst::info!(
         CAT,
         "hlssink3_video_pipeline: waiting for {} buffers",
         BUFFER_NB

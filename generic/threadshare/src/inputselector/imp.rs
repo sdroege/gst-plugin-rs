@@ -24,7 +24,6 @@ use futures::prelude::*;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_log, gst_trace};
 
 use once_cell::sync::Lazy;
 
@@ -143,7 +142,7 @@ impl InputSelectorPadSinkHandler {
         }
 
         if is_active {
-            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
+            gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
 
             if switched_pad && !buffer.flags().contains(gst::BufferFlags::DISCONT) {
                 let buffer = buffer.make_mut();
@@ -189,7 +188,7 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         let pad_weak = pad.downgrade();
         async move {
             let pad = pad_weak.upgrade().expect("PadSink no longer exists");
-            gst_log!(CAT, obj: pad.gst_pad(), "Handling buffer list {:?}", list);
+            gst::log!(CAT, obj: pad.gst_pad(), "Handling buffer list {:?}", list);
             // TODO: Ideally we would keep the list intact and forward it in one go
             for buffer in list.iter_owned() {
                 this.handle_item(&pad, &element, buffer).await?;
@@ -261,14 +260,14 @@ impl PadSinkHandler for InputSelectorPadSinkHandler {
         _element: &gst::Element,
         query: &mut gst::QueryRef,
     ) -> bool {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad.gst_pad(), "Handling query {:?}", query);
 
         if query.is_serialized() {
             // FIXME: How can we do this (drops ALLOCATION and DRAIN)?
-            gst_log!(CAT, obj: pad.gst_pad(), "Dropping serialized query {:?}", query);
+            gst::log!(CAT, obj: pad.gst_pad(), "Dropping serialized query {:?}", query);
             false
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
+            gst::log!(CAT, obj: pad.gst_pad(), "Forwarding query {:?}", query);
             inputselector.src_pad.gst_pad().peer_query(query)
         }
     }
@@ -289,7 +288,7 @@ impl PadSrcHandler for InputSelectorPadSrcHandler {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
@@ -378,9 +377,9 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 impl InputSelector {
     fn unprepare(&self, element: &super::InputSelector) {
         let mut state = self.state.lock().unwrap();
-        gst_debug!(CAT, obj: element, "Unpreparing");
+        gst::debug!(CAT, obj: element, "Unpreparing");
         *state = State::default();
-        gst_debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, obj: element, "Unprepared");
     }
 }
 
@@ -564,7 +563,7 @@ impl ElementImpl for InputSelector {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         if let gst::StateChange::ReadyToNull = transition {
             self.unprepare(element);

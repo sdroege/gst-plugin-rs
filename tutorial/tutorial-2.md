@@ -25,7 +25,6 @@ In `src/sinesrc/imp.rs`:
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_log};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
@@ -240,7 +239,7 @@ impl ObjectImpl for SineSrc {
             "samples-per-buffer" => {
                 let mut settings = self.settings.lock().unwrap();
                 let samples_per_buffer = value.get_some().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing samples-per-buffer from {} to {}",
@@ -255,7 +254,7 @@ impl ObjectImpl for SineSrc {
             "freq" => {
                 let mut settings = self.settings.lock().unwrap();
                 let freq = value.get_some().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing freq from {} to {}",
@@ -267,7 +266,7 @@ impl ObjectImpl for SineSrc {
             "volume" => {
                 let mut settings = self.settings.lock().unwrap();
                 let volume = value.get_some().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing volume from {} to {}",
@@ -279,7 +278,7 @@ impl ObjectImpl for SineSrc {
             "mute" => {
                 let mut settings = self.settings.lock().unwrap();
                 let mute = value.get_some().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing mute from {} to {}",
@@ -291,7 +290,7 @@ impl ObjectImpl for SineSrc {
             "is-live" => {
                 let mut settings = self.settings.lock().unwrap();
                 let is_live = value.get_some().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing is-live from {} to {}",
@@ -342,7 +341,7 @@ impl BaseSrcImpl for SineSrc {
         // Reset state
         *self.state.lock().unwrap() = Default::default();
 
-        gst_info!(CAT, obj: element, "Started");
+        gst::info!(CAT, obj: element, "Started");
 
         true
     }
@@ -352,7 +351,7 @@ impl BaseSrcImpl for SineSrc {
         // Reset state
         *self.state.lock().unwrap() = Default::default();
 
-        gst_info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, obj: element, "Stopped");
 
         true
     }
@@ -421,7 +420,7 @@ First of all, we need to get notified whenever the caps that our source is confi
             gst::loggable_error!(CAT, "Failed to build `AudioInfo` from caps {}", caps)
         })?;
 
-        gst_debug!(CAT, obj: element, "Configuring for caps {}", caps);
+        gst::debug!(CAT, obj: element, "Configuring for caps {}", caps);
 
         element.set_blocksize(info.bpf() * (*self.settings.lock().unwrap()).samples_per_buffer);
 
@@ -586,7 +585,7 @@ Now that this is done, we need to implement the `PushSrc::create` virtual meth
         // point but at most samples_per_buffer samples per buffer
         let n_samples = if let Some(sample_stop) = state.sample_stop {
             if sample_stop <= state.sample_offset {
-                gst_log!(CAT, obj: element, "At EOS");
+                gst::log!(CAT, obj: element, "At EOS");
                 return Err(gst::FlowReturn::Eos);
             }
 
@@ -645,7 +644,7 @@ Now that this is done, we need to implement the `PushSrc::create` virtual meth
         state.sample_offset += n_samples;
         drop(state);
 
-        gst_debug!(CAT, obj: element, "Produced buffer {:?}", buffer);
+        gst::debug!(CAT, obj: element, "Produced buffer {:?}", buffer);
 
         Ok(buffer)
     }
@@ -712,7 +711,7 @@ For working in live mode, we have to add a few different parts in various places
 
             let id = clock.new_single_shot_id(wait_until);
 
-            gst_log!(
+            gst::log!(
                 CAT,
                 obj: element,
                 "Waiting until {}, now {}",
@@ -720,7 +719,7 @@ For working in live mode, we have to add a few different parts in various places
                 clock.get_time().display(),
             );
             let (res, jitter) = id.wait();
-            gst_log!(
+            gst::log!(
                 CAT,
                 obj: element,
                 "Waited res {:?} jitter {}",
@@ -729,7 +728,7 @@ For working in live mode, we have to add a few different parts in various places
             );
         }
 
-        gst_debug!(CAT, obj: element, "Produced buffer {:?}", buffer);
+        gst::debug!(CAT, obj: element, "Produced buffer {:?}", buffer);
 
         Ok(buffer)
     }
@@ -783,7 +782,7 @@ This querying is done with the `LATENCY` query, which we will have to handle i
                     let latency = gst::ClockTime::SECOND
                         .mul_div_floor(settings.samples_per_buffer as u64, info.rate() as u64)
                         .unwrap();
-                    gst_debug!(CAT, obj: element, "Returning latency {}", latency);
+                    gst::debug!(CAT, obj: element, "Returning latency {}", latency);
                     q.set(settings.is_live, latency, gst::ClockTime::NONE);
                     true
                 } else {
@@ -837,7 +836,7 @@ struct SineSrc {
     fn unlock(&self, element: &Self::Type) -> bool {
         // This should unblock the create() function ASAP, so we
         // just unschedule the clock it here, if any.
-        gst_debug!(CAT, obj: element, "Unlocking");
+        gst::debug!(CAT, obj: element, "Unlocking");
         let mut clock_wait = self.clock_wait.lock().unwrap();
         if let Some(clock_id) = clock_wait.clock_id.take() {
             clock_id.unschedule();
@@ -856,7 +855,7 @@ Once everything is unlocked, we need to reset things again so that data flow can
     fn unlock_stop(&self, element: &Self::Type) -> bool {
         // This signals that unlocking is done, so we can reset
         // all values again.
-        gst_debug!(CAT, obj: element, "Unlock stop");
+        gst::debug!(CAT, obj: element, "Unlock stop");
         let mut clock_wait = self.clock_wait.lock().unwrap();
         clock_wait.flushing = false;
 
@@ -874,7 +873,7 @@ Now as a last step, we need to actually make use of the new struct we added arou
             // so that we immediately stop waiting on e.g. shutdown.
             let mut clock_wait = self.clock_wait.lock().unwrap();
             if clock_wait.flushing {
-                gst_debug!(CAT, obj: element, "Flushing");
+                gst::debug!(CAT, obj: element, "Flushing");
                 return Err(gst::FlowReturn::Flushing);
             }
 
@@ -882,7 +881,7 @@ Now as a last step, we need to actually make use of the new struct we added arou
             clock_wait.clock_id = Some(id.clone());
             drop(clock_wait);
 
-            gst_log!(
+            gst::log!(
                 CAT,
                 obj: element,
                 "Waiting until {}, now {}",
@@ -890,7 +889,7 @@ Now as a last step, we need to actually make use of the new struct we added arou
                 clock.get_time().display(),
             );
             let (res, jitter) = id.wait();
-            gst_log!(
+            gst::log!(
                 CAT,
                 obj: element,
                 "Waited res {:?} jitter {}",
@@ -902,7 +901,7 @@ Now as a last step, we need to actually make use of the new struct we added arou
             // If the clock ID was unscheduled, unlock() was called
             // and we should return Flushing immediately.
             if res == gst::ClockReturn::Unscheduled {
-                gst_debug!(CAT, obj: element, "Flushing");
+                gst::debug!(CAT, obj: element, "Flushing");
                 return Err(gst::FlowReturn::Flushing);
             }
 ```
@@ -931,7 +930,7 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
         // and for calculating the timestamps, etc.
 
         if segment.get_rate() < 0.0 {
-            gst_error!(CAT, obj: element, "Reverse playback not supported");
+            gst::error!(CAT, obj: element, "Reverse playback not supported");
             return false;
         }
 
@@ -962,7 +961,7 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
             let accumulator =
                 (sample_offset as f64).rem(2.0 * PI * (settings.freq as f64) / (rate as f64));
 
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Seeked to {}-{:?} (accum: {}) for segment {:?}",
@@ -984,7 +983,7 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
             use std::f64::consts::PI;
 
             if state.info.is_none() {
-                gst_error!(
+                gst::error!(
                     CAT,
                     obj: element,
                     "Can only seek in Default format if sample rate is known"
@@ -998,7 +997,7 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
             let accumulator =
                 (sample_offset as f64).rem(2.0 * PI * (settings.freq as f64) / (rate as f64));
 
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Seeked to {}-{:?} (accum: {}) for segment {:?}",
@@ -1017,7 +1016,7 @@ Seeking is implemented in the `BaseSrc::do_seek` virtual method, and signallin
 
             true
         } else {
-            gst_error!(
+            gst::error!(
                 CAT,
                 obj: element,
                 "Can't seek in format {:?}",

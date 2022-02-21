@@ -10,7 +10,6 @@
 
 use gst::glib;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error};
 use gst_audio::prelude::*;
 use gst_audio::subclass::prelude::*;
 
@@ -120,7 +119,7 @@ impl AudioDecoderImpl for ClaxonDec {
     }
 
     fn set_format(&self, element: &Self::Type, caps: &gst::Caps) -> Result<(), gst::LoggableError> {
-        gst_debug!(CAT, obj: element, "Setting format {:?}", caps);
+        gst::debug!(CAT, obj: element, "Setting format {:?}", caps);
 
         let mut audio_info: Option<gst_audio::AudioInfo> = None;
 
@@ -129,7 +128,7 @@ impl AudioDecoderImpl for ClaxonDec {
             let streamheaders = streamheaders.as_slice();
 
             if streamheaders.len() < 2 {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Not enough streamheaders, trying in-band"
@@ -137,18 +136,18 @@ impl AudioDecoderImpl for ClaxonDec {
             } else {
                 let ident_buf = streamheaders[0].get::<Option<gst::Buffer>>();
                 if let Ok(Some(ident_buf)) = ident_buf {
-                    gst_debug!(CAT, obj: element, "Got streamheader buffers");
+                    gst::debug!(CAT, obj: element, "Got streamheader buffers");
                     let inmap = ident_buf.map_readable().unwrap();
 
                     if inmap[0..7] != [0x7f, b'F', b'L', b'A', b'C', 0x01, 0x00] {
-                        gst_debug!(CAT, obj: element, "Unknown streamheader format");
+                        gst::debug!(CAT, obj: element, "Unknown streamheader format");
                     } else if let Ok(tstreaminfo) = claxon_streaminfo(&inmap[13..]) {
                         if let Ok(taudio_info) = gstaudioinfo(&tstreaminfo) {
                             // To speed up negotiation
                             if element.set_output_format(&taudio_info).is_err()
                                 || element.negotiate().is_err()
                             {
-                                gst_debug!(
+                                gst::debug!(
                                     CAT,
                                     obj: element,
                                     "Error to negotiate output from based on in-caps streaminfo"
@@ -174,7 +173,7 @@ impl AudioDecoderImpl for ClaxonDec {
         element: &Self::Type,
         inbuf: Option<&gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(CAT, obj: element, "Handling buffer {:?}", inbuf);
+        gst::debug!(CAT, obj: element, "Handling buffer {:?}", inbuf);
 
         let inbuf = match inbuf {
             None => return Ok(gst::FlowSuccess::Ok),
@@ -182,7 +181,7 @@ impl AudioDecoderImpl for ClaxonDec {
         };
 
         let inmap = inbuf.map_readable().map_err(|_| {
-            gst_error!(CAT, obj: element, "Failed to buffer readable");
+            gst::error!(CAT, obj: element, "Failed to buffer readable");
             gst::FlowError::Error
         })?;
 
@@ -190,16 +189,16 @@ impl AudioDecoderImpl for ClaxonDec {
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
         if inmap.as_slice() == b"fLaC" {
-            gst_debug!(CAT, obj: element, "fLaC buffer received");
+            gst::debug!(CAT, obj: element, "fLaC buffer received");
         } else if inmap[0] & 0x7F == 0x00 {
-            gst_debug!(CAT, obj: element, "Streaminfo header buffer received");
+            gst::debug!(CAT, obj: element, "Streaminfo header buffer received");
             return self.handle_streaminfo_header(element, state, inmap.as_ref());
         } else if inmap[0] == 0b1111_1111 && inmap[1] & 0b1111_1100 == 0b1111_1000 {
-            gst_debug!(CAT, obj: element, "Data buffer received");
+            gst::debug!(CAT, obj: element, "Data buffer received");
             return self.handle_data(element, state, inmap.as_ref());
         } else {
             // info about other headers in flacparse and https://xiph.org/flac/format.html
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Other header buffer received {:?}",
@@ -228,7 +227,7 @@ impl ClaxonDec {
             gst::FlowError::Error
         })?;
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Successfully parsed headers: {:?}",

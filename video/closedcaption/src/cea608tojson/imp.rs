@@ -28,7 +28,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};
 
 use crate::ffi;
 use crate::ttutils::{Cea608Mode, Chunk, Line, Lines, TextStyle};
@@ -403,7 +402,7 @@ fn dump(
     let end = pts.opt_add(duration.into());
 
     if cc_data != 0x8080 {
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "{} -> {}: {}",
@@ -412,7 +411,7 @@ fn dump(
             eia608_to_text(cc_data)
         );
     } else {
-        gst_trace!(
+        gst::trace!(
             CAT,
             obj: element,
             "{} -> {}: padding",
@@ -461,7 +460,7 @@ impl State {
     }
 
     fn drain(&mut self, element: &super::Cea608ToJson, flush: bool) -> Option<TimestampedLines> {
-        gst_log!(CAT, obj: element, "Draining");
+        gst::log!(CAT, obj: element, "Draining");
 
         let pts = if self.settings.unbuffered {
             self.current_pts
@@ -536,7 +535,7 @@ impl State {
 
     fn drain_pending(&mut self, element: &super::Cea608ToJson) -> Option<TimestampedLines> {
         if let Some(mut pending) = self.pending_lines.take() {
-            gst_log!(CAT, obj: element, "Draining pending");
+            gst::log!(CAT, obj: element, "Draining pending");
             pending.duration = self
                 .current_pts
                 .opt_add(self.current_duration)
@@ -560,7 +559,7 @@ impl State {
             return None;
         }
 
-        gst_log!(CAT, obj: element, "preamble: {:?}", preamble);
+        gst::log!(CAT, obj: element, "preamble: {:?}", preamble);
 
         let drain_roll_up = self.cursor.row != preamble.row as u32;
 
@@ -646,7 +645,7 @@ impl State {
     ) -> Option<TimestampedLines> {
         let (cmd, chan) = parse_control(cc_data);
 
-        gst_log!(CAT, obj: element, "Command for CC {}", chan);
+        gst::log!(CAT, obj: element, "Command for CC {}", chan);
 
         if chan != 0 {
             return None;
@@ -679,7 +678,7 @@ impl State {
                 return self.update_mode(element, Cea608Mode::RollUp4);
             }
             ffi::eia608_control_t_eia608_control_carriage_return => {
-                gst_log!(CAT, obj: element, "carriage return");
+                gst::log!(CAT, obj: element, "carriage return");
 
                 if let Some(mode) = self.mode {
                     // https://www.law.cornell.edu/cfr/text/47/79.101 (f)(2)(i) (f)(3)(i)
@@ -755,7 +754,7 @@ impl State {
             | ffi::eia608_control_t_eia608_control_text_restart
             | ffi::eia608_control_t_eia608_control_text_resume_text_display => {}
             _ => {
-                gst_warning!(CAT, obj: element, "Unknown command {}!", cmd);
+                gst::warning!(CAT, obj: element, "Unknown command {}!", cmd);
             }
         }
 
@@ -790,7 +789,7 @@ impl State {
                 row.push(&mut self.cursor, c);
             }
         } else {
-            gst_warning!(CAT, obj: element, "No row to append decoded text to!");
+            gst::warning!(CAT, obj: element, "No row to append decoded text to!");
         }
     }
 
@@ -812,7 +811,7 @@ impl State {
         cc_data: u16,
     ) -> Option<TimestampedLines> {
         if (is_specialna(cc_data) || is_control(cc_data)) && Some(cc_data) == self.last_cc_data {
-            gst_log!(CAT, obj: element, "Skipping duplicate");
+            gst::log!(CAT, obj: element, "Skipping duplicate");
             return None;
         }
 
@@ -821,14 +820,14 @@ impl State {
         self.current_duration = duration;
 
         if is_xds(cc_data) {
-            gst_log!(CAT, obj: element, "XDS, ignoring");
+            gst::log!(CAT, obj: element, "XDS, ignoring");
         } else if is_control(cc_data) {
-            gst_log!(CAT, obj: element, "control!");
+            gst::log!(CAT, obj: element, "control!");
             return self.decode_control(element, cc_data);
         } else if is_basicna(cc_data) || is_specialna(cc_data) || is_westeu(cc_data) {
             if let Some(mode) = self.mode {
                 self.mode?;
-                gst_log!(CAT, obj: element, "text");
+                gst::log!(CAT, obj: element, "text");
                 self.decode_text(element, cc_data);
 
                 if mode.is_rollup() && self.settings.unbuffered {
@@ -836,10 +835,10 @@ impl State {
                 }
             }
         } else if is_preamble(cc_data) {
-            gst_log!(CAT, obj: element, "preamble");
+            gst::log!(CAT, obj: element, "preamble");
             return self.decode_preamble(element, cc_data);
         } else if is_midrowchange(cc_data) {
-            gst_log!(CAT, obj: element, "midrowchange");
+            gst::log!(CAT, obj: element, "midrowchange");
             self.decode_midrowchange(cc_data);
         }
         None
@@ -852,7 +851,7 @@ impl Cea608ToJson {
         element: &super::Cea608ToJson,
         lines: TimestampedLines,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(CAT, obj: element, "outputting: {:?}", lines);
+        gst::debug!(CAT, obj: element, "outputting: {:?}", lines);
 
         let json = serde_json::to_string(&lines.lines).map_err(|err| {
             gst::element_error!(
@@ -871,7 +870,7 @@ impl Cea608ToJson {
             buf_mut.set_duration(lines.duration);
         }
 
-        gst_log!(CAT, obj: element, "Pushing {:?}", buf);
+        gst::log!(CAT, obj: element, "Pushing {:?}", buf);
 
         self.srcpad.push(buf)
     }
@@ -882,30 +881,30 @@ impl Cea608ToJson {
         element: &super::Cea608ToJson,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_trace!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::trace!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.borrow_mut();
 
         let pts = buffer.pts();
         if pts.is_none() {
-            gst_error!(CAT, obj: pad, "Require timestamped buffers");
+            gst::error!(CAT, obj: pad, "Require timestamped buffers");
             return Err(gst::FlowError::Error);
         }
 
         let duration = buffer.duration();
         if duration.is_none() {
-            gst_error!(CAT, obj: pad, "Require buffers with duration");
+            gst::error!(CAT, obj: pad, "Require buffers with duration");
             return Err(gst::FlowError::Error);
         }
 
         let data = buffer.map_readable().map_err(|_| {
-            gst_error!(CAT, obj: pad, "Can't map buffer readable");
+            gst::error!(CAT, obj: pad, "Can't map buffer readable");
 
             gst::FlowError::Error
         })?;
 
         if data.len() < 2 {
-            gst_error!(CAT, obj: pad, "Invalid closed caption packet size");
+            gst::error!(CAT, obj: pad, "Invalid closed caption packet size");
 
             return Ok(gst::FlowSuccess::Ok);
         }
@@ -933,7 +932,7 @@ impl Cea608ToJson {
     fn sink_event(&self, pad: &gst::Pad, element: &super::Cea608ToJson, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Caps(..) => {
                 // We send our own caps downstream
@@ -1107,7 +1106,7 @@ impl ElementImpl for Cea608ToJson {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

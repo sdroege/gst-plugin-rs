@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
@@ -132,7 +131,7 @@ impl ObjectImpl for EbuR128Level {
                         let this = args[0].get::<super::EbuR128Level>().unwrap();
                         let imp = this.imp();
 
-                        gst_info!(CAT, obj: &this, "Resetting measurements",);
+                        gst::info!(CAT, obj: &this, "Resetting measurements",);
                         imp.reset.store(true, atomic::Ordering::SeqCst);
 
                         None
@@ -188,7 +187,7 @@ impl ObjectImpl for EbuR128Level {
         match pspec.name() {
             "mode" => {
                 let mode = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing mode from {:?} to {:?}",
@@ -199,7 +198,7 @@ impl ObjectImpl for EbuR128Level {
             }
             "post-messages" => {
                 let post_messages = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing post-messages from {} to {}",
@@ -211,7 +210,7 @@ impl ObjectImpl for EbuR128Level {
             "interval" => {
                 let interval =
                     gst::ClockTime::from_nseconds(value.get().expect("type checked upstream"));
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing interval from {} to {}",
@@ -309,7 +308,7 @@ impl BaseTransformImpl for EbuR128Level {
             Ok(info) => info,
         };
 
-        gst_debug!(CAT, obj: element, "Configured for caps {}", incaps,);
+        gst::debug!(CAT, obj: element, "Configured for caps {}", incaps,);
 
         let settings = *self.settings.lock().unwrap();
 
@@ -370,7 +369,7 @@ impl BaseTransformImpl for EbuR128Level {
                         gst_audio::AudioChannelPosition::Invalid
                         | gst_audio::AudioChannelPosition::None => ebur128::Channel::Unused,
                         val => {
-                            gst_debug!(
+                            gst::debug!(
                                 CAT,
                                 obj: element,
                                 "Unknown channel position {:?}, ignoring channel",
@@ -414,7 +413,7 @@ impl BaseTransformImpl for EbuR128Level {
         // Drop state
         let _ = self.state.borrow_mut().take();
 
-        gst_info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -504,7 +503,7 @@ impl BaseTransformImpl for EbuR128Level {
                     if state.ebur128.mode().contains(ebur128::Mode::M) {
                         match state.ebur128.loudness_momentary() {
                             Ok(loudness) => s.set("momentary-loudness", &loudness),
-                            Err(err) => gst_error!(
+                            Err(err) => gst::error!(
                                 CAT,
                                 obj: element,
                                 "Failed to get momentary loudness: {}",
@@ -516,7 +515,7 @@ impl BaseTransformImpl for EbuR128Level {
                     if state.ebur128.mode().contains(ebur128::Mode::S) {
                         match state.ebur128.loudness_shortterm() {
                             Ok(loudness) => s.set("shortterm-loudness", &loudness),
-                            Err(err) => gst_error!(
+                            Err(err) => gst::error!(
                                 CAT,
                                 obj: element,
                                 "Failed to get shortterm loudness: {}",
@@ -528,7 +527,7 @@ impl BaseTransformImpl for EbuR128Level {
                     if state.ebur128.mode().contains(ebur128::Mode::I) {
                         match state.ebur128.loudness_global() {
                             Ok(loudness) => s.set("global-loudness", &loudness),
-                            Err(err) => gst_error!(
+                            Err(err) => gst::error!(
                                 CAT,
                                 obj: element,
                                 "Failed to get global loudness: {}",
@@ -538,7 +537,7 @@ impl BaseTransformImpl for EbuR128Level {
 
                         match state.ebur128.relative_threshold() {
                             Ok(threshold) => s.set("relative-threshold", &threshold),
-                            Err(err) => gst_error!(
+                            Err(err) => gst::error!(
                                 CAT,
                                 obj: element,
                                 "Failed to get relative threshold: {}",
@@ -550,7 +549,7 @@ impl BaseTransformImpl for EbuR128Level {
                     if state.ebur128.mode().contains(ebur128::Mode::LRA) {
                         match state.ebur128.loudness_range() {
                             Ok(range) => s.set("loudness-range", &range),
-                            Err(err) => gst_error!(
+                            Err(err) => gst::error!(
                                 CAT,
                                 obj: element,
                                 "Failed to get loudness range: {}",
@@ -567,7 +566,12 @@ impl BaseTransformImpl for EbuR128Level {
                         match peaks {
                             Ok(peaks) => s.set("sample-peak", gst::Array::from(peaks)),
                             Err(err) => {
-                                gst_error!(CAT, obj: element, "Failed to get sample peaks: {}", err)
+                                gst::error!(
+                                    CAT,
+                                    obj: element,
+                                    "Failed to get sample peaks: {}",
+                                    err
+                                )
                             }
                         }
                     }
@@ -580,12 +584,12 @@ impl BaseTransformImpl for EbuR128Level {
                         match peaks {
                             Ok(peaks) => s.set("true-peak", gst::Array::from(peaks)),
                             Err(err) => {
-                                gst_error!(CAT, obj: element, "Failed to get true peaks: {}", err)
+                                gst::error!(CAT, obj: element, "Failed to get true peaks: {}", err)
                             }
                         }
                     }
 
-                    gst_debug!(CAT, obj: element, "Posting message {}", s);
+                    gst::debug!(CAT, obj: element, "Posting message {}", s);
 
                     let msg = gst::message::Element::builder(s).src(element).build();
 
@@ -750,12 +754,12 @@ fn interleaved_channel_data_into_slice<'a, T: FromByteSlice>(
 ) -> Result<&'a [T], gst::FlowError> {
     buf.plane_data(0)
         .map_err(|err| {
-            gst_error!(CAT, obj: element, "Failed to get audio data: {}", err);
+            gst::error!(CAT, obj: element, "Failed to get audio data: {}", err);
             gst::FlowError::Error
         })?
         .as_slice_of::<T>()
         .map_err(|err| {
-            gst_error!(CAT, obj: element, "Failed to handle audio data: {}", err);
+            gst::error!(CAT, obj: element, "Failed to handle audio data: {}", err);
             gst::FlowError::Error
         })
 }
@@ -769,12 +773,12 @@ fn non_interleaved_channel_data_into_slices<'a, T: FromByteSlice>(
         .map(|c| {
             buf.plane_data(c)
                 .map_err(|err| {
-                    gst_error!(CAT, obj: element, "Failed to get audio data: {}", err);
+                    gst::error!(CAT, obj: element, "Failed to get audio data: {}", err);
                     gst::FlowError::Error
                 })?
                 .as_slice_of::<T>()
                 .map_err(|err| {
-                    gst_error!(CAT, obj: element, "Failed to handle audio data: {}", err);
+                    gst::error!(CAT, obj: element, "Failed to handle audio data: {}", err);
                     gst::FlowError::Error
                 })
         })

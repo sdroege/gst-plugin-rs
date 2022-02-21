@@ -9,10 +9,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{
-    element_error, gst_debug, gst_error, gst_fixme, gst_info, gst_log, gst_trace, gst_warning,
-    loggable_error,
-};
+use gst::{element_error, loggable_error};
 use gst_video::ValidVideoTimeCode;
 
 use std::cmp;
@@ -191,7 +188,7 @@ impl State {
                             gst::FlowError::Error
                         })?;
 
-                gst_warning!(
+                gst::warning!(
                     CAT,
                     obj: element,
                     "Invalid timecode {:?}, using previous {:?}",
@@ -218,7 +215,7 @@ impl State {
         let start_position = self.start_position.expect("checked above");
 
         let nsecs = nsecs.checked_sub(start_position).unwrap_or_else(|| {
-            gst_fixme!(
+            gst::fixme!(
                 CAT,
                 obj: element,
                 "New position {} < start position {}",
@@ -234,7 +231,7 @@ impl State {
         {
             self.last_position = Some(nsecs);
         } else {
-            gst_fixme!(
+            gst::fixme!(
                 CAT,
                 obj: element,
                 "New position {} < last position {}",
@@ -310,7 +307,7 @@ impl State {
                 };
 
                 events.push(gst::event::Caps::new(&caps));
-                gst_info!(CAT, obj: element, "Caps changed to {:?}", &caps);
+                gst::info!(CAT, obj: element, "Caps changed to {:?}", &caps);
             }
         }
 
@@ -387,7 +384,7 @@ impl MccParse {
                 Ok(Some(MccLine::Caption(tc, Some(data)))) => {
                     assert!(!state.seeking);
 
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Got caption buffer with timecode {:?} and size {}",
@@ -406,7 +403,7 @@ impl MccParse {
                     }
 
                     if data.len() < 3 {
-                        gst_debug!(
+                        gst::debug!(
                             CAT,
                             obj: element,
                             "Too small caption packet: {}",
@@ -419,14 +416,14 @@ impl MccParse {
                         (0x61, 0x01) => Format::Cea708Cdp,
                         (0x61, 0x02) => Format::Cea608,
                         (did, sdid) => {
-                            gst_debug!(CAT, obj: element, "Unknown DID {:x} SDID {:x}", did, sdid);
+                            gst::debug!(CAT, obj: element, "Unknown DID {:x} SDID {:x}", did, sdid);
                             continue;
                         }
                     };
 
                     let len = data[2];
                     if data.len() < 3 + len as usize {
-                        gst_debug!(
+                        gst::debug!(
                             CAT,
                             obj: element,
                             "Too small caption packet: {} < {}",
@@ -454,7 +451,7 @@ impl MccParse {
                     state = self.handle_skipped_line(element, tc, state)?;
                 }
                 Ok(Some(MccLine::TimeCodeRate(rate, df))) => {
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Got timecode rate {} (drop frame {})",
@@ -468,7 +465,7 @@ impl MccParse {
                     }
                 }
                 Ok(Some(line)) => {
-                    gst_debug!(CAT, obj: element, "Got line '{:?}'", line);
+                    gst::debug!(CAT, obj: element, "Got line '{:?}'", line);
                 }
                 Err((line, err)) => {
                     element_error!(
@@ -562,13 +559,13 @@ impl MccParse {
         drop(state);
 
         for event in events {
-            gst_debug!(CAT, obj: element, "Pushing event {:?}", event);
+            gst::debug!(CAT, obj: element, "Pushing event {:?}", event);
             self.srcpad.push_event(event);
         }
 
         self.srcpad.push(buffer).map_err(|err| {
             if err != gst::FlowError::Flushing {
-                gst_error!(CAT, obj: element, "Pushing buffer returned {:?}", err);
+                gst::error!(CAT, obj: element, "Pushing buffer returned {:?}", err);
             }
             err
         })?;
@@ -592,18 +589,18 @@ impl MccParse {
             state.pull = None;
 
             if !pad.peer_query(&mut query) {
-                gst_debug!(CAT, obj: pad, "Scheduling query failed on peer");
+                gst::debug!(CAT, obj: pad, "Scheduling query failed on peer");
                 gst::PadMode::Push
             } else if query
                 .has_scheduling_mode_with_flags(gst::PadMode::Pull, gst::SchedulingFlags::SEEKABLE)
             {
-                gst_debug!(CAT, obj: pad, "Activating in Pull mode");
+                gst::debug!(CAT, obj: pad, "Activating in Pull mode");
 
                 state.pull = Some(PullState::new(element, &self.srcpad));
 
                 gst::PadMode::Pull
             } else {
-                gst_debug!(CAT, obj: pad, "Activating in Push mode");
+                gst::debug!(CAT, obj: pad, "Activating in Push mode");
                 gst::PadMode::Push
             }
         };
@@ -657,7 +654,7 @@ impl MccParse {
         &self,
         element: &super::MccParse,
     ) -> Result<Option<ValidVideoTimeCode>, gst::LoggableError> {
-        gst_debug!(CAT, obj: element, "Scanning duration");
+        gst::debug!(CAT, obj: element, "Scanning duration");
 
         /* First let's query the bytes duration upstream */
         let mut q = gst::query::Duration::new(gst::Format::Bytes);
@@ -724,7 +721,7 @@ impl MccParse {
             }
 
             if last_tc.is_some() || offset == 0 {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Duration scan done, last_tc: {:?}",
@@ -757,7 +754,7 @@ impl MccParse {
                 drop(state);
 
                 for event in events {
-                    gst_debug!(CAT, obj: element, "Pushing event {:?}", event);
+                    gst::debug!(CAT, obj: element, "Pushing event {:?}", event);
                     self.srcpad.push_event(event);
                 }
             }
@@ -790,13 +787,13 @@ impl MccParse {
             Ok(buffer) => Some(buffer),
             Err(gst::FlowError::Eos) => None,
             Err(gst::FlowError::Flushing) => {
-                gst_debug!(CAT, obj: &self.sinkpad, "Pausing after pulling buffer, reason: flushing");
+                gst::debug!(CAT, obj: &self.sinkpad, "Pausing after pulling buffer, reason: flushing");
 
                 let _ = self.sinkpad.pause_task();
                 return;
             }
             Err(flow) => {
-                gst_error!(CAT, obj: &self.sinkpad, "Failed to pull, reason: {:?}", flow);
+                gst::error!(CAT, obj: &self.sinkpad, "Failed to pull, reason: {:?}", flow);
 
                 element_error!(
                     element,
@@ -841,17 +838,17 @@ impl MccParse {
             Err(flow) => {
                 match flow {
                     gst::FlowError::Flushing => {
-                        gst_debug!(CAT, obj: element, "Pausing after flow {:?}", flow);
+                        gst::debug!(CAT, obj: element, "Pausing after flow {:?}", flow);
                     }
                     gst::FlowError::Eos => {
                         self.push_eos(element);
 
-                        gst_debug!(CAT, obj: element, "Pausing after flow {:?}", flow);
+                        gst::debug!(CAT, obj: element, "Pausing after flow {:?}", flow);
                     }
                     _ => {
                         self.push_eos(element);
 
-                        gst_error!(CAT, obj: element, "Pausing after flow {:?}", flow);
+                        gst::error!(CAT, obj: element, "Pausing after flow {:?}", flow);
 
                         element_error!(
                             element,
@@ -872,7 +869,7 @@ impl MccParse {
         element: &super::MccParse,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         self.handle_buffer(element, Some(buffer), false)
     }
@@ -900,17 +897,17 @@ impl MccParse {
     fn sink_event(&self, pad: &gst::Pad, element: &super::MccParse, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Caps(_) => {
                 // We send a proper caps event from the chain function later
-                gst_log!(CAT, obj: pad, "Dropping caps event");
+                gst::log!(CAT, obj: pad, "Dropping caps event");
                 true
             }
             EventView::Segment(_) => {
                 // We send a gst::Format::Time segment event later when needed
-                gst_log!(CAT, obj: pad, "Dropping segment event");
+                gst::log!(CAT, obj: pad, "Dropping segment event");
                 true
             }
             EventView::FlushStop(_) => {
@@ -921,9 +918,9 @@ impl MccParse {
                 pad.event_default(Some(element), event)
             }
             EventView::Eos(_) => {
-                gst_log!(CAT, obj: pad, "Draining");
+                gst::log!(CAT, obj: pad, "Draining");
                 if let Err(err) = self.handle_buffer(element, None, false) {
-                    gst_error!(CAT, obj: pad, "Failed to drain parser: {:?}", err);
+                    gst::error!(CAT, obj: pad, "Failed to drain parser: {:?}", err);
                 }
                 pad.event_default(Some(element), event)
             }
@@ -932,7 +929,7 @@ impl MccParse {
                     && !self.srcpad.has_current_caps()
                     && event.type_() > gst::EventType::Caps
                 {
-                    gst_log!(CAT, obj: pad, "Deferring sticky event until we have caps");
+                    gst::log!(CAT, obj: pad, "Deferring sticky event until we have caps");
                     let mut state = self.state.lock().unwrap();
                     state.pending_events.push(event);
                     true
@@ -945,7 +942,7 @@ impl MccParse {
 
     fn perform_seek(&self, event: &gst::event::Seek, element: &super::MccParse) -> bool {
         if self.state.lock().unwrap().pull.is_none() {
-            gst_error!(CAT, obj: element, "seeking is only supported in pull mode");
+            gst::error!(CAT, obj: element, "seeking is only supported in pull mode");
             return false;
         }
 
@@ -954,7 +951,7 @@ impl MccParse {
         let mut start: Option<gst::ClockTime> = match start.try_into() {
             Ok(start) => start,
             Err(_) => {
-                gst_error!(CAT, obj: element, "seek has invalid format");
+                gst::error!(CAT, obj: element, "seek has invalid format");
                 return false;
             }
         };
@@ -962,18 +959,18 @@ impl MccParse {
         let mut stop: Option<gst::ClockTime> = match stop.try_into() {
             Ok(stop) => stop,
             Err(_) => {
-                gst_error!(CAT, obj: element, "seek has invalid format");
+                gst::error!(CAT, obj: element, "seek has invalid format");
                 return false;
             }
         };
 
         if !flags.contains(gst::SeekFlags::FLUSH) {
-            gst_error!(CAT, obj: element, "only flushing seeks are supported");
+            gst::error!(CAT, obj: element, "only flushing seeks are supported");
             return false;
         }
 
         if start_type == gst::SeekType::End || stop_type == gst::SeekType::End {
-            gst_error!(CAT, obj: element, "Relative seeks are not supported");
+            gst::error!(CAT, obj: element, "Relative seeks are not supported");
             return false;
         }
 
@@ -983,14 +980,14 @@ impl MccParse {
             .seqnum(seek_seqnum)
             .build();
 
-        gst_debug!(CAT, obj: element, "Sending event {:?} upstream", event);
+        gst::debug!(CAT, obj: element, "Sending event {:?} upstream", event);
         self.sinkpad.push_event(event);
 
         let event = gst::event::FlushStart::builder()
             .seqnum(seek_seqnum)
             .build();
 
-        gst_debug!(CAT, obj: element, "Pushing event {:?}", event);
+        gst::debug!(CAT, obj: element, "Pushing event {:?}", event);
         self.srcpad.push_event(event);
 
         let _ = self.sinkpad.pause_task();
@@ -1018,7 +1015,7 @@ impl MccParse {
         /* Drop our state while we push a serialized event upstream */
         drop(state);
 
-        gst_debug!(CAT, obj: element, "Sending event {:?} upstream", event);
+        gst::debug!(CAT, obj: element, "Sending event {:?} upstream", event);
         self.sinkpad.push_event(event);
 
         state = self.state.lock().unwrap();
@@ -1039,7 +1036,7 @@ impl MccParse {
     fn src_event(&self, pad: &gst::Pad, element: &super::MccParse, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(e) => self.perform_seek(e, element),
             _ => pad.event_default(Some(element), event),
@@ -1054,7 +1051,7 @@ impl MccParse {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -1252,7 +1249,7 @@ impl ElementImpl for MccParse {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {

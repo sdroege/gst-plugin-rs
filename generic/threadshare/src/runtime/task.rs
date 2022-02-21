@@ -26,8 +26,6 @@ use futures::future::{self, abortable, AbortHandle, Aborted, BoxFuture, RemoteHa
 use futures::prelude::*;
 use futures::stream::StreamExt;
 
-use gst::{gst_debug, gst_error, gst_fixme, gst_log, gst_trace, gst_warning};
-
 use std::fmt;
 use std::ops::Deref;
 use std::stringify;
@@ -166,18 +164,18 @@ pub trait TaskImpl: Send + 'static {
         async move {
             match err {
                 gst::FlowError::Flushing => {
-                    gst_debug!(
+                    gst::debug!(
                         RUNTIME_CAT,
                         "TaskImpl iterate returned Flushing. Posting FlushStart"
                     );
                     Trigger::FlushStart
                 }
                 gst::FlowError::Eos => {
-                    gst_debug!(RUNTIME_CAT, "TaskImpl iterate returned Eos. Posting Stop");
+                    gst::debug!(RUNTIME_CAT, "TaskImpl iterate returned Eos. Posting Stop");
                     Trigger::Stop
                 }
                 other => {
-                    gst_error!(
+                    gst::error!(
                         RUNTIME_CAT,
                         "TaskImpl iterate returned {:?}. Posting Error",
                         other
@@ -198,7 +196,7 @@ pub trait TaskImpl: Send + 'static {
     ///
     /// Otherwise, handle the error and return the recovering `Trigger`.
     ///
-    /// Default is to `gst_error` log and return `Trigger::Error`.
+    /// Default is to `gst::error` log and return `Trigger::Error`.
     fn handle_action_error(
         &mut self,
         trigger: Trigger,
@@ -206,7 +204,7 @@ pub trait TaskImpl: Send + 'static {
         err: gst::ErrorMessage,
     ) -> BoxFuture<'_, Trigger> {
         async move {
-            gst_error!(
+            gst::error!(
                 RUNTIME_CAT,
                 "TaskImpl transition action error during {:?} from {:?}: {:?}. Posting Trigger::Error",
                 trigger,
@@ -338,7 +336,7 @@ impl TaskInner {
 
         let (triggering_evt, ack_rx) = TriggeringEvent::new(trigger);
 
-        gst_log!(RUNTIME_CAT, "Pushing {:?}", triggering_evt);
+        gst::log!(RUNTIME_CAT, "Pushing {:?}", triggering_evt);
 
         triggering_evt_tx.try_send(triggering_evt).map_err(|err| {
             let resource_err = if err.is_full() {
@@ -347,7 +345,7 @@ impl TaskInner {
                 gst::ResourceError::Close
             };
 
-            gst_warning!(RUNTIME_CAT, "Unable to send {:?}: {:?}", trigger, err);
+            gst::warning!(RUNTIME_CAT, "Unable to send {:?}: {:?}", trigger, err);
             TransitionError {
                 trigger,
                 state: self.state,
@@ -365,7 +363,7 @@ impl Drop for TaskInner {
             // Don't panic here: in case another panic occurs, we would get
             // "panicked while panicking" which would prevents developers
             // from getting the initial panic message.
-            gst_fixme!(RUNTIME_CAT, "Missing call to `Task::unprepare`");
+            gst::fixme!(RUNTIME_CAT, "Missing call to `Task::unprepare`");
         }
     }
 }
@@ -417,14 +415,14 @@ impl Task {
         match origin {
             TaskState::Unprepared => (),
             TaskState::Prepared | TaskState::Preparing => {
-                gst_debug!(RUNTIME_CAT, "Task already {:?}", origin);
+                gst::debug!(RUNTIME_CAT, "Task already {:?}", origin);
                 return Ok(TransitionStatus::Skipped {
                     trigger: Trigger::Prepare,
                     state: origin,
                 });
             }
             state => {
-                gst_warning!(RUNTIME_CAT, "Attempt to prepare Task in state {:?}", state);
+                gst::warning!(RUNTIME_CAT, "Attempt to prepare Task in state {:?}", state);
                 return Err(TransitionError {
                     trigger: Trigger::Prepare,
                     state: inner.state,
@@ -440,7 +438,7 @@ impl Task {
 
         inner.state = TaskState::Preparing;
 
-        gst_log!(RUNTIME_CAT, "Spawning task state machine");
+        gst::log!(RUNTIME_CAT, "Spawning task state machine");
 
         // FIXME allow configuration of the channel buffer size,
         // this determines the contention on the Task.
@@ -463,17 +461,17 @@ impl Task {
         let origin = inner.state;
         match origin {
             TaskState::Stopped | TaskState::Error | TaskState::Prepared | TaskState::Preparing => {
-                gst_debug!(RUNTIME_CAT, "Unpreparing task");
+                gst::debug!(RUNTIME_CAT, "Unpreparing task");
             }
             TaskState::Unprepared | TaskState::Unpreparing => {
-                gst_debug!(RUNTIME_CAT, "Task already {:?}", origin);
+                gst::debug!(RUNTIME_CAT, "Task already {:?}", origin);
                 return Ok(TransitionStatus::Skipped {
                     trigger: Trigger::Unprepare,
                     state: origin,
                 });
             }
             state => {
-                gst_warning!(
+                gst::warning!(
                     RUNTIME_CAT,
                     "Attempt to unprepare Task in state {:?}",
                     state
@@ -509,7 +507,7 @@ impl Task {
 
         match state_machine_handle {
             Some(state_machine_handle) => {
-                gst_log!(
+                gst::log!(
                     RUNTIME_CAT,
                     "Synchronously waiting for the state machine {:?}",
                     state_machine_handle,
@@ -520,7 +518,7 @@ impl Task {
                     drop(triggering_evt_tx);
                     drop(context);
 
-                    gst_debug!(RUNTIME_CAT, "Task unprepared");
+                    gst::debug!(RUNTIME_CAT, "Task unprepared");
                 });
 
                 if join_fut.is_none() {
@@ -635,7 +633,7 @@ impl Task {
                 if cur_task_id == spawned_task_id && &cur_context == inner.context.as_ref().unwrap()
                 {
                     // Don't block as this would deadlock
-                    gst_log!(
+                    gst::log!(
                         RUNTIME_CAT,
                         "Requested {:?} from loop or transition action, not waiting",
                         trigger,
@@ -648,13 +646,13 @@ impl Task {
         drop(inner);
 
         block_on_or_add_sub_task(async move {
-            gst_trace!(RUNTIME_CAT, "Awaiting ack for {:?}", trigger);
+            gst::trace!(RUNTIME_CAT, "Awaiting ack for {:?}", trigger);
 
             let res = ack_rx.await.unwrap();
             if res.is_ok() {
-                gst_log!(RUNTIME_CAT, "Received ack {:?} for {:?}", res, trigger);
+                gst::log!(RUNTIME_CAT, "Received ack {:?} for {:?}", res, trigger);
             } else {
-                gst_error!(RUNTIME_CAT, "Received ack {:?} for {:?}", res, trigger);
+                gst::error!(RUNTIME_CAT, "Received ack {:?} for {:?}", res, trigger);
             }
 
             res
@@ -702,10 +700,10 @@ macro_rules! exec_action {
 
             if res.is_ok() {
                 while Context::current_has_sub_tasks() {
-                    gst_trace!(RUNTIME_CAT, "Draining subtasks for {}", stringify!($action));
+                    gst::trace!(RUNTIME_CAT, "Draining subtasks for {}", stringify!($action));
                     res = Context::drain_sub_tasks().await.map_err(|err| {
                         let msg = format!("{} subtask returned {:?}", stringify!($action), err);
-                        gst_log!(RUNTIME_CAT, "{}", &msg);
+                        gst::log!(RUNTIME_CAT, "{}", &msg);
                         gst::error_msg!(gst::CoreError::StateChange, ["{}", &msg])
                     });
 
@@ -744,7 +742,7 @@ macro_rules! exec_action {
             Ok(()) => Ok($triggering_evt),
             Err(next_trigger) => {
                 // Convert triggering event according to the error handler's decision
-                gst_trace!(
+                gst::trace!(
                     RUNTIME_CAT,
                     "TaskImpl transition action error: converting {:?} to {:?}",
                     $triggering_evt.trigger,
@@ -775,7 +773,7 @@ impl StateMachine {
     }
 
     async fn run(mut self, task_inner: Arc<Mutex<TaskInner>>, context: Context) {
-        gst_trace!(RUNTIME_CAT, "Preparing task");
+        gst::trace!(RUNTIME_CAT, "Preparing task");
 
         {
             let (mut triggering_evt, _) = TriggeringEvent::new(Trigger::Prepare);
@@ -792,7 +790,7 @@ impl StateMachine {
                     .lock()
                     .unwrap()
                     .switch_to_state(TaskState::Prepared, triggering_evt);
-                gst_trace!(RUNTIME_CAT, "Task Prepared");
+                gst::trace!(RUNTIME_CAT, "Task Prepared");
             }
         }
 
@@ -806,13 +804,13 @@ impl StateMachine {
                     .expect("triggering_evt_rx dropped"),
             };
 
-            gst_trace!(RUNTIME_CAT, "State machine popped {:?}", triggering_evt);
+            gst::trace!(RUNTIME_CAT, "State machine popped {:?}", triggering_evt);
 
             match triggering_evt.trigger {
                 Trigger::Error => {
                     let mut task_inner = task_inner.lock().unwrap();
                     task_inner.switch_to_err(triggering_evt);
-                    gst_trace!(RUNTIME_CAT, "Switched to Error");
+                    gst::trace!(RUNTIME_CAT, "Switched to Error");
                 }
                 Trigger::Start => {
                     let origin = {
@@ -822,7 +820,10 @@ impl StateMachine {
                             TaskState::Stopped | TaskState::Paused | TaskState::Prepared => (),
                             TaskState::PausedFlushing => {
                                 task_inner.switch_to_state(TaskState::Flushing, triggering_evt);
-                                gst_trace!(RUNTIME_CAT, "Switched from PausedFlushing to Flushing");
+                                gst::trace!(
+                                    RUNTIME_CAT,
+                                    "Switched from PausedFlushing to Flushing"
+                                );
                                 continue;
                             }
                             TaskState::Error => {
@@ -831,7 +832,7 @@ impl StateMachine {
                             }
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
-                                gst_trace!(RUNTIME_CAT, "Skipped Start in state {:?}", state);
+                                gst::trace!(RUNTIME_CAT, "Skipped Start in state {:?}", state);
                                 continue;
                             }
                         }
@@ -858,7 +859,7 @@ impl StateMachine {
                             }
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
-                                gst_trace!(RUNTIME_CAT, "Skipped Pause in state {:?}", state);
+                                gst::trace!(RUNTIME_CAT, "Skipped Pause in state {:?}", state);
                                 continue;
                             }
                         }
@@ -871,7 +872,7 @@ impl StateMachine {
                             .lock()
                             .unwrap()
                             .switch_to_state(target, triggering_evt);
-                        gst_trace!(RUNTIME_CAT, "Task loop {:?}", target);
+                        gst::trace!(RUNTIME_CAT, "Task loop {:?}", target);
                     }
                 }
                 Trigger::Stop => {
@@ -889,7 +890,7 @@ impl StateMachine {
                             }
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
-                                gst_trace!(RUNTIME_CAT, "Skipped Stop in state {:?}", state);
+                                gst::trace!(RUNTIME_CAT, "Skipped Stop in state {:?}", state);
                                 continue;
                             }
                         }
@@ -902,7 +903,7 @@ impl StateMachine {
                             .lock()
                             .unwrap()
                             .switch_to_state(TaskState::Stopped, triggering_evt);
-                        gst_trace!(RUNTIME_CAT, "Task loop Stopped");
+                        gst::trace!(RUNTIME_CAT, "Task loop Stopped");
                     }
                 }
                 Trigger::FlushStart => {
@@ -918,7 +919,7 @@ impl StateMachine {
                             }
                             state => {
                                 task_inner.skip_triggering_evt(triggering_evt);
-                                gst_trace!(RUNTIME_CAT, "Skipped FlushStart in state {:?}", state);
+                                gst::trace!(RUNTIME_CAT, "Skipped FlushStart in state {:?}", state);
                                 continue;
                             }
                         }
@@ -937,7 +938,7 @@ impl StateMachine {
                             .lock()
                             .unwrap()
                             .switch_to_state(target, triggering_evt);
-                        gst_trace!(RUNTIME_CAT, "Task {:?}", target);
+                        gst::trace!(RUNTIME_CAT, "Task {:?}", target);
                     }
                 }
                 Trigger::FlushStop => {
@@ -954,7 +955,7 @@ impl StateMachine {
                                 .lock()
                                 .unwrap()
                                 .skip_triggering_evt(triggering_evt);
-                            gst_trace!(RUNTIME_CAT, "Skipped FlushStop in state {:?}", state);
+                            gst::trace!(RUNTIME_CAT, "Skipped FlushStop in state {:?}", state);
                             continue;
                         }
                     };
@@ -973,7 +974,7 @@ impl StateMachine {
                                 .lock()
                                 .unwrap()
                                 .switch_to_state(TaskState::Paused, triggering_evt);
-                            gst_trace!(RUNTIME_CAT, "Switched from PausedFlushing to Paused");
+                            gst::trace!(RUNTIME_CAT, "Switched from PausedFlushing to Paused");
                         } else {
                             self = Self::spawn_loop(
                                 self,
@@ -995,9 +996,9 @@ impl StateMachine {
                             self.task_impl.unprepare().await;
 
                             while Context::current_has_sub_tasks() {
-                                gst_trace!(RUNTIME_CAT, "Draining subtasks for unprepare");
+                                gst::trace!(RUNTIME_CAT, "Draining subtasks for unprepare");
                                 let res = Context::drain_sub_tasks().await.map_err(|err| {
-                                    gst_log!(RUNTIME_CAT, "unprepare subtask returned {:?}", err);
+                                    gst::log!(RUNTIME_CAT, "unprepare subtask returned {:?}", err);
                                     err
                                 });
                                 if res.is_err() {
@@ -1019,7 +1020,7 @@ impl StateMachine {
             }
         }
 
-        gst_trace!(RUNTIME_CAT, "Task state machine terminated");
+        gst::trace!(RUNTIME_CAT, "Task state machine terminated");
     }
 
     async fn spawn_loop(
@@ -1034,10 +1035,10 @@ impl StateMachine {
             let mut res = self.task_impl.start().await;
             if res.is_ok() {
                 while Context::current_has_sub_tasks() {
-                    gst_trace!(RUNTIME_CAT, "Draining subtasks for start");
+                    gst::trace!(RUNTIME_CAT, "Draining subtasks for start");
                     res = Context::drain_sub_tasks().await.map_err(|err| {
                         let msg = format!("start subtask returned {:?}", err);
-                        gst_log!(RUNTIME_CAT, "{}", &msg);
+                        gst::log!(RUNTIME_CAT, "{}", &msg);
                         gst::error_msg!(gst::CoreError::StateChange, ["{}", &msg])
                     });
 
@@ -1060,7 +1061,7 @@ impl StateMachine {
                         abortable_task_loop
                     };
 
-                    gst_trace!(RUNTIME_CAT, "Starting task loop");
+                    gst::trace!(RUNTIME_CAT, "Starting task loop");
                     match abortable_task_loop.await {
                         Ok(Ok(())) => (),
                         Ok(Err(err)) => {
@@ -1068,7 +1069,7 @@ impl StateMachine {
                             let (triggering_evt, _) = TriggeringEvent::new(next_trigger);
                             self.pending_triggering_evt = Some(triggering_evt);
                         }
-                        Err(Aborted) => gst_trace!(RUNTIME_CAT, "Task loop aborted"),
+                        Err(Aborted) => gst::trace!(RUNTIME_CAT, "Task loop aborted"),
                     }
                 }
                 Err(err) => {
@@ -1078,7 +1079,7 @@ impl StateMachine {
                         .handle_action_error(triggering_evt.trigger, origin, err)
                         .await;
 
-                    gst_log!(
+                    gst::log!(
                         RUNTIME_CAT,
                         "TaskImpl transition action error: converting Start to {:?}",
                         next_trigger,
@@ -1106,11 +1107,11 @@ impl StateMachine {
     }
 
     async fn run_loop(&mut self, task_inner: Arc<Mutex<TaskInner>>) -> Result<(), gst::FlowError> {
-        gst_trace!(RUNTIME_CAT, "Task loop started");
+        gst::trace!(RUNTIME_CAT, "Task loop started");
 
         loop {
             while let Ok(Some(triggering_evt)) = self.triggering_evt_rx.try_next() {
-                gst_trace!(RUNTIME_CAT, "Task loop popped {:?}", triggering_evt);
+                gst::trace!(RUNTIME_CAT, "Task loop popped {:?}", triggering_evt);
 
                 match triggering_evt.trigger {
                     Trigger::Start => {
@@ -1118,10 +1119,10 @@ impl StateMachine {
                             .lock()
                             .unwrap()
                             .skip_triggering_evt(triggering_evt);
-                        gst_trace!(RUNTIME_CAT, "Skipped Start in state Started");
+                        gst::trace!(RUNTIME_CAT, "Skipped Start in state Started");
                     }
                     _ => {
-                        gst_trace!(
+                        gst::trace!(
                             RUNTIME_CAT,
                             "Task loop handing {:?} to state machine",
                             triggering_evt,
@@ -1134,14 +1135,14 @@ impl StateMachine {
 
             // Run the iteration function
             self.task_impl.iterate().await.map_err(|err| {
-                gst_log!(RUNTIME_CAT, "Task loop iterate impl returned {:?}", err);
+                gst::log!(RUNTIME_CAT, "Task loop iterate impl returned {:?}", err);
                 err
             })?;
 
             while Context::current_has_sub_tasks() {
-                gst_trace!(RUNTIME_CAT, "Draining subtasks for {}", stringify!($action));
+                gst::trace!(RUNTIME_CAT, "Draining subtasks for {}", stringify!($action));
                 Context::drain_sub_tasks().await.map_err(|err| {
-                    gst_log!(RUNTIME_CAT, "Task loop iterate subtask returned {:?}", err);
+                    gst::log!(RUNTIME_CAT, "Task loop iterate subtask returned {:?}", err);
                     err
                 })?;
             }
@@ -1177,7 +1178,7 @@ mod tests {
         impl TaskImpl for TaskTest {
             fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "task_iterate: prepared");
+                    gst::debug!(RUNTIME_CAT, "task_iterate: prepared");
                     self.prepared_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -1186,7 +1187,7 @@ mod tests {
 
             fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "task_iterate: started");
+                    gst::debug!(RUNTIME_CAT, "task_iterate: started");
                     self.started_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -1195,19 +1196,19 @@ mod tests {
 
             fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "task_iterate: entering iterate");
+                    gst::debug!(RUNTIME_CAT, "task_iterate: entering iterate");
                     self.iterate_sender.send(()).await.unwrap();
 
-                    gst_debug!(
+                    gst::debug!(
                         RUNTIME_CAT,
                         "task_iterate: awaiting complete_iterate_receiver"
                     );
 
                     let res = self.complete_iterate_receiver.next().await.unwrap();
                     if res.is_ok() {
-                        gst_debug!(RUNTIME_CAT, "task_iterate: received Ok => keep looping");
+                        gst::debug!(RUNTIME_CAT, "task_iterate: received Ok => keep looping");
                     } else {
-                        gst_debug!(
+                        gst::debug!(
                             RUNTIME_CAT,
                             "task_iterate: received {:?} => cancelling loop",
                             res
@@ -1221,7 +1222,7 @@ mod tests {
 
             fn pause(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "task_iterate: paused");
+                    gst::debug!(RUNTIME_CAT, "task_iterate: paused");
                     self.paused_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -1230,7 +1231,7 @@ mod tests {
 
             fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "task_iterate: stopped");
+                    gst::debug!(RUNTIME_CAT, "task_iterate: stopped");
                     self.stopped_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -1239,7 +1240,7 @@ mod tests {
 
             fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "task_iterate: stopped");
+                    gst::debug!(RUNTIME_CAT, "task_iterate: stopped");
                     self.flush_start_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -1248,7 +1249,7 @@ mod tests {
 
             fn unprepare(&mut self) -> BoxFuture<'_, ()> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "task_iterate: unprepared");
+                    gst::debug!(RUNTIME_CAT, "task_iterate: unprepared");
                     self.unprepared_sender.send(()).await.unwrap();
                 }
                 .boxed()
@@ -1261,7 +1262,7 @@ mod tests {
 
         assert_eq!(task.state(), TaskState::Unprepared);
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: preparing");
+        gst::debug!(RUNTIME_CAT, "task_iterate: preparing");
 
         let (prepared_sender, mut prepared_receiver) = mpsc::channel(1);
         let (started_sender, mut started_receiver) = mpsc::channel(1);
@@ -1294,7 +1295,7 @@ mod tests {
             }
         );
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: starting (initial)");
+        gst::debug!(RUNTIME_CAT, "task_iterate: starting (initial)");
         assert_eq!(
             task.start().unwrap(),
             TransitionStatus::Complete {
@@ -1315,7 +1316,7 @@ mod tests {
         block_on(iterate_receiver.next()).unwrap();
         block_on(complete_iterate_sender.send(Ok(()))).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: starting (redundant)");
+        gst::debug!(RUNTIME_CAT, "task_iterate: starting (redundant)");
         // start will return immediately
         assert_eq!(
             task.start().unwrap(),
@@ -1326,7 +1327,7 @@ mod tests {
         );
         assert_eq!(task.state(), TaskState::Started);
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: pause (initial)");
+        gst::debug!(RUNTIME_CAT, "task_iterate: pause (initial)");
         assert_eq!(
             task.pause().unwrap(),
             TransitionStatus::NotWaiting {
@@ -1345,10 +1346,10 @@ mod tests {
             }
         }
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: awaiting pause ack");
+        gst::debug!(RUNTIME_CAT, "task_iterate: awaiting pause ack");
         block_on(paused_receiver.next()).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: starting (after pause)");
+        gst::debug!(RUNTIME_CAT, "task_iterate: starting (after pause)");
         assert_eq!(
             task.start().unwrap(),
             TransitionStatus::Complete {
@@ -1361,7 +1362,7 @@ mod tests {
         // Paused -> Started
         let _ = block_on(started_receiver.next());
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: stopping");
+        gst::debug!(RUNTIME_CAT, "task_iterate: stopping");
         assert_eq!(
             task.stop().unwrap(),
             TransitionStatus::Complete {
@@ -1376,7 +1377,7 @@ mod tests {
         // purge remaining iteration received before stop if any
         let _ = iterate_receiver.try_next();
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: starting (after stop)");
+        gst::debug!(RUNTIME_CAT, "task_iterate: starting (after stop)");
         assert_eq!(
             task.start().unwrap(),
             TransitionStatus::Complete {
@@ -1386,11 +1387,11 @@ mod tests {
         );
         let _ = block_on(started_receiver.next());
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: req. iterate to return Eos");
+        gst::debug!(RUNTIME_CAT, "task_iterate: req. iterate to return Eos");
         block_on(iterate_receiver.next()).unwrap();
         block_on(complete_iterate_sender.send(Err(gst::FlowError::Eos))).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: awaiting stop ack");
+        gst::debug!(RUNTIME_CAT, "task_iterate: awaiting stop ack");
         block_on(stopped_receiver.next()).unwrap();
 
         // Wait for state machine to reach Stopped
@@ -1398,7 +1399,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(2));
         }
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: starting (after stop)");
+        gst::debug!(RUNTIME_CAT, "task_iterate: starting (after stop)");
         assert_eq!(
             task.start().unwrap(),
             TransitionStatus::Complete {
@@ -1408,11 +1409,11 @@ mod tests {
         );
         let _ = block_on(started_receiver.next());
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: req. iterate to return Flushing");
+        gst::debug!(RUNTIME_CAT, "task_iterate: req. iterate to return Flushing");
         block_on(iterate_receiver.next()).unwrap();
         block_on(complete_iterate_sender.send(Err(gst::FlowError::Flushing))).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: awaiting flush_start ack");
+        gst::debug!(RUNTIME_CAT, "task_iterate: awaiting flush_start ack");
         block_on(flush_start_receiver.next()).unwrap();
 
         // Wait for state machine to reach Flushing
@@ -1420,7 +1421,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(2));
         }
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: stop flushing");
+        gst::debug!(RUNTIME_CAT, "task_iterate: stop flushing");
         assert_eq!(
             task.flush_stop().unwrap(),
             TransitionStatus::Complete {
@@ -1430,7 +1431,7 @@ mod tests {
         );
         let _ = block_on(started_receiver.next());
 
-        gst_debug!(RUNTIME_CAT, "task_iterate: req. iterate to return Error");
+        gst::debug!(RUNTIME_CAT, "task_iterate: req. iterate to return Error");
         block_on(iterate_receiver.next()).unwrap();
         block_on(complete_iterate_sender.send(Err(gst::FlowError::Error))).unwrap();
 
@@ -1439,7 +1440,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(2));
         }
 
-        gst_debug!(
+        gst::debug!(
             RUNTIME_CAT,
             "task_iterate: attempting to start (after Error)"
         );
@@ -1476,7 +1477,7 @@ mod tests {
         impl TaskImpl for TaskPrepareTest {
             fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "prepare_error: prepare returning an error");
+                    gst::debug!(RUNTIME_CAT, "prepare_error: prepare returning an error");
                     Err(gst::error_msg!(
                         gst::ResourceError::Failed,
                         ["prepare_error: intentional error"]
@@ -1492,7 +1493,7 @@ mod tests {
                 err: gst::ErrorMessage,
             ) -> BoxFuture<'_, Trigger> {
                 async move {
-                    gst_debug!(
+                    gst::debug!(
                         RUNTIME_CAT,
                         "prepare_error: handling prepare error {:?}",
                         err
@@ -1528,7 +1529,7 @@ mod tests {
         )
         .unwrap();
 
-        gst_debug!(
+        gst::debug!(
             RUNTIME_CAT,
             "prepare_error: await action error notification"
         );
@@ -1565,12 +1566,12 @@ mod tests {
         impl TaskImpl for TaskPrepareTest {
             fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(
+                    gst::debug!(
                         RUNTIME_CAT,
                         "prepare_start_ok: preparation awaiting trigger"
                     );
                     self.prepare_receiver.next().await.unwrap();
-                    gst_debug!(RUNTIME_CAT, "prepare_start_ok: preparation complete Ok");
+                    gst::debug!(RUNTIME_CAT, "prepare_start_ok: preparation complete Ok");
                     Ok(())
                 }
                 .boxed()
@@ -1587,7 +1588,7 @@ mod tests {
 
             fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "prepare_start_ok: started");
+                    gst::debug!(RUNTIME_CAT, "prepare_start_ok: started");
                     Ok(())
                 }
                 .boxed()
@@ -1611,7 +1612,7 @@ mod tests {
         let (ready_sender, ready_receiver) = oneshot::channel();
         let start_handle = start_ctx.spawn(async move {
             assert_eq!(task_clone.state(), TaskState::Preparing);
-            gst_debug!(RUNTIME_CAT, "prepare_start_ok: starting");
+            gst::debug!(RUNTIME_CAT, "prepare_start_ok: starting");
             assert_eq!(
                 task_clone.start().unwrap(),
                 TransitionStatus::Async {
@@ -1644,10 +1645,10 @@ mod tests {
             assert_eq!(task_clone.state(), TaskState::Unprepared);
         });
 
-        gst_debug!(RUNTIME_CAT, "prepare_start_ok: awaiting for start_ctx");
+        gst::debug!(RUNTIME_CAT, "prepare_start_ok: awaiting for start_ctx");
         block_on(ready_receiver).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "prepare_start_ok: triggering preparation");
+        gst::debug!(RUNTIME_CAT, "prepare_start_ok: triggering preparation");
         block_on(prepare_sender.send(())).unwrap();
 
         block_on(start_handle).unwrap();
@@ -1667,12 +1668,12 @@ mod tests {
         impl TaskImpl for TaskPrepareTest {
             fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(
+                    gst::debug!(
                         RUNTIME_CAT,
                         "prepare_start_error: preparation awaiting trigger"
                     );
                     self.prepare_receiver.next().await.unwrap();
-                    gst_debug!(RUNTIME_CAT, "prepare_start_error: preparation complete Err");
+                    gst::debug!(RUNTIME_CAT, "prepare_start_error: preparation complete Err");
 
                     Err(gst::error_msg!(
                         gst::ResourceError::Failed,
@@ -1689,7 +1690,7 @@ mod tests {
                 err: gst::ErrorMessage,
             ) -> BoxFuture<'_, Trigger> {
                 async move {
-                    gst_debug!(
+                    gst::debug!(
                         RUNTIME_CAT,
                         "prepare_start_error: handling prepare error {:?}",
                         err
@@ -1734,7 +1735,7 @@ mod tests {
         let (ready_sender, ready_receiver) = oneshot::channel();
         let start_handle = start_ctx.spawn(async move {
             assert_eq!(task_clone.state(), TaskState::Preparing);
-            gst_debug!(RUNTIME_CAT, "prepare_start_error: starting (Err)");
+            gst::debug!(RUNTIME_CAT, "prepare_start_error: starting (Err)");
             task_clone.start().unwrap();
             ready_sender.send(()).unwrap();
             Context::drain_sub_tasks().await.unwrap();
@@ -1749,16 +1750,16 @@ mod tests {
             Context::drain_sub_tasks().await.unwrap();
         });
 
-        gst_debug!(RUNTIME_CAT, "prepare_start_error: awaiting for start_ctx");
+        gst::debug!(RUNTIME_CAT, "prepare_start_error: awaiting for start_ctx");
         block_on(ready_receiver).unwrap();
 
-        gst_debug!(
+        gst::debug!(
             RUNTIME_CAT,
             "prepare_start_error: triggering preparation (failure)"
         );
         block_on(prepare_sender.send(())).unwrap();
 
-        gst_debug!(
+        gst::debug!(
             RUNTIME_CAT,
             "prepare_start_error: await prepare error notification"
         );
@@ -1780,12 +1781,12 @@ mod tests {
         impl TaskImpl for TaskPauseStartTest {
             fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_start: entering iteration");
+                    gst::debug!(RUNTIME_CAT, "pause_start: entering iteration");
                     self.iterate_sender.send(()).await.unwrap();
 
-                    gst_debug!(RUNTIME_CAT, "pause_start: iteration awaiting completion");
+                    gst::debug!(RUNTIME_CAT, "pause_start: iteration awaiting completion");
                     self.complete_receiver.next().await.unwrap();
-                    gst_debug!(RUNTIME_CAT, "pause_start: iteration complete");
+                    gst::debug!(RUNTIME_CAT, "pause_start: iteration complete");
 
                     Ok(())
                 }
@@ -1794,7 +1795,7 @@ mod tests {
 
             fn pause(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_start: paused");
+                    gst::debug!(RUNTIME_CAT, "pause_start: paused");
                     self.paused_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -1819,7 +1820,7 @@ mod tests {
         )
         .unwrap();
 
-        gst_debug!(RUNTIME_CAT, "pause_start: starting");
+        gst::debug!(RUNTIME_CAT, "pause_start: starting");
         assert_eq!(
             task.start().unwrap(),
             TransitionStatus::Complete {
@@ -1829,10 +1830,10 @@ mod tests {
         );
         assert_eq!(task.state(), TaskState::Started);
 
-        gst_debug!(RUNTIME_CAT, "pause_start: awaiting 1st iteration");
+        gst::debug!(RUNTIME_CAT, "pause_start: awaiting 1st iteration");
         block_on(iterate_receiver.next()).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "pause_start: pausing (1)");
+        gst::debug!(RUNTIME_CAT, "pause_start: pausing (1)");
         assert_eq!(
             task.pause().unwrap(),
             TransitionStatus::NotWaiting {
@@ -1841,7 +1842,7 @@ mod tests {
             },
         );
 
-        gst_debug!(RUNTIME_CAT, "pause_start: sending 1st iteration completion");
+        gst::debug!(RUNTIME_CAT, "pause_start: sending 1st iteration completion");
         complete_sender.try_send(()).unwrap();
 
         // Pause transition is asynchronous
@@ -1849,7 +1850,7 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
 
-        gst_debug!(RUNTIME_CAT, "pause_start: awaiting paused");
+        gst::debug!(RUNTIME_CAT, "pause_start: awaiting paused");
         let _ = block_on(paused_receiver.next());
 
         // Loop held on due to Pause
@@ -1864,10 +1865,10 @@ mod tests {
         );
         assert_eq!(task.state(), TaskState::Started);
 
-        gst_debug!(RUNTIME_CAT, "pause_start: awaiting 2d iteration");
+        gst::debug!(RUNTIME_CAT, "pause_start: awaiting 2d iteration");
         block_on(iterate_receiver.next()).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "pause_start: sending 2d iteration completion");
+        gst::debug!(RUNTIME_CAT, "pause_start: sending 2d iteration completion");
         complete_sender.try_send(()).unwrap();
 
         task.stop().unwrap();
@@ -1886,7 +1887,7 @@ mod tests {
         impl TaskImpl for TaskPauseStartTest {
             fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "successive_pause_start: iteration");
+                    gst::debug!(RUNTIME_CAT, "successive_pause_start: iteration");
                     self.iterate_sender.send(()).await.unwrap();
 
                     Ok(())
@@ -1903,22 +1904,22 @@ mod tests {
         task.prepare(TaskPauseStartTest { iterate_sender }, context)
             .unwrap();
 
-        gst_debug!(RUNTIME_CAT, "successive_pause_start: starting");
+        gst::debug!(RUNTIME_CAT, "successive_pause_start: starting");
         task.start().unwrap();
 
-        gst_debug!(RUNTIME_CAT, "successive_pause_start: awaiting iteration 1");
+        gst::debug!(RUNTIME_CAT, "successive_pause_start: awaiting iteration 1");
         block_on(iterate_receiver.next()).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "successive_pause_start: pause and start");
+        gst::debug!(RUNTIME_CAT, "successive_pause_start: pause and start");
         task.pause().unwrap();
         task.start().unwrap();
 
         assert_eq!(task.state(), TaskState::Started);
 
-        gst_debug!(RUNTIME_CAT, "successive_pause_start: awaiting iteration 2");
+        gst::debug!(RUNTIME_CAT, "successive_pause_start: awaiting iteration 2");
         block_on(iterate_receiver.next()).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "successive_pause_start: stopping");
+        gst::debug!(RUNTIME_CAT, "successive_pause_start: stopping");
         task.stop().unwrap();
         task.unprepare().unwrap();
     }
@@ -1939,7 +1940,7 @@ mod tests {
 
             fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "flush_regular_sync: started flushing");
+                    gst::debug!(RUNTIME_CAT, "flush_regular_sync: started flushing");
                     self.flush_start_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -1948,7 +1949,7 @@ mod tests {
 
             fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "flush_regular_sync: stopped flushing");
+                    gst::debug!(RUNTIME_CAT, "flush_regular_sync: stopped flushing");
                     self.flush_stop_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -1971,10 +1972,10 @@ mod tests {
         )
         .unwrap();
 
-        gst_debug!(RUNTIME_CAT, "flush_regular_sync: start");
+        gst::debug!(RUNTIME_CAT, "flush_regular_sync: start");
         task.start().unwrap();
 
-        gst_debug!(RUNTIME_CAT, "flush_regular_sync: starting flush");
+        gst::debug!(RUNTIME_CAT, "flush_regular_sync: starting flush");
         assert_eq!(
             task.flush_start().unwrap(),
             TransitionStatus::Complete {
@@ -1986,7 +1987,7 @@ mod tests {
 
         block_on(flush_start_receiver.next()).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "flush_regular_sync: stopping flush");
+        gst::debug!(RUNTIME_CAT, "flush_regular_sync: stopping flush");
         assert_eq!(
             task.flush_stop().unwrap(),
             TransitionStatus::Complete {
@@ -2020,7 +2021,7 @@ mod tests {
 
             fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(
+                    gst::debug!(
                         RUNTIME_CAT,
                         "flush_regular_different_context: started flushing"
                     );
@@ -2032,7 +2033,7 @@ mod tests {
 
             fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(
+                    gst::debug!(
                         RUNTIME_CAT,
                         "flush_regular_different_context: stopped flushing"
                     );
@@ -2059,7 +2060,7 @@ mod tests {
         )
         .unwrap();
 
-        gst_debug!(RUNTIME_CAT, "flush_regular_different_context: start");
+        gst::debug!(RUNTIME_CAT, "flush_regular_different_context: start");
         task.start().unwrap();
 
         let oob_context = Context::acquire(
@@ -2116,7 +2117,7 @@ mod tests {
 
             fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "flush_regular_same_context: started flushing");
+                    gst::debug!(RUNTIME_CAT, "flush_regular_same_context: started flushing");
                     self.flush_start_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2125,7 +2126,7 @@ mod tests {
 
             fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "flush_regular_same_context: stopped flushing");
+                    gst::debug!(RUNTIME_CAT, "flush_regular_same_context: stopped flushing");
                     self.flush_stop_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2195,7 +2196,7 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "flush_from_loop: flush_start from iteration");
+                    gst::debug!(RUNTIME_CAT, "flush_from_loop: flush_start from iteration");
                     assert_eq!(
                         self.task.flush_start().unwrap(),
                         TransitionStatus::NotWaiting {
@@ -2210,7 +2211,7 @@ mod tests {
 
             fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "flush_from_loop: started flushing");
+                    gst::debug!(RUNTIME_CAT, "flush_from_loop: started flushing");
                     self.flush_start_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2234,7 +2235,7 @@ mod tests {
 
         task.start().unwrap();
 
-        gst_debug!(
+        gst::debug!(
             RUNTIME_CAT,
             "flush_from_loop: awaiting flush_start notification"
         );
@@ -2264,11 +2265,11 @@ mod tests {
         impl TaskImpl for TaskStartTest {
             fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_from_loop: entering iteration");
+                    gst::debug!(RUNTIME_CAT, "pause_from_loop: entering iteration");
 
                     crate::runtime::time::delay_for(Duration::from_millis(50)).await;
 
-                    gst_debug!(RUNTIME_CAT, "pause_from_loop: pause from iteration");
+                    gst::debug!(RUNTIME_CAT, "pause_from_loop: pause from iteration");
                     assert_eq!(
                         self.task.pause().unwrap(),
                         TransitionStatus::NotWaiting {
@@ -2283,7 +2284,7 @@ mod tests {
 
             fn pause(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_from_loop: entering pause action");
+                    gst::debug!(RUNTIME_CAT, "pause_from_loop: entering pause action");
                     self.pause_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2307,7 +2308,7 @@ mod tests {
 
         task.start().unwrap();
 
-        gst_debug!(RUNTIME_CAT, "pause_from_loop: awaiting pause notification");
+        gst::debug!(RUNTIME_CAT, "pause_from_loop: awaiting pause notification");
         block_on(pause_receiver.next()).unwrap();
 
         task.stop().unwrap();
@@ -2331,7 +2332,7 @@ mod tests {
 
             fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(
+                    gst::debug!(
                         RUNTIME_CAT,
                         "trigger_from_action: flush_start triggering flush_stop"
                     );
@@ -2349,7 +2350,7 @@ mod tests {
 
             fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "trigger_from_action: stopped flushing");
+                    gst::debug!(RUNTIME_CAT, "trigger_from_action: stopped flushing");
                     self.flush_stop_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2374,7 +2375,7 @@ mod tests {
         task.start().unwrap();
         task.flush_start().unwrap();
 
-        gst_debug!(
+        gst::debug!(
             RUNTIME_CAT,
             "trigger_from_action: awaiting flush_stop notification"
         );
@@ -2397,7 +2398,7 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_flush_start: started");
+                    gst::debug!(RUNTIME_CAT, "pause_flush_start: started");
                     self.started_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2410,7 +2411,7 @@ mod tests {
 
             fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_flush_start: started flushing");
+                    gst::debug!(RUNTIME_CAT, "pause_flush_start: started flushing");
                     self.flush_start_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2419,7 +2420,7 @@ mod tests {
 
             fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_flush_start: stopped flushing");
+                    gst::debug!(RUNTIME_CAT, "pause_flush_start: stopped flushing");
                     self.flush_stop_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2446,7 +2447,7 @@ mod tests {
 
         // Pause, FlushStart, FlushStop, Start
 
-        gst_debug!(RUNTIME_CAT, "pause_flush_start: pausing");
+        gst::debug!(RUNTIME_CAT, "pause_flush_start: pausing");
         assert_eq!(
             task.pause().unwrap(),
             TransitionStatus::Complete {
@@ -2455,7 +2456,7 @@ mod tests {
             },
         );
 
-        gst_debug!(RUNTIME_CAT, "pause_flush_start: starting flush");
+        gst::debug!(RUNTIME_CAT, "pause_flush_start: starting flush");
         assert_eq!(
             task.flush_start().unwrap(),
             TransitionStatus::Complete {
@@ -2466,7 +2467,7 @@ mod tests {
         assert_eq!(task.state(), TaskState::PausedFlushing);
         block_on(flush_start_receiver.next());
 
-        gst_debug!(RUNTIME_CAT, "pause_flush_start: stopping flush");
+        gst::debug!(RUNTIME_CAT, "pause_flush_start: stopping flush");
         assert_eq!(
             task.flush_stop().unwrap(),
             TransitionStatus::Complete {
@@ -2480,7 +2481,7 @@ mod tests {
         // start action not executed
         started_receiver.try_next().unwrap_err();
 
-        gst_debug!(RUNTIME_CAT, "pause_flush_start: starting after flushing");
+        gst::debug!(RUNTIME_CAT, "pause_flush_start: starting after flushing");
         assert_eq!(
             task.start().unwrap(),
             TransitionStatus::Complete {
@@ -2508,7 +2509,7 @@ mod tests {
         impl TaskImpl for TaskFlushTest {
             fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_flushing_start: started");
+                    gst::debug!(RUNTIME_CAT, "pause_flushing_start: started");
                     self.started_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2521,7 +2522,7 @@ mod tests {
 
             fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_flushing_start: started flushing");
+                    gst::debug!(RUNTIME_CAT, "pause_flushing_start: started flushing");
                     self.flush_start_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2530,7 +2531,7 @@ mod tests {
 
             fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "pause_flushing_start: stopped flushing");
+                    gst::debug!(RUNTIME_CAT, "pause_flushing_start: stopped flushing");
                     self.flush_stop_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2557,15 +2558,15 @@ mod tests {
 
         // Pause, FlushStart, Start, FlushStop
 
-        gst_debug!(RUNTIME_CAT, "pause_flushing_start: pausing");
+        gst::debug!(RUNTIME_CAT, "pause_flushing_start: pausing");
         task.pause().unwrap();
 
-        gst_debug!(RUNTIME_CAT, "pause_flushing_start: starting flush");
+        gst::debug!(RUNTIME_CAT, "pause_flushing_start: starting flush");
         task.flush_start().unwrap();
         assert_eq!(task.state(), TaskState::PausedFlushing);
         block_on(flush_start_receiver.next());
 
-        gst_debug!(RUNTIME_CAT, "pause_flushing_start: starting while flushing");
+        gst::debug!(RUNTIME_CAT, "pause_flushing_start: starting while flushing");
         assert_eq!(
             task.start().unwrap(),
             TransitionStatus::Complete {
@@ -2578,7 +2579,7 @@ mod tests {
         // start action not executed
         started_receiver.try_next().unwrap_err();
 
-        gst_debug!(RUNTIME_CAT, "pause_flushing_start: stopping flush");
+        gst::debug!(RUNTIME_CAT, "pause_flushing_start: stopping flush");
         assert_eq!(
             task.flush_stop().unwrap(),
             TransitionStatus::Complete {
@@ -2612,7 +2613,7 @@ mod tests {
 
             fn flush_start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "flush_concurrent_start: started flushing");
+                    gst::debug!(RUNTIME_CAT, "flush_concurrent_start: started flushing");
                     self.flush_start_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2621,7 +2622,7 @@ mod tests {
 
             fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "flush_concurrent_start: stopped flushing");
+                    gst::debug!(RUNTIME_CAT, "flush_concurrent_start: stopped flushing");
                     self.flush_stop_sender.send(()).await.unwrap();
                     Ok(())
                 }
@@ -2652,9 +2653,9 @@ mod tests {
 
         // Launch flush_start // start
         let (ready_sender, ready_receiver) = oneshot::channel();
-        gst_debug!(RUNTIME_CAT, "flush_concurrent_start: spawning flush_start");
+        gst::debug!(RUNTIME_CAT, "flush_concurrent_start: spawning flush_start");
         let flush_start_handle = oob_context.spawn(async move {
-            gst_debug!(RUNTIME_CAT, "flush_concurrent_start: // flush_start");
+            gst::debug!(RUNTIME_CAT, "flush_concurrent_start: // flush_start");
             ready_sender.send(()).unwrap();
             let res = task_clone.flush_start().unwrap();
             match res {
@@ -2672,13 +2673,13 @@ mod tests {
             flush_start_receiver.next().await.unwrap();
         });
 
-        gst_debug!(
+        gst::debug!(
             RUNTIME_CAT,
             "flush_concurrent_start: awaiting for oob_context"
         );
         block_on(ready_receiver).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "flush_concurrent_start: // start");
+        gst::debug!(RUNTIME_CAT, "flush_concurrent_start: // start");
         let res = task.start().unwrap();
         match res {
             TransitionStatus::Complete {
@@ -2694,7 +2695,7 @@ mod tests {
 
         block_on(flush_start_handle).unwrap();
 
-        gst_debug!(RUNTIME_CAT, "flush_concurrent_start: requesting flush_stop");
+        gst::debug!(RUNTIME_CAT, "flush_concurrent_start: requesting flush_stop");
         assert_eq!(
             task.flush_stop().unwrap(),
             TransitionStatus::Complete {
@@ -2725,7 +2726,7 @@ mod tests {
             fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
                 async move {
                     self.timer = Some(crate::runtime::time::delay_for(Duration::from_millis(50)));
-                    gst_debug!(RUNTIME_CAT, "start_timer: started");
+                    gst::debug!(RUNTIME_CAT, "start_timer: started");
                     Ok(())
                 }
                 .boxed()
@@ -2733,9 +2734,9 @@ mod tests {
 
             fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
                 async move {
-                    gst_debug!(RUNTIME_CAT, "start_timer: awaiting timer");
+                    gst::debug!(RUNTIME_CAT, "start_timer: awaiting timer");
                     self.timer.take().unwrap().await;
-                    gst_debug!(RUNTIME_CAT, "start_timer: timer elapsed");
+                    gst::debug!(RUNTIME_CAT, "start_timer: timer elapsed");
 
                     if let Some(timer_elapsed_sender) = self.timer_elapsed_sender.take() {
                         timer_elapsed_sender.send(()).unwrap();
@@ -2761,11 +2762,11 @@ mod tests {
         )
         .unwrap();
 
-        gst_debug!(RUNTIME_CAT, "start_timer: start");
+        gst::debug!(RUNTIME_CAT, "start_timer: start");
         task.start().unwrap();
 
         block_on(timer_elapsed_receiver).unwrap();
-        gst_debug!(RUNTIME_CAT, "start_timer: timer elapsed received");
+        gst::debug!(RUNTIME_CAT, "start_timer: timer elapsed received");
 
         task.stop().unwrap();
         task.unprepare().unwrap();

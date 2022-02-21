@@ -24,7 +24,6 @@ use futures::prelude::*;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log, gst_trace};
 use gst_net::*;
 
 use once_cell::sync::Lazy;
@@ -157,7 +156,7 @@ impl UdpSrcPadHandler {
     async fn push_prelude(&self, pad: &PadSrcRef<'_>, _element: &super::UdpSrc) {
         let mut state = self.0.state.lock().await;
         if state.need_initial_events {
-            gst_debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
+            gst::debug!(CAT, obj: pad.gst_pad(), "Pushing initial events");
 
             let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
             let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
@@ -188,7 +187,7 @@ impl UdpSrcPadHandler {
         element: &super::UdpSrc,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
+        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", buffer);
 
         self.push_prelude(pad, element).await;
 
@@ -208,7 +207,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
     ) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
+        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
             EventView::FlushStart(..) => udpsrc.task.flush_start().is_ok(),
@@ -219,9 +218,9 @@ impl PadSrcHandler for UdpSrcPadHandler {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad.gst_pad(), "Handled {:?}", event);
+            gst::log!(CAT, obj: pad.gst_pad(), "Handled {:?}", event);
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", event);
+            gst::log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", event);
         }
 
         ret
@@ -236,7 +235,7 @@ impl PadSrcHandler for UdpSrcPadHandler {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
+        gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", query);
 
         let ret = match query.view_mut() {
             QueryViewMut::Latency(q) => {
@@ -267,9 +266,9 @@ impl PadSrcHandler for UdpSrcPadHandler {
         };
 
         if ret {
-            gst_log!(CAT, obj: pad.gst_pad(), "Handled {:?}", query);
+            gst::log!(CAT, obj: pad.gst_pad(), "Handled {:?}", query);
         } else {
-            gst_log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", query);
+            gst::log!(CAT, obj: pad.gst_pad(), "Didn't handle {:?}", query);
         }
 
         ret
@@ -302,10 +301,10 @@ impl UdpSrcTask {
 impl TaskImpl for UdpSrcTask {
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst_log!(CAT, obj: &self.element, "Starting task");
+            gst::log!(CAT, obj: &self.element, "Starting task");
             self.socket
                 .set_clock(self.element.clock(), self.element.base_time());
-            gst_log!(CAT, obj: &self.element, "Task started");
+            gst::log!(CAT, obj: &self.element, "Task started");
             Ok(())
         }
         .boxed()
@@ -318,7 +317,7 @@ impl TaskImpl for UdpSrcTask {
             let (mut buffer, saddr) = match item {
                 Some(Ok((buffer, saddr))) => (buffer, saddr),
                 Some(Err(err)) => {
-                    gst_error!(CAT, obj: &self.element, "Got error {:?}", err);
+                    gst::error!(CAT, obj: &self.element, "Got error {:?}", err);
                     match err {
                         SocketError::Gst(err) => {
                             gst::element_error!(
@@ -340,7 +339,7 @@ impl TaskImpl for UdpSrcTask {
                     return Err(gst::FlowError::Error);
                 }
                 None => {
-                    gst_log!(CAT, obj: &self.element, "SocketStream Stopped");
+                    gst::log!(CAT, obj: &self.element, "SocketStream Stopped");
                     return Err(gst::FlowError::Flushing);
                 }
             };
@@ -367,14 +366,14 @@ impl TaskImpl for UdpSrcTask {
                 .push_buffer(&pad, &self.element, buffer)
                 .await;
             match res {
-                Ok(_) => gst_log!(CAT, obj: &self.element, "Successfully pushed buffer"),
-                Err(gst::FlowError::Flushing) => gst_debug!(CAT, obj: &self.element, "Flushing"),
+                Ok(_) => gst::log!(CAT, obj: &self.element, "Successfully pushed buffer"),
+                Err(gst::FlowError::Flushing) => gst::debug!(CAT, obj: &self.element, "Flushing"),
                 Err(gst::FlowError::Eos) => {
-                    gst_debug!(CAT, obj: &self.element, "EOS");
+                    gst::debug!(CAT, obj: &self.element, "EOS");
                     pad.push_event(gst::event::Eos::new()).await;
                 }
                 Err(err) => {
-                    gst_error!(CAT, obj: &self.element, "Got error {}", err);
+                    gst::error!(CAT, obj: &self.element, "Got error {}", err);
                     gst::element_error!(
                         self.element,
                         gst::StreamError::Failed,
@@ -391,9 +390,9 @@ impl TaskImpl for UdpSrcTask {
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst_log!(CAT, obj: &self.element, "Stopping task");
+            gst::log!(CAT, obj: &self.element, "Stopping task");
             self.src_pad_handler.reset_state().await;
-            gst_log!(CAT, obj: &self.element, "Task stopped");
+            gst::log!(CAT, obj: &self.element, "Task stopped");
             Ok(())
         }
         .boxed()
@@ -401,9 +400,9 @@ impl TaskImpl for UdpSrcTask {
 
     fn flush_stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
-            gst_log!(CAT, obj: &self.element, "Stopping task flush");
+            gst::log!(CAT, obj: &self.element, "Stopping task flush");
             self.src_pad_handler.set_need_segment().await;
-            gst_log!(CAT, obj: &self.element, "Stopped task flush");
+            gst::log!(CAT, obj: &self.element, "Stopped task flush");
             Ok(())
         }
         .boxed()
@@ -429,7 +428,7 @@ impl UdpSrc {
     fn prepare(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {
         let mut settings_guard = self.settings.lock().unwrap();
 
-        gst_debug!(CAT, obj: element, "Preparing");
+        gst::debug!(CAT, obj: element, "Preparing");
 
         let context = Context::acquire(&settings_guard.context, settings_guard.context_wait)
             .map_err(|err| {
@@ -492,7 +491,7 @@ impl UdpSrc {
                 };
 
                 let saddr = SocketAddr::new(bind_addr, port as u16);
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Binding to {:?} for multicast group {:?}",
@@ -503,7 +502,7 @@ impl UdpSrc {
                 saddr
             } else {
                 let saddr = SocketAddr::new(addr, port as u16);
-                gst_debug!(CAT, obj: element, "Binding to {:?}", saddr);
+                gst::debug!(CAT, obj: element, "Binding to {:?}", saddr);
 
                 saddr
             };
@@ -647,40 +646,40 @@ impl UdpSrc {
                 )
             })?;
 
-        gst_debug!(CAT, obj: element, "Prepared");
+        gst::debug!(CAT, obj: element, "Prepared");
 
         Ok(())
     }
 
     fn unprepare(&self, element: &super::UdpSrc) {
-        gst_debug!(CAT, obj: element, "Unpreparing");
+        gst::debug!(CAT, obj: element, "Unpreparing");
 
         self.settings.lock().unwrap().used_socket = None;
         element.notify("used-socket");
 
         self.task.unprepare().unwrap();
 
-        gst_debug!(CAT, obj: element, "Unprepared");
+        gst::debug!(CAT, obj: element, "Unprepared");
     }
 
     fn stop(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Stopping");
+        gst::debug!(CAT, obj: element, "Stopping");
         self.task.stop()?;
-        gst_debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
     fn start(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Starting");
+        gst::debug!(CAT, obj: element, "Starting");
         self.task.start()?;
-        gst_debug!(CAT, obj: element, "Started");
+        gst::debug!(CAT, obj: element, "Started");
         Ok(())
     }
 
     fn pause(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Pausing");
+        gst::debug!(CAT, obj: element, "Pausing");
         self.task.pause()?;
-        gst_debug!(CAT, obj: element, "Paused");
+        gst::debug!(CAT, obj: element, "Paused");
         Ok(())
     }
 }
@@ -921,7 +920,7 @@ impl ElementImpl for UdpSrc {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

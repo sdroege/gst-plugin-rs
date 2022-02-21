@@ -9,7 +9,6 @@ use futures::channel::oneshot;
 use futures::pin_mut;
 
 use gio::glib::clone::Downgrade;
-use gst::{gst_debug, gst_error, gst_trace, gst_warning};
 
 use std::cell::RefCell;
 use std::future::Future;
@@ -56,7 +55,7 @@ impl Scheduler {
         let thread_ctx_name = Arc::clone(&context_name);
         let join = thread
             .spawn(move || {
-                gst_debug!(
+                gst::debug!(
                     RUNTIME_CAT,
                     "Started Scheduler thread for Context {}",
                     thread_ctx_name
@@ -68,14 +67,14 @@ impl Scheduler {
 
                 match this.block_on_priv(shutdown_receiver) {
                     Ok(_) => {
-                        gst_debug!(
+                        gst::debug!(
                             RUNTIME_CAT,
                             "Scheduler thread shut down for Context {}",
                             thread_ctx_name
                         );
                     }
                     Err(e) => {
-                        gst_error!(
+                        gst::error!(
                             RUNTIME_CAT,
                             "Scheduler thread shut down due to an error within Context {}",
                             thread_ctx_name
@@ -149,10 +148,10 @@ impl Scheduler {
             res
         });
 
-        gst_trace!(RUNTIME_CAT, "Blocking on current thread with {:?}", task_id);
+        gst::trace!(RUNTIME_CAT, "Blocking on current thread with {:?}", task_id);
 
         let _guard = CallOnDrop::new(|| {
-            gst_trace!(
+            gst::trace!(
                 RUNTIME_CAT,
                 "Blocking on current thread with {:?} done",
                 task_id,
@@ -162,7 +161,7 @@ impl Scheduler {
         match this.block_on_priv(task) {
             Ok(res) => res,
             Err(e) => {
-                gst_error!(
+                gst::error!(
                     RUNTIME_CAT,
                     "Panic blocking on Context {}",
                     &Scheduler::DUMMY_NAME
@@ -202,7 +201,7 @@ impl Scheduler {
 
             while let Ok(runnable) = self.tasks.pop_runnable() {
                 panic::catch_unwind(|| runnable.run()).map_err(|err| {
-                    gst_error!(
+                    gst::error!(
                         RUNTIME_CAT,
                         "A task has panicked within Context {}",
                         self.context_name
@@ -241,7 +240,7 @@ impl Scheduler {
     }
 
     fn close(context_name: Arc<str>) {
-        gst_trace!(
+        gst::trace!(
             RUNTIME_CAT,
             "Closing Scheduler for Context {}",
             context_name,
@@ -282,7 +281,7 @@ impl Scheduler {
 
 impl Drop for Scheduler {
     fn drop(&mut self) {
-        gst_debug!(
+        gst::debug!(
             RUNTIME_CAT,
             "Terminated: Scheduler for Context {}",
             self.context_name
@@ -315,7 +314,7 @@ impl SchedulerShutdown {
 impl Drop for SchedulerShutdown {
     fn drop(&mut self) {
         if let Some(sender) = self.sender.take() {
-            gst_debug!(
+            gst::debug!(
                 RUNTIME_CAT,
                 "Shutting down Scheduler thread for Context {}",
                 self.scheduler.context_name
@@ -325,7 +324,7 @@ impl Drop for SchedulerShutdown {
             // Don't block shutting down itself
             if !self.scheduler.is_current() {
                 if let Some(join_handler) = self.join.take() {
-                    gst_trace!(
+                    gst::trace!(
                         RUNTIME_CAT,
                         "Waiting for Scheduler thread to shutdown for Context {}",
                         self.scheduler.context_name
@@ -429,7 +428,7 @@ impl Handle {
             .push(CleanUpOps(source))
             .is_err()
         {
-            gst_warning!(RUNTIME_CAT, "scheduler: cleanup_ops is full");
+            gst::warning!(RUNTIME_CAT, "scheduler: cleanup_ops is full");
         }
     }
 

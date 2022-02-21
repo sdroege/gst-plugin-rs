@@ -22,7 +22,6 @@ use once_cell::sync::Lazy;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_trace, gst_warning};
 use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
@@ -259,7 +258,7 @@ impl ReqwestHttpSrc {
     ) -> Result<ClientContext, gst::ErrorMessage> {
         let mut client_guard = self.client.lock().unwrap();
         if let Some(ref client) = *client_guard {
-            gst_debug!(CAT, obj: src, "Using already configured client");
+            gst::debug!(CAT, obj: src, "Using already configured client");
             return Ok(client.clone());
         }
 
@@ -282,7 +281,7 @@ impl ReqwestHttpSrc {
 
             // Hopefully now, self.set_context will have been synchronously called
             if let Some(client) = self.external_client.lock().unwrap().clone() {
-                gst_debug!(CAT, obj: src, "Using shared client");
+                gst::debug!(CAT, obj: src, "Using shared client");
                 *client_guard = Some(client.clone());
 
                 return Ok(client);
@@ -303,7 +302,7 @@ impl ReqwestHttpSrc {
             builder = builder.proxy(p);
         }
 
-        gst_debug!(CAT, obj: src, "Creating new client");
+        gst::debug!(CAT, obj: src, "Creating new client");
         let client = ClientContext(Arc::new(ClientContextInner {
             client: builder.build().map_err(|err| {
                 gst::error_msg!(
@@ -317,7 +316,7 @@ impl ReqwestHttpSrc {
         // The alternative would be different contexts for different proxy settings, or one context with a
         // map from proxy settings to client, but then, how and when to discard those, retaining reuse benefits?
         if proxy.is_none() {
-            gst_debug!(CAT, obj: src, "Sharing new client with other elements");
+            gst::debug!(CAT, obj: src, "Sharing new client with other elements");
             let mut context = gst::Context::new(REQWEST_CLIENT_CONTEXT, true);
             {
                 let context = context.get_mut().unwrap();
@@ -343,7 +342,7 @@ impl ReqwestHttpSrc {
         use headers::{Connection, ContentLength, ContentRange, HeaderMapExt, Range, UserAgent};
         use reqwest::header::{self, HeaderMap, HeaderName, HeaderValue};
 
-        gst_debug!(CAT, obj: src, "Creating new request for {}", uri);
+        gst::debug!(CAT, obj: src, "Creating new request for {}", uri);
 
         let settings = self.settings.lock().unwrap().clone();
 
@@ -386,7 +385,7 @@ impl ReqwestHttpSrc {
                 let field = match HeaderName::try_from(field) {
                     Ok(field) => field,
                     Err(err) => {
-                        gst_warning!(
+                        gst::warning!(
                             CAT,
                             obj: src,
                             "Failed to transform extra-header field name '{}' to header name: {}",
@@ -402,7 +401,7 @@ impl ReqwestHttpSrc {
                     let value = match value.transform::<String>() {
                         Ok(value) => value,
                         Err(_) => {
-                            gst_warning!(
+                            gst::warning!(
                                 CAT,
                                 obj: src,
                                 "Failed to transform extra-header '{}' value to string",
@@ -417,7 +416,7 @@ impl ReqwestHttpSrc {
                     let value = match value.parse::<HeaderValue>() {
                         Ok(value) => value,
                         Err(_) => {
-                            gst_warning!(
+                            gst::warning!(
                                 CAT,
                                 obj: src,
                                 "Failed to transform extra-header '{}' value to header value",
@@ -465,7 +464,7 @@ impl ReqwestHttpSrc {
             req
         };
 
-        gst_debug!(CAT, obj: src, "Sending new request: {:?}", req);
+        gst::debug!(CAT, obj: src, "Sending new request: {:?}", req);
 
         let future = async {
             req.send().await.map_err(|err| {
@@ -480,21 +479,21 @@ impl ReqwestHttpSrc {
         let res = match res {
             Ok(res) => res,
             Err(Some(err)) => {
-                gst_debug!(CAT, obj: src, "Error {:?}", err);
+                gst::debug!(CAT, obj: src, "Error {:?}", err);
                 return Err(Some(err));
             }
             Err(None) => {
-                gst_debug!(CAT, obj: src, "Flushing");
+                gst::debug!(CAT, obj: src, "Flushing");
                 return Err(None);
             }
         };
 
-        gst_debug!(CAT, obj: src, "Received response: {:?}", res);
+        gst::debug!(CAT, obj: src, "Received response: {:?}", res);
 
         if !res.status().is_success() {
             match res.status() {
                 StatusCode::NOT_FOUND => {
-                    gst_error!(CAT, obj: src, "Resource not found");
+                    gst::error!(CAT, obj: src, "Resource not found");
                     return Err(Some(gst::error_msg!(
                         gst::ResourceError::NotFound,
                         ["Resource '{}' not found", uri]
@@ -504,14 +503,14 @@ impl ReqwestHttpSrc {
                 | StatusCode::PAYMENT_REQUIRED
                 | StatusCode::FORBIDDEN
                 | StatusCode::PROXY_AUTHENTICATION_REQUIRED => {
-                    gst_error!(CAT, obj: src, "Not authorized: {}", res.status());
+                    gst::error!(CAT, obj: src, "Not authorized: {}", res.status());
                     return Err(Some(gst::error_msg!(
                         gst::ResourceError::NotAuthorized,
                         ["Not Authorized for resource '{}': {}", uri, res.status()]
                     )));
                 }
                 _ => {
-                    gst_error!(CAT, obj: src, "Request failed: {}", res.status());
+                    gst::error!(CAT, obj: src, "Request failed: {}", res.status());
                     return Err(Some(gst::error_msg!(
                         gst::ResourceError::OpenRead,
                         ["Request for '{}' failed: {}", uri, res.status()]
@@ -562,7 +561,7 @@ impl ReqwestHttpSrc {
             .and_then(|content_type| content_type.to_str().ok())
             .and_then(|content_type| content_type.parse::<mime::Mime>().ok())
         {
-            gst_debug!(CAT, obj: src, "Got content type {}", content_type);
+            gst::debug!(CAT, obj: src, "Got content type {}", content_type);
             if let Some(ref mut caps) = caps {
                 let caps = caps.get_mut().unwrap();
                 let s = caps.structure_mut(0).unwrap();
@@ -605,7 +604,7 @@ impl ReqwestHttpSrc {
             }
         }
 
-        gst_debug!(CAT, obj: src, "Request successful");
+        gst::debug!(CAT, obj: src, "Request successful");
 
         Ok(State::Started {
             uri,
@@ -883,7 +882,7 @@ impl ObjectImpl for ReqwestHttpSrc {
         };
 
         if let Err(err) = res {
-            gst_error!(
+            gst::error!(
                 CAT,
                 obj: obj,
                 "Failed to set property `{}`: {:?}",
@@ -1058,7 +1057,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
             })
             .map(|uri| uri.clone())?;
 
-        gst_debug!(CAT, obj: src, "Starting for URI {}", uri);
+        gst::debug!(CAT, obj: src, "Starting for URI {}", uri);
 
         *state = self.do_request(src, uri, 0, None).map_err(|err| {
             err.unwrap_or_else(|| {
@@ -1070,7 +1069,7 @@ impl BaseSrcImpl for ReqwestHttpSrc {
     }
 
     fn stop(&self, src: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: src, "Stopping");
+        gst::debug!(CAT, obj: src, "Stopping");
         *self.state.lock().unwrap() = State::Stopped;
 
         Ok(())
@@ -1116,10 +1115,10 @@ impl BaseSrcImpl for ReqwestHttpSrc {
         let start = *segment.start().expect("No start position given");
         let stop = segment.stop().map(|stop| *stop);
 
-        gst_debug!(CAT, obj: src, "Seeking to {}-{:?}", start, stop);
+        gst::debug!(CAT, obj: src, "Seeking to {}-{:?}", start, stop);
 
         if position == start && old_stop == stop {
-            gst_debug!(CAT, obj: src, "No change to current request");
+            gst::debug!(CAT, obj: src, "No change to current request");
             return true;
         }
 
@@ -1166,7 +1165,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
         let mut current_response = match response.take() {
             Some(response) => response,
             None => {
-                gst_error!(CAT, obj: src, "Don't have a response");
+                gst::error!(CAT, obj: src, "Don't have a response");
                 gst::element_error!(src, gst::ResourceError::Read, ["Don't have a response"]);
 
                 return Err(gst::FlowError::Error);
@@ -1178,13 +1177,13 @@ impl PushSrcImpl for ReqwestHttpSrc {
         drop(state);
 
         if let Some(caps) = caps {
-            gst_debug!(CAT, obj: src, "Setting caps {:?}", caps);
+            gst::debug!(CAT, obj: src, "Setting caps {:?}", caps);
             src.set_caps(&caps)
                 .map_err(|_| gst::FlowError::NotNegotiated)?;
         }
 
         if let Some(tags) = tags {
-            gst_debug!(CAT, obj: src, "Sending iradio tags {:?}", tags);
+            gst::debug!(CAT, obj: src, "Sending iradio tags {:?}", tags);
             let pad = src.static_pad("src").unwrap();
             pad.push_event(gst::event::Tag::new(tags));
         }
@@ -1202,12 +1201,12 @@ impl PushSrcImpl for ReqwestHttpSrc {
         let res = match res {
             Ok(res) => res,
             Err(Some(err)) => {
-                gst_debug!(CAT, obj: src, "Error {:?}", err);
+                gst::debug!(CAT, obj: src, "Error {:?}", err);
                 src.post_error_message(err);
                 return Err(gst::FlowError::Error);
             }
             Err(None) => {
-                gst_debug!(CAT, obj: src, "Flushing");
+                gst::debug!(CAT, obj: src, "Flushing");
                 return Err(gst::FlowError::Flushing);
             }
         };
@@ -1230,7 +1229,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
             Some(chunk) => {
                 /* do something with the chunk and store the body again in the state */
 
-                gst_trace!(
+                gst::trace!(
                     CAT,
                     obj: src,
                     "Chunk of {} bytes received at offset {}",
@@ -1256,7 +1255,7 @@ impl PushSrcImpl for ReqwestHttpSrc {
             }
             None => {
                 /* No further data, end of stream */
-                gst_debug!(CAT, obj: src, "End of stream");
+                gst::debug!(CAT, obj: src, "End of stream");
                 *response = Some(current_response);
                 Err(gst::FlowError::Eos)
             }

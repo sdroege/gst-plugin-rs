@@ -10,7 +10,6 @@
 
 use atomic_refcell::AtomicRefCell;
 use gst::glib;
-use gst::gst_debug;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
@@ -290,7 +289,7 @@ impl VideoEncoderImpl for GifEnc {
             .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
 
         let video_info = state.info();
-        gst_debug!(CAT, obj: element, "Setting format {:?}", video_info);
+        gst::debug!(CAT, obj: element, "Setting format {:?}", video_info);
 
         {
             let mut state = State::new(video_info);
@@ -321,7 +320,7 @@ impl VideoEncoderImpl for GifEnc {
         let mut state_guard = self.state.borrow_mut();
         let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Sending frame {}",
@@ -429,7 +428,7 @@ impl VideoEncoderImpl for GifEnc {
 
 impl GifEnc {
     fn flush_encoder(&self, element: &super::GifEnc) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(CAT, obj: element, "Flushing");
+        gst::debug!(CAT, obj: element, "Flushing");
 
         let trailer_buffer = self.state.borrow_mut().as_mut().map(|state| {
             // Drop encoder to flush and take flushed data (gif trailer)

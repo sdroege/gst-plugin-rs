@@ -17,7 +17,6 @@
 //
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
-use gst::gst_debug;
 use gst::prelude::*;
 
 use std::sync::mpsc;
@@ -92,10 +91,10 @@ fn jb_pipeline() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    gst_debug!(CAT, "jb_pipeline: waiting for {} buffers", BUFFER_NB);
+    gst::debug!(CAT, "jb_pipeline: waiting for {} buffers", BUFFER_NB);
     for idx in 0..BUFFER_NB {
         receiver.recv().unwrap();
-        gst_debug!(CAT, "jb_pipeline: received buffer #{}", idx);
+        gst::debug!(CAT, "jb_pipeline: received buffer #{}", idx);
     }
 
     pipeline.set_state(gst::State::Null).unwrap();
@@ -155,10 +154,10 @@ fn jb_ts_pipeline() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    gst_debug!(CAT, "jb_ts_pipeline: waiting for {} buffers", BUFFER_NB);
+    gst::debug!(CAT, "jb_ts_pipeline: waiting for {} buffers", BUFFER_NB);
     for idx in 0..BUFFER_NB {
         receiver.recv().unwrap();
-        gst_debug!(CAT, "jb_ts_pipeline: received buffer #{}", idx);
+        gst::debug!(CAT, "jb_ts_pipeline: received buffer #{}", idx);
     }
 
     pipeline.set_state(gst::State::Null).unwrap();

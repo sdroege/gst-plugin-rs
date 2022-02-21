@@ -10,7 +10,6 @@
 
 use gst::format::Bytes;
 use gst::glib;
-use gst::gst_debug;
 use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
@@ -204,7 +203,7 @@ impl BaseParseImpl for CdgParse {
             buffer.set_flags(gst::BufferFlags::HEADER);
         }
 
-        gst_debug!(CAT, obj: element, "Found frame pts={}", pts);
+        gst::debug!(CAT, obj: element, "Found frame pts={}", pts);
 
         element.finish_frame(frame, CDG_PACKET_SIZE as u32)?;
 

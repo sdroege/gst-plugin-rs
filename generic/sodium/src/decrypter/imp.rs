@@ -25,7 +25,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log};
 use sodiumoxide::crypto::box_;
 
 use std::sync::Mutex;
@@ -115,7 +114,7 @@ impl State {
             gst::FlowError::Error
         })?;
 
-        gst_debug!(CAT, obj: pad, "Returned pull size: {}", map.len());
+        gst::debug!(CAT, obj: pad, "Returned pull size: {}", map.len());
 
         let mut nonce = add_nonce(self.initial_nonce.unwrap(), chunk_index);
         let block_size = self.block_size.expect("Block size wasn't set") as usize + box_::MACBYTES;
@@ -147,8 +146,8 @@ impl State {
         adapter_offset: usize,
     ) -> Result<gst::PadGetRangeSuccess, gst::FlowError> {
         let avail = self.adapter.available();
-        gst_debug!(CAT, obj: pad, "Avail: {}", avail);
-        gst_debug!(CAT, obj: pad, "Adapter offset: {}", adapter_offset);
+        gst::debug!(CAT, obj: pad, "Avail: {}", avail);
+        gst::debug!(CAT, obj: pad, "Adapter offset: {}", adapter_offset);
 
         // if this underflows, the available buffer in the adapter is smaller than the
         // requested offset, which means we have reached EOS
@@ -190,7 +189,7 @@ impl State {
             let mut map = match buffer.map_writable() {
                 Ok(map) => map,
                 Err(e) => {
-                    gst_error!(
+                    gst::error!(
                         CAT,
                         obj: pad,
                         "Failed to map provided buffer writable: {}",
@@ -200,7 +199,7 @@ impl State {
                 }
             };
             if let Err(e) = self.adapter.copy(0, &mut map[..available_size]) {
-                gst_error!(CAT, obj: pad, "Failed to copy into provided buffer: {}", e);
+                gst::error!(CAT, obj: pad, "Failed to copy into provided buffer: {}", e);
                 return Err(gst::FlowError::Error);
             }
             if map.len() != available_size {
@@ -287,7 +286,7 @@ impl Decrypter {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Scheduling(q) => {
@@ -297,12 +296,12 @@ impl Decrypter {
                     return res;
                 }
 
-                gst_log!(CAT, obj: pad, "Upstream returned {:?}", peer_query);
+                gst::log!(CAT, obj: pad, "Upstream returned {:?}", peer_query);
 
                 let (flags, min, max, align) = peer_query.result();
                 q.set(flags, min, max, align);
                 q.add_scheduling_modes(&[gst::PadMode::Pull]);
-                gst_log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
+                gst::log!(CAT, obj: pad, "Returning {:?}", q.query_mut());
                 true
             }
             QueryViewMut::Duration(q) => {
@@ -314,14 +313,14 @@ impl Decrypter {
                 let mut peer_query = gst::query::Duration::new(gst::Format::Bytes);
 
                 if !self.sinkpad.peer_query(&mut peer_query) {
-                    gst_error!(CAT, "Failed to query upstream duration");
+                    gst::error!(CAT, "Failed to query upstream duration");
                     return false;
                 }
 
                 let size = match peer_query.result().try_into().unwrap() {
                     Some(gst::format::Bytes(size)) => size,
                     None => {
-                        gst_error!(CAT, "Failed to query upstream duration");
+                        gst::error!(CAT, "Failed to query upstream duration");
 
                         return false;
                     }
@@ -344,7 +343,7 @@ impl Decrypter {
                 // subtrack the MAC of each block
                 let size = size - total_chunks * box_::MACBYTES as u64;
 
-                gst_debug!(CAT, obj: pad, "Setting duration bytes: {}", size);
+                gst::debug!(CAT, obj: pad, "Setting duration bytes: {}", size);
                 q.set(gst::format::Bytes(size));
 
                 true
@@ -417,9 +416,9 @@ impl Decrypter {
         let state = state.as_mut().unwrap();
 
         state.initial_nonce = Some(nonce);
-        gst_debug!(CAT, obj: element, "Setting nonce to: {:?}", nonce.0);
+        gst::debug!(CAT, obj: element, "Setting nonce to: {:?}", nonce.0);
         state.block_size = Some(block_size);
-        gst_debug!(CAT, obj: element, "Setting block size to: {}", block_size);
+        gst::debug!(CAT, obj: element, "Setting block size to: {}", block_size);
 
         Ok(())
     }
@@ -436,8 +435,8 @@ impl Decrypter {
             + (chunk_index * block_size as u64)
             + (chunk_index * box_::MACBYTES as u64);
 
-        gst_debug!(CAT, obj: pad, "Pull offset: {}", pull_offset);
-        gst_debug!(CAT, obj: pad, "block size: {}", block_size);
+        gst::debug!(CAT, obj: pad, "Pull offset: {}", pull_offset);
+        gst::debug!(CAT, obj: pad, "block size: {}", block_size);
 
         // calculate how many chunks are needed, if we need something like 3.2
         // round the number to 4 and cut the buffer afterwards.
@@ -456,7 +455,7 @@ impl Decrypter {
 
         // Read at least one chunk in case 0 bytes were requested
         let total_chunks = u32::max((checked - 1) / block_size, 1);
-        gst_debug!(CAT, obj: pad, "Blocks to be pulled: {}", total_chunks);
+        gst::debug!(CAT, obj: pad, "Blocks to be pulled: {}", total_chunks);
 
         // Pull a buffer of all the chunks we will need
         let checked_size = total_chunks.checked_mul(block_size).ok_or_else(|| {
@@ -473,18 +472,18 @@ impl Decrypter {
         })?;
 
         let total_size = checked_size + (total_chunks * box_::MACBYTES as u32);
-        gst_debug!(CAT, obj: pad, "Requested pull size: {}", total_size);
+        gst::debug!(CAT, obj: pad, "Requested pull size: {}", total_size);
 
         self.sinkpad.pull_range(pull_offset, total_size).map_err(|err| {
             match err {
                 gst::FlowError::Flushing => {
-                    gst_debug!(CAT, obj: &self.sinkpad, "Pausing after pulling buffer, reason: flushing");
+                    gst::debug!(CAT, obj: &self.sinkpad, "Pausing after pulling buffer, reason: flushing");
                 }
                 gst::FlowError::Eos => {
-                    gst_debug!(CAT, obj: &self.sinkpad, "Eos");
+                    gst::debug!(CAT, obj: &self.sinkpad, "Eos");
                 }
                 flow => {
-                    gst_error!(CAT, obj: &self.sinkpad, "Failed to pull, reason: {:?}", flow);
+                    gst::error!(CAT, obj: &self.sinkpad, "Failed to pull, reason: {:?}", flow);
                 }
             };
 
@@ -510,11 +509,11 @@ impl Decrypter {
             state.block_size.expect("Block size wasn't set")
         };
 
-        gst_debug!(CAT, obj: pad, "Requested offset: {}", offset);
-        gst_debug!(CAT, obj: pad, "Requested size: {}", requested_size);
+        gst::debug!(CAT, obj: pad, "Requested offset: {}", offset);
+        gst::debug!(CAT, obj: pad, "Requested size: {}", requested_size);
 
         let chunk_index = offset as u64 / block_size as u64;
-        gst_debug!(CAT, obj: pad, "Stream Block index: {}", chunk_index);
+        gst::debug!(CAT, obj: pad, "Stream Block index: {}", chunk_index);
 
         let pull_offset = offset - (chunk_index * block_size as u64);
         assert!(pull_offset <= std::u32::MAX as u64);
@@ -705,7 +704,7 @@ impl ElementImpl for Decrypter {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_debug!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::debug!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::NullToReady => {

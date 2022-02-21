@@ -146,7 +146,6 @@ With that our `src/lib.rs` is complete, and all following code is only in `src/r
 
 ```rust
 use gst::glib;
-use gst::{gst_debug, gst_info};
 use gst_base::subclass::prelude::*;
 
 use std::i32;
@@ -438,7 +437,7 @@ impl BaseTransformImpl for Rgb2Gray {
             Some(info) => info,
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Configured for caps {} to {}",
@@ -455,14 +454,14 @@ impl BaseTransformImpl for Rgb2Gray {
         // Drop state
         let _ = self.state.lock().unwrap().take();
 
-        gst_info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
 }
 ```
 
-This code should be relatively self-explanatory. In `set_caps` we’re parsing the two caps into a `VideoInfo` and then store this in our `State`, in `stop` we drop the `State` and replace it with `None`. In addition we make use of our debug category here and use the `gst_info!` and `gst_debug!` macros to output the current caps configuration to the GStreamer debug logging system. This information can later be useful for debugging any problems once the element is running.
+This code should be relatively self-explanatory. In `set_caps` we’re parsing the two caps into a `VideoInfo` and then store this in our `State`, in `stop` we drop the `State` and replace it with `None`. In addition we make use of our debug category here and use the `gst::info!` and `gst::debug!` macros to output the current caps configuration to the GStreamer debug logging system. This information can later be useful for debugging any problems once the element is running.
 
 Next we have to provide information to the `BaseTransform` base class about the size in bytes of a video frame with specific caps. This is needed so that the base class can allocate an appropriately sized output buffer for us, that we can then fill later. This is done with the `get_unit_size` virtual method, which is required to return the size of one processing unit in specific caps. In our case, one processing unit is one video frame. In the case of raw audio it would be the size of one sample multiplied by the number of channels.
 
@@ -518,7 +517,7 @@ impl BaseTransformImpl for Rgb2Gray {
             gray_caps
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Transformed caps from {} to {} in direction {:?}",
@@ -778,7 +777,7 @@ impl ObjectImpl for Rgb2Gray {
             "invert" => {
                 let mut settings = self.settings.lock().unwrap();
                 let invert = value.get_some().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing invert from {} to {}",
@@ -790,7 +789,7 @@ impl ObjectImpl for Rgb2Gray {
             "shift" => {
                 let mut settings = self.settings.lock().unwrap();
                 let shift = value.get_some().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing shift from {} to {}",

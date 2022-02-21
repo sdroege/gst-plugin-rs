@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_trace, gst_warning};
 use gst_base::subclass::prelude::*;
 
 use crate::ccutils::{extract_cdp, ParseError, ParseErrorCode};
@@ -75,7 +74,7 @@ struct CCPacketContents {
 impl CCDetect {
     fn detect_cc_data(data: &[u8]) -> Result<CCPacketContents, ParseError> {
         if data.len() % 3 != 0 {
-            gst_warning!(CAT, "cc_data length is not a multiple of 3, truncating");
+            gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
 
         /* logic from ccconverter */
@@ -85,7 +84,7 @@ impl CCDetect {
         for (i, triple) in data.chunks_exact(3).enumerate() {
             let cc_valid = (triple[0] & 0x04) == 0x04;
             let cc_type = triple[0] & 0x03;
-            gst_trace!(
+            gst::trace!(
                 CAT,
                 "triple:{} have ccp:{} 608:{} 708:{} data:{:02x},{:02x},{:02x} cc_valid:{} cc_type:{:02b}",
                 i * 3,
@@ -159,7 +158,7 @@ impl CCDetect {
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().ok_or(gst::FlowError::NotNegotiated)?;
 
-            gst_trace!(
+            gst::trace!(
                 CAT,
                 "packet contains {:?} current settings {:?} and state {:?}",
                 cc_packet,
@@ -194,7 +193,7 @@ impl CCDetect {
                 state.last_cc708_change = Some(ts);
             }
 
-            gst_trace!(CAT, "changed to settings {:?} state {:?}", settings, state);
+            gst::trace!(CAT, "changed to settings {:?} state {:?}", settings, state);
         }
 
         if notify_cc608 {
@@ -365,7 +364,7 @@ impl BaseTransformImpl for CCDetect {
         let cc_packet = match Self::detect(format, map.as_slice()) {
             Ok(v) => v,
             Err(e) => {
-                gst_warning!(CAT, "{}", &e.to_string());
+                gst::warning!(CAT, "{}", &e.to_string());
                 gst::element_warning!(element, gst::StreamError::Decode, [&e.to_string()]);
                 CCPacketContents {
                     cc608: false,

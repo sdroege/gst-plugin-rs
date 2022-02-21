@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_warning};
 
 use std::mem;
 use std::sync::Mutex;
@@ -319,7 +318,7 @@ impl ObjectImpl for FallbackSrc {
             "enable-audio" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing enable-audio from {:?} to {:?}",
@@ -331,7 +330,7 @@ impl ObjectImpl for FallbackSrc {
             "enable-video" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing enable-video from {:?} to {:?}",
@@ -343,7 +342,7 @@ impl ObjectImpl for FallbackSrc {
             "uri" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing URI from {:?} to {:?}",
@@ -355,7 +354,7 @@ impl ObjectImpl for FallbackSrc {
             "source" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing source from {:?} to {:?}",
@@ -367,7 +366,7 @@ impl ObjectImpl for FallbackSrc {
             "fallback-uri" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing Fallback URI from {:?} to {:?}",
@@ -379,7 +378,7 @@ impl ObjectImpl for FallbackSrc {
             "timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing timeout from {:?} to {:?}",
@@ -391,7 +390,7 @@ impl ObjectImpl for FallbackSrc {
             "restart-timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing Restart Timeout from {:?} to {:?}",
@@ -403,7 +402,7 @@ impl ObjectImpl for FallbackSrc {
             "retry-timeout" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing Retry Timeout from {:?} to {:?}",
@@ -415,7 +414,7 @@ impl ObjectImpl for FallbackSrc {
             "restart-on-eos" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing restart-on-eos from {:?} to {:?}",
@@ -427,7 +426,7 @@ impl ObjectImpl for FallbackSrc {
             "min-latency" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing Minimum Latency from {:?} to {:?}",
@@ -439,7 +438,7 @@ impl ObjectImpl for FallbackSrc {
             "buffer-duration" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing Buffer Duration from {:?} to {:?}",
@@ -451,7 +450,7 @@ impl ObjectImpl for FallbackSrc {
             "immediate-fallback" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing immediate-fallback from {:?} to {:?}",
@@ -463,7 +462,7 @@ impl ObjectImpl for FallbackSrc {
             "manual-unblock" => {
                 let mut settings = self.settings.lock().unwrap();
                 let new_value = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing manual-unblock from {:?} to {:?}",
@@ -729,7 +728,7 @@ impl ElementImpl for FallbackSrc {
     fn send_event(&self, _element: &Self::Type, event: gst::Event) -> bool {
         match event.view() {
             gst::EventView::Eos(..) => {
-                gst_debug!(CAT, "Handling element-level EOS, forwarding to all streams");
+                gst::debug!(CAT, "Handling element-level EOS, forwarding to all streams");
 
                 let mut state_guard = self.state.lock().unwrap();
                 let state = match &mut *state_guard {
@@ -984,7 +983,7 @@ impl FallbackSrc {
     }
 
     fn start(&self, element: &super::FallbackSrc) -> Result<(), gst::StateChangeError> {
-        gst_debug!(CAT, obj: element, "Starting");
+        gst::debug!(CAT, obj: element, "Starting");
         let mut state_guard = self.state.lock().unwrap();
         if state_guard.is_some() {
             return Err(gst::StateChangeError);
@@ -1000,7 +999,7 @@ impl FallbackSrc {
         {
             Some(source) => source,
             None => {
-                gst_error!(CAT, obj: element, "No URI or source element configured");
+                gst::error!(CAT, obj: element, "No URI or source element configured");
                 gst::element_error!(
                     element,
                     gst::LibraryError::Settings,
@@ -1077,12 +1076,12 @@ impl FallbackSrc {
 
         element.notify("status");
 
-        gst_debug!(CAT, obj: element, "Started");
+        gst::debug!(CAT, obj: element, "Started");
         Ok(())
     }
 
     fn stop(&self, element: &super::FallbackSrc) {
-        gst_debug!(CAT, obj: element, "Stopping");
+        gst::debug!(CAT, obj: element, "Stopping");
         let mut state_guard = self.state.lock().unwrap();
         let mut state = match state_guard.take() {
             Some(state) => state,
@@ -1134,11 +1133,11 @@ impl FallbackSrc {
             timeout.unschedule();
         }
 
-        gst_debug!(CAT, obj: element, "Stopped");
+        gst::debug!(CAT, obj: element, "Stopped");
     }
 
     fn change_source_state(&self, element: &super::FallbackSrc, transition: gst::StateChange) {
-        gst_debug!(CAT, obj: element, "Changing source state: {:?}", transition);
+        gst::debug!(CAT, obj: element, "Changing source state: {:?}", transition);
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
             Some(state) => state,
@@ -1146,14 +1145,14 @@ impl FallbackSrc {
         };
 
         if transition.current() <= transition.next() && state.source_pending_restart {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Not starting source because pending restart"
             );
             return;
         } else if transition.next() <= gst::State::Ready && state.source_pending_restart {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Unsetting pending restart because shutting down"
@@ -1171,7 +1170,7 @@ impl FallbackSrc {
         let res = source.set_state(transition.next());
         match res {
             Err(_) => {
-                gst_error!(CAT, obj: element, "Source failed to change state");
+                gst::error!(CAT, obj: element, "Source failed to change state");
                 // Try again later if we're not shutting down
                 if transition != gst::StateChange::ReadyToNull {
                     let _ = source.set_state(gst::State::Null);
@@ -1183,7 +1182,7 @@ impl FallbackSrc {
                 }
             }
             Ok(res) => {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Source changed state successfully: {:?}",
@@ -1231,7 +1230,7 @@ impl FallbackSrc {
         element: &super::FallbackSrc,
         pad: &gst::Pad,
     ) -> Result<(), gst::ErrorMessage> {
-        gst_debug!(CAT, obj: element, "Pad {} added to source", pad.name(),);
+        gst::debug!(CAT, obj: element, "Pad {} added to source", pad.name(),);
 
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
@@ -1297,14 +1296,14 @@ impl FallbackSrc {
 
         let stream = match stream {
             None => {
-                gst_debug!(CAT, obj: element, "No {} stream enabled", type_);
+                gst::debug!(CAT, obj: element, "No {} stream enabled", type_);
                 return Ok(());
             }
             Some(Stream {
                 source_srcpad: Some(_),
                 ..
             }) => {
-                gst_debug!(CAT, obj: element, "Already configured a {} stream", type_);
+                gst::debug!(CAT, obj: element, "Already configured a {} stream", type_);
                 return Ok(());
             }
             Some(ref mut stream) => stream,
@@ -1314,11 +1313,11 @@ impl FallbackSrc {
             let imagefreeze =
                 gst::ElementFactory::make("imagefreeze", None).expect("no imagefreeze found");
 
-            gst_debug!(CAT, "image stream, inserting imagefreeze");
+            gst::debug!(CAT, "image stream, inserting imagefreeze");
             element.add(&imagefreeze).unwrap();
             imagefreeze.set_property("is-live", true);
             if imagefreeze.sync_state_with_parent().is_err() {
-                gst_error!(CAT, obj: element, "imagefreeze failed to change state",);
+                gst::error!(CAT, obj: element, "imagefreeze failed to change state",);
                 return Err(gst::error_msg!(
                     gst::CoreError::StateChange,
                     ["Failed to change imagefreeze state"]
@@ -1331,7 +1330,7 @@ impl FallbackSrc {
         };
 
         pad.link(&sinkpad).map_err(|err| {
-            gst_error!(
+            gst::error!(
                 CAT,
                 obj: element,
                 "Failed to link source pad to clocksync: {}",
@@ -1354,7 +1353,7 @@ impl FallbackSrc {
 
             match info.data {
                 Some(gst::PadProbeData::Event(ref ev)) if ev.type_() == gst::EventType::Eos => {
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: &element,
                         "Received EOS from source on pad {}",
@@ -1418,7 +1417,7 @@ impl FallbackSrc {
         // a workaround until
         //     https://gitlab.freedesktop.org/gstreamer/gst-plugins-base/-/issues/800
         // is fixed.
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Adding probe to pad {}",
@@ -1488,7 +1487,7 @@ impl FallbackSrc {
             .as_mut()
             .filter(|s| &s.clocksync_queue_srcpad == pad)
         {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Called probe on pad {}",
@@ -1500,7 +1499,7 @@ impl FallbackSrc {
             .as_mut()
             .filter(|s| &s.clocksync_queue_srcpad == pad)
         {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Called probe on pad {}",
@@ -1524,7 +1523,7 @@ impl FallbackSrc {
                     }
                 })
             {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Removing pad probe for pad {}",
@@ -1533,7 +1532,7 @@ impl FallbackSrc {
                 block.pad.remove_probe(block.probe_id);
             }
 
-            gst_debug!(CAT, obj: element, "Live source, unblocking directly");
+            gst::debug!(CAT, obj: element, "Live source, unblocking directly");
 
             drop(state_guard);
             element.notify("status");
@@ -1550,13 +1549,13 @@ impl FallbackSrc {
         let segment = match pad.sticky_event::<gst::event::Segment>(0) {
             Some(ev) => ev.segment().clone(),
             None => {
-                gst_warning!(CAT, obj: element, "Have no segment event yet");
+                gst::warning!(CAT, obj: element, "Have no segment event yet");
                 return Ok(());
             }
         };
 
         let segment = segment.downcast::<gst::ClockTime>().map_err(|_| {
-            gst_error!(CAT, obj: element, "Have no time segment");
+            gst::error!(CAT, obj: element, "Have no time segment");
             gst::error_msg!(gst::CoreError::Clock, ["Have no time segment"])
         })?;
 
@@ -1571,7 +1570,7 @@ impl FallbackSrc {
             segment.to_running_time(pts)
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Have block running time {}",
@@ -1590,14 +1589,14 @@ impl FallbackSrc {
 
     fn unblock_pads(&self, element: &super::FallbackSrc, state: &mut State) {
         if state.manually_blocked {
-            gst_debug!(CAT, obj: element, "Not unblocking yet: manual unblock",);
+            gst::debug!(CAT, obj: element, "Not unblocking yet: manual unblock",);
             return;
         }
 
         // Check if all streams are blocked and have a running time and we have
         // 100% buffering
         if state.stats.buffering_percent < 100 {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Not unblocking yet: buffering {}%",
@@ -1608,7 +1607,7 @@ impl FallbackSrc {
 
         let streams = match state.streams {
             None => {
-                gst_debug!(CAT, obj: element, "Have no stream collection yet");
+                gst::debug!(CAT, obj: element, "Have no stream collection yet");
                 return;
             }
             Some(ref streams) => streams,
@@ -1660,7 +1659,7 @@ impl FallbackSrc {
         let current_running_time = match element.current_running_time() {
             Some(current_running_time) => current_running_time,
             None => {
-                gst_debug!(CAT, obj: element, "Waiting for current_running_time");
+                gst::debug!(CAT, obj: element, "Waiting for current_running_time");
                 return;
             }
         };
@@ -1671,17 +1670,17 @@ impl FallbackSrc {
                 && video_running_time.is_none()
                 && !video_is_eos
             {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Waiting for audio and video pads to block"
                 );
                 return;
             } else if audio_running_time.is_none() && !audio_is_eos {
-                gst_debug!(CAT, obj: element, "Waiting for audio pad to block");
+                gst::debug!(CAT, obj: element, "Waiting for audio pad to block");
                 return;
             } else if video_running_time.is_none() && !video_is_eos {
-                gst_debug!(CAT, obj: element, "Waiting for video pad to block");
+                gst::debug!(CAT, obj: element, "Waiting for video pad to block");
                 return;
             }
 
@@ -1702,7 +1701,7 @@ impl FallbackSrc {
                 -((min_running_time - current_running_time).nseconds() as i64)
             };
 
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Unblocking at {} with pad offset {} (audio: {} eos {}, video {} eos {})",
@@ -1739,7 +1738,7 @@ impl FallbackSrc {
             let audio_running_time = match audio_running_time {
                 Some(audio_running_time) => audio_running_time,
                 None => {
-                    gst_debug!(CAT, obj: element, "Waiting for audio pad to block");
+                    gst::debug!(CAT, obj: element, "Waiting for audio pad to block");
                     return;
                 }
             };
@@ -1750,7 +1749,7 @@ impl FallbackSrc {
                 -((audio_running_time - current_running_time).nseconds() as i64)
             };
 
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Unblocking at {} with pad offset {} (audio: {} eos {})",
@@ -1774,7 +1773,7 @@ impl FallbackSrc {
             let video_running_time = match video_running_time {
                 Some(video_running_time) => video_running_time,
                 None => {
-                    gst_debug!(CAT, obj: element, "Waiting for video pad to block");
+                    gst::debug!(CAT, obj: element, "Waiting for video pad to block");
                     return;
                 }
             };
@@ -1785,7 +1784,7 @@ impl FallbackSrc {
                 -((video_running_time - current_running_time).nseconds() as i64)
             };
 
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Unblocking at {} with pad offset {} (video: {} eos {})",
@@ -1809,7 +1808,7 @@ impl FallbackSrc {
     }
 
     fn handle_source_pad_removed(&self, element: &super::FallbackSrc, pad: &gst::Pad) {
-        gst_debug!(CAT, obj: element, "Pad {} removed from source", pad.name());
+        gst::debug!(CAT, obj: element, "Pad {} removed from source", pad.name());
 
         let mut state_guard = self.state.lock().unwrap();
         let state = match &mut *state_guard {
@@ -1856,11 +1855,11 @@ impl FallbackSrc {
         };
 
         if state.source_pending_restart {
-            gst_debug!(CAT, obj: element, "Has pending restart");
+            gst::debug!(CAT, obj: element, "Has pending restart");
             return;
         }
 
-        gst_debug!(CAT, obj: element, "Got buffering {}%", m.percent());
+        gst::debug!(CAT, obj: element, "Got buffering {}%", m.percent());
 
         state.stats.buffering_percent = m.percent();
         if state.stats.buffering_percent < 100 {
@@ -1901,7 +1900,7 @@ impl FallbackSrc {
 
         let streams = m.stream_collection();
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Got stream collection {:?}",
@@ -1916,7 +1915,7 @@ impl FallbackSrc {
         }
 
         if !have_audio && state.settings.enable_audio {
-            gst_warning!(
+            gst::warning!(
                 CAT,
                 obj: element,
                 "Have no audio streams but audio is enabled"
@@ -1924,7 +1923,7 @@ impl FallbackSrc {
         }
 
         if !have_video && state.settings.enable_video {
-            gst_warning!(
+            gst::warning!(
                 CAT,
                 obj: element,
                 "Have no video streams but video is enabled"
@@ -1964,7 +1963,7 @@ impl FallbackSrc {
             Some(src) => src,
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Got error message from {}",
@@ -1985,7 +1984,7 @@ impl FallbackSrc {
             if src == video_stream.fallback_input
                 || src.has_as_ancestor(&video_stream.fallback_input)
             {
-                gst_debug!(CAT, obj: element, "Got error from video fallback input");
+                gst::debug!(CAT, obj: element, "Got error from video fallback input");
 
                 let prev_fallback_uri = video_stream
                     .fallback_input
@@ -2009,7 +2008,7 @@ impl FallbackSrc {
             }
         }
 
-        gst_error!(
+        gst::error!(
             CAT,
             obj: element,
             "Give up for error message from {}",
@@ -2025,11 +2024,11 @@ impl FallbackSrc {
         state: &mut State,
         reason: RetryReason,
     ) {
-        gst_debug!(CAT, obj: element, "Handling source error: {:?}", reason);
+        gst::debug!(CAT, obj: element, "Handling source error: {:?}", reason);
 
         state.stats.last_retry_reason = reason;
         if state.source_pending_restart {
-            gst_debug!(CAT, obj: element, "Source is already pending restart");
+            gst::debug!(CAT, obj: element, "Source is already pending restart");
             return;
         }
 
@@ -2082,7 +2081,7 @@ impl FallbackSrc {
                     source_pending_restart: false,
                     ..
                 }) => {
-                    gst_debug!(CAT, obj: element, "Restarting source not needed anymore");
+                    gst::debug!(CAT, obj: element, "Restarting source not needed anymore");
                     return;
                 }
                 Some(state) => state,
@@ -2098,7 +2097,7 @@ impl FallbackSrc {
                     }
                 })
             {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Removing pad probe for pad {}",
@@ -2108,7 +2107,7 @@ impl FallbackSrc {
             }
             drop(state_guard);
 
-            gst_debug!(CAT, obj: element, "Shutting down source");
+            gst::debug!(CAT, obj: element, "Shutting down source");
             let _ = source.set_state(gst::State::Null);
 
             // Sleep for 1s before retrying
@@ -2120,7 +2119,7 @@ impl FallbackSrc {
                     source_pending_restart: false,
                     ..
                 }) => {
-                    gst_debug!(CAT, obj: element, "Restarting source not needed anymore");
+                    gst::debug!(CAT, obj: element, "Restarting source not needed anymore");
                     return;
                 }
                 Some(state) => state,
@@ -2134,7 +2133,7 @@ impl FallbackSrc {
                 stream.source_srcpad = None;
             }
 
-            gst_debug!(CAT, obj: element, "Waiting for 1s before retrying");
+            gst::debug!(CAT, obj: element, "Waiting for 1s before retrying");
             let clock = gst::SystemClock::obtain();
             let wait_time = clock.time().unwrap() + gst::ClockTime::SECOND;
             assert!(state.source_pending_restart_timeout.is_none());
@@ -2148,7 +2147,7 @@ impl FallbackSrc {
                         Some(element) => element,
                     };
 
-                    gst_debug!(CAT, obj: &element, "Woke up, retrying");
+                    gst::debug!(CAT, obj: &element, "Woke up, retrying");
                     element.call_async(|element| {
                         let src = element.imp();
 
@@ -2159,7 +2158,7 @@ impl FallbackSrc {
                                 source_pending_restart: false,
                                 ..
                             }) => {
-                                gst_debug!(
+                                gst::debug!(
                                     CAT,
                                     obj: element,
                                     "Restarting source not needed anymore"
@@ -2195,7 +2194,7 @@ impl FallbackSrc {
                         state.last_buffering_update = None;
 
                         if let Some(timeout) = state.source_restart_timeout.take() {
-                            gst_debug!(CAT, obj: element, "Unscheduling restart timeout");
+                            gst::debug!(CAT, obj: element, "Unscheduling restart timeout");
                             timeout.unschedule();
                         }
                         drop(state_guard);
@@ -2207,7 +2206,7 @@ impl FallbackSrc {
                         }
 
                         if source.sync_state_with_parent().is_err() {
-                            gst_error!(CAT, obj: element, "Source failed to change state");
+                            gst::error!(CAT, obj: element, "Source failed to change state");
                             let _ = source.set_state(gst::State::Null);
                             let mut state_guard = src.state.lock().unwrap();
                             let state = state_guard.as_mut().expect("no state");
@@ -2243,7 +2242,7 @@ impl FallbackSrc {
         elapsed: gst::ClockTime,
     ) {
         if state.source_pending_restart {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Not scheduling source restart timeout because source is pending restart already",
@@ -2252,7 +2251,7 @@ impl FallbackSrc {
         }
 
         if state.is_image {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Not scheduling source restart timeout because we are playing back an image",
@@ -2261,7 +2260,7 @@ impl FallbackSrc {
         }
 
         if state.manually_blocked {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Not scheduling source restart timeout because we are manually blocked",
@@ -2271,7 +2270,7 @@ impl FallbackSrc {
 
         let clock = gst::SystemClock::obtain();
         let wait_time = clock.time().unwrap() + state.settings.restart_timeout - elapsed;
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Scheduling source restart timeout for {}",
@@ -2290,11 +2289,11 @@ impl FallbackSrc {
                 element.call_async(move |element| {
                     let src = element.imp();
 
-                    gst_debug!(CAT, obj: element, "Source restart timeout triggered");
+                    gst::debug!(CAT, obj: element, "Source restart timeout triggered");
                     let mut state_guard = src.state.lock().unwrap();
                     let state = match &mut *state_guard {
                         None => {
-                            gst_debug!(CAT, obj: element, "Restarting source not needed anymore");
+                            gst::debug!(CAT, obj: element, "Restarting source not needed anymore");
                             return;
                         }
                         Some(state) => state,
@@ -2310,13 +2309,13 @@ impl FallbackSrc {
                             .map(|i| i.elapsed() >= state.settings.restart_timeout.into())
                             .unwrap_or(state.stats.buffering_percent == 100)
                         {
-                            gst_debug!(CAT, obj: element, "Not buffering, restarting source");
+                            gst::debug!(CAT, obj: element, "Not buffering, restarting source");
 
                             src.handle_source_error(element, state, RetryReason::Timeout);
                             drop(state_guard);
                             element.notify("statistics");
                         } else {
-                            gst_debug!(CAT, obj: element, "Buffering, restarting source later");
+                            gst::debug!(CAT, obj: element, "Buffering, restarting source later");
                             let elapsed = state
                                 .last_buffering_update
                                 .and_then(|last_buffering_update| {
@@ -2327,7 +2326,7 @@ impl FallbackSrc {
                             src.schedule_source_restart_timeout(element, state, elapsed);
                         }
                     } else {
-                        gst_debug!(CAT, obj: element, "Restarting source not needed anymore");
+                        gst::debug!(CAT, obj: element, "Restarting source not needed anymore");
                     }
                 });
             })
@@ -2380,19 +2379,19 @@ impl FallbackSrc {
         // If we have the fallback activated then start the retry timeout unless it was started
         // already. Otherwise cancel the retry timeout.
         if self.have_fallback_activated(element, state) {
-            gst_warning!(CAT, obj: element, "Switched to fallback stream");
+            gst::warning!(CAT, obj: element, "Switched to fallback stream");
             if state.source_restart_timeout.is_none() {
                 self.schedule_source_restart_timeout(element, state, gst::ClockTime::ZERO);
             }
         } else {
-            gst_debug!(CAT, obj: element, "Switched to main stream");
+            gst::debug!(CAT, obj: element, "Switched to main stream");
             if let Some(timeout) = state.source_retry_timeout.take() {
-                gst_debug!(CAT, obj: element, "Unscheduling retry timeout");
+                gst::debug!(CAT, obj: element, "Unscheduling retry timeout");
                 timeout.unschedule();
             }
 
             if let Some(timeout) = state.source_restart_timeout.take() {
-                gst_debug!(CAT, obj: element, "Unscheduling restart timeout");
+                gst::debug!(CAT, obj: element, "Unscheduling restart timeout");
                 timeout.unschedule();
             }
         }

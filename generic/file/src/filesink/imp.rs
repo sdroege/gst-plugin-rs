@@ -13,7 +13,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_trace};
 use gst_base::subclass::prelude::*;
 
 use std::fs::File;
@@ -84,7 +83,7 @@ impl FileSink {
             Some(location) => {
                 match settings.location {
                     Some(ref location_cur) => {
-                        gst_info!(
+                        gst::info!(
                             CAT,
                             obj: element,
                             "Changing `location` from {:?} to {}",
@@ -93,13 +92,13 @@ impl FileSink {
                         );
                     }
                     None => {
-                        gst_info!(CAT, obj: element, "Setting `location` to {}", location,);
+                        gst::info!(CAT, obj: element, "Setting `location` to {}", location,);
                     }
                 }
                 Some(location)
             }
             None => {
-                gst_info!(CAT, obj: element, "Resetting `location` to None",);
+                gst::info!(CAT, obj: element, "Resetting `location` to None",);
                 None
             }
         };
@@ -148,7 +147,7 @@ impl ObjectImpl for FileSink {
                 };
 
                 if let Err(err) = res {
-                    gst_error!(CAT, obj: obj, "Failed to set property `location`: {}", err);
+                    gst::error!(CAT, obj: obj, "Failed to set property `location`: {}", err);
                 }
             }
             _ => unimplemented!(),
@@ -230,10 +229,10 @@ impl BaseSinkImpl for FileSink {
                 ]
             )
         })?;
-        gst_debug!(CAT, obj: element, "Opened file {:?}", file);
+        gst::debug!(CAT, obj: element, "Opened file {:?}", file);
 
         *state = State::Started { file, position: 0 };
-        gst_info!(CAT, obj: element, "Started");
+        gst::info!(CAT, obj: element, "Started");
 
         Ok(())
     }
@@ -248,7 +247,7 @@ impl BaseSinkImpl for FileSink {
         }
 
         *state = State::Stopped;
-        gst_info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -272,7 +271,7 @@ impl BaseSinkImpl for FileSink {
             }
         };
 
-        gst_trace!(CAT, obj: element, "Rendering {:?}", buffer);
+        gst::trace!(CAT, obj: element, "Rendering {:?}", buffer);
         let map = buffer.map_readable().map_err(|_| {
             gst::element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error

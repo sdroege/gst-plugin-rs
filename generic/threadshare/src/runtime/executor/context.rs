@@ -5,8 +5,6 @@
 
 use futures::prelude::*;
 
-use gst::{gst_debug, gst_error, gst_trace, gst_warning};
-
 use once_cell::sync::Lazy;
 
 use std::collections::HashMap;
@@ -51,7 +49,7 @@ where
     Fut::Output: Send + 'static,
 {
     if let Some((cur_context, cur_task_id)) = Context::current_task() {
-        gst_debug!(
+        gst::debug!(
             RUNTIME_CAT,
             "Adding subtask to task {:?} on context {}",
             cur_task_id,
@@ -86,12 +84,12 @@ where
 {
     if let Some(context) = Context::current() {
         let msg = format!("Attempt to block within Context {}", context.name());
-        gst_error!(RUNTIME_CAT, "{}", msg);
+        gst::error!(RUNTIME_CAT, "{}", msg);
         panic!("{}", msg);
     }
 
     // Not running in a Context thread so we can block
-    gst_debug!(RUNTIME_CAT, "Blocking on new dummy context");
+    gst::debug!(RUNTIME_CAT, "Blocking on new dummy context");
     Scheduler::block_on(future)
 }
 
@@ -157,7 +155,7 @@ impl Context {
 
         if let Some(context_weak) = contexts.get(context_name) {
             if let Some(context) = context_weak.upgrade() {
-                gst_debug!(RUNTIME_CAT, "Joining Context '{}'", context.name());
+                gst::debug!(RUNTIME_CAT, "Joining Context '{}'", context.name());
                 return Ok(context);
             }
         }
@@ -165,7 +163,7 @@ impl Context {
         let context = Context(Scheduler::start(context_name, wait));
         contexts.insert(context_name.into(), context.downgrade());
 
-        gst_debug!(RUNTIME_CAT, "New Context '{}'", context.name());
+        gst::debug!(RUNTIME_CAT, "New Context '{}'", context.name());
         Ok(context)
     }
 
@@ -221,7 +219,7 @@ impl Context {
                     self.name()
                 );
             } else {
-                gst_warning!(
+                gst::warning!(
                     RUNTIME_CAT,
                     "Entering Context {} within {}",
                     self.name(),
@@ -229,7 +227,7 @@ impl Context {
                 );
             }
         } else {
-            gst_debug!(RUNTIME_CAT, "Entering Context {}", self.name());
+            gst::debug!(RUNTIME_CAT, "Entering Context {}", self.name());
         }
 
         self.0.enter(f)
@@ -255,7 +253,7 @@ impl Context {
         let (ctx, task_id) = match Context::current_task() {
             Some(task) => task,
             None => {
-                gst_trace!(RUNTIME_CAT, "No current task");
+                gst::trace!(RUNTIME_CAT, "No current task");
                 return false;
             }
         };
@@ -270,7 +268,7 @@ impl Context {
         let (ctx, task_id) = match Context::current_task() {
             Some(task) => task,
             None => {
-                gst_trace!(RUNTIME_CAT, "No current task");
+                gst::trace!(RUNTIME_CAT, "No current task");
                 return Err(sub_task);
             }
         };

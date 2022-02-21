@@ -7,7 +7,6 @@
 
 use concurrent_queue::ConcurrentQueue;
 use futures::ready;
-use gst::{gst_trace, gst_warning};
 use polling::{Event, Poller};
 use slab::Slab;
 
@@ -215,7 +214,7 @@ impl Reactor {
             .is_err()
         {
             // If the queue is full, drain it and try again.
-            gst_warning!(RUNTIME_CAT, "react: timer_ops is full");
+            gst::warning!(RUNTIME_CAT, "react: timer_ops is full");
             self.process_timer_ops();
         }
 
@@ -226,7 +225,7 @@ impl Reactor {
     pub fn remove_timer(&mut self, when: Instant, id: usize) {
         // Push a remove operation.
         while self.timer_ops.push(TimerOp::Remove(when, id)).is_err() {
-            gst_warning!(RUNTIME_CAT, "react: timer_ops is full");
+            gst::warning!(RUNTIME_CAT, "react: timer_ops is full");
             // If the queue is full, drain it and try again.
             self.process_timer_ops();
         }
@@ -249,7 +248,7 @@ impl Reactor {
 
         // Add wakers to the list.
         if !ready.is_empty() {
-            gst_trace!(RUNTIME_CAT, "process_timers: {} ready wakers", ready.len());
+            gst::trace!(RUNTIME_CAT, "process_timers: {} ready wakers", ready.len());
 
             for (_, waker) in ready {
                 wakers.push(waker);
@@ -333,7 +332,7 @@ impl Reactor {
 
         // Wake up ready tasks.
         if !wakers.is_empty() {
-            gst_trace!(RUNTIME_CAT, "react: {} ready wakers", wakers.len());
+            gst::trace!(RUNTIME_CAT, "react: {} ready wakers", wakers.len());
 
             for waker in wakers {
                 // Don't let a panicking waker blow everything up.
@@ -506,7 +505,7 @@ impl<T> Future for Readable<'_, T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         ready!(Pin::new(&mut self.0).poll(cx))?;
-        gst_trace!(RUNTIME_CAT, "readable: fd={}", self.0.handle.source.raw);
+        gst::trace!(RUNTIME_CAT, "readable: fd={}", self.0.handle.source.raw);
         Poll::Ready(Ok(()))
     }
 }
@@ -526,7 +525,7 @@ impl<T> Future for ReadableOwned<T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         ready!(Pin::new(&mut self.0).poll(cx))?;
-        gst_trace!(
+        gst::trace!(
             RUNTIME_CAT,
             "readable_owned: fd={}",
             self.0.handle.source.raw
@@ -550,7 +549,7 @@ impl<T> Future for Writable<'_, T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         ready!(Pin::new(&mut self.0).poll(cx))?;
-        gst_trace!(RUNTIME_CAT, "writable: fd={}", self.0.handle.source.raw);
+        gst::trace!(RUNTIME_CAT, "writable: fd={}", self.0.handle.source.raw);
         Poll::Ready(Ok(()))
     }
 }
@@ -570,7 +569,7 @@ impl<T> Future for WritableOwned<T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         ready!(Pin::new(&mut self.0).poll(cx))?;
-        gst_trace!(
+        gst::trace!(
             RUNTIME_CAT,
             "writable_owned: fd={}",
             self.0.handle.source.raw

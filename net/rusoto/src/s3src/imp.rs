@@ -18,7 +18,6 @@ use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info};
 
 use gst_base::prelude::*;
 use gst_base::subclass::base_src::CreateSuccess;
@@ -150,7 +149,7 @@ impl S3Src {
         })?;
 
         if let Some(size) = output.content_length {
-            gst_info!(CAT, obj: src, "HEAD success, content length = {}", size);
+            gst::info!(CAT, obj: src, "HEAD success, content length = {}", size);
             Ok(size as u64)
         } else {
             Err(gst::error_msg!(
@@ -191,7 +190,7 @@ impl S3Src {
             ..Default::default()
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: src,
             "Requesting range: {}-{}",
@@ -209,7 +208,7 @@ impl S3Src {
             WaitError::Cancelled => None,
         })?;
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: src,
             "Read {} bytes",
@@ -466,7 +465,7 @@ impl BaseSrcImpl for S3Src {
             Err(None) => Err(gst::FlowError::Flushing),
             /* Actual Error */
             Err(Some(err)) => {
-                gst_error!(CAT, obj: src, "Could not GET: {}", err);
+                gst::error!(CAT, obj: src, "Could not GET: {}", err);
                 Err(gst::FlowError::Error)
             }
         }

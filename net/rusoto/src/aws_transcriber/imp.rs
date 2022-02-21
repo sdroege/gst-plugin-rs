@@ -9,10 +9,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{
-    element_error, error_msg, gst_debug, gst_error, gst_info, gst_log, gst_trace, gst_warning,
-    loggable_error,
-};
+use gst::{element_error, error_msg, loggable_error};
 
 use std::default::Default;
 
@@ -233,7 +230,7 @@ impl Transcriber {
 
         while let Some(buf) = state.buffers.front() {
             let pts = buf.pts().unwrap();
-            gst_trace!(
+            gst::trace!(
                 CAT,
                 obj: element,
                 "Checking now {} if item is ready for dequeuing, PTS {}, threshold {} vs {}",
@@ -282,7 +279,7 @@ impl Transcriber {
                         .duration(pts - last_position)
                         .seqnum(seqnum)
                         .build();
-                    gst_log!(CAT, "Pushing gap:    {} -> {}", last_position, pts);
+                    gst::log!(CAT, "Pushing gap:    {} -> {}", last_position, pts);
                     if !self.srcpad.push_event(gap_event) {
                         return false;
                     }
@@ -290,7 +287,7 @@ impl Transcriber {
                 Ordering::Less => {
                     let delta = last_position - pts;
 
-                    gst_warning!(
+                    gst::warning!(
                         CAT,
                         obj: element,
                         "Updating item PTS ({} < {}), consider increasing latency",
@@ -313,7 +310,7 @@ impl Transcriber {
 
             last_position = pts + duration;
 
-            gst_debug!(CAT, "Pushing buffer: {} -> {}", pts, pts + duration);
+            gst::debug!(CAT, "Pushing buffer: {} -> {}", pts, pts + duration);
 
             if self.srcpad.push(buf).is_err() {
                 return false;
@@ -321,7 +318,7 @@ impl Transcriber {
         }
 
         /* next, push a gap if we're lagging behind the target position */
-        gst_trace!(
+        gst::trace!(
             CAT,
             obj: element,
             "Checking now: {} if we need to push a gap, last_position: {}, threshold: {}",
@@ -338,7 +335,7 @@ impl Transcriber {
                 .seqnum(seqnum)
                 .build();
 
-            gst_log!(
+            gst::log!(
                 CAT,
                 "Pushing gap:    {} -> {}",
                 last_position,
@@ -371,7 +368,7 @@ impl Transcriber {
         let lateness = self.settings.lock().unwrap().lateness;
 
         if alternative.items.len() <= state.partial_index {
-            gst_error!(
+            gst::error!(
                 CAT,
                 obj: element,
                 "sanity check failed, alternative length {} < partial_index {}",
@@ -399,7 +396,7 @@ impl Transcriber {
             }
 
             /* Should be sent now */
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Item is ready for queuing: {}, PTS {}",
@@ -469,7 +466,7 @@ impl Transcriber {
         };
 
         for event in events.drain(..) {
-            gst_info!(CAT, obj: element, "Sending {:?}", event);
+            gst::info!(CAT, obj: element, "Sending {:?}", event);
             self.srcpad.push_event(event);
         }
 
@@ -486,7 +483,7 @@ impl Transcriber {
             match msg {
                 Message::Binary(buf) => {
                     let (_, pkt) = parse_packet(&buf).map_err(|err| {
-                        gst_error!(CAT, obj: element, "Failed to parse packet: {}", err);
+                        gst::error!(CAT, obj: element, "Failed to parse packet: {}", err);
                         error_msg!(
                             gst::StreamError::Failed,
                             ["Failed to parse packet: {}", err]
@@ -498,7 +495,7 @@ impl Transcriber {
                     if packet_is_exception(&pkt) {
                         let message: ExceptionMessage =
                             serde_json::from_str(payload).map_err(|err| {
-                                gst_error!(
+                                gst::error!(
                                     CAT,
                                     obj: element,
                                     "Unexpected exception message: {} ({})",
@@ -510,7 +507,7 @@ impl Transcriber {
                                     ["Unexpected exception message: {} ({})", payload, err]
                                 )
                             })?;
-                        gst_error!(
+                        gst::error!(
                             CAT,
                             obj: element,
                             "AWS raised an error: {}",
@@ -531,7 +528,7 @@ impl Transcriber {
                     })?;
 
                     if let Some(result) = transcript.transcript.results.get(0) {
-                        gst_trace!(
+                        gst::trace!(
                             CAT,
                             obj: element,
                             "result: {}",
@@ -557,7 +554,7 @@ impl Transcriber {
             match tokio::time::timeout(GRANULARITY.into(), future).await {
                 Err(_) => {
                     if !self.dequeue(element) {
-                        gst_info!(CAT, obj: element, "Failed to push gap event, pausing");
+                        gst::info!(CAT, obj: element, "Failed to push gap event, pausing");
 
                         let _ = self.srcpad.pause_task();
                     }
@@ -565,7 +562,7 @@ impl Transcriber {
                 }
                 Ok(res) => {
                     if !self.dequeue(element) {
-                        gst_info!(CAT, obj: element, "Failed to push gap event, pausing");
+                        gst::info!(CAT, obj: element, "Failed to push gap event, pausing");
 
                         let _ = self.srcpad.pause_task();
                     }
@@ -644,7 +641,7 @@ impl Transcriber {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
@@ -679,23 +676,23 @@ impl Transcriber {
     fn sink_event(&self, pad: &gst::Pad, element: &super::Transcriber, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Eos(_) => match self.handle_buffer(pad, element, None) {
                 Err(err) => {
-                    gst_error!(CAT, "Failed to send EOS to AWS: {}", err);
+                    gst::error!(CAT, "Failed to send EOS to AWS: {}", err);
                     false
                 }
                 Ok(_) => true,
             },
             EventView::FlushStart(_) => {
-                gst_info!(CAT, obj: element, "Received flush start, disconnecting");
+                gst::info!(CAT, obj: element, "Received flush start, disconnecting");
                 let mut ret = pad.event_default(Some(element), event);
 
                 match self.srcpad.stop_task() {
                     Err(err) => {
-                        gst_error!(CAT, obj: element, "Failed to stop srcpad task: {}", err);
+                        gst::error!(CAT, obj: element, "Failed to stop srcpad task: {}", err);
 
                         self.disconnect(element);
 
@@ -709,12 +706,12 @@ impl Transcriber {
                 ret
             }
             EventView::FlushStop(_) => {
-                gst_info!(CAT, obj: element, "Received flush stop, restarting task");
+                gst::info!(CAT, obj: element, "Received flush stop, restarting task");
 
                 if pad.event_default(Some(element), event) {
                     match self.start_task(element) {
                         Err(err) => {
-                            gst_error!(CAT, obj: element, "Failed to start srcpad task: {}", err);
+                            gst::error!(CAT, obj: element, "Failed to start srcpad task: {}", err);
                             false
                         }
                         Ok(_) => true,
@@ -745,7 +742,7 @@ impl Transcriber {
             }
             EventView::Tag(_) => true,
             EventView::Caps(e) => {
-                gst_info!(CAT, "Received caps {:?}", e);
+                gst::info!(CAT, "Received caps {:?}", e);
                 true
             }
             EventView::StreamStart(_) => true,
@@ -781,7 +778,7 @@ impl Transcriber {
                 for chunk in data.chunks(8192) {
                     let packet = build_packet(chunk);
                     ws_sink.send(Message::Binary(packet)).await.map_err(|err| {
-                        gst_error!(CAT, obj: element, "Failed sending packet: {}", err);
+                        gst::error!(CAT, obj: element, "Failed sending packet: {}", err);
                         gst::FlowError::Error
                     })?;
                 }
@@ -789,7 +786,7 @@ impl Transcriber {
                 // EOS
                 let packet = build_packet(&[]);
                 ws_sink.send(Message::Binary(packet)).await.map_err(|err| {
-                    gst_error!(CAT, obj: element, "Failed sending packet: {}", err);
+                    gst::error!(CAT, obj: element, "Failed sending packet: {}", err);
                     gst::FlowError::Error
                 })?;
             }
@@ -804,7 +801,7 @@ impl Transcriber {
         element: &super::Transcriber,
         buffer: Option<gst::Buffer>,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: element, "Handling {:?}", buffer);
+        gst::log!(CAT, obj: element, "Handling {:?}", buffer);
 
         self.ensure_connection(element).map_err(|err| {
             element_error!(
@@ -853,7 +850,7 @@ impl Transcriber {
         let settings = self.settings.lock().unwrap();
 
         if settings.latency + settings.lateness <= 2 * GRANULARITY {
-            gst_error!(
+            gst::error!(
                 CAT,
                 obj: element,
                 "latency + lateness must be greater than 200 milliseconds"
@@ -864,7 +861,7 @@ impl Transcriber {
             ));
         }
 
-        gst_info!(CAT, obj: element, "Connecting ..");
+        gst::info!(CAT, obj: element, "Connecting ..");
 
         let creds = match (
             settings.access_key.as_ref(),
@@ -876,7 +873,7 @@ impl Transcriber {
                     StaticProvider::new_minimal(access_key.clone(), secret_access_key.clone())
                         .credentials()
                         .map_err(|err| {
-                            gst_error!(
+                            gst::error!(
                                 CAT,
                                 obj: element,
                                 "Failed to generate credentials: {}",
@@ -892,7 +889,7 @@ impl Transcriber {
             _ => {
                 let _enter = RUNTIME.enter();
                 futures::executor::block_on(ChainProvider::new().credentials()).map_err(|err| {
-                    gst_error!(CAT, obj: element, "Failed to generate credentials: {}", err);
+                    gst::error!(CAT, obj: element, "Failed to generate credentials: {}", err);
                     error_msg!(
                         gst::CoreError::Failed,
                         ["Failed to generate credentials: {}", err]
@@ -927,7 +924,7 @@ impl Transcriber {
         }
 
         if let Some(ref session_id) = settings.session_id {
-            gst_debug!(CAT, obj: element, "Using session ID: {}", session_id);
+            gst::debug!(CAT, obj: element, "Using session ID: {}", session_id);
             signed.add_param("session-id", session_id);
         }
 
@@ -950,7 +947,7 @@ impl Transcriber {
             let _enter = RUNTIME.enter();
             futures::executor::block_on(connect_async(format!("wss{}", &url[5..]))).map_err(
                 |err| {
-                    gst_error!(CAT, obj: element, "Failed to connect: {}", err);
+                    gst::error!(CAT, obj: element, "Failed to connect: {}", err);
                     error_msg!(gst::CoreError::Failed, ["Failed to connect: {}", err])
                 },
             )?
@@ -976,7 +973,7 @@ impl Transcriber {
                 let msg = match msg {
                     Ok(msg) => msg,
                     Err(err) => {
-                        gst_error!(CAT, "Failed to receive data: {}", err);
+                        gst::error!(CAT, "Failed to receive data: {}", err);
                         element_error!(
                             element,
                             gst::StreamError::Failed,
@@ -1006,7 +1003,7 @@ impl Transcriber {
 
         state.connected = true;
 
-        gst_info!(CAT, obj: element, "Connected");
+        gst::info!(CAT, obj: element, "Connected");
 
         Ok(())
     }
@@ -1014,7 +1011,7 @@ impl Transcriber {
     fn disconnect(&self, element: &super::Transcriber) {
         let mut state = self.state.lock().unwrap();
 
-        gst_info!(CAT, obj: element, "Unpreparing");
+        gst::info!(CAT, obj: element, "Unpreparing");
 
         if let Some(abort_handle) = state.recv_abort_handle.take() {
             abort_handle.abort();
@@ -1026,7 +1023,7 @@ impl Transcriber {
 
         *state = State::default();
 
-        gst_info!(
+        gst::info!(
             CAT,
             obj: element,
             "Unprepared, connected: {}!",
@@ -1316,7 +1313,7 @@ impl ElementImpl for Transcriber {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_info!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::info!(CAT, obj: element, "Changing state {:?}", transition);
 
         let mut success = self.parent_change_state(element, transition)?;
 

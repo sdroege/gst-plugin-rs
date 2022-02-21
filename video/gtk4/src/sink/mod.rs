@@ -13,8 +13,6 @@ use gtk::glib;
 use gtk::glib::prelude::*;
 use gtk::subclass::prelude::*;
 
-use gst::{gst_debug, gst_trace};
-
 use fragile::Fragile;
 
 use std::sync::{mpsc, MutexGuard};
@@ -54,7 +52,7 @@ impl PaintableSink {
         &self,
         paintable_storage: &mut MutexGuard<Option<Fragile<SinkPaintable>>>,
     ) {
-        gst_debug!(imp::CAT, obj: self, "Initializing paintable");
+        gst::debug!(imp::CAT, obj: self, "Initializing paintable");
 
         let context = glib::MainContext::default();
 
@@ -98,7 +96,7 @@ impl PaintableSink {
 
         match action {
             SinkEvent::FrameChanged => {
-                gst_trace!(imp::CAT, obj: self, "Frame changed");
+                gst::trace!(imp::CAT, obj: self, "Frame changed");
                 paintable.get().handle_frame_changed(self.pending_frame())
             }
         }

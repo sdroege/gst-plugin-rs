@@ -9,7 +9,6 @@
 // SPDX-License-Identifier: MIT/Apache-2.0
 
 use gst::glib;
-use gst::gst_debug;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
@@ -189,7 +188,7 @@ impl VideoDecoderImpl for CdgDec {
             }
         }
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Finish frame pts={}",
@@ -221,7 +220,7 @@ impl VideoDecoderImpl for CdgDec {
     }
 
     fn flush(&self, element: &Self::Type) -> bool {
-        gst_debug!(CAT, obj: element, "flushing, reset CDG interpreter");
+        gst::debug!(CAT, obj: element, "flushing, reset CDG interpreter");
 
         let mut cdg_inter = self.cdg_inter.lock().unwrap();
         cdg_inter.reset(false);

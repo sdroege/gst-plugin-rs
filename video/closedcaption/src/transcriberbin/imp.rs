@@ -11,7 +11,6 @@ use anyhow::Error;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_log, gst_trace};
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
@@ -85,7 +84,7 @@ impl TranscriberBin {
         element: &super::TranscriberBin,
         state: &mut State,
     ) -> Result<(), Error> {
-        gst_debug!(CAT, obj: element, "Building transcription bin");
+        gst::debug!(CAT, obj: element, "Building transcription bin");
 
         let aqueue_transcription = gst::ElementFactory::make("queue", Some("transqueue"))?;
         let ccconverter = gst::ElementFactory::make("ccconverter", None)?;
@@ -263,7 +262,7 @@ impl TranscriberBin {
             let passthrough = self.settings.lock().unwrap().passthrough;
 
             if passthrough {
-                gst_debug!(CAT, obj: element, "disabling transcription bin");
+                gst::debug!(CAT, obj: element, "disabling transcription bin");
 
                 let bin_sink_pad = state.transcription_bin.static_pad("sink").unwrap();
                 if let Some(audio_tee_pad) = bin_sink_pad.peer() {
@@ -330,7 +329,7 @@ impl TranscriberBin {
     fn setup_cc_mode(&self, element: &super::TranscriberBin, state: &State) {
         let mode = self.settings.lock().unwrap().mode;
 
-        gst_debug!(CAT, obj: element, "setting CC mode {:?}", mode);
+        gst::debug!(CAT, obj: element, "setting CC mode {:?}", mode);
 
         state.tttocea608.set_property("mode", mode);
 
@@ -353,7 +352,7 @@ impl TranscriberBin {
         element: &super::TranscriberBin,
         old_transcriber: &gst::Element,
     ) -> Result<(), Error> {
-        gst_error!(
+        gst::error!(
             CAT,
             obj: element,
             "Relinking transcriber, old: {:?}, new: {:?}",
@@ -386,7 +385,7 @@ impl TranscriberBin {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Latency(q) => {
@@ -463,7 +462,7 @@ impl TranscriberBin {
     ) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Caps(e) => {
                 let mut state = self.state.lock().unwrap();
@@ -481,7 +480,7 @@ impl TranscriberBin {
                     }
 
                     if !had_framerate {
-                        gst_info!(
+                        gst::info!(
                             CAT,
                             obj: element,
                             "Received video caps, setting up transcription"
@@ -666,7 +665,7 @@ impl ObjectImpl for TranscriberBin {
                         match self.relink_transcriber(state, obj, &old_transcriber) {
                             Ok(()) => (),
                             Err(err) => {
-                                gst_error!(CAT, "invalid transcriber: {}", err);
+                                gst::error!(CAT, "invalid transcriber: {}", err);
                                 drop(s);
                                 *self.state.lock().unwrap() = None;
                             }
@@ -725,12 +724,12 @@ impl ObjectImpl for TranscriberBin {
             Ok(mut state) => match self.construct_internal_bin(obj, &mut state) {
                 Ok(()) => Some(state),
                 Err(err) => {
-                    gst_error!(CAT, "Failed to build internal bin: {}", err);
+                    gst::error!(CAT, "Failed to build internal bin: {}", err);
                     None
                 }
             },
             Err(err) => {
-                gst_error!(CAT, "Failed to build state: {}", err);
+                gst::error!(CAT, "Failed to build state: {}", err);
                 None
             }
         }
@@ -804,7 +803,7 @@ impl ElementImpl for TranscriberBin {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {
@@ -812,7 +811,7 @@ impl ElementImpl for TranscriberBin {
 
                 if let Some(ref mut state) = state.as_mut() {
                     if state.framerate.is_some() {
-                        gst_info!(
+                        gst::info!(
                             CAT,
                             obj: element,
                             "Received video caps, setting up transcription"
@@ -846,7 +845,7 @@ impl BinImpl for TranscriberBin {
 
                 if let Some(state) = s.as_ref() {
                     if msg.src().as_ref() == Some(state.transcriber.upcast_ref()) {
-                        gst_error!(
+                        gst::error!(
                             CAT,
                             obj: bin,
                             "Transcriber has posted an error ({:?}), going back to passthrough",

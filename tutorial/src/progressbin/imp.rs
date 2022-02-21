@@ -9,7 +9,6 @@
 // SPDX-License-Identifier: MIT/Apache-2.0
 
 use gst::glib;
-use gst::gst_info;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::sync::Mutex;
@@ -111,7 +110,7 @@ impl ObjectImpl for ProgressBin {
                 let new_output_type = value
                     .get::<ProgressBinOutput>()
                     .expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing output from {:?} to {:?}",
@@ -238,7 +237,7 @@ impl BinImpl for ProgressBin {
                     match output_type {
                         ProgressBinOutput::Println => println!("progress: {:5.1}%", percent),
                         ProgressBinOutput::DebugCategory => {
-                            gst_info!(CAT, "progress: {:5.1}%", percent);
+                            gst::info!(CAT, "progress: {:5.1}%", percent);
                         }
                     };
                 }

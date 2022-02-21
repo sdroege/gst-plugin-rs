@@ -13,7 +13,6 @@ use once_cell::sync::Lazy;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_log};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -272,7 +271,7 @@ impl TextAhead {
         // queue buffer
         let mut state = self.state.lock().unwrap();
 
-        gst_log!(CAT, obj: element, "input {:?}: {}", pts, text);
+        gst::log!(CAT, obj: element, "input {:?}: {}", pts, text);
 
         state.pending.push(Input {
             text,
@@ -299,7 +298,7 @@ impl TextAhead {
             gst::EventView::Eos(_) => {
                 let mut state = self.state.lock().unwrap();
 
-                gst_debug!(CAT, obj: element, "eos");
+                gst::debug!(CAT, obj: element, "eos");
 
                 while !state.pending.is_empty() {
                     let _ = self.push_pending(element, &mut state);
@@ -354,7 +353,7 @@ impl TextAhead {
             }
         }
 
-        gst_log!(CAT, obj: element, "output {:?}: {}", first.pts, text);
+        gst::log!(CAT, obj: element, "output {:?}: {}", first.pts, text);
 
         let mut output = gst::Buffer::from_mut_slice(text.into_bytes());
         {

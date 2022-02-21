@@ -8,7 +8,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{element_error, error_msg, gst_error, gst_log, gst_trace};
+use gst::{element_error, error_msg};
 use serde_derive::Deserialize;
 
 use once_cell::sync::Lazy;
@@ -86,7 +86,7 @@ impl TranscribeParse {
         _element: &super::TranscribeParse,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.lock().unwrap();
 
@@ -228,7 +228,7 @@ impl TranscribeParse {
     ) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::FlushStop(..) => {
                 let mut state = self.state.lock().unwrap();
@@ -238,7 +238,7 @@ impl TranscribeParse {
             EventView::Eos(..) => match self.drain() {
                 Ok(()) => pad.event_default(Some(element), event),
                 Err(err) => {
-                    gst_error!(CAT, obj: element, "failed to drain on EOS: {}", err);
+                    gst::error!(CAT, obj: element, "failed to drain on EOS: {}", err);
                     element_error!(
                         element,
                         gst::StreamError::Failed,
@@ -348,7 +348,7 @@ impl ElementImpl for TranscribeParse {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {

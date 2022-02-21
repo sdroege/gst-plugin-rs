@@ -10,7 +10,6 @@
 
 use atomic_refcell::AtomicRefCell;
 use gst::glib;
-use gst::gst_debug;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
@@ -634,7 +633,7 @@ impl VideoEncoderImpl for Rav1Enc {
             .map_err(|_| gst::loggable_error!(CAT, "Failed to drain"))?;
 
         let video_info = state.info();
-        gst_debug!(CAT, obj: element, "Setting format {:?}", video_info);
+        gst::debug!(CAT, obj: element, "Setting format {:?}", video_info);
 
         let settings = self.settings.lock().unwrap();
 
@@ -884,13 +883,13 @@ impl VideoEncoderImpl for Rav1Enc {
     }
 
     fn flush(&self, element: &Self::Type) -> bool {
-        gst_debug!(CAT, obj: element, "Flushing");
+        gst::debug!(CAT, obj: element, "Flushing");
 
         let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
             state.context.flush();
             while let Ok(_) | Err(data::EncoderStatus::Encoded) = state.context.receive_packet() {
-                gst_debug!(CAT, obj: element, "Dropping packet on flush",);
+                gst::debug!(CAT, obj: element, "Dropping packet on flush",);
             }
         }
 
@@ -898,7 +897,7 @@ impl VideoEncoderImpl for Rav1Enc {
     }
 
     fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_debug!(CAT, obj: element, "Finishing");
+        gst::debug!(CAT, obj: element, "Finishing");
 
         let mut state_guard = self.state.borrow_mut();
         if let Some(ref mut state) = *state_guard {
@@ -919,7 +918,7 @@ impl VideoEncoderImpl for Rav1Enc {
 
         self.output_frames(element, state)?;
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Sending frame {}",
@@ -947,7 +946,7 @@ impl VideoEncoderImpl for Rav1Enc {
                 .contains(gst_video::VideoCodecFrameFlags::FORCE_KEYFRAME),
         ) {
             Ok(_) => {
-                gst_debug!(
+                gst::debug!(
                     CAT,
                     obj: element,
                     "Sent frame {}",
@@ -974,7 +973,7 @@ impl Rav1Enc {
         loop {
             match state.context.receive_packet() {
                 Ok((packet_type, packet_number, frame_number, packet_data)) => {
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Received packet {} of size {}, frame type {:?}",
@@ -993,10 +992,10 @@ impl Rav1Enc {
                     element.finish_frame(Some(frame))?;
                 }
                 Err(data::EncoderStatus::Encoded) => {
-                    gst_debug!(CAT, obj: element, "Encoded but not output frame yet",);
+                    gst::debug!(CAT, obj: element, "Encoded but not output frame yet",);
                 }
                 Err(data::EncoderStatus::NeedMoreData) => {
-                    gst_debug!(CAT, obj: element, "Encoded but need more data",);
+                    gst::debug!(CAT, obj: element, "Encoded but need more data",);
                     return Ok(gst::FlowSuccess::Ok);
                 }
                 Err(data::EncoderStatus::Failure) => {
@@ -1008,7 +1007,7 @@ impl Rav1Enc {
                     return Err(gst::FlowError::Error);
                 }
                 Err(err) => {
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Soft error when receiving frame: {:?}",

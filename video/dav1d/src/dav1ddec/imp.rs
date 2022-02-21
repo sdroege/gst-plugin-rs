@@ -11,7 +11,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_trace, gst_warning};
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 
@@ -60,7 +59,7 @@ impl Dav1dDec {
             (dav1d::PixelLayout::I422, _) => "I422",
             (dav1d::PixelLayout::I444, _) => "Y444",
             (layout, bpc) => {
-                gst_warning!(
+                gst::warning!(
                     CAT,
                     obj: element,
                     "Unsupported dav1d format {:?}/{:?}",
@@ -90,7 +89,7 @@ impl Dav1dDec {
             }
         };
         f.parse::<gst_video::VideoFormat>().unwrap_or_else(|_| {
-            gst_warning!(CAT, obj: element, "Unsupported dav1d format: {}", f);
+            gst::warning!(CAT, obj: element, "Unsupported dav1d format: {}", f);
             gst_video::VideoFormat::Unknown
         })
     }
@@ -121,7 +120,7 @@ impl Dav1dDec {
             return Ok(state_guard);
         }
 
-        gst_info!(
+        gst::info!(
             CAT,
             obj: element,
             "Negotiating format {:?} picture dimensions {}x{}",
@@ -146,7 +145,7 @@ impl Dav1dDec {
     }
 
     fn flush_decoder(&self, element: &super::Dav1dDec, state_guard: &mut Option<State>) {
-        gst_info!(CAT, obj: element, "Flushing decoder");
+        gst::info!(CAT, obj: element, "Flushing decoder");
 
         let state = state_guard.as_mut().unwrap();
         state.decoder.flush();
@@ -159,7 +158,7 @@ impl Dav1dDec {
         input_buffer: gst::Buffer,
         frame: gst_video::VideoCodecFrame,
     ) -> Result<std::ops::ControlFlow<(), ()>, gst::FlowError> {
-        gst_trace!(
+        gst::trace!(
             CAT,
             obj: element,
             "Sending data to decoder for frame {}",
@@ -182,15 +181,15 @@ impl Dav1dDec {
             .send_data(input_data, frame_number, timestamp, duration)
         {
             Ok(()) => {
-                gst_trace!(CAT, obj: element, "Decoder returned OK");
+                gst::trace!(CAT, obj: element, "Decoder returned OK");
                 Ok(std::ops::ControlFlow::Break(()))
             }
             Err(err) if err.is_again() => {
-                gst_trace!(CAT, obj: element, "Decoder returned EAGAIN");
+                gst::trace!(CAT, obj: element, "Decoder returned EAGAIN");
                 Ok(std::ops::ControlFlow::Continue(()))
             }
             Err(err) => {
-                gst_error!(CAT, "Sending data failed (error code: {})", err);
+                gst::error!(CAT, "Sending data failed (error code: {})", err);
                 element.release_frame(frame);
                 return gst_video::video_decoder_error!(
                     element,
@@ -208,21 +207,21 @@ impl Dav1dDec {
         element: &super::Dav1dDec,
         state_guard: &mut AtomicRefMut<Option<State>>,
     ) -> Result<std::ops::ControlFlow<(), ()>, gst::FlowError> {
-        gst_trace!(CAT, obj: element, "Sending pending data to decoder");
+        gst::trace!(CAT, obj: element, "Sending pending data to decoder");
 
         let state = state_guard.as_mut().unwrap();
 
         match state.decoder.send_pending_data() {
             Ok(()) => {
-                gst_trace!(CAT, obj: element, "Decoder returned OK");
+                gst::trace!(CAT, obj: element, "Decoder returned OK");
                 Ok(std::ops::ControlFlow::Break(()))
             }
             Err(err) if err.is_again() => {
-                gst_trace!(CAT, obj: element, "Decoder returned EAGAIN");
+                gst::trace!(CAT, obj: element, "Decoder returned EAGAIN");
                 Ok(std::ops::ControlFlow::Continue(()))
             }
             Err(err) => {
-                gst_error!(CAT, "Sending data failed (error code: {})", err);
+                gst::error!(CAT, "Sending data failed (error code: {})", err);
                 return gst_video::video_decoder_error!(
                     element,
                     1,
@@ -274,7 +273,7 @@ impl Dav1dDec {
             let mem = if video_meta_supported || src_stride == dest_stride {
                 gst::Memory::from_slice(plane)
             } else {
-                gst_trace!(
+                gst::trace!(
                     gst::CAT_PERFORMANCE,
                     obj: element,
                     "Copying decoded video frame component {:?}",
@@ -335,7 +334,7 @@ impl Dav1dDec {
         mut state_guard: AtomicRefMut<'s, Option<State>>,
         pic: &dav1d::Picture,
     ) -> Result<AtomicRefMut<'s, Option<State>>, gst::FlowError> {
-        gst_trace!(CAT, obj: element, "Handling picture {}", pic.offset());
+        gst::trace!(CAT, obj: element, "Handling picture {}", pic.offset());
 
         state_guard = self.handle_resolution_change(element, state_guard, pic)?;
 
@@ -352,14 +351,14 @@ impl Dav1dDec {
             element.finish_frame(frame)?;
             Ok(self.state.borrow_mut())
         } else {
-            gst_warning!(CAT, obj: element, "No frame found for offset {}", offset);
+            gst::warning!(CAT, obj: element, "No frame found for offset {}", offset);
             Ok(state_guard)
         }
     }
 
     fn drop_decoded_pictures(&self, element: &super::Dav1dDec, state_guard: &mut Option<State>) {
         while let Ok(Some(pic)) = self.pending_pictures(element, state_guard) {
-            gst_debug!(CAT, obj: element, "Dropping picture {}", pic.offset());
+            gst::debug!(CAT, obj: element, "Dropping picture {}", pic.offset());
             drop(pic);
         }
     }
@@ -369,21 +368,21 @@ impl Dav1dDec {
         element: &super::Dav1dDec,
         state_guard: &mut Option<State>,
     ) -> Result<Option<dav1d::Picture>, gst::FlowError> {
-        gst_trace!(CAT, obj: element, "Retrieving pending picture");
+        gst::trace!(CAT, obj: element, "Retrieving pending picture");
 
         let state = state_guard.as_mut().unwrap();
 
         match state.decoder.get_picture() {
             Ok(pic) => {
-                gst_trace!(CAT, obj: element, "Retrieved picture {}", pic.offset());
+                gst::trace!(CAT, obj: element, "Retrieved picture {}", pic.offset());
                 Ok(Some(pic))
             }
             Err(err) if err.is_again() => {
-                gst_trace!(CAT, obj: element, "Decoder needs more data");
+                gst::trace!(CAT, obj: element, "Decoder needs more data");
                 Ok(None)
             }
             Err(err) => {
-                gst_error!(
+                gst::error!(
                     CAT,
                     obj: element,
                     "Retrieving decoded picture failed (error code {})",
@@ -598,7 +597,7 @@ impl VideoDecoderImpl for Dav1dDec {
     }
 
     fn flush(&self, element: &Self::Type) -> bool {
-        gst_info!(CAT, obj: element, "Flushing");
+        gst::info!(CAT, obj: element, "Flushing");
 
         {
             let mut state_guard = self.state.borrow_mut();
@@ -610,7 +609,7 @@ impl VideoDecoderImpl for Dav1dDec {
     }
 
     fn drain(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_info!(CAT, obj: element, "Draining");
+        gst::info!(CAT, obj: element, "Draining");
 
         {
             let mut state_guard = self.state.borrow_mut();
@@ -622,7 +621,7 @@ impl VideoDecoderImpl for Dav1dDec {
     }
 
     fn finish(&self, element: &Self::Type) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_info!(CAT, obj: element, "Finishing");
+        gst::info!(CAT, obj: element, "Finishing");
 
         {
             let mut state_guard = self.state.borrow_mut();

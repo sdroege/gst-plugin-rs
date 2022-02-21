@@ -10,7 +10,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error};
 use gst_base::subclass::base_transform::BaseTransformImplExt;
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
@@ -132,7 +131,7 @@ impl AudioRNNoise {
         }
 
         let mut buffer = gst::Buffer::with_size(available).map_err(|e| {
-            gst_error!(
+            gst::error!(
                 CAT,
                 obj: element,
                 "Failed to allocate buffer at EOS {:?}",
@@ -279,7 +278,7 @@ impl BaseTransformImpl for AudioRNNoise {
             ));
         }
 
-        gst_debug!(CAT, obj: element, "Set caps to {}", incaps);
+        gst::debug!(CAT, obj: element, "Set caps to {}", incaps);
 
         let in_info = gst_audio::AudioInfo::from_caps(incaps)
             .map_err(|e| gst::loggable_error!(CAT, "Failed to parse input caps {:?}", e))?;
@@ -337,7 +336,7 @@ impl BaseTransformImpl for AudioRNNoise {
         use gst::EventView;
 
         if let EventView::Eos(_) = event.view() {
-            gst_debug!(CAT, obj: element, "Handling EOS");
+            gst::debug!(CAT, obj: element, "Handling EOS");
             if self.drain(element).is_err() {
                 return false;
             }
@@ -357,7 +356,7 @@ impl BaseTransformImpl for AudioRNNoise {
                 let mut upstream_query = gst::query::Latency::new();
                 if sink_pad.peer_query(&mut upstream_query) {
                     let (live, mut min, mut max) = upstream_query.result();
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: element,
                         "Peer latency: live {} min {} max {}",

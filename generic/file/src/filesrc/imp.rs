@@ -12,7 +12,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info};
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
@@ -98,7 +97,7 @@ impl FileSrc {
 
                 match settings.location {
                     Some(ref location_cur) => {
-                        gst_info!(
+                        gst::info!(
                             CAT,
                             obj: element,
                             "Changing `location` from {:?} to {}",
@@ -107,13 +106,13 @@ impl FileSrc {
                         );
                     }
                     None => {
-                        gst_info!(CAT, obj: element, "Setting `location to {}", location,);
+                        gst::info!(CAT, obj: element, "Setting `location to {}", location,);
                     }
                 }
                 Some(location)
             }
             None => {
-                gst_info!(CAT, obj: element, "Resetting `location` to None",);
+                gst::info!(CAT, obj: element, "Resetting `location` to None",);
                 None
             }
         };
@@ -162,7 +161,7 @@ impl ObjectImpl for FileSrc {
                 };
 
                 if let Err(err) = res {
-                    gst_error!(CAT, obj: obj, "Failed to set property `location`: {}", err);
+                    gst::error!(CAT, obj: obj, "Failed to set property `location`: {}", err);
                 }
             }
             _ => unimplemented!(),
@@ -264,11 +263,11 @@ impl BaseSrcImpl for FileSrc {
             )
         })?;
 
-        gst_debug!(CAT, obj: element, "Opened file {:?}", file);
+        gst::debug!(CAT, obj: element, "Opened file {:?}", file);
 
         *state = State::Started { file, position: 0 };
 
-        gst_info!(CAT, obj: element, "Started");
+        gst::info!(CAT, obj: element, "Started");
 
         Ok(())
     }
@@ -284,7 +283,7 @@ impl BaseSrcImpl for FileSrc {
 
         *state = State::Stopped;
 
-        gst_info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }

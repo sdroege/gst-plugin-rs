@@ -18,7 +18,6 @@ use ::flavors::parser as flavors;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log, gst_trace, gst_warning};
 
 use num_rational::Rational32;
 
@@ -317,10 +316,10 @@ impl FlvDemux {
             //         gst::SchedulingFlags::SEEKABLE,
             //     )
             // {
-            //     gst_debug!(CAT, obj: pad, "Activating in Pull mode");
+            //     gst::debug!(CAT, obj: pad, "Activating in Pull mode");
             //     gst::PadMode::Pull
             // } else {
-            gst_debug!(CAT, obj: pad, "Activating in Push mode");
+            gst::debug!(CAT, obj: pad, "Activating in Push mode");
             gst::PadMode::Push
             // }
         };
@@ -378,7 +377,7 @@ impl FlvDemux {
     fn sink_event(&self, pad: &gst::Pad, element: &super::FlvDemux, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Eos(..) => {
                 // TODO implement
@@ -471,7 +470,7 @@ impl FlvDemux {
         element: &super::FlvDemux,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         let mut adapter = self.adapter.lock().unwrap();
         adapter.push(buffer);
@@ -484,7 +483,7 @@ impl FlvDemux {
                     let header = match self.find_header(element, &mut *adapter) {
                         Ok(header) => header,
                         Err(_) => {
-                            gst_trace!(CAT, obj: element, "Need more data");
+                            gst::trace!(CAT, obj: element, "Need more data");
                             return Ok(gst::FlowSuccess::Ok);
                         }
                     };
@@ -513,7 +512,7 @@ impl FlvDemux {
                 } => {
                     let avail = adapter.available();
                     if avail == 0 {
-                        gst_trace!(CAT, obj: element, "Need more data");
+                        gst::trace!(CAT, obj: element, "Need more data");
                         return Ok(gst::FlowSuccess::Ok);
                     }
                     let skip = cmp::min(avail, *skip_left as usize);
@@ -525,7 +524,7 @@ impl FlvDemux {
 
                     match res {
                         Ok(None) => {
-                            gst_trace!(CAT, obj: element, "Need more data");
+                            gst::trace!(CAT, obj: element, "Need more data");
                             return Ok(gst::FlowSuccess::Ok);
                         }
                         Ok(Some(events)) => {
@@ -556,7 +555,7 @@ impl FlvDemux {
             let data = adapter.map(9).unwrap();
 
             if let Ok((_, header)) = flavors::header(&*data) {
-                gst_debug!(CAT, obj: element, "Found FLV header: {:?}", header);
+                gst::debug!(CAT, obj: element, "Found FLV header: {:?}", header);
                 drop(data);
                 adapter.flush(9);
 
@@ -618,7 +617,7 @@ impl FlvDemux {
 
                     if let Some(pad) = pad {
                         let res = pad.push(buffer);
-                        gst_trace!(
+                        gst::trace!(
                             CAT,
                             obj: element,
                             "Pushing buffer for stream {:?} returned {:?}",
@@ -710,7 +709,7 @@ impl StreamingState {
         match be_u32::<_, (_, nom::error::ErrorKind)>(&data[0..4]) {
             Err(_) => unreachable!(),
             Ok((_, previous_size)) => {
-                gst_trace!(CAT, obj: element, "Previous tag size {}", previous_size);
+                gst::trace!(CAT, obj: element, "Previous tag size {}", previous_size);
                 // Nothing to do here, we just consume it for now
             }
         }
@@ -726,7 +725,7 @@ impl StreamingState {
             Ok((_, tag_header)) => tag_header,
         };
 
-        gst_trace!(CAT, obj: element, "Parsed tag header {:?}", tag_header);
+        gst::trace!(CAT, obj: element, "Parsed tag header {:?}", tag_header);
 
         drop(data);
 
@@ -738,17 +737,17 @@ impl StreamingState {
 
         match tag_header.tag_type {
             flavors::TagType::Script => {
-                gst_trace!(CAT, obj: element, "Found script tag");
+                gst::trace!(CAT, obj: element, "Found script tag");
 
                 Ok(self.handle_script_tag(element, &tag_header, adapter))
             }
             flavors::TagType::Audio => {
-                gst_trace!(CAT, obj: element, "Found audio tag");
+                gst::trace!(CAT, obj: element, "Found audio tag");
 
                 self.handle_audio_tag(element, &tag_header, adapter)
             }
             flavors::TagType::Video => {
-                gst_trace!(CAT, obj: element, "Found video tag");
+                gst::trace!(CAT, obj: element, "Found video tag");
 
                 self.handle_video_tag(element, &tag_header, adapter)
             }
@@ -770,10 +769,10 @@ impl StreamingState {
 
         match flavors::script_data(&*data) {
             Ok((_, ref script_data)) if script_data.name == "onMetaData" => {
-                gst_trace!(CAT, obj: element, "Got script tag: {:?}", script_data);
+                gst::trace!(CAT, obj: element, "Got script tag: {:?}", script_data);
 
                 let metadata = Metadata::new(script_data);
-                gst_debug!(CAT, obj: element, "Got metadata: {:?}", metadata);
+                gst::debug!(CAT, obj: element, "Got metadata: {:?}", metadata);
 
                 let audio_changed = self
                     .audio
@@ -801,10 +800,10 @@ impl StreamingState {
                 }
             }
             Ok((_, ref script_data)) => {
-                gst_trace!(CAT, obj: element, "Got script tag: {:?}", script_data);
+                gst::trace!(CAT, obj: element, "Got script tag: {:?}", script_data);
             }
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
-                gst_error!(CAT, obj: element, "Error parsing script tag: {:?}", err);
+                gst::error!(CAT, obj: element, "Error parsing script tag: {:?}", err);
             }
             Err(nom::Err::Incomplete(_)) => {
                 // ignore
@@ -824,7 +823,7 @@ impl StreamingState {
     ) -> SmallVec<[Event; 4]> {
         let mut events = SmallVec::new();
 
-        gst_trace!(
+        gst::trace!(
             CAT,
             obj: element,
             "Got audio data header: {:?}",
@@ -835,7 +834,7 @@ impl StreamingState {
             AudioFormat::new(data_header, &self.metadata, &self.aac_sequence_header);
 
         if self.audio.as_ref() != Some(&new_audio_format) {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Got new audio format: {:?}",
@@ -853,7 +852,7 @@ impl StreamingState {
 
         if (!self.expect_video || self.video != None) && self.audio != None && !self.got_all_streams
         {
-            gst_debug!(CAT, obj: element, "Have all expected streams now");
+            gst::debug!(CAT, obj: element, "Have all expected streams now");
             self.got_all_streams = true;
             events.push(Event::HaveAllStreams);
         }
@@ -870,7 +869,7 @@ impl StreamingState {
         // Not big enough for the AAC packet header, ship!
         if tag_header.data_size < 1 + 1 {
             adapter.flush((tag_header.data_size - 1) as usize);
-            gst_warning!(
+            gst::warning!(
                 CAT,
                 obj: element,
                 "Too small packet for AAC packet header {}",
@@ -883,7 +882,7 @@ impl StreamingState {
 
         match flavors::aac_audio_packet_header(&*data) {
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
-                gst_error!(
+                gst::error!(
                     CAT,
                     obj: element,
                     "Invalid AAC audio packet header: {:?}",
@@ -895,7 +894,7 @@ impl StreamingState {
             }
             Err(nom::Err::Incomplete(_)) => unreachable!(),
             Ok((_, header)) => {
-                gst_trace!(CAT, obj: element, "Got AAC packet header {:?}", header);
+                gst::trace!(CAT, obj: element, "Got AAC packet header {:?}", header);
                 match header.packet_type {
                     flavors::AACPacketType::SequenceHeader => {
                         drop(data);
@@ -903,7 +902,7 @@ impl StreamingState {
                         let buffer = adapter
                             .take_buffer((tag_header.data_size - 1 - 1) as usize)
                             .unwrap();
-                        gst_debug!(CAT, obj: element, "Got AAC sequence header {:?}", buffer,);
+                        gst::debug!(CAT, obj: element, "Got AAC sequence header {:?}", buffer,);
 
                         self.aac_sequence_header = Some(buffer);
                         Ok(true)
@@ -929,7 +928,7 @@ impl StreamingState {
         let data = adapter.map(1).unwrap();
         let data_header = match flavors::audio_data_header(&*data) {
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
-                gst_error!(CAT, obj: element, "Invalid audio data header: {:?}", err);
+                gst::error!(CAT, obj: element, "Invalid audio data header: {:?}", err);
                 drop(data);
                 adapter.flush(tag_header.data_size as usize);
                 return Ok(SmallVec::new());
@@ -972,7 +971,7 @@ impl StreamingState {
             buffer.set_pts(gst::ClockTime::from_mseconds(tag_header.timestamp as u64));
         }
 
-        gst_trace!(
+        gst::trace!(
             CAT,
             obj: element,
             "Outputting audio buffer {:?} for tag {:?}",
@@ -994,7 +993,7 @@ impl StreamingState {
     ) -> SmallVec<[Event; 4]> {
         let mut events = SmallVec::new();
 
-        gst_trace!(
+        gst::trace!(
             CAT,
             obj: element,
             "Got video data header: {:?}",
@@ -1005,7 +1004,7 @@ impl StreamingState {
             VideoFormat::new(data_header, &self.metadata, &self.avc_sequence_header);
 
         if self.video.as_ref() != Some(&new_video_format) {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "Got new video format: {:?}",
@@ -1023,7 +1022,7 @@ impl StreamingState {
 
         if (!self.expect_audio || self.audio != None) && self.video != None && !self.got_all_streams
         {
-            gst_debug!(CAT, obj: element, "Have all expected streams now");
+            gst::debug!(CAT, obj: element, "Have all expected streams now");
             self.got_all_streams = true;
             events.push(Event::HaveAllStreams);
         }
@@ -1040,7 +1039,7 @@ impl StreamingState {
         // Not big enough for the AVC packet header, skip!
         if tag_header.data_size < 1 + 4 {
             adapter.flush((tag_header.data_size - 1) as usize);
-            gst_warning!(
+            gst::warning!(
                 CAT,
                 obj: element,
                 "Too small packet for AVC packet header {}",
@@ -1052,7 +1051,7 @@ impl StreamingState {
         let data = adapter.map(4).unwrap();
         match flavors::avc_video_packet_header(&*data) {
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
-                gst_error!(
+                gst::error!(
                     CAT,
                     obj: element,
                     "Invalid AVC video packet header: {:?}",
@@ -1064,7 +1063,7 @@ impl StreamingState {
             }
             Err(nom::Err::Incomplete(_)) => unreachable!(),
             Ok((_, header)) => {
-                gst_trace!(CAT, obj: element, "Got AVC packet header {:?}", header);
+                gst::trace!(CAT, obj: element, "Got AVC packet header {:?}", header);
                 match header.packet_type {
                     flavors::AVCPacketType::SequenceHeader => {
                         drop(data);
@@ -1072,7 +1071,7 @@ impl StreamingState {
                         let buffer = adapter
                             .take_buffer((tag_header.data_size - 1 - 4) as usize)
                             .unwrap();
-                        gst_debug!(
+                        gst::debug!(
                             CAT,
                             obj: element,
                             "Got AVC sequence header {:?} of size {}",
@@ -1110,7 +1109,7 @@ impl StreamingState {
         let data = adapter.map(1).unwrap();
         let data_header = match flavors::video_data_header(&*data) {
             Err(nom::Err::Error(err)) | Err(nom::Err::Failure(err)) => {
-                gst_error!(CAT, obj: element, "Invalid video data header: {:?}", err);
+                gst::error!(CAT, obj: element, "Invalid video data header: {:?}", err);
                 drop(data);
                 adapter.flush(tag_header.data_size as usize);
                 return Ok(SmallVec::new());
@@ -1184,7 +1183,7 @@ impl StreamingState {
             buffer.set_pts(gst::ClockTime::from_mseconds(pts));
         }
 
-        gst_trace!(
+        gst::trace!(
             CAT,
             obj: element,
             "Outputting video buffer {:?} for tag {:?}, keyframe: {}",

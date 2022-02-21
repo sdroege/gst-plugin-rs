@@ -11,7 +11,6 @@ use gst::glib;
 use gst::prelude::*;
 use gst::structure;
 use gst::subclass::prelude::*;
-use gst::{gst_error, gst_log, gst_trace};
 use gst_video::{self, ValidVideoTimeCode};
 
 use once_cell::sync::Lazy;
@@ -255,13 +254,13 @@ impl SccEnc {
         element: &super::SccEnc,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         let mut state = self.state.lock().unwrap();
         let res = state.generate_caption(element, buffer)?;
 
         if let Some(outbuf) = res {
-            gst_trace!(CAT, obj: pad, "Pushing buffer {:?} to the pad", &outbuf);
+            gst::trace!(CAT, obj: pad, "Pushing buffer {:?} to the pad", &outbuf);
 
             drop(state);
             self.srcpad.push(outbuf)?;
@@ -273,7 +272,7 @@ impl SccEnc {
     fn sink_event(&self, pad: &gst::Pad, element: &super::SccEnc, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
 
         match event.view() {
             EventView::Caps(ev) => {
@@ -282,7 +281,7 @@ impl SccEnc {
                 let framerate = match s.get::<gst::Fraction>("framerate") {
                     Ok(framerate) => Some(framerate),
                     Err(structure::GetError::FieldNotFound { .. }) => {
-                        gst_error!(CAT, obj: pad, "Caps without framerate");
+                        gst::error!(CAT, obj: pad, "Caps without framerate");
                         return false;
                     }
                     err => panic!("SccEnc::sink_event caps: {:?}", err),
@@ -301,15 +300,15 @@ impl SccEnc {
                 let outbuf = state.write_line(element);
 
                 if let Ok(Some(buffer)) = outbuf {
-                    gst_trace!(CAT, obj: pad, "Pushing buffer {:?} to the pad", &buffer);
+                    gst::trace!(CAT, obj: pad, "Pushing buffer {:?} to the pad", &buffer);
 
                     drop(state);
                     if self.srcpad.push(buffer).is_err() {
-                        gst_error!(CAT, obj: pad, "Failed to push buffer to the pad");
+                        gst::error!(CAT, obj: pad, "Failed to push buffer to the pad");
                         return false;
                     }
                 } else if let Err(err) = outbuf {
-                    gst_error!(CAT, obj: pad, "Failed to write a line after EOS: {:?}", err);
+                    gst::error!(CAT, obj: pad, "Failed to write a line after EOS: {:?}", err);
                     return false;
                 }
                 pad.event_default(Some(element), event)
@@ -321,10 +320,10 @@ impl SccEnc {
     fn src_event(&self, pad: &gst::Pad, element: &super::SccEnc, event: gst::Event) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Seek(_) => {
-                gst_log!(CAT, obj: pad, "Dropping seek event");
+                gst::log!(CAT, obj: pad, "Dropping seek event");
                 false
             }
             _ => pad.event_default(Some(element), event),
@@ -339,7 +338,7 @@ impl SccEnc {
     ) -> bool {
         use gst::QueryViewMut;
 
-        gst_log!(CAT, obj: pad, "Handling query {:?}", query);
+        gst::log!(CAT, obj: pad, "Handling query {:?}", query);
 
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
@@ -512,7 +511,7 @@ impl ElementImpl for SccEnc {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused => {

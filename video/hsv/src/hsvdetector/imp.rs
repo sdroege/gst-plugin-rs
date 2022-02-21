@@ -12,7 +12,6 @@ use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
-use gst::{gst_debug, gst_info};
 use gst_base::subclass::prelude::*;
 use gst_video::subclass::prelude::*;
 
@@ -238,7 +237,7 @@ impl ObjectImpl for HsvDetector {
             "hue-ref" => {
                 let mut settings = self.settings.lock().unwrap();
                 let hue_ref = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing hue-ref from {} to {}",
@@ -250,7 +249,7 @@ impl ObjectImpl for HsvDetector {
             "hue-var" => {
                 let mut settings = self.settings.lock().unwrap();
                 let hue_var = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing hue-var from {} to {}",
@@ -262,7 +261,7 @@ impl ObjectImpl for HsvDetector {
             "saturation-ref" => {
                 let mut settings = self.settings.lock().unwrap();
                 let saturation_ref = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing saturation-ref from {} to {}",
@@ -274,7 +273,7 @@ impl ObjectImpl for HsvDetector {
             "saturation-var" => {
                 let mut settings = self.settings.lock().unwrap();
                 let saturation_var = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing saturation-var from {} to {}",
@@ -286,7 +285,7 @@ impl ObjectImpl for HsvDetector {
             "value-ref" => {
                 let mut settings = self.settings.lock().unwrap();
                 let value_ref = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing value-ref from {} to {}",
@@ -298,7 +297,7 @@ impl ObjectImpl for HsvDetector {
             "value-var" => {
                 let mut settings = self.settings.lock().unwrap();
                 let value_var = value.get().expect("type checked upstream");
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: obj,
                     "Changing value-var from {} to {}",
@@ -436,7 +435,7 @@ impl BaseTransformImpl for HsvDetector {
             }
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Transformed caps from {} to {} in direction {:?}",

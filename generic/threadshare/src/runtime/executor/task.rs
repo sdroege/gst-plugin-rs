@@ -9,8 +9,6 @@ use concurrent_queue::ConcurrentQueue;
 use futures::future::BoxFuture;
 use futures::prelude::*;
 
-use gst::{gst_log, gst_trace, gst_warning};
-
 use pin_project_lite::pin_project;
 
 use slab::Slab;
@@ -139,7 +137,7 @@ impl TaskQueue {
 
         let context_name = Arc::clone(&self.context_name);
         let task_fut = async move {
-            gst_trace!(
+            gst::trace!(
                 RUNTIME_CAT,
                 "Running {:?} on context {}",
                 task_id,
@@ -149,7 +147,7 @@ impl TaskQueue {
             let _guard = CallOnDrop::new(move || {
                 if let Some(task) = tasks_clone.lock().unwrap().try_remove(task_id.0) {
                     if !task.sub_tasks.is_empty() {
-                        gst_warning!(
+                        gst::warning!(
                             RUNTIME_CAT,
                             "Task {:?} on context {} has {} pending sub tasks",
                             task_id,
@@ -159,7 +157,7 @@ impl TaskQueue {
                     }
                 }
 
-                gst_trace!(
+                gst::trace!(
                     RUNTIME_CAT,
                     "Done {:?} on context {}",
                     task_id,
@@ -203,7 +201,7 @@ impl TaskQueue {
 
         let context_name = Arc::clone(&self.context_name);
         let task_fut = async move {
-            gst_trace!(
+            gst::trace!(
                 RUNTIME_CAT,
                 "Executing sync function on context {} as {:?}",
                 context_name,
@@ -213,7 +211,7 @@ impl TaskQueue {
             let _guard = CallOnDrop::new(move || {
                 let _ = tasks_clone.lock().unwrap().try_remove(task_id.0);
 
-                gst_trace!(
+                gst::trace!(
                     RUNTIME_CAT,
                     "Done executing sync function on context {} as {:?}",
                     context_name,
@@ -257,7 +255,7 @@ impl TaskQueue {
     {
         match self.tasks.lock().unwrap().get_mut(task_id.0) {
             Some(task) => {
-                gst_trace!(
+                gst::trace!(
                     RUNTIME_CAT,
                     "Adding subtask to {:?} on context {}",
                     task_id,
@@ -267,7 +265,7 @@ impl TaskQueue {
                 Ok(())
             }
             None => {
-                gst_trace!(RUNTIME_CAT, "Task was removed in the meantime");
+                gst::trace!(RUNTIME_CAT, "Task was removed in the meantime");
                 Err(sub_task)
             }
         }
@@ -287,7 +285,7 @@ impl TaskQueue {
         async move {
             if let Some((mut sub_tasks, context_name)) = sub_tasks {
                 if !sub_tasks.is_empty() {
-                    gst_log!(
+                    gst::log!(
                         RUNTIME_CAT,
                         "Scheduling draining {} sub tasks from {:?} on '{}'",
                         sub_tasks.len(),

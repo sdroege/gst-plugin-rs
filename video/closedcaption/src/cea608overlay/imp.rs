@@ -9,7 +9,6 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_error, gst_info, gst_log, gst_trace, gst_warning};
 use gst_video::prelude::*;
 
 use once_cell::sync::Lazy;
@@ -249,7 +248,7 @@ impl Cea608Overlay {
         let buffer = match render_buffer() {
             Some(buffer) => buffer,
             None => {
-                gst_error!(CAT, obj: element, "Failed to render buffer");
+                gst::error!(CAT, obj: element, "Failed to render buffer");
                 state.composition = None;
                 return;
             }
@@ -329,7 +328,7 @@ impl Cea608Overlay {
         pts: gst::ClockTime,
     ) {
         if data.len() % 3 != 0 {
-            gst_warning!(CAT, "cc_data length is not a multiple of 3, truncating");
+            gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
 
         for triple in data.chunks_exact(3) {
@@ -340,7 +339,7 @@ impl Cea608Overlay {
                 if cc_type == 0x00 || cc_type == 0x01 {
                     if state.selected_field.is_none() {
                         state.selected_field = Some(cc_type);
-                        gst_info!(
+                        gst::info!(
                             CAT,
                             obj: element,
                             "Selected field {} automatically",
@@ -356,7 +355,7 @@ impl Cea608Overlay {
                             let text = match state.caption_frame.to_text(true) {
                                 Ok(text) => text,
                                 Err(_) => {
-                                    gst_error!(
+                                    gst::error!(
                                         CAT,
                                         obj: pad,
                                         "Failed to convert caption frame to text"
@@ -386,14 +385,14 @@ impl Cea608Overlay {
         pts: gst::ClockTime,
     ) {
         if data.len() % 3 != 0 {
-            gst_warning!(CAT, "cc_data length is not a multiple of 3, truncating");
+            gst::warning!(CAT, "cc_data length is not a multiple of 3, truncating");
         }
 
         for triple in data.chunks_exact(3) {
             let cc_type = triple[0] & 0x01;
             if state.selected_field.is_none() {
                 state.selected_field = Some(cc_type);
-                gst_info!(
+                gst::info!(
                     CAT,
                     obj: element,
                     "Selected field {} automatically",
@@ -409,7 +408,7 @@ impl Cea608Overlay {
                     let text = match state.caption_frame.to_text(true) {
                         Ok(text) => text,
                         Err(_) => {
-                            gst_error!(CAT, obj: pad, "Failed to convert caption frame to text");
+                            gst::error!(CAT, obj: pad, "Failed to convert caption frame to text");
                             continue;
                         }
                     };
@@ -432,10 +431,10 @@ impl Cea608Overlay {
         element: &super::Cea608Overlay,
         mut buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst_log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
+        gst::log!(CAT, obj: pad, "Handling buffer {:?}", buffer);
 
         let pts = buffer.pts().ok_or_else(|| {
-            gst_error!(CAT, obj: pad, "Require timestamped buffers");
+            gst::error!(CAT, obj: pad, "Require timestamped buffers");
             gst::FlowError::Error
         })?;
 
@@ -456,7 +455,7 @@ impl Cea608Overlay {
                         self.decode_cc_data(pad, element, &mut state, data, pts);
                     }
                     Err(e) => {
-                        gst_warning!(CAT, "{}", &e.to_string());
+                        gst::warning!(CAT, "{}", &e.to_string());
                         gst::element_warning!(element, gst::StreamError::Decode, [&e.to_string()]);
                     }
                 }
@@ -475,7 +474,7 @@ impl Cea608Overlay {
                         let text = match state.caption_frame.to_text(true) {
                             Ok(text) => text,
                             Err(_) => {
-                                gst_error!(
+                                gst::error!(
                                     CAT,
                                     obj: pad,
                                     "Failed to convert caption frame to text"
@@ -495,7 +494,7 @@ impl Cea608Overlay {
         if let Some(timeout) = self.settings.lock().unwrap().timeout {
             if let Some(interval) = pts.opt_saturating_sub(state.last_cc_pts) {
                 if interval > timeout {
-                    gst_info!(CAT, obj: element, "Reached timeout, clearing overlay");
+                    gst::info!(CAT, obj: element, "Reached timeout, clearing overlay");
                     state.composition.take();
                     state.last_cc_pts.take();
                 }
@@ -514,7 +513,7 @@ impl Cea608Overlay {
                 .unwrap();
 
                 if composition.blend(&mut frame).is_err() {
-                    gst_error!(CAT, obj: pad, "Failed to blend composition");
+                    gst::error!(CAT, obj: pad, "Failed to blend composition");
                 }
             }
         }
@@ -531,7 +530,7 @@ impl Cea608Overlay {
     ) -> bool {
         use gst::EventView;
 
-        gst_log!(CAT, obj: pad, "Handling event {:?}", event);
+        gst::log!(CAT, obj: pad, "Handling event {:?}", event);
         match event.view() {
             EventView::Caps(c) => {
                 let mut state = self.state.lock().unwrap();
@@ -751,7 +750,7 @@ impl ElementImpl for Cea608Overlay {
         element: &Self::Type,
         transition: gst::StateChange,
     ) -> Result<gst::StateChangeSuccess, gst::StateChangeError> {
-        gst_trace!(CAT, obj: element, "Changing state {:?}", transition);
+        gst::trace!(CAT, obj: element, "Changing state {:?}", transition);
 
         match transition {
             gst::StateChange::ReadyToPaused | gst::StateChange::PausedToReady => {

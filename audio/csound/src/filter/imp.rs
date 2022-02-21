@@ -9,9 +9,7 @@
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{
-    element_error, error_msg, gst_debug, gst_error, gst_info, gst_log, gst_warning, loggable_error,
-};
+use gst::{element_error, error_msg, loggable_error};
 use gst_base::subclass::base_transform::GenerateOutputSuccess;
 use gst_base::subclass::prelude::*;
 
@@ -163,12 +161,12 @@ impl CsoundFilter {
 
     fn message_callback(msg_type: MessageType, msg: &str) {
         match msg_type {
-            MessageType::CSOUNDMSG_ERROR => gst_error!(CAT, "{}", msg),
-            MessageType::CSOUNDMSG_WARNING => gst_warning!(CAT, "{}", msg),
-            MessageType::CSOUNDMSG_ORCH => gst_info!(CAT, "{}", msg),
-            MessageType::CSOUNDMSG_REALTIME => gst_log!(CAT, "{}", msg),
-            MessageType::CSOUNDMSG_DEFAULT => gst_log!(CAT, "{}", msg),
-            MessageType::CSOUNDMSG_STDOUT => gst_log!(CAT, "{}", msg),
+            MessageType::CSOUNDMSG_ERROR => gst::error!(CAT, "{}", msg),
+            MessageType::CSOUNDMSG_WARNING => gst::warning!(CAT, "{}", msg),
+            MessageType::CSOUNDMSG_ORCH => gst::info!(CAT, "{}", msg),
+            MessageType::CSOUNDMSG_REALTIME => gst::log!(CAT, "{}", msg),
+            MessageType::CSOUNDMSG_DEFAULT => gst::log!(CAT, "{}", msg),
+            MessageType::CSOUNDMSG_STDOUT => gst::log!(CAT, "{}", msg),
         }
     }
 
@@ -193,7 +191,7 @@ impl CsoundFilter {
             (avail / state.in_info.channels() as usize) * state.out_info.channels() as usize;
 
         let mut buffer = gst::Buffer::with_size(out_bytes).map_err(|e| {
-            gst_error!(
+            gst::error!(
                 CAT,
                 obj: element,
                 "Failed to allocate buffer at EOS {:?}",
@@ -257,7 +255,7 @@ impl CsoundFilter {
         outbuf.set_pts(pts);
         outbuf.set_duration(duration);
 
-        gst_log!(
+        gst::log!(
             CAT,
             obj: element,
             "Generating output at: {} - duration: {}",
@@ -510,7 +508,7 @@ impl BaseTransformImpl for CsoundFilter {
         csound.reset();
         let _ = self.state.lock().unwrap().take();
 
-        gst_info!(CAT, obj: element, "Stopped");
+        gst::info!(CAT, obj: element, "Stopped");
 
         Ok(())
     }
@@ -519,7 +517,7 @@ impl BaseTransformImpl for CsoundFilter {
         use gst::EventView;
 
         if let EventView::Eos(_) = event.view() {
-            gst_log!(CAT, obj: element, "Handling Eos");
+            gst::log!(CAT, obj: element, "Handling Eos");
             if self.drain(element).is_err() {
                 return false;
             }
@@ -563,7 +561,7 @@ impl BaseTransformImpl for CsoundFilter {
             new_caps
         };
 
-        gst_debug!(
+        gst::debug!(
             CAT,
             obj: element,
             "Transformed caps from {} to {} in direction {:?}",
@@ -665,7 +663,7 @@ impl BaseTransformImpl for CsoundFilter {
                 return self.generate_output(element, state);
             }
         }
-        gst_log!(CAT, "No enough data to generate output");
+        gst::log!(CAT, "No enough data to generate output");
         Ok(GenerateOutputSuccess::NoOutput)
     }
 }

@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::glib;
-use gst::gst_error;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
@@ -54,14 +53,14 @@ impl RegEx {
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let data = buffer.map_readable().map_err(|_| {
-            gst_error!(CAT, obj: element, "Can't map buffer readable");
+            gst::error!(CAT, obj: element, "Can't map buffer readable");
             gst::element_error!(element, gst::CoreError::Failed, ["Failed to map buffer"]);
             gst::FlowError::Error
         })?;
 
         let mut data = std::str::from_utf8(&data)
             .map_err(|err| {
-                gst_error!(CAT, obj: element, "Can't decode utf8: {}", err);
+                gst::error!(CAT, obj: element, "Can't decode utf8: {}", err);
                 gst::element_error!(
                     element,
                     gst::StreamError::Decode,
@@ -194,7 +193,7 @@ impl ObjectImpl for RegEx {
                     let pattern = match s.get::<Option<String>>("pattern") {
                         Ok(Some(pattern)) => pattern,
                         Ok(None) | Err(_) => {
-                            gst_error!(CAT, "All commands require a pattern field as a string");
+                            gst::error!(CAT, "All commands require a pattern field as a string");
                             continue;
                         }
                     };
@@ -202,7 +201,7 @@ impl ObjectImpl for RegEx {
                     let regex = match Regex::new(&pattern) {
                         Ok(regex) => regex,
                         Err(err) => {
-                            gst_error!(CAT, "Failed to compile regex: {:?}", err);
+                            gst::error!(CAT, "Failed to compile regex: {:?}", err);
                             continue;
                         }
                     };
@@ -212,7 +211,7 @@ impl ObjectImpl for RegEx {
                             let replacement = match s.get::<Option<String>>("replacement") {
                                 Ok(Some(pattern)) => pattern,
                                 Ok(None) | Err(_) => {
-                                    gst_error!(
+                                    gst::error!(
                                         CAT,
                                         "Replace operations require a replacement field as a string"
                                     );
@@ -226,7 +225,7 @@ impl ObjectImpl for RegEx {
                             });
                         }
                         val => {
-                            gst_error!(CAT, "Unknown operation {}", val);
+                            gst::error!(CAT, "Unknown operation {}", val);
                         }
                     }
                 }

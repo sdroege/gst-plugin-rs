@@ -15,7 +15,6 @@ use tokio::{runtime, task::JoinHandle};
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_log};
 use gst_base::subclass::{base_src::CreateSuccess, prelude::*};
 
 use librespot::core::{
@@ -250,7 +249,7 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
         if let Err(err) = RUNTIME.block_on(async move { self.setup().await }) {
             let details = format!("{:?}", err);
-            gst_error!(CAT, obj: src, "failed to start: {}", details);
+            gst::error!(CAT, obj: src, "failed to start: {}", details);
             gst::element_error!(src, gst::ResourceError::Settings, [&details]);
             return Err(gst::error_msg!(gst::ResourceError::Settings, [&details]));
         }
@@ -260,7 +259,7 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
     fn stop(&self, src: &Self::Type) -> Result<(), gst::ErrorMessage> {
         if let Some(state) = self.state.lock().unwrap().take() {
-            gst_debug!(CAT, obj: src, "stopping");
+            gst::debug!(CAT, obj: src, "stopping");
             state.player.stop();
             state.player_channel_handle.abort();
             // FIXME: not sure why this is needed to unblock BufferSink::write(), dropping State should drop the receiver
@@ -282,15 +281,15 @@ impl BaseSrcImpl for SpotifyAudioSrc {
 
         match state.receiver.recv().unwrap() {
             Message::Buffer(buffer) => {
-                gst_log!(CAT, obj: src, "got buffer of size {}", buffer.size());
+                gst::log!(CAT, obj: src, "got buffer of size {}", buffer.size());
                 Ok(CreateSuccess::NewBuffer(buffer))
             }
             Message::Eos => {
-                gst_debug!(CAT, obj: src, "eos");
+                gst::debug!(CAT, obj: src, "eos");
                 Err(gst::FlowError::Eos)
             }
             Message::Unavailable => {
-                gst_error!(CAT, obj: src, "track is not available");
+                gst::error!(CAT, obj: src, "track is not available");
                 gst::element_error!(
                     src,
                     gst::ResourceError::NotFound,
@@ -331,11 +330,11 @@ impl SpotifyAudioSrc {
 
             let credentials = match cache.credentials() {
                 Some(cached_cred) => {
-                    gst_debug!(CAT, obj: &src, "reuse credentials from cache",);
+                    gst::debug!(CAT, obj: &src, "reuse credentials from cache",);
                     cached_cred
                 }
                 None => {
-                    gst_debug!(CAT, obj: &src, "credentials not in cache",);
+                    gst::debug!(CAT, obj: &src, "credentials not in cache",);
 
                     if settings.username.is_empty() {
                         bail!("username is not set and credentials are not in cache");
