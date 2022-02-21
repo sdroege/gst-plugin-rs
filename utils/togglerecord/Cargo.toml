@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-togglerecord"
-version = "0.8.1"
+version = "0.8.2"
 authors = ["Sebastian Dröge <sebastian@centricular.com>"]
 license = "MPL-2.0"
 description = "Toggle Record Plugin"

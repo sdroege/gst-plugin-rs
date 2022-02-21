@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-rusoto"
-version = "0.8.1"
+version = "0.8.2"
 authors = ["Arun Raghavan <arun@arunraghavan.net>",
            "Jordan Petridis <jordan@centricular.com>",
            "Mathieu Duponchelle <mathieu@centricular.com>"]
