@@ -139,10 +139,10 @@ update-nightly:
   script:
     - rustc --version
 
-    - cargo build --locked --color=always --all
-    - G_DEBUG=fatal_warnings cargo test --locked --color=always --all
-    - cargo build --locked --color=always --all --examples --all-features
-    - G_DEBUG=fatal_warnings cargo test --locked --color=always --all --examples --all-features
+    - cargo build --locked --color=always --workspace --all-targets
+    - G_DEBUG=fatal_warnings cargo test --locked --color=always --workspace --all-targets
+    - cargo build --locked --color=always --workspace --all-targets --all-features
+    - G_DEBUG=fatal_warnings cargo test --locked --color=always --workspace --all-targets --all-features
 
 test msrv:
   extends:
