@@ -23,6 +23,8 @@ path = "src/lib.rs"
 [dev-dependencies]
 gst-app = { package = "gstreamer-app", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
 gst-check = { package = "gstreamer-check", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_18"] }
+gst-pbutils = { package = "gstreamer-pbutils", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
+m3u8-rs = "3.0"
 
 [build-dependencies]
 gst-plugin-version-helper = { path="../../version-helper" }
