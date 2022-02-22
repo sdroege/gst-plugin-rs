@@ -129,6 +129,7 @@ update-nightly:
   variables:
     # csound-sys only looks at /usr/lib and /usr/local top levels
     CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
+    RUST_BACKTRACE: 'full'
   script:
     - rustc --version
 
