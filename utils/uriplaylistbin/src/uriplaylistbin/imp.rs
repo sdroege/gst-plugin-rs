@@ -295,7 +295,7 @@ impl Item {
             | ItemState::Blocked { uridecodebin, .. }
             | ItemState::Streaming { uridecodebin, .. }
             | ItemState::Done { uridecodebin, .. } => uridecodebin.clone(),
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -315,7 +315,7 @@ impl Item {
             | ItemState::Done {
                 concat_sink_pads, ..
             } => concat_sink_pads.clone(),
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -329,7 +329,7 @@ impl Item {
                 *n_pads_pendings -= 1;
                 *n_pads_pendings
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -340,7 +340,7 @@ impl Item {
             ItemState::WaitingForPads { receiver, .. } => receiver.clone(),
             ItemState::WaitingForStreamsynchronizerEos { receiver, .. } => receiver.clone(),
             // receiver is no longer supposed to be accessed once in the `Blocked` state
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -351,7 +351,7 @@ impl Item {
             ItemState::WaitingForStreamsynchronizerEos { decodebin_pads, .. } => {
                 decodebin_pads.push(pad);
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -364,7 +364,7 @@ impl Item {
                 *waiting_eos -= 1;
                 *waiting_eos == 0
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -385,7 +385,7 @@ impl Item {
             } => {
                 *stream_selected_msg = Some(msg);
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -398,7 +398,7 @@ impl Item {
                 *waiting_eos -= 1;
                 *waiting_eos == 0
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -411,7 +411,7 @@ impl Item {
             } => {
                 concat_sink_pads.push((concat.clone(), sink_pad.clone()));
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -456,7 +456,7 @@ impl Item {
                     receiver,
                 };
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -479,7 +479,7 @@ impl Item {
                     receiver,
                 };
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -527,7 +527,7 @@ impl Item {
 
                 (topology, pending_pads, sender)
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -551,7 +551,7 @@ impl Item {
                     stream_selected_msg: None,
                 };
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -586,7 +586,7 @@ impl Item {
 
                 (messages, sender)
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 
@@ -605,7 +605,7 @@ impl Item {
                     concat_sink_pads: concat_sink_pads.clone(),
                 };
             }
-            _ => unreachable!(),
+            _ => panic!("invalid state: {:?}", inner.state),
         }
     }
 }
