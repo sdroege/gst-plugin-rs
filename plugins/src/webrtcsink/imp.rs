@@ -1728,17 +1728,21 @@ impl WebRTCSink {
             state.navigation_handler = Some(NavigationEventHandler::new(&element, &webrtcbin));
         }
 
+        state.consumers.insert(peer_id.to_string(), consumer);
+
+        drop(state);
+
+        // This is intentionally emitted with the pipeline in the Ready state,
+        // so that application code can create data channels at the correct
+        // moment.
+        element.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
+
         pipeline.set_state(gst::State::Playing).map_err(|err| {
             WebRTCSinkError::ConsumerPipelineError {
                 peer_id: peer_id.to_string(),
                 details: err.to_string(),
             }
         })?;
-
-        state.consumers.insert(peer_id.to_string(), consumer);
-
-        drop(state);
-        element.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
 
         Ok(())
     }
