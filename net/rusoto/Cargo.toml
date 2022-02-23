@@ -21,7 +21,7 @@ rusoto_credential = "0.47"
 rusoto_signature = "0.47"
 url = "2"
 percent-encoding = "2"
-tokio = { version = "1.0", features = [ "rt-multi-thread" ] }
+tokio = { version = "1.0", features = [ "rt-multi-thread", "time" ] }
 async-tungstenite = { version = "0.16", features = ["tokio", "tokio-runtime", "tokio-native-tls"] }
 nom = "7"
 crc = "2"
@@ -32,6 +32,7 @@ serde_derive = "1"
 serde_json = "1"
 atomic_refcell = "0.1"
 base32 = "0.4"
+backoff = { version = "0.4", features = [ "futures", "tokio" ] }
 
 [lib]
 name = "gstrusoto"

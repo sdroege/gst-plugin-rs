@@ -24,6 +24,7 @@ use once_cell::sync::Lazy;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use crate::s3url::*;
 use crate::s3utils::{self, WaitError};
@@ -31,6 +32,8 @@ use crate::s3utils::{self, WaitError};
 use super::OnError;
 
 const DEFAULT_MULTIPART_UPLOAD_ON_ERROR: OnError = OnError::DoNothing;
+const DEFAULT_UPLOAD_PART_REQUEST_TIMEOUT_MSEC: u64 = 10_000;
+const DEFAULT_UPLOAD_PART_RETRY_DURATION_MSEC: u64 = 60_000;
 
 struct Started {
     client: S3Client,
@@ -93,6 +96,8 @@ struct Settings {
     secret_access_key: Option<String>,
     metadata: Option<gst::Structure>,
     multipart_upload_on_error: OnError,
+    upload_part_request_timeout: Option<Duration>,
+    upload_part_retry_duration: Option<Duration>,
 }
 
 impl Settings {
@@ -161,6 +166,12 @@ impl Default for Settings {
             secret_access_key: None,
             metadata: None,
             multipart_upload_on_error: DEFAULT_MULTIPART_UPLOAD_ON_ERROR,
+            upload_part_request_timeout: Some(Duration::from_millis(
+                DEFAULT_UPLOAD_PART_REQUEST_TIMEOUT_MSEC,
+            )),
+            upload_part_retry_duration: Some(Duration::from_millis(
+                DEFAULT_UPLOAD_PART_RETRY_DURATION_MSEC,
+            )),
         }
     }
 }
@@ -187,10 +198,8 @@ impl S3Sink {
         &self,
         element: &super::S3Sink,
     ) -> Result<(), Option<gst::ErrorMessage>> {
-        let upload_part_req = self.create_upload_part_request()?;
-        let part_number = upload_part_req.part_number;
-
         let mut state = self.state.lock().unwrap();
+        let settings = self.settings.lock().unwrap();
         let state = match *state {
             State::Started(ref mut started_state) => started_state,
             State::Stopped => {
@@ -198,68 +207,81 @@ impl S3Sink {
             }
         };
 
-        let upload_part_req_future = state.client.upload_part(upload_part_req);
+        let part_number = state.increment_part_number()?;
+        let body = std::mem::replace(
+            &mut state.buffer,
+            Vec::with_capacity(settings.buffer_size as usize),
+        );
+        let upload_id = &state.upload_id;
+        let client = &state.client;
 
-        let output =
-            s3utils::wait(&self.canceller, upload_part_req_future).map_err(|err| match err {
-                WaitError::FutureError(err) => {
-                    let settings = self.settings.lock().unwrap();
-                    match settings.multipart_upload_on_error {
-                        OnError::Abort => {
-                            gst::log!(
-                                CAT,
-                                obj: element,
-                                "Aborting multipart upload request with id: {}",
-                                state.upload_id
-                            );
-                            match self.abort_multipart_upload_request(state) {
-                                Ok(()) => {
-                                    gst::log!(
-                                        CAT,
-                                        obj: element,
-                                        "Aborting multipart upload request succeeded."
-                                    );
-                                }
-                                Err(err) => gst::error!(
+        let upload_part_req_future =
+            || client.upload_part(self.create_upload_part_request(&body, part_number, upload_id));
+
+        let output = s3utils::wait_retry(
+            &self.canceller,
+            settings.upload_part_request_timeout,
+            settings.upload_part_retry_duration,
+            upload_part_req_future,
+        )
+        .map_err(|err| match err {
+            WaitError::FutureError(err) => {
+                match settings.multipart_upload_on_error {
+                    OnError::Abort => {
+                        gst::log!(
+                            CAT,
+                            obj: element,
+                            "Aborting multipart upload request with id: {}",
+                            state.upload_id
+                        );
+                        match self.abort_multipart_upload_request(state) {
+                            Ok(()) => {
+                                gst::log!(
                                     CAT,
                                     obj: element,
-                                    "Aborting multipart upload failed: {}",
-                                    err.to_string()
-                                ),
+                                    "Aborting multipart upload request succeeded."
+                                );
                             }
-                        }
-                        OnError::Complete => {
-                            gst::log!(
+                            Err(err) => gst::error!(
                                 CAT,
                                 obj: element,
-                                "Completing multipart upload request with id: {}",
-                                state.upload_id
-                            );
-                            match self.complete_multipart_upload_request(state) {
-                                Ok(()) => {
-                                    gst::log!(
-                                        CAT,
-                                        obj: element,
-                                        "Complete multipart upload request succeeded."
-                                    );
-                                }
-                                Err(err) => gst::error!(
-                                    CAT,
-                                    obj: element,
-                                    "Completing multipart upload failed: {}",
-                                    err.to_string()
-                                ),
-                            }
+                                "Aborting multipart upload failed: {}",
+                                err.to_string()
+                            ),
                         }
-                        OnError::DoNothing => (),
                     }
-                    Some(gst::error_msg!(
-                        gst::ResourceError::OpenWrite,
-                        ["Failed to upload part: {}", err]
-                    ))
+                    OnError::Complete => {
+                        gst::log!(
+                            CAT,
+                            obj: element,
+                            "Completing multipart upload request with id: {}",
+                            state.upload_id
+                        );
+                        match self.complete_multipart_upload_request(state) {
+                            Ok(()) => {
+                                gst::log!(
+                                    CAT,
+                                    obj: element,
+                                    "Complete multipart upload request succeeded."
+                                );
+                            }
+                            Err(err) => gst::error!(
+                                CAT,
+                                obj: element,
+                                "Completing multipart upload failed: {}",
+                                err.to_string()
+                            ),
+                        }
+                    }
+                    OnError::DoNothing => (),
                 }
-                WaitError::Cancelled => None,
-            })?;
+                Some(gst::error_msg!(
+                    gst::ResourceError::OpenWrite,
+                    ["Failed to upload part: {}", err]
+                ))
+            }
+            WaitError::Cancelled => None,
+        })?;
 
         state.completed_parts.push(CompletedPart {
             e_tag: output.e_tag,
@@ -270,29 +292,22 @@ impl S3Sink {
         Ok(())
     }
 
-    fn create_upload_part_request(&self) -> Result<UploadPartRequest, gst::ErrorMessage> {
+    fn create_upload_part_request(
+        &self,
+        body: &[u8],
+        part_number: i64,
+        upload_id: &str,
+    ) -> UploadPartRequest {
         let url = self.url.lock().unwrap();
-        let settings = self.settings.lock().unwrap();
-        let mut state = self.state.lock().unwrap();
-        let state = match *state {
-            State::Started(ref mut started_state) => started_state,
-            State::Stopped => {
-                unreachable!("Element should be started");
-            }
-        };
 
-        let part_number = state.increment_part_number()?;
-        Ok(UploadPartRequest {
-            body: Some(rusoto_core::ByteStream::from(std::mem::replace(
-                &mut state.buffer,
-                Vec::with_capacity(settings.buffer_size as usize),
-            ))),
+        UploadPartRequest {
+            body: Some(rusoto_core::ByteStream::from(body.to_owned())),
             bucket: url.as_ref().unwrap().bucket.to_owned(),
             key: url.as_ref().unwrap().object.to_owned(),
-            upload_id: state.upload_id.to_owned(),
+            upload_id: upload_id.to_owned(),
             part_number,
             ..Default::default()
-        })
+        }
     }
 
     fn create_complete_multipart_upload_request(
@@ -640,6 +655,24 @@ impl ObjectImpl for S3Sink {
                     DEFAULT_MULTIPART_UPLOAD_ON_ERROR as i32,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecInt64::new(
+                    "upload-part-request-timeout",
+                    "Upload part request timeout",
+                    "Timeout for a single upload part request (in ms, set to -1 for infinity)",
+                    -1,
+                    std::i64::MAX,
+                    DEFAULT_UPLOAD_PART_REQUEST_TIMEOUT_MSEC as i64,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpecInt64::new(
+                    "upload-part-retry-duration",
+                    "Upload part retry duration",
+                    "How long we should retry upload part requests before giving up (in ms, set to -1 for infinity)",
+                    -1,
+                    std::i64::MAX,
+                    DEFAULT_UPLOAD_PART_RETRY_DURATION_MSEC as i64,
+                    glib::ParamFlags::READWRITE,
+                ),
             ]
         });
 
@@ -716,6 +749,20 @@ impl ObjectImpl for S3Sink {
                 settings.multipart_upload_on_error =
                     value.get::<OnError>().expect("type checked upstream");
             }
+            "upload-part-request-timeout" => {
+                settings.upload_part_request_timeout =
+                    match value.get::<i64>().expect("type checked upstream") {
+                        -1 => None,
+                        v => Some(Duration::from_millis(v as u64)),
+                    }
+            }
+            "upload-part-retry-duration" => {
+                settings.upload_part_retry_duration =
+                    match value.get::<i64>().expect("type checked upstream") {
+                        -1 => None,
+                        v => Some(Duration::from_millis(v as u64)),
+                    }
+            }
             _ => unimplemented!(),
         }
     }
@@ -740,6 +787,20 @@ impl ObjectImpl for S3Sink {
             "secret-access-key" => settings.secret_access_key.to_value(),
             "metadata" => settings.metadata.to_value(),
             "on-error" => settings.multipart_upload_on_error.to_value(),
+            "upload-part-request-timeout" => {
+                let timeout: i64 = match settings.upload_part_request_timeout {
+                    None => -1,
+                    Some(v) => v.as_millis() as i64,
+                };
+                timeout.to_value()
+            }
+            "upload-part-retry-duration" => {
+                let timeout: i64 = match settings.upload_part_retry_duration {
+                    None => -1,
+                    Some(v) => v.as_millis() as i64,
+                };
+                timeout.to_value()
+            }
             _ => unimplemented!(),
         }
     }
