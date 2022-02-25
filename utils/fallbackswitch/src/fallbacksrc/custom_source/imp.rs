@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use gst::glib;
+use gst::glib::SignalHandlerId;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 
@@ -35,6 +36,9 @@ struct State {
     pads: Vec<Stream>,
     num_audio: usize,
     num_video: usize,
+    pad_added_sig_id: Option<SignalHandlerId>,
+    pad_removed_sig_id: Option<SignalHandlerId>,
+    no_more_pads_sig_id: Option<SignalHandlerId>,
 }
 
 #[derive(Default)]
@@ -202,7 +206,7 @@ impl CustomSource {
             gst::debug!(CAT, obj: element, "Found sometimes pads");
 
             let element_weak = element.downgrade();
-            source.connect_pad_added(move |_, pad| {
+            let pad_added_sig_id = source.connect_pad_added(move |_, pad| {
                 let element = match element_weak.upgrade() {
                     None => return,
                     Some(element) => element,
@@ -214,7 +218,7 @@ impl CustomSource {
                 }
             });
             let element_weak = element.downgrade();
-            source.connect_pad_removed(move |_, pad| {
+            let pad_removed_sig_id = source.connect_pad_removed(move |_, pad| {
                 let element = match element_weak.upgrade() {
                     None => return,
                     Some(element) => element,
@@ -225,7 +229,7 @@ impl CustomSource {
             });
 
             let element_weak = element.downgrade();
-            source.connect_no_more_pads(move |_| {
+            let no_more_pads_sig_id = source.connect_no_more_pads(move |_| {
                 let element = match element_weak.upgrade() {
                     None => return,
                     Some(element) => element,
@@ -234,6 +238,11 @@ impl CustomSource {
 
                 src.handle_source_no_more_pads(&element);
             });
+
+            let mut state = self.state.lock().unwrap();
+            state.pad_added_sig_id = Some(pad_added_sig_id);
+            state.pad_removed_sig_id = Some(pad_removed_sig_id);
+            state.no_more_pads_sig_id = Some(no_more_pads_sig_id);
         }
 
         Ok(gst::StateChangeSuccess::Success)
@@ -360,6 +369,19 @@ impl CustomSource {
         gst::debug!(CAT, obj: element, "Stopping");
 
         let mut state = self.state.lock().unwrap();
+        let source = self.source.get().unwrap();
+        if let Some(id) = state.pad_added_sig_id.take() {
+            source.disconnect(id)
+        }
+
+        if let Some(id) = state.pad_removed_sig_id.take() {
+            source.disconnect(id)
+        }
+
+        if let Some(id) = state.no_more_pads_sig_id.take() {
+            source.disconnect(id)
+        }
+
         let pads = mem::take(&mut state.pads);
         state.num_audio = 0;
         state.num_video = 0;
