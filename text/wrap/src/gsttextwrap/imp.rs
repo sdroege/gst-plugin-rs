@@ -53,36 +53,8 @@ impl Default for Settings {
     }
 }
 
-// FIXME: https://github.com/mgeisler/textwrap/issues/412
-#[derive(Debug)]
-struct WrappedWordSplitter(Box<dyn textwrap::word_splitters::WordSplitter + Send>);
-
-impl textwrap::word_splitters::WordSplitter for WrappedWordSplitter {
-    fn split_points(&self, word: &str) -> Vec<usize> {
-        self.0.split_points(word)
-    }
-}
-
-impl Clone for WrappedWordSplitter {
-    fn clone(&self) -> Self {
-        WrappedWordSplitter(unsafe {
-            std::mem::transmute::<
-                Box<dyn textwrap::word_splitters::WordSplitter + 'static>,
-                Box<dyn textwrap::word_splitters::WordSplitter + Send + 'static>,
-            >(self.0.clone_box())
-        })
-    }
-}
-
 struct State {
-    options: Option<
-        textwrap::Options<
-            'static,
-            textwrap::wrap_algorithms::OptimalFit,
-            textwrap::word_separators::UnicodeBreakProperties,
-            WrappedWordSplitter,
-        >,
-    >,
+    options: Option<textwrap::Options<'static>>,
 
     current_text: String,
     start_ts: Option<gst::ClockTime>,
@@ -121,7 +93,9 @@ impl TextWrap {
             return;
         }
 
-        state.options = if let Some(dictionary) = &settings.dictionary {
+        let mut options = textwrap::Options::new(settings.columns as usize);
+
+        if let Some(dictionary) = &settings.dictionary {
             let dict_file = match File::open(dictionary) {
                 Err(err) => {
                     gst_error!(CAT, obj: element, "Failed to open dictionary file: {}", err);
@@ -144,16 +118,12 @@ impl TextWrap {
                 Ok(standard) => standard,
             };
 
-            Some(textwrap::Options::with_word_splitter(
-                settings.columns as usize,
-                WrappedWordSplitter(Box::new(standard)),
-            ))
+            options.word_splitter = textwrap::WordSplitter::Hyphenation(standard);
         } else {
-            Some(textwrap::Options::with_word_splitter(
-                settings.columns as usize,
-                WrappedWordSplitter(Box::new(textwrap::word_splitters::NoHyphenation)),
-            ))
-        };
+            options.word_splitter = textwrap::WordSplitter::NoHyphenation;
+        }
+
+        state.options = Some(options);
     }
 
     fn sink_chain(
