@@ -231,11 +231,6 @@ impl FallbackSwitch {
             buffer
         );
 
-        if buffer.pts().is_none() {
-            gst_error!(CAT, obj: preferred_pad, "Only buffers with PTS supported");
-            return Err(gst::FlowError::Error);
-        }
-
         let segment = preferred_pad
             .segment()
             .downcast::<gst::ClockTime>()
@@ -244,12 +239,29 @@ impl FallbackSwitch {
                 gst::FlowError::Error
             })?;
 
-        let running_time = segment.to_running_time(buffer.dts_or_pts());
+        let running_time = if buffer.pts().is_none() {
+            // re-use ts from previous buffer
+            let running_time = state
+                .primary
+                .last_sinkpad_time
+                .max(state.fallback.last_sinkpad_time);
+
+            gst_debug!(
+                CAT,
+                obj: preferred_pad,
+                "Buffer does not have PTS, re-use ts from previous buffer: {}",
+                running_time.display()
+            );
+
+            running_time
+        } else {
+            segment.to_running_time(buffer.pts())
+        };
 
         {
             // FIXME: This will not work correctly for negative DTS
             let buffer = buffer.make_mut();
-            buffer.set_pts(segment.to_running_time(buffer.pts()));
+            buffer.set_pts(running_time);
             buffer.set_dts(segment.to_running_time(buffer.dts()));
         }
 
@@ -363,11 +375,6 @@ impl FallbackSwitch {
                 buffer
             );
 
-            if buffer.pts().is_none() {
-                gst_error!(CAT, obj: backup_pad, "Only buffers with PTS supported");
-                return Err(gst::FlowError::Error);
-            }
-
             let backup_segment =
                 backup_pad
                     .segment()
@@ -376,12 +383,30 @@ impl FallbackSwitch {
                         gst_error!(CAT, obj: backup_pad, "Only TIME segments supported");
                         gst::FlowError::Error
                     })?;
-            let running_time = backup_segment.to_running_time(buffer.dts_or_pts());
+
+            let running_time = if buffer.pts().is_none() {
+                // re-use ts from previous buffer
+                let running_time = state
+                    .primary
+                    .last_sinkpad_time
+                    .max(state.fallback.last_sinkpad_time);
+
+                gst_debug!(
+                    CAT,
+                    obj: backup_pad,
+                    "Buffer does not have PTS, re-use ts from previous buffer: {}",
+                    running_time.display()
+                );
+
+                running_time
+            } else {
+                backup_segment.to_running_time(buffer.pts())
+            };
 
             {
                 // FIXME: This will not work correctly for negative DTS
                 let buffer = buffer.make_mut();
-                buffer.set_pts(backup_segment.to_running_time(buffer.pts()));
+                buffer.set_pts(running_time);
                 buffer.set_dts(backup_segment.to_running_time(buffer.dts()));
             }
 
@@ -1049,12 +1074,6 @@ impl AggregatorImpl for FallbackSwitch {
             .as_ref()
             .and_then(|p| p.peek_buffer().map(|buffer| (buffer, p)))
         {
-            if buffer.pts().is_none() {
-                gst_error!(CAT, obj: agg, "Only buffers with PTS supported");
-                // Trigger aggregate immediately to error out immediately
-                return Some(gst::ClockTime::ZERO);
-            }
-
             let segment = match backup_sinkpad.segment().downcast::<gst::ClockTime>() {
                 Ok(segment) => segment,
                 Err(_) => {
@@ -1064,7 +1083,26 @@ impl AggregatorImpl for FallbackSwitch {
                 }
             };
 
-            let running_time = segment.to_running_time(buffer.dts_or_pts());
+            let running_time = if buffer.pts().is_none() {
+                // re-use ts from previous buffer
+                let state = self.output_state.lock().unwrap();
+                let running_time = state
+                    .primary
+                    .last_sinkpad_time
+                    .max(state.fallback.last_sinkpad_time);
+
+                gst_debug!(
+                    CAT,
+                    obj: agg,
+                    "Buffer does not have PTS, re-use ts from previous buffer: {}",
+                    running_time.display(),
+                );
+
+                running_time
+            } else {
+                segment.to_running_time(buffer.pts())
+            };
+
             gst_debug!(
                 CAT,
                 obj: agg,
@@ -1097,7 +1135,7 @@ impl AggregatorImpl for FallbackSwitch {
 
         let pts = buffer.pts();
         if pts.is_none() {
-            gst_error!(CAT, obj: agg, "Only buffers with PTS supported");
+            gst_debug!(CAT, obj: agg, "Only clipping buffers with PTS supported");
             return Some(buffer);
         }
 
