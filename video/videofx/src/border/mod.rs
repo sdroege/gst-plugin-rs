@@ -16,9 +16,6 @@ glib::wrapper! {
     pub struct RoundedCorners(ObjectSubclass<roundedcorners::RoundedCorners>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
-unsafe impl Send for RoundedCorners {}
-unsafe impl Sync for RoundedCorners {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct RegEx(ObjectSubclass<imp::RegEx>) @extends gst::Element, gst::Object;
 }
 
-unsafe impl Send for RegEx {}
-unsafe impl Sync for RegEx {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(Some(plugin), "regex", gst::Rank::None, RegEx::static_type())
 }

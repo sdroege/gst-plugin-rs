@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct EbuR128Level(ObjectSubclass<imp::EbuR128Level>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
-unsafe impl Send for EbuR128Level {}
-unsafe impl Sync for EbuR128Level {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

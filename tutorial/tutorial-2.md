@@ -371,11 +371,6 @@ glib::wrapper! {
     pub struct SineSrc(ObjectSubclass<imp::SineSrc>) @extends gst_base::BaseSrc, gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for SineSrc {}
-unsafe impl Sync for SineSrc {}
-
 // Registers the type for our element, and then registers in GStreamer under
 // the name "rssinesrc" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().

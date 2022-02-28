@@ -16,9 +16,6 @@ glib::wrapper! {
     pub struct AudioEcho(ObjectSubclass<imp::AudioEcho>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
-unsafe impl Send for AudioEcho {}
-unsafe impl Sync for AudioEcho {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

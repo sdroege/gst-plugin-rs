@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct TextWrap(ObjectSubclass<imp::TextWrap>) @extends gst::Element, gst::Object;
 }
 
-unsafe impl Send for TextWrap {}
-unsafe impl Sync for TextWrap {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

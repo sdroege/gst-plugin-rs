@@ -16,11 +16,6 @@ glib::wrapper! {
     pub struct MccParse(ObjectSubclass<imp::MccParse>) @extends gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for MccParse {}
-unsafe impl Sync for MccParse {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

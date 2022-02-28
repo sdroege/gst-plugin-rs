@@ -35,8 +35,6 @@ impl Default for State {
     }
 }
 
-unsafe impl Send for State {}
-
 pub struct TranscribeParse {
     srcpad: gst::Pad,
     sinkpad: gst::Pad,

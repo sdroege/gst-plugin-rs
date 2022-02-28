@@ -18,11 +18,6 @@ glib::wrapper! {
     pub struct Rgb2Gray(ObjectSubclass<imp::Rgb2Gray>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for Rgb2Gray {}
-unsafe impl Sync for Rgb2Gray {}
-
 // Registers the type for our element, and then registers in GStreamer under
 // the name "rsrgb2gray" for being able to instantiate it via e.g.
 // gst::ElementFactory::make().

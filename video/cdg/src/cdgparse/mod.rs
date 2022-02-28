@@ -17,11 +17,6 @@ glib::wrapper! {
     pub struct CdgParse(ObjectSubclass<imp::CdgParse>) @extends gst_base::BaseParse, gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for CdgParse {}
-unsafe impl Sync for CdgParse {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

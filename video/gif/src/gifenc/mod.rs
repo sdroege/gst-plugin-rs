@@ -17,11 +17,6 @@ glib::wrapper! {
     pub struct GifEnc(ObjectSubclass<imp::GifEnc>) @extends gst_video::VideoEncoder, gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for GifEnc {}
-unsafe impl Sync for GifEnc {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

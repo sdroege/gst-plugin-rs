@@ -461,8 +461,6 @@ mod imp_src {
 glib::wrapper! {
     pub struct ElementSrcTest(ObjectSubclass<imp_src::ElementSrcTest>) @extends gst::Element, gst::Object;
 }
-unsafe impl Send for ElementSrcTest {}
-unsafe impl Sync for ElementSrcTest {}
 
 // Sink
 
@@ -753,8 +751,6 @@ mod imp_sink {
 glib::wrapper! {
     pub struct ElementSinkTest(ObjectSubclass<imp_sink::ElementSinkTest>) @extends gst::Element, gst::Object;
 }
-unsafe impl Send for ElementSinkTest {}
-unsafe impl Sync for ElementSinkTest {}
 
 fn setup(
     context_name: &str,

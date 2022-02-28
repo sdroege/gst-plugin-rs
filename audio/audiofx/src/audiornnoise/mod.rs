@@ -16,9 +16,6 @@ glib::wrapper! {
     pub struct AudioRNNoise(ObjectSubclass<imp::AudioRNNoise>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
-unsafe impl Send for AudioRNNoise {}
-unsafe impl Sync for AudioRNNoise {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

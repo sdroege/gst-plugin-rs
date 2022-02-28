@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct JsonGstEnc(ObjectSubclass<imp::JsonGstEnc>) @extends gst::Element, gst::Object;
 }
 
-unsafe impl Send for JsonGstEnc {}
-unsafe impl Sync for JsonGstEnc {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

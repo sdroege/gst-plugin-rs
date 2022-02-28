@@ -16,29 +16,17 @@ glib::wrapper! {
     pub(crate) struct FMP4Mux(ObjectSubclass<imp::FMP4Mux>) @extends gst::Element, gst::Object;
 }
 
-unsafe impl Send for FMP4Mux {}
-unsafe impl Sync for FMP4Mux {}
-
 glib::wrapper! {
     pub(crate) struct ISOFMP4Mux(ObjectSubclass<imp::ISOFMP4Mux>) @extends FMP4Mux, gst::Element, gst::Object;
 }
-
-unsafe impl Send for ISOFMP4Mux {}
-unsafe impl Sync for ISOFMP4Mux {}
 
 glib::wrapper! {
     pub(crate) struct CMAFMux(ObjectSubclass<imp::CMAFMux>) @extends FMP4Mux, gst::Element, gst::Object;
 }
 
-unsafe impl Send for CMAFMux {}
-unsafe impl Sync for CMAFMux {}
-
 glib::wrapper! {
     pub(crate) struct DASHMP4Mux(ObjectSubclass<imp::DASHMP4Mux>) @extends FMP4Mux, gst::Element, gst::Object;
 }
-
-unsafe impl Send for DASHMP4Mux {}
-unsafe impl Sync for DASHMP4Mux {}
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(

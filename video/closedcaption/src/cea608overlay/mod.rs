@@ -21,11 +21,6 @@ glib::wrapper! {
     pub struct Cea608Overlay(ObjectSubclass<imp::Cea608Overlay>) @extends gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for Cea608Overlay {}
-unsafe impl Sync for Cea608Overlay {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

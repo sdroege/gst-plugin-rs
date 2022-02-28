@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct HrtfRender(ObjectSubclass<imp::HrtfRender>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
-unsafe impl Send for HrtfRender {}
-unsafe impl Sync for HrtfRender {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

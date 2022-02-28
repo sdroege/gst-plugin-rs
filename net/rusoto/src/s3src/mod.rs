@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct S3Src(ObjectSubclass<imp::S3Src>) @extends gst_base::BaseSrc, gst::Element, gst::Object;
 }
 
-unsafe impl Send for S3Src {}
-unsafe impl Sync for S3Src {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

@@ -33,11 +33,6 @@ glib::wrapper! {
         @extends gst_video::VideoSink, gst_base::BaseSink, gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for PaintableSink {}
-unsafe impl Sync for PaintableSink {}
-
 impl PaintableSink {
     pub fn new(name: Option<&str>) -> Self {
         glib::Object::new(&[("name", &name)]).expect("Failed to create a GTK4Sink")

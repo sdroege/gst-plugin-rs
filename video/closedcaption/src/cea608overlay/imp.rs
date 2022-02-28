@@ -59,6 +59,11 @@ struct State {
     last_cc_pts: Option<gst::ClockTime>,
 }
 
+// SAFETY: Required because `pango::Layout` is not `Send` but the whole `State` needs to be.
+// We ensure that no additional references to the layout are ever created, which makes it safe
+// to send it to other threads as long as only a single thread uses it concurrently.
+unsafe impl Send for State {}
+
 impl Default for State {
     fn default() -> Self {
         Self {
@@ -73,8 +78,6 @@ impl Default for State {
         }
     }
 }
-
-unsafe impl Send for State {}
 
 pub struct Cea608Overlay {
     srcpad: gst::Pad,

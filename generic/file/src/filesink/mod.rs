@@ -19,9 +19,6 @@ glib::wrapper! {
     pub struct FileSink(ObjectSubclass<imp::FileSink>) @extends gst_base::BaseSink, gst::Element, gst::Object, @implements gst::URIHandler;
 }
 
-unsafe impl Send for FileSink {}
-unsafe impl Sync for FileSink {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

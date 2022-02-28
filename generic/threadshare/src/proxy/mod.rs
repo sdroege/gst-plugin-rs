@@ -26,19 +26,9 @@ glib::wrapper! {
     pub struct ProxySink(ObjectSubclass<imp::ProxySink>) @extends gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for ProxySink {}
-unsafe impl Sync for ProxySink {}
-
 glib::wrapper! {
     pub struct ProxySrc(ObjectSubclass<imp::ProxySrc>) @extends gst::Element, gst::Object;
 }
-
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for ProxySrc {}
-unsafe impl Sync for ProxySrc {}
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(

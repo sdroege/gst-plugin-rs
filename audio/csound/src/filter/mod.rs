@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct CsoundFilter(ObjectSubclass<imp::CsoundFilter>) @extends gst_base::BaseTransform, gst::Element, gst::Object;
 }
 
-unsafe impl Send for CsoundFilter {}
-unsafe impl Sync for CsoundFilter {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

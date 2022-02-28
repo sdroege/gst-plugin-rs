@@ -14,11 +14,6 @@ glib::wrapper! {
     pub struct CustomSource(ObjectSubclass<imp::CustomSource>) @extends gst::Bin, gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for CustomSource {}
-unsafe impl Sync for CustomSource {}
-
 impl CustomSource {
     pub fn new(source: &gst::Element) -> CustomSource {
         glib::Object::new(&[("source", source)]).unwrap()

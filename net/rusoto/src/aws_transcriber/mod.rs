@@ -35,9 +35,6 @@ glib::wrapper! {
     pub struct Transcriber(ObjectSubclass<imp::Transcriber>) @extends gst::Element, gst::Object;
 }
 
-unsafe impl Send for Transcriber {}
-unsafe impl Sync for Transcriber {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

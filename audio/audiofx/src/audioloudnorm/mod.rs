@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct AudioLoudNorm(ObjectSubclass<imp::AudioLoudNorm>) @extends gst::Element, gst::Object;
 }
 
-unsafe impl Send for AudioLoudNorm {}
-unsafe impl Sync for AudioLoudNorm {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

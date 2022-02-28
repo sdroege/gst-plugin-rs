@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct TtToJson(ObjectSubclass<imp::TtToJson>) @extends gst::Element, gst::Object;
 }
 
-unsafe impl Send for TtToJson {}
-unsafe impl Sync for TtToJson {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

@@ -17,9 +17,6 @@ glib::wrapper! {
     pub struct ReqwestHttpSrc(ObjectSubclass<imp::ReqwestHttpSrc>) @extends gst_base::PushSrc, gst_base::BaseSrc, gst::Element, gst::Object, @implements gst::URIHandler;
 }
 
-unsafe impl Send for ReqwestHttpSrc {}
-unsafe impl Sync for ReqwestHttpSrc {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

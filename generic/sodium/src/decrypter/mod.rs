@@ -31,9 +31,6 @@ glib::wrapper! {
     pub struct Decrypter(ObjectSubclass<imp::Decrypter>) @extends gst::Element, gst::Object;
 }
 
-unsafe impl Send for Decrypter {}
-unsafe impl Sync for Decrypter {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

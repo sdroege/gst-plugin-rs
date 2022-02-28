@@ -17,9 +17,6 @@ glib::wrapper! {
     pub struct HlsSink3(ObjectSubclass<imp::HlsSink3>) @extends gst::Bin, gst::Element, gst::Object;
 }
 
-unsafe impl Send for HlsSink3 {}
-unsafe impl Sync for HlsSink3 {}
-
 pub fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

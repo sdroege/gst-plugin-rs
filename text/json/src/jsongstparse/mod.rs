@@ -15,9 +15,6 @@ glib::wrapper! {
     pub struct JsonGstParse(ObjectSubclass<imp::JsonGstParse>) @extends gst::Element, gst::Object;
 }
 
-unsafe impl Send for JsonGstParse {}
-unsafe impl Sync for JsonGstParse {}
-
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     gst::Element::register(
         Some(plugin),

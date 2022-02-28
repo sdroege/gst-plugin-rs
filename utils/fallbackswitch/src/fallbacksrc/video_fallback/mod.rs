@@ -15,11 +15,6 @@ glib::wrapper! {
     pub struct VideoFallbackSource(ObjectSubclass<imp::VideoFallbackSource>) @extends gst::Bin, gst::Element, gst::Object;
 }
 
-// GStreamer elements need to be thread-safe. For the private implementation this is automatically
-// enforced but for the public wrapper type we need to specify this manually.
-unsafe impl Send for VideoFallbackSource {}
-unsafe impl Sync for VideoFallbackSource {}
-
 impl VideoFallbackSource {
     pub fn new(uri: Option<&str>, min_latency: gst::ClockTime) -> VideoFallbackSource {
         glib::Object::new(&[("uri", &uri), ("min-latency", &min_latency.nseconds())]).unwrap()
