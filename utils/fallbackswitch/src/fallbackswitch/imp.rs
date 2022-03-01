@@ -18,7 +18,7 @@ use std::sync::{Mutex, RwLock};
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
 #[enum_type(name = "GstFallbackSwitchStreamHealth")]
-pub(crate) enum StreamHealth {
+pub enum StreamHealth {
     #[enum_value(name = "Data flow is inactive or late", nick = "inactive")]
     Inactive = 0,
     #[enum_value(name = "Data is currently flowing in the stream", nick = "present")]
