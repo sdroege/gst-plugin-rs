@@ -1360,11 +1360,11 @@ impl WebRTCSink {
         &self,
         element: &super::WebRTCSink,
         offer: gst_webrtc::WebRTCSessionDescription,
-        peer_id: String,
+        peer_id: &str,
     ) {
         let mut state = self.state.lock().unwrap();
 
-        if let Some(consumer) = state.consumers.get(&peer_id) {
+        if let Some(consumer) = state.consumers.get(peer_id) {
             consumer
                 .webrtcbin
                 .emit_by_name::<()>("set-local-description", &[&offer, &None::<gst::Promise>]);
@@ -1382,19 +1382,15 @@ impl WebRTCSink {
         }
     }
 
-    fn on_negotiation_needed(&self, element: &super::WebRTCSink, peer_id: String) {
+    fn negotiate(&self, element: &super::WebRTCSink, peer_id: &str) {
         let state = self.state.lock().unwrap();
 
-        gst_debug!(
-            CAT,
-            obj: element,
-            "On negotiation needed for peer {}",
-            peer_id
-        );
+        gst_debug!(CAT, obj: element, "Negotiating for peer {}", peer_id);
 
-        if let Some(consumer) = state.consumers.get(&peer_id) {
+        if let Some(consumer) = state.consumers.get(peer_id) {
             let element = element.downgrade();
             gst_debug!(CAT, "Creating offer for peer {}", peer_id);
+            let peer_id = peer_id.to_string();
             let promise = gst::Promise::with_change_func(move |reply| {
                 gst_debug!(CAT, "Created offer for peer {}", peer_id);
 
@@ -1429,7 +1425,7 @@ impl WebRTCSink {
                         .value("offer")
                         .map(|offer| offer.get::<gst_webrtc::WebRTCSessionDescription>().unwrap())
                     {
-                        this.on_offer_created(&element, offer, peer_id);
+                        this.on_offer_created(&element, offer, &peer_id);
                     } else {
                         gst_warning!(
                             CAT,
@@ -1514,17 +1510,6 @@ impl WebRTCSink {
         }
 
         pipeline.add(&webrtcbin).unwrap();
-
-        let element_clone = element.downgrade();
-        let peer_id_clone = peer_id.to_owned();
-        webrtcbin.connect("on-negotiation-needed", false, move |_| {
-            if let Some(element) = element_clone.upgrade() {
-                let this = Self::from_instance(&element);
-                this.on_negotiation_needed(&element, peer_id_clone.to_string());
-            }
-
-            None
-        });
 
         let element_clone = element.downgrade();
         let peer_id_clone = peer_id.to_owned();
@@ -1736,6 +1721,17 @@ impl WebRTCSink {
         // so that application code can create data channels at the correct
         // moment.
         element.emit_by_name::<()>("consumer-added", &[&peer_id, &webrtcbin]);
+
+        // We don't connect to on-negotiation-needed, this in order to call the above
+        // signal without holding the state lock:
+        //
+        // Going to Ready triggers synchronous emission of the on-negotiation-needed
+        // signal, during which time the application may add a data channel, causing
+        // renegotiation, which we do not support at this time.
+        //
+        // This is completely safe, as we know that by now all conditions are gathered:
+        // webrtcbin is in the Ready state, and all its transceivers have codec_preferences.
+        self.negotiate(&element, peer_id);
 
         pipeline.set_state(gst::State::Playing).map_err(|err| {
             WebRTCSinkError::ConsumerPipelineError {
