@@ -12,6 +12,9 @@ use gst::glib;
 mod fallbacksrc;
 mod fallbackswitch;
 
+pub use fallbacksrc::{RetryReason, Status};
+pub use fallbackswitch::StreamHealth;
+
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     fallbacksrc::register(plugin)?;
     fallbackswitch::register(plugin)?;

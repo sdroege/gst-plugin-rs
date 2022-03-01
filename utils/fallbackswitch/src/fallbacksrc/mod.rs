@@ -16,7 +16,7 @@ mod video_fallback;
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
 #[enum_type(name = "GstFallbackSourceRetryReason")]
-enum RetryReason {
+pub enum RetryReason {
     None,
     Error,
     Eos,
@@ -27,7 +27,7 @@ enum RetryReason {
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
 #[repr(u32)]
 #[enum_type(name = "GstFallbackSourceStatus")]
-enum Status {
+pub enum Status {
     Stopped,
     Buffering,
     Retrying,
