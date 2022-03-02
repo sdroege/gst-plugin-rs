@@ -212,23 +212,23 @@ impl FallbackSwitch {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn handle_main_buffer(
+    fn handle_main_timed_item(
         &self,
         agg: &super::FallbackSwitch,
         state: &mut OutputState,
         settings: &Settings,
-        mut buffer: gst::Buffer,
+        mut item: TimedItem,
         preferred_pad: &gst_base::AggregatorPad,
         backup_pad: &Option<&gst_base::AggregatorPad>,
         cur_running_time: impl Into<Option<gst::ClockTime>>,
-    ) -> Result<Option<(gst::Buffer, gst::Caps, bool)>, gst::FlowError> {
-        // If we got a buffer on the sinkpad just handle it
+    ) -> Result<Option<(TimedItem, gst::Caps, bool)>, gst::FlowError> {
         gst_debug!(
             CAT,
             obj: preferred_pad,
-            "Got buffer on pad {} - {:?}",
+            "Got {} on pad {} - {:?}",
+            item.name(),
             preferred_pad.name(),
-            buffer
+            item
         );
 
         let segment = preferred_pad
@@ -239,7 +239,7 @@ impl FallbackSwitch {
                 gst::FlowError::Error
             })?;
 
-        let running_time = if buffer.pts().is_none() {
+        let running_time = if item.pts().is_none() {
             // re-use ts from previous buffer
             let running_time = state
                 .primary
@@ -249,21 +249,17 @@ impl FallbackSwitch {
             gst_debug!(
                 CAT,
                 obj: preferred_pad,
-                "Buffer does not have PTS, re-use ts from previous buffer: {}",
+                "{} does not have PTS, re-use ts from previous buffer: {}",
+                item.name(),
                 running_time.display()
             );
 
             running_time
         } else {
-            segment.to_running_time(buffer.pts())
+            segment.to_running_time(item.pts())
         };
 
-        {
-            // FIXME: This will not work correctly for negative DTS
-            let buffer = buffer.make_mut();
-            buffer.set_pts(running_time);
-            buffer.set_dts(segment.to_running_time(buffer.dts()));
-        }
+        item.update_ts(running_time, &segment);
 
         if preferred_pad == &self.primary_sinkpad {
             state.primary.last_sinkpad_time = running_time;
@@ -284,7 +280,8 @@ impl FallbackSwitch {
             gst_debug!(
                 CAT,
                 obj: preferred_pad,
-                "Buffer is too late: {} > {}",
+                "{} is too late: {} > {}",
+                item.name(),
                 cur_running_time.display(),
                 deadline.display(),
             );
@@ -300,7 +297,8 @@ impl FallbackSwitch {
                 gst_debug!(
                     CAT,
                     obj: preferred_pad,
-                    "Buffer is too late and timeout reached: {} + {} <= {}",
+                    "{} is too late and timeout reached: {} + {} <= {}",
+                    item.name(),
                     state.last_output_time.display(),
                     settings.timeout,
                     running_time.display(),
@@ -315,7 +313,7 @@ impl FallbackSwitch {
             && active_sinkpad.as_ref() != Some(preferred_pad.upcast_ref::<gst::Pad>());
 
         if pad_change {
-            if buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
+            if !item.is_keyframe() {
                 gst_info!(
                     CAT,
                     obj: preferred_pad,
@@ -352,7 +350,32 @@ impl FallbackSwitch {
             self.drain_pad_to_time(state, backup_pad, state.last_output_time)?;
         }
 
-        Ok(Some((buffer, active_caps, pad_change)))
+        Ok(Some((item, active_caps, pad_change)))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn handle_main_buffer(
+        &self,
+        agg: &super::FallbackSwitch,
+        state: &mut OutputState,
+        settings: &Settings,
+        buffer: gst::Buffer,
+        preferred_pad: &gst_base::AggregatorPad,
+        backup_pad: &Option<&gst_base::AggregatorPad>,
+        cur_running_time: impl Into<Option<gst::ClockTime>>,
+    ) -> Result<Option<(gst::Buffer, gst::Caps, bool)>, gst::FlowError> {
+        // If we got a buffer on the sinkpad just handle it
+        let res = self.handle_main_timed_item(
+            agg,
+            state,
+            settings,
+            TimedItem::Buffer(buffer),
+            preferred_pad,
+            backup_pad,
+            cur_running_time,
+        )?;
+
+        Ok(res.map(|res| (res.0.buffer(), res.1, res.2)))
     }
 
     fn backup_buffer(
@@ -1260,5 +1283,51 @@ impl AggregatorImpl for FallbackSwitch {
 
     fn negotiate(&self, _agg: &Self::Type) -> bool {
         true
+    }
+}
+
+#[derive(Debug)]
+enum TimedItem {
+    Buffer(gst::Buffer),
+}
+
+impl TimedItem {
+    fn name(&self) -> &str {
+        match self {
+            TimedItem::Buffer(_) => "buffer",
+        }
+    }
+
+    fn pts(&self) -> Option<gst::ClockTime> {
+        match self {
+            TimedItem::Buffer(buffer) => buffer.pts(),
+        }
+    }
+
+    fn update_ts(
+        &mut self,
+        running_time: Option<gst::ClockTime>,
+        segment: &gst::FormattedSegment<gst::ClockTime>,
+    ) {
+        match self {
+            TimedItem::Buffer(buffer) => {
+                // FIXME: This will not work correctly for negative DTS
+                let buffer = buffer.make_mut();
+                buffer.set_pts(running_time);
+                buffer.set_dts(segment.to_running_time(buffer.dts()));
+            }
+        }
+    }
+
+    fn is_keyframe(&self) -> bool {
+        match self {
+            TimedItem::Buffer(buffer) => !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT),
+        }
+    }
+
+    fn buffer(self) -> gst::Buffer {
+        match self {
+            TimedItem::Buffer(buffer) => buffer,
+        }
     }
 }
