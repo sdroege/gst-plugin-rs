@@ -999,7 +999,57 @@ impl AggregatorImpl for FallbackSwitch {
         match event.view() {
             EventView::Gap(gap) => {
                 if gap.gap_flags().contains(gst::GapFlags::DATA) {
-                    gst_debug!(CAT, obj: agg_pad, "Dropping gap event");
+                    let settings = self.settings.lock().unwrap().clone();
+                    let mut state = self.output_state.lock().unwrap();
+                    let fallback_sinkpad = self.fallback_sinkpad.read().unwrap();
+
+                    let on_active_sinkpad = {
+                        let active_sinkpad = self.active_sinkpad.lock().unwrap();
+                        active_sinkpad.as_ref() == Some(agg_pad.upcast_ref::<gst::Pad>())
+                    };
+
+                    // handle GAP as timed item
+                    let clock = agg.clock();
+                    let base_time = agg.base_time();
+
+                    let cur_running_time = if let Some(clock) = clock {
+                        clock.time().opt_checked_sub(base_time).ok().flatten()
+                    } else {
+                        gst::ClockTime::NONE
+                    };
+
+                    let mut forwarded = false;
+                    if let Ok(Some((item, _, _))) = self.handle_main_timed_item(
+                        agg,
+                        &mut *state,
+                        &settings,
+                        TimedItem::GapEvent(event),
+                        agg_pad,
+                        &fallback_sinkpad.as_ref(),
+                        cur_running_time,
+                    ) {
+                        // push GAP downstream only if it's from the active sink pad
+                        if on_active_sinkpad {
+                            let event = item.event();
+                            // FIXME: API to retrieve src pad from Aggregator?
+                            let src_pad = agg.static_pad("src").unwrap();
+
+                            gst_debug!(
+                                CAT,
+                                obj: agg_pad,
+                                "Forwarding gap event downstream: {:?}",
+                                event
+                            );
+
+                            src_pad.push_event(event);
+                            forwarded = true;
+                        }
+                    }
+
+                    if !forwarded {
+                        gst_debug!(CAT, obj: agg_pad, "Dropping gap event");
+                    }
+
                     Ok(gst::FlowSuccess::Ok)
                 } else {
                     self.parent_sink_event_pre_queue(agg, agg_pad, event)
@@ -1289,18 +1339,29 @@ impl AggregatorImpl for FallbackSwitch {
 #[derive(Debug)]
 enum TimedItem {
     Buffer(gst::Buffer),
+    // only used with feature v1_20
+    #[allow(dead_code)]
+    GapEvent(gst::Event),
 }
 
 impl TimedItem {
     fn name(&self) -> &str {
         match self {
             TimedItem::Buffer(_) => "buffer",
+            TimedItem::GapEvent(_) => "GAP event",
         }
     }
 
     fn pts(&self) -> Option<gst::ClockTime> {
         match self {
             TimedItem::Buffer(buffer) => buffer.pts(),
+            TimedItem::GapEvent(event) => match event.view() {
+                gst::EventView::Gap(gap) => {
+                    let (pts, _duration) = gap.get();
+                    Some(pts)
+                }
+                _ => unreachable!(),
+            },
         }
     }
 
@@ -1316,18 +1377,45 @@ impl TimedItem {
                 buffer.set_pts(running_time);
                 buffer.set_dts(segment.to_running_time(buffer.dts()));
             }
+            TimedItem::GapEvent(event) => {
+                let new_event = match event.view() {
+                    gst::EventView::Gap(gap) => {
+                        let (pts, duration) = gap.get();
+                        let builder = gst::event::Gap::builder(pts)
+                            .duration(duration)
+                            .seqnum(event.seqnum());
+
+                        #[cfg(feature = "v1_20")]
+                        let builder = builder.gap_flags(gap.gap_flags());
+
+                        builder.build()
+                    }
+                    _ => unreachable!(),
+                };
+                *event = new_event;
+            }
         }
     }
 
     fn is_keyframe(&self) -> bool {
         match self {
             TimedItem::Buffer(buffer) => !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT),
+            TimedItem::GapEvent(_) => false,
         }
     }
 
     fn buffer(self) -> gst::Buffer {
         match self {
             TimedItem::Buffer(buffer) => buffer,
+            _ => unreachable!(),
+        }
+    }
+
+    #[cfg(feature = "v1_20")]
+    fn event(self) -> gst::Event {
+        match self {
+            TimedItem::GapEvent(event) => event,
+            _ => unreachable!(),
         }
     }
 }
