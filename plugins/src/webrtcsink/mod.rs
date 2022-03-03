@@ -41,14 +41,14 @@ pub trait Signallable: Sync + Send + 'static {
 
     /// sdp_mid is exposed for future proofing, see
     /// https://gitlab.freedesktop.org/gstreamer/gst-plugins-bad/-/issues/1174,
-    /// at the moment sdp_mline_index will always be Some and sdp_mid will always
+    /// at the moment sdp_m_line_index will always be Some and sdp_mid will always
     /// be None
     fn handle_ice(
         &mut self,
         element: &WebRTCSink,
         peer_id: &str,
         candidate: &str,
-        sdp_mline_index: Option<u32>,
+        sdp_m_line_index: Option<u32>,
         sdp_mid: Option<String>,
     ) -> Result<(), Box<dyn Error>>;
 
@@ -96,17 +96,17 @@ impl WebRTCSink {
 
     /// sdp_mid is exposed for future proofing, see
     /// https://gitlab.freedesktop.org/gstreamer/gst-plugins-bad/-/issues/1174,
-    /// at the moment sdp_mline_index must be Some
+    /// at the moment sdp_m_line_index must be Some
     pub fn handle_ice(
         &self,
         peer_id: &str,
-        sdp_mline_index: Option<u32>,
+        sdp_m_line_index: Option<u32>,
         sdp_mid: Option<String>,
         candidate: &str,
     ) -> Result<(), WebRTCSinkError> {
         let ws = imp::WebRTCSink::from_instance(self);
 
-        ws.handle_ice(self, peer_id, sdp_mline_index, sdp_mid, candidate)
+        ws.handle_ice(self, peer_id, sdp_m_line_index, sdp_mid, candidate)
     }
 
     pub fn handle_signalling_error(&self, error: Box<dyn Error + Send + Sync>) {

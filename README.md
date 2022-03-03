@@ -15,9 +15,9 @@ useful alternative.
 
 `webrtcsink` implements the following features:
 
-* Built-in signaller: when using the default signalling server (provided as a python
-  script [here](signalling/simple-server.py)), this element will perform signalling without
-  requiring application interaction. This makes it usable directly from `gst-launch`.
+* Built-in signaller: when using the default signalling server, this element will
+  perform signalling without requiring application interaction.
+  This makes it usable directly from `gst-launch`.
 
 * Application-provided signalling: `webrtcsink` can be instantiated by an application
   with a custom signaller. That signaller must be a GObject, and must implement the
@@ -90,8 +90,7 @@ cargo build
 Open three terminals. In the first, run:
 
 ``` shell
-cd signalling
-python3 simple-server.py --addr=127.0.0.1 --disable-ssl
+WEBRTCSINK_SIGNALLING_SERVER_LOG=debug cargo run --bin server
 ```
 
 In the second, run:
@@ -109,7 +108,7 @@ gst-launch-1.0 webrtcsink name=ws videotestsrc ! ws. audiotestsrc ! ws.
 ```
 
 When the pipeline above is running succesfully, open a browser and
-point it to the python server:
+point it to the http server:
 
 ``` shell
 xdg-open http://127.0.0.1:8000

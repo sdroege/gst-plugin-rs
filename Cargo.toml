@@ -2,4 +2,6 @@
 
 members = [
     "plugins",
+    "protocol",
+    "signalling",
 ]

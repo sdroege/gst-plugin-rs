@@ -1455,14 +1455,14 @@ impl WebRTCSink {
         &self,
         element: &super::WebRTCSink,
         peer_id: String,
-        sdp_mline_index: u32,
+        sdp_m_line_index: u32,
         candidate: String,
     ) {
         let mut state = self.state.lock().unwrap();
         if let Err(err) =
             state
                 .signaller
-                .handle_ice(element, &peer_id, &candidate, Some(sdp_mline_index), None)
+                .handle_ice(element, &peer_id, &candidate, Some(sdp_m_line_index), None)
         {
             gst_warning!(
                 CAT,
@@ -1516,12 +1516,12 @@ impl WebRTCSink {
         webrtcbin.connect("on-ice-candidate", false, move |values| {
             if let Some(element) = element_clone.upgrade() {
                 let this = Self::from_instance(&element);
-                let sdp_mline_index = values[1].get::<u32>().expect("Invalid argument");
+                let sdp_m_line_index = values[1].get::<u32>().expect("Invalid argument");
                 let candidate = values[2].get::<String>().expect("Invalid argument");
                 this.on_ice_candidate(
                     &element,
                     peer_id_clone.to_string(),
-                    sdp_mline_index,
+                    sdp_m_line_index,
                     candidate,
                 );
             }
@@ -1864,19 +1864,19 @@ impl WebRTCSink {
         &self,
         _element: &super::WebRTCSink,
         peer_id: &str,
-        sdp_mline_index: Option<u32>,
+        sdp_m_line_index: Option<u32>,
         _sdp_mid: Option<String>,
         candidate: &str,
     ) -> Result<(), WebRTCSinkError> {
         let state = self.state.lock().unwrap();
 
-        let sdp_mline_index = sdp_mline_index.ok_or(WebRTCSinkError::MandatorySdpMlineIndex)?;
+        let sdp_m_line_index = sdp_m_line_index.ok_or(WebRTCSinkError::MandatorySdpMlineIndex)?;
 
         if let Some(consumer) = state.consumers.get(peer_id) {
             gst_trace!(CAT, "adding ice candidate for peer {}", peer_id);
             consumer
                 .webrtcbin
-                .emit_by_name::<()>("add-ice-candidate", &[&sdp_mline_index, &candidate]);
+                .emit_by_name::<()>("add-ice-candidate", &[&sdp_m_line_index, &candidate]);
             Ok(())
         } else {
             Err(WebRTCSinkError::NoConsumerWithId(peer_id.to_string()))
