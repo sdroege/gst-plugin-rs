@@ -15,6 +15,8 @@ use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
 
+use super::CaptionSource;
+
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
         "transcriberbin",
@@ -27,6 +29,7 @@ const DEFAULT_PASSTHROUGH: bool = false;
 const DEFAULT_LATENCY: gst::ClockTime = gst::ClockTime::from_seconds(4);
 const DEFAULT_ACCUMULATE: gst::ClockTime = gst::ClockTime::ZERO;
 const DEFAULT_MODE: Cea608Mode = Cea608Mode::RollUp2;
+const DEFAULT_CAPTION_SOURCE: CaptionSource = CaptionSource::Both;
 
 struct State {
     framerate: Option<gst::Fraction>,
@@ -43,6 +46,7 @@ struct State {
     textwrap: gst::Element,
     tttocea608: gst::Element,
     cccapsfilter: gst::Element,
+    transcription_valve: gst::Element,
 }
 
 struct Settings {
@@ -51,6 +55,7 @@ struct Settings {
     passthrough: bool,
     accumulate_time: gst::ClockTime,
     mode: Cea608Mode,
+    caption_source: CaptionSource,
 }
 
 impl Default for Settings {
@@ -63,6 +68,7 @@ impl Default for Settings {
             latency: DEFAULT_LATENCY,
             accumulate_time: DEFAULT_ACCUMULATE,
             mode: DEFAULT_MODE,
+            caption_source: DEFAULT_CAPTION_SOURCE,
         }
     }
 }
@@ -98,6 +104,7 @@ impl TranscriberBin {
             &state.tttocea608,
             &ccconverter,
             &state.cccapsfilter,
+            &state.transcription_valve,
         ])?;
 
         gst::Element::link_many(&[
@@ -109,6 +116,7 @@ impl TranscriberBin {
             &state.tttocea608,
             &ccconverter,
             &state.cccapsfilter,
+            &state.transcription_valve,
         ])?;
 
         let transcription_audio_sinkpad = gst::GhostPad::with_target(
@@ -117,7 +125,7 @@ impl TranscriberBin {
         )?;
         let transcription_audio_srcpad = gst::GhostPad::with_target(
             Some("src"),
-            &state.cccapsfilter.static_pad("src").unwrap(),
+            &state.transcription_valve.static_pad("src").unwrap(),
         )?;
 
         state
@@ -189,6 +197,31 @@ impl TranscriberBin {
         state.internal_bin.add_pad(&internal_audio_srcpad)?;
         state.internal_bin.add_pad(&internal_video_sinkpad)?;
         state.internal_bin.add_pad(&internal_video_srcpad)?;
+
+        let element_weak = element.downgrade();
+        let comp_sinkpad = &state.cccombiner.static_pad("sink").unwrap();
+        // Drop caption meta from video buffer if user preference is transcription
+        comp_sinkpad.add_probe(gst::PadProbeType::BUFFER, move |_, probe_info| {
+            let element = match element_weak.upgrade() {
+                None => return gst::PadProbeReturn::Remove,
+                Some(element) => element,
+            };
+
+            let trans = TranscriberBin::from_instance(&element);
+            let settings = trans.settings.lock().unwrap();
+            if settings.caption_source != CaptionSource::Transcription {
+                return gst::PadProbeReturn::Pass;
+            }
+
+            if let Some(gst::PadProbeData::Buffer(buffer)) = &mut probe_info.data {
+                let buffer = buffer.make_mut();
+                while let Some(meta) = buffer.meta_mut::<gst_video::VideoCaptionMeta>() {
+                    meta.remove().unwrap();
+                }
+            }
+
+            gst::PadProbeReturn::Ok
+        });
 
         element.add(&state.internal_bin)?;
 
@@ -434,6 +467,9 @@ impl TranscriberBin {
         let audio_queue_passthrough = gst::ElementFactory::make("queue", None)?;
         let video_queue = gst::ElementFactory::make("queue", None)?;
         let cccapsfilter = gst::ElementFactory::make("capsfilter", None)?;
+        let transcription_valve = gst::ElementFactory::make("valve", None)?;
+
+        transcription_valve.set_property_from_str("drop-mode", "transform-to-gap");
 
         Ok(State {
             framerate: None,
@@ -449,6 +485,7 @@ impl TranscriberBin {
             textwrap,
             tttocea608,
             cccapsfilter,
+            transcription_valve,
             tearing_down: false,
         })
     }
@@ -602,6 +639,16 @@ impl ObjectImpl for TranscriberBin {
                     gst::Element::static_type(),
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecEnum::new(
+                    "caption-source",
+                    "Caption source",
+                    "Caption source to use. \
+                    If \"Transcription\" or \"Inband\" is selected, the caption meta \
+                    of the other source will be dropped by transcriberbin",
+                    CaptionSource::static_type(),
+                    DEFAULT_CAPTION_SOURCE as i32,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
             ]
         });
 
@@ -673,6 +720,21 @@ impl ObjectImpl for TranscriberBin {
                     }
                 }
             }
+            "caption-source" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.caption_source = value.get().expect("type checked upstream");
+
+                let s = self.state.lock().unwrap();
+                if let Some(state) = s.as_ref() {
+                    if settings.caption_source == CaptionSource::Inband {
+                        gst::debug!(CAT, obj: obj, "Use inband caption, dropping transcription");
+                        state.transcription_valve.set_property("drop", true);
+                    } else {
+                        gst::debug!(CAT, obj: obj, "Stop dropping transcription");
+                        state.transcription_valve.set_property("drop", false);
+                    }
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -707,6 +769,10 @@ impl ObjectImpl for TranscriberBin {
                     let ret: Option<gst::Element> = None;
                     ret.to_value()
                 }
+            }
+            "caption-source" => {
+                let settings = self.settings.lock().unwrap();
+                settings.caption_source.to_value()
             }
             _ => unimplemented!(),
         }

@@ -11,6 +11,15 @@ use gst::prelude::*;
 
 mod imp;
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstTranscriberBinCaptionSource")]
+pub enum CaptionSource {
+    Both,
+    Transcription,
+    Inband,
+}
+
 glib::wrapper! {
     pub struct TranscriberBin(ObjectSubclass<imp::TranscriberBin>) @extends gst::Bin, gst::Element, gst::Object;
 }
