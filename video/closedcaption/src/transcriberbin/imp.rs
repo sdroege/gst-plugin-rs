@@ -395,7 +395,6 @@ impl TranscriberBin {
 
                 if ret {
                     let (_, mut min, _) = upstream_query.result();
-                    let settings = self.settings.lock().unwrap();
                     let received_framerate = {
                         let state = self.state.lock().unwrap();
                         if let Some(state) = state.as_ref() {
@@ -405,6 +404,7 @@ impl TranscriberBin {
                         }
                     };
 
+                    let settings = self.settings.lock().unwrap();
                     if settings.passthrough || !received_framerate {
                         min += settings.latency + settings.accumulate_time;
                     } else if settings.mode.is_rollup() {
