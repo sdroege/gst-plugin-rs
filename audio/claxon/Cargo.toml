@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-claxon"
-version = "0.8.2"
+version = "0.8.3"
 authors = ["Ruben Gonzalez <rgonzalez@fluendo.com>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT/Apache-2.0"
