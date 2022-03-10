@@ -93,6 +93,10 @@ impl TranscriberBin {
         gst::debug!(CAT, obj: element, "Building transcription bin");
 
         let aqueue_transcription = gst::ElementFactory::make("queue", Some("transqueue"))?;
+        aqueue_transcription.set_property("max-size-buffers", 0u32);
+        aqueue_transcription.set_property("max-size-bytes", 0u32);
+        aqueue_transcription.set_property("max-size-time", 5_000_000_000u64);
+        aqueue_transcription.set_property_from_str("leaky", "downstream");
         let ccconverter = gst::ElementFactory::make("ccconverter", None)?;
 
         state.transcription_bin.add_many(&[
