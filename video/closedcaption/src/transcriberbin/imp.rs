@@ -920,8 +920,8 @@ impl BinImpl for TranscriberBin {
                         drop(s);
                         let mut settings = self.settings.lock().unwrap();
                         settings.passthrough = true;
-                        bin.notify("passthrough");
                         drop(settings);
+                        bin.notify("passthrough");
                         bin.call_async(move |bin| {
                             let thiz = bin.imp();
                             thiz.block_and_update(bin, true);
