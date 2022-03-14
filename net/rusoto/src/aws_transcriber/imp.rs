@@ -941,7 +941,8 @@ impl Transcriber {
         drop(settings);
         drop(state);
 
-        let url = signed.generate_presigned_url(&creds, &std::time::Duration::from_secs(60), true);
+        let url =
+            signed.generate_presigned_url(&creds, &std::time::Duration::from_secs(5 * 60), true);
 
         let (ws, _) = {
             let _enter = RUNTIME.enter();
