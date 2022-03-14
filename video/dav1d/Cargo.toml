@@ -5,7 +5,7 @@ authors = ["Philippe Normand <philn@igalia.com>"]
 edition = "2021"
 rust-version = "1.57"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 description = "Dav1d Plugin"
 
 [dependencies]
