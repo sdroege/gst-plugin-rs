@@ -132,6 +132,11 @@ version = "0.9"
 name = "miniz_oxide"
 version = "0.4"
 
+# ignore duplicated wasi dependency because various crates depends on an old version
+[[bans.skip]]
+name = "wasi"
+version = "0.10"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
