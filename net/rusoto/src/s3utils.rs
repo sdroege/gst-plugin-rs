@@ -9,7 +9,7 @@
 use bytes::{buf::BufMut, Bytes, BytesMut};
 use futures::{future, Future, FutureExt, TryFutureExt, TryStreamExt};
 use once_cell::sync::Lazy;
-use rusoto_core::RusotoError::HttpDispatch;
+use rusoto_core::RusotoError::{HttpDispatch, Unknown};
 use rusoto_core::{ByteStream, HttpDispatchError, RusotoError};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -79,6 +79,20 @@ where
                 HttpDispatch(_) => {
                     gst_warning!(CAT, "Error waiting for operation ({:?}), retrying", err);
                     backoff::Error::transient(err)
+                }
+                Unknown(ref response) => {
+                    gst_warning!(
+                        CAT,
+                        "Unknown error waiting for operation ({:?}), retrying",
+                        response
+                    );
+
+                    // Retry on 5xx errors
+                    if response.status.is_server_error() {
+                        backoff::Error::transient(err)
+                    } else {
+                        backoff::Error::permanent(err)
+                    }
                 }
                 _ => backoff::Error::permanent(err),
             })
