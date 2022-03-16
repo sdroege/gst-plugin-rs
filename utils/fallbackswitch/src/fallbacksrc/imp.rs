@@ -2107,6 +2107,9 @@ impl FallbackSrc {
             }
             drop(state_guard);
 
+            gst::debug!(CAT, obj: element, "Flushing source");
+            let _ = source.send_event(gst::event::FlushStart::builder().build());
+
             gst::debug!(CAT, obj: element, "Shutting down source");
             let _ = source.set_state(gst::State::Null);
 
