@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::sync::Mutex;
+use std::time::Duration;
 
 use bytes::Bytes;
 use futures::future;
@@ -25,6 +26,9 @@ use gst_base::subclass::prelude::*;
 
 use crate::s3url::*;
 use crate::s3utils::{self, WaitError};
+
+const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 10_000;
+const DEFAULT_RETRY_DURATION_MSEC: u64 = 60_000;
 
 #[allow(clippy::large_enum_variant)]
 enum StreamingState {
@@ -47,6 +51,8 @@ struct Settings {
     url: Option<GstS3Url>,
     access_key: Option<String>,
     secret_access_key: Option<String>,
+    request_timeout: Option<Duration>,
+    retry_duration: Option<Duration>,
 }
 
 #[derive(Default)]
@@ -129,16 +135,24 @@ impl S3Src {
         client: &S3Client,
         url: &GstS3Url,
     ) -> Result<u64, gst::ErrorMessage> {
-        let request = HeadObjectRequest {
-            bucket: url.bucket.clone(),
-            key: url.object.clone(),
-            version_id: url.version.clone(),
-            ..Default::default()
+        let settings = self.settings.lock().unwrap();
+
+        let head_object_future = || {
+            client.head_object(HeadObjectRequest {
+                bucket: url.bucket.clone(),
+                key: url.object.clone(),
+                version_id: url.version.clone(),
+                ..Default::default()
+            })
         };
 
-        let response = client.head_object(request);
-
-        let output = s3utils::wait(&self.canceller, response).map_err(|err| match err {
+        let output = s3utils::wait_retry(
+            &self.canceller,
+            settings.request_timeout,
+            settings.retry_duration,
+            head_object_future,
+        )
+        .map_err(|err| match err {
             WaitError::FutureError(err) => gst::error_msg!(
                 gst::ResourceError::NotFound,
                 ["Failed to HEAD object: {}", err]
@@ -182,13 +196,7 @@ impl S3Src {
             }
         };
 
-        let request = GetObjectRequest {
-            bucket: url.bucket.clone(),
-            key: url.object.clone(),
-            range: Some(format!("bytes={}-{}", offset, offset + length - 1)),
-            version_id: url.version.clone(),
-            ..Default::default()
-        };
+        let settings = self.settings.lock().unwrap();
 
         gst::debug!(
             CAT,
@@ -198,9 +206,23 @@ impl S3Src {
             offset + length - 1
         );
 
-        let response = client.get_object(request);
+        let get_object_future = || {
+            client.get_object(GetObjectRequest {
+                bucket: url.bucket.clone(),
+                key: url.object.clone(),
+                range: Some(format!("bytes={}-{}", offset, offset + length - 1)),
+                version_id: url.version.clone(),
+                ..Default::default()
+            })
+        };
 
-        let output = s3utils::wait(&self.canceller, response).map_err(|err| match err {
+        let output = s3utils::wait_retry(
+            &self.canceller,
+            settings.request_timeout,
+            settings.retry_duration,
+            get_object_future,
+        )
+        .map_err(|err| match err {
             WaitError::FutureError(err) => Some(gst::error_msg!(
                 gst::ResourceError::Read,
                 ["Could not read: {}", err]
@@ -258,6 +280,24 @@ impl ObjectImpl for S3Src {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecInt64::new(
+                    "request-timeout",
+                    "Request timeout",
+                    "Timeout for each S3 request (in ms, set to -1 for infinity)",
+                    -1,
+                    std::i64::MAX,
+                    DEFAULT_REQUEST_TIMEOUT_MSEC as i64,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpecInt64::new(
+                    "retry-duration",
+                    "Retry duration",
+                    "How long we should retry S3 requests before giving up (in ms, set to -1 for infinity)",
+                    -1,
+                    std::i64::MAX,
+                    DEFAULT_RETRY_DURATION_MSEC as i64,
+                    glib::ParamFlags::READWRITE,
+                ),
             ]
         });
 
@@ -283,6 +323,21 @@ impl ObjectImpl for S3Src {
                 let mut settings = self.settings.lock().unwrap();
                 settings.secret_access_key = value.get().expect("type checked upstream");
             }
+            "request-timeout" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.request_timeout = match value.get::<i64>().expect("type checked upstream")
+                {
+                    -1 => None,
+                    v => Some(Duration::from_millis(v as u64)),
+                }
+            }
+            "retry-duration" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.retry_duration = match value.get::<i64>().expect("type checked upstream") {
+                    -1 => None,
+                    v => Some(Duration::from_millis(v as u64)),
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -301,6 +356,20 @@ impl ObjectImpl for S3Src {
             }
             "access-key" => settings.access_key.to_value(),
             "secret-access-key" => settings.secret_access_key.to_value(),
+            "request-timeout" => {
+                let timeout: i64 = match settings.request_timeout {
+                    None => -1,
+                    Some(v) => v.as_millis() as i64,
+                };
+                timeout.to_value()
+            }
+            "retry-duration" => {
+                let timeout: i64 = match settings.retry_duration {
+                    None => -1,
+                    Some(v) => v.as_millis() as i64,
+                };
+                timeout.to_value()
+            }
             _ => unimplemented!(),
         }
     }
