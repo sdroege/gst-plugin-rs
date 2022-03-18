@@ -6,11 +6,10 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use bytes::{buf::BufMut, Bytes, BytesMut};
-use futures::{future, Future, FutureExt, TryFutureExt, TryStreamExt};
+use futures::{future, Future, FutureExt, TryFutureExt};
 use once_cell::sync::Lazy;
 use rusoto_core::RusotoError::{HttpDispatch, Unknown};
-use rusoto_core::{ByteStream, HttpDispatchError, RusotoError};
+use rusoto_core::{HttpDispatchError, RusotoError};
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::runtime;
@@ -34,6 +33,12 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
         .unwrap()
 });
 
+#[derive(Debug)]
+pub enum RetriableError<E> {
+    Rusoto(RusotoError<E>),
+    Std(std::io::Error),
+}
+
 pub enum WaitError<E> {
     Cancelled,
     FutureError(E),
@@ -42,10 +47,10 @@ pub enum WaitError<E> {
 fn make_timeout<F, T, E>(
     timeout: Duration,
     future: F,
-) -> impl Future<Output = Result<T, RusotoError<E>>>
+) -> impl Future<Output = Result<T, RetriableError<E>>>
 where
     E: std::fmt::Debug,
-    F: Future<Output = Result<T, RusotoError<E>>>,
+    F: Future<Output = Result<T, RetriableError<E>>>,
 {
     tokio::time::timeout(timeout, future).map(|v| match v {
         // Future resolved succesfully
@@ -55,18 +60,20 @@ where
         // Timeout elapsed
         // Use an HttpDispatch error so the caller doesn't have to deal with this separately from
         // other HTTP dispatch errors
-        _ => Err(HttpDispatch(HttpDispatchError::new("Timeout".to_owned()))),
+        _ => Err(RetriableError::Rusoto(HttpDispatch(
+            HttpDispatchError::new("Timeout".to_owned()),
+        ))),
     })
 }
 
 fn make_retry<F, T, E, Fut>(
     timeout: Option<Duration>,
     mut future: F,
-) -> impl Future<Output = Result<T, RusotoError<E>>>
+) -> impl Future<Output = Result<T, RetriableError<E>>>
 where
     E: std::fmt::Debug,
     F: FnMut() -> Fut,
-    Fut: Future<Output = Result<T, RusotoError<E>>>,
+    Fut: Future<Output = Result<T, RetriableError<E>>>,
 {
     backoff::future::retry(
         backoff::ExponentialBackoffBuilder::new()
@@ -76,11 +83,11 @@ where
             .build(),
         move || {
             future().map_err(|err| match err {
-                HttpDispatch(_) => {
+                RetriableError::Rusoto(HttpDispatch(_)) => {
                     gst_warning!(CAT, "Error waiting for operation ({:?}), retrying", err);
                     backoff::Error::transient(err)
                 }
-                Unknown(ref response) => {
+                RetriableError::Rusoto(Unknown(ref response)) => {
                     gst_warning!(
                         CAT,
                         "Unknown error waiting for operation ({:?}), retrying",
@@ -105,11 +112,11 @@ pub fn wait_retry<F, T, E, Fut>(
     req_timeout: Option<Duration>,
     retry_timeout: Option<Duration>,
     mut future: F,
-) -> Result<T, WaitError<RusotoError<E>>>
+) -> Result<T, WaitError<RetriableError<E>>>
 where
     E: std::fmt::Debug,
     F: FnMut() -> Fut,
-    Fut: Send + Future<Output = Result<T, RusotoError<E>>>,
+    Fut: Send + Future<Output = Result<T, RetriableError<E>>>,
     Fut::Output: Send,
     T: Send,
     E: Send,
@@ -198,20 +205,4 @@ where
     *canceller_guard = None;
 
     res
-}
-
-pub fn wait_stream(
-    canceller: &Mutex<Option<future::AbortHandle>>,
-    stream: &mut ByteStream,
-) -> Result<Bytes, WaitError<std::io::Error>> {
-    wait(canceller, async move {
-        let mut collect = BytesMut::new();
-
-        // Loop over the stream and collect till we're done
-        while let Some(item) = stream.try_next().await? {
-            collect.put(item)
-        }
-
-        Ok::<Bytes, std::io::Error>(collect.freeze())
-    })
 }
