@@ -9,11 +9,13 @@
 use std::sync::Mutex;
 use std::time::Duration;
 
-use bytes::Bytes;
+use bytes::{buf::BufMut, Bytes, BytesMut};
 use futures::future;
+use futures::{TryFutureExt, TryStreamExt};
 use once_cell::sync::Lazy;
 use rusoto_core::request::HttpClient;
 use rusoto_credential::StaticProvider;
+use rusoto_s3::GetObjectError;
 use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
 
 use gst::glib;
@@ -25,7 +27,7 @@ use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use crate::s3url::*;
-use crate::s3utils::{self, WaitError};
+use crate::s3utils::{self, RetriableError, WaitError};
 
 const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 10_000;
 const DEFAULT_RETRY_DURATION_MSEC: u64 = 60_000;
@@ -138,12 +140,14 @@ impl S3Src {
         let settings = self.settings.lock().unwrap();
 
         let head_object_future = || {
-            client.head_object(HeadObjectRequest {
-                bucket: url.bucket.clone(),
-                key: url.object.clone(),
-                version_id: url.version.clone(),
-                ..Default::default()
-            })
+            client
+                .head_object(HeadObjectRequest {
+                    bucket: url.bucket.clone(),
+                    key: url.object.clone(),
+                    version_id: url.version.clone(),
+                    ..Default::default()
+                })
+                .map_err(RetriableError::Rusoto)
         };
 
         let output = s3utils::wait_retry(
@@ -155,7 +159,7 @@ impl S3Src {
         .map_err(|err| match err {
             WaitError::FutureError(err) => gst::error_msg!(
                 gst::ResourceError::NotFound,
-                ["Failed to HEAD object: {}", err]
+                ["Failed to HEAD object: {:?}", err]
             ),
             WaitError::Cancelled => {
                 gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
@@ -198,25 +202,46 @@ impl S3Src {
 
         let settings = self.settings.lock().unwrap();
 
-        gst::debug!(
-            CAT,
-            obj: src,
-            "Requesting range: {}-{}",
-            offset,
-            offset + length - 1
-        );
+        let get_object_future = || async {
+            gst::debug!(
+                CAT,
+                obj: src,
+                "Requesting range: {}-{}",
+                offset,
+                offset + length - 1
+            );
 
-        let get_object_future = || {
-            client.get_object(GetObjectRequest {
-                bucket: url.bucket.clone(),
-                key: url.object.clone(),
-                range: Some(format!("bytes={}-{}", offset, offset + length - 1)),
-                version_id: url.version.clone(),
-                ..Default::default()
-            })
+            let output = client
+                .get_object(GetObjectRequest {
+                    bucket: url.bucket.clone(),
+                    key: url.object.clone(),
+                    range: Some(format!("bytes={}-{}", offset, offset + length - 1)),
+                    version_id: url.version.clone(),
+                    ..Default::default()
+                })
+                .map_err(RetriableError::Rusoto)
+                .await?;
+
+            gst::debug!(
+                CAT,
+                obj: src,
+                "Read {} bytes",
+                output.content_length.unwrap()
+            );
+
+            let mut collect = BytesMut::new();
+            let mut stream = output.body.unwrap();
+
+            // Loop over the stream and collect till we're done
+            // FIXME: Can we use TryStreamExt::collect() here?
+            while let Some(item) = stream.try_next().map_err(RetriableError::Std).await? {
+                collect.put(item)
+            }
+
+            Ok::<Bytes, RetriableError<GetObjectError>>(collect.freeze())
         };
 
-        let output = s3utils::wait_retry(
+        s3utils::wait_retry(
             &self.canceller,
             settings.request_timeout,
             settings.retry_duration,
@@ -225,22 +250,7 @@ impl S3Src {
         .map_err(|err| match err {
             WaitError::FutureError(err) => Some(gst::error_msg!(
                 gst::ResourceError::Read,
-                ["Could not read: {}", err]
-            )),
-            WaitError::Cancelled => None,
-        })?;
-
-        gst::debug!(
-            CAT,
-            obj: src,
-            "Read {} bytes",
-            output.content_length.unwrap()
-        );
-
-        s3utils::wait_stream(&self.canceller, &mut output.body.unwrap()).map_err(|err| match err {
-            WaitError::FutureError(err) => Some(gst::error_msg!(
-                gst::ResourceError::Read,
-                ["Could not read: {}", err]
+                ["Could not read: {:?}", err]
             )),
             WaitError::Cancelled => None,
         })

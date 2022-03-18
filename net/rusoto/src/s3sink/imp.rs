@@ -6,6 +6,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use futures::TryFutureExt;
 use gst::glib;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -27,7 +28,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::s3url::*;
-use crate::s3utils::{self, WaitError};
+use crate::s3utils::{self, RetriableError, WaitError};
 
 use super::OnError;
 
@@ -215,8 +216,11 @@ impl S3Sink {
         let upload_id = &state.upload_id;
         let client = &state.client;
 
-        let upload_part_req_future =
-            || client.upload_part(self.create_upload_part_request(&body, part_number, upload_id));
+        let upload_part_req_future = || {
+            client
+                .upload_part(self.create_upload_part_request(&body, part_number, upload_id))
+                .map_err(RetriableError::Rusoto)
+        };
 
         let output = s3utils::wait_retry(
             &self.canceller,
@@ -277,7 +281,7 @@ impl S3Sink {
                 }
                 Some(gst::error_msg!(
                     gst::ResourceError::OpenWrite,
-                    ["Failed to upload part: {}", err]
+                    ["Failed to upload part: {:?}", err]
                 ))
             }
             WaitError::Cancelled => None,
