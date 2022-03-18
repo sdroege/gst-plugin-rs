@@ -34,8 +34,17 @@ use crate::s3utils::{self, RetriableError, WaitError};
 use super::OnError;
 
 const DEFAULT_MULTIPART_UPLOAD_ON_ERROR: OnError = OnError::DoNothing;
+// This needs to be independently configurable, as the part size can be upto 5GB
 const DEFAULT_UPLOAD_PART_REQUEST_TIMEOUT_MSEC: u64 = 10_000;
 const DEFAULT_UPLOAD_PART_RETRY_DURATION_MSEC: u64 = 60_000;
+// The rest of these aren't exposed as properties yet
+// General setting for create / abort requests
+const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 10_000;
+const DEFAULT_RETRY_DURATION_MSEC: u64 = 60_000;
+// CompletedMultipartUpload can take minutes to complete, so we need a longer value here
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
+const DEFAULT_COMPLETE_REQUEST_TIMEOUT_MSEC: u64 = 600_000; // 10 minutes
+const DEFAULT_COMPLETE_RETRY_DURATION_MSEC: u64 = 3_600_000; // 60 minutes
 
 struct Started {
     client: S3Client,
@@ -317,16 +326,9 @@ impl S3Sink {
 
     fn create_complete_multipart_upload_request(
         &self,
-        started_state: &mut Started,
+        started_state: &Started,
+        completed_upload: CompletedMultipartUpload,
     ) -> CompleteMultipartUploadRequest {
-        started_state
-            .completed_parts
-            .sort_by(|a, b| a.part_number.cmp(&b.part_number));
-
-        let completed_upload = CompletedMultipartUpload {
-            parts: Some(std::mem::take(&mut started_state.completed_parts)),
-        };
-
         let url = self.url.lock().unwrap();
         CompleteMultipartUploadRequest {
             bucket: url.as_ref().unwrap().bucket.to_owned(),
@@ -373,45 +375,74 @@ impl S3Sink {
             Some(ref url) => url.clone(),
             None => unreachable!("Element should be started"),
         };
-        let abort_req = self.create_abort_multipart_upload_request(&s3url, started_state);
-        let abort_req_future = started_state.client.abort_multipart_upload(abort_req);
+        let abort_req_future = || {
+            let abort_req = self.create_abort_multipart_upload_request(&s3url, started_state);
+            started_state
+                .client
+                .abort_multipart_upload(abort_req)
+                .map_err(RetriableError::Rusoto)
+        };
 
-        s3utils::wait(&self.abort_multipart_canceller, abort_req_future)
-            .map(|_| ())
-            .map_err(|err| match err {
-                WaitError::FutureError(err) => {
-                    gst::error_msg!(
-                        gst::ResourceError::Write,
-                        ["Failed to abort multipart upload: {}.", err.to_string()]
-                    )
-                }
-                WaitError::Cancelled => {
-                    gst::error_msg!(
-                        gst::ResourceError::Write,
-                        ["Abort multipart upload request interrupted."]
-                    )
-                }
-            })
+        s3utils::wait_retry(
+            &self.abort_multipart_canceller,
+            Some(Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MSEC)),
+            Some(Duration::from_millis(DEFAULT_RETRY_DURATION_MSEC)),
+            abort_req_future,
+        )
+        .map(|_| ())
+        .map_err(|err| match err {
+            WaitError::FutureError(err) => {
+                gst::error_msg!(
+                    gst::ResourceError::Write,
+                    ["Failed to abort multipart upload: {:?}.", err]
+                )
+            }
+            WaitError::Cancelled => {
+                gst::error_msg!(
+                    gst::ResourceError::Write,
+                    ["Abort multipart upload request interrupted."]
+                )
+            }
+        })
     }
 
     fn complete_multipart_upload_request(
         &self,
         started_state: &mut Started,
     ) -> Result<(), gst::ErrorMessage> {
-        let complete_req = self.create_complete_multipart_upload_request(started_state);
-        let complete_req_future = started_state.client.complete_multipart_upload(complete_req);
+        started_state
+            .completed_parts
+            .sort_by(|a, b| a.part_number.cmp(&b.part_number));
 
-        s3utils::wait(&self.canceller, complete_req_future)
-            .map(|_| ())
-            .map_err(|err| match err {
-                WaitError::FutureError(err) => gst::error_msg!(
-                    gst::ResourceError::Write,
-                    ["Failed to complete multipart upload: {}.", err.to_string()]
-                ),
-                WaitError::Cancelled => {
-                    gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during stop"])
-                }
-            })
+        let completed_upload = CompletedMultipartUpload {
+            parts: Some(std::mem::take(&mut started_state.completed_parts)),
+        };
+
+        let complete_req_future = || {
+            let complete_req = self
+                .create_complete_multipart_upload_request(started_state, completed_upload.clone());
+            started_state
+                .client
+                .complete_multipart_upload(complete_req)
+                .map_err(RetriableError::Rusoto)
+        };
+
+        s3utils::wait_retry(
+            &self.canceller,
+            Some(Duration::from_millis(DEFAULT_COMPLETE_REQUEST_TIMEOUT_MSEC)),
+            Some(Duration::from_millis(DEFAULT_COMPLETE_RETRY_DURATION_MSEC)),
+            complete_req_future,
+        )
+        .map(|_| ())
+        .map_err(|err| match err {
+            WaitError::FutureError(err) => gst::error_msg!(
+                gst::ResourceError::Write,
+                ["Failed to complete multipart upload: {:?}.", err]
+            ),
+            WaitError::Cancelled => {
+                gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during stop"])
+            }
+        })
     }
 
     fn finalize_upload(&self, element: &super::S3Sink) -> Result<(), gst::ErrorMessage> {
@@ -467,20 +498,29 @@ impl S3Sink {
             _ => S3Client::new(s3url.region.clone()),
         };
 
-        let create_multipart_req = self.create_create_multipart_upload_request(&s3url, &settings);
-        let create_multipart_req_future = client.create_multipart_upload(create_multipart_req);
+        let create_multipart_req_future = || {
+            let create_multipart_req =
+                self.create_create_multipart_upload_request(&s3url, &settings);
+            client
+                .create_multipart_upload(create_multipart_req)
+                .map_err(RetriableError::Rusoto)
+        };
 
-        let response = s3utils::wait(&self.canceller, create_multipart_req_future).map_err(
-            |err| match err {
-                WaitError::FutureError(err) => gst::error_msg!(
-                    gst::ResourceError::OpenWrite,
-                    ["Failed to create multipart upload: {}", err]
-                ),
-                WaitError::Cancelled => {
-                    gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
-                }
-            },
-        )?;
+        let response = s3utils::wait_retry(
+            &self.canceller,
+            Some(Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MSEC)),
+            Some(Duration::from_millis(DEFAULT_RETRY_DURATION_MSEC)),
+            create_multipart_req_future,
+        )
+        .map_err(|err| match err {
+            WaitError::FutureError(err) => gst::error_msg!(
+                gst::ResourceError::OpenWrite,
+                ["Failed to create multipart upload: {:?}", err]
+            ),
+            WaitError::Cancelled => {
+                gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
+            }
+        })?;
 
         let upload_id = response.upload_id.ok_or_else(|| {
             gst::error_msg!(
