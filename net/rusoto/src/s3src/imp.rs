@@ -27,7 +27,7 @@ use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use crate::s3url::*;
-use crate::s3utils::{self, RetriableError, WaitError};
+use crate::s3utils::{self, duration_from_millis, duration_to_millis, RetriableError, WaitError};
 
 const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 10_000;
 const DEFAULT_RETRY_DURATION_MSEC: u64 = 60_000;
@@ -335,18 +335,13 @@ impl ObjectImpl for S3Src {
             }
             "request-timeout" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.request_timeout = match value.get::<i64>().expect("type checked upstream")
-                {
-                    -1 => None,
-                    v => Some(Duration::from_millis(v as u64)),
-                }
+                settings.request_timeout =
+                    duration_from_millis(value.get::<i64>().expect("type checked upstream"));
             }
             "retry-duration" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.retry_duration = match value.get::<i64>().expect("type checked upstream") {
-                    -1 => None,
-                    v => Some(Duration::from_millis(v as u64)),
-                }
+                settings.retry_duration =
+                    duration_from_millis(value.get::<i64>().expect("type checked upstream"));
             }
             _ => unimplemented!(),
         }
@@ -366,20 +361,8 @@ impl ObjectImpl for S3Src {
             }
             "access-key" => settings.access_key.to_value(),
             "secret-access-key" => settings.secret_access_key.to_value(),
-            "request-timeout" => {
-                let timeout: i64 = match settings.request_timeout {
-                    None => -1,
-                    Some(v) => v.as_millis() as i64,
-                };
-                timeout.to_value()
-            }
-            "retry-duration" => {
-                let timeout: i64 = match settings.retry_duration {
-                    None => -1,
-                    Some(v) => v.as_millis() as i64,
-                };
-                timeout.to_value()
-            }
+            "request-timeout" => duration_to_millis(settings.request_timeout).to_value(),
+            "retry-duration" => duration_to_millis(settings.retry_duration).to_value(),
             _ => unimplemented!(),
         }
     }
