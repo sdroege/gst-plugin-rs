@@ -165,3 +165,17 @@ where
 
     res
 }
+
+pub fn duration_from_millis(millis: i64) -> Option<Duration> {
+    match millis {
+        -1 => None,
+        v => Some(Duration::from_millis(v as u64)),
+    }
+}
+
+pub fn duration_to_millis(dur: Option<Duration>) -> i64 {
+    match dur {
+        None => -1,
+        Some(d) => d.as_millis() as i64,
+    }
+}
