@@ -311,7 +311,7 @@ impl BaseTransformImpl for AudioRNNoise {
         // if it is not the case, just notify the parent class to not generate
         // an output
         if let Some(buffer) = self.take_queued_buffer() {
-            if buffer.flags() == gst::BufferFlags::DISCONT {
+            if buffer.flags().contains(gst::BufferFlags::DISCONT) {
                 self.drain(element)?;
             }
 
