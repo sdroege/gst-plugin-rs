@@ -1097,6 +1097,25 @@ impl AggregatorImpl for FallbackSwitch {
 
                 self.parent_sink_event(agg, agg_pad, event)
             }
+            EventView::CustomDownstream(ev) => {
+                {
+                    let active_sinkpad_guard = self.active_sinkpad.lock().unwrap();
+                    if let Some(active_sinkpad) = &*active_sinkpad_guard {
+                        if active_sinkpad == agg_pad.upcast_ref::<gst::Pad>() {
+                            drop(active_sinkpad_guard);
+                            let src_pad = agg.static_pad("src").unwrap();
+                            src_pad.push_event(event.clone());
+                            gst::debug!(
+                                CAT,
+                                obj: agg_pad,
+                                "Forwarding custom downstream event: {:?}",
+                                ev
+                            );
+                        }
+                    }
+                }
+                self.parent_sink_event(agg, agg_pad, event)
+            }
             _ => self.parent_sink_event(agg, agg_pad, event),
         }
     }
