@@ -19,6 +19,7 @@
 
 use gst::glib;
 use gst::prelude::*;
+use once_cell::sync::Lazy;
 
 use std::env;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -27,6 +28,14 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 const THROUGHPUT_PERIOD: Duration = Duration::from_secs(20);
+
+pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "ts-benchmark",
+        gst::DebugColorFlags::empty(),
+        Some("Thread-sharing benchmarking receiver"),
+    )
+});
 
 fn main() {
     gst::init().unwrap();
@@ -55,32 +64,49 @@ fn main() {
     }
 
     let args = env::args().collect::<Vec<_>>();
-    assert_eq!(args.len(), 6);
+    assert!(args.len() > 4);
     let n_streams: u16 = args[1].parse().unwrap();
     let source = &args[2];
     let n_groups: u32 = args[3].parse().unwrap();
     let wait: u32 = args[4].parse().unwrap();
+
+    // Nb buffers to await before stopping.
+    let max_buffers: Option<u64> = if args.len() > 5 {
+        args[5].parse().ok()
+    } else {
+        None
+    };
+    let is_rtp = args.len() > 6 && (args[6] == "rtp");
+
+    let rtp_caps = gst::Caps::builder("audio/x-rtp")
+        .field("media", "audio")
+        .field("payload", 8i32)
+        .field("clock-rate", 8000)
+        .field("encoding-name", "PCMA")
+        .build();
 
     let l = glib::MainLoop::new(None, false);
     let pipeline = gst::Pipeline::new(None);
     let counter = Arc::new(AtomicU64::new(0));
 
     for i in 0..n_streams {
+        let build_context = || format!("context-{}", (i as u32) % n_groups);
+
         let sink =
             gst::ElementFactory::make("fakesink", Some(format!("sink-{}", i).as_str())).unwrap();
         sink.set_property("sync", false);
         sink.set_property("async", false);
-
-        let counter_clone = Arc::clone(&counter);
-        sink.static_pad("sink").unwrap().add_probe(
-            gst::PadProbeType::BUFFER,
-            move |_pad, _probe_info| {
-                let _ = counter_clone.fetch_add(1, Ordering::SeqCst);
-                gst::PadProbeReturn::Ok
-            },
+        sink.set_property("signal-handoffs", true);
+        sink.connect(
+            "handoff",
+            true,
+            glib::clone!(@strong counter => move |_| {
+                let _ = counter.fetch_add(1, Ordering::SeqCst);
+                None
+            }),
         );
 
-        let source = match source.as_str() {
+        let (source, context) = match source.as_str() {
             "udpsrc" => {
                 let source =
                     gst::ElementFactory::make("udpsrc", Some(format!("source-{}", i).as_str()))
@@ -88,17 +114,22 @@ fn main() {
                 source.set_property("port", 40000i32 + i as i32);
                 source.set_property("retrieve-sender-address", false);
 
-                source
+                (source, None)
             }
             "ts-udpsrc" => {
+                let context = build_context();
                 let source =
                     gst::ElementFactory::make("ts-udpsrc", Some(format!("source-{}", i).as_str()))
                         .unwrap();
                 source.set_property("port", 40000i32 + i as i32);
-                source.set_property("context", format!("context-{}", (i as u32) % n_groups));
+                source.set_property("context", &context);
                 source.set_property("context-wait", wait);
 
-                source
+                if is_rtp {
+                    source.set_property("caps", &rtp_caps);
+                }
+
+                (source, Some(context))
             }
             "tcpclientsrc" => {
                 let source = gst::ElementFactory::make(
@@ -109,9 +140,10 @@ fn main() {
                 source.set_property("host", "127.0.0.1");
                 source.set_property("port", 40000i32);
 
-                source
+                (source, None)
             }
             "ts-tcpclientsrc" => {
+                let context = build_context();
                 let source = gst::ElementFactory::make(
                     "ts-tcpclientsrc",
                     Some(format!("source-{}", i).as_str()),
@@ -119,10 +151,10 @@ fn main() {
                 .unwrap();
                 source.set_property("host", "127.0.0.1");
                 source.set_property("port", 40000i32);
-                source.set_property("context", format!("context-{}", (i as u32) % n_groups));
+                source.set_property("context", &context);
                 source.set_property("context-wait", wait);
 
-                source
+                (source, Some(context))
             }
             "tonegeneratesrc" => {
                 let source = gst::ElementFactory::make(
@@ -134,23 +166,51 @@ fn main() {
 
                 sink.set_property("sync", true);
 
-                source
+                (source, None)
             }
             "ts-tonesrc" => {
+                let context = build_context();
                 let source =
                     gst::ElementFactory::make("ts-tonesrc", Some(format!("source-{}", i).as_str()))
                         .unwrap();
                 source.set_property("samples-per-buffer", (wait as u32) * 8000 / 1000);
-                source.set_property("context", format!("context-{}", (i as u32) % n_groups));
+                source.set_property("context", &context);
                 source.set_property("context-wait", wait);
 
-                source
+                (source, Some(context))
             }
             _ => unimplemented!(),
         };
 
-        pipeline.add_many(&[&source, &sink]).unwrap();
-        source.link(&sink).unwrap();
+        if is_rtp {
+            let jb =
+                gst::ElementFactory::make("ts-jitterbuffer", Some(format!("jb-{}", i).as_str()))
+                    .unwrap();
+            if let Some(context) = context {
+                jb.set_property("context", &context);
+            }
+            jb.set_property("context-wait", wait);
+            jb.set_property("latency", wait);
+
+            let elements = &[&source, &jb, &sink];
+            pipeline.add_many(elements).unwrap();
+            gst::Element::link_many(elements).unwrap();
+        } else {
+            let queue = if let Some(context) = context {
+                let queue =
+                    gst::ElementFactory::make("ts-queue", Some(format!("queue-{}", i).as_str()))
+                        .unwrap();
+                queue.set_property("context", &context);
+                queue.set_property("context-wait", wait);
+                queue
+            } else {
+                gst::ElementFactory::make("queue2", Some(format!("queue-{}", i).as_str())).unwrap()
+            };
+
+            let elements = &[&source, &queue, &sink];
+            pipeline.add_many(elements).unwrap();
+            gst::Element::link_many(elements).unwrap();
+        }
     }
 
     let bus = pipeline.bus().unwrap();
@@ -161,7 +221,8 @@ fn main() {
         match msg.view() {
             MessageView::Eos(..) => l_clone.quit(),
             MessageView::Error(err) => {
-                println!(
+                gst::error!(
+                    CAT,
                     "Error from {:?}: {} ({:?})",
                     err.src().map(|s| s.path_string()),
                     err.error(),
@@ -178,8 +239,9 @@ fn main() {
 
     pipeline.set_state(gst::State::Playing).unwrap();
 
-    println!("started");
+    gst::info!(CAT, "started");
 
+    let l_clone = l.clone();
     thread::spawn(move || {
         let throughput_factor = 1_000f32 / (n_streams as f32);
         let mut prev_reset_instant: Option<Instant> = None;
@@ -188,10 +250,24 @@ fn main() {
 
         loop {
             count = counter.fetch_and(0, Ordering::SeqCst);
+            if let Some(max_buffers) = max_buffers {
+                if count > max_buffers {
+                    gst::info!(CAT, "Stopping");
+                    let stopping_instant = Instant::now();
+                    pipeline.set_state(gst::State::Ready).unwrap();
+                    gst::info!(CAT, "Stopped. Took {:?}", stopping_instant.elapsed());
+                    pipeline.set_state(gst::State::Null).unwrap();
+                    gst::info!(CAT, "Unprepared");
+                    l_clone.quit();
+                    break;
+                }
+            }
+
             reset_instant = Instant::now();
 
             if let Some(prev_reset_instant) = prev_reset_instant {
-                println!(
+                gst::info!(
+                    CAT,
                     "{:>6.2} / s / stream",
                     (count as f32) * throughput_factor
                         / ((reset_instant - prev_reset_instant).as_millis() as f32)
