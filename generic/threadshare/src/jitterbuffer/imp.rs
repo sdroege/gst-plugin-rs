@@ -181,20 +181,32 @@ impl SinkHandler {
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let s = caps.structure(0).ok_or(gst::FlowError::Error)?;
 
-        gst_info!(CAT, obj: element, "Parsing {:?}", caps);
+        gst_debug!(CAT, obj: element, "Parsing {:?}", caps);
 
-        let payload = s.get::<i32>("payload").map_err(|_| gst::FlowError::Error)?;
+        let payload = s.get::<i32>("payload").map_err(|err| {
+            gst_debug!(CAT, obj: element, "Caps 'payload': {}", err);
+            gst::FlowError::Error
+        })?;
 
         if pt != 0 && payload as u8 != pt {
+            gst_debug!(
+                CAT,
+                obj: element,
+                "Caps 'payload' ({}) doesn't match payload type ({})",
+                payload,
+                pt
+            );
             return Err(gst::FlowError::Error);
         }
 
         inner.last_pt = Some(pt);
-        let clock_rate = s
-            .get::<i32>("clock-rate")
-            .map_err(|_| gst::FlowError::Error)?;
+        let clock_rate = s.get::<i32>("clock-rate").map_err(|err| {
+            gst_debug!(CAT, obj: element, "Caps 'clock-rate': {}", err);
+            gst::FlowError::Error
+        })?;
 
         if clock_rate <= 0 {
+            gst_debug!(CAT, obj: element, "Caps 'clock-rate' <= 0");
             return Err(gst::FlowError::Error);
         }
         state.clock_rate = Some(clock_rate as u32);
@@ -372,8 +384,14 @@ impl SinkHandler {
                 drop(state);
                 let caps = element
                     .try_emit_by_name::<Option<gst::Caps>>("request-pt-map", &[&(pt as u32)])
-                    .map_err(|_| gst::FlowError::Error)?
-                    .ok_or(gst::FlowError::Error)?;
+                    .map_err(|err| {
+                        gst_error!(CAT, obj: pad, "Emitting 'request-pt-map': {}", err);
+                        gst::FlowError::Error
+                    })?
+                    .ok_or_else(|| {
+                        gst_error!(CAT, obj: pad, "Signal 'request-pt-map' retuned None");
+                        gst::FlowError::Error
+                    })?;
                 let mut state = jb.state.lock().unwrap();
                 self.parse_caps(inner, &mut state, element, &caps, pt)?;
                 state
@@ -1247,7 +1265,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 impl JitterBuffer {
     fn clear_pt_map(&self, element: &super::JitterBuffer) {
-        gst_info!(CAT, obj: element, "Clearing PT map");
+        gst_debug!(CAT, obj: element, "Clearing PT map");
 
         let mut state = self.state.lock().unwrap();
         state.clock_rate = None;
@@ -1255,7 +1273,7 @@ impl JitterBuffer {
     }
 
     fn prepare(&self, element: &super::JitterBuffer) -> Result<(), gst::ErrorMessage> {
-        gst_info!(CAT, obj: element, "Preparing");
+        gst_debug!(CAT, obj: element, "Preparing");
 
         let context = {
             let settings = self.settings.lock().unwrap();
@@ -1274,7 +1292,7 @@ impl JitterBuffer {
                 )
             })?;
 
-        gst_info!(CAT, obj: element, "Prepared");
+        gst_debug!(CAT, obj: element, "Prepared");
 
         Ok(())
     }
