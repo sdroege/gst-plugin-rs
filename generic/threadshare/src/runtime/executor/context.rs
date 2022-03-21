@@ -251,6 +251,17 @@ impl Context {
         self.0.spawn_and_awake(future)
     }
 
+    /// Forces the scheduler to wake up.
+    ///
+    /// This is not needed by elements implementors as they are
+    /// supposed to call [`Self::spawn_and_awake`] when needed.
+    /// However, it's useful for lower level implementations such as
+    /// `runtime::Task` so as to make sure the iteration loop yields
+    /// as soon as possible when a transition is requested.
+    pub(in crate::runtime) fn wake_up(&self) {
+        self.0.wake_up();
+    }
+
     pub fn current_has_sub_tasks() -> bool {
         let (ctx, task_id) = match Context::current_task() {
             Some(task) => task,

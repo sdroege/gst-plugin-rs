@@ -357,6 +357,25 @@ impl TaskInner {
 
         Ok(ack_rx)
     }
+
+    /// Aborts the task iteration loop ASAP.
+    ///
+    /// When the iteration loop is throttling, the call to `abort`
+    /// on the `loop_abort_handle` returns immediately, but the
+    /// actual `Future` for the iteration loop is aborted only when
+    /// the scheduler throttling completes.
+    ///
+    /// This function aborts the task iteration loop and awakes the
+    /// iteration scheduler.
+    fn abort_task_loop(&mut self) {
+        if let Some(loop_abort_handle) = self.loop_abort_handle.take() {
+            loop_abort_handle.abort();
+
+            if let Some(context) = self.context.as_ref() {
+                context.wake_up();
+            }
+        }
+    }
 }
 
 impl Drop for TaskInner {
@@ -491,9 +510,7 @@ impl Task {
 
         inner.state = TaskState::Unpreparing;
 
-        if let Some(loop_abort_handle) = inner.loop_abort_handle.take() {
-            loop_abort_handle.abort();
-        }
+        inner.abort_task_loop();
 
         let _ = inner.trigger(Trigger::Unprepare).unwrap();
         let triggering_evt_tx = inner.triggering_evt_tx.take().unwrap();
@@ -581,42 +598,32 @@ impl Task {
     }
 
     pub fn flush_start(&self) -> Result<TransitionStatus, TransitionError> {
-        let mut inner = self.0.lock().unwrap();
-
-        if let Some(loop_abort_handle) = inner.loop_abort_handle.take() {
-            loop_abort_handle.abort();
-        }
-
-        Self::push_and_await_transition(inner, Trigger::FlushStart)
+        self.abort_push_wakeup_await(Trigger::FlushStart)
     }
 
     pub fn flush_stop(&self) -> Result<TransitionStatus, TransitionError> {
-        let mut inner = self.0.lock().unwrap();
-
-        if let Some(loop_abort_handle) = inner.loop_abort_handle.take() {
-            loop_abort_handle.abort();
-        }
-
-        Self::push_and_await_transition(inner, Trigger::FlushStop)
+        self.abort_push_wakeup_await(Trigger::FlushStop)
     }
 
     /// Stops the `Started` `Task` and wait for it to finish.
     pub fn stop(&self) -> Result<TransitionStatus, TransitionError> {
-        let mut inner = self.0.lock().unwrap();
-
-        if let Some(loop_abort_handle) = inner.loop_abort_handle.take() {
-            loop_abort_handle.abort();
-        }
-
-        Self::push_and_await_transition(inner, Trigger::Stop)
+        self.abort_push_wakeup_await(Trigger::Stop)
     }
 
-    fn push_and_await_transition(
-        mut inner: MutexGuard<TaskInner>,
+    /// Pushes a [`Trigger`] which requires the iteration loop to abort ASAP.
+    ///
+    /// This function:
+    /// - Makes sure the iteration loop aborts as soon as possible.
+    /// - Pushes the provided [`Trigger`].
+    /// - Awaits for the expected transition as usual.
+    fn abort_push_wakeup_await(
+        &self,
         trigger: Trigger,
     ) -> Result<TransitionStatus, TransitionError> {
-        let ack_rx = inner.trigger(trigger)?;
+        let mut inner = self.0.lock().unwrap();
 
+        inner.abort_task_loop();
+        let ack_rx = inner.trigger(trigger)?;
         Self::await_ack(inner, ack_rx, trigger)
     }
 
