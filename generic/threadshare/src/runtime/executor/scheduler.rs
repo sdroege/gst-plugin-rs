@@ -420,6 +420,10 @@ impl Handle {
         JoinHandle::new(task_id, task, self)
     }
 
+    pub(super) fn wake_up(&self) {
+        self.0.scheduler.wake_up();
+    }
+
     pub fn remove_soure(&self, source: Arc<Source>) {
         if self
             .0
