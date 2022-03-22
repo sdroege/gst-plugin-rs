@@ -163,7 +163,12 @@ impl Context {
         let context = Context(Scheduler::start(context_name, wait));
         contexts.insert(context_name.into(), context.downgrade());
 
-        gst::debug!(RUNTIME_CAT, "New Context '{}'", context.name());
+        gst::debug!(
+            RUNTIME_CAT,
+            "New Context '{}' throttling {:?}",
+            context.name(),
+            wait,
+        );
         Ok(context)
     }
 
