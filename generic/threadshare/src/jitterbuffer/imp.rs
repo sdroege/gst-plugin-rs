@@ -1111,7 +1111,7 @@ impl TaskImpl for JitterBufferTask {
                             let (delay_fut, abort_handle) = abortable(async move {
                                 match next_wakeup {
                                     Some((_, delay)) => {
-                                        runtime::time::delay_for(delay).await;
+                                        runtime::time::delay_for_at_least(delay).await;
                                     }
                                     None => {
                                         future::pending::<()>().await;
