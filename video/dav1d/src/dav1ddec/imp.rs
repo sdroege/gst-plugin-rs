@@ -18,6 +18,10 @@ use once_cell::sync::Lazy;
 
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use std::i32;
+use std::sync::Mutex;
+
+const DEFAULT_N_THREADS: u32 = 0;
+const DEFAULT_MAX_FRAME_DELAY: i64 = -1;
 
 struct State {
     decoder: dav1d::Decoder,
@@ -27,9 +31,25 @@ struct State {
     video_meta_supported: bool,
 }
 
+// We make our own settings object so we don't have to deal with a Sync impl for dav1d::Settings
+struct Settings {
+    n_threads: u32,
+    max_frame_delay: i64,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            n_threads: DEFAULT_N_THREADS,
+            max_frame_delay: DEFAULT_MAX_FRAME_DELAY,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Dav1dDec {
     state: AtomicRefCell<Option<State>>,
+    settings: Mutex<Settings>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -460,7 +480,64 @@ impl ObjectSubclass for Dav1dDec {
     type ParentType = gst_video::VideoDecoder;
 }
 
-impl ObjectImpl for Dav1dDec {}
+impl ObjectImpl for Dav1dDec {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpecUInt::new(
+                    "n-threads",
+                    "Number of threads",
+                    "Number of threads to use while decoding (set to 0 to use number of logical cores)",
+                    0,
+                    std::u32::MAX,
+                    DEFAULT_N_THREADS,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpecInt64::new(
+                    "max-frame-delay",
+                    "Maximum frame delay",
+                    "Maximum delay in frames for the decoder (set to 1 for low latency, 0 to be equal to the number of logical cores. -1 to choose between these two based on pipeline liveness)",
+                    -1,
+                    std::u32::MAX.into(),
+                    DEFAULT_MAX_FRAME_DELAY,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        _obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        let mut settings = self.settings.lock().unwrap();
+
+        match pspec.name() {
+            "n-threads" => {
+                settings.n_threads = value.get().expect("type checked upstream");
+            }
+            "max-frame-delay" => {
+                settings.max_frame_delay = value.get().expect("type checked upstream");
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        let settings = self.settings.lock().unwrap();
+
+        match pspec.name() {
+            "n-threads" => settings.n_threads.to_value(),
+            "max-frame-delay" => settings.max_frame_delay.to_value(),
+            _ => unimplemented!(),
+        }
+    }
+}
 
 impl GstObjectImpl for Dav1dDec {}
 
@@ -527,13 +604,43 @@ impl VideoDecoderImpl for Dav1dDec {
     fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         {
             let mut state_guard = self.state.borrow_mut();
+            let settings = self.settings.lock().unwrap();
+            let mut decoder_settings = dav1d::Settings::new();
+            let max_frame_delay: u32;
+
+            if settings.max_frame_delay == -1 {
+                let mut latency_query = gst::query::Latency::new();
+                let mut is_live = false;
+                let sinkpad = &element.static_pad("sink").expect("Failed to get sink pad");
+
+                if sinkpad.peer_query(&mut latency_query) {
+                    is_live = latency_query.result().0;
+                }
+
+                max_frame_delay = if is_live { 1 } else { 0 };
+            } else {
+                max_frame_delay = settings.max_frame_delay.try_into().unwrap();
+            }
+
+            gst::info!(
+                CAT,
+                obj: element,
+                "Creating decoder with n-threads={} and max-frame-delay={}",
+                settings.n_threads,
+                max_frame_delay
+            );
+            decoder_settings.set_n_threads(settings.n_threads);
+            decoder_settings.set_max_frame_delay(max_frame_delay);
+
+            let decoder = dav1d::Decoder::with_settings(&decoder_settings).map_err(|err| {
+                gst::error_msg!(
+                    gst::LibraryError::Init,
+                    ["Failed to create decoder instance: {}", err]
+                )
+            })?;
+
             *state_guard = Some(State {
-                decoder: dav1d::Decoder::new().map_err(|err| {
-                    gst::error_msg!(
-                        gst::LibraryError::Init,
-                        ["Failed to create decoder instance: {}", err]
-                    )
-                })?,
+                decoder,
                 input_state: None,
                 output_info: None,
                 video_meta_supported: false,
