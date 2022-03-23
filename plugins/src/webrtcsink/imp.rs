@@ -389,6 +389,7 @@ fn setup_encoding(
             enc.set_property("resize-allowed", true);
             enc.set_property("max-intra-bitrate", 250i32);
             enc.set_property_from_str("error-resilient", "default");
+            enc.set_property("lag-in-frames", 0i32);
             pay.set_property_from_str("picture-id-mode", "15-bit");
         }
         "x264enc" => {
