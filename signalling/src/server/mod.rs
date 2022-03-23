@@ -52,7 +52,7 @@ impl Server {
                 match serde_json::from_str::<I>(&msg) {
                     Ok(msg) => Some((peer_id, Some(msg))),
                     Err(err) => {
-                        warn!("Failed to parse incoming message: {}", err);
+                        warn!("Failed to parse incoming message: {} ({})", err, msg);
                         None
                     }
                 }

@@ -90,7 +90,9 @@ impl Signaller {
         });
 
         websocket_sender
-            .send(p::IncomingMessage::Register(p::RegisterMessage::Producer))
+            .send(p::IncomingMessage::Register(p::RegisterMessage::Producer {
+                display_name: element.property("display-name"),
+            }))
             .await?;
 
         let element_clone = element.downgrade();
@@ -104,7 +106,7 @@ impl Signaller {
                             if let Ok(msg) = serde_json::from_str::<p::OutgoingMessage>(&msg) {
                                 match msg {
                                     p::OutgoingMessage::Registered(
-                                        p::RegisteredMessage::Producer { peer_id },
+                                        p::RegisteredMessage::Producer { peer_id, .. },
                                     ) => {
                                         gst_info!(
                                             CAT,

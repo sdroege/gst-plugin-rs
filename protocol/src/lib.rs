@@ -8,13 +8,29 @@ use serde::{Deserialize, Serialize};
 pub enum RegisteredMessage {
     /// Registered as a producer
     #[serde(rename_all = "camelCase")]
-    Producer { peer_id: String },
+    Producer {
+        peer_id: String,
+        display_name: Option<String>,
+    },
     /// Registered as a consumer
     #[serde(rename_all = "camelCase")]
-    Consumer { peer_id: String },
+    Consumer {
+        peer_id: String,
+        display_name: Option<String>,
+    },
     /// Registered as a listener
     #[serde(rename_all = "camelCase")]
-    Listener { peer_id: String },
+    Listener {
+        peer_id: String,
+        display_name: Option<String>,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Peer {
+    pub id: String,
+    pub display_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -26,10 +42,16 @@ pub enum OutgoingMessage {
     Registered(RegisteredMessage),
     /// Notifies listeners that a producer was registered
     #[serde(rename_all = "camelCase")]
-    ProducerAdded { peer_id: String },
+    ProducerAdded {
+        peer_id: String,
+        display_name: Option<String>,
+    },
     /// Notifies listeners that a producer was removed
     #[serde(rename_all = "camelCase")]
-    ProducerRemoved { peer_id: String },
+    ProducerRemoved {
+        peer_id: String,
+        display_name: Option<String>,
+    },
     /// Instructs a peer to generate an offer
     #[serde(rename_all = "camelCase")]
     StartSession { peer_id: String },
@@ -39,7 +61,7 @@ pub enum OutgoingMessage {
     /// Messages directly forwarded from one peer to another
     Peer(PeerMessage),
     /// Provides the current list of consumer peers
-    List { producers: Vec<String> },
+    List { producers: Vec<Peer> },
     /// Notifies that an error occurred with the peer's current session
     Error { details: String },
 }
@@ -50,11 +72,23 @@ pub enum OutgoingMessage {
 /// Register with a peer type
 pub enum RegisterMessage {
     /// Register as a producer
-    Producer,
+    #[serde(rename_all = "camelCase")]
+    Producer {
+        #[serde(default)]
+        display_name: Option<String>,
+    },
     /// Register as a consumer
-    Consumer,
+    #[serde(rename_all = "camelCase")]
+    Consumer {
+        #[serde(default)]
+        display_name: Option<String>,
+    },
     /// Register as a listener
-    Listener,
+    #[serde(rename_all = "camelCase")]
+    Listener {
+        #[serde(default)]
+        display_name: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]

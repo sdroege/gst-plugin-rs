@@ -37,6 +37,7 @@ const RTP_TWCC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
+const DEFAULT_DISPLAY_NAME: Option<&str> = None;
 const DEFAULT_MIN_BITRATE: u32 = 1000;
 
 /* I have found higher values to cause packet loss *somewhere* in
@@ -61,6 +62,7 @@ struct Settings {
     do_fec: bool,
     do_retransmission: bool,
     enable_data_channel_navigation: bool,
+    display_name: Option<String>,
 }
 
 /// Represents a codec we can offer
@@ -213,8 +215,8 @@ struct PipelineWrapper(gst::Pipeline);
 // Structure to generate GstNavigation event from a WebRTCDataChannel
 #[derive(Debug)]
 struct NavigationEventHandler {
-    channel: WebRTCDataChannel,
-    message_sig: glib::SignalHandlerId,
+    _channel: WebRTCDataChannel,
+    _message_sig: glib::SignalHandlerId,
 }
 
 /// Our instance structure
@@ -243,6 +245,7 @@ impl Default for Settings {
             do_fec: DEFAULT_DO_FEC,
             do_retransmission: DEFAULT_DO_RETRANSMISSION,
             enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
+            display_name: DEFAULT_DISPLAY_NAME.map(String::from),
         }
     }
 }
@@ -994,6 +997,8 @@ impl Consumer {
             gst_webrtc::WebRTCRTPTransceiverDirection::Sendonly,
         );
 
+        transceiver.set_property("msid-appdata", stream.sink_pad.name());
+
         transceiver.set_property("codec-preferences", &payloader_caps);
 
         if stream.sink_pad.name().starts_with("video_") {
@@ -1214,7 +1219,7 @@ impl NavigationEventHandler {
 
         let weak_element = element.downgrade();
         Self {
-            message_sig: channel.connect("on-message-string", false, move |values| {
+            _message_sig: channel.connect("on-message-string", false, move |values| {
                 if let Some(element) = weak_element.upgrade() {
                     let _channel = values[0].get::<WebRTCDataChannel>().unwrap();
                     let msg = values[1].get::<&str>().unwrap();
@@ -1223,7 +1228,7 @@ impl NavigationEventHandler {
 
                 None
             }),
-            channel,
+            _channel: channel,
         }
     }
 }
@@ -2321,6 +2326,13 @@ impl ObjectImpl for WebRTCSink {
                     DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY
                 ),
+                glib::ParamSpecString::new(
+                    "display-name",
+                    "Display name",
+                    "The display name of the producer",
+                    DEFAULT_DISPLAY_NAME,
+                    glib::ParamFlags::READWRITE,
+                ),
             ]
         });
 
@@ -2414,6 +2426,12 @@ impl ObjectImpl for WebRTCSink {
                 settings.enable_data_channel_navigation =
                     value.get::<bool>().expect("type checked upstream");
             }
+            "display-name" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.display_name = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream")
+            }
             _ => unimplemented!(),
         }
     }
@@ -2461,6 +2479,10 @@ impl ObjectImpl for WebRTCSink {
                 settings.enable_data_channel_navigation.to_value()
             }
             "stats" => self.gather_stats().to_value(),
+            "display-name" => {
+                let settings = self.settings.lock().unwrap();
+                settings.display_name.to_value()
+            }
             _ => unimplemented!(),
         }
     }
