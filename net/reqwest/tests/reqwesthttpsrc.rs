@@ -123,7 +123,7 @@ impl Harness {
                 let http_func = http_func.clone();
                 Ok::<_, hyper::Error>(service_fn(move |req| {
                     let http_func = http_func.clone();
-                    async move { Ok::<_, hyper::Error>((&mut *http_func.lock().unwrap())(req)) }
+                    async move { Ok::<_, hyper::Error>((*http_func.lock().unwrap())(req)) }
                 }))
             }
         });
