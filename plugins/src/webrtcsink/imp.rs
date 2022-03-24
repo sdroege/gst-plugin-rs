@@ -998,8 +998,6 @@ impl Consumer {
             gst_webrtc::WebRTCRTPTransceiverDirection::Sendonly,
         );
 
-        transceiver.set_property("msid-appdata", stream.sink_pad.name());
-
         transceiver.set_property("codec-preferences", &payloader_caps);
 
         if stream.sink_pad.name().starts_with("video_") {
