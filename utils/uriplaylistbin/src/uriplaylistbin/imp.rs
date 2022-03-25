@@ -607,6 +607,17 @@ impl Item {
             _ => panic!("invalid state: {:?}", inner.state),
         }
     }
+
+    fn sender(&self) -> crossbeam_channel::Sender<bool> {
+        let inner = self.inner.lock().unwrap();
+
+        match &inner.state {
+            ItemState::WaitingForStreamsynchronizerEos { sender, .. } => sender.clone(),
+            ItemState::WaitingForPads { sender, .. } => sender.clone(),
+            ItemState::Blocked { sender, .. } => sender.clone(),
+            _ => panic!("invalid state: {:?}", inner.state),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -932,6 +943,24 @@ impl ElementImpl for UriPlaylistBin {
             if let Err(e) = self.start(element) {
                 self.failed(element, e);
                 return Err(gst::StateChangeError);
+            }
+        }
+
+        if transition == gst::StateChange::PausedToReady {
+            let mut state_guard = self.state.lock().unwrap();
+            let state = state_guard.as_mut().unwrap();
+
+            // The probe callback owns a ref on the item and so on the sender as well.
+            // As a result we have to explicitly unblock all receivers as dropping the sender
+            // is not enough.
+            if let Some(item) = state.waiting_for_ss_eos.take() {
+                let _ = item.sender().send(false);
+            }
+            if let Some(item) = state.waiting_for_pads.take() {
+                let _ = item.sender().send(false);
+            }
+            if let Some(item) = state.blocked.take() {
+                let _ = item.sender().send(false);
             }
         }
 
