@@ -214,10 +214,7 @@ struct PipelineWrapper(gst::Pipeline);
 
 // Structure to generate GstNavigation event from a WebRTCDataChannel
 #[derive(Debug)]
-struct NavigationEventHandler {
-    _channel: WebRTCDataChannel,
-    _message_sig: glib::SignalHandlerId,
-}
+struct NavigationEventHandler((glib::SignalHandlerId, WebRTCDataChannel));
 
 /// Our instance structure
 #[derive(Default)]
@@ -1244,8 +1241,8 @@ impl NavigationEventHandler {
         );
 
         let weak_element = element.downgrade();
-        Self {
-            _message_sig: channel.connect("on-message-string", false, move |values| {
+        Self((
+            channel.connect("on-message-string", false, move |values| {
                 if let Some(element) = weak_element.upgrade() {
                     let _channel = values[0].get::<WebRTCDataChannel>().unwrap();
                     let msg = values[1].get::<&str>().unwrap();
@@ -1254,8 +1251,8 @@ impl NavigationEventHandler {
 
                 None
             }),
-            _channel: channel,
-        }
+            channel,
+        ))
     }
 }
 
