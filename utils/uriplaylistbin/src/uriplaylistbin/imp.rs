@@ -1050,14 +1050,10 @@ impl UriPlaylistBin {
                 None => return,
             };
             let imp = element.imp();
+            let mut state_guard = imp.state.lock().unwrap();
+            let state = state_guard.as_mut().unwrap();
 
-            let item = {
-                let mut state_guard = imp.state.lock().unwrap();
-                let state = state_guard.as_mut().unwrap();
-                state.waiting_for_ss_eos.as_ref().cloned()
-            };
-
-            if let Some(item) = item {
+            if let Some(item) = state.waiting_for_ss_eos.as_ref() {
                 // block pad until streamsynchronizer is eos
                 let element_weak = element.downgrade();
                 let receiver = item.receiver();
@@ -1091,6 +1087,7 @@ impl UriPlaylistBin {
 
                 item.add_blocked_pad(src_pad.clone());
             } else {
+                drop(state_guard);
                 imp.process_decodebin_pad(src_pad);
             }
         });
