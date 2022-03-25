@@ -213,6 +213,7 @@ fn create_navigation_event<N: IsA<gst_video::Navigation>>(sink: &N, msg: &str) {
 struct PipelineWrapper(gst::Pipeline);
 
 // Structure to generate GstNavigation event from a WebRTCDataChannel
+// This is simply used to hold references to the inner items.
 #[derive(Debug)]
 struct NavigationEventHandler((glib::SignalHandlerId, WebRTCDataChannel));
 
@@ -294,41 +295,43 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
 }
 
 /// Default configuration for known encoders, can be disabled
-/// by returning True from an encoder-setup handler
-fn configure_encoder(codec: &Codec, enc: &gst::Element) {
-    match codec.encoder.name().as_str() {
-        "vp8enc" | "vp9enc" => {
-            enc.set_property("deadline", 1i64);
-            enc.set_property("threads", 12i32);
-            enc.set_property("target-bitrate", 2560000i32);
-            enc.set_property("cpu-used", -16i32);
-            enc.set_property("keyframe-max-dist", 2000i32);
-            enc.set_property_from_str("keyframe-mode", "disabled");
-            enc.set_property_from_str("end-usage", "cbr");
-            enc.set_property("buffer-initial-size", 100i32);
-            enc.set_property("buffer-optimal-size", 120i32);
-            enc.set_property("buffer-size", 150i32);
-            enc.set_property("resize-allowed", true);
-            enc.set_property("max-intra-bitrate", 250i32);
-            enc.set_property_from_str("error-resilient", "default");
-            enc.set_property("lag-in-frames", 0i32);
+/// by returning True from an encoder-setup handler.
+fn configure_encoder(enc: &gst::Element) {
+    if let Some(factory) = enc.factory() {
+        match factory.name().as_str() {
+            "vp8enc" | "vp9enc" => {
+                enc.set_property("deadline", 1i64);
+                enc.set_property("threads", 12i32);
+                enc.set_property("target-bitrate", 2560000i32);
+                enc.set_property("cpu-used", -16i32);
+                enc.set_property("keyframe-max-dist", 2000i32);
+                enc.set_property_from_str("keyframe-mode", "disabled");
+                enc.set_property_from_str("end-usage", "cbr");
+                enc.set_property("buffer-initial-size", 100i32);
+                enc.set_property("buffer-optimal-size", 120i32);
+                enc.set_property("buffer-size", 150i32);
+                enc.set_property("resize-allowed", true);
+                enc.set_property("max-intra-bitrate", 250i32);
+                enc.set_property_from_str("error-resilient", "default");
+                enc.set_property("lag-in-frames", 0i32);
+            }
+            "x264enc" => {
+                enc.set_property("bitrate", 2048u32);
+                enc.set_property_from_str("tune", "zerolatency");
+                enc.set_property_from_str("speed-preset", "ultrafast");
+                enc.set_property("threads", 12u32);
+                enc.set_property("key-int-max", 2560u32);
+                enc.set_property("b-adapt", false);
+                enc.set_property("vbv-buf-capacity", 120u32);
+            }
+            "nvh264enc" => {
+                enc.set_property("bitrate", 2048u32);
+                enc.set_property("gop-size", 2560i32);
+                enc.set_property_from_str("rc-mode", "cbr-ld-hq");
+                enc.set_property("zerolatency", true);
+            }
+            _ => (),
         }
-        "x264enc" => {
-            enc.set_property("bitrate", 2048u32);
-            enc.set_property_from_str("tune", "zerolatency");
-            enc.set_property_from_str("speed-preset", "ultrafast");
-            enc.set_property("threads", 12u32);
-            enc.set_property("key-int-max", 2560u32);
-            enc.set_property("b-adapt", false);
-            enc.set_property("vbv-buf-capacity", 120u32);
-        }
-        "nvh264enc" => {
-            enc.set_property("bitrate", 2048u32);
-            enc.set_property("gop-size", 2560i32);
-            enc.set_property_from_str("rc-mode", "cbr-ld-hq");
-            enc.set_property("zerolatency", true);
-        }
-        _ => (),
     }
 }
 
@@ -1066,22 +1069,10 @@ impl Consumer {
             false,
         )?;
 
-        let encoder_was_configured: bool = element.emit_by_name(
+        element.emit_by_name::<bool>(
             "encoder-setup",
             &[&self.peer_id, &webrtc_pad.stream_name, &enc],
         );
-
-        if !encoder_was_configured {
-            gst_debug!(CAT, obj: element, "configuring encoder {:?}", enc);
-            configure_encoder(codec, &enc);
-        } else {
-            gst_debug!(
-                CAT,
-                obj: element,
-                "the encoder {:?} was configured through the signal handler",
-                enc
-            );
-        }
 
         // At this point, the peer has provided its answer, and we want to
         // let the payloader / encoder perform negotiation according to that.
@@ -2584,7 +2575,7 @@ impl ObjectImpl for WebRTCSink {
                  * This signal can be used to tweak @encoder properties.
                  *
                  * Returns: True if the encoder is entirely configured,
-                 * False if webrtcsink should apply a default configuration
+                 * False to let other handlers run
                  */
                 glib::subclass::Signal::builder(
                     "encoder-setup",
@@ -2595,6 +2586,23 @@ impl ObjectImpl for WebRTCSink {
                     ],
                     bool::static_type().into(),
                 )
+                .accumulator(|_hint, _ret, value| !value.get::<bool>().unwrap())
+                .class_handler(|_, args| {
+                    let element = args[0].get::<gst::Element>().unwrap();
+                    let enc = args[3].get::<gst::Element>().unwrap();
+
+                    gst_debug!(
+                        CAT,
+                        obj: &element,
+                        "applying default configuration on encoder {:?}",
+                        enc
+                    );
+
+                    configure_encoder(&enc);
+
+                    // Return false here so that latter handlers get called
+                    Some(false.to_value())
+                })
                 .build(),
             ]
         });
