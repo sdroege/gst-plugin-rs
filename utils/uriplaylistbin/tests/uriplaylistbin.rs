@@ -255,8 +255,6 @@ fn single_video() {
 }
 
 #[test]
-// FIXME: this test hits deadlocks, see https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/184
-#[ignore]
 fn multi_audio() {
     let (events, current_iteration, current_uri_index) = test(
         vec![TestMedia::ogg(), TestMedia::ogg(), TestMedia::ogg()],
