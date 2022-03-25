@@ -35,26 +35,30 @@ useful alternative.
   While this is not on the roadmap at the moment, nothing in the design prevents
   implementing this optimization.
 
-* Congestion control: the element levarages transport-wide congestion control
+* Congestion control: the element leverages transport-wide congestion control
   feedback messages in order to adapt the bitrate of individual consumers' video
   encoders to the available bandwidth.
 
-* Configuration: the level of user control over the element is at the moment quite
-  narrow, as the only interface exposed is control over proposed codecs, as well
-  as their order of priority, and disabling congestion control. Consult `gst-inspect=1.0`
-  for more information.
+* Configuration: the level of user control over the element is slowly expanding,
+  consult `gst-inspect-1.0` for more information on the available properties and
+  signals.
 
-More features are on the roadmap, focusing on mechanisms for mitigating packet
-loss.
+* Packet loss mitigation: webrtcsink now supports sending protection packets for
+  Forward Error Correction, modulating the amount as a function of the available
+  bandwidth, and can honor retransmission requests. Both features can be disabled
+  via properties.
 
 It is important to note that full control over the individual elements used by
 `webrtcsink` is *not* on the roadmap, as it will act as a black box in that respect,
 for example `webrtcsink` wants to reserve control over the bitrate for congestion
 control.
 
+A signal is now available however for the application to provide the initial
+configuration for the encoders `webrtcsink` instantiates.
+
 If more granular control is required, applications should use `webrtcbin` directly,
 `webrtcsink` will focus on trying to just do the right thing, although it might
-expose interfaces to guide and tune the heuristics it employs.
+expose more interfaces to guide and tune the heuristics it employs.
 
 [example project]: https://github.com/centricular/webrtcsink-custom-signaller
 

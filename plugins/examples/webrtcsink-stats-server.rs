@@ -133,6 +133,24 @@ async fn run(args: Args) -> Result<(), Error> {
         .by_name("ws")
         .unwrap();
 
+    ws.connect("encoder-setup", false, |values| {
+        let encoder = values[3].get::<gst::Element>().unwrap();
+
+        info!("Encoder: {}", encoder.factory().unwrap().name());
+
+        let configured = match encoder.factory().unwrap().name().as_str() {
+            "does-not-exist" => {
+                // One could configure a hardware encoder to their liking here,
+                // and return true to make sure webrtcsink does not do any configuration
+                // of its own
+                true
+            }
+            _ => false,
+        };
+
+        Some(configured.to_value())
+    });
+
     let ws_clone = ws.downgrade();
     let state_clone = state.clone();
     task::spawn(async move {
