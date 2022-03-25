@@ -1224,9 +1224,16 @@ impl InputStream {
 
 impl NavigationEventHandler {
     pub fn new(element: &super::WebRTCSink, webrtcbin: &gst::Element) -> Self {
+        gst_info!(CAT, "Creating navigation data channel");
         let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
             "create-data-channel",
-            &[&"input", &None::<gst::Structure>],
+            &[
+                &"input",
+                &gst::Structure::new(
+                    "config",
+                    &[("priority", &gst_webrtc::WebRTCPriorityType::High)],
+                ),
+            ],
         );
 
         let weak_element = element.downgrade();
