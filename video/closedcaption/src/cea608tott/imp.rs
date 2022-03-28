@@ -232,10 +232,10 @@ impl Cea608ToTt {
         let (h1, m1, s1, ms1) = Self::split_time(timestamp);
         let (h2, m2, s2, ms2) = Self::split_time(timestamp + duration);
 
-        writeln!(&mut data, "{:02}\r", index).unwrap();
+        writeln!(&mut data, "{}\r", index).unwrap();
         writeln!(
             &mut data,
-            "{}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}\r",
+            "{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}\r",
             h1, m1, s1, ms1, h2, m2, s2, ms2
         )
         .unwrap();
