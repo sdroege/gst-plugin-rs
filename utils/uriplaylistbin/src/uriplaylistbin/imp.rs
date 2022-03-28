@@ -1232,7 +1232,10 @@ impl UriPlaylistBin {
                 return;
             }
 
-            let item = state.waiting_for_pads.clone().unwrap();
+            let item = match state.waiting_for_pads.as_ref() {
+                Some(item) => item.clone(),
+                None => return, // element is being shutdown
+            };
 
             // Parse the pad name to extract the stream type and its index.
             // We could get the type from the Stream object from the StreamStart sticky event but we'd still have
@@ -1529,7 +1532,11 @@ impl UriPlaylistBin {
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().unwrap();
 
-            let item = state.waiting_for_ss_eos.take().unwrap();
+            let item = match state.waiting_for_ss_eos.take() {
+                Some(item) => item,
+                None => return, // element is being shutdown
+            };
+
             let (topology, pending_pads, sender) = item.done_waiting_for_ss_eos();
             state.waiting_for_pads = Some(item);
 
