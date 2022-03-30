@@ -261,7 +261,7 @@ coverage:
   rules:
     - when: 'always'
   variables:
-    RUSTFLAGS: "-Zinstrument-coverage"
+    RUSTFLAGS: "-Cinstrument-coverage"
     LLVM_PROFILE_FILE: "gst-plugins-rs-%p-%m.profraw"
     # csound-sys only looks at /usr/lib and /usr/local top levels
     CSOUND_LIB_DIR: '/usr/lib/x86_64-linux-gnu/'
