@@ -9,6 +9,7 @@ use gst::glib::prelude::*;
 use gst::subclass::prelude::*;
 use gst::{gst_debug, gst_error, gst_info, gst_trace, gst_warning};
 use once_cell::sync::Lazy;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use webrtcsink_protocol as p;
 
@@ -28,14 +29,17 @@ struct State {
     receive_task_handle: Option<task::JoinHandle<()>>,
 }
 
+#[derive(Clone)]
 struct Settings {
     address: Option<String>,
+    cafile: Option<PathBuf>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             address: Some("ws://127.0.0.1:8443".to_string()),
+            cafile: None,
         }
     }
 }
@@ -48,16 +52,22 @@ pub struct Signaller {
 
 impl Signaller {
     async fn connect(&self, element: &WebRTCSink) -> Result<(), Error> {
-        let address = self
-            .settings
-            .lock()
-            .unwrap()
-            .address
-            .as_ref()
-            .unwrap()
-            .clone();
+        let settings = self.settings.lock().unwrap().clone();
 
-        let (ws, _) = async_tungstenite::async_std::connect_async(address).await?;
+        let connector = if let Some(path) = settings.cafile {
+            let cert = async_std::fs::read_to_string(&path).await?;
+            let cert = async_native_tls::Certificate::from_pem(cert.as_bytes())?;
+            let connector = async_native_tls::TlsConnector::new();
+            Some(connector.add_root_certificate(cert))
+        } else {
+            None
+        };
+
+        let (ws, _) = async_tungstenite::async_std::connect_async_with_tls_connector(
+            settings.address.unwrap(),
+            connector,
+        )
+        .await?;
 
         gst_info!(CAT, obj: element, "connected");
 
@@ -347,13 +357,22 @@ impl ObjectSubclass for Signaller {
 impl ObjectImpl for Signaller {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecString::new(
-                "address",
-                "Address",
-                "Address of the signalling server",
-                Some("ws://127.0.0.1:8443"),
-                glib::ParamFlags::READWRITE,
-            )]
+            vec![
+                glib::ParamSpecString::new(
+                    "address",
+                    "Address",
+                    "Address of the signalling server",
+                    Some("ws://127.0.0.1:8443"),
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpecString::new(
+                    "cafile",
+                    "CA file",
+                    "Path to a Certificate file to add to the set of roots the TLS connector will trust",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
+            ]
         });
 
         PROPERTIES.as_ref()
@@ -379,15 +398,22 @@ impl ObjectImpl for Signaller {
                     gst_error!(CAT, "address can't be None");
                 }
             }
+            "cafile" => {
+                let value: String = value.get().unwrap();
+                let mut settings = self.settings.lock().unwrap();
+                settings.cafile = Some(value.into());
+            }
             _ => unimplemented!(),
         }
     }
 
     fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
-            "address" => {
+            "address" => self.settings.lock().unwrap().address.to_value(),
+            "cafile" => {
                 let settings = self.settings.lock().unwrap();
-                settings.address.to_value()
+                let cafile = settings.cafile.as_ref();
+                cafile.and_then(|file| file.to_str()).to_value()
             }
             _ => unimplemented!(),
         }

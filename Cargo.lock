@@ -1834,6 +1834,7 @@ name = "webrtcsink"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-native-tls 0.4.0",
  "async-std",
  "async-tungstenite",
  "clap",
