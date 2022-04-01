@@ -1430,7 +1430,12 @@ impl UriPlaylistBin {
                         pad.name()
                     );
 
-                    let _ = receiver.recv();
+                    if let Ok(false) = receiver.recv() {
+                        // we are shutting down so remove the probe.
+                        // Don't handle Err(_) here as if the item has multiple pads, the sender may be dropped in unblock_item()
+                        // before all probes received the message, resulting in a receiving error.
+                        return gst::PadProbeReturn::Remove;
+                    }
 
                     gst::log!(
                         CAT,
