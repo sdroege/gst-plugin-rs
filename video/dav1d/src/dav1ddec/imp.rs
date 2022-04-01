@@ -29,6 +29,7 @@ struct State {
         Option<gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>>,
     output_info: Option<gst_video::VideoInfo>,
     video_meta_supported: bool,
+    n_cpus: usize,
 }
 
 // We make our own settings object so we don't have to deal with a Sync impl for dav1d::Settings
@@ -61,6 +62,17 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 impl Dav1dDec {
+    // FIXME: drop this once we have API from dav1d to query this value
+    // https://code.videolan.org/videolan/dav1d/-/merge_requests/1407
+    fn estimate_frame_delay(&self, max_frame_delay: u32, n_threads: u32) -> u32 {
+        if max_frame_delay > 0 {
+            std::cmp::min(max_frame_delay, n_threads)
+        } else {
+            let n_tc = n_threads as f64;
+            std::cmp::min(8, n_tc.sqrt().ceil() as u32)
+        }
+    }
+
     fn gst_video_format_from_dav1d_picture(
         &self,
         element: &super::Dav1dDec,
@@ -601,12 +613,70 @@ impl ElementImpl for Dav1dDec {
 }
 
 impl VideoDecoderImpl for Dav1dDec {
+    fn src_query(&self, element: &Self::Type, query: &mut gst::QueryRef) -> bool {
+        if let gst::QueryViewMut::Latency(q) = query.view_mut() {
+            let state_guard = self.state.borrow();
+            let max_frame_delay = {
+                let settings = self.settings.lock().unwrap();
+                settings.max_frame_delay
+            };
+
+            match *state_guard {
+                Some(ref state) => match state.output_info {
+                    Some(ref info) => {
+                        let mut upstream_latency = gst::query::Latency::new();
+                        let sinkpad = &element.static_pad("sink").expect("Failed to get sink pad");
+
+                        if sinkpad.peer_query(&mut upstream_latency) {
+                            let (live, mut min, mut max) = upstream_latency.result();
+                            // For autodetection: 1 if live, else whatever dav1d gives us
+                            let frame_latency: u64 = if max_frame_delay < 0 && live {
+                                1
+                            } else {
+                                self.estimate_frame_delay(
+                                    max_frame_delay as u32,
+                                    state.n_cpus as u32,
+                                )
+                                .into()
+                            };
+
+                            let latency = frame_latency
+                                * (info.fps().denom() as u64)
+                                * gst::ClockTime::SECOND
+                                / (info.fps().numer() as u64);
+
+                            gst::debug!(CAT, obj: element, "Reporting latency of {}", latency);
+
+                            min += latency;
+                            max = max.opt_add(latency);
+                            q.set(live, min, max);
+
+                            true
+                        } else {
+                            // peer latency query failed
+                            false
+                        }
+                    }
+                    // output info not available => fps unknown
+                    None => false,
+                },
+                // no state yet
+                None => false,
+            }
+        } else {
+            VideoDecoderImplExt::parent_src_query(self, element, query)
+        }
+    }
+
     fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         {
             let mut state_guard = self.state.borrow_mut();
             let settings = self.settings.lock().unwrap();
             let mut decoder_settings = dav1d::Settings::new();
             let max_frame_delay: u32;
+            let n_cpus = num_cpus::get();
+
+            gst::info!(CAT, obj: element, "Detected {} logical CPUs", n_cpus);
 
             if settings.max_frame_delay == -1 {
                 let mut latency_query = gst::query::Latency::new();
@@ -644,6 +714,7 @@ impl VideoDecoderImpl for Dav1dDec {
                 input_state: None,
                 output_info: None,
                 video_meta_supported: false,
+                n_cpus,
             });
         }
 
