@@ -25,8 +25,7 @@ const DEFAULT_MAX_FRAME_DELAY: i64 = -1;
 
 struct State {
     decoder: dav1d::Decoder,
-    input_state:
-        Option<gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>>,
+    input_state: gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     output_info: Option<gst_video::VideoInfo>,
     video_meta_supported: bool,
     n_cpus: usize,
@@ -161,11 +160,11 @@ impl Dav1dDec {
             pic.height()
         );
 
-        let input_state = state.input_state.as_ref().cloned();
+        let input_state = state.input_state.clone();
         drop(state_guard);
 
         let output_state =
-            element.set_output_state(format, pic.width(), pic.height(), input_state.as_ref())?;
+            element.set_output_state(format, pic.width(), pic.height(), Some(&input_state))?;
         element.negotiate(output_state)?;
         let out_state = element.output_state().unwrap();
 
@@ -668,59 +667,6 @@ impl VideoDecoderImpl for Dav1dDec {
         }
     }
 
-    fn start(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
-        {
-            let mut state_guard = self.state.borrow_mut();
-            let settings = self.settings.lock().unwrap();
-            let mut decoder_settings = dav1d::Settings::new();
-            let max_frame_delay: u32;
-            let n_cpus = num_cpus::get();
-
-            gst::info!(CAT, obj: element, "Detected {} logical CPUs", n_cpus);
-
-            if settings.max_frame_delay == -1 {
-                let mut latency_query = gst::query::Latency::new();
-                let mut is_live = false;
-                let sinkpad = &element.static_pad("sink").expect("Failed to get sink pad");
-
-                if sinkpad.peer_query(&mut latency_query) {
-                    is_live = latency_query.result().0;
-                }
-
-                max_frame_delay = if is_live { 1 } else { 0 };
-            } else {
-                max_frame_delay = settings.max_frame_delay.try_into().unwrap();
-            }
-
-            gst::info!(
-                CAT,
-                obj: element,
-                "Creating decoder with n-threads={} and max-frame-delay={}",
-                settings.n_threads,
-                max_frame_delay
-            );
-            decoder_settings.set_n_threads(settings.n_threads);
-            decoder_settings.set_max_frame_delay(max_frame_delay);
-
-            let decoder = dav1d::Decoder::with_settings(&decoder_settings).map_err(|err| {
-                gst::error_msg!(
-                    gst::LibraryError::Init,
-                    ["Failed to create decoder instance: {}", err]
-                )
-            })?;
-
-            *state_guard = Some(State {
-                decoder,
-                input_state: None,
-                output_info: None,
-                video_meta_supported: false,
-                n_cpus,
-            });
-        }
-
-        self.parent_start(element)
-    }
-
     fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
         {
             let mut state_guard = self.state.borrow_mut();
@@ -735,11 +681,49 @@ impl VideoDecoderImpl for Dav1dDec {
         element: &Self::Type,
         input_state: &gst_video::VideoCodecState<'static, gst_video::video_codec_state::Readable>,
     ) -> Result<(), gst::LoggableError> {
-        {
-            let mut state_guard = self.state.borrow_mut();
-            let state = state_guard.as_mut().unwrap();
-            state.input_state = Some(input_state.clone());
+        let mut state_guard = self.state.borrow_mut();
+        let settings = self.settings.lock().unwrap();
+        let mut decoder_settings = dav1d::Settings::new();
+        let max_frame_delay: u32;
+        let n_cpus = num_cpus::get();
+
+        gst::info!(CAT, obj: element, "Detected {} logical CPUs", n_cpus);
+
+        if settings.max_frame_delay == -1 {
+            let mut latency_query = gst::query::Latency::new();
+            let mut is_live = false;
+            let sinkpad = &element.static_pad("sink").expect("Failed to get sink pad");
+
+            if sinkpad.peer_query(&mut latency_query) {
+                is_live = latency_query.result().0;
+            }
+
+            max_frame_delay = if is_live { 1 } else { 0 };
+        } else {
+            max_frame_delay = settings.max_frame_delay.try_into().unwrap();
         }
+
+        gst::info!(
+            CAT,
+            obj: element,
+            "Creating decoder with n-threads={} and max-frame-delay={}",
+            settings.n_threads,
+            max_frame_delay
+        );
+        decoder_settings.set_n_threads(settings.n_threads);
+        decoder_settings.set_max_frame_delay(max_frame_delay);
+
+        let decoder = dav1d::Decoder::with_settings(&decoder_settings).map_err(|err| {
+            gst::loggable_error!(CAT, "Failed to create decoder instance: {}", err)
+        })?;
+
+        *state_guard = Some(State {
+            decoder,
+            input_state: input_state.clone(),
+            output_info: None,
+            video_meta_supported: false,
+            n_cpus,
+        });
 
         self.parent_set_format(element, input_state)
     }
@@ -779,8 +763,10 @@ impl VideoDecoderImpl for Dav1dDec {
 
         {
             let mut state_guard = self.state.borrow_mut();
-            self.flush_decoder(element, &mut state_guard);
-            self.drop_decoded_pictures(element, &mut state_guard);
+            if state_guard.is_some() {
+                self.flush_decoder(element, &mut state_guard);
+                self.drop_decoded_pictures(element, &mut state_guard);
+            }
         }
 
         true
@@ -791,8 +777,10 @@ impl VideoDecoderImpl for Dav1dDec {
 
         {
             let mut state_guard = self.state.borrow_mut();
-            self.flush_decoder(element, &mut state_guard);
-            let _state_guard = self.forward_pending_pictures(element, state_guard)?;
+            if state_guard.is_some() {
+                self.flush_decoder(element, &mut state_guard);
+                let _state_guard = self.forward_pending_pictures(element, state_guard)?;
+            }
         }
 
         self.parent_drain(element)
@@ -803,8 +791,10 @@ impl VideoDecoderImpl for Dav1dDec {
 
         {
             let mut state_guard = self.state.borrow_mut();
-            self.flush_decoder(element, &mut state_guard);
-            let _state_guard = self.forward_pending_pictures(element, state_guard)?;
+            if state_guard.is_some() {
+                self.flush_decoder(element, &mut state_guard);
+                let _state_guard = self.forward_pending_pictures(element, state_guard)?;
+            }
         }
 
         self.parent_finish(element)
