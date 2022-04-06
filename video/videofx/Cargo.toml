@@ -11,6 +11,10 @@ edition = "2021"
 cairo-rs = { git = "https://github.com/gtk-rs/gtk-rs-core", features=["use_glib"] }
 atomic_refcell = "0.1"
 once_cell = "1.0"
+# color-thief = "0.2"
+# https://github.com/RazrFalcon/color-thief-rs/pull/4
+color-thief = { git = "https://github.com/philn/color-thief-rs", branch = "max-colors-respect" }
+color-name = "1.0.0"
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"

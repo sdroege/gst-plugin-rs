@@ -1,0 +1,348 @@
+// Copyright (C) 2022, Igalia S.L
+//      Author: Philippe Normand <philn@igalia.com>
+//
+// This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at
+// <https://mozilla.org/MPL/2.0/>.
+//
+// SPDX-License-Identifier: MPL-2.0
+
+use atomic_refcell::AtomicRefCell;
+use color_name;
+use color_thief::{get_palette, Color, ColorFormat};
+use gst::{glib, subclass::prelude::*};
+use gst_base::prelude::*;
+use gst_video::{subclass::prelude::*, VideoFormat};
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+const DEFAULT_QUALITY: u32 = 10;
+const DEFAULT_MAX_COLORS: u32 = 2;
+
+static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
+    gst::DebugCategory::new(
+        "colordetect",
+        gst::DebugColorFlags::empty(),
+        Some("Dominant color detection"),
+    )
+});
+
+#[derive(Debug, Clone, Copy)]
+struct Settings {
+    quality: u32,
+    max_colors: u32,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            quality: DEFAULT_QUALITY,
+            max_colors: DEFAULT_MAX_COLORS,
+        }
+    }
+}
+
+struct State {
+    color_format: ColorFormat,
+    out_info: gst_video::VideoInfo,
+    current_color: Option<String>,
+}
+
+#[derive(Default)]
+pub struct ColorDetect {
+    settings: Mutex<Settings>,
+    state: AtomicRefCell<Option<State>>,
+}
+
+impl ColorDetect {
+    fn detect_color(
+        &self,
+        element: &super::ColorDetect,
+        buf: &mut gst::BufferRef,
+    ) -> Result<Option<(String, Vec<Color>)>, gst::FlowError> {
+        let mut state_guard = self.state.borrow_mut();
+        let state = state_guard.as_mut().ok_or_else(|| {
+            gst::element_error!(element, gst::CoreError::Negotiation, ["Have no state yet"]);
+            gst::FlowError::NotNegotiated
+        })?;
+
+        let settings = *self.settings.lock().unwrap();
+        let frame =
+            gst_video::VideoFrameRef::from_buffer_ref_readable(buf, &state.out_info).unwrap();
+        let palette = get_palette(
+            frame.plane_data(0).unwrap(),
+            state.color_format,
+            settings.quality as u8,
+            settings.max_colors as u8,
+        )
+        .map_err(|_| gst::FlowError::Error)?;
+
+        let dominant_color = palette[0];
+        let dominant_color_name =
+            color_name::Color::similar([dominant_color.r, dominant_color.g, dominant_color.b])
+                .to_lowercase();
+        if state
+            .current_color
+            .as_ref()
+            .map_or(true, |current_color| current_color != &dominant_color_name)
+        {
+            let name = dominant_color_name.clone();
+            state.current_color = Some(dominant_color_name);
+            return Ok(Some((name, palette)));
+        }
+        Ok(None)
+    }
+
+    fn color_changed(
+        &self,
+        element: &super::ColorDetect,
+        dominant_color_name: &str,
+        palette: Vec<Color>,
+    ) {
+        gst::debug!(
+            CAT,
+            obj: element,
+            "Dominant color changed to {}",
+            dominant_color_name
+        );
+        let palette_colors = gst::List::new(
+            palette
+                .iter()
+                .map(|c| ((c.r as u32) << 16) | ((c.g as u32) << 8) | (c.b as u32)),
+        );
+
+        element
+            .post_message(
+                gst::message::Element::builder(
+                    gst::structure::Structure::builder("colordetect")
+                        .field("dominant-color", dominant_color_name)
+                        .field("palette", palette_colors)
+                        .build(),
+                )
+                .build(),
+            )
+            .expect("Element without bus. Should not happen!");
+    }
+}
+
+#[glib::object_subclass]
+impl ObjectSubclass for ColorDetect {
+    const NAME: &'static str = "GstColorDetect";
+    type Type = super::ColorDetect;
+    type ParentType = gst_base::BaseTransform;
+}
+
+impl ObjectImpl for ColorDetect {
+    fn properties() -> &'static [glib::ParamSpec] {
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
+            vec![
+                glib::ParamSpecUInt::new(
+                    "quality",
+                    "Quality of an output colors",
+                    "A step in pixels to improve performance",
+                    0,
+                    10,
+                    DEFAULT_QUALITY,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+                glib::ParamSpecUInt::new(
+                    "max-colors",
+                    "Number of colors in the output palette",
+                    "Actual colors count can be lower depending on the image",
+                    2,
+                    255,
+                    DEFAULT_MAX_COLORS,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
+            ]
+        });
+
+        PROPERTIES.as_ref()
+    }
+
+    fn set_property(
+        &self,
+        obj: &Self::Type,
+        _id: usize,
+        value: &glib::Value,
+        pspec: &glib::ParamSpec,
+    ) {
+        match pspec.name() {
+            "quality" => {
+                let mut settings = self.settings.lock().unwrap();
+                let quality = value.get().expect("type checked upstream");
+                if settings.quality != quality {
+                    gst::info!(
+                        CAT,
+                        obj: obj,
+                        "Changing quality from {} to {}",
+                        settings.quality,
+                        quality
+                    );
+                    settings.quality = quality;
+                }
+            }
+            "max-colors" => {
+                let mut settings = self.settings.lock().unwrap();
+                let max_colors = value.get().expect("type checked upstream");
+                if settings.max_colors != max_colors {
+                    gst::info!(
+                        CAT,
+                        obj: obj,
+                        "Changing max_colors from {} to {}",
+                        settings.max_colors,
+                        max_colors
+                    );
+                    settings.max_colors = max_colors;
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+        match pspec.name() {
+            "quality" => {
+                let settings = self.settings.lock().unwrap();
+                settings.quality.to_value()
+            }
+            "max-colors" => {
+                let settings = self.settings.lock().unwrap();
+                settings.max_colors.to_value()
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl GstObjectImpl for ColorDetect {}
+
+impl ElementImpl for ColorDetect {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "Dominant color detection",
+                "Filter/Video",
+                "Detects the dominant color of a video",
+                "Philippe Normand <philn@igalia.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let formats = gst::List::new([
+                VideoFormat::Rgb.to_str(),
+                VideoFormat::Rgba.to_str(),
+                VideoFormat::Argb.to_str(),
+                VideoFormat::Bgr.to_str(),
+                VideoFormat::Bgra.to_str(),
+            ]);
+
+            let caps = gst::Caps::builder("video/x-raw")
+                .field("format", &formats)
+                .field("width", gst::IntRange::new(1, i32::MAX))
+                .field("height", gst::IntRange::new(1, i32::MAX))
+                .field(
+                    "framerate",
+                    gst::FractionRange::new(
+                        gst::Fraction::new(0, 1),
+                        gst::Fraction::new(i32::MAX, 1),
+                    ),
+                )
+                .build();
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps,
+            )
+            .unwrap();
+
+            vec![sink_pad_template, src_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
+
+impl BaseTransformImpl for ColorDetect {
+    const MODE: gst_base::subclass::BaseTransformMode =
+        gst_base::subclass::BaseTransformMode::AlwaysInPlace;
+    const PASSTHROUGH_ON_SAME_CAPS: bool = false;
+    const TRANSFORM_IP_ON_PASSTHROUGH: bool = false;
+
+    fn stop(&self, element: &Self::Type) -> Result<(), gst::ErrorMessage> {
+        *self.state.borrow_mut() = None;
+        gst::info!(CAT, obj: element, "Stopped");
+        Ok(())
+    }
+
+    fn set_caps(
+        &self,
+        element: &Self::Type,
+        incaps: &gst::Caps,
+        outcaps: &gst::Caps,
+    ) -> Result<(), gst::LoggableError> {
+        let in_info = match gst_video::VideoInfo::from_caps(incaps) {
+            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse input caps")),
+            Ok(info) => info,
+        };
+
+        let out_info = match gst_video::VideoInfo::from_caps(outcaps) {
+            Err(_) => return Err(gst::loggable_error!(CAT, "Failed to parse output caps")),
+            Ok(info) => info,
+        };
+
+        gst::debug!(
+            CAT,
+            obj: element,
+            "Configured for caps {} to {}",
+            incaps,
+            outcaps
+        );
+
+        let color_format = match in_info.format() {
+            VideoFormat::Rgb => ColorFormat::Rgb,
+            VideoFormat::Rgba => ColorFormat::Rgba,
+            VideoFormat::Argb => ColorFormat::Argb,
+            VideoFormat::Bgr => ColorFormat::Bgr,
+            VideoFormat::Bgra => ColorFormat::Bgra,
+            _ => unimplemented!(),
+        };
+
+        let previous_color = match self.state.borrow().as_ref() {
+            Some(state) => state.current_color.clone(),
+            None => None,
+        };
+        *self.state.borrow_mut() = Some(State {
+            color_format,
+            out_info,
+            current_color: previous_color,
+        });
+
+        Ok(())
+    }
+
+    fn transform_ip(
+        &self,
+        element: &Self::Type,
+        buf: &mut gst::BufferRef,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        if let Some((dominant_color_name, palette)) = self.detect_color(element, buf)? {
+            self.color_changed(element, &dominant_color_name, palette);
+        }
+
+        Ok(gst::FlowSuccess::Ok)
+    }
+}

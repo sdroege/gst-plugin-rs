@@ -9,9 +9,11 @@
 #![allow(clippy::non_send_fields_in_send_ty)]
 
 mod border;
+mod colordetect;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), gst::glib::BoolError> {
-    border::register(plugin)
+    border::register(plugin)?;
+    colordetect::register(plugin)
 }
 
 gst::plugin_define!(
