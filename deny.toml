@@ -126,6 +126,11 @@ version = "0.9"
 name = "sha-1"
 version = "0.9"
 
+# ignore duplicated tokio-util dependency because librespot/reqwest depend on an old version
+[[bans.skip]]
+name = "tokio-util"
+version = "0.6"
+
 # ignore duplicated miniz_oxide dependency because flate2 depends on an old version
 # https://github.com/rust-lang/flate2-rs/pull/293
 [[bans.skip]]
