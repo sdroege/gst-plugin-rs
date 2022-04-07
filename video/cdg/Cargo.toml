@@ -9,9 +9,9 @@ edition = "2021"
 rust-version = "1.57"
 
 [dependencies]
-gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
-gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
-gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_12"] }
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 cdg = "0.1"
 cdg_renderer = "0.7"
 image = { version = "0.24", default-features = false }
@@ -30,8 +30,7 @@ path = "src/lib.rs"
 gst-plugin-version-helper = { path="../../version-helper" }
 
 [features]
-# GStreamer 1.14 is required for static linking
-static = ["gst/v1_14"]
+static = []
 capi = []
 
 [package.metadata.capi]

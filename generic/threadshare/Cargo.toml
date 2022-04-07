@@ -55,8 +55,7 @@ cc = "1.0.38"
 pkg-config = "0.3.15"
 
 [features]
-# GStreamer 1.14 is required for static linking
-static = ["gst/v1_14"]
+static = []
 capi = []
 
 [package.metadata.capi]

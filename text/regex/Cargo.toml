@@ -14,7 +14,6 @@ regex = "1.5"
 
 [dependencies.gst]
 git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
-features = ["v1_14"]
 package="gstreamer"
 
 [lib]
@@ -30,8 +29,7 @@ git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs"
 package="gstreamer-check"
 
 [features]
-# GStreamer 1.14 is required for static linking
-static = ["gst/v1_14"]
+static = []
 capi = []
 
 [package.metadata.capi]

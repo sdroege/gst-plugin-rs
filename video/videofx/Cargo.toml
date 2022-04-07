@@ -40,7 +40,6 @@ path = "src/lib.rs"
 gst-plugin-version-helper = { path="../../version-helper" }
 
 [features]
-# GStreamer 1.14 is required for static linking
 static = []
 capi = []
 
