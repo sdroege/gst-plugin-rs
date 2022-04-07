@@ -349,16 +349,16 @@ impl TranscriberBin {
                 // Do nothing, wait for the previous transcription bin
                 // to finish tearing down
             } else {
-                let audio_tee_pad = state.audio_tee.request_pad_simple("src_%u").unwrap();
-                let transcription_sink_pad = state.transcription_bin.static_pad("sink").unwrap();
-                audio_tee_pad.link(&transcription_sink_pad).unwrap();
-
                 state
                     .transcription_bin
                     .link_pads(Some("src"), &state.cccombiner, Some("caption"))
                     .unwrap();
                 state.transcription_bin.set_locked_state(false);
                 state.transcription_bin.sync_state_with_parent().unwrap();
+
+                let audio_tee_pad = state.audio_tee.request_pad_simple("src_%u").unwrap();
+                let transcription_sink_pad = state.transcription_bin.static_pad("sink").unwrap();
+                audio_tee_pad.link(&transcription_sink_pad).unwrap();
             }
         }
     }
@@ -473,6 +473,9 @@ impl TranscriberBin {
         let cccapsfilter = gst::ElementFactory::make("capsfilter", None)?;
         let transcription_valve = gst::ElementFactory::make("valve", None)?;
 
+        // Protect passthrough enable (and resulting dynamic reconfigure)
+        // from non-streaming thread
+        audio_tee.set_property("allow-not-linked", true);
         transcription_valve.set_property_from_str("drop-mode", "transform-to-gap");
 
         Ok(State {
