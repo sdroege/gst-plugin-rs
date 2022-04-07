@@ -1781,7 +1781,6 @@ name = "gst-plugin-uriplaylistbin"
 version = "0.8.3"
 dependencies = [
  "anyhow",
- "crossbeam-channel",
  "gst-plugin-version-helper",
  "gstreamer",
  "gstreamer-app",
