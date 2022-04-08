@@ -928,16 +928,6 @@ impl FallbackSrc {
             .add_many(&[&fallback_input, &switch, &clocksync_queue, &clocksync])
             .unwrap();
 
-        let element_weak = element.downgrade();
-        switch.connect_notify(Some("active-pad"), move |_switch, _pspec| {
-            let element = match element_weak.upgrade() {
-                None => return,
-                Some(element) => element,
-            };
-
-            let src = element.imp();
-            src.handle_switch_active_pad_change(&element);
-        });
         switch.set_property("timeout", timeout.nseconds());
         switch.set_property("min-upstream-latency", min_latency.nseconds());
         switch.set_property("immediate-fallback", immediate_fallback);
@@ -954,6 +944,17 @@ impl FallbackSrc {
         clocksync_srcpad.link(&switch_mainsink).unwrap();
         switch_mainsink.set_property("priority", 0u32);
         // clocksync_queue sink pad is not connected to anything yet at this point!
+
+        let element_weak = element.downgrade();
+        switch.connect_notify(Some("active-pad"), move |_switch, _pspec| {
+            let element = match element_weak.upgrade() {
+                None => return,
+                Some(element) => element,
+            };
+
+            let src = element.imp();
+            src.handle_switch_active_pad_change(&element);
+        });
 
         let srcpad = switch.static_pad("src").unwrap();
         let templ = element
