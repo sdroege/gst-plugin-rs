@@ -932,11 +932,6 @@ impl FallbackSrc {
         switch.set_property("min-upstream-latency", min_latency.nseconds());
         switch.set_property("immediate-fallback", immediate_fallback);
 
-        let fallback_srcpad = fallback_input.static_pad("src").unwrap();
-        let switch_fallbacksink = switch.request_pad_simple("sink_%u").unwrap();
-        fallback_srcpad.link(&switch_fallbacksink).unwrap();
-        switch_fallbacksink.set_property("priority", 1u32);
-
         gst::Element::link_pads(&clocksync_queue, Some("src"), &clocksync, Some("sink")).unwrap();
 
         let clocksync_srcpad = clocksync.static_pad("src").unwrap();
@@ -944,6 +939,11 @@ impl FallbackSrc {
         clocksync_srcpad.link(&switch_mainsink).unwrap();
         switch_mainsink.set_property("priority", 0u32);
         // clocksync_queue sink pad is not connected to anything yet at this point!
+
+        let fallback_srcpad = fallback_input.static_pad("src").unwrap();
+        let switch_fallbacksink = switch.request_pad_simple("sink_%u").unwrap();
+        fallback_srcpad.link(&switch_fallbacksink).unwrap();
+        switch_fallbacksink.set_property("priority", 1u32);
 
         let element_weak = element.downgrade();
         switch.connect_notify(Some("active-pad"), move |_switch, _pspec| {
