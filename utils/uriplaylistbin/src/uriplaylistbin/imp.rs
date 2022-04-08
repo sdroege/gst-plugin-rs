@@ -1071,7 +1071,6 @@ impl UriPlaylistBin {
         element.add(&uridecodebin).unwrap();
 
         let element_weak = element.downgrade();
-        let uridecodebin_clone = uridecodebin.clone();
 
         let item_clone = item.clone();
         assert!(state.waiting_for_stream_collection.is_none());
@@ -1128,7 +1127,7 @@ impl UriPlaylistBin {
 
         drop(state_guard);
 
-        uridecodebin_clone
+        uridecodebin
             .sync_state_with_parent()
             .map_err(|e| PlaylistError::ItemFailed {
                 error: e.into(),
