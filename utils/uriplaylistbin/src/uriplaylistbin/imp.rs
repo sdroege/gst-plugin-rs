@@ -100,6 +100,23 @@ impl Default for Settings {
     }
 }
 
+enum Status {
+    /// all good element is working
+    Running,
+    /// the element stopped because of an error
+    Error,
+}
+
+impl Status {
+    /// check if the element should stop proceeding
+    fn done(&self) -> bool {
+        match self {
+            Status::Running => false,
+            Status::Error => true,
+        }
+    }
+}
+
 struct State {
     streamsynchronizer: gst::Element,
     concat_audio: Vec<gst::Element>,
@@ -110,8 +127,7 @@ struct State {
 
     /// the current number of streams handled by the element
     streams_topology: StreamsTopology,
-    // true if the element stopped because of an error
-    errored: bool,
+    status: Status,
 
     // we have max one item in one of each of those states
     waiting_for_stream_collection: Option<Item>,
@@ -137,7 +153,7 @@ impl State {
             streamsynchronizer,
             playlist: Playlist::new(uris, iterations),
             streams_topology: StreamsTopology::default(),
-            errored: false,
+            status: Status::Running,
             waiting_for_stream_collection: None,
             waiting_for_ss_eos: None,
             waiting_for_pads: None,
@@ -1213,7 +1229,7 @@ impl UriPlaylistBin {
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().unwrap();
 
-            if state.errored {
+            if state.status.done() {
                 return;
             }
 
@@ -1605,10 +1621,10 @@ impl UriPlaylistBin {
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().unwrap();
 
-            if state.errored {
+            if state.status.done() {
                 return;
             }
-            state.errored = true;
+            state.status = Status::Error;
 
             if let Some(blocked) = state.blocked.take() {
                 // unblock streaming thread
