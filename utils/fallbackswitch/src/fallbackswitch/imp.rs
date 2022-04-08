@@ -29,7 +29,7 @@ const PROP_TIMEOUT: &str = "timeout";
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "fallback-switch",
+        "fallbackswitch",
         gst::DebugColorFlags::empty(),
         Some("Automatic priority-based input selector"),
     )
