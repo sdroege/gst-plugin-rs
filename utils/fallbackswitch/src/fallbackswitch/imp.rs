@@ -1140,18 +1140,21 @@ impl ElementImpl for FallbackSwitch {
             }
             gst::StateChange::ReadyToPaused => {
                 let mut state = self.state.lock();
+                let prev_active_pad = state.active_sinkpad.clone();
                 *state = State::default();
                 let pads = element.sink_pads();
+
                 if let Some(pad) = pads.first() {
-                    state.active_sinkpad = Some(
-                        pad.clone()
-                            .downcast::<super::FallbackSwitchSinkPad>()
-                            .unwrap(),
-                    );
+                    let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
+
+                    state.active_sinkpad = Some(pad.clone());
                     state.switched_pad = true;
                     state.discont_pending = true;
                     drop(state);
-                    element.notify(PROP_ACTIVE_PAD);
+
+                    if prev_active_pad.as_ref() != Some(pad) {
+                        element.notify(PROP_ACTIVE_PAD);
+                    }
                 }
                 for pad in pads {
                     let pad = pad.downcast_ref::<super::FallbackSwitchSinkPad>().unwrap();
