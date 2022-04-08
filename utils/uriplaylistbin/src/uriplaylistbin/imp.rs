@@ -6,8 +6,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::sync::Arc;
 use std::sync::{mpsc, Mutex, MutexGuard};
+use std::sync::{Arc, Weak};
 
 use gst::glib;
 use gst::prelude::*;
@@ -620,6 +620,14 @@ impl Item {
             ItemState::Blocked { channels, .. } => channels.clone(),
             _ => panic!("invalid state: {:?}", inner.state),
         }
+    }
+
+    fn downgrade(&self) -> Weak<Mutex<ItemInner>> {
+        Arc::downgrade(&self.inner)
+    }
+
+    fn upgrade(weak: &Weak<Mutex<ItemInner>>) -> Option<Item> {
+        weak.upgrade().map(|inner| Item { inner })
     }
 }
 
@@ -1415,7 +1423,8 @@ impl UriPlaylistBin {
             // block pad until next item is reaching the `Blocked` state
             let receiver = Mutex::new(item.receiver());
             let element_weak = element.downgrade();
-            let item_clone = item.clone();
+            // passing ownership of item to the probe callback would introduce a reference cycle as the item is owning the sinkpad
+            let item_weak = item.downgrade();
 
             sink_pad.add_probe(gst::PadProbeType::BLOCK_DOWNSTREAM, move |pad, info| {
                 let element = match element_weak.upgrade() {
@@ -1423,7 +1432,10 @@ impl UriPlaylistBin {
                     None => return gst::PadProbeReturn::Remove,
                 };
                 let parent = pad.parent().unwrap();
-                let item = &item_clone;
+                let item = match Item::upgrade(&item_weak) {
+                    Some(item) => item,
+                    None => return gst::PadProbeReturn::Remove,
+                };
 
                 if !item.is_streaming() {
                     // block pad until next item is ready
