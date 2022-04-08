@@ -106,6 +106,8 @@ enum Status {
     Running,
     /// the element stopped because of an error
     Error,
+    /// the element is being shut down
+    ShuttingDown,
 }
 
 impl Status {
@@ -113,7 +115,7 @@ impl Status {
     fn done(&self) -> bool {
         match self {
             Status::Running => false,
-            Status::Error => true,
+            Status::Error | Status::ShuttingDown => true,
         }
     }
 }
@@ -950,6 +952,8 @@ impl ElementImpl for UriPlaylistBin {
         if transition == gst::StateChange::PausedToReady {
             let mut state_guard = self.state.lock().unwrap();
             let state = state_guard.as_mut().unwrap();
+
+            state.status = Status::ShuttingDown;
 
             // The probe callback owns a ref on the item and so on the sender as well.
             // As a result we have to explicitly unblock all receivers as dropping the sender
