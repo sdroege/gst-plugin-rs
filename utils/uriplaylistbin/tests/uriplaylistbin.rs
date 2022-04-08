@@ -313,6 +313,8 @@ fn missing_file() {
 }
 
 #[test]
+// FIXME: test deadlocks: https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/issues/194
+#[ignore]
 fn missing_http() {
     let (events, current_iteration, current_uri_index) = test(
         vec![TestMedia::ogg(), TestMedia::missing_http()],
