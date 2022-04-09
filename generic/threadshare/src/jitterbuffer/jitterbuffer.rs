@@ -23,7 +23,6 @@ use std::ptr;
 
 use glib::translate::*;
 use gst::glib;
-use gst::prelude::*;
 
 use std::mem;
 
@@ -35,11 +34,8 @@ glib::wrapper! {
     }
 }
 
-unsafe impl glib::SendUnique for RTPJitterBuffer {
-    fn is_unique(&self) -> bool {
-        self.ref_count() == 1
-    }
-}
+// SAFETY: We ensure that we never get another reference to the jitterbuffer
+unsafe impl Send for RTPJitterBuffer {}
 
 impl IntoGlib for RTPJitterBufferMode {
     type GlibType = ffi::RTPJitterBufferMode;
