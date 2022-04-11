@@ -261,14 +261,13 @@ impl SinkState {
         };
         let end_ts = start_ts.saturating_add(duration);
 
-        let (start_ts, end_ts) = match self.segment.clip(start_ts, end_ts) {
-            Some((start_ts, end_ts)) => (start_ts, end_ts),
-            None => return (None, None),
-        };
-        let start_ts = self.segment.to_running_time(start_ts);
-        let end_ts = self.segment.to_running_time(end_ts);
-
-        (start_ts, end_ts)
+        match self.segment.clip(start_ts, end_ts) {
+            Some((start_ts, end_ts)) => (
+                self.segment.to_running_time(start_ts),
+                self.segment.to_running_time(end_ts),
+            ),
+            None => (None, None),
+        }
     }
 
     fn schedule_clock(
