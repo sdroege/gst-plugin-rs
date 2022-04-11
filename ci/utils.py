@@ -3,7 +3,7 @@ import os
 DIRS = ['audio', 'generic', 'net', 'text', 'utils', 'video']
 # Plugins whose name is prefixed by 'rs'
 RS_PREFIXED = ['audiofx', 'closedcaption',
-               'dav1d', 'file', 'json', 'regex', 'webp']
+               'dav1d', 'file', 'json', 'onvif', 'regex', 'webp']
 OVERRIDE = {'wrap': 'rstextwrap', 'flavors': 'rsflv', 'ahead': 'textahead'}
 
 

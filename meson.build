@@ -61,6 +61,7 @@ plugins = {
   'gst-plugin-uriplaylistbin': 'libgsturiplaylistbin',
   'gst-plugin-spotify': 'libgstspotify',
   'gst-plugin-textahead': 'libgsttextahead',
+  'gst-plugin-onvif': 'libgstrsonvif',
 }
 
 extra_env = {}
