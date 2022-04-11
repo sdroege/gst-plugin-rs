@@ -138,7 +138,7 @@ impl ElementImpl for CustomSource {
         let res = self.parent_change_state(element, transition)?;
 
         match transition {
-            gst::StateChange::ReadyToNull => {
+            gst::StateChange::ReadyToNull | gst::StateChange::NullToNull => {
                 self.stop(element);
             }
             _ => (),
