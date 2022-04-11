@@ -2094,22 +2094,23 @@ impl FallbackSrc {
                 }
                 Some(state) => state,
             };
-            for (source_srcpad, block) in [state.video_stream.as_mut(), state.audio_stream.as_mut()]
-                .iter_mut()
-                .filter_map(|s| s.as_mut())
-                .filter_map(|s| {
-                    if let Some(block) = s.source_srcpad_block.take() {
-                        Some((s.source_srcpad.as_ref().unwrap(), block))
-                    } else {
-                        None
-                    }
-                })
+            for (source_srcpad_name, block) in
+                [state.video_stream.as_mut(), state.audio_stream.as_mut()]
+                    .iter_mut()
+                    .filter_map(|s| s.as_mut())
+                    .filter_map(|s| {
+                        if let Some(block) = s.source_srcpad_block.take() {
+                            Some((s.source_srcpad.as_ref().map(|pad| pad.name()), block))
+                        } else {
+                            None
+                        }
+                    })
             {
                 gst::debug!(
                     CAT,
                     obj: element,
                     "Removing pad probe for pad {}",
-                    source_srcpad.name()
+                    source_srcpad_name.as_deref().unwrap_or("UNKNOWN")
                 );
                 block.pad.remove_probe(block.probe_id);
             }
