@@ -1236,17 +1236,22 @@ impl ElementImpl for FallbackSwitch {
         pad.set_active(true).unwrap();
         element.add_pad(&pad).unwrap();
 
+        let mut notify_active_pad = false;
         if state.active_sinkpad.is_none() {
             state.active_sinkpad = Some(pad.clone());
             state.switched_pad = true;
             state.discont_pending = true;
-            element.notify(PROP_ACTIVE_PAD);
+            notify_active_pad = true;
         }
 
         let mut pad_settings = pad.imp().settings.lock();
         pad_settings.priority = pad_serial;
         drop(pad_settings);
         drop(state);
+
+        if notify_active_pad {
+            element.notify(PROP_ACTIVE_PAD);
+        }
 
         let _ = element.post_message(gst::message::Latency::builder().src(element).build());
 
