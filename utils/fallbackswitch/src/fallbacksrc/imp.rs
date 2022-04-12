@@ -123,6 +123,9 @@ struct Stream {
     // clocksync for source source pad
     clocksync: gst::Element,
 
+    // imagefreeze if this is an image stream
+    imagefreeze: Option<gst::Element>,
+
     clocksync_queue: gst::Element,
     clocksync_queue_srcpad: gst::Pad,
 
@@ -983,6 +986,7 @@ impl FallbackSrc {
             source_srcpad: None,
             source_srcpad_block: None,
             clocksync,
+            imagefreeze: None,
             clocksync_queue_srcpad: clocksync_queue.static_pad("src").unwrap(),
             clocksync_queue,
             switch,
@@ -1318,12 +1322,19 @@ impl FallbackSrc {
         };
 
         let sinkpad = if is_image {
-            let imagefreeze =
-                gst::ElementFactory::make("imagefreeze", None).expect("no imagefreeze found");
+            let imagefreeze = if let Some(ref imagefreeze) = stream.imagefreeze {
+                imagefreeze
+            } else {
+                let imagefreeze =
+                    gst::ElementFactory::make("imagefreeze", None).expect("no imagefreeze found");
 
-            gst::debug!(CAT, "image stream, inserting imagefreeze");
-            element.add(&imagefreeze).unwrap();
-            imagefreeze.set_property("is-live", true);
+                gst::debug!(CAT, "image stream, inserting imagefreeze");
+                element.add(&imagefreeze).unwrap();
+                imagefreeze.set_property("is-live", true);
+                stream.imagefreeze = Some(imagefreeze);
+                stream.imagefreeze.as_ref().unwrap()
+            };
+
             if imagefreeze.sync_state_with_parent().is_err() {
                 gst::error!(CAT, obj: element, "imagefreeze failed to change state",);
                 return Err(gst::error_msg!(
@@ -1334,6 +1345,12 @@ impl FallbackSrc {
             imagefreeze.link(&stream.clocksync_queue).unwrap();
             imagefreeze.static_pad("sink").unwrap()
         } else {
+            if let Some(imagefreeze) = stream.imagefreeze.take() {
+                imagefreeze.set_locked_state(true);
+                let _ = imagefreeze.set_state(gst::State::Null);
+                element.remove(&imagefreeze).unwrap();
+            }
+
             stream.clocksync_queue.static_pad("sink").unwrap()
         };
 
