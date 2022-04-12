@@ -2142,6 +2142,28 @@ impl FallbackSrc {
                     }
                 })
                 .collect::<Vec<_>>();
+
+            let stream_srcpads = [state.audio_stream.as_ref(), state.video_stream.as_ref()]
+                .into_iter()
+                .flatten()
+                .map(|s| {
+                    let srcpad = s.srcpad.clone();
+                    let probe_id = srcpad
+                        .add_probe(
+                            gst::PadProbeType::EVENT_DOWNSTREAM | gst::PadProbeType::EVENT_FLUSH,
+                            move |_pad, info| match info.data {
+                                Some(gst::PadProbeData::Event(ref ev)) => match ev.view() {
+                                    gst::EventView::FlushStart(_) => gst::PadProbeReturn::Drop,
+                                    gst::EventView::FlushStop(_) => gst::PadProbeReturn::Drop,
+                                    _ => gst::PadProbeReturn::Ok,
+                                },
+                                _ => gst::PadProbeReturn::Ok,
+                            },
+                        )
+                        .unwrap();
+                    (probe_id, srcpad)
+                })
+                .collect::<Vec<_>>();
             drop(state_guard);
 
             gst::debug!(CAT, obj: element, "Flushing source");
@@ -2153,6 +2175,10 @@ impl FallbackSrc {
             gst::debug!(CAT, obj: element, "Stop flushing downstream of source");
             for pad in stream_sinkpads {
                 let _ = pad.send_event(gst::event::FlushStop::builder(true).build());
+            }
+
+            for (probe_id, pad) in stream_srcpads {
+                pad.remove_probe(probe_id);
             }
 
             // Sleep for 1s before retrying
