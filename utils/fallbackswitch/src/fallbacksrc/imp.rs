@@ -2131,6 +2131,17 @@ impl FallbackSrc {
                 );
                 block.pad.remove_probe(block.probe_id);
             }
+            let stream_sinkpads = [state.audio_stream.as_ref(), state.video_stream.as_ref()]
+                .into_iter()
+                .flatten()
+                .map(|s| {
+                    if let Some(ref imagefreeze) = s.imagefreeze {
+                        imagefreeze.static_pad("sink").unwrap()
+                    } else {
+                        s.clocksync_queue.static_pad("sink").unwrap()
+                    }
+                })
+                .collect::<Vec<_>>();
             drop(state_guard);
 
             gst::debug!(CAT, obj: element, "Flushing source");
@@ -2138,6 +2149,11 @@ impl FallbackSrc {
 
             gst::debug!(CAT, obj: element, "Shutting down source");
             let _ = source.set_state(gst::State::Null);
+
+            gst::debug!(CAT, obj: element, "Stop flushing downstream of source");
+            for pad in stream_sinkpads {
+                let _ = pad.send_event(gst::event::FlushStop::builder(true).build());
+            }
 
             // Sleep for 1s before retrying
 
