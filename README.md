@@ -13,86 +13,100 @@ your development environment.
 You will find the following plugins in this repository:
 
   * `generic`
-    - `file`: A Rust implementation of the standard `filesrc` and `filesink`
-      elements
+    - `file`: A Rust implementation of the standard `filesrc` and `filesink` elements
 
-    - `sodium`: Elements to perform encryption and decryption using
-      [libsodium](https://libsodium.org).
+    - `fmp4`: A fragmented MP4/ISOBMFF/CMAF muxer for generating e.g. DASH/HLS media fragments.
 
-    - `threadshare`: Some popular threaded elements reimplemented using common
-      thread-sharing infrastructure.
+    - `sodium`: Elements to perform encryption and decryption using [libsodium](https://libsodium.org).
+
+    - `threadshare`: Some popular threaded elements reimplemented using common thread-sharing infrastructure.
 
   * `net`
-    - `reqwest`: An HTTP source element based on the
-      [reqwest](https://github.com/seanmonstar/reqwest) library.
+    - `hlssink3`: An element for generating MPEG-TS HLS streams.
 
-    - `rusoto`: A source and sink plugin to talk to the Amazon S3 object
-      storage system, as well as an element wrapping the AWS Transcriber
-      service using the [Rusoto](https://rusoto.org) library.
+    - `reqwest`: An HTTP source element based on the [reqwest](https://github.com/seanmonstar/reqwest) library.
+
+    - `rusoto`: Various elements for Amazon AWS services using the [Rusoto](https://rusoto.org) library
+      - `s3src`/`s3sink`: A source and sink element to talk to the Amazon S3 object storage system.
+      - `aws_transcriber`: an element wrapping the AWS Transcriber service.
 
   * `audio`
-    - `audiofx`: Plugins to apply audio effects to a stream (such as adding
-      echo/reverb, [removing noise](https://jmvalin.ca/demo/rnnoise/) or normalization).
+    - `audiofx`: Elements to apply audio effects to a stream
+      - `rsaudioecho`: a simple echo/reverb filter.
+      - `rsaudioloudnorm`: [audio normalization](http://k.ylo.ph/2016/04/04/loudnorm.html) filter.
+      - `audiornnoise`: Filter for [removing noise](https://jmvalin.ca/demo/rnnoise/).
+      - `ebur128level`: Filter for measuring audio loudness according to EBU R-128.
+      - `hrtfrender`: Filter for rendering audio according to a [head-related transfer
+        function](https://en.wikipedia.org/wiki/Head-related_transfer_function).
 
-    - `claxon`: A FLAC decoder based on the
-      [Claxon](https://github.com/ruuda/claxon) library.
+    - `claxon`: A FLAC decoder based on the [Claxon](https://github.com/ruuda/claxon) library.
 
-    - `csound`: A plugin to implement audio effects using the
-      [Csound](https://csound.com/) library.
+    - `csound`: A plugin to implement audio effects using the [Csound](https://csound.com/) library.
 
-    - `lewton`: A Vorbis decoder based on the
-      [lewton](https://github.com/RustAudio/lewton) library.
+    - `lewton`: A Vorbis decoder based on the [lewton](https://github.com/RustAudio/lewton) library.
 
-    - `spotify`: A plugin to access content from [Spotify](https://www.spotify.com/)
-      based on the [librespot](https://github.com/librespot-org/) library.
-
+    - `spotify`: A plugin to access content from [Spotify](https://www.spotify.com/) based on the [librespot](https://github.com/librespot-org/) library.
 
   * `video`
-    - `cdg`: A parser and renderer for
-      [CD+G karaoke data](https://docs.rs/cdg/0.1.0/cdg/).
+    - `cdg`: A parser and renderer for [CD+G karaoke data](https://docs.rs/cdg/0.1.0/cdg/).
 
-    - `closedcaption`: Plugins to deal with several closed caption formats
-      (MCC, SCC, EIA-608/CEA-608 and timed text).
+    - `closedcaption`: Plugin to deal with closed caption streams
+      - `ccdetect`: Detects if a stream contains active Closed Captions.
+      - `cea608overlay`: Overlay CEA-608 / EIA-608 closed captions over a
+        video stream.
+      - `cea608tojson`: Convert CEA-608 / EIA-608 closed captions to a JSON
+        stream.
+      - `cea608tott`: Convert CEA-608 / EIA-608 closed captions to timed text.
+      - `jsontovtt`: Convert JSON to timed text.
+      - `mccenc`: Convert CEA-608 / EIA-608 and CEA-708 / EIA-708 closed captions to the MCC format.
+      - `mccparse`: Parse CEA-608 / EIA-608 and CEA-708 / EIA-708 closed captions from the MCC format.
+      - `sccenc`: Convert CEA-608 / EIA-608 closed captions to the MCC format.
+      - `sccparse`: Parse CEA-608 / EIA-608 closed captions from the MCC format.
+      - `transcriberbin`: Convenience bin around transcriber elements like `aws_transcriber`.
+      - `tttocea608`: Convert timed text to CEA-608 / EIA-608 closed captions.
+      - `tttojson`: Convert timed text to JSON.
 
-    - `dav1d`: AV1 decoder based on the
-      [dav1d](https://code.videolan.org/videolan/dav1d) library.
+    - `dav1d`: AV1 decoder based on the [dav1d](https://code.videolan.org/videolan/dav1d) library.
 
-    - `ffv1`: FFV1 decoder based on the
-      [ffv1](https://github.com/rust-av/ffv1) library.
+    - `ffv1`: FFV1 decoder based on the [ffv1](https://github.com/rust-av/ffv1) library.
 
-    - `flavors`: FLV demuxer based on the
-      [flavors](https://github.com/rust-av/flavors) library.
+    - `flavors`: FLV demuxer based on the [flavors](https://github.com/rust-av/flavors) library.
 
-    - `gif`: A GIF encoder based on the
-      [gif](https://github.com/image-rs/image-gif) library.
+    - `gif`: A GIF encoder based on the [gif](https://github.com/image-rs/image-gif) library.
 
-    - `hsv`: Elements to work with video data in hue, saturation, value form.
+    - `gtk4`: A [GTK4](https://www.gtk.org) video sink that provides a `GdkPaintable` for UI integration.
 
-    - `png`: PNG encoder based on the
-      [png](https://github.com/image-rs/image-png) library.
+    - `hsv`: Plugin with various elements to work with video data in hue, saturation, value format
+       - `hsvdetector`: Mark pixels that are close to a configured color in HSV format.
+       - `hsvfilter`: Apply various transformations in the HSV colorspace.
 
-    - `rav1e`: AV1 encoder based on the [rav1e](https://github.com/xiph/rav1e)
-      library.
+    - `png`: PNG encoder based on the [png](https://github.com/image-rs/image-png) library.
 
-    - `webp`: WebP decoder based on the
-      [libwebp-sys-2](https://github.com/qnighy/libwebp-sys2-rs) library.
+    - `rav1e`: AV1 encoder based on the [rav1e](https://github.com/xiph/rav1e) library.
+
+    - `videofx`: Plugin with various video filters.
+      - `roundedcorners`: Element to make the corners of a video rounded via the alpha channel.
+
+    - `webp`: WebP decoder based on the [libwebp-sys-2](https://github.com/qnighy/libwebp-sys2-rs) library.
 
   * `text`
-    - `json`: A plugin to convert a stream of JSON objects to a higher level
-      wrapped NDJSON output.
+    - `ahead`: A plugin to display upcoming text buffers ahead.
+
+    - `json`: A plugin to convert a stream of JSON objects to a higher level wrapped NDJSON output.
 
     - `regex`: A regular expression text filter plugin.
 
     - `wrap`: A plugin to perform text wrapping with hyphenation.
 
-    - `ahead`: A plugin to display upcoming text buffers ahead.
-
   * `utils`
-    - `fallbackswitch`: Aggregator element that allows falling back to a
-      different sink pad after a timeout.
+    - `fallbackswitch`:
+      - `fallbackswitch`: An element that allows falling back to different
+        sink pads after a timeout based on the sink pads' priorities.
+      - `fallbacksrc`: Element similar to `urisourcebin` that allows
+        configuring a fallback audio/video if there are problems with the main
+        source.
 
-    - `togglerecord`: Element to enable starting and stopping multiple
-      streams together.
+    - `togglerecord`: Element to enable starting and stopping multiple streams together.
 
 ## Building
 
