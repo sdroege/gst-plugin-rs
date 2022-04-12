@@ -143,32 +143,23 @@ and generate `pkg-config` files.
 
 ## LICENSE
 
-gst-plugins-rs and all crates contained in here that are not listed below are
-licensed under either of
+gst-plugins-rs and all crates contained in here are licensed under one of the
+following licenses
 
- * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
-   http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or
-   http://opensource.org/licenses/MIT)
-
-at your option.
-
-gst-plugin-togglerecord is licensed under the Lesser General Public License
-([LICENSE-LGPLv2](LICENSE-LGPLv2)) version 2.1 or (at your option) any later
-version.
-
-gst-plugin-csound is licensed under the Lesser General Public License
-([LICENSE-LGPLv2](LICENSE-LGPLv2)) version 2.1 or (at your option) any later
-version.
+ * Mozilla Public License Version 2.0 ([LICENSE-MPL-2.0](LICENSE-MPL-2.0) or http://opensource.org/licenses/MPL-2.0)
+ * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+ * Lesser General Public License ([LICENSE-LGPLv2](LICENSE-LGPLv2)) version 2.1 or (at your option) any later version
 
 GStreamer itself is licensed under the Lesser General Public License version
-2.1 or (at your option) any later version:
-https://www.gnu.org/licenses/lgpl-2.1.html
+2.1 or (at your option) any later version: https://www.gnu.org/licenses/lgpl-2.1.html
 
 ## Contribution
 
-Any kinds of contributions are welcome as a pull request.
+Any kinds of contributions are welcome as a merge request.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in gst-plugins-rs by you, as defined in the Apache-2.0 license, shall be
-dual licensed as above, without any additional terms or conditions.
+for inclusion in gst-plugins-rs by you shall be licensed under the license of
+the plugin it is added to.
+
+For new plugins the MPL-2 license is preferred.
