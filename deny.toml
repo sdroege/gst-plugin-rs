@@ -131,12 +131,6 @@ version = "0.9"
 name = "tokio-util"
 version = "0.6"
 
-# ignore duplicated miniz_oxide dependency because flate2 depends on an old version
-# https://github.com/rust-lang/flate2-rs/pull/293
-[[bans.skip]]
-name = "miniz_oxide"
-version = "0.4"
-
 # ignore duplicated wasi dependency because various crates depends on an old version
 [[bans.skip]]
 name = "wasi"
