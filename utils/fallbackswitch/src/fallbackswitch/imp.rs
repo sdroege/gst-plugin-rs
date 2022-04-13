@@ -620,6 +620,7 @@ impl FallbackSwitch {
         let is_active = state.active_sinkpad.as_ref() == Some(pad);
 
         let mut pad_state = pad_imp.state.lock();
+        let raw_pad = !matches!(pad_state.caps_info, CapsInfo::None);
         let (start_running_time, end_running_time) = pad_state.get_sync_time(&buffer);
 
         log!(
@@ -642,15 +643,26 @@ impl FallbackSwitch {
         } else if end_running_time.map_or(false, |end_running_time| {
             end_running_time < state.timeout_running_time
         }) {
-            log!(
-                CAT,
-                obj: pad,
-                "Dropping trailing buffer {:?} before timeout {}",
-                buffer,
-                state.timeout_running_time
-            );
+            if raw_pad {
+                log!(
+                    CAT,
+                    obj: pad,
+                    "Dropping trailing raw {:?} before timeout {}",
+                    buffer,
+                    state.timeout_running_time
+                );
+                return Ok(gst::FlowSuccess::Ok);
+            } else {
+                log!(
+                    CAT,
+                    obj: pad,
+                    "Not dropping trailing non-raw {:?} before timeout {}",
+                    buffer,
+                    state.timeout_running_time
+                );
 
-            return Ok(gst::FlowSuccess::Ok);
+                None
+            }
         } else {
             pad_state.schedule_clock(
                 element,
@@ -699,15 +711,24 @@ impl FallbackSwitch {
                     start_running_time < output_running_time
                 },
             ) {
-                log!(
-                    CAT,
-                    obj: pad,
-                    "Dropping trailing buffer {:?} before output running time {}",
-                    buffer,
-                    state.output_running_time.display(),
-                );
-
-                return Ok(gst::FlowSuccess::Ok);
+                if raw_pad {
+                    log!(
+                        CAT,
+                        obj: pad,
+                        "Dropping trailing raw {:?} before output running time {}",
+                        buffer,
+                        state.output_running_time.display(),
+                    );
+                    return Ok(gst::FlowSuccess::Ok);
+                } else {
+                    log!(
+                        CAT,
+                        obj: pad,
+                        "Not dropping trailing non-raw {:?} before output running time {}",
+                        buffer,
+                        state.output_running_time.display(),
+                    );
+                }
             }
 
             if start_running_time.is_some() {
