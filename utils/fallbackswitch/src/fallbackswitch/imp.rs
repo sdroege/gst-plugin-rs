@@ -556,7 +556,7 @@ impl FallbackSwitch {
             trace!(
                 CAT,
                 obj: pad,
-                "Clipping buffer {:?} against segment {:?}",
+                "Clipping {:?} against segment {:?}",
                 buffer,
                 pad_state.segment,
             );
@@ -625,7 +625,7 @@ impl FallbackSwitch {
         log!(
             CAT,
             obj: pad,
-            "Handling buffer {:?} run ts start {} end {} pad active {}",
+            "Handling {:?} run ts start {} end {} pad active {}",
             buffer,
             start_running_time.display(),
             end_running_time.display(),
@@ -729,7 +729,7 @@ impl FallbackSwitch {
         drop(pad_state);
 
         if !is_active {
-            log!(CAT, obj: pad, "Dropping {:?}", buffer);
+            log!(CAT, obj: pad, "Dropping {:?} on inactive pad", buffer);
             return Ok(gst::FlowSuccess::Ok);
         }
         let _stream_lock = self.src_pad.stream_lock();
