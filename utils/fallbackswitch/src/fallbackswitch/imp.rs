@@ -731,8 +731,13 @@ impl FallbackSwitch {
                 }
             }
 
-            if start_running_time.is_some() {
-                state.output_running_time = start_running_time;
+            if let Some(start_running_time) = start_running_time {
+                if let Some(output_running_time) = state.output_running_time {
+                    state.output_running_time =
+                        Some(std::cmp::max(start_running_time, output_running_time));
+                } else {
+                    state.output_running_time = Some(start_running_time);
+                }
             }
 
             if let Some(end_running_time) = end_running_time {
