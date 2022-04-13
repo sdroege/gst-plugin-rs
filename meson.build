@@ -177,9 +177,16 @@ plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
 pkgconfig_install_dir = get_option('libdir') / 'pkgconfig'
 
 # Use all files checked in git to  figure out when to rebuild
-tmp = run_command(['git', 'ls-files', '.'])
-files = tmp.stdout().split()
-if tmp.returncode() == 0 and files.length() > 0
+git = find_program('git', required: false)
+files = []
+if git.found()
+  tmp = run_command([git, 'ls-files', '.'])
+  if tmp.returncode() == 0
+    files = tmp.stdout().split()
+  endif
+endif
+
+if files.length() > 0
   build_always_stale = false
 else
   warning('Could not retrieve list of files, always building the target')
