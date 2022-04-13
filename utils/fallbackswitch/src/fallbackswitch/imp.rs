@@ -276,29 +276,21 @@ impl SinkState {
         running_time: Option<gst::ClockTime>,
         extra_time: gst::ClockTime,
     ) -> Option<gst::SingleShotClockId> {
-        let clock = match element.clock() {
-            None => return None,
-            Some(clock) => clock,
-        };
+        let running_time = running_time?;
+        let clock = element.clock()?;
 
-        let base_time = element.base_time();
-        let wait_until = match running_time
-            .zip(base_time)
-            .map(|(running_time, base_time)| running_time + base_time)
-        {
-            Some(wait_until) => wait_until,
-            None => return None,
-        };
+        let base_time = element.base_time()?;
+        let wait_until = running_time + base_time;
         let wait_until = wait_until.saturating_add(extra_time);
 
-        let now = clock.time();
+        let now = clock.time()?;
 
         /* If the buffer is already late, skip the clock wait */
-        if now.map_or(true, |now| wait_until < now) {
+        if wait_until < now {
             debug!(
                 CAT,
                 obj: element,
-                "Skipping buffer wait until {} - clock already {:?}",
+                "Skipping buffer wait until {} - clock already {}",
                 wait_until,
                 now
             );
@@ -308,7 +300,7 @@ impl SinkState {
         debug!(
             CAT,
             obj: element,
-            "Scheduling buffer wait until {} = {:?} + extra {:?} + base time {:?}",
+            "Scheduling buffer wait until {} = {} + extra {} + base time {}",
             wait_until,
             running_time,
             extra_time,
@@ -450,19 +442,14 @@ impl FallbackSwitch {
             Some(clock) => clock,
         };
 
-        let timeout_running_time = running_time
-            .saturating_add(state.upstream_latency + settings.timeout + settings.latency);
-
-        let base_time = element.base_time();
-
-        let wait_until = match Some(timeout_running_time)
-            .zip(base_time)
-            .map(|(running_time, base_time)| running_time + base_time)
-        {
-            Some(wait_until) => wait_until,
+        let base_time = match element.base_time() {
+            Some(base_time) => base_time,
             None => return,
         };
 
+        let timeout_running_time = running_time
+            .saturating_add(state.upstream_latency + settings.timeout + settings.latency);
+        let wait_until = timeout_running_time + base_time;
         state.timeout_running_time = timeout_running_time;
 
         /* If we're already running behind, fire the timeout immediately */
@@ -554,10 +541,10 @@ impl FallbackSwitch {
         log!(
             CAT,
             obj: pad,
-            "Handling buffer {:?} run ts start {:?} end {:?} pad active {}",
+            "Handling buffer {:?} run ts start {} end {} pad active {}",
             buffer,
-            start_running_time,
-            end_running_time,
+            start_running_time.display(),
+            end_running_time.display(),
             is_active
         );
 
