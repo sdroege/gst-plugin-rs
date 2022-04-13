@@ -693,13 +693,18 @@ impl FallbackSwitch {
         let discont_pending = state.discont_pending;
 
         if is_active {
-            if start_running_time < state.output_running_time {
+            if Option::zip(start_running_time, state.output_running_time).map_or(
+                false,
+                |(start_running_time, output_running_time)| {
+                    start_running_time < output_running_time
+                },
+            ) {
                 log!(
                     CAT,
                     obj: pad,
-                    "Dropping trailing buffer {:?} before timeout {}",
+                    "Dropping trailing buffer {:?} before output running time {}",
                     buffer,
-                    state.timeout_running_time
+                    state.output_running_time.display(),
                 );
 
                 return Ok(gst::FlowSuccess::Ok);
