@@ -248,6 +248,67 @@ impl SinkState {
         self.caps_info = CapsInfo::None;
     }
 
+    fn clip_buffer(&self, mut buffer: gst::Buffer) -> Option<gst::Buffer> {
+        match &self.caps_info {
+            CapsInfo::Audio(audio_info) => gst_audio::audio_buffer_clip(
+                buffer,
+                self.segment.upcast_ref(),
+                audio_info.rate(),
+                audio_info.bpf(),
+            ),
+            CapsInfo::Video(video_info) => {
+                let start_ts = buffer.pts();
+                let duration = buffer.duration().or_else(|| {
+                    if video_info.fps().numer() > 0 {
+                        gst::ClockTime::SECOND.mul_div_floor(
+                            video_info.fps().denom() as u64,
+                            video_info.fps().numer() as u64,
+                        )
+                    } else {
+                        None
+                    }
+                });
+                let end_ts = Option::zip(start_ts, duration)
+                    .map(|(start_ts, duration)| start_ts.saturating_add(duration));
+
+                let (clipped_start_ts, clipped_end_ts) = self.segment.clip(start_ts, end_ts)?;
+
+                let clipped_duration = Option::zip(clipped_start_ts, clipped_end_ts)
+                    .map(|(clipped_start_ts, clipped_end_ts)| clipped_end_ts - clipped_start_ts);
+
+                if clipped_start_ts != start_ts || clipped_duration != buffer.duration() {
+                    let buffer = buffer.make_mut();
+                    buffer.set_pts(clipped_start_ts);
+                    buffer.set_duration(clipped_duration);
+                }
+
+                Some(buffer)
+            }
+            CapsInfo::None => {
+                let start_ts = buffer.pts();
+                let end_ts = Option::zip(start_ts, buffer.duration())
+                    .map(|(start_ts, duration)| start_ts.saturating_add(duration));
+
+                // Can only clip buffers completely away, i.e. drop them, if they're raw
+                if let Some((clipped_start_ts, clipped_end_ts)) =
+                    self.segment.clip(start_ts, end_ts)
+                {
+                    let clipped_duration = Option::zip(clipped_start_ts, clipped_end_ts).map(
+                        |(clipped_start_ts, clipped_end_ts)| clipped_end_ts - clipped_start_ts,
+                    );
+
+                    if clipped_start_ts != start_ts || clipped_duration != buffer.duration() {
+                        let buffer = buffer.make_mut();
+                        buffer.set_pts(clipped_start_ts);
+                        buffer.set_duration(clipped_duration);
+                    }
+                }
+
+                Some(buffer)
+            }
+        }
+    }
+
     fn get_sync_time(
         &self,
         buffer: &gst::Buffer,
@@ -483,8 +544,36 @@ impl FallbackSwitch {
         &self,
         pad: &super::FallbackSwitchSinkPad,
         element: &super::FallbackSwitch,
-        mut buffer: gst::Buffer,
+        buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        let mut state = self.state.lock();
+        let settings = self.settings.lock().clone();
+        let pad = pad.downcast_ref().unwrap();
+        let pad_imp = FallbackSwitchSinkPad::from_instance(pad);
+
+        let mut buffer = {
+            let pad_state = pad_imp.state.lock();
+            trace!(
+                CAT,
+                obj: pad,
+                "Clipping buffer {:?} against segment {:?}",
+                buffer,
+                pad_state.segment,
+            );
+            match pad_state.clip_buffer(buffer) {
+                Some(buffer) => buffer,
+                None => {
+                    log!(
+                        CAT,
+                        obj: pad,
+                        "Dropping raw buffer completely out of segment",
+                    );
+
+                    return Ok(gst::FlowSuccess::Ok);
+                }
+            }
+        };
+
         /* There are 4 cases coming in:
          *  1. This is not the active pad but is higher priority:
          *    - become the active pad, then goto 4.
@@ -500,11 +589,6 @@ impl FallbackSwitch {
          */
 
         /* First see if we should become the active pad */
-        let mut state = self.state.lock();
-        let settings = self.settings.lock().clone();
-        let pad = pad.downcast_ref().unwrap();
-        let pad_imp = FallbackSwitchSinkPad::from_instance(pad);
-
         if state.active_sinkpad.as_ref() != Some(pad) && settings.auto_switch {
             let pad_settings = pad_imp.settings.lock().clone();
             let mut switch_to_pad = state.timed_out;
