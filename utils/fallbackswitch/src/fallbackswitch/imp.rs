@@ -754,6 +754,9 @@ impl FallbackSwitch {
         }
 
         let mut pad_state = pad_imp.state.lock();
+        if let Some(running_time) = end_running_time {
+            pad_state.current_running_time = Some(running_time);
+        }
         pad_state.is_healthy = pad_state.is_healthy(&state, &settings);
         drop(pad_state);
 
