@@ -696,12 +696,11 @@ impl FallbackSwitch {
             state
         };
 
-        let pad_state = pad_imp.state.lock();
+        let mut pad_state = pad_imp.state.lock();
         if pad_state.flushing {
             debug!(CAT, obj: element, "Flushing");
             return Err(gst::FlowError::Flushing);
         }
-        drop(pad_state);
 
         let is_active = state.active_sinkpad.as_ref() == Some(pad);
         let switched_pad = state.switched_pad;
@@ -753,7 +752,6 @@ impl FallbackSwitch {
             state.discont_pending = false;
         }
 
-        let mut pad_state = pad_imp.state.lock();
         if let Some(running_time) = end_running_time {
             pad_state.current_running_time = Some(running_time);
         }
