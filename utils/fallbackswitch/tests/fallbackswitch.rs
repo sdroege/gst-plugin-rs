@@ -558,6 +558,9 @@ fn setup_pipeline(
     switch.link_pads(Some("src"), &queue, Some("sink")).unwrap();
     queue.link_pads(Some("src"), &sink, Some("sink")).unwrap();
 
+    let sink_pad = switch.static_pad("sink_0").unwrap();
+    sink_pad.set_property("priority", 0u32);
+
     if let Some(live) = with_live_fallback {
         let fallback_src = gst::ElementFactory::make("appsrc", Some("fallback-src"))
             .unwrap()
@@ -581,6 +584,8 @@ fn setup_pipeline(
         fallback_src
             .link_pads(Some("src"), &switch, Some("sink_1"))
             .unwrap();
+        let sink_pad = switch.static_pad("sink_1").unwrap();
+        sink_pad.set_property("priority", 1u32);
     }
 
     pipeline.set_state(gst::State::Playing).unwrap();
