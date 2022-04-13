@@ -530,7 +530,7 @@ fn setup_pipeline(
             .field("format", "ARGB")
             .field("width", 320i32)
             .field("height", 240i32)
-            .field("framerate", gst::Fraction::new(1, 1))
+            .field("framerate", gst::Fraction::new(0, 1))
             .build(),
     );
 
@@ -575,7 +575,7 @@ fn setup_pipeline(
                 .field("format", "ARGB")
                 .field("width", 160i32)
                 .field("height", 120i32)
-                .field("framerate", gst::Fraction::new(1, 1))
+                .field("framerate", gst::Fraction::new(0, 1))
                 .build(),
         );
 
