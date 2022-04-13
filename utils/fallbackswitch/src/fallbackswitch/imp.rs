@@ -334,6 +334,7 @@ impl SinkState {
     fn schedule_clock(
         &mut self,
         element: &super::FallbackSwitch,
+        pad: &super::FallbackSwitchSinkPad,
         running_time: Option<gst::ClockTime>,
         extra_time: gst::ClockTime,
     ) -> Option<gst::SingleShotClockId> {
@@ -350,7 +351,7 @@ impl SinkState {
         if wait_until < now {
             debug!(
                 CAT,
-                obj: element,
+                obj: pad,
                 "Skipping buffer wait until {} - clock already {}",
                 wait_until,
                 now
@@ -360,7 +361,7 @@ impl SinkState {
 
         debug!(
             CAT,
-            obj: element,
+            obj: pad,
             "Scheduling buffer wait until {} = {} + extra {} + base time {}",
             wait_until,
             running_time,
@@ -637,6 +638,7 @@ impl FallbackSwitch {
         let output_clockid = if is_active {
             pad_state.schedule_clock(
                 element,
+                pad,
                 start_running_time,
                 state.upstream_latency + settings.latency,
             )
@@ -666,6 +668,7 @@ impl FallbackSwitch {
         } else {
             pad_state.schedule_clock(
                 element,
+                pad,
                 end_running_time,
                 state.upstream_latency + settings.timeout + settings.latency,
             )
