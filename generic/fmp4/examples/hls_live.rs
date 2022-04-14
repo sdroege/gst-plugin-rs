@@ -118,7 +118,7 @@ struct StreamState {
     trimmed_segments: VecDeque<UnreffedSegment>,
     start_date_time: Option<DateTime<Utc>>,
     start_time: Option<gst::ClockTime>,
-    media_sequence: i32,
+    media_sequence: u64,
     segment_index: u32,
 }
 
