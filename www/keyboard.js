@@ -39,6 +39,8 @@ Keyboard = function(element) {
      *
      * @event
      * @param {Number} keysym The keysym of the key being pressed.
+     * @param {String} modifier_state The string representation of
+     *                                all active modifiers.
      * @return {Boolean} true if the key event should be allowed through to the
      *                   browser, false otherwise.
      */
@@ -50,6 +52,8 @@ Keyboard = function(element) {
      *
      * @event
      * @param {Number} keysym The keysym of the key being released.
+     * @param {String} modifier_state The string representation of
+     *                                all active modifiers.
      */
     this.onkeyup = null;
 
@@ -2835,7 +2839,8 @@ Keyboard = function(element) {
             // Send key event
             if (guac_keyboard.onkeydown) {
 
-                var result = guac_keyboard.onkeydown(keysym_to_string[keysym]);
+                var result = guac_keyboard.onkeydown(keysym_to_string[keysym],
+                    modifier_state_to_str());
                 last_keydown_result[keysym] = result;
 
                 // Stop any current repeat
@@ -2846,8 +2851,9 @@ Keyboard = function(element) {
                 if (!no_repeat[keysym])
                     key_repeat_timeout = window.setTimeout(function() {
                         key_repeat_interval = window.setInterval(function() {
-                            guac_keyboard.onkeyup(keysym_to_string[keysym]);
-                            guac_keyboard.onkeydown(keysym_to_string[keysym]);
+                            var mods = modifier_state_to_str();
+                            guac_keyboard.onkeyup(keysym_to_string[keysym], mods);
+                            guac_keyboard.onkeydown(keysym_to_string[keysym], mods);
                         }, 50);
                     }, 500);
 
@@ -2879,7 +2885,8 @@ Keyboard = function(element) {
 
             // Send key event
             if (keysym !== null && guac_keyboard.onkeyup)
-                guac_keyboard.onkeyup(keysym_to_string[keysym]);
+                guac_keyboard.onkeyup(keysym_to_string[keysym],
+                    modifier_state_to_str());
 
         }
 
@@ -2949,6 +2956,21 @@ Keyboard = function(element) {
         guac_keyboard.modifiers = state;
 
     };
+
+    /**
+     * Constructs a string representing all currently pressed modifiers.
+     *
+     * @return {String} The resulting string.
+     */
+    var modifier_state_to_str = function modifier_state_to_str() {
+        let masks = []
+        if (guac_keyboard.modifiers.alt) masks.push("alt-mask");
+        if (guac_keyboard.modifiers.ctrl) masks.push("control-mask");
+        if (guac_keyboard.modifiers.meta) masks.push("meta-mask");
+        if (guac_keyboard.modifiers.shift) masks.push("shift-mask");
+        if (guac_keyboard.modifiers.hyper) masks.push("hyper-mask");
+        return masks.join('+')
+    }
 
     /**
      * Reads through the event log, removing events from the head of the log

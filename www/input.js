@@ -75,6 +75,11 @@ class Input {
         this.y = 0;
 
         /**
+         * @type {Integer}
+         */
+        this.lastTouch = 0;
+
+        /**
          * @type {function}
          */
         this.onmenuhotkey = null;
@@ -162,6 +167,7 @@ class Input {
 
         data["x"] = this.x;
         data["y"] = this.y;
+        data["modifier_state"] = this._modifierState(event);
 
         this.send(JSON.stringify(data));
     }
@@ -171,29 +177,61 @@ class Input {
      * @param {TouchEvent} event
      */
     _touch(event) {
-        var mask = 1;
-        var data = {};
+        var mod_state = this._modifierState(event);
 
+        // Use TouchUp for cancelled touch points
+        if (event.type === 'touchcancel') {
+            let data = {};
+
+            data["event"] = "TouchUp";
+            data["identifier"] = event.changedTouches[0].identifier;
+            data["x"] = this._clientToServerX(event.changedTouches[0].clientX);
+            data["y"] = this._clientToServerY(event.changedTouches[0].clientY);
+            data["modifier_state"] = mod_state;
+
+            this.send(JSON.stringify(data));
+            return;
+        }
+        
         if (event.type === 'touchstart') {
-            this.buttonMask |= mask;
-            data["event"] = "MouseButtonPress";
-            data["button"] = this.buttonMask;
-        } else if (event.type === 'touchend') {
-            this.buttonMask &= ~mask;
-            data["event"] = "MouseButtonRelease";
-            data["button"] = this.buttonMask;
+            var event_name = "TouchDown";
         } else if (event.type === 'touchmove') {
-            event.preventDefault();
-            data["event"] = "MouseMove";
+            var event_name = "TouchMotion";
+        } else if (event.type === 'touchend') {
+            var event_name = "TouchUp";
         }
 
-        this.x = this._clientToServerX(event.changedTouches[0].clientX);
-        this.y = this._clientToServerY(event.changedTouches[0].clientY);
+        for (let touch of event.changedTouches) {
+            let data = {};
 
-        data["x"] = this.x;
-        data["y"] = this.y;
+            data["event"] = event_name;
+            data["identifier"] = touch.identifier;
+            data["x"] = this._clientToServerX(touch.clientX);
+            data["y"] = this._clientToServerY(touch.clientY);
+            data["modifier_state"] = mod_state;
 
-        this.send(JSON.stringify(data));
+            if (event.type !== 'touchend') {
+                if ('force' in touch) {
+                    data["pressure"] = touch.force;
+                } else {
+                    data["pressure"] = NaN;
+                }
+            }
+
+            this.send(JSON.stringify(data));
+        }
+
+        if (event.timeStamp > this.lastTouch) {
+            let data = {};
+
+            data["event"] = "TouchFrame";
+            data["modifier_state"] = mod_state;
+
+            this.send(JSON.stringify(data));
+            this.lastTouch = event.timeStamp;
+        }
+
+        event.preventDefault();
     }
 
     /**
@@ -207,6 +245,7 @@ class Input {
             "y": this.y,
             "delta_x": -event.deltaX,
             "delta_y": -event.deltaY,
+            "modifier_state": this._modifierState(event),
         };
 
         this.send(JSON.stringify(data));
@@ -261,6 +300,18 @@ class Input {
      */
     _exitPointerLock() {
         document.exitPointerLock();
+    }
+
+    /**
+     * constructs the string representation for the active modifiers on the event
+     */
+    _modifierState(event) {
+        let masks = []
+        if (event.altKey) masks.push("alt-mask");
+        if (event.ctrlKey) masks.push("control-mask");
+        if (event.metaKey) masks.push("meta-mask");
+        if (event.shiftKey) masks.push("shift-mask");
+        return masks.join('+')
     }
 
     /**
@@ -395,6 +446,11 @@ class Input {
             this.listeners.push(addListener(this.element, 'mouseup', this._mouseButtonMovement, this));
         }
 
+        this.listeners.push(addListener(this.element, 'touchstart', this._touch, this));
+        this.listeners.push(addListener(this.element, 'touchend', this._touch, this));
+        this.listeners.push(addListener(this.element, 'touchmove', this._touch, this));
+        this.listeners.push(addListener(this.element, 'touchcancel', this._touch, this));
+
         // Adjust for scroll offset
         this.listeners.push(addListener(window, 'scroll', () => {
             this.m.scrollX = window.scrollX;
@@ -403,11 +459,11 @@ class Input {
 
         // Using guacamole keyboard because it has the keysym translations.
         this.keyboard = new Keyboard(window);
-        this.keyboard.onkeydown = (keysym) => {
-            this.send(JSON.stringify( {"event": "KeyPress", "key": keysym}));
+        this.keyboard.onkeydown = (keysym, state) => {
+            this.send(JSON.stringify( {"event": "KeyPress", "key": keysym, "modifier_state": state}));
         };
-        this.keyboard.onkeyup = (keysym) => {
-            this.send(JSON.stringify( {"event": "KeyRelease", "key": keysym}));
+        this.keyboard.onkeyup = (keysym, state) => {
+            this.send(JSON.stringify( {"event": "KeyRelease", "key": keysym, "modifier_state": state}));
         };
 
         this._windowMath();
