@@ -7,7 +7,6 @@ use futures::prelude::*;
 use gst::glib;
 use gst::glib::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_trace, gst_warning};
 use once_cell::sync::Lazy;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -69,7 +68,7 @@ impl Signaller {
         )
         .await?;
 
-        gst_info!(CAT, obj: element, "connected");
+        gst::info!(CAT, obj: element, "connected");
 
         // Channel for asynchronously sending out websocket message
         let (mut ws_sink, mut ws_stream) = ws.split();
@@ -82,7 +81,7 @@ impl Signaller {
         let send_task_handle = task::spawn(async move {
             while let Some(msg) = websocket_receiver.next().await {
                 if let Some(element) = element_clone.upgrade() {
-                    gst_trace!(CAT, obj: &element, "Sending websocket message {:?}", msg);
+                    gst::trace!(CAT, obj: &element, "Sending websocket message {:?}", msg);
                 }
                 ws_sink
                     .send(WsMessage::Text(serde_json::to_string(&msg).unwrap()))
@@ -90,7 +89,7 @@ impl Signaller {
             }
 
             if let Some(element) = element_clone.upgrade() {
-                gst_info!(CAT, obj: &element, "Done sending");
+                gst::info!(CAT, obj: &element, "Done sending");
             }
 
             ws_sink.send(WsMessage::Close(None)).await?;
@@ -111,14 +110,14 @@ impl Signaller {
                 if let Some(element) = element_clone.upgrade() {
                     match msg {
                         Ok(WsMessage::Text(msg)) => {
-                            gst_trace!(CAT, obj: &element, "Received message {}", msg);
+                            gst::trace!(CAT, obj: &element, "Received message {}", msg);
 
                             if let Ok(msg) = serde_json::from_str::<p::OutgoingMessage>(&msg) {
                                 match msg {
                                     p::OutgoingMessage::Registered(
                                         p::RegisteredMessage::Producer { peer_id, .. },
                                     ) => {
-                                        gst_info!(
+                                        gst::info!(
                                             CAT,
                                             obj: &element,
                                             "We are registered with the server, our peer id is {}",
@@ -128,12 +127,12 @@ impl Signaller {
                                     p::OutgoingMessage::Registered(_) => unreachable!(),
                                     p::OutgoingMessage::StartSession { peer_id } => {
                                         if let Err(err) = element.add_consumer(&peer_id) {
-                                            gst_warning!(CAT, obj: &element, "{}", err);
+                                            gst::warning!(CAT, obj: &element, "{}", err);
                                         }
                                     }
                                     p::OutgoingMessage::EndSession { peer_id } => {
                                         if let Err(err) = element.remove_consumer(&peer_id) {
-                                            gst_warning!(CAT, obj: &element, "{}", err);
+                                            gst::warning!(CAT, obj: &element, "{}", err);
                                         }
                                     }
                                     p::OutgoingMessage::Peer(p::PeerMessage {
@@ -151,13 +150,13 @@ impl Signaller {
                                                     .unwrap(),
                                                 ),
                                             ) {
-                                                gst_warning!(CAT, obj: &element, "{}", err);
+                                                gst::warning!(CAT, obj: &element, "{}", err);
                                             }
                                         }
                                         p::PeerMessageInner::Sdp(p::SdpMessage::Offer {
                                             ..
                                         }) => {
-                                            gst_warning!(
+                                            gst::warning!(
                                                 CAT,
                                                 obj: &element,
                                                 "Ignoring offer from peer"
@@ -173,12 +172,12 @@ impl Signaller {
                                                 None,
                                                 &candidate,
                                             ) {
-                                                gst_warning!(CAT, obj: &element, "{}", err);
+                                                gst::warning!(CAT, obj: &element, "{}", err);
                                             }
                                         }
                                     },
                                     _ => {
-                                        gst_warning!(
+                                        gst::warning!(
                                             CAT,
                                             obj: &element,
                                             "Ignoring unsupported message {:?}",
@@ -187,7 +186,7 @@ impl Signaller {
                                     }
                                 }
                             } else {
-                                gst_error!(
+                                gst::error!(
                                     CAT,
                                     obj: &element,
                                     "Unknown message from server: {}",
@@ -199,7 +198,7 @@ impl Signaller {
                             }
                         }
                         Ok(WsMessage::Close(reason)) => {
-                            gst_info!(
+                            gst::info!(
                                 CAT,
                                 obj: &element,
                                 "websocket connection closed: {:?}",
@@ -221,7 +220,7 @@ impl Signaller {
             }
 
             if let Some(element) = element_clone.upgrade() {
-                gst_info!(CAT, obj: &element, "Stopped websocket receiving");
+                gst::info!(CAT, obj: &element, "Stopped websocket receiving");
             }
         });
 
@@ -302,7 +301,7 @@ impl Signaller {
     }
 
     pub fn stop(&self, element: &WebRTCSink) {
-        gst_info!(CAT, obj: element, "Stopping now");
+        gst::info!(CAT, obj: element, "Stopping now");
 
         let mut state = self.state.lock().unwrap();
         let send_task_handle = state.send_task_handle.take();
@@ -313,7 +312,7 @@ impl Signaller {
 
                 if let Some(handle) = send_task_handle {
                     if let Err(err) = handle.await {
-                        gst_warning!(CAT, obj: element, "Error while joining send task: {}", err);
+                        gst::warning!(CAT, obj: element, "Error while joining send task: {}", err);
                     }
                 }
 
@@ -325,7 +324,7 @@ impl Signaller {
     }
 
     pub fn consumer_removed(&self, element: &WebRTCSink, peer_id: &str) {
-        gst_debug!(CAT, obj: element, "Signalling consumer {} removed", peer_id);
+        gst::debug!(CAT, obj: element, "Signalling consumer {} removed", peer_id);
 
         let state = self.state.lock().unwrap();
         let peer_id = peer_id.to_string();
@@ -390,12 +389,12 @@ impl ObjectImpl for Signaller {
                 let address: Option<_> = value.get().expect("type checked upstream");
 
                 if let Some(address) = address {
-                    gst_info!(CAT, "Signaller address set to {}", address);
+                    gst::info!(CAT, "Signaller address set to {}", address);
 
                     let mut settings = self.settings.lock().unwrap();
                     settings.address = Some(address);
                 } else {
-                    gst_error!(CAT, "address can't be None");
+                    gst::error!(CAT, "address can't be None");
                 }
             }
             "cafile" => {

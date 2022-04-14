@@ -6,7 +6,6 @@ use anyhow::{Context, Error};
 use once_cell::sync::Lazy;
 
 use gst::prelude::*;
-use gst::{gst_debug, gst_error, gst_trace, gst_warning};
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -49,11 +48,11 @@ impl StreamProducer {
     pub fn add_consumer(&self, consumer: &gst_app::AppSrc, consumer_id: &str) {
         let mut consumers = self.consumers.lock().unwrap();
         if consumers.consumers.get(consumer_id).is_some() {
-            gst_error!(CAT, "Consumer already added");
+            gst::error!(CAT, "Consumer already added");
             return;
         }
 
-        gst_debug!(CAT, "Adding consumer");
+        gst::debug!(CAT, "Adding consumer");
 
         consumer.set_property("max-buffers", 0u64);
         consumer.set_property("max-bytes", 0u64);
@@ -67,7 +66,7 @@ impl StreamProducer {
             .add_probe(gst::PadProbeType::EVENT_UPSTREAM, move |_pad, info| {
                 if let Some(gst::PadProbeData::Event(ref ev)) = info.data {
                     if gst_video::UpstreamForceKeyUnitEvent::parse(ev).is_ok() {
-                        gst_debug!(CAT, "Requesting keyframe");
+                        gst::debug!(CAT, "Requesting keyframe");
                         let _ = appsink_clone.send_event(ev.clone());
                     }
                 }
@@ -85,9 +84,9 @@ impl StreamProducer {
     /// Remove a consumer appsrc by id
     pub fn remove_consumer(&self, consumer_id: &str) {
         if let Some(consumer) = self.consumers.lock().unwrap().consumers.remove(consumer_id) {
-            gst_debug!(CAT, "Removed consumer {}", consumer.appsrc.name());
+            gst::debug!(CAT, "Removed consumer {}", consumer.appsrc.name());
         } else {
-            gst_debug!(CAT, "Consumer {} not found", consumer_id);
+            gst::debug!(CAT, "Consumer {} not found", consumer_id);
         }
     }
 
@@ -123,7 +122,7 @@ impl<'a> From<&'a gst_app::AppSink> for StreamProducer {
                     let sample = match appsink.pull_sample() {
                         Ok(sample) => sample,
                         Err(_err) => {
-                            gst_debug!(CAT, "Failed to pull sample");
+                            gst::debug!(CAT, "Failed to pull sample");
                             return Err(gst::FlowError::Flushing);
                         }
                     };
@@ -132,7 +131,7 @@ impl<'a> From<&'a gst_app::AppSink> for StreamProducer {
                         return Ok(gst::FlowSuccess::Ok);
                     }
 
-                    gst_trace!(CAT, "processing sample");
+                    gst::trace!(CAT, "processing sample");
 
                     let latency = consumers.current_latency;
                     let latency_updated = mem::replace(&mut consumers.latency_updated, false);
@@ -167,7 +166,7 @@ impl<'a> From<&'a gst_app::AppSink> for StreamProducer {
                                 .is_ok()
                                 && !requested_keyframe
                             {
-                                gst_debug!(CAT, "Requesting keyframe for first buffer");
+                                gst::debug!(CAT, "Requesting keyframe for first buffer");
                                 appsink.send_event(
                                     gst_video::UpstreamForceKeyUnitEvent::builder()
                                         .all_headers(true)
@@ -183,7 +182,7 @@ impl<'a> From<&'a gst_app::AppSink> for StreamProducer {
 
                     for consumer in current_consumers {
                         if let Err(err) = consumer.push_sample(&sample) {
-                            gst_warning!(CAT, "Failed to push sample: {}", err);
+                            gst::warning!(CAT, "Failed to push sample: {}", err);
                         }
                     }
 
@@ -266,7 +265,7 @@ impl StreamConsumer {
         appsrc.set_callbacks(
             gst_app::AppSrcCallbacks::builder()
                 .enough_data(move |_appsrc| {
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         "consumer {} is not consuming fast enough, old samples are getting dropped",
                         consumer_id

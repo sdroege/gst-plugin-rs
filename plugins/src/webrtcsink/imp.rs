@@ -1,8 +1,8 @@
 use anyhow::Context;
 use gst::glib;
+use gst::glib::value::FromValue;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
-use gst::{gst_debug, gst_error, gst_info, gst_log, gst_trace, gst_warning};
 use gst_rtp::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
@@ -236,7 +236,7 @@ fn create_navigation_event<N: IsA<gst_video::Navigation>>(sink: &N, msg: &str) {
     if let Ok(event) = event {
         sink.send_event(event.structure());
     } else {
-        gst_error!(CAT, "Invalid navigation event: {:?}", msg);
+        gst::error!(CAT, "Invalid navigation event: {:?}", msg);
     }
 }
 
@@ -609,7 +609,7 @@ impl VideoEncoder {
             .build();
 
         if !caps.is_strictly_equal(&current_caps) {
-            gst_log!(
+            gst::log!(
                 CAT,
                 obj: element,
                 "consumer {}: setting bitrate {} and caps {} on encoder {:?}",
@@ -671,7 +671,7 @@ impl CongestionController {
         let delay_factor = sent_minus_received as f64 / target_bitrate;
         let last_update_time = self.last_update_time.replace(std::time::Instant::now());
 
-        gst_trace!(
+        gst::trace!(
             CAT,
             obj: element,
             "consumer {}: considering stats {}",
@@ -699,7 +699,7 @@ impl CongestionController {
             CongestionControlOp::Increase(if let Some(ema) = self.bitrate_ema {
                 let bitrate_stdev = self.bitrate_emvar.sqrt();
 
-                gst_trace!(
+                gst::trace!(
                     CAT,
                     obj: element,
                     "consumer {}: Old bitrate: {}, ema: {}, stddev: {}",
@@ -714,7 +714,7 @@ impl CongestionController {
                 // homegrown algorithm not implementing gcc, revisit when implementing
                 // the rest of the RFC
                 if target_bitrate < ema - 7. * bitrate_stdev {
-                    gst_trace!(
+                    gst::trace!(
                         CAT,
                         obj: element,
                         "consumer {}: below last congestion window",
@@ -723,7 +723,7 @@ impl CongestionController {
                     /* Multiplicative increase */
                     IncreaseType::Multiplicative(1.03)
                 } else if target_bitrate > ema + 7. * bitrate_stdev {
-                    gst_trace!(
+                    gst::trace!(
                         CAT,
                         obj: element,
                         "consumer {}: above last congestion window",
@@ -753,7 +753,7 @@ impl CongestionController {
                     let packets_per_frame = f64::ceil(bits_per_frame / (1200. * 8.));
                     let avg_packet_size_bits = bits_per_frame / packets_per_frame;
 
-                    gst_trace!(
+                    gst::trace!(
                         CAT,
                         obj: element,
                         "consumer {}: still in last congestion window",
@@ -765,7 +765,7 @@ impl CongestionController {
                 }
             } else {
                 /* Multiplicative increase */
-                gst_trace!(
+                gst::trace!(
                     CAT,
                     obj: element,
                     "consumer {}: outside congestion window",
@@ -814,19 +814,19 @@ impl CongestionController {
         let mut rtt = 0.;
         let mut n_rtts = 0u64;
         for inbound_stat in &inbound_rtp_stats {
-            if let Err(err) = (|| -> Result<(), gst::structure::GetError> {
+            if let Err(err) = (|| -> Result<(), gst::structure::GetError<<<f64 as FromValue>::Checker as glib::value::ValueTypeChecker>::Error>> {
                 rtt += inbound_stat.get::<f64>("round-trip-time")?;
                 n_rtts += 1;
 
                 Ok(())
             })() {
-                gst_debug!(CAT, "{:?}", err);
+                gst::debug!(CAT, "{:?}", err);
             }
         }
 
         rtt /= f64::max(1., n_rtts as f64);
 
-        gst_log!(CAT, "Round trip time: {}", rtt);
+        gst::log!(CAT, "Round trip time: {}", rtt);
 
         rtt
     }
@@ -877,7 +877,7 @@ impl CongestionController {
         control_op: CongestionControlOp,
         controller_type: ControllerType,
     ) {
-        gst_trace!(
+        gst::trace!(
             CAT,
             obj: element,
             "consumer {}: applying congestion control operation {:?}",
@@ -933,7 +933,7 @@ impl CongestionController {
             ) / n_encoders;
 
         if target_bitrate != prev_bitrate {
-            gst_info!(
+            gst::info!(
                 CAT,
                 "{:?} {} => {}",
                 control_op,
@@ -1012,14 +1012,14 @@ impl State {
             && self.codec_discovery_done
         {
             if let Err(err) = self.signaller.start(element) {
-                gst_error!(CAT, obj: element, "error: {}", err);
+                gst::error!(CAT, obj: element, "error: {}", err);
                 gst::element_error!(
                     element,
                     gst::StreamError::Failed,
                     ["Failed to start signaller {}", err]
                 );
             } else {
-                gst_info!(CAT, "Started signaller");
+                gst::info!(CAT, "Started signaller");
                 self.signaller_state = SignallerState::Started;
             }
         }
@@ -1029,7 +1029,7 @@ impl State {
         if self.signaller_state == SignallerState::Started {
             self.signaller.stop(element);
             self.signaller_state = SignallerState::Stopped;
-            gst_info!(CAT, "Stopped signaller");
+            gst::info!(CAT, "Stopped signaller");
         }
     }
 }
@@ -1102,7 +1102,7 @@ impl Consumer {
             payloader_caps_mut.set_simple(&[("ssrc", &ssrc)]);
         }
 
-        gst_info!(
+        gst::info!(
             CAT,
             obj: element,
             "Requesting WebRTC pad for consumer {} with caps {}",
@@ -1154,7 +1154,7 @@ impl Consumer {
         webrtc_pad: &WebRTCPad,
         codecs: &BTreeMap<i32, Codec>,
     ) -> Result<(), Error> {
-        gst_info!(
+        gst::info!(
             CAT,
             obj: element,
             "Connecting input stream {} for consumer {}",
@@ -1342,7 +1342,7 @@ impl InputStream {
 
 impl NavigationEventHandler {
     pub fn new(element: &super::WebRTCSink, webrtcbin: &gst::Element) -> Self {
-        gst_info!(CAT, "Creating navigation data channel");
+        gst::info!(CAT, "Creating navigation data channel");
         let channel = webrtcbin.emit_by_name::<WebRTCDataChannel>(
             "create-data-channel",
             &[
@@ -1414,7 +1414,7 @@ impl WebRTCSink {
                             payload: pt,
                         })
                     } else {
-                        gst_warning!(CAT, obj: &self.instance(),
+                        gst::warning!(CAT, obj: &self.instance(),
                                 "Too many formats for available payload type range, ignoring {}",
                                 s);
                         None
@@ -1428,7 +1428,7 @@ impl WebRTCSink {
     /// Prepare for accepting consumers, by setting
     /// up StreamProducers for each of our sink pads
     fn prepare(&self, element: &super::WebRTCSink) -> Result<(), Error> {
-        gst_debug!(CAT, obj: element, "preparing");
+        gst::debug!(CAT, obj: element, "preparing");
 
         self.state
             .lock()
@@ -1443,7 +1443,7 @@ impl WebRTCSink {
     /// Unprepare by stopping consumers, then the signaller object.
     /// Might abort codec discovery
     fn unprepare(&self, element: &super::WebRTCSink) -> Result<(), Error> {
-        gst_info!(CAT, obj: element, "unpreparing");
+        gst::info!(CAT, obj: element, "unpreparing");
 
         let mut state = self.state.lock().unwrap();
 
@@ -1487,7 +1487,7 @@ impl WebRTCSink {
 
     /// Called by the signaller when it has encountered an error
     pub fn handle_signalling_error(&self, element: &super::WebRTCSink, error: anyhow::Error) {
-        gst_error!(CAT, obj: element, "Signalling error: {:?}", error);
+        gst::error!(CAT, obj: element, "Signalling error: {:?}", error);
 
         gst::element_error!(
             element,
@@ -1510,7 +1510,7 @@ impl WebRTCSink {
                 .emit_by_name::<()>("set-local-description", &[&offer, &None::<gst::Promise>]);
 
             if let Err(err) = state.signaller.handle_sdp(element, peer_id, &offer) {
-                gst_warning!(
+                gst::warning!(
                     CAT,
                     "Failed to handle SDP for consumer {}: {}",
                     peer_id,
@@ -1525,21 +1525,21 @@ impl WebRTCSink {
     fn negotiate(&self, element: &super::WebRTCSink, peer_id: &str) {
         let state = self.state.lock().unwrap();
 
-        gst_debug!(CAT, obj: element, "Negotiating for peer {}", peer_id);
+        gst::debug!(CAT, obj: element, "Negotiating for peer {}", peer_id);
 
         if let Some(consumer) = state.consumers.get(peer_id) {
             let element = element.downgrade();
-            gst_debug!(CAT, "Creating offer for peer {}", peer_id);
+            gst::debug!(CAT, "Creating offer for peer {}", peer_id);
             let peer_id = peer_id.to_string();
             let promise = gst::Promise::with_change_func(move |reply| {
-                gst_debug!(CAT, "Created offer for peer {}", peer_id);
+                gst::debug!(CAT, "Created offer for peer {}", peer_id);
 
                 if let Some(element) = element.upgrade() {
                     let this = Self::from_instance(&element);
                     let reply = match reply {
                         Ok(Some(reply)) => reply,
                         Ok(None) => {
-                            gst_warning!(
+                            gst::warning!(
                                 CAT,
                                 obj: &element,
                                 "Promise returned without a reply for {}",
@@ -1549,7 +1549,7 @@ impl WebRTCSink {
                             return;
                         }
                         Err(err) => {
-                            gst_warning!(
+                            gst::warning!(
                                 CAT,
                                 obj: &element,
                                 "Promise returned with an error for {}: {:?}",
@@ -1567,7 +1567,7 @@ impl WebRTCSink {
                     {
                         this.on_offer_created(&element, offer, &peer_id);
                     } else {
-                        gst_warning!(
+                        gst::warning!(
                             CAT,
                             "Reply without an offer for consumer {}: {:?}",
                             peer_id,
@@ -1582,7 +1582,7 @@ impl WebRTCSink {
                 .webrtcbin
                 .emit_by_name::<()>("create-offer", &[&None::<gst::Structure>, &promise]);
         } else {
-            gst_debug!(
+            gst::debug!(
                 CAT,
                 obj: element,
                 "consumer for peer {} no longer exists",
@@ -1604,7 +1604,7 @@ impl WebRTCSink {
                 .signaller
                 .handle_ice(element, &peer_id, &candidate, Some(sdp_m_line_index), None)
         {
-            gst_warning!(
+            gst::warning!(
                 CAT,
                 "Failed to handle ICE for consumer {}: {}",
                 peer_id,
@@ -1628,7 +1628,7 @@ impl WebRTCSink {
             return Err(WebRTCSinkError::DuplicateConsumerId(peer_id.to_string()));
         }
 
-        gst_info!(CAT, obj: element, "Adding consumer {}", peer_id);
+        gst::info!(CAT, obj: element, "Adding consumer {}", peer_id);
 
         let pipeline = gst::Pipeline::new(Some(&format!("consumer-pipeline-{}", peer_id)));
 
@@ -1678,7 +1678,7 @@ impl WebRTCSink {
                 match state {
                     gst_webrtc::WebRTCPeerConnectionState::Failed => {
                         let this = Self::from_instance(&element);
-                        gst_warning!(
+                        gst::warning!(
                             CAT,
                             obj: &element,
                             "Connection state for consumer {} failed",
@@ -1687,7 +1687,7 @@ impl WebRTCSink {
                         let _ = this.remove_consumer(&element, &peer_id_clone, true);
                     }
                     _ => {
-                        gst_log!(
+                        gst::log!(
                             CAT,
                             obj: &element,
                             "Connection state for consumer {} changed: {:?}",
@@ -1709,7 +1709,7 @@ impl WebRTCSink {
 
                 match state {
                     gst_webrtc::WebRTCICEConnectionState::Failed => {
-                        gst_warning!(
+                        gst::warning!(
                             CAT,
                             obj: &element,
                             "Ice connection state for consumer {} failed",
@@ -1718,7 +1718,7 @@ impl WebRTCSink {
                         let _ = this.remove_consumer(&element, &peer_id_clone, true);
                     }
                     _ => {
-                        gst_log!(
+                        gst::log!(
                             CAT,
                             obj: &element,
                             "Ice connection state for consumer {} changed: {:?}",
@@ -1753,7 +1753,7 @@ impl WebRTCSink {
                 webrtcbin.property::<gst_webrtc::WebRTCICEGatheringState>("ice-gathering-state");
 
             if let Some(element) = element_clone.upgrade() {
-                gst_log!(
+                gst::log!(
                     CAT,
                     obj: &element,
                     "Ice gathering state for consumer {} changed: {:?}",
@@ -1831,7 +1831,7 @@ impl WebRTCSink {
                     let this = Self::from_instance(&element);
                     match msg.view() {
                         gst::MessageView::Error(err) => {
-                            gst_error!(
+                            gst::error!(
                                 CAT,
                                 "Consumer {} error: {}, details: {:?}",
                                 peer_id_clone,
@@ -1857,12 +1857,12 @@ impl WebRTCSink {
                         }
                         gst::MessageView::Latency(..) => {
                             if let Some(pipeline) = pipeline_clone.upgrade() {
-                                gst_info!(CAT, obj: &pipeline, "Recalculating latency");
+                                gst::info!(CAT, obj: &pipeline, "Recalculating latency");
                                 let _ = pipeline.recalculate_latency();
                             }
                         }
                         gst::MessageView::Eos(..) => {
-                            gst_error!(
+                            gst::error!(
                                 CAT,
                                 "Unexpected end of stream for consumer {}",
                                 peer_id_clone
@@ -1986,7 +1986,7 @@ impl WebRTCSink {
                     if let Err(err) =
                         consumer.connect_input_stream(element, producer, webrtc_pad, &state.codecs)
                     {
-                        gst_error!(
+                        gst::error!(
                             CAT,
                             obj: element,
                             "Failed to connect input stream {} for consumer {}: {}",
@@ -1998,7 +1998,7 @@ impl WebRTCSink {
                         break;
                     }
                 } else {
-                    gst_error!(
+                    gst::error!(
                         CAT,
                         obj: element,
                         "No producer to connect consumer {} to",
@@ -2059,7 +2059,7 @@ impl WebRTCSink {
         let sdp_m_line_index = sdp_m_line_index.ok_or(WebRTCSinkError::MandatorySdpMlineIndex)?;
 
         if let Some(consumer) = state.consumers.get(peer_id) {
-            gst_trace!(CAT, "adding ice candidate for peer {}", peer_id);
+            gst::trace!(CAT, "adding ice candidate for peer {}", peer_id);
             consumer
                 .webrtcbin
                 .emit_by_name::<()>("add-ice-candidate", &[&sdp_m_line_index, &candidate]);
@@ -2093,7 +2093,7 @@ impl WebRTCSink {
                             .media(webrtc_pad.media_idx)
                             .and_then(|media| media.as_text().ok());
 
-                        gst_warning!(
+                        gst::warning!(
                             CAT,
                             "consumer {} refused media {}: {:?}",
                             peer_id,
@@ -2116,7 +2116,7 @@ impl WebRTCSink {
                 {
                     webrtc_pad.payload = Some(payload);
                 } else {
-                    gst_warning!(
+                    gst::warning!(
                         CAT,
                         "consumer {} did not provide valid payload for media index {}",
                         peer_id,
@@ -2136,7 +2136,7 @@ impl WebRTCSink {
             let peer_id = peer_id.to_string();
 
             let promise = gst::Promise::with_change_func(move |reply| {
-                gst_debug!(CAT, "received reply {:?}", reply);
+                gst::debug!(CAT, "received reply {:?}", reply);
                 if let Some(element) = element.upgrade() {
                     let this = Self::from_instance(&element);
 
@@ -2270,7 +2270,7 @@ impl WebRTCSink {
                     /* We don't consider this fatal, as long as we end up with one
                      * potential codec for each input stream
                      */
-                    gst_warning!(
+                    gst::warning!(
                         CAT,
                         obj: element,
                         "Codec discovery pipeline failed: {}",
@@ -2342,11 +2342,11 @@ impl WebRTCSink {
                         // Nothing changed
                         true
                     } else {
-                        gst_error!(CAT, obj: pad, "Renegotiation is not supported");
+                        gst::error!(CAT, obj: pad, "Renegotiation is not supported");
                         false
                     }
                 } else {
-                    gst_info!(CAT, obj: pad, "Received caps event {:?}", e);
+                    gst::info!(CAT, obj: pad, "Received caps event {:?}", e);
 
                     let mut all_pads_have_caps = true;
 
@@ -2384,7 +2384,7 @@ impl WebRTCSink {
 
                                 match fut.await {
                                     Ok(Err(err)) => {
-                                        gst_error!(CAT, obj: &element, "error: {}", err);
+                                        gst::error!(CAT, obj: &element, "error: {}", err);
                                         gst::element_error!(
                                             element,
                                             gst::StreamError::CodecNotFound,
@@ -2775,7 +2775,7 @@ impl ObjectImpl for WebRTCSink {
                     let element = args[0].get::<super::WebRTCSink>().expect("signal arg");
                     let enc = args[3].get::<gst::Element>().unwrap();
 
-                    gst_debug!(
+                    gst::debug!(
                         CAT,
                         obj: &element,
                         "applying default configuration on encoder {:?}",
@@ -2864,7 +2864,7 @@ impl ElementImpl for WebRTCSink {
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         if element.current_state() > gst::State::Ready {
-            gst_error!(CAT, "element pads can only be requested before starting");
+            gst::error!(CAT, "element pads can only be requested before starting");
             return None;
         }
 
@@ -2985,10 +2985,10 @@ impl NavigationImpl for WebRTCSink {
 
         state.streams.iter_mut().for_each(|(_, stream)| {
             if stream.sink_pad.name().starts_with("video_") {
-                gst_log!(CAT, "Navigating to: {:?}", event);
+                gst::log!(CAT, "Navigating to: {:?}", event);
                 // FIXME: Handle multi tracks.
                 if !stream.sink_pad.push_event(event.clone()) {
-                    gst_info!(CAT, "Could not send event: {:?}", event);
+                    gst::info!(CAT, "Could not send event: {:?}", event);
                 }
             }
         });
