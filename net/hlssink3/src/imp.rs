@@ -125,10 +125,7 @@ impl HlsSink3 {
 
         let (target_duration, playlist_type) = {
             let settings = self.settings.lock().unwrap();
-            (
-                settings.target_duration as f32,
-                settings.playlist_type.clone(),
-            )
+            (settings.target_duration as f32, settings.playlist_type)
         };
 
         let mut state = self.state.lock().unwrap();

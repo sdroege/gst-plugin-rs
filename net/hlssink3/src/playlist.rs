@@ -24,7 +24,7 @@ static SEGMENT_IDX_PATTERN: Lazy<regex::Regex> = Lazy::new(|| Regex::new(r"(%0(\
 #[derive(Debug, Clone)]
 pub struct Playlist {
     inner: MediaPlaylist,
-    playlist_index: i32,
+    playlist_index: u64,
     status: PlaylistRenderState,
     turn_vod: bool,
 }
@@ -94,7 +94,7 @@ impl Playlist {
         }
 
         self.playlist_index += 1;
-        self.inner.media_sequence = self.playlist_index as i32 - self.inner.segments.len() as i32;
+        self.inner.media_sequence = self.playlist_index as u64 - self.inner.segments.len() as u64;
     }
 
     /// Sets the playlist to started state.
