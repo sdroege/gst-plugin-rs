@@ -13,12 +13,22 @@
  *
  * Since: plugins-rs-0.8.0
  */
+#[cfg(feature = "doc")]
+use gst::prelude::*;
+
 mod border;
 mod colordetect;
+mod videocompare;
+
+pub use videocompare::{HashAlgorithm, PadDistance, VideoCompareMessage};
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), gst::glib::BoolError> {
+    #[cfg(feature = "doc")]
+    HashAlgorithm::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
+
     border::register(plugin)?;
-    colordetect::register(plugin)
+    colordetect::register(plugin)?;
+    videocompare::register(plugin)
 }
 
 gst::plugin_define!(

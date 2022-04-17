@@ -7129,11 +7129,100 @@
                     }
                 },
                 "rank": "none"
+            },
+            "videocompare": {
+                "author": "Rafael Caricio <rafael@caricio.com>",
+                "description": "Compare similarity of video frames",
+                "hierarchy": [
+                    "GstVideoCompare",
+                    "GstVideoAggregator",
+                    "GstAggregator",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Filter/Video",
+                "long-name": "Image comparison",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "video/x-raw:\n         format: { RGB, RGBA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "sink",
+                        "presence": "request",
+                        "type": "GstVideoAggregatorPad"
+                    },
+                    "src": {
+                        "caps": "video/x-raw:\n         format: { RGB, RGBA }\n          width: [ 1, 2147483647 ]\n         height: [ 1, 2147483647 ]\n      framerate: [ 0/1, 2147483647/1 ]\n",
+                        "direction": "src",
+                        "presence": "always",
+                        "type": "GstVideoAggregatorPad"
+                    }
+                },
+                "properties": {
+                    "hash-algo": {
+                        "blurb": "Which hashing algorithm to use for image comparisons",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "blockhash (4)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstVideoCompareHashAlgorithm",
+                        "writable": true
+                    },
+                    "max-dist-threshold": {
+                        "blurb": "Maximum distance threshold to emit messages when an image is detected, by default emits only on exact match",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "0",
+                        "max": "1.79769e+308",
+                        "min": "0",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gdouble",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
             }
         },
         "filename": "gstvideofx",
         "license": "MPL",
-        "other-types": {},
+        "other-types": {
+            "GstVideoCompareHashAlgorithm": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Mean: The Mean hashing algorithm.",
+                        "name": "mean",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Gradient: The Gradient hashing algorithm.",
+                        "name": "gradient",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "VertGradient: The Vertical-Gradient hashing algorithm.",
+                        "name": "vertgradient",
+                        "value": "2"
+                    },
+                    {
+                        "desc": "DoubleGradient: The Double-Gradient hashing algorithm.",
+                        "name": "doublegradient",
+                        "value": "3"
+                    },
+                    {
+                        "desc": "Blockhash: The [Blockhash](https://github.com/commonsmachinery/blockhash-rfc) algorithm.",
+                        "name": "blockhash",
+                        "value": "4"
+                    }
+                ]
+            }
+        },
         "package": "gst-plugin-videofx",
         "source": "gst-plugin-videofx",
         "tracers": {},
