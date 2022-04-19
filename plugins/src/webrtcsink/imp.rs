@@ -913,7 +913,7 @@ impl State {
 
     fn maybe_start_signaller(&mut self, element: &super::WebRTCSink) {
         if self.signaller_state == SignallerState::Stopped
-            && element.current_state() == gst::State::Playing
+            && element.current_state() >= gst::State::Paused
             && self.codec_discovery_done
         {
             if let Err(err) = self.signaller.start(element) {
