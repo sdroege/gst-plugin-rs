@@ -176,32 +176,16 @@ extra_env_str = ','.join(extra_env_list)
 plugins_install_dir = get_option('libdir') / 'gstreamer-1.0'
 pkgconfig_install_dir = get_option('libdir') / 'pkgconfig'
 
-# Use all files checked in git to  figure out when to rebuild
-git = find_program('git', required: false)
-files = []
-if git.found()
-  tmp = run_command([git, 'ls-files', '.'])
-  if tmp.returncode() == 0
-    files = tmp.stdout().split()
-  endif
-endif
 
-if files.length() > 0
-  build_always_stale = false
-else
-  warning('Could not retrieve list of files, always building the target')
-  build_always_stale = true
-endif
-
+python = import('python').find_installation()
 rs_plugins = custom_target('gst-plugins-rs',
   build_by_default: true,
   output: output,
   console: true,
   install: true,
   install_dir: plugins_install_dir,
-  input: files,
-  build_always_stale: build_always_stale,
   depends: depends,
+  depfile: 'gst-plugins-rs.dep',
   command: [cargo_wrapper,
     'build',
     meson.current_build_dir(),
@@ -212,14 +196,15 @@ rs_plugins = custom_target('gst-plugins-rs',
     extra_env_str,
     get_option('prefix'),
     get_option('libdir'),
-    extensions])
+    '--depfile', '@DEPFILE@',
+    '--exts', extensions,
+  ])
 
 plugins = rs_plugins.to_list()
 
 # We don't need to pass a command as we depends on the target above
 # but it is currently mandatory ( https://github.com/mesonbuild/meson/issues/8059 )
 # so use python as it's guaranteed to be present on any setup
-python = import('python').find_installation()
 custom_target('gst-plugins-rs-pc-files',
   build_by_default: true,
   output: pc_files,
