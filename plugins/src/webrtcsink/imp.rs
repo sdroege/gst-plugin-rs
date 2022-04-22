@@ -1673,7 +1673,7 @@ impl WebRTCSink {
 
         let clock = element.clock();
 
-        pipeline.set_clock(clock.as_ref()).unwrap();
+        pipeline.use_clock(clock.as_ref()).unwrap();
         pipeline.set_start_time(gst::ClockTime::NONE);
         pipeline.set_base_time(element.base_time().unwrap());
 
