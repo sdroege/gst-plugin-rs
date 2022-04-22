@@ -89,7 +89,7 @@ impl MccEnc {
         if let Some(ref uuid) = settings.uuid {
             let _ = write!(buffer, "UUID={}\r\n", uuid);
         } else {
-            let _ = write!(buffer, "UUID={:X}\r\n", Uuid::new_v4().to_hyphenated());
+            let _ = write!(buffer, "UUID={:X}\r\n", Uuid::new_v4().as_hyphenated());
         }
 
         let _ = write!(
