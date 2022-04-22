@@ -271,7 +271,7 @@ impl Default for State {
 fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error> {
     assert!(caps.is_fixed());
 
-    for feature in caps.features(0) {
+    if let Some(feature) = caps.features(0) {
         if feature.contains(CUDA_MEMORY_FEATURE) {
             return Ok(gst::parse_bin_from_description(
                 "cudaupload ! cudaconvert ! cudascale ! videorate drop-only=true skip-to-first=true",
@@ -1393,7 +1393,7 @@ impl WebRTCSink {
                 .webrtcbin
                 .emit_by_name::<()>("set-local-description", &[&offer, &None::<gst::Promise>]);
 
-            if let Err(err) = state.signaller.handle_sdp(element, &peer_id, &offer) {
+            if let Err(err) = state.signaller.handle_sdp(element, peer_id, &offer) {
                 gst_warning!(
                     CAT,
                     "Failed to handle SDP for consumer {}: {}",
@@ -1401,7 +1401,7 @@ impl WebRTCSink {
                     err
                 );
 
-                state.remove_consumer(element, &peer_id, true);
+                state.remove_consumer(element, peer_id, true);
             }
         }
     }
@@ -1734,7 +1734,7 @@ impl WebRTCSink {
         })?;
 
         if settings.enable_data_channel_navigation {
-            state.navigation_handler = Some(NavigationEventHandler::new(&element, &webrtcbin));
+            state.navigation_handler = Some(NavigationEventHandler::new(element, &webrtcbin));
         }
 
         state.consumers.insert(peer_id.to_string(), consumer);
@@ -1755,7 +1755,7 @@ impl WebRTCSink {
         //
         // This is completely safe, as we know that by now all conditions are gathered:
         // webrtcbin is in the Ready state, and all its transceivers have codec_preferences.
-        self.negotiate(&element, peer_id);
+        self.negotiate(element, peer_id);
 
         pipeline.set_state(gst::State::Playing).map_err(|err| {
             WebRTCSinkError::ConsumerPipelineError {
@@ -2004,8 +2004,7 @@ impl WebRTCSink {
         } else {
             make_element("audiotestsrc", None)?
         };
-        let mut elements = Vec::new();
-        elements.push(src.clone());
+        let mut elements = vec![src.clone()];
 
         if codec.is_video {
             elements.push(make_converter_for_video_caps(caps)?);
@@ -2018,7 +2017,7 @@ impl WebRTCSink {
         gst::Element::link_many(elements_slice)
             .with_context(|| format!("Running discovery pipeline for caps {}", caps))?;
 
-        let (_, _, pay) = setup_encoding(&pipe.0, &capsfilter, &caps, codec, None, true)?;
+        let (_, _, pay) = setup_encoding(&pipe.0, &capsfilter, caps, codec, None, true)?;
 
         let sink = make_element("fakesink", None)?;
 
@@ -2042,7 +2041,7 @@ impl WebRTCSink {
                 gst::MessageView::Error(err) => {
                     pipe.0.debug_to_dot_file_with_ts(
                         gst::DebugGraphDetails::all(),
-                        format!("webrtcsink-discovery-error"),
+                        "webrtcsink-discovery-error".to_string(),
                     );
                     return Err(err.error().into());
                 }
@@ -2051,7 +2050,7 @@ impl WebRTCSink {
 
                     pipe.0.debug_to_dot_file_with_ts(
                         gst::DebugGraphDetails::all(),
-                        format!("webrtcsink-discovery-done"),
+                        "webrtcsink-discovery-done".to_string(),
                     );
 
                     if let Some(s) = caps.structure(0) {
