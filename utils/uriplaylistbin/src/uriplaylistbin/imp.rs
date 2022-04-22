@@ -1052,7 +1052,7 @@ impl UriPlaylistBin {
         }
 
         let n_streaming = state.streaming.len();
-        if n_streaming > MAX_STREAMING_ITEMS {
+        if n_streaming >= MAX_STREAMING_ITEMS {
             gst_log!(
                 CAT,
                 obj: element,
