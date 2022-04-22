@@ -101,6 +101,7 @@ impl Default for Settings {
     }
 }
 
+#[derive(Debug)]
 enum Status {
     /// all good element is working
     Running,
@@ -120,6 +121,7 @@ impl Status {
     }
 }
 
+#[derive(Debug)]
 struct State {
     streamsynchronizer: gst::Element,
     concat_audio: Vec<gst::Element>,
@@ -702,6 +704,14 @@ impl Playlist {
         item.set_waiting_for_stream_collection()?;
 
         Ok(Some(item))
+    }
+}
+
+impl std::fmt::Debug for Playlist {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Playlist")
+            .field("uris", &self.uris)
+            .finish()
     }
 }
 
