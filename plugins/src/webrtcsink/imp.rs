@@ -1712,6 +1712,12 @@ impl WebRTCSink {
                                 }
                             }
                         }
+                        gst::MessageView::Latency(..) => {
+                            if let Some(pipeline) = pipeline_clone.upgrade() {
+                                gst_info!(CAT, obj: &pipeline, "Recalculating latency");
+                                let _ = pipeline.recalculate_latency();
+                            }
+                        }
                         gst::MessageView::Eos(..) => {
                             gst_error!(
                                 CAT,
