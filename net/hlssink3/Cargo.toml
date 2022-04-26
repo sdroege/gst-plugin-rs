@@ -2,7 +2,7 @@
 name = "gst-plugin-hlssink3"
 description = "HLS (HTTP Live Streaming) Plugin"
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
-version = "0.8.3"
+version = "0.8.4"
 authors = ["Rafael Caricio <rafael@caricio.com>"]
 edition = "2021"
 license = "MPL-2.0"

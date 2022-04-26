@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-ffv1"
-version = "0.8.3"
+version = "0.8.4"
 authors = ["Arun Raghavan <arun@asymptotic.io>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"

@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-closedcaption"
-version = "0.8.3"
+version = "0.8.4"
 authors = ["Sebastian Dröge <sebastian@centricular.com>", "Jordan Petridis <jordan@centricular.com>", "Matthew Waters <matthew@centricular.com>"]
 license = "MPL-2.0"
 edition = "2021"

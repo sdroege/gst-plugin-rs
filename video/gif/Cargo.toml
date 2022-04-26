@@ -1,6 +1,6 @@
 [package]
 name = "gst-plugin-gif"
-version = "0.8.3"
+version = "0.8.4"
 authors = ["Markus Ebner <info@ebner-markus.de>"]
 repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
 license = "MIT OR Apache-2.0"
