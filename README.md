@@ -86,6 +86,7 @@ You will find the following plugins in this repository:
 
     - `videofx`: Plugin with various video filters.
       - `roundedcorners`: Element to make the corners of a video rounded via the alpha channel.
+      - `colordetect`: A pass-through filter able to detect the dominant color(s) on incoming frames, using [color-thief](https://github.com/RazrFalcon/color-thief-rs).
 
     - `webp`: WebP decoder based on the [libwebp-sys-2](https://github.com/qnighy/libwebp-sys2-rs) library.
 
