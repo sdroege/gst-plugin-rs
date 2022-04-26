@@ -179,7 +179,7 @@ impl<T: AsRawSocket> Async<T> {
             }
         }
 
-        let source = Reactor::with_mut(|reactor| reactor.insert_io(fd))?;
+        let source = Reactor::with_mut(|reactor| reactor.insert_io(sock))?;
         Ok(Async {
             source,
             io: Some(io),
