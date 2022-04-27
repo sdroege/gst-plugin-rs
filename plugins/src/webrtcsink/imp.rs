@@ -336,6 +336,9 @@ fn configure_encoder(enc: &gst::Element) {
                 enc.set_property_from_str("rc-mode", "cbr-ld-hq");
                 enc.set_property("zerolatency", true);
             }
+            "vaapih264enc" => {
+                enc.set_property("bitrate", 2048u32);
+            }
             _ => (),
         }
     }
@@ -516,8 +519,8 @@ impl VideoEncoder {
     fn bitrate(&self) -> i32 {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.property::<i32>("target-bitrate"),
-            "x264enc" | "nvh264enc" => (self.element.property::<u32>("bitrate") * 1000) as i32,
-            _ => unreachable!(),
+            "x264enc" | "nvh264enc" | "vaapih264enc" => (self.element.property::<u32>("bitrate") * 1000) as i32,
+            factory => unreachable!("Factory {} is currently not supported", factory),
         }
     }
 
@@ -538,10 +541,10 @@ impl VideoEncoder {
     fn set_bitrate(&mut self, element: &super::WebRTCSink, bitrate: i32) {
         match self.factory_name.as_str() {
             "vp8enc" | "vp9enc" => self.element.set_property("target-bitrate", bitrate),
-            "x264enc" | "nvh264enc" => self
+            "x264enc" | "nvh264enc" | "vaapih264enc" => self
                 .element
                 .set_property("bitrate", (bitrate / 1000) as u32),
-            _ => unreachable!(),
+            factory => unreachable!("Factory {} is currently not supported", factory),
         }
 
         let current_caps = self.filter.property::<gst::Caps>("caps");
