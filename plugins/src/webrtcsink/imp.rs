@@ -339,6 +339,7 @@ fn configure_encoder(enc: &gst::Element) {
             "vaapih264enc" | "vaapivp8enc" => {
                 enc.set_property("bitrate", 2048u32);
                 enc.set_property("keyframe-period", 2560u32);
+                enc.set_property_from_str("rate-control", "cbr");
             }
             _ => (),
         }
