@@ -97,6 +97,8 @@ struct State {
     // Start / end PTS of the whole stream
     earliest_pts: Option<gst::ClockTime>,
     end_pts: Option<gst::ClockTime>,
+
+    headers_since_eos: bool,
 }
 
 pub(crate) struct FMP4Mux {
@@ -515,7 +517,7 @@ impl FMP4Mux {
             );
 
             let mut fmp4_header = None;
-            if state.sequence_number == 0 {
+            if !state.headers_since_eos {
                 let mut buffer = state.stream_header.as_ref().unwrap().copy();
                 {
                     let buffer = buffer.get_mut().unwrap();
@@ -530,7 +532,7 @@ impl FMP4Mux {
                 fmp4_header = Some(buffer);
 
                 state.earliest_pts = Some(earliest_pts);
-                state.sequence_number = 1;
+                state.headers_since_eos = true;
             }
 
             let mut buffers = drain_gops
@@ -542,6 +544,9 @@ impl FMP4Mux {
             // TODO: Write prft boxes before moof
             // TODO: Write sidx boxes before moof and rewrite once offsets are known
 
+            if state.sequence_number == 0 {
+                state.sequence_number = 1;
+            }
             let sequence_number = state.sequence_number;
             state.sequence_number += 1;
             let (mut fmp4_fragment_header, moof_offset) =
@@ -923,6 +928,7 @@ impl FMP4Mux {
                         }
                     }
                 }
+                self.state.lock().unwrap().headers_since_eos = false;
 
                 pad.event_default(Some(element), event)
             }
