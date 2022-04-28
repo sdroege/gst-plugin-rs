@@ -68,11 +68,17 @@ struct Settings {
 /// Represents a codec we can offer
 #[derive(Debug)]
 struct Codec {
-    is_video: bool,
     encoder: gst::ElementFactory,
     payloader: gst::ElementFactory,
     caps: gst::Caps,
     payload: i32,
+}
+
+impl Codec {
+    fn is_video(&self) -> bool {
+        self.encoder
+            .has_type(gst::ElementFactoryType::VIDEO_ENCODER)
+    }
 }
 
 /// Wrapper around our sink pads
@@ -346,7 +352,7 @@ fn setup_encoding(
     ssrc: Option<u32>,
     twcc: bool,
 ) -> Result<(gst::Element, gst::Element, gst::Element), Error> {
-    let conv = match codec.is_video {
+    let conv = match codec.is_video() {
         true => make_converter_for_video_caps(input_caps)?.upcast(),
         false => gst::parse_bin_from_description("audioresample ! audioconvert", true)?.upcast(),
     };
@@ -392,7 +398,7 @@ fn setup_encoding(
             .with_context(|| "Linking encoding elements")?;
     }
 
-    let conv_caps = if codec.is_video {
+    let conv_caps = if codec.is_video() {
         let mut structure_builder = gst::Structure::builder("video/x-raw")
             .field("pixel-aspect-ratio", gst::Fraction::new(1, 1));
 
@@ -1115,7 +1121,7 @@ impl Consumer {
 
         pay_filter.set_property("caps", caps);
 
-        if codec.is_video {
+        if codec.is_video() {
             let video_info = gst_video::VideoInfo::from_caps(&webrtc_pad.in_caps)?;
             let mut enc = VideoEncoder::new(
                 enc,
@@ -1274,9 +1280,8 @@ impl WebRTCSink {
         settings
             .video_caps
             .iter()
-            .map(|s| (true, s))
-            .chain(settings.audio_caps.iter().map(|s| (false, s)))
-            .filter_map(move |(is_video, s)| {
+            .chain(settings.audio_caps.iter())
+            .filter_map(move |s| {
                 let caps = gst::Caps::builder_full().structure(s.to_owned()).build();
 
                 Option::zip(
@@ -1291,7 +1296,6 @@ impl WebRTCSink {
                     /* Assign a payload type to the codec */
                     if let Some(pt) = payload.next() {
                         Some(Codec {
-                            is_video,
                             encoder: encoder.clone(),
                             payloader: payloader.clone(),
                             caps,
@@ -2005,14 +2009,14 @@ impl WebRTCSink {
     ) -> Result<gst::Structure, Error> {
         let pipe = PipelineWrapper(gst::Pipeline::new(None));
 
-        let src = if codec.is_video {
+        let src = if codec.is_video() {
             make_element("videotestsrc", None)?
         } else {
             make_element("audiotestsrc", None)?
         };
         let mut elements = vec![src.clone()];
 
-        if codec.is_video {
+        if codec.is_video() {
             elements.push(make_converter_for_video_caps(caps)?);
         }
 
@@ -2102,7 +2106,7 @@ impl WebRTCSink {
 
         let futs = codecs
             .iter()
-            .filter(|(_, codec)| codec.is_video == is_video)
+            .filter(|(_, codec)| codec.is_video() == is_video)
             .map(|(_, codec)| WebRTCSink::run_discovery_pipeline(element, codec, &sink_caps));
 
         for ret in futures::future::join_all(futs).await {
