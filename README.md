@@ -100,8 +100,7 @@ WEBRTCSINK_SIGNALLING_SERVER_LOG=debug cargo run --bin server
 In the second, run:
 
 ``` shell
-cd www
-python3 -m http.server
+python3 -m http.server -d www/
 ```
 
 In the third, run:
