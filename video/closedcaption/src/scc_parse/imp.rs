@@ -457,7 +457,9 @@ impl SccParse {
         }
 
         self.srcpad.push_list(buffers).map_err(|err| {
-            gst_error!(CAT, obj: element, "Pushing buffer returned {:?}", err);
+            if err != gst::FlowError::Flushing && err != gst::FlowError::Eos {
+                gst_error!(CAT, obj: element, "Pushing buffer returned {:?}", err);
+            }
             err
         })?;
 
