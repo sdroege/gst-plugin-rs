@@ -564,7 +564,7 @@ impl MccParse {
         }
 
         self.srcpad.push(buffer).map_err(|err| {
-            if err != gst::FlowError::Flushing {
+            if err != gst::FlowError::Flushing && err != gst::FlowError::Eos {
                 gst::error!(CAT, obj: element, "Pushing buffer returned {:?}", err);
             }
             err
