@@ -50,6 +50,8 @@ const DEFAULT_DO_FEC: bool = true;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
 
+const DEFAULT_START_BITRATE: u32 = 2048000;
+
 /// User configuration
 struct Settings {
     video_caps: gst::Caps,
@@ -59,6 +61,7 @@ struct Settings {
     cc_heuristic: WebRTCSinkCongestionControl,
     min_bitrate: u32,
     max_bitrate: u32,
+    start_bitrate: u32,
     do_fec: bool,
     do_retransmission: bool,
     enable_data_channel_navigation: bool,
@@ -268,6 +271,7 @@ impl Default for Settings {
             turn_server: None,
             min_bitrate: DEFAULT_MIN_BITRATE,
             max_bitrate: DEFAULT_MAX_BITRATE,
+            start_bitrate: DEFAULT_START_BITRATE,
             do_fec: DEFAULT_DO_FEC,
             do_retransmission: DEFAULT_DO_RETRANSMISSION,
             enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
@@ -324,13 +328,13 @@ fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error
 
 /// Default configuration for known encoders, can be disabled
 /// by returning True from an encoder-setup handler.
-fn configure_encoder(enc: &gst::Element) {
+fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
     if let Some(factory) = enc.factory() {
         match factory.name().as_str() {
             "vp8enc" | "vp9enc" => {
                 enc.set_property("deadline", 1i64);
                 enc.set_property("threads", 12i32);
-                enc.set_property("target-bitrate", 2560000i32);
+                enc.set_property("target-bitrate", start_bitrate);
                 enc.set_property("cpu-used", -16i32);
                 enc.set_property("keyframe-max-dist", 2000i32);
                 enc.set_property_from_str("keyframe-mode", "disabled");
@@ -344,7 +348,7 @@ fn configure_encoder(enc: &gst::Element) {
                 enc.set_property("lag-in-frames", 0i32);
             }
             "x264enc" => {
-                enc.set_property("bitrate", 2048u32);
+                enc.set_property("bitrate", start_bitrate / 1000);
                 enc.set_property_from_str("tune", "zerolatency");
                 enc.set_property_from_str("speed-preset", "ultrafast");
                 enc.set_property("threads", 12u32);
@@ -353,13 +357,13 @@ fn configure_encoder(enc: &gst::Element) {
                 enc.set_property("vbv-buf-capacity", 120u32);
             }
             "nvh264enc" => {
-                enc.set_property("bitrate", 2048u32);
+                enc.set_property("bitrate", start_bitrate / 1000);
                 enc.set_property("gop-size", 2560i32);
                 enc.set_property_from_str("rc-mode", "cbr-ld-hq");
                 enc.set_property("zerolatency", true);
             }
             "vaapih264enc" | "vaapivp8enc" => {
-                enc.set_property("bitrate", 2048u32);
+                enc.set_property("bitrate", start_bitrate / 1000);
                 enc.set_property("keyframe-period", 2560u32);
                 enc.set_property_from_str("rate-control", "cbr");
             }
@@ -2474,6 +2478,15 @@ impl ObjectImpl for WebRTCSink {
                     DEFAULT_MAX_BITRATE,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecUInt::new(
+                    "start-bitrate",
+                    "Start Bitrate",
+                    "Start bitrate to use (in bit/sec)",
+                    1,
+                    u32::MAX as u32,
+                    DEFAULT_START_BITRATE,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
                 glib::ParamSpecBoxed::new(
                     "stats",
                     "Consumer statistics",
@@ -2590,6 +2603,10 @@ impl ObjectImpl for WebRTCSink {
                 let mut settings = self.settings.lock().unwrap();
                 settings.max_bitrate = value.get::<u32>().expect("type checked upstream");
             }
+            "start-bitrate" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.start_bitrate = value.get::<u32>().expect("type checked upstream");
+            }
             "do-fec" => {
                 let mut settings = self.settings.lock().unwrap();
                 settings.do_fec = value.get::<bool>().expect("type checked upstream");
@@ -2642,6 +2659,10 @@ impl ObjectImpl for WebRTCSink {
             "max-bitrate" => {
                 let settings = self.settings.lock().unwrap();
                 settings.max_bitrate.to_value()
+            }
+            "start-bitrate" => {
+                let settings = self.settings.lock().unwrap();
+                settings.start_bitrate.to_value()
             }
             "do-fec" => {
                 let settings = self.settings.lock().unwrap();
@@ -2751,7 +2772,7 @@ impl ObjectImpl for WebRTCSink {
                 )
                 .accumulator(|_hint, _ret, value| !value.get::<bool>().unwrap())
                 .class_handler(|_, args| {
-                    let element = args[0].get::<gst::Element>().unwrap();
+                    let element = args[0].get::<super::WebRTCSink>().expect("signal arg");
                     let enc = args[3].get::<gst::Element>().unwrap();
 
                     gst_debug!(
@@ -2761,8 +2782,10 @@ impl ObjectImpl for WebRTCSink {
                         enc
                     );
 
-                    configure_encoder(&enc);
-
+                    let this = element.imp();
+                    let settings = this.settings.lock().unwrap();
+                    configure_encoder(&enc, settings.start_bitrate);
+                    
                     // Return false here so that latter handlers get called
                     Some(false.to_value())
                 })
