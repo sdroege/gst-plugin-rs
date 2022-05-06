@@ -308,8 +308,17 @@ impl OnvifAggregator {
             if let Some(start) = self.lookup_reference_timestamp(media_buffer) {
                 let end = start + duration;
 
-                if let Some(latest_frame) = state.meta_frames.iter().next_back() {
-                    if latest_frame.timestamp > end || timeout {
+                if timeout {
+                    gst::debug!(
+                        CAT,
+                        obj: element,
+                        "Media buffer spanning {} -> {} is ready (timeout)",
+                        start,
+                        end
+                    );
+                    Ok(Some((self.media_sink_pad.pop_buffer().unwrap(), Some(end))))
+                } else if let Some(latest_frame) = state.meta_frames.iter().next_back() {
+                    if latest_frame.timestamp > end {
                         gst::debug!(
                             CAT,
                             obj: element,
