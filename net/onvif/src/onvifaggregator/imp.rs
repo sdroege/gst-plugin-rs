@@ -436,9 +436,10 @@ impl AggregatorImpl for OnvifAggregator {
             QueryViewMut::AcceptCaps(q) => {
                 let caps = q.caps_owned();
                 let class = aggregator.class();
-                let templ_caps = class.pad_template("media").unwrap().caps();
+                let templ = class.pad_template("media").unwrap();
+                let templ_caps = templ.caps();
 
-                q.set_result(caps.is_subset(&templ_caps));
+                q.set_result(caps.is_subset(templ_caps));
 
                 true
             }
@@ -500,14 +501,15 @@ impl AggregatorImpl for OnvifAggregator {
                 } else {
                     let filter = q.filter_owned();
                     let class = aggregator.class();
-                    let templ_caps = class.pad_template("meta").unwrap().caps();
+                    let templ = class.pad_template("meta").unwrap();
+                    let templ_caps = templ.caps();
 
                     if let Some(filter) = filter {
                         q.set_result(
-                            &filter.intersect_with_mode(&templ_caps, gst::CapsIntersectMode::First),
+                            &filter.intersect_with_mode(templ_caps, gst::CapsIntersectMode::First),
                         );
                     } else {
-                        q.set_result(&templ_caps);
+                        q.set_result(templ_caps);
                     }
 
                     true
@@ -520,9 +522,10 @@ impl AggregatorImpl for OnvifAggregator {
                 } else {
                     let caps = q.caps_owned();
                     let class = aggregator.class();
-                    let templ_caps = class.pad_template("meta").unwrap().caps();
+                    let templ = class.pad_template("meta").unwrap();
+                    let templ_caps = templ.caps();
 
-                    q.set_result(caps.is_subset(&templ_caps));
+                    q.set_result(caps.is_subset(templ_caps));
                 }
 
                 true
