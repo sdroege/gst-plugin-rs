@@ -308,9 +308,7 @@ impl TextAhead {
             gst::EventView::Caps(_caps) => {
                 // set caps on src pad
                 let templ = element.class().pad_template("src").unwrap();
-                let _ = self
-                    .src_pad
-                    .push_event(gst::event::Caps::new(&templ.caps()));
+                let _ = self.src_pad.push_event(gst::event::Caps::new(templ.caps()));
                 true
             }
             _ => pad.event_default(Some(element), event),
