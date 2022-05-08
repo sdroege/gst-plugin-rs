@@ -83,7 +83,7 @@ impl RTPJitterBufferItem {
             ptr::write(
                 ptr.as_ptr(),
                 ffi::RTPJitterBufferItem {
-                    data: buffer.into_ptr() as *mut _,
+                    data: buffer.into_glib_ptr() as *mut _,
                     next: ptr::null_mut(),
                     prev: ptr::null_mut(),
                     r#type: 0,
