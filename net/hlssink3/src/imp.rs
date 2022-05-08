@@ -783,8 +783,8 @@ impl ElementImpl for HlsSink3 {
         _caps: Option<&gst::Caps>,
     ) -> Option<gst::Pad> {
         let mut settings = self.settings.lock().unwrap();
-        match templ.name_template().as_ref().map(|val| val.as_str()) {
-            Some("audio") => {
+        match templ.name_template() {
+            "audio" => {
                 if settings.audio_sink {
                     gst::debug!(
                         CAT,
@@ -804,7 +804,7 @@ impl ElementImpl for HlsSink3 {
 
                 Some(sink_pad.upcast())
             }
-            Some("video") => {
+            "video" => {
                 if settings.video_sink {
                     gst::debug!(
                         CAT,
@@ -824,11 +824,7 @@ impl ElementImpl for HlsSink3 {
 
                 Some(sink_pad.upcast())
             }
-            None => {
-                gst::debug!(CAT, obj: element, "template name returned `None`",);
-                None
-            }
-            Some(other_name) => {
+            other_name => {
                 gst::debug!(
                     CAT,
                     obj: element,
