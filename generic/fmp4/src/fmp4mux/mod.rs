@@ -53,6 +53,8 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 
 #[derive(Debug)]
 pub(crate) struct Buffer {
+    /// Track index
+    idx: usize,
     buffer: gst::Buffer,
     // Running times
     pts: gst::ClockTime,
@@ -63,23 +65,30 @@ pub(crate) struct Buffer {
 pub(crate) struct HeaderConfiguration<'a> {
     variant: Variant,
     update: bool,
-    caps: &'a gst::Caps,
+    /// First caps must be the video/reference stream. Must be in the order the tracks are going to
+    /// be used later for the fragments too.
+    caps: &'a [&'a gst::Caps],
     write_mehd: bool,
     duration: Option<gst::ClockTime>,
 }
 
 #[derive(Debug)]
-pub(crate) struct FragmentHeaderConfiguration<'a> {
-    variant: Variant,
-    sequence_number: u32,
-    caps: &'a gst::Caps,
-    buffers: &'a [Buffer],
+pub(crate) struct FragmentTimingInfo {
     earliest_pts: gst::ClockTime,
     start_dts: Option<gst::ClockTime>,
     end_pts: gst::ClockTime,
     end_dts: Option<gst::ClockTime>,
     #[allow(dead_code)]
     dts_offset: Option<gst::ClockTime>,
+}
+
+#[derive(Debug)]
+pub(crate) struct FragmentHeaderConfiguration<'a> {
+    variant: Variant,
+    sequence_number: u32,
+    caps: &'a [&'a gst::Caps],
+    timing_infos: &'a [Option<FragmentTimingInfo>],
+    buffers: &'a [Buffer],
 }
 
 #[allow(clippy::upper_case_acronyms)]

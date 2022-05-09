@@ -8,7 +8,7 @@
 
 use gst::prelude::*;
 
-use anyhow::{bail, Context, Error};
+use anyhow::{anyhow, bail, Context, Error};
 
 use super::Buffer;
 
@@ -332,7 +332,7 @@ fn cmaf_brands_from_caps(caps: &gst::CapsRef, compatible_brands: &mut Vec<&'stat
 
 fn brands_from_variant_and_caps(
     variant: super::Variant,
-    caps: &gst::CapsRef,
+    caps: &[&gst::Caps],
 ) -> (&'static [u8; 4], Vec<&'static [u8; 4]>) {
     match variant {
         super::Variant::ISO => (b"iso6", vec![b"iso6"]),
@@ -343,7 +343,8 @@ fn brands_from_variant_and_caps(
         super::Variant::CMAF => {
             let mut compatible_brands = vec![b"iso6", b"cmfc"];
 
-            cmaf_brands_from_caps(caps, &mut compatible_brands);
+            assert_eq!(caps.len(), 1);
+            cmaf_brands_from_caps(caps[0], &mut compatible_brands);
 
             (b"cmf2", compatible_brands)
         }
@@ -383,7 +384,9 @@ fn write_moov(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
     write_full_box(v, b"mvhd", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
         write_mvhd(v, cfg, creation_time)
     })?;
-    write_box(v, b"trak", |v| write_trak(v, cfg, creation_time))?;
+    for (idx, caps) in cfg.caps.iter().enumerate() {
+        write_box(v, b"trak", |v| write_trak(v, cfg, idx, caps, creation_time))?;
+    }
     write_box(v, b"mvex", |v| write_mvex(v, cfg))?;
 
     Ok(())
@@ -427,8 +430,8 @@ fn write_mvhd(
     v.extend(creation_time.to_be_bytes());
     // Modification time
     v.extend(creation_time.to_be_bytes());
-    // Timescale
-    v.extend(caps_to_timescale(cfg.caps).to_be_bytes());
+    // Timescale: uses the reference track timescale
+    v.extend(caps_to_timescale(cfg.caps[0]).to_be_bytes());
     // Duration
     v.extend(0u64.to_be_bytes());
 
@@ -460,7 +463,7 @@ fn write_mvhd(
     v.extend([0u8; 6 * 4]);
 
     // Next track id
-    v.extend(2u32.to_be_bytes());
+    v.extend((cfg.caps.len() as u32 + 1).to_be_bytes());
 
     Ok(())
 }
@@ -472,6 +475,8 @@ const TKHD_FLAGS_TRACK_IN_PREVIEW: u32 = 0x4;
 fn write_trak(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
+    idx: usize,
+    caps: &gst::CapsRef,
     creation_time: u64,
 ) -> Result<(), Error> {
     write_full_box(
@@ -479,20 +484,22 @@ fn write_trak(
         b"tkhd",
         FULL_BOX_VERSION_1,
         TKHD_FLAGS_TRACK_ENABLED | TKHD_FLAGS_TRACK_IN_MOVIE | TKHD_FLAGS_TRACK_IN_PREVIEW,
-        |v| write_tkhd(v, cfg, creation_time),
+        |v| write_tkhd(v, cfg, idx, caps, creation_time),
     )?;
 
     // TODO: write edts if necessary: for audio tracks to remove initialization samples
     // TODO: write edts optionally for negative DTS instead of offsetting the DTS
 
-    write_box(v, b"mdia", |v| write_mdia(v, cfg, creation_time))?;
+    write_box(v, b"mdia", |v| write_mdia(v, cfg, caps, creation_time))?;
 
     Ok(())
 }
 
 fn write_tkhd(
     v: &mut Vec<u8>,
-    cfg: &super::HeaderConfiguration,
+    _cfg: &super::HeaderConfiguration,
+    idx: usize,
+    caps: &gst::CapsRef,
     creation_time: u64,
 ) -> Result<(), Error> {
     // Creation time
@@ -500,7 +507,7 @@ fn write_tkhd(
     // Modification time
     v.extend(creation_time.to_be_bytes());
     // Track ID
-    v.extend(1u32.to_be_bytes());
+    v.extend((idx as u32 + 1).to_be_bytes());
     // Reserved
     v.extend(0u32.to_be_bytes());
     // Duration
@@ -515,7 +522,7 @@ fn write_tkhd(
     v.extend(0u16.to_be_bytes());
 
     // Volume
-    let s = cfg.caps.structure(0).unwrap();
+    let s = caps.structure(0).unwrap();
     match s.name() {
         "audio/mpeg" => v.extend((1u16 << 8).to_be_bytes()),
         _ => v.extend(0u16.to_be_bytes()),
@@ -572,18 +579,19 @@ fn write_tkhd(
 fn write_mdia(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
+    caps: &gst::CapsRef,
     creation_time: u64,
 ) -> Result<(), Error> {
     write_full_box(v, b"mdhd", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
-        write_mdhd(v, cfg, creation_time)
+        write_mdhd(v, cfg, caps, creation_time)
     })?;
     write_full_box(v, b"hdlr", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-        write_hdlr(v, cfg)
+        write_hdlr(v, cfg, caps)
     })?;
 
     // TODO: write elng if needed
 
-    write_box(v, b"minf", |v| write_minf(v, cfg))?;
+    write_box(v, b"minf", |v| write_minf(v, cfg, caps))?;
 
     Ok(())
 }
@@ -601,7 +609,8 @@ fn language_code(lang: impl std::borrow::Borrow<[u8; 3]>) -> u16 {
 
 fn write_mdhd(
     v: &mut Vec<u8>,
-    cfg: &super::HeaderConfiguration,
+    _cfg: &super::HeaderConfiguration,
+    caps: &gst::CapsRef,
     creation_time: u64,
 ) -> Result<(), Error> {
     // Creation time
@@ -609,7 +618,7 @@ fn write_mdhd(
     // Modification time
     v.extend(creation_time.to_be_bytes());
     // Timescale
-    v.extend(caps_to_timescale(cfg.caps).to_be_bytes());
+    v.extend(caps_to_timescale(caps).to_be_bytes());
     // Duration
     v.extend(0u64.to_be_bytes());
 
@@ -623,11 +632,15 @@ fn write_mdhd(
     Ok(())
 }
 
-fn write_hdlr(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), Error> {
+fn write_hdlr(
+    v: &mut Vec<u8>,
+    _cfg: &super::HeaderConfiguration,
+    caps: &gst::CapsRef,
+) -> Result<(), Error> {
     // Pre-defined
     v.extend([0u8; 4]);
 
-    let s = cfg.caps.structure(0).unwrap();
+    let s = caps.structure(0).unwrap();
     let (handler_type, name) = match s.name() {
         "video/x-h264" | "video/x-h265" => (b"vide", b"VideoHandler\0"),
         "audio/mpeg" => (b"soun", b"SoundHandler\0"),
@@ -646,8 +659,12 @@ fn write_hdlr(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
     Ok(())
 }
 
-fn write_minf(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), Error> {
-    let s = cfg.caps.structure(0).unwrap();
+fn write_minf(
+    v: &mut Vec<u8>,
+    cfg: &super::HeaderConfiguration,
+    caps: &gst::CapsRef,
+) -> Result<(), Error> {
+    let s = caps.structure(0).unwrap();
 
     match s.name() {
         "video/x-h264" | "video/x-h265" => {
@@ -662,7 +679,7 @@ fn write_minf(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
 
     write_box(v, b"dinf", |v| write_dinf(v, cfg))?;
 
-    write_box(v, b"stbl", |v| write_stbl(v, cfg))?;
+    write_box(v, b"stbl", |v| write_stbl(v, cfg, caps))?;
 
     Ok(())
 }
@@ -712,9 +729,13 @@ fn write_dref(v: &mut Vec<u8>, _cfg: &super::HeaderConfiguration) -> Result<(), 
     Ok(())
 }
 
-fn write_stbl(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), Error> {
+fn write_stbl(
+    v: &mut Vec<u8>,
+    cfg: &super::HeaderConfiguration,
+    caps: &gst::CapsRef,
+) -> Result<(), Error> {
     write_full_box(v, b"stsd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-        write_stsd(v, cfg)
+        write_stsd(v, cfg, caps)
     })?;
     write_full_box(v, b"stts", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
         write_stts(v, cfg)
@@ -731,7 +752,7 @@ fn write_stbl(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
     })?;
 
     // For video write a sync sample box as indication that not all samples are sync samples
-    let s = cfg.caps.structure(0).unwrap();
+    let s = caps.structure(0).unwrap();
     match s.name() {
         "video/x-h264" | "video/x-h265" => {
             write_full_box(v, b"stss", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
@@ -744,14 +765,18 @@ fn write_stbl(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
     Ok(())
 }
 
-fn write_stsd(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), Error> {
+fn write_stsd(
+    v: &mut Vec<u8>,
+    cfg: &super::HeaderConfiguration,
+    caps: &gst::CapsRef,
+) -> Result<(), Error> {
     // Entry count
     v.extend(1u32.to_be_bytes());
 
-    let s = cfg.caps.structure(0).unwrap();
+    let s = caps.structure(0).unwrap();
     match s.name() {
-        "video/x-h264" | "video/x-h265" => write_visual_sample_entry(v, cfg)?,
-        "audio/mpeg" => write_audio_sample_entry(v, cfg)?,
+        "video/x-h264" | "video/x-h265" => write_visual_sample_entry(v, cfg, caps)?,
+        "audio/mpeg" => write_audio_sample_entry(v, cfg, caps)?,
         _ => unreachable!(),
     }
 
@@ -776,9 +801,10 @@ fn write_sample_entry_box<T, F: FnOnce(&mut Vec<u8>) -> Result<T, Error>>(
 
 fn write_visual_sample_entry(
     v: &mut Vec<u8>,
-    cfg: &super::HeaderConfiguration,
+    _cfg: &super::HeaderConfiguration,
+    caps: &gst::CapsRef,
 ) -> Result<(), Error> {
-    let s = cfg.caps.structure(0).unwrap();
+    let s = caps.structure(0).unwrap();
     let fourcc = match s.name() {
         "video/x-h264" => {
             let stream_format = s.get::<&str>("stream-format").context("no stream-format")?;
@@ -946,7 +972,7 @@ fn write_visual_sample_entry(
 
         #[cfg(feature = "v1_18")]
         {
-            if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(cfg.caps) {
+            if let Ok(cll) = gst_video::VideoContentLightLevel::from_caps(caps) {
                 write_box(v, b"clli", move |v| {
                     v.extend((cll.max_content_light_level() as u16).to_be_bytes());
                     v.extend((cll.max_frame_average_light_level() as u16).to_be_bytes());
@@ -954,7 +980,7 @@ fn write_visual_sample_entry(
                 })?;
             }
 
-            if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(cfg.caps) {
+            if let Ok(mastering) = gst_video::VideoMasteringDisplayInfo::from_caps(caps) {
                 write_box(v, b"mdcv", move |v| {
                     for primary in mastering.display_primaries() {
                         v.extend(primary.x.to_be_bytes());
@@ -979,9 +1005,10 @@ fn write_visual_sample_entry(
 
 fn write_audio_sample_entry(
     v: &mut Vec<u8>,
-    cfg: &super::HeaderConfiguration,
+    _cfg: &super::HeaderConfiguration,
+    caps: &gst::CapsRef,
 ) -> Result<(), Error> {
-    let s = cfg.caps.structure(0).unwrap();
+    let s = caps.structure(0).unwrap();
     let fourcc = match s.name() {
         "audio/mpeg" => b"mp4a",
         _ => unreachable!(),
@@ -1211,15 +1238,18 @@ fn write_mvex(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
         }
     }
 
-    write_full_box(v, b"trex", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-        write_trex(v, cfg)
-    })?;
+    for (idx, _caps) in cfg.caps.iter().enumerate() {
+        write_full_box(v, b"trex", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+            write_trex(v, cfg, idx)
+        })?;
+    }
 
     Ok(())
 }
 
 fn write_mehd(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), Error> {
-    let timescale = caps_to_timescale(cfg.caps);
+    // Use the reference track timescale
+    let timescale = caps_to_timescale(cfg.caps[0]);
 
     let duration = cfg
         .duration
@@ -1233,9 +1263,9 @@ fn write_mehd(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
     Ok(())
 }
 
-fn write_trex(v: &mut Vec<u8>, _cfg: &super::HeaderConfiguration) -> Result<(), Error> {
+fn write_trex(v: &mut Vec<u8>, _cfg: &super::HeaderConfiguration, idx: usize) -> Result<(), Error> {
     // Track ID
-    v.extend(1u32.to_be_bytes());
+    v.extend((idx as u32 + 1).to_be_bytes());
 
     // Default sample description index
     v.extend(1u32.to_be_bytes());
@@ -1276,7 +1306,7 @@ pub(super) fn create_fmp4_fragment_header(
 
     let styp_len = v.len();
 
-    let data_offset_offset = write_box(&mut v, b"moof", |v| write_moof(v, &cfg))?;
+    let data_offset_offsets = write_box(&mut v, b"moof", |v| write_moof(v, &cfg))?;
 
     let size = cfg
         .buffers
@@ -1293,19 +1323,38 @@ pub(super) fn create_fmp4_fragment_header(
     }
 
     let data_offset = v.len() - styp_len;
-    v[data_offset_offset..][..4].copy_from_slice(&(data_offset as u32).to_be_bytes());
+    for data_offset_offset in data_offset_offsets {
+        let val = u32::from_be_bytes(v[data_offset_offset..][..4].try_into()?)
+            .checked_add(u32::try_from(data_offset)?)
+            .ok_or_else(|| anyhow!("can't calculate track run data offset"))?;
+        v[data_offset_offset..][..4].copy_from_slice(&val.to_be_bytes());
+    }
 
     Ok((gst::Buffer::from_mut_slice(v), styp_len as u64))
 }
 
 #[allow(clippy::too_many_arguments)]
-fn write_moof(v: &mut Vec<u8>, cfg: &super::FragmentHeaderConfiguration) -> Result<usize, Error> {
+fn write_moof(
+    v: &mut Vec<u8>,
+    cfg: &super::FragmentHeaderConfiguration,
+) -> Result<Vec<usize>, Error> {
     write_full_box(v, b"mfhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
         write_mfhd(v, cfg)
     })?;
-    let data_offset_offset = write_box(v, b"traf", |v| write_traf(v, cfg))?;
 
-    Ok(data_offset_offset)
+    let mut data_offset_offsets = vec![];
+    for (idx, caps) in cfg.caps.iter().enumerate() {
+        // Skip tracks without any buffers for this fragment.
+        if cfg.timing_infos[idx].is_none() {
+            continue;
+        }
+
+        write_box(v, b"traf", |v| {
+            write_traf(v, cfg, &mut data_offset_offsets, idx, caps)
+        })?;
+    }
+
+    Ok(data_offset_offsets)
 }
 
 fn write_mfhd(v: &mut Vec<u8>, cfg: &super::FragmentHeaderConfiguration) -> Result<(), Error> {
@@ -1407,6 +1456,7 @@ const SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT: u32 = 0x8_00;
 #[allow(clippy::type_complexity)]
 fn analyze_buffers(
     cfg: &super::FragmentHeaderConfiguration,
+    idx: usize,
     check_dts: bool,
     intra_only: bool,
     timescale: u32,
@@ -1438,7 +1488,13 @@ fn analyze_buffers(
 
     let mut negative_composition_time_offsets = false;
 
-    for Buffer { buffer, pts, dts } in cfg.buffers {
+    for Buffer {
+        idx: _idx,
+        buffer,
+        pts,
+        dts,
+    } in cfg.buffers.iter().filter(|b| b.idx == idx)
+    {
         if size.is_none() {
             size = Some(buffer.size() as u32);
         }
@@ -1495,10 +1551,11 @@ fn analyze_buffers(
 
     // Check duration of the last buffer against end_pts / end_dts
     {
+        let timing_info = cfg.timing_infos[idx].as_ref().unwrap();
         let current_timestamp = if check_dts {
-            cfg.end_dts.expect("no end DTS")
+            timing_info.end_dts.expect("no end DTS")
         } else {
-            cfg.end_pts
+            timing_info.end_pts
         };
         let current_timestamp = current_timestamp
             .nseconds()
@@ -1546,9 +1603,16 @@ fn analyze_buffers(
     ))
 }
 
-fn write_traf(v: &mut Vec<u8>, cfg: &super::FragmentHeaderConfiguration) -> Result<usize, Error> {
-    let s = cfg.caps.structure(0).unwrap();
-    let timescale = caps_to_timescale(cfg.caps);
+#[allow(clippy::ptr_arg)]
+fn write_traf(
+    v: &mut Vec<u8>,
+    cfg: &super::FragmentHeaderConfiguration,
+    data_offset_offsets: &mut Vec<usize>,
+    idx: usize,
+    caps: &gst::CapsRef,
+) -> Result<(), Error> {
+    let s = caps.structure(0).unwrap();
+    let timescale = caps_to_timescale(caps);
 
     let check_dts = matches!(s.name(), "video/x-h264" | "video/x-h265");
     let intra_only = matches!(s.name(), "audio/mpeg");
@@ -1562,45 +1626,95 @@ fn write_traf(v: &mut Vec<u8>, cfg: &super::FragmentHeaderConfiguration) -> Resu
         default_duration,
         default_flags,
         negative_composition_time_offsets,
-    ) = analyze_buffers(cfg, check_dts, intra_only, timescale)?;
+    ) = analyze_buffers(cfg, idx, check_dts, intra_only, timescale)?;
 
     assert!((tf_flags & DEFAULT_SAMPLE_SIZE_PRESENT == 0) ^ default_size.is_some());
     assert!((tf_flags & DEFAULT_SAMPLE_DURATION_PRESENT == 0) ^ default_duration.is_some());
     assert!((tf_flags & DEFAULT_SAMPLE_FLAGS_PRESENT == 0) ^ default_flags.is_some());
 
     write_full_box(v, b"tfhd", FULL_BOX_VERSION_0, tf_flags, |v| {
-        write_tfhd(v, cfg, default_size, default_duration, default_flags)
+        write_tfhd(v, cfg, idx, default_size, default_duration, default_flags)
     })?;
     write_full_box(v, b"tfdt", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
-        write_tfdt(v, cfg, timescale)
+        write_tfdt(v, cfg, idx, timescale)
     })?;
 
-    let data_offset_offset = write_full_box(
-        v,
-        b"trun",
-        if negative_composition_time_offsets {
-            FULL_BOX_VERSION_1
-        } else {
-            FULL_BOX_VERSION_0
-        },
-        tr_flags,
-        |v| write_trun(v, cfg, tr_flags, check_dts, intra_only, timescale),
-    )?;
+    let mut current_data_offset = 0;
+
+    let mut iter = GroupBy::new(cfg.buffers, |a: &Buffer, b: &Buffer| a.idx == b.idx);
+    while let Some(run) = iter.next() {
+        if run[0].idx != idx {
+            // FIXME: What to do with >4GB offsets?
+            current_data_offset = (current_data_offset as u64
+                + run.iter().map(|b| b.buffer.size() as u64).sum::<u64>())
+            .try_into()?;
+            continue;
+        }
+
+        let last_end_timestamp =
+            if let Some(Buffer { pts, dts, .. }) = iter.as_slice().iter().find(|b| b.idx == idx) {
+                timestamp_from_pts_dts(*pts, *dts, check_dts, timescale)
+                    .map(|(current_timestamp, _pts, _dts)| current_timestamp)?
+            } else {
+                let timing_info = cfg.timing_infos[idx].as_ref().unwrap();
+                let last_end_timestamp = if check_dts {
+                    timing_info.end_dts.expect("no end DTS")
+                } else {
+                    timing_info.end_pts
+                };
+
+                last_end_timestamp
+                    .nseconds()
+                    .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
+                    .context("too big timestamp")?
+            };
+
+        let data_offset_offset = write_full_box(
+            v,
+            b"trun",
+            if negative_composition_time_offsets {
+                FULL_BOX_VERSION_1
+            } else {
+                FULL_BOX_VERSION_0
+            },
+            tr_flags,
+            |v| {
+                write_trun(
+                    v,
+                    cfg,
+                    current_data_offset,
+                    tr_flags,
+                    check_dts,
+                    intra_only,
+                    timescale,
+                    run,
+                    last_end_timestamp,
+                )
+            },
+        )?;
+        data_offset_offsets.push(data_offset_offset);
+
+        // FIXME: What to do with >4GB offsets?
+        current_data_offset = (current_data_offset as u64
+            + run.iter().map(|b| b.buffer.size() as u64).sum::<u64>())
+        .try_into()?;
+    }
 
     // TODO: saio, saiz, sbgp, sgpd, subs?
 
-    Ok(data_offset_offset)
+    Ok(())
 }
 
 fn write_tfhd(
     v: &mut Vec<u8>,
     _cfg: &super::FragmentHeaderConfiguration,
+    idx: usize,
     default_size: Option<u32>,
     default_duration: Option<u32>,
     default_flags: Option<u32>,
 ) -> Result<(), Error> {
     // Track ID
-    v.extend(1u32.to_be_bytes());
+    v.extend((idx as u32 + 1).to_be_bytes());
 
     // No base data offset, no sample description index
 
@@ -1622,11 +1736,14 @@ fn write_tfhd(
 fn write_tfdt(
     v: &mut Vec<u8>,
     cfg: &super::FragmentHeaderConfiguration,
+    idx: usize,
     timescale: u32,
 ) -> Result<(), Error> {
-    let base_time = cfg
+    let timing_info = cfg.timing_infos[idx].as_ref().unwrap();
+
+    let base_time = timing_info
         .start_dts
-        .unwrap_or(cfg.earliest_pts)
+        .unwrap_or(timing_info.earliest_pts)
         .mul_div_floor(timescale as u64, gst::ClockTime::SECOND.nseconds())
         .context("base time overflow")?;
 
@@ -1638,43 +1755,44 @@ fn write_tfdt(
 #[allow(clippy::too_many_arguments)]
 fn write_trun(
     v: &mut Vec<u8>,
-    cfg: &super::FragmentHeaderConfiguration,
+    _cfg: &super::FragmentHeaderConfiguration,
+    current_data_offset: u32,
     tr_flags: u32,
     check_dts: bool,
     intra_only: bool,
     timescale: u32,
+    buffers: &[Buffer],
+    last_end_timestamp: u64,
 ) -> Result<usize, Error> {
     // Sample count
-    v.extend((cfg.buffers.len() as u32).to_be_bytes());
+    v.extend((buffers.len() as u32).to_be_bytes());
 
     let data_offset_offset = v.len();
     // Data offset, will be rewritten later
-    v.extend(0i32.to_be_bytes());
+    v.extend(current_data_offset.to_be_bytes());
 
     if (tr_flags & FIRST_SAMPLE_FLAGS_PRESENT) != 0 {
-        v.extend(sample_flags_from_buffer(&cfg.buffers[0].buffer, intra_only).to_be_bytes());
+        v.extend(sample_flags_from_buffer(&buffers[0].buffer, intra_only).to_be_bytes());
     }
 
-    let last_timestamp = if check_dts {
-        cfg.end_dts.expect("no end DTS")
-    } else {
-        cfg.end_pts
-    };
-    let last_timestamp = last_timestamp
-        .nseconds()
-        .mul_div_round(timescale as u64, gst::ClockTime::SECOND.nseconds())
-        .context("too big timestamp")?;
-
-    for (Buffer { buffer, pts, dts }, next_timestamp) in Iterator::zip(
-        cfg.buffers.iter(),
-        cfg.buffers
+    for (
+        Buffer {
+            idx: _idx,
+            buffer,
+            pts,
+            dts,
+        },
+        next_timestamp,
+    ) in Iterator::zip(
+        buffers.iter(),
+        buffers
             .iter()
             .skip(1)
             .map(|Buffer { pts, dts, .. }| {
                 timestamp_from_pts_dts(*pts, *dts, check_dts, timescale)
                     .map(|(current_timestamp, _pts, _dts)| current_timestamp)
             })
-            .chain(Some(Ok(last_timestamp))),
+            .chain(Some(Ok(last_end_timestamp))),
     ) {
         let next_timestamp = next_timestamp?;
 
@@ -1764,4 +1882,104 @@ pub(crate) fn create_mfra(
     v[offset..][..4].copy_from_slice(&len.to_be_bytes());
 
     Ok(gst::Buffer::from_mut_slice(v))
+}
+
+// Copy from std while this is still nightly-only
+use std::fmt;
+
+/// An iterator over slice in (non-overlapping) chunks separated by a predicate.
+///
+/// This struct is created by the [`group_by`] method on [slices].
+///
+/// [`group_by`]: slice::group_by
+/// [slices]: slice
+struct GroupBy<'a, T: 'a, P> {
+    slice: &'a [T],
+    predicate: P,
+}
+
+impl<'a, T: 'a, P> GroupBy<'a, T, P> {
+    fn new(slice: &'a [T], predicate: P) -> Self {
+        GroupBy { slice, predicate }
+    }
+
+    fn as_slice(&'a self) -> &'a [T] {
+        self.slice
+    }
+}
+
+impl<'a, T: 'a, P> Iterator for GroupBy<'a, T, P>
+where
+    P: FnMut(&T, &T) -> bool,
+{
+    type Item = &'a [T];
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.slice.is_empty() {
+            None
+        } else {
+            let mut len = 1;
+            let mut iter = self.slice.windows(2);
+            while let Some([l, r]) = iter.next() {
+                if (self.predicate)(l, r) {
+                    len += 1
+                } else {
+                    break;
+                }
+            }
+            let (head, tail) = self.slice.split_at(len);
+            self.slice = tail;
+            Some(head)
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.slice.is_empty() {
+            (0, Some(0))
+        } else {
+            (1, Some(self.slice.len()))
+        }
+    }
+
+    #[inline]
+    fn last(mut self) -> Option<Self::Item> {
+        self.next_back()
+    }
+}
+
+impl<'a, T: 'a, P> DoubleEndedIterator for GroupBy<'a, T, P>
+where
+    P: FnMut(&T, &T) -> bool,
+{
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.slice.is_empty() {
+            None
+        } else {
+            let mut len = 1;
+            let mut iter = self.slice.windows(2);
+            while let Some([l, r]) = iter.next_back() {
+                if (self.predicate)(l, r) {
+                    len += 1
+                } else {
+                    break;
+                }
+            }
+            let (head, tail) = self.slice.split_at(self.slice.len() - len);
+            self.slice = head;
+            Some(tail)
+        }
+    }
+}
+
+impl<'a, T: 'a, P> std::iter::FusedIterator for GroupBy<'a, T, P> where P: FnMut(&T, &T) -> bool {}
+
+impl<'a, T: 'a + fmt::Debug, P> fmt::Debug for GroupBy<'a, T, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GroupBy")
+            .field("slice", &self.slice)
+            .finish()
+    }
 }

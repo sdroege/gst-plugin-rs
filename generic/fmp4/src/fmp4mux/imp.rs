@@ -255,7 +255,12 @@ impl FMP4Mux {
                 final_earliest_pts: intra_only,
                 end_pts,
                 end_dts,
-                buffers: vec![Buffer { buffer, pts, dts }],
+                buffers: vec![Buffer {
+                    idx: 0,
+                    buffer,
+                    pts,
+                    dts,
+                }],
             };
             state.queued_gops.push_front(gop);
 
@@ -315,6 +320,7 @@ impl FMP4Mux {
             gop.end_pts = std::cmp::max(gop.end_pts, end_pts);
             gop.end_dts = Some(std::cmp::max(gop.end_dts.expect("no end DTS"), end_dts));
             gop.buffers.push(Buffer {
+                idx: 0,
                 buffer,
                 pts,
                 dts: Some(dts),
@@ -545,13 +551,15 @@ impl FMP4Mux {
                 boxes::create_fmp4_fragment_header(super::FragmentHeaderConfiguration {
                     variant: class.as_ref().variant,
                     sequence_number,
-                    caps: state.caps.as_ref().unwrap(),
+                    caps: &[state.caps.as_ref().unwrap()],
+                    timing_infos: &[Some(super::FragmentTimingInfo {
+                        earliest_pts,
+                        start_dts,
+                        end_pts,
+                        end_dts,
+                        dts_offset,
+                    })],
                     buffers: &buffers,
-                    earliest_pts,
-                    start_dts,
-                    end_pts,
-                    end_dts,
-                    dts_offset,
                 })
                 .map_err(|err| {
                     gst::error!(
@@ -673,7 +681,7 @@ impl FMP4Mux {
         let mut buffer = boxes::create_fmp4_header(super::HeaderConfiguration {
             variant,
             update: at_eos,
-            caps: state.caps.as_ref().unwrap(),
+            caps: &[state.caps.as_ref().unwrap()],
             write_mehd: settings.write_mehd,
             duration: if at_eos { duration } else { None },
         })
