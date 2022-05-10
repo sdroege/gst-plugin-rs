@@ -8,3 +8,4 @@ meson build -D prefix=/usr/local
 ninja -C build
 ninja -C build install
 cd ..
+rm -rf dav1d
