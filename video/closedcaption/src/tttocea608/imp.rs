@@ -95,6 +95,7 @@ struct Settings {
     mode: Cea608Mode,
     origin_row: i32,
     origin_column: u32,
+    roll_up_timeout: Option<gst::ClockTime>,
 }
 
 impl Default for Settings {
@@ -103,6 +104,7 @@ impl Default for Settings {
             mode: DEFAULT_MODE,
             origin_row: DEFAULT_ORIGIN_ROW,
             origin_column: DEFAULT_ORIGIN_COLUMN,
+            roll_up_timeout: gst::ClockTime::NONE,
         }
     }
 }
@@ -188,6 +190,8 @@ impl State {
         if let Some(erase_display_frame_no) = self.erase_display_frame_no {
             if self.last_frame_no == erase_display_frame_no - 1 {
                 self.erase_display_frame_no = None;
+                self.column = 0;
+                self.send_roll_up_preamble = true;
                 self.erase_display_memory(element, bufferlist);
                 return true;
             }
@@ -792,6 +796,9 @@ impl TtToCea608 {
         if state.mode == Cea608Mode::PopOn {
             state.erase_display_frame_no =
                 Some(state.last_frame_no + duration.mul_div_round(fps_n, fps_d).unwrap().seconds());
+        } else if let Some(timeout) = settings.roll_up_timeout {
+            state.erase_display_frame_no =
+                Some(state.last_frame_no + timeout.mul_div_round(fps_n, fps_d).unwrap().seconds());
         }
 
         state.pad(element, mut_list, state.max_frame_no);
@@ -1081,6 +1088,15 @@ impl ObjectImpl for TtToCea608 {
                     DEFAULT_ORIGIN_COLUMN,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
                 ),
+                glib::ParamSpecUInt64::new(
+                    "roll-up-timeout",
+                    "Roll-Up Timeout",
+                    "Duration after which to erase display memory in roll-up mode",
+                    0,
+                    u64::MAX,
+                    u64::MAX,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
+                ),
             ]
         });
 
@@ -1121,6 +1137,16 @@ impl ObjectImpl for TtToCea608 {
                 state.force_clear = true;
                 state.column = settings.origin_column;
             }
+            "roll-up-timeout" => {
+                let mut settings = self.settings.lock().unwrap();
+
+                let timeout = value.get().expect("type checked upstream");
+
+                settings.roll_up_timeout = match timeout {
+                    u64::MAX => gst::ClockTime::NONE,
+                    _ => Some(gst::ClockTime::from_nseconds(timeout)),
+                };
+            }
             _ => unimplemented!(),
         }
     }
@@ -1138,6 +1164,15 @@ impl ObjectImpl for TtToCea608 {
             "origin-column" => {
                 let settings = self.settings.lock().unwrap();
                 settings.origin_column.to_value()
+            }
+            "roll-up-timeout" => {
+                let settings = self.settings.lock().unwrap();
+
+                if let Some(timeout) = settings.roll_up_timeout {
+                    timeout.nseconds().to_value()
+                } else {
+                    u64::MAX.to_value()
+                }
             }
             _ => unimplemented!(),
         }
