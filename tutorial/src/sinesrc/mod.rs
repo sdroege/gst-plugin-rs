@@ -15,7 +15,7 @@ mod imp;
 
 // The public Rust wrapper type for our element
 glib::wrapper! {
-    pub struct SineSrc(ObjectSubclass<imp::SineSrc>) @extends gst_base::BaseSrc, gst::Element, gst::Object;
+    pub struct SineSrc(ObjectSubclass<imp::SineSrc>) @extends gst_base::PushSrc, gst_base::BaseSrc, gst::Element, gst::Object;
 }
 
 // GStreamer elements need to be thread-safe. For the private implementation this is automatically
