@@ -334,7 +334,7 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
             "vp8enc" | "vp9enc" => {
                 enc.set_property("deadline", 1i64);
                 enc.set_property("threads", 12i32);
-                enc.set_property("target-bitrate", start_bitrate);
+                enc.set_property("target-bitrate", start_bitrate as i32);
                 enc.set_property("cpu-used", -16i32);
                 enc.set_property("keyframe-max-dist", 2000i32);
                 enc.set_property_from_str("keyframe-mode", "disabled");
@@ -2785,7 +2785,7 @@ impl ObjectImpl for WebRTCSink {
                     let this = element.imp();
                     let settings = this.settings.lock().unwrap();
                     configure_encoder(&enc, settings.start_bitrate);
-                    
+
                     // Return false here so that latter handlers get called
                     Some(false.to_value())
                 })
