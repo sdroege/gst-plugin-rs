@@ -351,23 +351,37 @@ impl Cea608Overlay {
                     }
 
                     if Some(cc_type) == state.selected_field {
-                        if let Ok(Status::Ready) = state
+                        match state
                             .caption_frame
                             .decode((triple[1] as u16) << 8 | triple[2] as u16, 0.0)
                         {
-                            let text = match state.caption_frame.to_text(true) {
-                                Ok(text) => text,
-                                Err(_) => {
-                                    gst::error!(
-                                        CAT,
-                                        obj: pad,
-                                        "Failed to convert caption frame to text"
-                                    );
-                                    continue;
-                                }
-                            };
+                            Ok(Status::Ready) => {
+                                let text = match state.caption_frame.to_text(true) {
+                                    Ok(text) => text,
+                                    Err(_) => {
+                                        gst::error!(
+                                            CAT,
+                                            obj: pad,
+                                            "Failed to convert caption frame to text"
+                                        );
+                                        continue;
+                                    }
+                                };
 
-                            self.overlay_text(element, &text, state);
+                                self.overlay_text(element, &text, state);
+                            }
+                            Ok(Status::Clear) => {
+                                self.overlay_text(element, "", state);
+                            }
+                            Ok(Status::Ok) => (),
+                            Err(err) => {
+                                gst::error!(
+                                    CAT,
+                                    obj: pad,
+                                    "Failed to decode caption frame: {:?}",
+                                    err
+                                );
+                            }
                         }
 
                         self.reset_timeout(state, pts);
