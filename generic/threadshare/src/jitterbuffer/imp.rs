@@ -1074,7 +1074,12 @@ impl TaskImpl for JitterBufferTask {
             self.sink_pad_handler.clear();
 
             let jb = self.element.imp();
-            *jb.state.lock().unwrap() = State::default();
+
+            let latency = jb.settings.lock().unwrap().latency;
+            let state = State::default();
+
+            state.jbuf.set_delay(latency);
+            *jb.state.lock().unwrap() = state;
 
             gst::log!(CAT, obj: &self.element, "Task started");
             Ok(())
