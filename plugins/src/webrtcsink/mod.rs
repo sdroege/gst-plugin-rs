@@ -4,7 +4,6 @@ use gst::subclass::prelude::ObjectSubclassExt;
 use std::error::Error;
 
 mod imp;
-mod utils;
 
 glib::wrapper! {
     pub struct WebRTCSink(ObjectSubclass<imp::WebRTCSink>) @extends gst::Bin, gst::Element, gst::Object, @implements gst::ChildProxy, gst_video::Navigation;

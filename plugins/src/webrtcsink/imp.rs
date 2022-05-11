@@ -4,6 +4,7 @@ use gst::glib::value::FromValue;
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_rtp::prelude::*;
+use gst_utils::StreamProducer;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use gst_webrtc::WebRTCDataChannel;
@@ -17,7 +18,6 @@ use std::collections::HashMap;
 use std::ops::Mul;
 use std::sync::Mutex;
 
-use super::utils::{make_element, StreamProducer};
 use super::{WebRTCSinkCongestionControl, WebRTCSinkError, WebRTCSinkMitigationMode};
 use crate::signaller::Signaller;
 use std::collections::BTreeMap;
@@ -202,6 +202,7 @@ struct Consumer {
 
     max_bitrate: u32,
 
+    links: HashMap<u32, gst_utils::ConsumptionLink>,
     stats_sigid: Option<glib::SignalHandlerId>,
 }
 
@@ -238,6 +239,13 @@ fn create_navigation_event<N: IsA<gst_video::Navigation>>(sink: &N, msg: &str) {
     } else {
         gst::error!(CAT, "Invalid navigation event: {:?}", msg);
     }
+}
+
+/// Wrapper around `gst::ElementFactory::make` with a better error
+/// message
+pub fn make_element(element: &str, name: Option<&str>) -> Result<gst::Element, Error> {
+    gst::ElementFactory::make(element, name)
+        .with_context(|| format!("Failed to make element {}", element))
 }
 
 /// Simple utility for tearing down a pipeline cleanly
@@ -965,7 +973,7 @@ impl State {
     fn finalize_consumer(
         &mut self,
         element: &super::WebRTCSink,
-        consumer: &Consumer,
+        consumer: &mut Consumer,
         signal: bool,
     ) {
         consumer.pipeline.debug_to_dot_file_with_ts(
@@ -973,14 +981,8 @@ impl State {
             format!("removing-peer-{}-", consumer.peer_id,),
         );
 
-        for webrtc_pad in consumer.webrtc_pads.values() {
-            if let Some(producer) = self
-                .streams
-                .get(&webrtc_pad.stream_name)
-                .and_then(|stream| stream.producer.as_ref())
-            {
-                consumer.disconnect_input_stream(producer);
-            }
+        for ssrc in consumer.webrtc_pads.keys() {
+            consumer.links.remove(ssrc);
         }
 
         consumer.pipeline.call_async(|pipeline| {
@@ -998,8 +1000,8 @@ impl State {
         peer_id: &str,
         signal: bool,
     ) -> Option<Consumer> {
-        if let Some(consumer) = self.consumers.remove(peer_id) {
-            self.finalize_consumer(element, &consumer, signal);
+        if let Some(mut consumer) = self.consumers.remove(peer_id) {
+            self.finalize_consumer(element, &mut consumer, signal);
             Some(consumer)
         } else {
             None
@@ -1052,6 +1054,7 @@ impl Consumer {
             stats: gst::Structure::new_empty("application/x-webrtc-stats"),
             webrtc_pads: HashMap::new(),
             encoders: Vec::new(),
+            links: HashMap::new(),
             stats_sigid: None,
         }
     }
@@ -1168,7 +1171,7 @@ impl Consumer {
             .get(&payload)
             .ok_or_else(|| anyhow!("No codec for payload {}", payload))?;
 
-        let appsrc = make_element("appsrc", None)?;
+        let appsrc = make_element("appsrc", Some(&webrtc_pad.stream_name))?;
         self.pipeline.add(&appsrc).unwrap();
 
         let pay_filter = make_element("capsfilter", None)?;
@@ -1258,11 +1261,7 @@ impl Consumer {
         }
 
         let appsrc = appsrc.downcast::<gst_app::AppSrc>().unwrap();
-
-        appsrc.set_format(gst::Format::Time);
-        appsrc.set_is_live(true);
-        appsrc.set_handle_segment_change(true);
-
+        gst_utils::StreamProducer::configure_consumer(&appsrc);
         self.pipeline
             .sync_children_states()
             .with_context(|| format!("Connecting input stream for {}", self.peer_id))?;
@@ -1275,14 +1274,13 @@ impl Consumer {
             .link(&webrtc_pad.pad)
             .with_context(|| format!("Connecting input stream for {}", self.peer_id))?;
 
-        producer.add_consumer(&appsrc, &self.peer_id);
-
-        Ok(())
-    }
-
-    /// Called when tearing down the consumer
-    fn disconnect_input_stream(&self, producer: &StreamProducer) {
-        producer.remove_consumer(&self.peer_id);
+        match producer.add_consumer(&appsrc) {
+            Ok(link) => {
+                self.links.insert(webrtc_pad.ssrc, link);
+                Ok(())
+            }
+            Err(err) => Err(anyhow!("Could not link producer: {:?}", err)),
+        }
     }
 }
 
@@ -2038,7 +2036,7 @@ impl WebRTCSink {
             });
 
             if remove {
-                state.finalize_consumer(element, &consumer, true);
+                state.finalize_consumer(element, &mut consumer, true);
             } else {
                 state.consumers.insert(consumer.peer_id.clone(), consumer);
             }
