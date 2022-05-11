@@ -626,7 +626,7 @@ impl VideoDecoderImpl for Dav1dDec {
                 Some(ref state) => match state.output_info {
                     Some(ref info) => {
                         let mut upstream_latency = gst::query::Latency::new();
-                        let sinkpad = &element.static_pad("sink").expect("Failed to get sink pad");
+                        let sinkpad = element.sink_pad();
 
                         if sinkpad.peer_query(&mut upstream_latency) {
                             let (live, mut min, mut max) = upstream_latency.result();
@@ -694,7 +694,7 @@ impl VideoDecoderImpl for Dav1dDec {
         if settings.max_frame_delay == -1 {
             let mut latency_query = gst::query::Latency::new();
             let mut is_live = false;
-            let sinkpad = &element.static_pad("sink").expect("Failed to get sink pad");
+            let sinkpad = element.sink_pad();
 
             if sinkpad.peer_query(&mut latency_query) {
                 is_live = latency_query.result().0;
