@@ -17,6 +17,7 @@ gst-sdp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package
 gst-rtp = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-rtp", features = ["v1_20"] }
 gst-utils = { git="https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", package = "gstreamer-utils" }
 once_cell = "1.0"
+chrono = { version = "0.4", default-features = false }
 smallvec = "1"
 anyhow = "1"
 thiserror = "1"

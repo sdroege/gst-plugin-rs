@@ -1856,6 +1856,7 @@ dependencies = [
  "async-native-tls 0.4.0",
  "async-std",
  "async-tungstenite",
+ "chrono",
  "clap",
  "fastrand",
  "futures",

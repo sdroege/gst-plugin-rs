@@ -1,10 +1,12 @@
 use gst::glib;
 
+pub mod gcc;
 mod signaller;
 pub mod webrtcsink;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     webrtcsink::register(plugin)?;
+    gcc::register(plugin)?;
 
     Ok(())
 }
