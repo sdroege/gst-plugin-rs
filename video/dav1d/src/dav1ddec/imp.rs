@@ -615,62 +615,63 @@ impl ElementImpl for Dav1dDec {
 
 impl VideoDecoderImpl for Dav1dDec {
     fn src_query(&self, element: &Self::Type, query: &mut gst::QueryRef) -> bool {
-        if let gst::QueryViewMut::Latency(q) = query.view_mut() {
-            let state_guard = self.state.lock().unwrap();
-            let max_frame_delay = {
-                let settings = self.settings.lock().unwrap();
-                settings.max_frame_delay
-            };
+        match query.view_mut() {
+            gst::QueryViewMut::Latency(q) => {
+                let state_guard = self.state.lock().unwrap();
+                let max_frame_delay = {
+                    let settings = self.settings.lock().unwrap();
+                    settings.max_frame_delay
+                };
 
-            match *state_guard {
-                Some(ref state) => match state.output_info {
-                    Some(ref info) => {
-                        let mut upstream_latency = gst::query::Latency::new();
-                        let sinkpad = element.sink_pad();
+                match *state_guard {
+                    Some(ref state) => match state.output_info {
+                        Some(ref info) => {
+                            let mut upstream_latency = gst::query::Latency::new();
+                            let sinkpad = element.sink_pad();
 
-                        if sinkpad.peer_query(&mut upstream_latency) {
-                            let (live, mut min, mut max) = upstream_latency.result();
-                            // For autodetection: 1 if live, else whatever dav1d gives us
-                            let frame_latency: u64 = if max_frame_delay < 0 && live {
-                                1
+                            if sinkpad.peer_query(&mut upstream_latency) {
+                                let (live, mut min, mut max) = upstream_latency.result();
+                                // For autodetection: 1 if live, else whatever dav1d gives us
+                                let frame_latency: u64 = if max_frame_delay < 0 && live {
+                                    1
+                                } else {
+                                    self.estimate_frame_delay(
+                                        max_frame_delay as u32,
+                                        state.n_cpus as u32,
+                                    )
+                                    .into()
+                                };
+
+                                let fps_n = match info.fps().numer() {
+                                    0 => 30, // Pretend we're at 30fps if we don't know latency,
+                                    n => n,
+                                };
+
+                                let latency = frame_latency
+                                    * (info.fps().denom() as u64)
+                                    * gst::ClockTime::SECOND
+                                    / (fps_n as u64);
+
+                                gst::debug!(CAT, obj: element, "Reporting latency of {}", latency);
+
+                                min += latency;
+                                max = max.opt_add(latency);
+                                q.set(live, min, max);
+
+                                true
                             } else {
-                                self.estimate_frame_delay(
-                                    max_frame_delay as u32,
-                                    state.n_cpus as u32,
-                                )
-                                .into()
-                            };
-
-                            let fps_n = match info.fps().numer() {
-                                0 => 30, // Pretend we're at 30fps if we don't know latency,
-                                n => n,
-                            };
-
-                            let latency = frame_latency
-                                * (info.fps().denom() as u64)
-                                * gst::ClockTime::SECOND
-                                / (fps_n as u64);
-
-                            gst::debug!(CAT, obj: element, "Reporting latency of {}", latency);
-
-                            min += latency;
-                            max = max.opt_add(latency);
-                            q.set(live, min, max);
-
-                            true
-                        } else {
-                            // peer latency query failed
-                            false
+                                // peer latency query failed
+                                false
+                            }
                         }
-                    }
-                    // output info not available => fps unknown
+                        // output info not available => fps unknown
+                        None => false,
+                    },
+                    // no state yet
                     None => false,
-                },
-                // no state yet
-                None => false,
+                }
             }
-        } else {
-            VideoDecoderImplExt::parent_src_query(self, element, query)
+            _ => VideoDecoderImplExt::parent_src_query(self, element, query),
         }
     }
 
