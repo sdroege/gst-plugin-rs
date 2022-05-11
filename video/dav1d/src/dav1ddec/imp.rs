@@ -641,10 +641,15 @@ impl VideoDecoderImpl for Dav1dDec {
                                 .into()
                             };
 
+                            let fps_n = match info.fps().numer() {
+                                0 => 30, // Pretend we're at 30fps if we don't know latency,
+                                n => n,
+                            };
+
                             let latency = frame_latency
                                 * (info.fps().denom() as u64)
                                 * gst::ClockTime::SECOND
-                                / (info.fps().numer() as u64);
+                                / (fps_n as u64);
 
                             gst::debug!(CAT, obj: element, "Reporting latency of {}", latency);
 
