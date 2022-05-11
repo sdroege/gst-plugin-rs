@@ -5004,6 +5004,72 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "rtpav1": {
+        "description": "AV1 RTP (De)payloader Plugins",
+        "elements": {
+            "rtpav1depay": {
+                "author": "Vivienne Watermeier <vwatermeier@igalia.com>",
+                "description": "Depayload AV1 from RTP packets",
+                "hierarchy": [
+                    "GstRtpAv1Depay",
+                    "GstRTPBaseDepayload",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Depayloader/Network/RTP",
+                "long-name": "RTP AV1 Depayloader",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: AV1\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: tu\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            },
+            "rtpav1pay": {
+                "author": "Vivienne Watermeier <vwatermeier@igalia.com>",
+                "description": "Payload AV1 as RTP packets",
+                "hierarchy": [
+                    "GstRtpAv1Pay",
+                    "GstRTPBasePayload",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Codec/Payloader/Network/RTP",
+                "long-name": "RTP AV1 payloader",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "video/x-av1:\n         parsed: true\n  stream-format: obu-stream\n      alignment: obu\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n          media: video\n        payload: [ 96, 127 ]\n     clock-rate: 90000\n  encoding-name: AV1\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "rank": "marginal"
+            }
+        },
+        "filename": "gstrtpav1",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-rtpav1",
+        "source": "gst-plugin-rtpav1",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "sodium": {
         "description": "libsodium-based file encryption and decryption",
         "elements": {

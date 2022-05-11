@@ -67,7 +67,8 @@ plugins = {
   'gst-plugin-textahead': 'libgsttextahead',
   'gst-plugin-onvif': 'libgstrsonvif',
   'gst-plugin-tracers': 'libgstrstracers',
-  'gst-plugin-webrtchttp': 'libgstwebrtchttp'
+  'gst-plugin-webrtchttp': 'libgstwebrtchttp',
+  'gst-plugin-rtpav1': 'libgstrtpav1',
 }
 
 extra_env = {}

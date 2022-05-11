@@ -1,0 +1,45 @@
+[package]
+name = "gst-plugin-rtpav1"
+version = "0.1.0"
+authors = ["Vivienne Watermeier <vwatermeier@igalia.com>"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+license = "MPL-2.0"
+edition = "2021"
+description = "AV1 RTP (De)payloader Plugins"
+rust-version = "1.63"
+
+[dependencies]
+bitstream-io = "1.3"
+gst      = { package = "gstreamer",      git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
+gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
+gst-rtp  = { package = "gstreamer-rtp",  git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"]}
+once_cell = "1.0"
+
+[dev-dependencies]
+gst-check = { package = "gstreamer-check",  git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", features = ["v1_20"] }
+
+[build-dependencies]
+gst-plugin-version-helper = { git = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs" }
+
+[lib]
+name = "gstrtpav1"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[features]
+static = []
+capi = []
+doc = []
+
+[package.metadata.capi]
+min_version = "0.8.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gstreamer-rtp-1.0, gobject-2.0, glib-2.0, gmodule-2.0"
