@@ -86,6 +86,7 @@ extern "C" {
         gap: c_int,
         is_rtx: gboolean,
     ) -> GstClockTime;
+    pub fn ts_rtp_jitter_buffer_num_packets(jbuf: *mut RTPJitterBuffer) -> c_uint;
     pub fn ts_rtp_jitter_buffer_insert(
         jbuf: *mut RTPJitterBuffer,
         item: *mut RTPJitterBufferItem,

@@ -363,6 +363,10 @@ impl RTPJitterBuffer {
     pub fn reset_skew(&self) {
         unsafe { ffi::ts_rtp_jitter_buffer_reset_skew(self.to_glib_none().0) }
     }
+
+    pub fn num_packets(&self) -> u32 {
+        unsafe { ffi::ts_rtp_jitter_buffer_num_packets(self.to_glib_none().0) }
+    }
 }
 
 impl Default for RTPJitterBuffer {
