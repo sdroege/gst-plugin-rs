@@ -1469,6 +1469,7 @@ fn analyze_buffers(
         let f = sample_flags_from_buffer(buffer, intra_only);
         if first_buffer_flags.is_none() {
             first_buffer_flags = Some(f);
+            flags = Some(f);
         } else if flags.is_none() {
             if Some(f) != first_buffer_flags {
                 tr_flags |= FIRST_SAMPLE_FLAGS_PRESENT;
@@ -1562,6 +1563,10 @@ fn write_traf(v: &mut Vec<u8>, cfg: &super::FragmentHeaderConfiguration) -> Resu
         default_flags,
         negative_composition_time_offsets,
     ) = analyze_buffers(cfg, check_dts, intra_only, timescale)?;
+
+    assert!((tf_flags & DEFAULT_SAMPLE_SIZE_PRESENT == 0) ^ default_size.is_some());
+    assert!((tf_flags & DEFAULT_SAMPLE_DURATION_PRESENT == 0) ^ default_duration.is_some());
+    assert!((tf_flags & DEFAULT_SAMPLE_FLAGS_PRESENT == 0) ^ default_flags.is_some());
 
     write_full_box(v, b"tfhd", FULL_BOX_VERSION_0, tf_flags, |v| {
         write_tfhd(v, cfg, default_size, default_duration, default_flags)
