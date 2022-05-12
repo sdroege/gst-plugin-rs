@@ -6,6 +6,8 @@
 // SPDX-License-Identifier: MPL-2.0
 //
 
+use gst::prelude::*;
+
 fn init() {
     use std::sync::Once;
     static INIT: Once = Once::new();
@@ -16,12 +18,18 @@ fn init() {
     });
 }
 
-#[test]
-fn test_buffer_flags() {
-    init();
+fn test_buffer_flags_single_stream(cmaf: bool) {
+    let mut h = if cmaf {
+        gst_check::Harness::new("cmafmux")
+    } else {
+        gst_check::Harness::with_padnames("isofmp4mux", Some("sink_0"), Some("src"))
+    };
 
     // 5s fragment duration
-    let mut h = gst_check::Harness::new_parse("isofmp4mux fragment-duration=5000000000");
+    h.element()
+        .unwrap()
+        .set_property("fragment-duration", gst::ClockTime::from_seconds(5));
+
     h.set_src_caps(
         gst::Caps::builder("video/x-h264")
             .field("width", 1920i32)
@@ -33,6 +41,12 @@ fn test_buffer_flags() {
             .build(),
     );
     h.play();
+
+    let output_offset = if cmaf {
+        gst::ClockTime::ZERO
+    } else {
+        gst::ClockTime::from_seconds(60 * 60 * 1000)
+    };
 
     // Push 7 buffers of 1s each, 1st and last buffer without DELTA_UNIT flag
     for i in 0..7 {
@@ -75,13 +89,19 @@ fn test_buffer_flags() {
         header.flags(),
         gst::BufferFlags::HEADER | gst::BufferFlags::DISCONT
     );
-    assert_eq!(header.pts(), Some(gst::ClockTime::ZERO));
-    assert_eq!(header.dts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(header.pts(), Some(gst::ClockTime::ZERO + output_offset));
+    assert_eq!(header.dts(), Some(gst::ClockTime::ZERO + output_offset));
 
     let fragment_header = h.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(fragment_header.pts(), Some(gst::ClockTime::ZERO));
-    assert_eq!(fragment_header.dts(), Some(gst::ClockTime::ZERO));
+    assert_eq!(
+        fragment_header.pts(),
+        Some(gst::ClockTime::ZERO + output_offset)
+    );
+    assert_eq!(
+        fragment_header.dts(),
+        Some(gst::ClockTime::ZERO + output_offset)
+    );
     assert_eq!(
         fragment_header.duration(),
         Some(gst::ClockTime::from_seconds(5))
@@ -97,8 +117,14 @@ fn test_buffer_flags() {
         } else {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
-        assert_eq!(buffer.pts(), Some(gst::ClockTime::from_seconds(i)));
-        assert_eq!(buffer.dts(), Some(gst::ClockTime::from_seconds(i)));
+        assert_eq!(
+            buffer.pts(),
+            Some(gst::ClockTime::from_seconds(i) + output_offset)
+        );
+        assert_eq!(
+            buffer.dts(),
+            Some(gst::ClockTime::from_seconds(i) + output_offset)
+        );
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -106,8 +132,14 @@ fn test_buffer_flags() {
 
     let fragment_header = h.pull().unwrap();
     assert_eq!(fragment_header.flags(), gst::BufferFlags::HEADER);
-    assert_eq!(fragment_header.pts(), Some(gst::ClockTime::from_seconds(5)));
-    assert_eq!(fragment_header.dts(), Some(gst::ClockTime::from_seconds(5)));
+    assert_eq!(
+        fragment_header.pts(),
+        Some(gst::ClockTime::from_seconds(5) + output_offset)
+    );
+    assert_eq!(
+        fragment_header.dts(),
+        Some(gst::ClockTime::from_seconds(5) + output_offset)
+    );
     assert_eq!(
         fragment_header.duration(),
         Some(gst::ClockTime::from_seconds(2))
@@ -123,8 +155,14 @@ fn test_buffer_flags() {
         } else {
             assert_eq!(buffer.flags(), gst::BufferFlags::DELTA_UNIT);
         }
-        assert_eq!(buffer.pts(), Some(gst::ClockTime::from_seconds(i)));
-        assert_eq!(buffer.dts(), Some(gst::ClockTime::from_seconds(i)));
+        assert_eq!(
+            buffer.pts(),
+            Some(gst::ClockTime::from_seconds(i) + output_offset)
+        );
+        assert_eq!(
+            buffer.dts(),
+            Some(gst::ClockTime::from_seconds(i) + output_offset)
+        );
         assert_eq!(buffer.duration(), Some(gst::ClockTime::SECOND));
     }
 
@@ -136,4 +174,18 @@ fn test_buffer_flags() {
     assert_eq!(ev.type_(), gst::EventType::Segment);
     let ev = h.pull_event().unwrap();
     assert_eq!(ev.type_(), gst::EventType::Eos);
+}
+
+#[test]
+fn test_buffer_flags_single_stream_cmaf() {
+    init();
+
+    test_buffer_flags_single_stream(true);
+}
+
+#[test]
+fn test_buffer_flags_single_stream_iso() {
+    init();
+
+    test_buffer_flags_single_stream(false);
 }

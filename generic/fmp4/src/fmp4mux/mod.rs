@@ -99,6 +99,15 @@ pub(crate) enum Variant {
     DASH,
 }
 
+impl Variant {
+    pub(crate) fn is_single_stream(self) -> bool {
+        match self {
+            Variant::ISO => false,
+            Variant::CMAF | Variant::DASH => true,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct FragmentOffset {
     time: gst::ClockTime,
