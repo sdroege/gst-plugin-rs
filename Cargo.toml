@@ -45,6 +45,7 @@ default-members = [
     "audio/claxon",
     "audio/lewton",
     "generic/file",
+    "generic/fmp4",
     "generic/threadshare",
     "net/onvif",
     "net/reqwest",
