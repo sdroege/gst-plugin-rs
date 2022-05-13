@@ -1,5 +1,6 @@
 use gst::glib;
 use gst::subclass::prelude::*;
+use gst_rtp::prelude::*;
 use gst_rtp::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -83,6 +84,14 @@ impl ElementImpl for OnvifDepay {
 }
 
 impl RTPBaseDepayloadImpl for OnvifDepay {
+    fn set_caps(&self, element: &Self::Type, _caps: &gst::Caps) -> Result<(), gst::LoggableError> {
+        let src_pad = element.src_pad();
+        let src_caps = src_pad.pad_template_caps();
+        src_pad.push_event(gst::event::Caps::builder(&src_caps).build());
+
+        Ok(())
+    }
+
     fn process_rtp_packet(
         &self,
         element: &Self::Type,
