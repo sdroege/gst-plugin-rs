@@ -844,11 +844,20 @@ impl FMP4Mux {
                         return Err(gst::FlowError::NotNegotiated);
                     }
                 }
+                "image/jpeg" => {
+                    intra_only = true;
+                }
                 "audio/mpeg" => {
                     if !s.has_field_with_type("codec_data", gst::Buffer::static_type()) {
                         gst::error!(CAT, obj: &pad, "Received caps without codec_data");
                         return Err(gst::FlowError::NotNegotiated);
                     }
+                    intra_only = true;
+                }
+                "audio/x-alaw" | "audio/x-mulaw" => {
+                    intra_only = true;
+                }
+                "audio/x-adpcm" => {
                     intra_only = true;
                 }
                 _ => unreachable!(),
@@ -950,7 +959,7 @@ impl FMP4Mux {
         state.stream_header = Some(buffer.clone());
 
         let variant = match variant {
-            super::Variant::ISO | super::Variant::DASH => "iso-fragmented",
+            super::Variant::ISO | super::Variant::DASH | super::Variant::ONVIF => "iso-fragmented",
             super::Variant::CMAF => "cmaf",
         };
         let caps = gst::Caps::builder("video/quicktime")
@@ -1871,4 +1880,104 @@ impl AggregatorImpl for DASHMP4Mux {}
 
 impl FMP4MuxImpl for DASHMP4Mux {
     const VARIANT: super::Variant = super::Variant::DASH;
+}
+
+#[derive(Default)]
+pub(crate) struct ONVIFFMP4Mux;
+
+#[glib::object_subclass]
+impl ObjectSubclass for ONVIFFMP4Mux {
+    const NAME: &'static str = "GstONVIFFMP4Mux";
+    type Type = super::ONVIFFMP4Mux;
+    type ParentType = super::FMP4Mux;
+}
+
+impl ObjectImpl for ONVIFFMP4Mux {}
+
+impl GstObjectImpl for ONVIFFMP4Mux {}
+
+impl ElementImpl for ONVIFFMP4Mux {
+    fn metadata() -> Option<&'static gst::subclass::ElementMetadata> {
+        static ELEMENT_METADATA: Lazy<gst::subclass::ElementMetadata> = Lazy::new(|| {
+            gst::subclass::ElementMetadata::new(
+                "ONVIFFMP4Mux",
+                "Codec/Muxer",
+                "ONVIF fragmented MP4 muxer",
+                "Sebastian Dröge <sebastian@centricular.com>",
+            )
+        });
+
+        Some(&*ELEMENT_METADATA)
+    }
+
+    fn pad_templates() -> &'static [gst::PadTemplate] {
+        static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
+            let src_pad_template = gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &gst::Caps::builder("video/quicktime")
+                    .field("variant", "iso-fragmented")
+                    .build(),
+            )
+            .unwrap();
+
+            let sink_pad_template = gst::PadTemplate::new(
+                "sink_%u",
+                gst::PadDirection::Sink,
+                gst::PadPresence::Request,
+                &[
+                    gst::Structure::builder("video/x-h264")
+                        .field("stream-format", gst::List::new(&[&"avc", &"avc3"]))
+                        .field("alignment", "au")
+                        .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("video/x-h265")
+                        .field("stream-format", gst::List::new(&[&"hvc1", &"hev1"]))
+                        .field("alignment", "au")
+                        .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("image/jpeg")
+                        .field("width", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("height", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .build(),
+                    gst::Structure::builder("audio/mpeg")
+                        .field("mpegversion", 4i32)
+                        .field("stream-format", "raw")
+                        .field("channels", gst::IntRange::<i32>::new(1, u16::MAX as i32))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-alaw")
+                        .field("channels", gst::IntRange::<i32>::new(1, 2))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-mulaw")
+                        .field("channels", gst::IntRange::<i32>::new(1, 2))
+                        .field("rate", gst::IntRange::<i32>::new(1, i32::MAX))
+                        .build(),
+                    gst::Structure::builder("audio/x-adpcm")
+                        .field("layout", "g726")
+                        .field("channels", 1i32)
+                        .field("rate", 8000i32)
+                        .field("bitrate", gst::List::new([16000i32, 24000, 32000, 40000]))
+                        .build(),
+                ]
+                .into_iter()
+                .collect::<gst::Caps>(),
+            )
+            .unwrap();
+
+            vec![src_pad_template, sink_pad_template]
+        });
+
+        PAD_TEMPLATES.as_ref()
+    }
+}
+
+impl AggregatorImpl for ONVIFFMP4Mux {}
+
+impl FMP4MuxImpl for ONVIFFMP4Mux {
+    const VARIANT: super::Variant = super::Variant::ONVIF;
 }

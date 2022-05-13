@@ -335,7 +335,7 @@ fn brands_from_variant_and_caps(
     caps: &[&gst::Caps],
 ) -> (&'static [u8; 4], Vec<&'static [u8; 4]>) {
     match variant {
-        super::Variant::ISO => (b"iso6", vec![b"iso6"]),
+        super::Variant::ISO | super::Variant::ONVIF => (b"iso6", vec![b"iso6"]),
         super::Variant::DASH => {
             // FIXME: `dsms` / `dash` brands, `msix`
             (b"msdh", vec![b"dums", b"msdh", b"iso6"])
@@ -524,7 +524,9 @@ fn write_tkhd(
     // Volume
     let s = caps.structure(0).unwrap();
     match s.name() {
-        "audio/mpeg" => v.extend((1u16 << 8).to_be_bytes()),
+        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+            v.extend((1u16 << 8).to_be_bytes())
+        }
         _ => v.extend(0u16.to_be_bytes()),
     }
 
@@ -550,7 +552,7 @@ fn write_tkhd(
 
     // Width/height
     match s.name() {
-        "video/x-h264" | "video/x-h265" => {
+        "video/x-h264" | "video/x-h265" | "image/jpeg" => {
             let width = s.get::<i32>("width").context("video caps without width")? as u32;
             let height = s
                 .get::<i32>("height")
@@ -642,8 +644,10 @@ fn write_hdlr(
 
     let s = caps.structure(0).unwrap();
     let (handler_type, name) = match s.name() {
-        "video/x-h264" | "video/x-h265" => (b"vide", b"VideoHandler\0"),
-        "audio/mpeg" => (b"soun", b"SoundHandler\0"),
+        "video/x-h264" | "video/x-h265" | "image/jpeg" => (b"vide", b"VideoHandler\0"),
+        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+            (b"soun", b"SoundHandler\0")
+        }
         _ => unreachable!(),
     };
 
@@ -667,13 +671,15 @@ fn write_minf(
     let s = caps.structure(0).unwrap();
 
     match s.name() {
-        "video/x-h264" | "video/x-h265" => {
+        "video/x-h264" | "video/x-h265" | "image/jpeg" => {
             // Flags are always 1 for unspecified reasons
             write_full_box(v, b"vmhd", FULL_BOX_VERSION_0, 1, |v| write_vmhd(v, cfg))?
         }
-        "audio/mpeg" => write_full_box(v, b"smhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
-            write_smhd(v, cfg)
-        })?,
+        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+            write_full_box(v, b"smhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                write_smhd(v, cfg)
+            })?
+        }
         _ => unreachable!(),
     }
 
@@ -775,8 +781,10 @@ fn write_stsd(
 
     let s = caps.structure(0).unwrap();
     match s.name() {
-        "video/x-h264" | "video/x-h265" => write_visual_sample_entry(v, cfg, caps)?,
-        "audio/mpeg" => write_audio_sample_entry(v, cfg, caps)?,
+        "video/x-h264" | "video/x-h265" | "image/jpeg" => write_visual_sample_entry(v, cfg, caps)?,
+        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+            write_audio_sample_entry(v, cfg, caps)?
+        }
         _ => unreachable!(),
     }
 
@@ -822,6 +830,7 @@ fn write_visual_sample_entry(
                 _ => unreachable!(),
             }
         }
+        "image/jpeg" => b"jpeg",
         _ => unreachable!(),
     };
 
@@ -889,6 +898,9 @@ fn write_visual_sample_entry(
                     v.extend_from_slice(&map);
                     Ok(())
                 })?;
+            }
+            "image/jpeg" => {
+                // Nothing to do here
             }
             _ => unreachable!(),
         }
@@ -995,6 +1007,37 @@ fn write_visual_sample_entry(
             }
         }
 
+        // Write fiel box for codecs that require it
+        if ["image/jpeg"].contains(&s.name()) {
+            let interlace_mode = s
+                .get::<&str>("interlace-mode")
+                .ok()
+                .map(gst_video::VideoInterlaceMode::from_string)
+                .unwrap_or(gst_video::VideoInterlaceMode::Progressive);
+            let field_order = s
+                .get::<&str>("field-order")
+                .ok()
+                .map(gst_video::VideoFieldOrder::from_string)
+                .unwrap_or(gst_video::VideoFieldOrder::Unknown);
+
+            write_box(v, b"fiel", move |v| {
+                let (interlace, field_order) = match interlace_mode {
+                    gst_video::VideoInterlaceMode::Progressive => (1, 0),
+                    gst_video::VideoInterlaceMode::Interleaved
+                        if field_order == gst_video::VideoFieldOrder::TopFieldFirst =>
+                    {
+                        (2, 9)
+                    }
+                    gst_video::VideoInterlaceMode::Interleaved => (2, 14),
+                    _ => (0, 0),
+                };
+
+                v.push(interlace);
+                v.push(field_order);
+                Ok(())
+            })?;
+        }
+
         // TODO: write btrt bitrate box based on tags
 
         Ok(())
@@ -1011,7 +1054,25 @@ fn write_audio_sample_entry(
     let s = caps.structure(0).unwrap();
     let fourcc = match s.name() {
         "audio/mpeg" => b"mp4a",
+        "audio/x-alaw" => b"alaw",
+        "audio/x-mulaw" => b"ulaw",
+        "audio/x-adpcm" => {
+            let layout = s.get::<&str>("layout").context("no ADPCM layout field")?;
+
+            match layout {
+                "g726" => b"ms\x00\x45",
+                _ => unreachable!(),
+            }
+        }
         _ => unreachable!(),
+    };
+
+    let sample_size = match s.name() {
+        "audio/x-adpcm" => {
+            let bitrate = s.get::<i32>("bitrate").context("no ADPCM bitrate field")?;
+            (bitrate / 8000) as u16
+        }
+        _ => 16u16,
     };
 
     write_sample_entry_box(v, fourcc, move |v| {
@@ -1024,7 +1085,7 @@ fn write_audio_sample_entry(
         v.extend(channels.to_be_bytes());
 
         // Sample size
-        v.extend(16u16.to_be_bytes());
+        v.extend(sample_size.to_be_bytes());
 
         // Pre-defined
         v.extend([0u8; 2]);
@@ -1049,6 +1110,9 @@ fn write_audio_sample_entry(
                     bail!("too small codec_data");
                 }
                 write_esds_aac(v, &map)?;
+            }
+            "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
+                // Nothing to do here
             }
             _ => unreachable!(),
         }
@@ -1615,7 +1679,10 @@ fn write_traf(
     let timescale = caps_to_timescale(caps);
 
     let check_dts = matches!(s.name(), "video/x-h264" | "video/x-h265");
-    let intra_only = matches!(s.name(), "audio/mpeg");
+    let intra_only = matches!(
+        s.name(),
+        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" | "image/jpeg"
+    );
 
     // Analyze all buffers to know what values can be put into the tfhd for all samples and what
     // has to be stored for every single sample
