@@ -644,10 +644,11 @@ fn write_hdlr(
 
     let s = caps.structure(0).unwrap();
     let (handler_type, name) = match s.name() {
-        "video/x-h264" | "video/x-h265" | "image/jpeg" => (b"vide", b"VideoHandler\0"),
+        "video/x-h264" | "video/x-h265" | "image/jpeg" => (b"vide", b"VideoHandler\0".as_slice()),
         "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
-            (b"soun", b"SoundHandler\0")
+            (b"soun", b"SoundHandler\0".as_slice())
         }
+        "application/x-onvif-metadata" => (b"meta", b"MetadataHandler\0".as_slice()),
         _ => unreachable!(),
     };
 
@@ -678,6 +679,11 @@ fn write_minf(
         "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             write_full_box(v, b"smhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
                 write_smhd(v, cfg)
+            })?
+        }
+        "application/x-onvif-metadata" => {
+            write_full_box(v, b"nmhd", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |_v| {
+                Ok(())
             })?
         }
         _ => unreachable!(),
@@ -785,6 +791,7 @@ fn write_stsd(
         "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" => {
             write_audio_sample_entry(v, cfg, caps)?
         }
+        "application/x-onvif-metadata" => write_xml_meta_data_sample_entry(v, cfg, caps)?,
         _ => unreachable!(),
     }
 
@@ -1246,6 +1253,34 @@ fn write_esds_aac(v: &mut Vec<u8>, codec_data: &[u8]) -> Result<(), Error> {
     )
 }
 
+fn write_xml_meta_data_sample_entry(
+    v: &mut Vec<u8>,
+    _cfg: &super::HeaderConfiguration,
+    caps: &gst::CapsRef,
+) -> Result<(), Error> {
+    let s = caps.structure(0).unwrap();
+    let namespace = match s.name() {
+        "application/x-onvif-metadata" => b"http://www.onvif.org/ver10/schema",
+        _ => unreachable!(),
+    };
+
+    write_sample_entry_box(v, b"metx", move |v| {
+        // content_encoding, empty string
+        v.push(0);
+
+        // namespace
+        v.extend_from_slice(namespace);
+        v.push(0);
+
+        // schema_location, empty string list
+        v.push(0);
+
+        Ok(())
+    })?;
+
+    Ok(())
+}
+
 fn write_stts(v: &mut Vec<u8>, _cfg: &super::HeaderConfiguration) -> Result<(), Error> {
     // Entry count
     v.extend(0u32.to_be_bytes());
@@ -1681,7 +1716,12 @@ fn write_traf(
     let check_dts = matches!(s.name(), "video/x-h264" | "video/x-h265");
     let intra_only = matches!(
         s.name(),
-        "audio/mpeg" | "audio/x-alaw" | "audio/x-mulaw" | "audio/x-adpcm" | "image/jpeg"
+        "audio/mpeg"
+            | "audio/x-alaw"
+            | "audio/x-mulaw"
+            | "audio/x-adpcm"
+            | "image/jpeg"
+            | "application/x-onvif-metadata"
     );
 
     // Analyze all buffers to know what values can be put into the tfhd for all samples and what

@@ -860,6 +860,9 @@ impl FMP4Mux {
                 "audio/x-adpcm" => {
                     intra_only = true;
                 }
+                "application/x-onvif-metadata" => {
+                    intra_only = true;
+                }
                 _ => unreachable!(),
             }
 
@@ -879,32 +882,30 @@ impl FMP4Mux {
             return Err(gst::FlowError::Error);
         }
 
-        // Sort video streams first and then audio streams, and each group by pad name.
+        // Sort video streams first and then audio streams and then metadata streams, and each group by pad name.
         state.streams.sort_by(|a, b| {
-            let stream_type_of_caps = |caps: &gst::CapsRef| {
+            let order_of_caps = |caps: &gst::CapsRef| {
                 let s = caps.structure(0).unwrap();
 
                 if s.name().starts_with("video/") {
-                    gst::StreamType::VIDEO
+                    0
                 } else if s.name().starts_with("audio/") {
-                    gst::StreamType::AUDIO
+                    1
+                } else if s.name().starts_with("application/x-onvif-metadata") {
+                    2
                 } else {
                     unimplemented!();
                 }
             };
 
-            let st_a = stream_type_of_caps(&a.caps);
-            let st_b = stream_type_of_caps(&b.caps);
+            let st_a = order_of_caps(&a.caps);
+            let st_b = order_of_caps(&b.caps);
 
             if st_a == st_b {
                 return a.sinkpad.name().cmp(&b.sinkpad.name());
             }
 
-            if st_a == gst::StreamType::VIDEO {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Greater
-            }
+            st_a.cmp(&st_b)
         });
 
         Ok(())
@@ -1962,6 +1963,9 @@ impl ElementImpl for ONVIFFMP4Mux {
                         .field("channels", 1i32)
                         .field("rate", 8000i32)
                         .field("bitrate", gst::List::new([16000i32, 24000, 32000, 40000]))
+                        .build(),
+                    gst::Structure::builder("application/x-onvif-metadata")
+                        .field("encoding", "utf8")
                         .build(),
                 ]
                 .into_iter()
