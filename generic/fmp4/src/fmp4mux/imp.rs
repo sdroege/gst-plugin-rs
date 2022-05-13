@@ -650,14 +650,14 @@ impl FMP4Mux {
                     if let Some(buffer) = bs.pop_front() {
                         dequeued_time += match bs.front() {
                             Some(next_buffer) => match Option::zip(next_buffer.dts, buffer.dts) {
-                                Some((b, a)) => b - a,
-                                None => next_buffer.pts - buffer.pts,
+                                Some((b, a)) => b.saturating_sub(a),
+                                None => next_buffer.pts.saturating_sub(buffer.pts),
                             },
                             None => {
                                 let timing_info = timing_infos[idx].as_ref().unwrap();
                                 match Option::zip(timing_info.end_dts, buffer.dts) {
-                                    Some((b, a)) => b - a,
-                                    None => timing_info.end_pts - buffer.pts,
+                                    Some((b, a)) => b.saturating_sub(a),
+                                    None => timing_info.end_pts.saturating_sub(buffer.pts),
                                 }
                             }
                         };
