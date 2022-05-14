@@ -6,21 +6,22 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use futures::{future, Future, FutureExt, TryFutureExt};
+use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_s3::{Credentials, Region};
+use aws_types::sdk_config::SdkConfig;
+
+use aws_smithy_http::byte_stream::{ByteStream, Error};
+use aws_smithy_types::{timeout, tristate::TriState};
+
+use bytes::{buf::BufMut, Bytes, BytesMut};
+use futures::stream::TryStreamExt;
+use futures::{future, Future};
 use once_cell::sync::Lazy;
-use rusoto_core::RusotoError::{HttpDispatch, Unknown};
-use rusoto_core::{HttpDispatchError, RusotoError};
 use std::sync::Mutex;
 use std::time::Duration;
 use tokio::runtime;
 
-static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
-    gst::DebugCategory::new(
-        "rusotos3utils",
-        gst::DebugColorFlags::empty(),
-        Some("Amazon S3 utilities"),
-    )
-});
+const DEFAULT_S3_REGION: &str = "us-west-2";
 
 static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
     runtime::Builder::new_multi_thread()
@@ -32,90 +33,18 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
 });
 
 #[derive(Debug)]
-pub enum RetriableError<E> {
-    Rusoto(RusotoError<E>),
-    Std(std::io::Error),
-}
-
 pub enum WaitError<E> {
     Cancelled,
     FutureError(E),
 }
 
-fn make_timeout<F, T, E>(
-    timeout: Duration,
-    future: F,
-) -> impl Future<Output = Result<T, RetriableError<E>>>
-where
-    E: std::fmt::Debug,
-    F: Future<Output = Result<T, RetriableError<E>>>,
-{
-    tokio::time::timeout(timeout, future).map(|v| match v {
-        // Future resolved succesfully
-        Ok(Ok(v)) => Ok(v),
-        // Future resolved with an error
-        Ok(Err(e)) => Err(e),
-        // Timeout elapsed
-        // Use an HttpDispatch error so the caller doesn't have to deal with this separately from
-        // other HTTP dispatch errors
-        _ => Err(RetriableError::Rusoto(HttpDispatch(
-            HttpDispatchError::new("Timeout".to_owned()),
-        ))),
-    })
-}
-
-fn make_retry<F, T, E, Fut>(
-    timeout: Option<Duration>,
-    mut future: F,
-) -> impl Future<Output = Result<T, RetriableError<E>>>
-where
-    E: std::fmt::Debug,
-    F: FnMut() -> Fut,
-    Fut: Future<Output = Result<T, RetriableError<E>>>,
-{
-    backoff::future::retry(
-        backoff::ExponentialBackoffBuilder::new()
-            .with_initial_interval(Duration::from_millis(500))
-            .with_multiplier(1.5)
-            .with_max_elapsed_time(timeout)
-            .build(),
-        move || {
-            future().map_err(|err| match err {
-                RetriableError::Rusoto(HttpDispatch(_)) => {
-                    gst::warning!(CAT, "Error waiting for operation ({:?}), retrying", err);
-                    backoff::Error::transient(err)
-                }
-                RetriableError::Rusoto(Unknown(ref response)) => {
-                    gst::warning!(
-                        CAT,
-                        "Unknown error waiting for operation ({:?}), retrying",
-                        response
-                    );
-
-                    // Retry on 5xx errors
-                    if response.status.is_server_error() {
-                        backoff::Error::transient(err)
-                    } else {
-                        backoff::Error::permanent(err)
-                    }
-                }
-                _ => backoff::Error::permanent(err),
-            })
-        },
-    )
-}
-
-pub fn wait_retry<F, T, E, Fut>(
+pub fn wait<F, T, E>(
     canceller: &Mutex<Option<future::AbortHandle>>,
-    req_timeout: Option<Duration>,
-    retry_timeout: Option<Duration>,
-    mut future: F,
-) -> Result<T, WaitError<RetriableError<E>>>
+    future: F,
+) -> Result<T, WaitError<E>>
 where
-    E: std::fmt::Debug,
-    F: FnMut() -> Fut,
-    Fut: Send + Future<Output = Result<T, RetriableError<E>>>,
-    Fut::Output: Send,
+    F: Send + Future<Output = Result<T, E>>,
+    F::Output: Send,
     T: Send,
     E: Send,
 {
@@ -125,28 +54,14 @@ where
     canceller_guard.replace(abort_handle);
     drop(canceller_guard);
 
+    let abortable_future = future::Abortable::new(future, abort_registration);
+
+    // FIXME: add a timeout as well
+
     let res = {
         let _enter = RUNTIME.enter();
-
         futures::executor::block_on(async {
-            // The order of this future stack matters: the innermost future is the supplied future
-            // generator closure. We wrap that in a timeout to bound how long we wait. This, in
-            // turn, is wrapped in a retrying future which will make multiple attempts until it
-            // ultimately fails.
-            // The timeout must be created within the tokio executor
-            let res = match req_timeout {
-                None => {
-                    let retry_future = make_retry(retry_timeout, future);
-                    future::Abortable::new(retry_future, abort_registration).await
-                }
-                Some(t) => {
-                    let timeout_future = || make_timeout(t, future());
-                    let retry_future = make_retry(retry_timeout, timeout_future);
-                    future::Abortable::new(retry_future, abort_registration).await
-                }
-            };
-
-            match res {
+            match abortable_future.await {
                 // Future resolved successfully
                 Ok(Ok(res)) => Ok(res),
                 // Future resolved with an error
@@ -164,16 +79,94 @@ where
     res
 }
 
-pub fn duration_from_millis(millis: i64) -> Option<Duration> {
+pub fn wait_stream(
+    canceller: &Mutex<Option<future::AbortHandle>>,
+    stream: &mut ByteStream,
+) -> Result<Bytes, WaitError<Error>> {
+    wait(canceller, async move {
+        let mut collect = BytesMut::new();
+
+        // Loop over the stream and collect till we're done
+        while let Some(item) = stream.try_next().await? {
+            collect.put(item)
+        }
+
+        Ok::<Bytes, Error>(collect.freeze())
+    })
+}
+
+// See setting-timeouts example in aws-sdk-rust.
+pub fn timeout_config(request_timeout: Duration) -> timeout::Config {
+    timeout::Config::new().with_api_timeouts(
+        timeout::Api::new()
+            // This timeout acts at the "Request to a service" level. When the SDK makes a request to a
+            // service, that "request" can contain several HTTP requests. This way, you can retry
+            // failures that are likely spurious, or refresh credentials.
+            .with_call_timeout(TriState::Set(request_timeout))
+            // This timeout acts at the "HTTP request" level and sets a separate timeout for each
+            // HTTP request made as part of a "service request."
+            .with_call_attempt_timeout(TriState::Set(request_timeout)),
+    )
+}
+
+pub fn wait_config(
+    canceller: &Mutex<Option<future::AbortHandle>>,
+    region: Region,
+    timeout_config: timeout::Config,
+    credentials: Option<Credentials>,
+) -> Result<SdkConfig, WaitError<Error>> {
+    let region_provider = RegionProviderChain::first_try(region)
+        .or_default_provider()
+        .or_else(Region::new(DEFAULT_S3_REGION));
+    let config_future = match credentials {
+        Some(cred) => aws_config::from_env()
+            .timeout_config(timeout_config)
+            .region(region_provider)
+            .credentials_provider(cred)
+            .load(),
+        None => aws_config::from_env()
+            .timeout_config(timeout_config)
+            .region(region_provider)
+            .load(),
+    };
+
+    let mut canceller_guard = canceller.lock().unwrap();
+    let (abort_handle, abort_registration) = future::AbortHandle::new_pair();
+
+    canceller_guard.replace(abort_handle);
+    drop(canceller_guard);
+
+    let abortable_future = future::Abortable::new(config_future, abort_registration);
+
+    let res = {
+        let _enter = RUNTIME.enter();
+        futures::executor::block_on(async {
+            match abortable_future.await {
+                // Future resolved successfully
+                Ok(config) => Ok(config),
+                // Canceller called before future resolved
+                Err(future::Aborted) => Err(WaitError::Cancelled),
+            }
+        })
+    };
+
+    /* Clear out the canceller */
+    canceller_guard = canceller.lock().unwrap();
+    *canceller_guard = None;
+
+    res
+}
+
+pub fn duration_from_millis(millis: i64) -> Duration {
     match millis {
-        -1 => None,
-        v => Some(Duration::from_millis(v as u64)),
+        -1 => Duration::MAX,
+        v => Duration::from_millis(v as u64),
     }
 }
 
 pub fn duration_to_millis(dur: Option<Duration>) -> i64 {
     match dur {
-        None => -1,
+        None => Duration::MAX.as_millis() as i64,
         Some(d) => d.as_millis() as i64,
     }
 }

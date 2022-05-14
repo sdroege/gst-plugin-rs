@@ -6,8 +6,8 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use aws_sdk_s3::Region;
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
-use rusoto_core::Region;
 use url::Url;
 
 #[derive(Clone)]
@@ -29,27 +29,7 @@ impl ToString for GstS3Url {
     fn to_string(&self) -> String {
         format!(
             "s3://{}/{}/{}{}",
-            match self.region {
-                Region::Custom {
-                    ref name,
-                    ref endpoint,
-                } => {
-                    format!(
-                        "{}+{}",
-                        base32::encode(
-                            base32::Alphabet::RFC4648 { padding: true },
-                            name.as_bytes(),
-                        ),
-                        base32::encode(
-                            base32::Alphabet::RFC4648 { padding: true },
-                            endpoint.as_bytes(),
-                        ),
-                    )
-                }
-                _ => {
-                    String::from(self.region.name())
-                }
-            },
+            self.region,
             self.bucket,
             percent_encode(self.object.as_bytes(), PATH_SEGMENT),
             if self.version.is_some() {
@@ -73,8 +53,9 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
     }
 
     let host = url.host_str().unwrap();
-    let region = host
-        .parse::<Region>()
+
+    let region_str = host
+        .parse()
         .or_else(|_| {
             let (name, endpoint) = host.split_once('+').ok_or(())?;
             let name =
@@ -83,9 +64,14 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
                 base32::decode(base32::Alphabet::RFC4648 { padding: true }, endpoint).ok_or(())?;
             let name = String::from_utf8(name).map_err(|_| ())?;
             let endpoint = String::from_utf8(endpoint).map_err(|_| ())?;
-            Ok(Region::Custom { name, endpoint })
+            Ok(format!("{}{}", name, endpoint))
         })
         .map_err(|_: ()| format!("Invalid region '{}'", host))?;
+
+    // Note that aws_sdk_s3::Region does not provide any error/validation
+    // methods to check the region argument being passed to it.
+    // See https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/struct.Region.html
+    let region = Region::new(region_str);
 
     let mut path = url
         .path_segments()
@@ -126,82 +112,4 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
         object,
         version,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cannot_be_base() {
-        assert!(parse_s3_url("data:something").is_err());
-    }
-
-    #[test]
-    fn invalid_scheme() {
-        assert!(parse_s3_url("file:///dev/zero").is_err());
-    }
-
-    #[test]
-    fn bad_region() {
-        assert!(parse_s3_url("s3://atlantis-1/i-hope-we/dont-find-this").is_err());
-    }
-
-    #[test]
-    fn no_bucket() {
-        assert!(parse_s3_url("s3://ap-south-1").is_err());
-        assert!(parse_s3_url("s3://ap-south-1/").is_err());
-    }
-
-    #[test]
-    fn no_object() {
-        assert!(parse_s3_url("s3://ap-south-1/my-bucket").is_err());
-        assert!(parse_s3_url("s3://ap-south-1/my-bucket/").is_err());
-    }
-
-    #[test]
-    fn valid_simple() {
-        assert!(parse_s3_url("s3://ap-south-1/my-bucket/my-object").is_ok());
-    }
-
-    #[test]
-    fn extraneous_query() {
-        assert!(parse_s3_url("s3://ap-south-1/my-bucket/my-object?foo=bar").is_err());
-    }
-
-    #[test]
-    fn valid_version() {
-        assert!(parse_s3_url("s3://ap-south-1/my-bucket/my-object?version=one").is_ok());
-    }
-
-    #[test]
-    fn trailing_slash() {
-        // Slashes are valid at the end of the object key
-        assert_eq!(
-            parse_s3_url("s3://ap-south-1/my-bucket/my-object/")
-                .unwrap()
-                .object,
-            "my-object/"
-        );
-    }
-
-    #[test]
-    fn percent_encoding() {
-        assert_eq!(
-            parse_s3_url("s3://ap-south-1/my-bucket/my%20object")
-                .unwrap()
-                .object,
-            "my object"
-        );
-    }
-
-    #[test]
-    fn percent_decoding() {
-        assert_eq!(
-            parse_s3_url("s3://ap-south-1/my-bucket/my object")
-                .unwrap()
-                .to_string(),
-            "s3://ap-south-1/my-bucket/my%20object"
-        );
-    }
 }

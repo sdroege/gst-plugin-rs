@@ -6,17 +6,14 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use bytes::Bytes;
+use futures::future;
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use bytes::{buf::BufMut, Bytes, BytesMut};
-use futures::future;
-use futures::{TryFutureExt, TryStreamExt};
-use once_cell::sync::Lazy;
-use rusoto_core::request::HttpClient;
-use rusoto_credential::StaticProvider;
-use rusoto_s3::GetObjectError;
-use rusoto_s3::{GetObjectRequest, HeadObjectRequest, S3Client, S3};
+use aws_sdk_s3::config;
+use aws_sdk_s3::{Client, Credentials, RetryConfig};
 
 use gst::glib;
 use gst::prelude::*;
@@ -27,9 +24,10 @@ use gst_base::subclass::base_src::CreateSuccess;
 use gst_base::subclass::prelude::*;
 
 use crate::s3url::*;
-use crate::s3utils::{self, duration_from_millis, duration_to_millis, RetriableError, WaitError};
+use crate::s3utils::{self, duration_from_millis, duration_to_millis, WaitError};
 
-const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 10_000;
+const DEFAULT_RETRY_ATTEMPTS: u32 = 5;
+const DEFAULT_REQUEST_TIMEOUT_MSEC: u64 = 15000;
 const DEFAULT_RETRY_DURATION_MSEC: u64 = 60_000;
 
 #[allow(clippy::large_enum_variant)]
@@ -37,7 +35,7 @@ enum StreamingState {
     Stopped,
     Started {
         url: GstS3Url,
-        client: S3Client,
+        client: Client,
         size: u64,
     },
 }
@@ -48,13 +46,25 @@ impl Default for StreamingState {
     }
 }
 
-#[derive(Default)]
 struct Settings {
     url: Option<GstS3Url>,
     access_key: Option<String>,
     secret_access_key: Option<String>,
-    request_timeout: Option<Duration>,
-    retry_duration: Option<Duration>,
+    retry_attempts: u32,
+    request_timeout: Duration,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        let duration = Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MSEC);
+        Self {
+            url: None,
+            access_key: None,
+            secret_access_key: None,
+            retry_attempts: DEFAULT_RETRY_ATTEMPTS,
+            request_timeout: duration,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -81,24 +91,44 @@ impl S3Src {
         };
     }
 
-    fn connect(self: &S3Src, url: &GstS3Url) -> S3Client {
+    fn connect(self: &S3Src, url: &GstS3Url) -> Result<Client, gst::ErrorMessage> {
         let settings = self.settings.lock().unwrap();
+        let timeout_config = s3utils::timeout_config(settings.request_timeout);
 
-        match (
+        let cred = match (
             settings.access_key.as_ref(),
             settings.secret_access_key.as_ref(),
         ) {
-            (Some(access_key), Some(secret_access_key)) => {
-                let creds =
-                    StaticProvider::new_minimal(access_key.clone(), secret_access_key.clone());
-                S3Client::new_with(
-                    HttpClient::new().expect("failed to create request dispatcher"),
-                    creds,
-                    url.region.clone(),
-                )
-            }
-            _ => S3Client::new(url.region.clone()),
-        }
+            (Some(access_key), Some(secret_access_key)) => Some(Credentials::new(
+                access_key.clone(),
+                secret_access_key.clone(),
+                None,
+                None,
+                "rusoto-s3-src",
+            )),
+            _ => None,
+        };
+
+        let sdk_config =
+            s3utils::wait_config(&self.canceller, url.region.clone(), timeout_config, cred)
+                .map_err(|err| match err {
+                    WaitError::FutureError(err) => gst::error_msg!(
+                        gst::ResourceError::OpenWrite,
+                        ["Failed to create SDK config: {}", err]
+                    ),
+                    WaitError::Cancelled => {
+                        gst::error_msg!(
+                            gst::LibraryError::Failed,
+                            ["SDK config request interrupted during start"]
+                        )
+                    }
+                })?;
+
+        let config = config::Builder::from(&sdk_config)
+            .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts))
+            .build();
+
+        Ok(Client::from_conf(config))
     }
 
     fn set_uri(self: &S3Src, _: &super::S3Src, url_str: Option<&str>) -> Result<(), glib::Error> {
@@ -134,47 +164,38 @@ impl S3Src {
     fn head(
         self: &S3Src,
         src: &super::S3Src,
-        client: &S3Client,
+        client: &Client,
         url: &GstS3Url,
     ) -> Result<u64, gst::ErrorMessage> {
-        let settings = self.settings.lock().unwrap();
+        let head_object = client
+            .head_object()
+            .set_bucket(Some(url.bucket.clone()))
+            .set_key(Some(url.object.clone()))
+            .set_version_id(url.version.clone());
+        let head_object_future = head_object.send();
 
-        let head_object_future = || {
-            client
-                .head_object(HeadObjectRequest {
-                    bucket: url.bucket.clone(),
-                    key: url.object.clone(),
-                    version_id: url.version.clone(),
-                    ..Default::default()
-                })
-                .map_err(RetriableError::Rusoto)
-        };
+        let output =
+            s3utils::wait(&self.canceller, head_object_future).map_err(|err| match err {
+                WaitError::FutureError(err) => gst::error_msg!(
+                    gst::ResourceError::NotFound,
+                    ["Failed to get HEAD object: {:?}", err]
+                ),
+                WaitError::Cancelled => {
+                    gst::error_msg!(
+                        gst::LibraryError::Failed,
+                        ["Head object request interrupted"]
+                    )
+                }
+            })?;
 
-        let output = s3utils::wait_retry(
-            &self.canceller,
-            settings.request_timeout,
-            settings.retry_duration,
-            head_object_future,
-        )
-        .map_err(|err| match err {
-            WaitError::FutureError(err) => gst::error_msg!(
-                gst::ResourceError::NotFound,
-                ["Failed to HEAD object: {:?}", err]
-            ),
-            WaitError::Cancelled => {
-                gst::error_msg!(gst::LibraryError::Failed, ["Interrupted during start"])
-            }
-        })?;
+        gst::info!(
+            CAT,
+            obj: src,
+            "HEAD success, content length = {}",
+            output.content_length
+        );
 
-        if let Some(size) = output.content_length {
-            gst::info!(CAT, obj: src, "HEAD success, content length = {}", size);
-            Ok(size as u64)
-        } else {
-            Err(gst::error_msg!(
-                gst::ResourceError::Read,
-                ["Failed to get content length"]
-            ))
-        }
+        Ok(output.content_length as u64)
     }
 
     /* Returns the bytes, Some(error) if one occured, or a None error if interrupted */
@@ -200,57 +221,38 @@ impl S3Src {
             }
         };
 
-        let settings = self.settings.lock().unwrap();
+        let get_object = client
+            .get_object()
+            .set_bucket(Some(url.bucket.clone()))
+            .set_key(Some(url.object.clone()))
+            .set_range(Some(format!("bytes={}-{}", offset, offset + length - 1)))
+            .set_version_id(url.version.clone());
 
-        let get_object_future = || async {
-            gst::debug!(
-                CAT,
-                obj: src,
-                "Requesting range: {}-{}",
-                offset,
-                offset + length - 1
-            );
+        gst::debug!(
+            CAT,
+            obj: src,
+            "Requesting range: {}-{}",
+            offset,
+            offset + length - 1
+        );
 
-            let output = client
-                .get_object(GetObjectRequest {
-                    bucket: url.bucket.clone(),
-                    key: url.object.clone(),
-                    range: Some(format!("bytes={}-{}", offset, offset + length - 1)),
-                    version_id: url.version.clone(),
-                    ..Default::default()
-                })
-                .map_err(RetriableError::Rusoto)
-                .await?;
+        let get_object_future = get_object.send();
 
-            gst::debug!(
-                CAT,
-                obj: src,
-                "Read {} bytes",
-                output.content_length.unwrap()
-            );
+        let mut output =
+            s3utils::wait(&self.canceller, get_object_future).map_err(|err| match err {
+                WaitError::FutureError(err) => Some(gst::error_msg!(
+                    gst::ResourceError::Read,
+                    ["Could not read: {}", err]
+                )),
+                WaitError::Cancelled => None,
+            })?;
 
-            let mut collect = BytesMut::new();
-            let mut stream = output.body.unwrap();
+        gst::debug!(CAT, obj: src, "Read {} bytes", output.content_length);
 
-            // Loop over the stream and collect till we're done
-            // FIXME: Can we use TryStreamExt::collect() here?
-            while let Some(item) = stream.try_next().map_err(RetriableError::Std).await? {
-                collect.put(item)
-            }
-
-            Ok::<Bytes, RetriableError<GetObjectError>>(collect.freeze())
-        };
-
-        s3utils::wait_retry(
-            &self.canceller,
-            settings.request_timeout,
-            settings.retry_duration,
-            get_object_future,
-        )
-        .map_err(|err| match err {
+        s3utils::wait_stream(&self.canceller, &mut output.body).map_err(|err| match err {
             WaitError::FutureError(err) => Some(gst::error_msg!(
                 gst::ResourceError::Read,
-                ["Could not read: {:?}", err]
+                ["Could not read: {}", err]
             )),
             WaitError::Cancelled => None,
         })
@@ -302,10 +304,19 @@ impl ObjectImpl for S3Src {
                 glib::ParamSpecInt64::new(
                     "retry-duration",
                     "Retry duration",
-                    "How long we should retry S3 requests before giving up (in ms, set to -1 for infinity)",
+                    "How long we should retry S3 requests before giving up (in ms, set to -1 for infinity) (Deprecated. Use retry-attempts.)",
                     -1,
                     std::i64::MAX,
                     DEFAULT_RETRY_DURATION_MSEC as i64,
+                    glib::ParamFlags::READWRITE,
+                ),
+                glib::ParamSpecUInt::new(
+                    "retry-attempts",
+                    "Retry attempts",
+                    "Number of times AWS SDK attempts a request before abandoning the request",
+                    1,
+                    10,
+                    DEFAULT_RETRY_ATTEMPTS,
                     glib::ParamFlags::READWRITE,
                 ),
             ]
@@ -321,27 +332,39 @@ impl ObjectImpl for S3Src {
         value: &glib::Value,
         pspec: &glib::ParamSpec,
     ) {
+        let mut settings = self.settings.lock().unwrap();
+
         match pspec.name() {
             "uri" => {
+                drop(settings);
                 let _ = self.set_uri(obj, value.get().expect("type checked upstream"));
             }
             "access-key" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.access_key = value.get().expect("type checked upstream");
             }
             "secret-access-key" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.secret_access_key = value.get().expect("type checked upstream");
             }
             "request-timeout" => {
-                let mut settings = self.settings.lock().unwrap();
                 settings.request_timeout =
                     duration_from_millis(value.get::<i64>().expect("type checked upstream"));
             }
             "retry-duration" => {
-                let mut settings = self.settings.lock().unwrap();
-                settings.retry_duration =
-                    duration_from_millis(value.get::<i64>().expect("type checked upstream"));
+                /*
+                 * To maintain backwards compatibility calculate retry attempts
+                 * by dividing the provided duration from request timeout.
+                 */
+                let value = value.get::<i64>().expect("type checked upstream");
+                let request_timeout = duration_to_millis(Some(settings.request_timeout));
+                let retry_attempts = if value > request_timeout {
+                    value / request_timeout
+                } else {
+                    request_timeout / value
+                };
+                settings.retry_attempts = retry_attempts as u32;
+            }
+            "retry-attempts" => {
+                settings.retry_attempts = value.get::<u32>().expect("type checked upstream");
             }
             _ => unimplemented!(),
         }
@@ -361,8 +384,12 @@ impl ObjectImpl for S3Src {
             }
             "access-key" => settings.access_key.to_value(),
             "secret-access-key" => settings.secret_access_key.to_value(),
-            "request-timeout" => duration_to_millis(settings.request_timeout).to_value(),
-            "retry-duration" => duration_to_millis(settings.retry_duration).to_value(),
+            "request-timeout" => duration_to_millis(Some(settings.request_timeout)).to_value(),
+            "retry-duration" => {
+                let request_timeout = duration_to_millis(Some(settings.request_timeout));
+                (settings.retry_attempts as i64 * request_timeout).to_value()
+            }
+            "retry-attempts" => settings.retry_attempts.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -459,16 +486,22 @@ impl BaseSrcImpl for S3Src {
         };
         drop(settings);
 
-        let s3client = self.connect(&s3url);
-        let size = self.head(src, &s3client, &s3url)?;
+        if let Ok(s3client) = self.connect(&s3url) {
+            let size = self.head(src, &s3client, &s3url)?;
 
-        *state = StreamingState::Started {
-            url: s3url,
-            client: s3client,
-            size,
-        };
+            *state = StreamingState::Started {
+                url: s3url,
+                client: s3client,
+                size,
+            };
 
-        Ok(())
+            Ok(())
+        } else {
+            Err(gst::error_msg!(
+                gst::ResourceError::Failed,
+                ["Cannot connect to S3 resource"]
+            ))
+        }
     }
 
     fn stop(&self, _: &Self::Type) -> Result<(), gst::ErrorMessage> {
