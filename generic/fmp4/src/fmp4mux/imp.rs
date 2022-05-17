@@ -639,41 +639,59 @@ impl FMP4Mux {
         // Interleave buffers according to the settings into a single vec
         let mut interleaved_buffers =
             Vec::with_capacity(drain_buffers.iter().map(|bs| bs.len()).sum());
-        while drain_buffers.iter().any(|bs| !bs.is_empty()) {
-            for (idx, bs) in drain_buffers.iter_mut().enumerate() {
-                let mut dequeued_time = gst::ClockTime::ZERO;
-                let mut dequeued_bytes = 0;
+        while let Some((idx, bs)) =
+            drain_buffers
+                .iter_mut()
+                .enumerate()
+                .min_by(|(a_idx, a), (b_idx, b)| {
+                    let (a, b) = match (a.front(), b.front()) {
+                        (None, None) => return std::cmp::Ordering::Equal,
+                        (None, _) => return std::cmp::Ordering::Greater,
+                        (_, None) => return std::cmp::Ordering::Less,
+                        (Some(a), Some(b)) => (a, b),
+                    };
 
-                while settings
-                    .interleave_bytes
-                    .map_or(true, |max_bytes| dequeued_bytes <= max_bytes)
-                    && settings
-                        .interleave_time
-                        .map_or(true, |max_time| dequeued_time <= max_time)
-                {
-                    if let Some(buffer) = bs.pop_front() {
-                        dequeued_time += match bs.front() {
-                            Some(next_buffer) => match Option::zip(next_buffer.dts, buffer.dts) {
-                                Some((b, a)) => b.saturating_sub(a),
-                                None => next_buffer.pts.saturating_sub(buffer.pts),
-                            },
-                            None => {
-                                let timing_info = timing_infos[idx].as_ref().unwrap();
-                                match Option::zip(timing_info.end_dts, buffer.dts) {
-                                    Some((b, a)) => b.saturating_sub(a),
-                                    None => timing_info.end_pts.saturating_sub(buffer.pts),
-                                }
-                            }
-                        };
-                        dequeued_bytes += buffer.buffer.size() as u64;
-                        interleaved_buffers.push(buffer);
-                    } else {
-                        // No buffers left in this stream, go to next stream
-                        break;
+                    match a.dts.unwrap_or(a.pts).cmp(&b.dts.unwrap_or(b.pts)) {
+                        std::cmp::Ordering::Equal => a_idx.cmp(b_idx),
+                        cmp => cmp,
                     }
+                })
+        {
+            let start_time = match bs.front() {
+                None => {
+                    // No more buffers now
+                    break;
+                }
+                Some(buf) => buf.dts.unwrap_or(buf.pts),
+            };
+            let mut current_end_time = start_time;
+            let mut dequeued_bytes = 0;
+
+            while settings
+                .interleave_bytes
+                .map_or(true, |max_bytes| dequeued_bytes <= max_bytes)
+                && settings.interleave_time.map_or(true, |max_time| {
+                    current_end_time.saturating_sub(start_time) <= max_time
+                })
+            {
+                if let Some(buffer) = bs.pop_front() {
+                    current_end_time = match bs.front() {
+                        Some(next_buffer) => next_buffer.dts.unwrap_or(next_buffer.pts),
+                        None => {
+                            let timing_info = timing_infos[idx].as_ref().unwrap();
+                            timing_info.end_dts.unwrap_or(timing_info.end_pts)
+                        }
+                    };
+                    dequeued_bytes += buffer.buffer.size() as u64;
+                    interleaved_buffers.push(buffer);
+                } else {
+                    // No buffers left in this stream, go to next stream
+                    break;
                 }
             }
         }
+
+        assert!(drain_buffers.iter().all(|bs| bs.is_empty()));
 
         let mut buffer_list = None;
 
