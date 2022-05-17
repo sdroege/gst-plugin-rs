@@ -500,12 +500,15 @@ impl FMP4Mux {
         element: &super::FMP4Mux,
         state: &mut State,
         settings: &Settings,
+        timeout: bool,
         at_eos: bool,
     ) -> Result<Option<gst::BufferList>, gst::FlowError> {
         let class = element.class();
 
         if at_eos {
             gst::info!(CAT, obj: element, "Draining at EOS");
+        } else if timeout {
+            gst::info!(CAT, obj: element, "Draining at timeout");
         } else {
             for stream in &state.streams {
                 if !stream.fragment_filled && !stream.sinkpad.is_eos() {
@@ -525,7 +528,8 @@ impl FMP4Mux {
 
         for stream in &mut state.streams {
             assert!(
-                at_eos
+                timeout
+                    || at_eos
                     || stream.sinkpad.is_eos()
                     || stream.queued_gops.get(1).map(|gop| gop.final_earliest_pts) == Some(true)
             );
@@ -540,7 +544,7 @@ impl FMP4Mux {
 
                 let fragment_start_pts = state.fragment_start_pts.unwrap();
                 while let Some(gop) = stream.queued_gops.pop_back() {
-                    assert!(gop.final_end_pts);
+                    assert!(timeout || gop.final_end_pts);
 
                     let end_pts = gop.end_pts;
                     gops.push(gop);
@@ -674,7 +678,7 @@ impl FMP4Mux {
         let mut buffer_list = None;
 
         if interleaved_buffers.is_empty() {
-            assert!(at_eos);
+            assert!(timeout || at_eos);
         } else {
             let min_earliest_pts_position = min_earliest_pts_position.unwrap();
             let min_earliest_pts = min_earliest_pts.unwrap();
@@ -1181,6 +1185,11 @@ impl ElementImpl for FMP4Mux {
 }
 
 impl AggregatorImpl for FMP4Mux {
+    fn next_time(&self, _aggregator: &Self::Type) -> Option<gst::ClockTime> {
+        let state = self.state.lock().unwrap();
+        state.fragment_start_pts
+    }
+
     fn sink_query(
         &self,
         aggregator: &Self::Type,
@@ -1365,7 +1374,7 @@ impl AggregatorImpl for FMP4Mux {
     fn aggregate(
         &self,
         aggregator: &Self::Type,
-        _timeout: bool,
+        timeout: bool,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let settings = self.settings.lock().unwrap().clone();
 
@@ -1468,7 +1477,7 @@ impl AggregatorImpl for FMP4Mux {
                             break;
                         }
                         Some(oldest_gop) => {
-                            if !oldest_gop.final_earliest_pts {
+                            if !timeout && !oldest_gop.final_earliest_pts {
                                 earliest_pts = None;
                                 break;
                             }
@@ -1517,7 +1526,7 @@ impl AggregatorImpl for FMP4Mux {
             }
 
             // If enough GOPs were queued, drain and create the output fragment
-            self.drain(aggregator, &mut state, &settings, all_eos)?
+            self.drain(aggregator, &mut state, &settings, timeout, all_eos)?
         };
 
         for (sinkpad, event) in upstream_events {
