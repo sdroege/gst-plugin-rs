@@ -1,0 +1,41 @@
+[package]
+name = "gst-plugin-tracers"
+version = "0.9.0"
+authors = ["Guillaume Desmottes <guillaume.desmottes@onestream.live>"]
+repository = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+license = "MPL-2.0"
+edition = "2018"
+description = "GStreamer tracers plugin"
+
+[dependencies]
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
+once_cell = "1.0"
+anyhow = "1"
+
+[target.'cfg(unix)'.dependencies]
+signal-hook = "0.3"
+
+[lib]
+name = "gstrstracers"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[build-dependencies]
+gst-plugin-version-helper = { path="../../version-helper" }
+
+[features]
+static = []
+capi = []
+
+[package.metadata.capi]
+min_version = "0.8.0"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

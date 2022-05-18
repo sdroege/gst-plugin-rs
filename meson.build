@@ -62,6 +62,7 @@ plugins = {
   'gst-plugin-spotify': 'libgstspotify',
   'gst-plugin-textahead': 'libgsttextahead',
   'gst-plugin-onvif': 'libgstrsonvif',
+  'gst-plugin-tracers': 'libgstrstracers',
 }
 
 extra_env = {}
