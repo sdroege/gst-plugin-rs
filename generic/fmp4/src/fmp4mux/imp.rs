@@ -414,7 +414,7 @@ impl FMP4Mux {
                 CAT,
                 obj: &stream.sinkpad,
                 "Queued full GOPs duration updated to {}",
-                prev_gop.end_pts - first_gop.earliest_pts,
+                prev_gop.end_pts.saturating_sub(first_gop.earliest_pts),
             );
         }
 
@@ -423,7 +423,7 @@ impl FMP4Mux {
             obj: &stream.sinkpad,
             "Queued duration updated to {}",
             Option::zip(stream.queued_gops.front(), stream.queued_gops.back())
-                .map(|(end, start)| end.end_pts - start.start_pts)
+                .map(|(end, start)| end.end_pts.saturating_sub(start.start_pts))
                 .unwrap_or(gst::ClockTime::ZERO)
         );
 
@@ -589,7 +589,7 @@ impl FMP4Mux {
                     CAT,
                     obj: &stream.sinkpad,
                     "Draining {} worth of buffers starting at PTS {} DTS {}, DTS offset {}",
-                    end_pts - earliest_pts,
+                    end_pts.saturating_sub(earliest_pts),
                     earliest_pts,
                     start_dts.display(),
                     dts_offset.display(),
@@ -603,7 +603,7 @@ impl FMP4Mux {
                         CAT,
                         obj: &stream.sinkpad,
                         "Queued full GOPs duration updated to {}",
-                        prev_gop.end_pts - first_gop.earliest_pts,
+                        prev_gop.end_pts.saturating_sub(first_gop.earliest_pts),
                     );
                 }
 
@@ -612,7 +612,7 @@ impl FMP4Mux {
                     obj: &stream.sinkpad,
                     "Queued duration updated to {}",
                     Option::zip(stream.queued_gops.front(), stream.queued_gops.back())
-                        .map(|(end, start)| end.end_pts - start.start_pts)
+                        .map(|(end, start)| end.end_pts.saturating_sub(start.start_pts))
                         .unwrap_or(gst::ClockTime::ZERO)
                 );
 
