@@ -275,6 +275,25 @@ fn test_buffer_flags_multi_stream() {
                     count: 0
                 }
             );
+
+            let ev = loop {
+                let ev = h2.pull_upstream_event().unwrap();
+                if ev.type_() != gst::EventType::Reconfigure
+                    && ev.type_() != gst::EventType::Latency
+                {
+                    break ev;
+                }
+            };
+
+            assert_eq!(ev.type_(), gst::EventType::CustomUpstream);
+            assert_eq!(
+                gst_video::UpstreamForceKeyUnitEvent::parse(&ev).unwrap(),
+                gst_video::UpstreamForceKeyUnitEvent {
+                    running_time: Some(gst::ClockTime::from_seconds(5)),
+                    all_headers: true,
+                    count: 0
+                }
+            );
         }
     }
 
