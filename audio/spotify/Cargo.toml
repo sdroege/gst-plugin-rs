@@ -12,7 +12,7 @@ rust-version = "1.57"
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 once_cell = "1.0"
-librespot = { version = "0.3", default-features = false }
+librespot = { version = "0.4", default-features = false }
 tokio = "1.0"
 futures = "0.3"
 anyhow = "1.0"
