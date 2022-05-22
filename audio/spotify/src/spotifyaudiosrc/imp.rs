@@ -27,6 +27,7 @@ use librespot::playback::{
     config::PlayerConfig,
     convert::Converter,
     decoder::AudioPacket,
+    mixer::NoOpVolume,
     player::{Player, PlayerEvent},
 };
 
@@ -327,7 +328,7 @@ impl SpotifyAudioSrc {
                 None
             };
 
-            let cache = Cache::new(credentials_cache, files_cache, max_size)?;
+            let cache = Cache::new(credentials_cache, None, files_cache, max_size)?;
 
             let credentials = match cache.credentials() {
                 Some(cached_cred) => {
@@ -359,7 +360,8 @@ impl SpotifyAudioSrc {
 
         let state = self.state.clone();
 
-        let session = Session::connect(SessionConfig::default(), credentials, Some(cache)).await?;
+        let (session, _credentials) =
+            Session::connect(SessionConfig::default(), credentials, Some(cache), false).await?;
 
         let player_config = PlayerConfig {
             passthrough: true,
@@ -371,7 +373,7 @@ impl SpotifyAudioSrc {
         let sender_clone = sender.clone();
 
         let (mut player, mut player_event_channel) =
-            Player::new(player_config, session, None, || {
+            Player::new(player_config, session, Box::new(NoOpVolume), || {
                 Box::new(BufferSink { sender })
             });
 
@@ -414,9 +416,12 @@ struct BufferSink {
 }
 
 impl Sink for BufferSink {
-    fn write(&mut self, packet: &AudioPacket, _converter: &mut Converter) -> SinkResult<()> {
-        let ogg = packet.oggdata().unwrap();
-        let buffer = gst::Buffer::from_slice(Vec::from(ogg));
+    fn write(&mut self, packet: AudioPacket, _converter: &mut Converter) -> SinkResult<()> {
+        let oggdata = match packet {
+            AudioPacket::OggData(data) => data,
+            AudioPacket::Samples(_) => unimplemented!(),
+        };
+        let buffer = gst::Buffer::from_slice(oggdata);
 
         // ignore if sending fails as that means the source element is being shutdown
         let _ = self.sender.send(Message::Buffer(buffer));
