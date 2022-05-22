@@ -5,9 +5,6 @@ vulnerability = "deny"
 unmaintained = "warn"
 notice = "warn"
 ignore = [
-    # Waiting for https://github.com/chronotope/chrono/pull/578
-    "RUSTSEC-2020-0071",
-    "RUSTSEC-2020-0159",
     # Waiting for https://github.com/librespot-org/librespot/issues/937
     "RUSTSEC-2021-0059",
     "RUSTSEC-2021-0060",
@@ -61,12 +58,6 @@ version = "0.1"
 name = "textwrap"
 version = "0.11"
 
-# ignore duplicated cfg-if dependency because a few dozen dependencies still
-# pull in the old version
-[[bans.skip]]
-name = "cfg-if"
-version = "0.1"
-
 # ignore duplicated rustc_version dependency because various crates depend on an old version
 [[bans.skip]]
 name = "rustc_version"
@@ -113,6 +104,14 @@ version = "0.3"
 # ignore duplicated env_logger dependency because librespot depends on an old version
 [[bans.skip]]
 name = "env_logger"
+version = "0.8"
+
+# ignore duplicated parking_lot dependency because librespot depends on an old version
+[[bans.skip]]
+name = "parking_lot"
+version = "0.11"
+[[bans.skip]]
+name = "parking_lot_core"
 version = "0.8"
 
 # ignore duplicated sha-1/digest/block-buffer dependencies because librespot depends on an old version
