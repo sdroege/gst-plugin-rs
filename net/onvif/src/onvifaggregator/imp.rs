@@ -317,6 +317,15 @@ impl OnvifAggregator {
                         end
                     );
                     Ok(Some((self.media_sink_pad.pop_buffer().unwrap(), Some(end))))
+                } else if self.meta_sink_pad.is_eos() {
+                    gst::debug!(
+                        CAT,
+                        obj: element,
+                        "Media buffer spanning {} -> {} is ready (meta pad is EOS)",
+                        start,
+                        end
+                    );
+                    Ok(Some((self.media_sink_pad.pop_buffer().unwrap(), Some(end))))
                 } else if let Some(latest_frame) = state.meta_frames.iter().next_back() {
                     if latest_frame.timestamp > end {
                         gst::debug!(
@@ -428,6 +437,8 @@ impl AggregatorImpl for OnvifAggregator {
             element.set_position(buffer.pts().opt_add(buffer.duration()));
 
             self.finish_buffer(element, buffer)
+        } else if self.media_sink_pad.is_eos() {
+            Err(gst::FlowError::Eos)
         } else {
             Err(AGGREGATOR_FLOW_NEED_DATA)
         }
