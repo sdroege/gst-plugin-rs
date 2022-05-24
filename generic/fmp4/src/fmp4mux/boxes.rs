@@ -355,8 +355,7 @@ fn brands_from_variant_and_caps<'a>(
 pub(super) fn create_fmp4_header(cfg: super::HeaderConfiguration) -> Result<gst::Buffer, Error> {
     let mut v = vec![];
 
-    let (brand, compatible_brands) =
-        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.1));
+    let (brand, compatible_brands) = brands_from_variant_and_caps(cfg.variant, cfg.streams.iter());
 
     write_box(&mut v, b"ftyp", |v| {
         // major brand
@@ -370,6 +369,42 @@ pub(super) fn create_fmp4_header(cfg: super::HeaderConfiguration) -> Result<gst:
     })?;
 
     write_box(&mut v, b"moov", |v| write_moov(v, &cfg))?;
+
+    if cfg.variant == super::Variant::ONVIF {
+        write_full_box(
+            &mut v,
+            b"meta",
+            FULL_BOX_VERSION_0,
+            FULL_BOX_FLAGS_NONE,
+            |v| {
+                write_full_box(v, b"hdlr", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
+                    // Handler type
+                    v.extend(b"null");
+
+                    // Reserved
+                    v.extend([0u8; 3 * 4]);
+
+                    // Name
+                    v.extend(b"MetadataHandler");
+
+                    Ok(())
+                })?;
+
+                write_box(v, b"cstb", |v| {
+                    // entry count
+                    v.extend(1u32.to_be_bytes());
+
+                    // track id
+                    v.extend(0u32.to_be_bytes());
+
+                    // XXX: start UTC time in 100ns units since Jan 1 1601
+                    v.extend(0u64.to_be_bytes());
+
+                    Ok(())
+                })
+            },
+        )?;
+    }
 
     Ok(gst::Buffer::from_mut_slice(v))
 }
@@ -385,7 +420,7 @@ fn write_moov(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
     write_full_box(v, b"mvhd", FULL_BOX_VERSION_1, FULL_BOX_FLAGS_NONE, |v| {
         write_mvhd(v, cfg, creation_time)
     })?;
-    for (idx, (pad, caps)) in cfg.streams.iter().enumerate() {
+    for (idx, caps) in cfg.streams.iter().enumerate() {
         write_box(v, b"trak", |v| {
             let mut references = vec![];
 
@@ -394,7 +429,7 @@ fn write_moov(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
                 && caps.structure(0).unwrap().name() == "application/x-onvif-metadata"
             {
                 // Find the first video track
-                for (idx, (_pad, caps)) in cfg.streams.iter().enumerate() {
+                for (idx, caps) in cfg.streams.iter().enumerate() {
                     let s = caps.structure(0).unwrap();
 
                     if matches!(s.name(), "video/x-h264" | "video/x-h265" | "image/jpeg") {
@@ -407,7 +442,7 @@ fn write_moov(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
                 }
             }
 
-            write_trak(v, cfg, idx, pad, caps, creation_time, &references)
+            write_trak(v, cfg, idx, caps, creation_time, &references)
         })?;
     }
     write_box(v, b"mvex", |v| write_mvex(v, cfg))?;
@@ -454,7 +489,7 @@ fn write_mvhd(
     // Modification time
     v.extend(creation_time.to_be_bytes());
     // Timescale: uses the reference track timescale
-    v.extend(caps_to_timescale(&cfg.streams[0].1).to_be_bytes());
+    v.extend(caps_to_timescale(&cfg.streams[0]).to_be_bytes());
     // Duration
     v.extend(0u64.to_be_bytes());
 
@@ -504,7 +539,6 @@ fn write_trak(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
     idx: usize,
-    _pad: &gst_base::AggregatorPad,
     caps: &gst::CapsRef,
     creation_time: u64,
     references: &[TrackReference],
@@ -1389,7 +1423,7 @@ fn write_mvex(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
         }
     }
 
-    for (idx, (_pad, _caps)) in cfg.streams.iter().enumerate() {
+    for (idx, _caps) in cfg.streams.iter().enumerate() {
         write_full_box(v, b"trex", FULL_BOX_VERSION_0, FULL_BOX_FLAGS_NONE, |v| {
             write_trex(v, cfg, idx)
         })?;
@@ -1400,7 +1434,7 @@ fn write_mvex(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
 
 fn write_mehd(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), Error> {
     // Use the reference track timescale
-    let timescale = caps_to_timescale(&cfg.streams[0].1);
+    let timescale = caps_to_timescale(&cfg.streams[0]);
 
     let duration = cfg
         .duration
@@ -1443,7 +1477,7 @@ pub(super) fn create_fmp4_fragment_header(
     let mut v = vec![];
 
     let (brand, compatible_brands) =
-        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.1));
+        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.0));
 
     write_box(&mut v, b"styp", |v| {
         // major brand
@@ -1494,7 +1528,7 @@ fn write_moof(
     })?;
 
     let mut data_offset_offsets = vec![];
-    for (idx, (_pad, caps, timing_info)) in cfg.streams.iter().enumerate() {
+    for (idx, (caps, timing_info)) in cfg.streams.iter().enumerate() {
         // Skip tracks without any buffers for this fragment.
         let timing_info = match timing_info {
             None => continue,

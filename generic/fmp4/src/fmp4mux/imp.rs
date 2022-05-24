@@ -607,7 +607,7 @@ impl FMP4Mux {
                     "Draining no buffers",
                 );
 
-                streams.push((stream.sinkpad.clone(), stream.caps.clone(), None));
+                streams.push((stream.caps.clone(), None));
                 drain_buffers.push(VecDeque::new());
             } else {
                 let first_gop = gops.first().unwrap();
@@ -678,7 +678,6 @@ impl FMP4Mux {
                 };
 
                 streams.push((
-                    stream.sinkpad.clone(),
                     stream.caps.clone(),
                     Some(super::FragmentTimingInfo {
                         start_time,
@@ -928,7 +927,7 @@ impl FMP4Mux {
 
             // Write mfra only for the main stream, and if there are no buffers for the main stream
             // in this segment then don't write anything.
-            if let Some((_pad, _caps, Some(ref timing_info))) = streams.get(0) {
+            if let Some((_caps, Some(ref timing_info))) = streams.get(0) {
                 state.fragment_offsets.push(super::FragmentOffset {
                     time: timing_info.start_time,
                     offset: moof_offset,
@@ -952,7 +951,7 @@ impl FMP4Mux {
         }
 
         if settings.write_mfra && at_eos {
-            match boxes::create_mfra(&streams[0].1, &state.fragment_offsets) {
+            match boxes::create_mfra(&streams[0].0, &state.fragment_offsets) {
                 Ok(mut mfra) => {
                     {
                         let mfra = mfra.get_mut().unwrap();
@@ -1100,11 +1099,10 @@ impl FMP4Mux {
         let streams = state
             .streams
             .iter()
-            .map(|s| (s.sinkpad.clone(), s.caps.clone()))
+            .map(|s| s.caps.clone())
             .collect::<Vec<_>>();
 
         let mut buffer = boxes::create_fmp4_header(super::HeaderConfiguration {
-            element,
             variant,
             update: at_eos,
             streams: streams.as_slice(),

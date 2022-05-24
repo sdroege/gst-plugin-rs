@@ -64,12 +64,10 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 #[derive(Debug)]
 pub(crate) struct HeaderConfiguration<'a> {
     variant: Variant,
-    #[allow(dead_code)]
-    element: &'a FMP4Mux,
     update: bool,
     /// First caps must be the video/reference stream. Must be in the order the tracks are going to
     /// be used later for the fragments too.
-    streams: &'a [(gst_base::AggregatorPad, gst::Caps)],
+    streams: &'a [gst::Caps],
     write_mehd: bool,
     duration: Option<gst::ClockTime>,
 }
@@ -78,11 +76,7 @@ pub(crate) struct HeaderConfiguration<'a> {
 pub(crate) struct FragmentHeaderConfiguration<'a> {
     variant: Variant,
     sequence_number: u32,
-    streams: &'a [(
-        gst_base::AggregatorPad,
-        gst::Caps,
-        Option<FragmentTimingInfo>,
-    )],
+    streams: &'a [(gst::Caps, Option<FragmentTimingInfo>)],
     buffers: &'a [Buffer],
 }
 
