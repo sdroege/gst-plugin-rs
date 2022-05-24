@@ -385,7 +385,29 @@ fn write_moov(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
         write_mvhd(v, cfg, creation_time)
     })?;
     for (idx, caps) in cfg.caps.iter().enumerate() {
-        write_box(v, b"trak", |v| write_trak(v, cfg, idx, caps, creation_time))?;
+        write_box(v, b"trak", |v| {
+            let mut references = vec![];
+
+            // Reference the video track for ONVIF metadata tracks
+            if cfg.variant == super::Variant::ONVIF
+                && caps.structure(0).unwrap().name() == "application/x-onvif-metadata"
+            {
+                // Find the first video track
+                for (idx, caps) in cfg.caps.iter().enumerate() {
+                    let s = caps.structure(0).unwrap();
+
+                    if matches!(s.name(), "video/x-h264" | "video/x-h265" | "image/jpeg") {
+                        references.push(TrackReference {
+                            reference_type: *b"cdsc",
+                            track_ids: vec![idx as u32 + 1],
+                        });
+                        break;
+                    }
+                }
+            }
+
+            write_trak(v, cfg, idx, caps, creation_time, &references)
+        })?;
     }
     write_box(v, b"mvex", |v| write_mvex(v, cfg))?;
 
@@ -472,12 +494,18 @@ const TKHD_FLAGS_TRACK_ENABLED: u32 = 0x1;
 const TKHD_FLAGS_TRACK_IN_MOVIE: u32 = 0x2;
 const TKHD_FLAGS_TRACK_IN_PREVIEW: u32 = 0x4;
 
+struct TrackReference {
+    reference_type: [u8; 4],
+    track_ids: Vec<u32>,
+}
+
 fn write_trak(
     v: &mut Vec<u8>,
     cfg: &super::HeaderConfiguration,
     idx: usize,
     caps: &gst::CapsRef,
     creation_time: u64,
+    references: &[TrackReference],
 ) -> Result<(), Error> {
     write_full_box(
         v,
@@ -491,6 +519,10 @@ fn write_trak(
     // TODO: write edts optionally for negative DTS instead of offsetting the DTS
 
     write_box(v, b"mdia", |v| write_mdia(v, cfg, caps, creation_time))?;
+
+    if !references.is_empty() {
+        write_box(v, b"tref", |v| write_tref(v, cfg, references))?;
+    }
 
     Ok(())
 }
@@ -594,6 +626,24 @@ fn write_mdia(
     // TODO: write elng if needed
 
     write_box(v, b"minf", |v| write_minf(v, cfg, caps))?;
+
+    Ok(())
+}
+
+fn write_tref(
+    v: &mut Vec<u8>,
+    _cfg: &super::HeaderConfiguration,
+    references: &[TrackReference],
+) -> Result<(), Error> {
+    for reference in references {
+        write_box(v, &reference.reference_type, |v| {
+            for track_id in &reference.track_ids {
+                v.extend(track_id.to_be_bytes());
+            }
+
+            Ok(())
+        })?;
+    }
 
     Ok(())
 }
