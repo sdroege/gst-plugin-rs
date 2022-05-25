@@ -70,6 +70,8 @@ struct Settings {
     buffer_duration: i64,
     immediate_fallback: bool,
     manual_unblock: bool,
+    fallback_video_caps: gst::Caps,
+    fallback_audio_caps: gst::Caps,
 }
 
 impl Default for Settings {
@@ -88,6 +90,8 @@ impl Default for Settings {
             buffer_duration: -1,
             immediate_fallback: false,
             manual_unblock: false,
+            fallback_video_caps: gst::Caps::new_any(),
+            fallback_audio_caps: gst::Caps::new_any(),
         }
     }
 }
@@ -115,6 +119,8 @@ struct Stream {
     //   for video: filesrc, decoder, converters, imagefreeze
     //   for audio: live audiotestsrc, converters
     fallback_input: gst::Element,
+
+    fallback_capsfilter: gst::Element,
 
     // source pad from source
     source_srcpad: Option<gst::Pad>,
@@ -304,6 +310,20 @@ impl ObjectImpl for FallbackSrc {
                     false,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecBoxed::new(
+                    "fallback-video-caps",
+                    "Fallback Video Caps",
+                    "Raw video caps for fallback stream",
+                    gst::Caps::static_type(),
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
+                glib::ParamSpecBoxed::new(
+                    "fallback-audio-caps",
+                    "Fallback Audio Caps",
+                    "Raw audio caps for fallback stream",
+                    gst::Caps::static_type(),
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -474,6 +494,36 @@ impl ObjectImpl for FallbackSrc {
                 );
                 settings.manual_unblock = new_value;
             }
+            "fallback-video-caps" => {
+                let mut settings = self.settings.lock();
+                let new_value = value
+                    .get::<Option<gst::Caps>>()
+                    .expect("type checked upstream")
+                    .unwrap_or_else(gst::Caps::new_any);
+                gst::info!(
+                    CAT,
+                    obj: obj,
+                    "Changing fallback video caps from {} to {}",
+                    settings.fallback_video_caps,
+                    new_value,
+                );
+                settings.fallback_video_caps = new_value;
+            }
+            "fallback-audio-caps" => {
+                let mut settings = self.settings.lock();
+                let new_value = value
+                    .get::<Option<gst::Caps>>()
+                    .expect("type checked upstream")
+                    .unwrap_or_else(gst::Caps::new_any);
+                gst::info!(
+                    CAT,
+                    obj: obj,
+                    "Changing fallback audio caps from {} to {}",
+                    settings.fallback_audio_caps,
+                    new_value,
+                );
+                settings.fallback_audio_caps = new_value;
+            }
             _ => unimplemented!(),
         }
     }
@@ -587,6 +637,14 @@ impl ObjectImpl for FallbackSrc {
             "manual-unblock" => {
                 let settings = self.settings.lock();
                 settings.manual_unblock.to_value()
+            }
+            "fallback-video-caps" => {
+                let settings = self.settings.lock();
+                settings.fallback_video_caps.to_value()
+            }
+            "fallback-audio-caps" => {
+                let settings = self.settings.lock();
+                settings.fallback_audio_caps.to_value()
             }
             _ => unimplemented!(),
         }
@@ -894,6 +952,7 @@ impl FallbackSrc {
         input.upcast()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_stream(
         &self,
         element: &super::FallbackSrc,
@@ -902,12 +961,17 @@ impl FallbackSrc {
         is_audio: bool,
         fallback_uri: Option<&str>,
         immediate_fallback: bool,
+        fallback_caps: &gst::Caps,
     ) -> Stream {
         let fallback_input = if is_audio {
             self.create_fallback_audio_input(element)
         } else {
             self.create_fallback_video_input(element, min_latency, fallback_uri)
         };
+
+        let fallback_capsfilter =
+            gst::ElementFactory::make("capsfilter", None).expect("No capsfilter found");
+        fallback_capsfilter.set_property("caps", fallback_caps);
 
         let switch =
             gst::ElementFactory::make("fallbackswitch", None).expect("No fallbackswitch found");
@@ -928,8 +992,15 @@ impl FallbackSrc {
         ]);
 
         element
-            .add_many(&[&fallback_input, &switch, &clocksync_queue, &clocksync])
+            .add_many(&[
+                &fallback_input,
+                &fallback_capsfilter,
+                &switch,
+                &clocksync_queue,
+                &clocksync,
+            ])
             .unwrap();
+        fallback_input.link(&fallback_capsfilter).unwrap();
 
         switch.set_property("timeout", timeout.nseconds());
         switch.set_property("min-upstream-latency", min_latency.nseconds());
@@ -943,7 +1014,7 @@ impl FallbackSrc {
         switch_mainsink.set_property("priority", 0u32);
         // clocksync_queue sink pad is not connected to anything yet at this point!
 
-        let fallback_srcpad = fallback_input.static_pad("src").unwrap();
+        let fallback_srcpad = fallback_capsfilter.static_pad("src").unwrap();
         let switch_fallbacksink = switch.request_pad_simple("sink_%u").unwrap();
         fallback_srcpad.link(&switch_fallbacksink).unwrap();
         switch_fallbacksink.set_property("priority", 1u32);
@@ -983,6 +1054,7 @@ impl FallbackSrc {
 
         Stream {
             fallback_input,
+            fallback_capsfilter,
             source_srcpad: None,
             source_srcpad_block: None,
             clocksync,
@@ -1037,6 +1109,7 @@ impl FallbackSrc {
                 false,
                 fallback_uri.as_deref(),
                 settings.immediate_fallback,
+                &settings.fallback_video_caps,
             );
             flow_combiner.add_pad(&stream.srcpad);
             Some(stream)
@@ -1053,6 +1126,7 @@ impl FallbackSrc {
                 true,
                 None,
                 settings.immediate_fallback,
+                &settings.fallback_audio_caps,
             );
             flow_combiner.add_pad(&stream.srcpad);
             Some(stream)
@@ -1112,6 +1186,7 @@ impl FallbackSrc {
             element.remove(&stream.switch).unwrap();
             element.remove(&stream.clocksync_queue).unwrap();
             element.remove(&stream.clocksync).unwrap();
+            element.remove(&stream.fallback_capsfilter).unwrap();
             element.remove(&stream.fallback_input).unwrap();
             let _ = stream.srcpad.set_target(None::<&gst::Pad>);
             let _ = element.remove_pad(&stream.srcpad);
