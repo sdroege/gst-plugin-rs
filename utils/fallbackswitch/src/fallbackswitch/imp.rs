@@ -14,7 +14,7 @@ use gst::{debug, log, trace};
 
 use once_cell::sync::Lazy;
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 const PROP_PRIORITY: &str = "priority";
@@ -689,28 +689,25 @@ impl FallbackSwitch {
          * in case the initial active pad never receives a buffer */
         if let Some(running_time) = start_running_time {
             if state.timeout_clock_id.is_none() && !is_active {
+                // May change active pad immediately
                 self.schedule_timeout(element, &mut state, &settings, running_time);
+                is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
             }
         }
 
-        let mut state = if let Some(clock_id) = &output_clockid {
-            drop(state);
+        if let Some(clock_id) = &output_clockid {
+            MutexGuard::unlocked(&mut state, || {
+                let (_res, _) = clock_id.wait();
+            });
 
-            let (_res, _) = clock_id.wait();
-            self.state.lock()
-        } else {
-            state
-        };
+            is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
+        }
 
         let mut pad_state = pad_imp.state.lock();
         if pad_state.flushing {
             debug!(CAT, obj: element, "Flushing");
             return Err(gst::FlowError::Flushing);
         }
-
-        let is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
-        let switched_pad = state.switched_pad;
-        let discont_pending = state.discont_pending;
 
         if is_active {
             if Option::zip(start_running_time, state.output_running_time).map_or(
@@ -749,13 +746,12 @@ impl FallbackSwitch {
             }
 
             if let Some(end_running_time) = end_running_time {
+                // May change active pad immediately
                 self.schedule_timeout(element, &mut state, &settings, end_running_time);
+                is_active = self.active_sinkpad.lock().as_ref() == Some(pad);
             } else {
                 state.cancel_timeout();
             }
-
-            state.switched_pad = false;
-            state.discont_pending = false;
         }
 
         if let Some(running_time) = end_running_time {
@@ -768,6 +764,12 @@ impl FallbackSwitch {
             log!(CAT, obj: pad, "Dropping {:?} on inactive pad", buffer);
             return Ok(gst::FlowSuccess::Ok);
         }
+
+        let switched_pad = state.switched_pad;
+        let discont_pending = state.discont_pending;
+        state.switched_pad = false;
+        state.discont_pending = false;
+
         let _stream_lock = self.src_pad.stream_lock();
         drop(state);
 
