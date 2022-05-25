@@ -125,9 +125,25 @@ impl Server {
         let this_id_clone = this_id.clone();
         let (mut ws_sink, mut ws_stream) = ws.split();
         let send_task_handle = task::spawn(async move {
-            while let Some(msg) = websocket_receiver.next().await {
-                trace!(this_id = %this_id_clone, "sending {}", msg);
-                ws_sink.send(WsMessage::Text(msg)).await?;
+            loop {
+                match async_std::future::timeout(
+                    std::time::Duration::from_secs(30),
+                    websocket_receiver.next(),
+                )
+                .await
+                {
+                    Ok(Some(msg)) => {
+                        trace!(this_id = %this_id_clone, "sending {}", msg);
+                        ws_sink.send(WsMessage::Text(msg)).await?;
+                    }
+                    Ok(None) => {
+                        break;
+                    }
+                    Err(_) => {
+                        trace!(this_id = %this_id_clone, "timeout, sending ping");
+                        ws_sink.send(WsMessage::Ping(vec![])).await?;
+                    }
+                }
             }
 
             ws_sink.send(WsMessage::Close(None)).await?;
@@ -152,6 +168,9 @@ impl Server {
                     Ok(WsMessage::Close(reason)) => {
                         info!(this_id = %this_id_clone, "connection closed: {:?}", reason);
                         break;
+                    }
+                    Ok(WsMessage::Pong(_)) => {
+                        continue;
                     }
                     Ok(_) => warn!(this_id = %this_id_clone, "Unsupported message type"),
                     Err(err) => {
