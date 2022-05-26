@@ -27,7 +27,7 @@ static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
     runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(2)
-        .thread_name("gst-rusoto-runtime")
+        .thread_name("gst-aws-runtime")
         .build()
         .unwrap()
 });

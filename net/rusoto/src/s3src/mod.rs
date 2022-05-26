@@ -21,5 +21,11 @@ pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
         "rusotos3src",
         gst::Rank::Primary,
         S3Src::static_type(),
+    )?;
+    gst::Element::register(
+        Some(plugin),
+        "awss3src",
+        gst::Rank::Primary,
+        S3Src::static_type(),
     )
 }

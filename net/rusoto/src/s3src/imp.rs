@@ -76,7 +76,7 @@ pub struct S3Src {
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "rusotos3src",
+        "awss3src",
         gst::DebugColorFlags::empty(),
         Some("Amazon S3 Source"),
     )
@@ -104,7 +104,7 @@ impl S3Src {
                 secret_access_key.clone(),
                 None,
                 None,
-                "rusoto-s3-src",
+                "aws-s3-src",
             )),
             _ => None,
         };

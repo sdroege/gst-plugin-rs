@@ -7,9 +7,9 @@ to interact with [S3](https://aws.amazon.com/s3) and
 
 ## AWS Credentials
 
-AWS credentials are picked up using the mechanism that
-[rusoto's ChainProvider](https://rusoto.github.io/rusoto/rusoto_credential/struct.ChainProvider.html)
-uses. At the moment, that is:
+AWS credentials are picked up using the mechanism described by
+[AWS SDK](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/credentials.html).
+At the moment, that is:
 
 1.  Environment variables: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
 2.  AWS credentials file. Usually located at ~/.aws/credentials.

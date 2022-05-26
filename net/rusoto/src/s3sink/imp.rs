@@ -172,7 +172,7 @@ pub struct S3Sink {
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
-        "rusotos3sink",
+        "aws3sink",
         gst::DebugColorFlags::empty(),
         Some("Amazon S3 Sink"),
     )
@@ -468,7 +468,7 @@ impl S3Sink {
                 secret_access_key.clone(),
                 None,
                 None,
-                "rusoto-s3-sink",
+                "aws-s3-sink",
             )),
             _ => None,
         };
