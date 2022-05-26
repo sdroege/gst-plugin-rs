@@ -26,7 +26,7 @@ You will find the following plugins in this repository:
 
     - `reqwest`: An HTTP source element based on the [reqwest](https://github.com/seanmonstar/reqwest) library.
 
-    - `rusoto`: Various elements for Amazon AWS services using the [Rusoto](https://rusoto.org) library
+    - `aws`: Various elements for Amazon AWS services using the [AWS SDK](https://awslabs.github.io/aws-sdk-rust/) library
       - `s3src`/`s3sink`: A source and sink element to talk to the Amazon S3 object storage system.
       - `aws_transcriber`: an element wrapping the AWS Transcriber service.
 

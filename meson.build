@@ -46,7 +46,7 @@ plugins = {
   'gst-plugin-reqwest': 'libgstreqwest',
   'gst-plugin-hlssink3': 'libgsthlssink3',
   'gst-plugin-rspng': 'libgstrspng',
-  'gst-plugin-rusoto': 'libgstrusoto',
+  'gst-plugin-aws': 'libgstaws',
   'gst-plugin-textwrap': 'libgstrstextwrap',
   'gst-plugin-fmp4': 'libgstfmp4',
   'gst-plugin-threadshare': 'libgstthreadshare',
