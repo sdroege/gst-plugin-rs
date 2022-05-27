@@ -11,6 +11,7 @@ use gst::glib;
 
 mod aws_transcribe_parse;
 mod aws_transcriber;
+mod s3hlssink;
 mod s3sink;
 mod s3src;
 mod s3url;
@@ -23,6 +24,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     s3src::register(plugin)?;
     aws_transcribe_parse::register(plugin)?;
     aws_transcriber::register(plugin)?;
+    s3hlssink::register(plugin)?;
 
     Ok(())
 }
