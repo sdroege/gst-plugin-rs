@@ -135,4 +135,9 @@ if __name__ == "__main__":
             dest = uninstalled / P(f).name
             if dest.exists():
                 dest.unlink()
-            shutil.move(f, uninstalled)
+            # move() takes paths from Python3.9 on
+            if ((sys.version_info.major >= 3) and (sys.version_info.minor >= 9)):
+                shutil.move(f, uninstalled)
+            else:
+                shutil.move(str(f), str(uninstalled))
+
