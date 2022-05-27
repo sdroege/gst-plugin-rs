@@ -1624,12 +1624,11 @@ fn analyze_buffers(
         let f = sample_flags_from_buffer(buffer, intra_only);
         if first_buffer_flags.is_none() {
             first_buffer_flags = Some(f);
+        } else {
             flags = Some(f);
-        } else if flags.is_none() {
             if Some(f) != first_buffer_flags {
                 tr_flags |= FIRST_SAMPLE_FLAGS_PRESENT;
             }
-            flags = Some(f);
         }
 
         if flags.is_some() && Some(f) != flags {
@@ -1684,6 +1683,13 @@ fn analyze_buffers(
         tf_flags |= DEFAULT_SAMPLE_DURATION_PRESENT;
     } else {
         duration = None;
+    }
+
+    // If there is only a single buffer use its flags as default sample flags
+    // instead of first sample flags.
+    if flags.is_none() && first_buffer_flags.is_some() {
+        tr_flags &= !FIRST_SAMPLE_FLAGS_PRESENT;
+        flags = first_buffer_flags.take();
     }
 
     if (tr_flags & SAMPLE_FLAGS_PRESENT) == 0 {
