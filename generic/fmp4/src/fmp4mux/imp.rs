@@ -503,7 +503,7 @@ impl FMP4Mux {
         settings: &Settings,
         timeout: bool,
         at_eos: bool,
-    ) -> Result<Option<gst::BufferList>, gst::FlowError> {
+    ) -> Result<(Option<gst::Caps>, Option<gst::BufferList>), gst::FlowError> {
         let class = element.class();
 
         if at_eos {
@@ -513,7 +513,7 @@ impl FMP4Mux {
         } else {
             for stream in &state.streams {
                 if !stream.fragment_filled && !stream.sinkpad.is_eos() {
-                    return Ok(None);
+                    return Ok((None, None));
                 }
             }
         }
@@ -558,7 +558,7 @@ impl FMP4Mux {
             stream.fragment_filled = false;
 
             if gops.is_empty() {
-                streams.push((&stream.sinkpad, &stream.caps, None));
+                streams.push((stream.sinkpad.clone(), stream.caps.clone(), None));
             } else {
                 let first_gop = gops.first().unwrap();
                 let last_gop = gops.last().unwrap();
@@ -622,8 +622,8 @@ impl FMP4Mux {
                 };
 
                 streams.push((
-                    &stream.sinkpad,
-                    &stream.caps,
+                    stream.sinkpad.clone(),
+                    stream.caps.clone(),
                     Some(super::FragmentTimingInfo {
                         start_time,
                         intra_only: stream.intra_only,
@@ -696,6 +696,15 @@ impl FMP4Mux {
                 }
                 drain_buffers.push(buffers);
             }
+        }
+
+        // Create header now if it was not created before and return the caps
+        let mut caps = None;
+        if state.stream_header.is_none() {
+            let (_, new_caps) = self
+                .update_header(element, state, &settings, false)?
+                .unwrap();
+            caps = Some(new_caps);
         }
 
         // Interleave buffers according to the settings into a single vec
@@ -873,7 +882,7 @@ impl FMP4Mux {
         }
 
         if settings.write_mfra && at_eos {
-            match boxes::create_mfra(streams[0].1, &state.fragment_offsets) {
+            match boxes::create_mfra(&streams[0].1, &state.fragment_offsets) {
                 Ok(mut mfra) => {
                     {
                         let mfra = mfra.get_mut().unwrap();
@@ -895,7 +904,7 @@ impl FMP4Mux {
         // TODO: Write edit list at EOS
         // TODO: Rewrite bitrates at EOS
 
-        Ok(buffer_list)
+        Ok((caps, buffer_list))
     }
 
     fn create_streams(
@@ -1020,7 +1029,7 @@ impl FMP4Mux {
         let streams = state
             .streams
             .iter()
-            .map(|s| (&s.sinkpad, &s.caps))
+            .map(|s| (s.sinkpad.clone(), s.caps.clone()))
             .collect::<Vec<_>>();
 
         let mut buffer = boxes::create_fmp4_header(super::HeaderConfiguration {
@@ -1461,23 +1470,12 @@ impl AggregatorImpl for FMP4Mux {
         let mut all_eos = true;
         let mut upstream_events = vec![];
 
-        let buffers = {
+        let (caps, buffers) = {
             let mut state = self.state.lock().unwrap();
 
             // Create streams
             if state.streams.is_empty() {
                 self.create_streams(aggregator, &mut state)?;
-            }
-
-            // Stream header in the beginning and set output caps.
-            if state.stream_header.is_none() {
-                let (_, caps) = self
-                    .update_header(aggregator, &mut state, &settings, false)?
-                    .unwrap();
-
-                drop(state);
-                aggregator.set_src_caps(&caps);
-                state = self.state.lock().unwrap();
             }
 
             // Queue buffers from all streams that are not filled for the current fragment yet
@@ -1614,6 +1612,16 @@ impl AggregatorImpl for FMP4Mux {
 
         for (sinkpad, event) in upstream_events {
             sinkpad.push_event(event);
+        }
+
+        if let Some(caps) = caps {
+            gst::debug!(
+                CAT,
+                obj: aggregator,
+                "Setting caps on source pad: {:?}",
+                caps
+            );
+            aggregator.set_src_caps(&caps);
         }
 
         if let Some(buffers) = buffers {

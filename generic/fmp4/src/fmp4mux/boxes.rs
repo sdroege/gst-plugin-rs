@@ -356,7 +356,7 @@ pub(super) fn create_fmp4_header(cfg: super::HeaderConfiguration) -> Result<gst:
     let mut v = vec![];
 
     let (brand, compatible_brands) =
-        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| s.1));
+        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.1));
 
     write_box(&mut v, b"ftyp", |v| {
         // major brand
@@ -454,7 +454,7 @@ fn write_mvhd(
     // Modification time
     v.extend(creation_time.to_be_bytes());
     // Timescale: uses the reference track timescale
-    v.extend(caps_to_timescale(cfg.streams[0].1).to_be_bytes());
+    v.extend(caps_to_timescale(&cfg.streams[0].1).to_be_bytes());
     // Duration
     v.extend(0u64.to_be_bytes());
 
@@ -1400,7 +1400,7 @@ fn write_mvex(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), E
 
 fn write_mehd(v: &mut Vec<u8>, cfg: &super::HeaderConfiguration) -> Result<(), Error> {
     // Use the reference track timescale
-    let timescale = caps_to_timescale(cfg.streams[0].1);
+    let timescale = caps_to_timescale(&cfg.streams[0].1);
 
     let duration = cfg
         .duration
@@ -1443,7 +1443,7 @@ pub(super) fn create_fmp4_fragment_header(
     let mut v = vec![];
 
     let (brand, compatible_brands) =
-        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| s.1));
+        brands_from_variant_and_caps(cfg.variant, cfg.streams.iter().map(|s| &s.1));
 
     write_box(&mut v, b"styp", |v| {
         // major brand

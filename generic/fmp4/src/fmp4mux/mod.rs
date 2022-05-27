@@ -69,7 +69,7 @@ pub(crate) struct HeaderConfiguration<'a> {
     update: bool,
     /// First caps must be the video/reference stream. Must be in the order the tracks are going to
     /// be used later for the fragments too.
-    streams: &'a [(&'a gst_base::AggregatorPad, &'a gst::Caps)],
+    streams: &'a [(gst_base::AggregatorPad, gst::Caps)],
     write_mehd: bool,
     duration: Option<gst::ClockTime>,
 }
@@ -79,8 +79,8 @@ pub(crate) struct FragmentHeaderConfiguration<'a> {
     variant: Variant,
     sequence_number: u32,
     streams: &'a [(
-        &'a gst_base::AggregatorPad,
-        &'a gst::Caps,
+        gst_base::AggregatorPad,
+        gst::Caps,
         Option<FragmentTimingInfo>,
     )],
     buffers: &'a [Buffer],
