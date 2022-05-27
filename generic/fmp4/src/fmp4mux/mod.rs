@@ -70,6 +70,9 @@ pub(crate) struct HeaderConfiguration<'a> {
     streams: &'a [gst::Caps],
     write_mehd: bool,
     duration: Option<gst::ClockTime>,
+    /// Start UTC time in ONVIF mode.
+    /// Since Jan 1 1601 in 100ns units.
+    start_utc_time: Option<u64>,
 }
 
 #[derive(Debug)]

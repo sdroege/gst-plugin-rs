@@ -397,8 +397,8 @@ pub(super) fn create_fmp4_header(cfg: super::HeaderConfiguration) -> Result<gst:
                     // track id
                     v.extend(0u32.to_be_bytes());
 
-                    // XXX: start UTC time in 100ns units since Jan 1 1601
-                    v.extend(0u64.to_be_bytes());
+                    // start UTC time in 100ns units since Jan 1 1601
+                    v.extend(cfg.start_utc_time.unwrap().to_be_bytes());
 
                     Ok(())
                 })
