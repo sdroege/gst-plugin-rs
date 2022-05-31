@@ -342,7 +342,11 @@ impl Handler {
 
     /// Register peer as a producer
     #[instrument(level = "debug", skip(self))]
-    fn register_producer(&mut self, peer_id: &str, meta: Option<serde_json::Value>) -> Result<(), Error> {
+    fn register_producer(
+        &mut self,
+        peer_id: &str,
+        meta: Option<serde_json::Value>,
+    ) -> Result<(), Error> {
         if self.producers.contains_key(peer_id) {
             Err(anyhow!("{} is already registered as a producer", peer_id))
         } else {
@@ -376,7 +380,11 @@ impl Handler {
 
     /// Register peer as a consumer
     #[instrument(level = "debug", skip(self))]
-    fn register_consumer(&mut self, peer_id: &str, meta: Option<serde_json::Value>) -> Result<(), Error> {
+    fn register_consumer(
+        &mut self,
+        peer_id: &str,
+        meta: Option<serde_json::Value>,
+    ) -> Result<(), Error> {
         if self.consumers.contains_key(peer_id) {
             Err(anyhow!("{} is already registered as a consumer", peer_id))
         } else {
@@ -400,7 +408,11 @@ impl Handler {
 
     /// Register peer as a listener
     #[instrument(level = "debug", skip(self))]
-    fn register_listener(&mut self, peer_id: &str, meta: Option<serde_json::Value>) -> Result<(), Error> {
+    fn register_listener(
+        &mut self,
+        peer_id: &str,
+        meta: Option<serde_json::Value>,
+    ) -> Result<(), Error> {
         if !self.listeners.insert(peer_id.to_string()) {
             Err(anyhow!("{} is already registered as a listener", peer_id))
         } else {
@@ -536,7 +548,7 @@ mod tests {
         let mut handler = Handler::new(Box::pin(rx));
 
         let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            meta: Some(json!( {"display-name": "foobar".to_string() }))
+            meta: Some(json!( {"display-name": "foobar".to_string() })),
         });
 
         tx.send(("producer".to_string(), Some(message)))

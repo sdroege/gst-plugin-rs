@@ -2292,7 +2292,7 @@ impl WebRTCSink {
                 gst::MessageView::Error(err) => {
                     pipe.0.debug_to_dot_file_with_ts(
                         gst::DebugGraphDetails::all(),
-                        "webrtcsink-discovery-error".to_string(),
+                        "webrtcsink-discovery-error",
                     );
                     return Err(err.error().into());
                 }
@@ -2301,7 +2301,7 @@ impl WebRTCSink {
 
                     pipe.0.debug_to_dot_file_with_ts(
                         gst::DebugGraphDetails::all(),
-                        "webrtcsink-discovery-done".to_string(),
+                        "webrtcsink-discovery-done",
                     );
 
                     if let Some(s) = caps.structure(0) {

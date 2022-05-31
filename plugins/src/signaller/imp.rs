@@ -107,7 +107,9 @@ impl Signaller {
         };
 
         websocket_sender
-            .send(p::IncomingMessage::Register(p::RegisterMessage::Producer { meta, }))
+            .send(p::IncomingMessage::Register(p::RegisterMessage::Producer {
+                meta,
+            }))
             .await?;
 
         let element_clone = element.downgrade();
