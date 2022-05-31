@@ -558,7 +558,14 @@ impl FMP4Mux {
             stream.fragment_filled = false;
 
             if gops.is_empty() {
+                gst::info!(
+                    CAT,
+                    obj: &stream.sinkpad,
+                    "Draining no buffers",
+                );
+
                 streams.push((stream.sinkpad.clone(), stream.caps.clone(), None));
+                drain_buffers.push(VecDeque::new());
             } else {
                 let first_gop = gops.first().unwrap();
                 let last_gop = gops.last().unwrap();
