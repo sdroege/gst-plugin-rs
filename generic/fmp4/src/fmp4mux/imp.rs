@@ -883,9 +883,18 @@ impl FMP4Mux {
             state.end_pts = Some(max_end_pts);
 
             // Update for the start PTS of the next fragment
-            state.fragment_start_pts = state
-                .fragment_start_pts
-                .map(|start| start + settings.fragment_duration);
+            state.fragment_start_pts = state.fragment_start_pts.map(|start| {
+                let new_fragment_start = start + settings.fragment_duration;
+
+                gst::info!(
+                    CAT,
+                    obj: element,
+                    "Starting new fragment at {}",
+                    new_fragment_start
+                );
+
+                new_fragment_start
+            });
         }
 
         if settings.write_mfra && at_eos {
