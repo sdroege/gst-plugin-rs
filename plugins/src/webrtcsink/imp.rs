@@ -350,7 +350,6 @@ fn configure_encoder(enc: &gst::Element, start_bitrate: u32) {
                 enc.set_property("buffer-initial-size", 100i32);
                 enc.set_property("buffer-optimal-size", 120i32);
                 enc.set_property("buffer-size", 150i32);
-                enc.set_property("resize-allowed", true);
                 enc.set_property("max-intra-bitrate", 250i32);
                 enc.set_property_from_str("error-resilient", "default");
                 enc.set_property("lag-in-frames", 0i32);
