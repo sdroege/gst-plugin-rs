@@ -77,16 +77,6 @@ class Input {
         /**
          * @type {function}
          */
-        this.onmenuhotkey = null;
-
-        /**
-         * @type {function}
-         */
-        this.onfullscreenhotkey = null;
-
-        /**
-         * @type {function}
-         */
         this.ongamepadconnected = null;
 
         /**
@@ -250,40 +240,6 @@ class Input {
     }
 
     /**
-     * Captures keyboard events to detect pressing of CTRL-SHIFT hotkey.
-     * @param {KeyboardEvent} event
-     */
-    _key(event) {
-
-        // disable problematic browser shortcuts
-        if (event.code === 'F5' && event.ctrlKey ||
-            event.code === 'KeyI' && event.ctrlKey && event.shiftKey ||
-            event.code === 'F11') {
-            event.preventDefault();
-            return;
-        }
-
-        // capture menu hotkey
-        if (event.type === 'keydown' && event.code === 'KeyM' && event.ctrlKey && event.shiftKey) {
-            if (document.fullscreenElement === null && this.onmenuhotkey !== null) {
-                this.onmenuhotkey();
-                event.preventDefault();
-            }
-
-            return;
-        }
-
-        // capture fullscreen hotkey
-        if (event.type === 'keydown' && event.code === 'KeyF' && event.ctrlKey && event.shiftKey) {
-            if (document.fullscreenElement === null && this.onfullscreenhotkey !== null) {
-                this.onfullscreenhotkey();
-                event.preventDefault();
-            }
-            return;
-        }
-    }
-
-    /**
      * Sends WebRTC app command to hide the remote pointer when exiting pointer lock.
      */
     _exitPointerLock() {
@@ -421,8 +377,6 @@ class Input {
         this.listeners.push(addListener(this.element, 'wheel', this._wheel, this));
         this.listeners.push(addListener(this.element, 'contextmenu', this._contextMenu, this));
         this.listeners.push(addListener(this.element.parentElement, 'fullscreenchange', this._onFullscreenChange, this));
-        this.listeners.push(addListener(window, 'keydown', this._key, this));
-        this.listeners.push(addListener(window, 'keyup', this._key, this));
         this.listeners.push(addListener(window, 'resize', this._windowMath, this));
         this.listeners.push(addListener(window, 'resize', this._resizeStart, this));
 
@@ -446,7 +400,7 @@ class Input {
         }, this));
 
         // Using guacamole keyboard because it has the keysym translations.
-        this.keyboard = new Keyboard(window);
+        this.keyboard = new Keyboard(this.element);
         this.keyboard.onkeydown = (keysym, state) => {
             this.send(JSON.stringify( {"event": "KeyPress", "key": keysym, "modifier_state": state}));
         };
