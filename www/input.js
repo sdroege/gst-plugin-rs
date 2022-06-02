@@ -50,11 +50,6 @@ class Input {
         this.m = null;
 
         /**
-         * @type {Integer}
-         */
-        this.buttonMask = 0;
-
-        /**
          * @type {Keyboard}
          */
         this.keyboard = null;
@@ -155,14 +150,7 @@ class Input {
         }
 
         if (event.type === 'mousedown' || event.type === 'mouseup') {
-            var mask = 1 << event.button;
-            if (down) {
-                this.buttonMask |= mask;
-            } else {
-                this.buttonMask &= ~mask;
-            }
-
-            data["button"] = this.buttonMask;
+            data["button"] = event.button + 1;
         }
 
         data["x"] = this.x;
