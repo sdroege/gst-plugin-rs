@@ -266,7 +266,7 @@ function Session(our_id, peer_id, closed_callback) {
                 this.input = new Input(video_element, (data) => {
                     if (this.data_channel) {
                         console.log(`Navigation data: ${data}`);
-                        this.data_channel.send(data);
+                        this.data_channel.send(JSON.stringify(data));
                     }
                 });
             }

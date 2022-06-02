@@ -147,7 +147,7 @@ class Input {
         data["y"] = this.y;
         data["modifier_state"] = this._modifierState(event);
 
-        this.send(JSON.stringify(data));
+        this.send(data);
     }
 
     /**
@@ -167,7 +167,7 @@ class Input {
             data["y"] = this._clientToServerY(event.changedTouches[0].clientY);
             data["modifier_state"] = mod_state;
 
-            this.send(JSON.stringify(data));
+            this.send(data);
             return;
         }
         
@@ -196,7 +196,7 @@ class Input {
                 }
             }
 
-            this.send(JSON.stringify(data));
+            this.send(data);
         }
 
         if (event.timeStamp > this.lastTouch) {
@@ -205,7 +205,7 @@ class Input {
             data["event"] = "TouchFrame";
             data["modifier_state"] = mod_state;
 
-            this.send(JSON.stringify(data));
+            this.send(data);
             this.lastTouch = event.timeStamp;
         }
 
@@ -226,7 +226,7 @@ class Input {
             "modifier_state": this._modifierState(event),
         };
 
-        this.send(JSON.stringify(data));
+        this.send(data);
 
         event.preventDefault();
     }
@@ -402,10 +402,10 @@ class Input {
         // Using guacamole keyboard because it has the keysym translations.
         this.keyboard = new Keyboard(this.element);
         this.keyboard.onkeydown = (keysym, state) => {
-            this.send(JSON.stringify( {"event": "KeyPress", "key": keysym, "modifier_state": state}));
+            this.send({"event": "KeyPress", "key": keysym, "modifier_state": state});
         };
         this.keyboard.onkeyup = (keysym, state) => {
-            this.send(JSON.stringify( {"event": "KeyRelease", "key": keysym, "modifier_state": state}));
+            this.send({"event": "KeyRelease", "key": keysym, "modifier_state": state});
         };
 
         this._windowMath();
