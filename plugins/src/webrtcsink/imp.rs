@@ -5,7 +5,6 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_rtp::prelude::*;
 use gst_utils::StreamProducer;
-use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
 use gst_webrtc::WebRTCDataChannel;
 
@@ -212,6 +211,13 @@ enum SignallerState {
     Stopped,
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct NavigationEvent {
+    mid: Option<String>,
+    #[serde(flatten)]
+    event: gst_video::NavigationEvent,
+}
+
 /* Our internal state */
 struct State {
     signaller: Box<dyn super::SignallableObject>,
@@ -229,13 +235,42 @@ struct State {
     video_serial: u32,
     streams: HashMap<String, InputStream>,
     navigation_handler: Option<NavigationEventHandler>,
+    mids: HashMap<String, String>,
 }
 
-fn create_navigation_event<N: IsA<gst_video::Navigation>>(sink: &N, msg: &str) {
-    let event: Result<gst_video::NavigationEvent, _> = serde_json::from_str(msg);
+fn create_navigation_event(sink: &super::WebRTCSink, msg: &str) {
+    let event: Result<NavigationEvent, _> = serde_json::from_str(msg);
 
     if let Ok(event) = event {
-        sink.send_event(event.structure());
+        gst::log!(CAT, obj: sink, "Processing navigation event: {:?}", event);
+
+        if let Some(mid) = event.mid {
+            let this = WebRTCSink::from_instance(sink);
+
+            let state = this.state.lock().unwrap();
+            if let Some(stream_name) = state.mids.get(&mid) {
+                if let Some(stream) = state.streams.get(stream_name) {
+                    let event = gst::event::Navigation::new(event.event.structure());
+
+                    if !stream.sink_pad.push_event(event.clone()) {
+                        gst::info!(CAT, "Could not send event: {:?}", event);
+                    }
+                }
+            }
+        } else {
+            let this = WebRTCSink::from_instance(sink);
+
+            let state = this.state.lock().unwrap();
+            let event = gst::event::Navigation::new(event.event.structure());
+            state.streams.iter().for_each(|(_, stream)| {
+                if stream.sink_pad.name().starts_with("video_") {
+                    gst::log!(CAT, "Navigating to: {:?}", event);
+                    if !stream.sink_pad.push_event(event.clone()) {
+                        gst::info!(CAT, "Could not send event: {:?}", event);
+                    }
+                }
+            });
+        }
     } else {
         gst::error!(CAT, "Invalid navigation event: {:?}", msg);
     }
@@ -304,6 +339,7 @@ impl Default for State {
             video_serial: 0,
             streams: HashMap::new(),
             navigation_handler: None,
+            mids: HashMap::new(),
         }
     }
 }
@@ -1975,6 +2011,16 @@ impl WebRTCSink {
 
         if let Some(mut consumer) = state.consumers.remove(&peer_id) {
             for webrtc_pad in consumer.webrtc_pads.clone().values() {
+                let transceiver = webrtc_pad
+                    .pad
+                    .property::<gst_webrtc::WebRTCRTPTransceiver>("transceiver");
+
+                if let Some(mid) = transceiver.mid() {
+                    state
+                        .mids
+                        .insert(mid.to_string(), webrtc_pad.stream_name.clone());
+                }
+
                 if let Some(producer) = state
                     .streams
                     .get(&webrtc_pad.stream_name)
