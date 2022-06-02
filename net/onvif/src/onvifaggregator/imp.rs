@@ -68,6 +68,7 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 static NTP_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::builder("timestamp/x-ntp").build());
+static UNIX_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::builder("timestamp/x-unix").build());
 
 #[glib::object_subclass]
 impl ObjectSubclass for OnvifAggregator {
@@ -284,6 +285,9 @@ impl OnvifAggregator {
         for meta in buffer.iter_meta::<gst::ReferenceTimestampMeta>() {
             if meta.reference().is_subset(&NTP_CAPS) {
                 return Some(meta.timestamp());
+            }
+            if meta.reference().is_subset(&UNIX_CAPS) {
+                return Some(meta.timestamp() + PRIME_EPOCH_OFFSET);
             }
         }
 
