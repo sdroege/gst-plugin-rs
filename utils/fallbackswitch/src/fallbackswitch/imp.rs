@@ -500,10 +500,7 @@ impl FallbackSwitch {
         settings: &Settings,
         running_time: gst::ClockTime,
     ) {
-        /* clear any previous timeout */
-        if let Some(clock_id) = state.timeout_clock_id.take() {
-            clock_id.unschedule();
-        }
+        state.cancel_timeout();
 
         let clock = match element.clock() {
             None => return,
