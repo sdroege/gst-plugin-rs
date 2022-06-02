@@ -482,6 +482,10 @@ impl FallbackSwitch {
             debug!(CAT, obj: element, "Late timeout callback. Ignoring");
             return;
         }
+
+        // Ensure sink_chain on an inactive pad can schedule another timeout
+        state.timeout_clock_id = None;
+
         self.handle_timeout(element, &mut state, settings);
     }
 
