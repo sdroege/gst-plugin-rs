@@ -4,15 +4,10 @@ use gst::subclass::prelude::*;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 use gst_base::AGGREGATOR_FLOW_NEED_DATA;
-use minidom::Element;
 use once_cell::sync::Lazy;
 use std::collections::BTreeSet;
 use std::io::Cursor;
 use std::sync::Mutex;
-
-// Offset in nanoseconds from midnight 01-01-1900 (prime epoch) to
-// midnight 01-01-1970 (UNIX epoch)
-const PRIME_EPOCH_OFFSET: gst::ClockTime = gst::ClockTime::from_seconds(2_208_988_800);
 
 // Incoming metadata is split up frame-wise, and stored in a FIFO.
 #[derive(Eq, Clone)]
@@ -66,9 +61,6 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
         Some("ONVIF metadata / video aggregator"),
     )
 });
-
-static NTP_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::builder("timestamp/x-ntp").build());
-static UNIX_CAPS: Lazy<gst::Caps> = Lazy::new(|| gst::Caps::builder("timestamp/x-unix").build());
 
 #[glib::object_subclass]
 impl ObjectSubclass for OnvifAggregator {
@@ -196,102 +188,43 @@ impl OnvifAggregator {
         element: &super::OnvifAggregator,
     ) -> Result<(), gst::FlowError> {
         while let Some(buffer) = self.meta_sink_pad.pop_buffer() {
-            let buffer = buffer.into_mapped_buffer_readable().map_err(|_| {
-                gst::element_error!(
-                    element,
-                    gst::ResourceError::Read,
-                    ["Failed to map buffer readable"]
-                );
+            let root = crate::xml_from_buffer(&buffer).map_err(|err| {
+                element.post_error_message(err);
 
                 gst::FlowError::Error
             })?;
 
-            let utf8 = std::str::from_utf8(buffer.as_ref()).map_err(|err| {
-                gst::element_error!(
-                    element,
-                    gst::StreamError::Format,
-                    ["Failed to decode buffer as UTF-8: {}", err]
-                );
+            for res in crate::iterate_video_analytics_frames(&root) {
+                let (dt, el) = res.map_err(|err| {
+                    element.post_error_message(err);
 
-                gst::FlowError::Error
-            })?;
+                    gst::FlowError::Error
+                })?;
 
-            let root = utf8.parse::<Element>().map_err(|err| {
-                gst::element_error!(
-                    element,
-                    gst::ResourceError::Read,
-                    ["Failed to parse buffer as XML: {}", err]
-                );
+                let prime_dt_ns = crate::PRIME_EPOCH_OFFSET
+                    + gst::ClockTime::from_nseconds(dt.timestamp_nanos() as u64);
 
-                gst::FlowError::Error
-            })?;
+                let mut writer = Cursor::new(Vec::new());
+                el.write_to(&mut writer).map_err(|err| {
+                    gst::element_error!(
+                        element,
+                        gst::ResourceError::Write,
+                        ["Failed to write back frame as XML: {}", err]
+                    );
 
-            if let Some(analytics) =
-                root.get_child("VideoAnalytics", "http://www.onvif.org/ver10/schema")
-            {
-                for el in analytics.children() {
-                    // We are only interested in associating Frame metadata with video frames
-                    if el.is("Frame", "http://www.onvif.org/ver10/schema") {
-                        let timestamp = el.attr("UtcTime").ok_or_else(|| {
-                            gst::element_error!(
-                                element,
-                                gst::ResourceError::Read,
-                                ["Frame element has no UtcTime attribute"]
-                            );
+                    gst::FlowError::Error
+                })?;
 
-                            gst::FlowError::Error
-                        })?;
+                gst::trace!(CAT, "Consuming metadata buffer {}", prime_dt_ns);
 
-                        let dt =
-                            chrono::DateTime::parse_from_rfc3339(timestamp).map_err(|err| {
-                                gst::element_error!(
-                                    element,
-                                    gst::ResourceError::Read,
-                                    ["Failed to parse UtcTime {}: {}", timestamp, err]
-                                );
-
-                                gst::FlowError::Error
-                            })?;
-
-                        let prime_dt_ns = PRIME_EPOCH_OFFSET
-                            + gst::ClockTime::from_nseconds(dt.timestamp_nanos() as u64);
-
-                        let mut writer = Cursor::new(Vec::new());
-                        el.write_to(&mut writer).map_err(|err| {
-                            gst::element_error!(
-                                element,
-                                gst::ResourceError::Write,
-                                ["Failed to write back frame as XML: {}", err]
-                            );
-
-                            gst::FlowError::Error
-                        })?;
-
-                        gst::trace!(CAT, "Consuming metadata buffer {}", prime_dt_ns);
-
-                        state.meta_frames.insert(MetaFrame {
-                            timestamp: prime_dt_ns,
-                            buffer: gst::Buffer::from_slice(writer.into_inner()),
-                        });
-                    }
-                }
+                state.meta_frames.insert(MetaFrame {
+                    timestamp: prime_dt_ns,
+                    buffer: gst::Buffer::from_slice(writer.into_inner()),
+                });
             }
         }
 
         Ok(())
-    }
-
-    fn lookup_reference_timestamp(&self, buffer: &gst::Buffer) -> Option<gst::ClockTime> {
-        for meta in buffer.iter_meta::<gst::ReferenceTimestampMeta>() {
-            if meta.reference().is_subset(&NTP_CAPS) {
-                return Some(meta.timestamp());
-            }
-            if meta.reference().is_subset(&UNIX_CAPS) {
-                return Some(meta.timestamp() + PRIME_EPOCH_OFFSET);
-            }
-        }
-
-        None
     }
 
     fn media_buffer_duration(
@@ -371,7 +304,7 @@ impl OnvifAggregator {
             .or_else(|| self.media_sink_pad.pop_buffer())
         {
             if let Some(current_media_start) =
-                self.lookup_reference_timestamp(&current_media_buffer)
+                crate::lookup_reference_timestamp(&current_media_buffer)
             {
                 let duration =
                     match self.media_buffer_duration(element, &current_media_buffer, timeout) {
