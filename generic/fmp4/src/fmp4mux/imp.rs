@@ -513,13 +513,16 @@ impl FMP4Mux {
         //
         // Otherwise if the current PTS is a fragment duration in the future, send the next one
         // now.
-        let pts = segment.to_running_time(pts).expect("no running time");
 
         let last_force_keyunit_time = match stream.last_force_keyunit_time {
             None => return Ok(None),
-            Some(last_force_keyunit_time) if last_force_keyunit_time > pts => return Ok(None),
             Some(last_force_keyunit_time) => last_force_keyunit_time,
         };
+
+        let pts = segment.to_running_time(pts);
+        if pts.map_or(true, |pts| last_force_keyunit_time > pts) {
+            return Ok(None);
+        }
 
         let fku_running_time = last_force_keyunit_time + settings.fragment_duration;
         gst::debug!(
