@@ -21,6 +21,12 @@ static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 const DEFAULT_FONT_DESC: &str = "monospace 12";
 
+#[derive(Debug)]
+struct Point {
+    x: u32,
+    y: u32,
+}
+
 // Shape description in cairo coordinates (0, 0) is top left
 #[derive(Debug)]
 struct Shape {
@@ -28,6 +34,7 @@ struct Shape {
     y: u32,
     width: u32,
     height: u32,
+    points: Vec<Point>,
     // Optional text rendered from top left of rectangle
     tag: Option<String>,
 }
@@ -146,6 +153,7 @@ impl OnvifOverlay {
         state: &mut State,
         width: u32,
         height: u32,
+        points: &[Point],
         tag: Option<&str>,
     ) -> Option<(gst::Buffer, u32, u32)> {
         let mut text_width = 0;
@@ -206,19 +214,37 @@ impl OnvifOverlay {
         cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
         cr.paint().ok()?;
 
-        cr.save().ok()?;
+        if points.is_empty() {
+            // Render bounding box
+            cr.save().ok()?;
 
-        // Now render the rectangle
-        cr.move_to(line_width, line_width);
-        cr.line_to(line_width, height as f64 - line_width);
-        cr.line_to(width as f64 - line_width, height as f64 - line_width);
-        cr.line_to(width as f64 - line_width, line_width);
-        cr.close_path();
-        cr.set_source_rgba(1., 0., 0., 1.);
-        cr.set_line_width(line_width);
-        let _ = cr.stroke();
+            cr.move_to(line_width, line_width);
+            cr.line_to(line_width, height as f64 - line_width);
+            cr.line_to(width as f64 - line_width, height as f64 - line_width);
+            cr.line_to(width as f64 - line_width, line_width);
+            cr.close_path();
+            cr.set_source_rgba(1., 0., 0., 1.);
+            cr.set_line_width(line_width);
+            let _ = cr.stroke();
 
-        cr.restore().ok()?;
+            cr.restore().ok()?;
+        } else {
+            // Render polygon
+            cr.save().ok()?;
+
+            cr.move_to(points[0].x as f64, points[0].y as f64);
+
+            for point in &points[1..] {
+                cr.line_to(point.x as f64, point.y as f64)
+            }
+
+            cr.close_path();
+            cr.set_source_rgba(1., 0., 0., 1.);
+            cr.set_line_width(line_width);
+            let _ = cr.stroke();
+
+            cr.restore().ok()?;
+        }
 
         // Finally render the text, if any
         if let Some(layout) = layout {
@@ -324,6 +350,7 @@ impl OnvifOverlay {
                 state,
                 shape.width,
                 shape.height,
+                &shape.points,
                 shape.tag.as_deref(),
             ) {
                 Some(ret) => ret,
@@ -534,11 +561,63 @@ impl OnvifOverlay {
                             let x2 = width / 2 + ((right * (width / 2) as f64) as i32);
                             let y2 = height / 2 - ((bottom * (height / 2) as f64) as i32);
 
+                            let w = (x2 - x1) as u32;
+                            let h = (y2 - y1) as u32;
+
+                            let mut points = vec![];
+
+                            if let Some(polygon) =
+                                shape.get_child("Polygon", "http://www.onvif.org/ver10/schema")
+                            {
+                                for point in polygon.children() {
+                                    if point.is("Point", "http://www.onvif.org/ver10/schema") {
+                                        let px: f64 = match point
+                                            .attr("x")
+                                            .and_then(|val| val.parse().ok())
+                                        {
+                                            Some(val) => val,
+                                            None => {
+                                                gst::warning!(
+                                                    CAT,
+                                                    obj: element,
+                                                    "Point with no x attribute"
+                                                );
+                                                continue;
+                                            }
+                                        };
+
+                                        let py: f64 = match point
+                                            .attr("y")
+                                            .and_then(|val| val.parse().ok())
+                                        {
+                                            Some(val) => val,
+                                            None => {
+                                                gst::warning!(
+                                                    CAT,
+                                                    obj: element,
+                                                    "Point with no y attribute"
+                                                );
+                                                continue;
+                                            }
+                                        };
+
+                                        let px = width / 2 + ((px * (width / 2) as f64) as i32);
+                                        let px = (px as u32).saturating_sub(x1 as u32).min(w);
+
+                                        let py = height / 2 - ((py * (height / 2) as f64) as i32);
+                                        let py = (py as u32).saturating_sub(y1 as u32).min(h);
+
+                                        points.push(Point { x: px, y: py });
+                                    }
+                                }
+                            }
+
                             shapes.push(Shape {
                                 x: x1 as u32,
                                 y: y1 as u32,
-                                width: (x2 - x1) as u32,
-                                height: (y2 - y1) as u32,
+                                width: w,
+                                height: h,
+                                points,
                                 tag,
                             });
                         }
