@@ -456,173 +456,203 @@ impl OnvifOverlay {
                         gst::FlowError::Error
                     })?;
 
-                    for object in root.children() {
-                        if object.is("Object", "http://www.onvif.org/ver10/schema") {
-                            gst::trace!(CAT, obj: element, "Handling object {:?}", object);
+                    for object in root
+                        .get_child("VideoAnalytics", "http://www.onvif.org/ver10/schema")
+                        .map(|el| el.children().into_iter().collect())
+                        .unwrap_or_else(Vec::new)
+                    {
+                        if object.is("Frame", "http://www.onvif.org/ver10/schema") {
+                            for object in object.children() {
+                                if object.is("Object", "http://www.onvif.org/ver10/schema") {
+                                    gst::trace!(CAT, obj: element, "Handling object {:?}", object);
 
-                            let object_id = match object.attr("ObjectId") {
-                                Some(id) => id.to_string(),
-                                None => {
-                                    gst::warning!(CAT, obj: element, "XML Object with no ObjectId");
-                                    continue;
-                                }
-                            };
+                                    let object_id = match object.attr("ObjectId") {
+                                        Some(id) => id.to_string(),
+                                        None => {
+                                            gst::warning!(
+                                                CAT,
+                                                obj: element,
+                                                "XML Object with no ObjectId"
+                                            );
+                                            continue;
+                                        }
+                                    };
 
-                            if !object_ids.insert(object_id.clone()) {
-                                gst::debug!(CAT, "Skipping older version of object {}", object_id);
-                                continue;
-                            }
-
-                            let appearance = match object
-                                .get_child("Appearance", "http://www.onvif.org/ver10/schema")
-                            {
-                                Some(appearance) => appearance,
-                                None => continue,
-                            };
-
-                            let shape = match appearance
-                                .get_child("Shape", "http://www.onvif.org/ver10/schema")
-                            {
-                                Some(shape) => shape,
-                                None => continue,
-                            };
-
-                            let tag = appearance
-                                .get_child("Class", "http://www.onvif.org/ver10/schema")
-                                .and_then(|class| {
-                                    class.get_child("Type", "http://www.onvif.org/ver10/schema")
-                                })
-                                .map(|t| t.text());
-
-                            let bbox = match shape
-                                .get_child("BoundingBox", "http://www.onvif.org/ver10/schema")
-                            {
-                                Some(bbox) => bbox,
-                                None => {
-                                    gst::warning!(
-                                        CAT,
-                                        obj: element,
-                                        "XML Shape with no BoundingBox"
-                                    );
-                                    continue;
-                                }
-                            };
-
-                            let left: f64 = match bbox.attr("left").and_then(|val| val.parse().ok())
-                            {
-                                Some(val) => val,
-                                None => {
-                                    gst::warning!(
-                                        CAT,
-                                        obj: element,
-                                        "BoundingBox with no left attribute"
-                                    );
-                                    continue;
-                                }
-                            };
-
-                            let right: f64 =
-                                match bbox.attr("right").and_then(|val| val.parse().ok()) {
-                                    Some(val) => val,
-                                    None => {
-                                        gst::warning!(
+                                    if !object_ids.insert(object_id.clone()) {
+                                        gst::debug!(
                                             CAT,
-                                            obj: element,
-                                            "BoundingBox with no right attribute"
+                                            "Skipping older version of object {}",
+                                            object_id
                                         );
                                         continue;
                                     }
-                                };
 
-                            let top: f64 = match bbox.attr("top").and_then(|val| val.parse().ok()) {
-                                Some(val) => val,
-                                None => {
-                                    gst::warning!(
-                                        CAT,
-                                        obj: element,
-                                        "BoundingBox with no top attribute"
-                                    );
-                                    continue;
-                                }
-                            };
+                                    let appearance = match object.get_child(
+                                        "Appearance",
+                                        "http://www.onvif.org/ver10/schema",
+                                    ) {
+                                        Some(appearance) => appearance,
+                                        None => continue,
+                                    };
 
-                            let bottom: f64 =
-                                match bbox.attr("bottom").and_then(|val| val.parse().ok()) {
-                                    Some(val) => val,
-                                    None => {
-                                        gst::warning!(
-                                            CAT,
-                                            obj: element,
-                                            "BoundingBox with no bottom attribute"
-                                        );
-                                        continue;
-                                    }
-                                };
+                                    let shape = match appearance
+                                        .get_child("Shape", "http://www.onvif.org/ver10/schema")
+                                    {
+                                        Some(shape) => shape,
+                                        None => continue,
+                                    };
 
-                            let x1 = width / 2 + ((left * (width / 2) as f64) as i32);
-                            let y1 = height / 2 - ((top * (height / 2) as f64) as i32);
-                            let x2 = width / 2 + ((right * (width / 2) as f64) as i32);
-                            let y2 = height / 2 - ((bottom * (height / 2) as f64) as i32);
+                                    let tag = appearance
+                                        .get_child("Class", "http://www.onvif.org/ver10/schema")
+                                        .and_then(|class| {
+                                            class.get_child(
+                                                "Type",
+                                                "http://www.onvif.org/ver10/schema",
+                                            )
+                                        })
+                                        .map(|t| t.text());
 
-                            let w = (x2 - x1) as u32;
-                            let h = (y2 - y1) as u32;
+                                    let bbox = match shape.get_child(
+                                        "BoundingBox",
+                                        "http://www.onvif.org/ver10/schema",
+                                    ) {
+                                        Some(bbox) => bbox,
+                                        None => {
+                                            gst::warning!(
+                                                CAT,
+                                                obj: element,
+                                                "XML Shape with no BoundingBox"
+                                            );
+                                            continue;
+                                        }
+                                    };
 
-                            let mut points = vec![];
-
-                            if let Some(polygon) =
-                                shape.get_child("Polygon", "http://www.onvif.org/ver10/schema")
-                            {
-                                for point in polygon.children() {
-                                    if point.is("Point", "http://www.onvif.org/ver10/schema") {
-                                        let px: f64 = match point
-                                            .attr("x")
-                                            .and_then(|val| val.parse().ok())
-                                        {
+                                    let left: f64 =
+                                        match bbox.attr("left").and_then(|val| val.parse().ok()) {
                                             Some(val) => val,
                                             None => {
                                                 gst::warning!(
                                                     CAT,
                                                     obj: element,
-                                                    "Point with no x attribute"
+                                                    "BoundingBox with no left attribute"
                                                 );
                                                 continue;
                                             }
                                         };
 
-                                        let py: f64 = match point
-                                            .attr("y")
-                                            .and_then(|val| val.parse().ok())
-                                        {
+                                    let right: f64 =
+                                        match bbox.attr("right").and_then(|val| val.parse().ok()) {
                                             Some(val) => val,
                                             None => {
                                                 gst::warning!(
                                                     CAT,
                                                     obj: element,
-                                                    "Point with no y attribute"
+                                                    "BoundingBox with no right attribute"
                                                 );
                                                 continue;
                                             }
                                         };
 
-                                        let px = width / 2 + ((px * (width / 2) as f64) as i32);
-                                        let px = (px as u32).saturating_sub(x1 as u32).min(w);
+                                    let top: f64 =
+                                        match bbox.attr("top").and_then(|val| val.parse().ok()) {
+                                            Some(val) => val,
+                                            None => {
+                                                gst::warning!(
+                                                    CAT,
+                                                    obj: element,
+                                                    "BoundingBox with no top attribute"
+                                                );
+                                                continue;
+                                            }
+                                        };
 
-                                        let py = height / 2 - ((py * (height / 2) as f64) as i32);
-                                        let py = (py as u32).saturating_sub(y1 as u32).min(h);
+                                    let bottom: f64 = match bbox
+                                        .attr("bottom")
+                                        .and_then(|val| val.parse().ok())
+                                    {
+                                        Some(val) => val,
+                                        None => {
+                                            gst::warning!(
+                                                CAT,
+                                                obj: element,
+                                                "BoundingBox with no bottom attribute"
+                                            );
+                                            continue;
+                                        }
+                                    };
 
-                                        points.push(Point { x: px, y: py });
+                                    let x1 = width / 2 + ((left * (width / 2) as f64) as i32);
+                                    let y1 = height / 2 - ((top * (height / 2) as f64) as i32);
+                                    let x2 = width / 2 + ((right * (width / 2) as f64) as i32);
+                                    let y2 = height / 2 - ((bottom * (height / 2) as f64) as i32);
+
+                                    let w = (x2 - x1) as u32;
+                                    let h = (y2 - y1) as u32;
+
+                                    let mut points = vec![];
+
+                                    if let Some(polygon) = shape
+                                        .get_child("Polygon", "http://www.onvif.org/ver10/schema")
+                                    {
+                                        for point in polygon.children() {
+                                            if point
+                                                .is("Point", "http://www.onvif.org/ver10/schema")
+                                            {
+                                                let px: f64 = match point
+                                                    .attr("x")
+                                                    .and_then(|val| val.parse().ok())
+                                                {
+                                                    Some(val) => val,
+                                                    None => {
+                                                        gst::warning!(
+                                                            CAT,
+                                                            obj: element,
+                                                            "Point with no x attribute"
+                                                        );
+                                                        continue;
+                                                    }
+                                                };
+
+                                                let py: f64 = match point
+                                                    .attr("y")
+                                                    .and_then(|val| val.parse().ok())
+                                                {
+                                                    Some(val) => val,
+                                                    None => {
+                                                        gst::warning!(
+                                                            CAT,
+                                                            obj: element,
+                                                            "Point with no y attribute"
+                                                        );
+                                                        continue;
+                                                    }
+                                                };
+
+                                                let px =
+                                                    width / 2 + ((px * (width / 2) as f64) as i32);
+                                                let px =
+                                                    (px as u32).saturating_sub(x1 as u32).min(w);
+
+                                                let py = height / 2
+                                                    - ((py * (height / 2) as f64) as i32);
+                                                let py =
+                                                    (py as u32).saturating_sub(y1 as u32).min(h);
+
+                                                points.push(Point { x: px, y: py });
+                                            }
+                                        }
                                     }
+
+                                    shapes.push(Shape {
+                                        x: x1 as u32,
+                                        y: y1 as u32,
+                                        width: w,
+                                        height: h,
+                                        points,
+                                        tag,
+                                    });
                                 }
                             }
-
-                            shapes.push(Shape {
-                                x: x1 as u32,
-                                y: y1 as u32,
-                                width: w,
-                                height: h,
-                                points,
-                                tag,
-                            });
                         }
                     }
                 }
