@@ -834,7 +834,7 @@ impl ObjectImpl for S3Sink {
                 settings.request_timeout =
                     duration_from_millis(value.get::<i64>().expect("type checked upstream"));
             }
-            "retry-duration" | "upload-part-retry-duration" | "complete-upload-retry-duration" => {
+            "retry-duration" => {
                 /*
                  * To maintain backwards compatibility calculate retry attempts
                  * by dividing the provided duration from request timeout.
@@ -847,6 +847,9 @@ impl ObjectImpl for S3Sink {
                     request_timeout / value
                 };
                 settings.retry_attempts = retry_attempts as u32;
+            }
+            "upload-part-retry-duration" | "complete-upload-retry-duration" => {
+                gst::warning!(CAT, "Use retry-attempts. retry/upload-part/complete-upload-retry duration are deprecated.");
             }
             _ => unimplemented!(),
         }
