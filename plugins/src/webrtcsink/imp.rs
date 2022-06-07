@@ -347,27 +347,71 @@ impl Default for State {
 fn make_converter_for_video_caps(caps: &gst::Caps) -> Result<gst::Element, Error> {
     assert!(caps.is_fixed());
 
-    if let Some(feature) = caps.features(0) {
-        if feature.contains(CUDA_MEMORY_FEATURE) {
-            return Ok(gst::parse_bin_from_description(
-                "cudaupload ! cudaconvert ! cudascale ! videorate drop-only=true skip-to-first=true",
-                true,
-            )?
-            .upcast());
-        } else if feature.contains(GL_MEMORY_FEATURE) {
-            return Ok(gst::parse_bin_from_description(
-                "glupload ! glcolorconvert ! glcolorscale ! videorate drop-only=true skip-to-first=true",
-                true,
-            )?
-            .upcast());
+    let video_info = gst_video::VideoInfo::from_caps(&caps)?;
+
+    let ret = gst::Bin::new(None);
+
+    let (head, mut tail) = {
+        if let Some(feature) = caps.features(0) {
+            if feature.contains(CUDA_MEMORY_FEATURE) {
+                let cudaupload = make_element("cudaupload", None)?;
+                let cudaconvert = make_element("cudaconvert", None)?;
+                let cudascale = make_element("cudascale", None)?;
+
+                ret.add_many(&[&cudaupload, &cudaconvert, &cudascale])?;
+                gst::Element::link_many(&[&cudaupload, &cudaconvert, &cudascale])?;
+
+                (cudaupload, cudascale)
+            } else if feature.contains(GL_MEMORY_FEATURE) {
+                let glupload = make_element("glupload", None)?;
+                let glconvert = make_element("glcolorconvert", None)?;
+                let glscale = make_element("glcolorscale", None)?;
+
+                ret.add_many(&[&glupload, &glconvert, &glscale])?;
+                gst::Element::link_many(&[&glupload, &glconvert, &glscale])?;
+
+                (glupload, glscale)
+            } else {
+                let convert = make_element("videoconvert", None)?;
+                let scale = make_element("videoscale", None)?;
+
+                ret.add_many(&[&convert, &scale])?;
+                gst::Element::link_many(&[&convert, &scale])?;
+
+                (convert, scale)
+            }
+        } else {
+            let convert = make_element("videoconvert", None)?;
+            let scale = make_element("videoscale", None)?;
+
+            ret.add_many(&[&convert, &scale])?;
+            gst::Element::link_many(&[&convert, &scale])?;
+
+            (convert, scale)
         }
+    };
+
+    ret.add_pad(
+        &gst::GhostPad::with_target(Some("sink"), &head.static_pad("sink").unwrap()).unwrap(),
+    )
+    .unwrap();
+
+    if video_info.fps().numer() != 0 {
+        let vrate = make_element("videorate", None)?;
+        vrate.set_property("drop-only", true);
+        vrate.set_property("skip-to-first", true);
+
+        ret.add(&vrate)?;
+        tail.link(&vrate)?;
+        tail = vrate;
     }
 
-    Ok(gst::parse_bin_from_description(
-        "videoconvert ! videoscale ! videorate drop-only=true skip-to-first=true",
-        true,
-    )?
-    .upcast())
+    ret.add_pad(
+        &gst::GhostPad::with_target(Some("src"), &tail.static_pad("src").unwrap()).unwrap(),
+    )
+    .unwrap();
+
+    Ok(ret.upcast())
 }
 
 /// Default configuration for known encoders, can be disabled
@@ -617,7 +661,10 @@ impl VideoEncoder {
 
             s.set("height", height);
             s.set("width", width);
-            s.set("framerate", self.halved_framerate);
+
+            if self.halved_framerate.numer() != 0 {
+                s.set("framerate", self.halved_framerate);
+            }
 
             self.mitigation_mode =
                 WebRTCSinkMitigationMode::DOWNSAMPLED | WebRTCSinkMitigationMode::DOWNSCALED;
