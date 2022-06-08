@@ -37,9 +37,10 @@ required-features = ["gtk", "gio"]
 gst-plugin-version-helper = { path="../../version-helper" }
 
 [features]
-default = ["libc"]
+default = ["libc", "v1_20"]
 static = []
 capi = []
+v1_20 = ["gst/v1_20"]
 
 [package.metadata.capi]
 min_version = "0.8.0"

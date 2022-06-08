@@ -554,6 +554,16 @@ impl FallbackSwitch {
         element: &super::FallbackSwitch,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        self.chain(pad, element, buffer, None)
+    }
+
+    fn chain(
+        &self,
+        pad: &super::FallbackSwitchSinkPad,
+        element: &super::FallbackSwitch,
+        buffer: gst::Buffer,
+        from_gap: Option<&gst::event::Gap>,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
         let mut state = self.state.lock();
         let settings = self.settings.lock().clone();
         let pad = pad.downcast_ref().unwrap();
@@ -792,7 +802,30 @@ impl FallbackSwitch {
         /* TODO: Clip raw video and audio buffers to avoid going backward? */
 
         log!(CAT, obj: pad, "Forwarding {:?}", buffer);
-        self.src_pad.push(buffer)
+
+        if let Some(in_gap_event) = from_gap {
+            // Safe unwrap: the buffer was constructed from a gap event with
+            // a timestamp, and even if its timestamp was adjusted it should never
+            // be NONE by now
+            let pts = buffer.pts().unwrap();
+
+            let mut builder = gst::event::Gap::builder(pts)
+                .duration(buffer.duration())
+                .seqnum(in_gap_event.seqnum());
+
+            #[cfg(feature = "v1_20")]
+            {
+                builder = builder.gap_flags(in_gap_event.gap_flags());
+            }
+
+            let out_gap_event = builder.build();
+
+            self.src_pad.push_event(out_gap_event);
+
+            Ok(gst::FlowSuccess::Ok)
+        } else {
+            self.src_pad.push(buffer)
+        }
     }
 
     fn sink_chain_list(
@@ -805,7 +838,7 @@ impl FallbackSwitch {
         // TODO: Keep the list intact and forward it in one go (or broken into several
         // pieces if needed) when outputting to the active pad
         for buffer in list.iter_owned() {
-            self.sink_chain(pad, element, buffer)?;
+            self.chain(pad, element, buffer, None)?;
         }
 
         Ok(gst::FlowSuccess::Ok)
@@ -817,6 +850,27 @@ impl FallbackSwitch {
         element: &super::FallbackSwitch,
         event: gst::Event,
     ) -> bool {
+        if let gst::EventView::Gap(ev) = event.view() {
+            let mut buffer = gst::Buffer::new();
+
+            {
+                let buf_mut = buffer.get_mut().unwrap();
+                buf_mut.set_flags(gst::BufferFlags::GAP);
+                let (pts, duration) = ev.get();
+                buf_mut.set_pts(pts);
+                buf_mut.set_duration(duration);
+            }
+
+            return match self.chain(pad, element, buffer, Some(ev)) {
+                Ok(_) => true,
+                Err(gst::FlowError::Flushing) | Err(gst::FlowError::Eos) => true,
+                Err(err) => {
+                    gst::error!(CAT, obj: pad, "Error processing gap event: {}", err);
+                    false
+                }
+            };
+        }
+
         let mut state = self.state.lock();
         let forward = self.active_sinkpad.lock().as_ref() == Some(pad);
 
