@@ -60,17 +60,6 @@ version = "0.1"
 name = "textwrap"
 version = "0.11"
 
-# ignore duplicated rustc_version dependency because various crates depend on an old version
-[[bans.skip]]
-name = "rustc_version"
-version = "0.2"
-[[bans.skip]]
-name = "semver"
-version = "0.9"
-[[bans.skip]]
-name = "semver-parser"
-version = "0.7"
-
 # ignore duplicated rustc_version dependency because rav1e depends on an old version
 [[bans.skip]]
 name = "rustc_version"
@@ -114,11 +103,6 @@ version = "0.9"
 name = "sha-1"
 version = "0.9"
 
-# ignore duplicated tokio-util dependency because reqwest depend on an old version
-[[bans.skip]]
-name = "tokio-util"
-version = "0.6"
-
 # ignore duplicated wasi dependency because various crates depends on an old version
 [[bans.skip]]
 name = "wasi"
@@ -133,5 +117,4 @@ allow-git = [
   "https://github.com/gtk-rs/gtk4-rs",
   "https://github.com/rust-av/ffv1",
   "https://github.com/rust-av/flavors",
-  "https://github.com/philn/color-thief-rs",
 ]
