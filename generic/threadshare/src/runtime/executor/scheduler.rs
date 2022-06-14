@@ -3,8 +3,6 @@
 //
 // Take a look at the license at the top of the repository in the LICENSE file.
 
-use concurrent_queue::ConcurrentQueue;
-
 use futures::channel::oneshot;
 use futures::pin_mut;
 
@@ -22,7 +20,7 @@ use std::time::{Duration, Instant};
 use waker_fn::waker_fn;
 
 use super::task::{SubTaskOutput, TaskId, TaskQueue};
-use super::{CallOnDrop, JoinHandle, Reactor, Source};
+use super::{CallOnDrop, JoinHandle, Reactor};
 use crate::runtime::RUNTIME_CAT;
 
 thread_local! {
@@ -30,14 +28,10 @@ thread_local! {
 }
 
 #[derive(Debug)]
-struct CleanUpOps(Arc<Source>);
-
-#[derive(Debug)]
 pub(super) struct Scheduler {
     context_name: Arc<str>,
     max_throttling: Duration,
     tasks: TaskQueue,
-    cleanup_ops: ConcurrentQueue<CleanUpOps>,
     must_awake: Mutex<bool>,
     must_awake_cvar: Condvar,
 }
@@ -108,7 +102,6 @@ impl Scheduler {
                 context_name: context_name.clone(),
                 max_throttling,
                 tasks: TaskQueue::new(context_name),
-                cleanup_ops: ConcurrentQueue::bounded(1000),
                 must_awake: Mutex::new(false),
                 must_awake_cvar: Condvar::new(),
             }));
@@ -191,13 +184,7 @@ impl Scheduler {
                 break Ok(t);
             }
 
-            Reactor::with_mut(|reactor| {
-                while let Ok(op) = self.cleanup_ops.pop() {
-                    let _ = reactor.remove_io(&op.0);
-                }
-
-                reactor.react().ok()
-            });
+            Reactor::with_mut(|reactor| reactor.react().ok());
 
             while let Ok(runnable) = self.tasks.pop_runnable() {
                 panic::catch_unwind(|| runnable.run()).map_err(|err| {
@@ -422,18 +409,6 @@ impl Handle {
 
     pub(super) fn wake_up(&self) {
         self.0.scheduler.wake_up();
-    }
-
-    pub fn remove_soure(&self, source: Arc<Source>) {
-        if self
-            .0
-            .scheduler
-            .cleanup_ops
-            .push(CleanUpOps(source))
-            .is_err()
-        {
-            gst::warning!(RUNTIME_CAT, "scheduler: cleanup_ops is full");
-        }
     }
 
     pub fn has_sub_tasks(&self, task_id: TaskId) -> bool {

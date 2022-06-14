@@ -186,6 +186,12 @@ impl Reactor {
 
         // Register the file descriptor.
         if let Err(err) = self.poller.add(raw, Event::none(source.key)) {
+            gst::error!(
+                crate::runtime::RUNTIME_CAT,
+                "Failed to register fd {}: {}",
+                source.raw,
+                err,
+            );
             self.sources.remove(source.key);
             return Err(err);
         }
@@ -465,27 +471,27 @@ impl Source {
     }
 
     /// Waits until the I/O source is readable.
-    pub fn readable<T>(handle: &Async<T>) -> Readable<'_, T> {
+    pub fn readable<T: Send + 'static>(handle: &Async<T>) -> Readable<'_, T> {
         Readable(Self::ready(handle, READ))
     }
 
     /// Waits until the I/O source is readable.
-    pub fn readable_owned<T>(handle: Arc<Async<T>>) -> ReadableOwned<T> {
+    pub fn readable_owned<T: Send + 'static>(handle: Arc<Async<T>>) -> ReadableOwned<T> {
         ReadableOwned(Self::ready(handle, READ))
     }
 
     /// Waits until the I/O source is writable.
-    pub fn writable<T>(handle: &Async<T>) -> Writable<'_, T> {
+    pub fn writable<T: Send + 'static>(handle: &Async<T>) -> Writable<'_, T> {
         Writable(Self::ready(handle, WRITE))
     }
 
     /// Waits until the I/O source is writable.
-    pub fn writable_owned<T>(handle: Arc<Async<T>>) -> WritableOwned<T> {
+    pub fn writable_owned<T: Send + 'static>(handle: Arc<Async<T>>) -> WritableOwned<T> {
         WritableOwned(Self::ready(handle, WRITE))
     }
 
     /// Waits until the I/O source is readable or writable.
-    fn ready<H: Borrow<Async<T>> + Clone, T>(handle: H, dir: usize) -> Ready<H, T> {
+    fn ready<H: Borrow<Async<T>> + Clone, T: Send + 'static>(handle: H, dir: usize) -> Ready<H, T> {
         Ready {
             handle,
             dir,
@@ -498,9 +504,9 @@ impl Source {
 
 /// Future for [`Async::readable`](crate::runtime::Async::readable).
 #[must_use = "futures do nothing unless you `.await` or poll them"]
-pub struct Readable<'a, T>(Ready<&'a Async<T>, T>);
+pub struct Readable<'a, T: Send + 'static>(Ready<&'a Async<T>, T>);
 
-impl<T> Future for Readable<'_, T> {
+impl<T: Send + 'static> Future for Readable<'_, T> {
     type Output = io::Result<()>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -510,7 +516,7 @@ impl<T> Future for Readable<'_, T> {
     }
 }
 
-impl<T> fmt::Debug for Readable<'_, T> {
+impl<T: Send + 'static> fmt::Debug for Readable<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Readable").finish()
     }
@@ -518,9 +524,9 @@ impl<T> fmt::Debug for Readable<'_, T> {
 
 /// Future for [`Async::readable_owned`](crate::runtime::Async::readable_owned).
 #[must_use = "futures do nothing unless you `.await` or poll them"]
-pub struct ReadableOwned<T>(Ready<Arc<Async<T>>, T>);
+pub struct ReadableOwned<T: Send + 'static>(Ready<Arc<Async<T>>, T>);
 
-impl<T> Future for ReadableOwned<T> {
+impl<T: Send + 'static> Future for ReadableOwned<T> {
     type Output = io::Result<()>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -534,7 +540,7 @@ impl<T> Future for ReadableOwned<T> {
     }
 }
 
-impl<T> fmt::Debug for ReadableOwned<T> {
+impl<T: Send + 'static> fmt::Debug for ReadableOwned<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ReadableOwned").finish()
     }
@@ -542,9 +548,9 @@ impl<T> fmt::Debug for ReadableOwned<T> {
 
 /// Future for [`Async::writable`](crate::runtime::Async::writable).
 #[must_use = "futures do nothing unless you `.await` or poll them"]
-pub struct Writable<'a, T>(Ready<&'a Async<T>, T>);
+pub struct Writable<'a, T: Send + 'static>(Ready<&'a Async<T>, T>);
 
-impl<T> Future for Writable<'_, T> {
+impl<T: Send + 'static> Future for Writable<'_, T> {
     type Output = io::Result<()>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -554,7 +560,7 @@ impl<T> Future for Writable<'_, T> {
     }
 }
 
-impl<T> fmt::Debug for Writable<'_, T> {
+impl<T: Send + 'static> fmt::Debug for Writable<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Writable").finish()
     }
@@ -562,9 +568,9 @@ impl<T> fmt::Debug for Writable<'_, T> {
 
 /// Future for [`Async::writable_owned`](crate::runtime::Async::writable_owned).
 #[must_use = "futures do nothing unless you `.await` or poll them"]
-pub struct WritableOwned<T>(Ready<Arc<Async<T>>, T>);
+pub struct WritableOwned<T: Send + 'static>(Ready<Arc<Async<T>>, T>);
 
-impl<T> Future for WritableOwned<T> {
+impl<T: Send + 'static> Future for WritableOwned<T> {
     type Output = io::Result<()>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -578,13 +584,13 @@ impl<T> Future for WritableOwned<T> {
     }
 }
 
-impl<T> fmt::Debug for WritableOwned<T> {
+impl<T: Send + 'static> fmt::Debug for WritableOwned<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("WritableOwned").finish()
     }
 }
 
-struct Ready<H: Borrow<Async<T>>, T> {
+struct Ready<H: Borrow<Async<T>>, T: Send + 'static> {
     handle: H,
     dir: usize,
     ticks: Option<(usize, usize)>,
@@ -592,9 +598,9 @@ struct Ready<H: Borrow<Async<T>>, T> {
     _guard: Option<RemoveOnDrop<H, T>>,
 }
 
-impl<H: Borrow<Async<T>>, T> Unpin for Ready<H, T> {}
+impl<H: Borrow<Async<T>>, T: Send + 'static> Unpin for Ready<H, T> {}
 
-impl<H: Borrow<Async<T>> + Clone, T> Future for Ready<H, T> {
+impl<H: Borrow<Async<T>> + Clone, T: Send + 'static> Future for Ready<H, T> {
     type Output = io::Result<()>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -656,14 +662,14 @@ impl<H: Borrow<Async<T>> + Clone, T> Future for Ready<H, T> {
 }
 
 /// Remove waker when dropped.
-struct RemoveOnDrop<H: Borrow<Async<T>>, T> {
+struct RemoveOnDrop<H: Borrow<Async<T>>, T: Send + 'static> {
     handle: H,
     dir: usize,
     key: usize,
     _marker: PhantomData<fn() -> T>,
 }
 
-impl<H: Borrow<Async<T>>, T> Drop for RemoveOnDrop<H, T> {
+impl<H: Borrow<Async<T>>, T: Send + 'static + 'static> Drop for RemoveOnDrop<H, T> {
     fn drop(&mut self) {
         let mut state = self.handle.borrow().source.state.lock().unwrap();
         let wakers = &mut state[self.dir].wakers;

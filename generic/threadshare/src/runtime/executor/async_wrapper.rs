@@ -28,6 +28,8 @@ use std::os::windows::io::{AsRawSocket, RawSocket};
 
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 
+use crate::runtime::RUNTIME_CAT;
+
 use super::scheduler::{self, Scheduler};
 use super::{Reactor, Readable, ReadableOwned, Source, Writable, WritableOwned};
 
@@ -87,7 +89,7 @@ use super::{Reactor, Readable, ReadableOwned, Source, Writable, WritableOwned};
 /// [`Shutdown`][`std::net::Shutdown`].
 ///
 #[derive(Debug)]
-pub struct Async<T> {
+pub struct Async<T: Send + 'static> {
     /// A source registered in the reactor.
     pub(super) source: Arc<Source>,
 
@@ -95,13 +97,13 @@ pub struct Async<T> {
     io: Option<T>,
 
     // The [`Handle`] on the [`Scheduler`] on which this Async wrapper is registered.
-    handle: scheduler::HandleWeak,
+    sched: scheduler::HandleWeak,
 }
 
-impl<T> Unpin for Async<T> {}
+impl<T: Send + 'static> Unpin for Async<T> {}
 
 #[cfg(unix)]
-impl<T: AsRawFd> Async<T> {
+impl<T: AsRawFd + Send + 'static> Async<T> {
     /// Creates an async I/O handle.
     ///
     /// This method will put the handle in non-blocking mode and register it in
@@ -132,7 +134,7 @@ impl<T: AsRawFd> Async<T> {
         Ok(Async {
             source,
             io: Some(io),
-            handle: Scheduler::current()
+            sched: Scheduler::current()
                 .expect("Attempt to create an Async wrapper outside of a Context")
                 .downgrade(),
         })
@@ -140,14 +142,14 @@ impl<T: AsRawFd> Async<T> {
 }
 
 #[cfg(unix)]
-impl<T: AsRawFd> AsRawFd for Async<T> {
+impl<T: AsRawFd + Send + 'static> AsRawFd for Async<T> {
     fn as_raw_fd(&self) -> RawFd {
         self.source.raw
     }
 }
 
 #[cfg(windows)]
-impl<T: AsRawSocket> Async<T> {
+impl<T: AsRawSocket + Send + 'static> Async<T> {
     /// Creates an async I/O handle.
     ///
     /// This method will put the handle in non-blocking mode and register it in
@@ -183,7 +185,7 @@ impl<T: AsRawSocket> Async<T> {
         Ok(Async {
             source,
             io: Some(io),
-            handle: Scheduler::current()
+            sched: Scheduler::current()
                 .expect("Attempt to create an Async wrapper outside of a Context")
                 .downgrade(),
         })
@@ -191,13 +193,13 @@ impl<T: AsRawSocket> Async<T> {
 }
 
 #[cfg(windows)]
-impl<T: AsRawSocket> AsRawSocket for Async<T> {
+impl<T: AsRawSocket + Send + 'static> AsRawSocket for Async<T> {
     fn as_raw_socket(&self) -> RawSocket {
         self.source.raw
     }
 }
 
-impl<T> Async<T> {
+impl<T: Send + 'static> Async<T> {
     /// Gets a reference to the inner I/O handle.
     pub fn get_ref(&self) -> &T {
         self.io.as_ref().unwrap()
@@ -358,32 +360,39 @@ impl<T> Async<T> {
     }
 }
 
-impl<T> AsRef<T> for Async<T> {
+impl<T: Send + 'static> AsRef<T> for Async<T> {
     fn as_ref(&self) -> &T {
         self.get_ref()
     }
 }
 
-impl<T> AsMut<T> for Async<T> {
+impl<T: Send + 'static> AsMut<T> for Async<T> {
     fn as_mut(&mut self) -> &mut T {
         self.get_mut()
     }
 }
 
-impl<T> Drop for Async<T> {
+impl<T: Send + 'static> Drop for Async<T> {
     fn drop(&mut self) {
         if let Some(io) = self.io.take() {
-            // Drop the I/O handle to close it.
-            drop(io);
-
-            if let Some(handle) = self.handle.upgrade() {
-                handle.remove_soure(Arc::clone(&self.source));
+            if let Some(sched) = self.sched.upgrade() {
+                let source = Arc::clone(&self.source);
+                sched.spawn_and_awake(async move {
+                    Reactor::with_mut(|reactor| {
+                        if let Err(err) = reactor.remove_io(&source) {
+                            gst::error!(RUNTIME_CAT, "Failed to remove fd {}: {}", source.raw, err);
+                        }
+                    });
+                    drop(io);
+                });
+            } else {
+                drop(io);
             }
         }
     }
 }
 
-impl<T: Read> AsyncRead for Async<T> {
+impl<T: Read + Send + 'static> AsyncRead for Async<T> {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -413,7 +422,7 @@ impl<T: Read> AsyncRead for Async<T> {
     }
 }
 
-impl<T> AsyncRead for &Async<T>
+impl<T: Send + 'static> AsyncRead for &Async<T>
 where
     for<'a> &'a T: Read,
 {
@@ -446,7 +455,7 @@ where
     }
 }
 
-impl<T: Write> AsyncWrite for Async<T> {
+impl<T: Write + Send + 'static> AsyncWrite for Async<T> {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -490,7 +499,7 @@ impl<T: Write> AsyncWrite for Async<T> {
     }
 }
 
-impl<T> AsyncWrite for &Async<T>
+impl<T: Send + 'static> AsyncWrite for &Async<T>
 where
     for<'a> &'a T: Write,
 {

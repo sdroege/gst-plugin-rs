@@ -19,7 +19,7 @@ gst-net = { package = "gstreamer-net", git = "https://gitlab.freedesktop.org/gst
 gst-rtp = { package = "gstreamer-rtp", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 once_cell = "1"
 pin-project-lite = "0.2.0"
-polling = "2.0.0"
+polling = "2.2.0"
 rand = "0.8"
 slab = "0.4.2"
 socket2 = {features = ["all"], version = "0.4"}
