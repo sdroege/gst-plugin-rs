@@ -33,11 +33,11 @@ use std::path::PathBuf;
 #[clap(about = "Generate a pair of Sodium's crypto_box_curve25519xsalsa20poly1305 keys.")]
 struct Args {
     /// Path to write the Keys
-    #[clap(short, long, parse(from_os_str))]
+    #[clap(short, long, action)]
     path: PathBuf,
 
     /// Write a JSON file instead of a key.prv/key.pub pair
-    #[clap(short, long)]
+    #[clap(short, long, action)]
     json: bool,
 }
 

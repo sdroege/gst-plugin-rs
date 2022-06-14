@@ -38,11 +38,11 @@ use serde::{Deserialize, Serialize};
 #[clap(about = "Decrypt a gstsodium10 file")]
 struct Args {
     /// File to encrypt
-    #[clap(short, long)]
+    #[clap(short, long, action)]
     input: String,
 
     /// File to decrypt
-    #[clap(short, long)]
+    #[clap(short, long, action)]
     output: String,
 }
 
