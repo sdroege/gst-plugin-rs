@@ -9,7 +9,6 @@ rust-version = "1.57"
 description = "Fallback Switcher Plugin"
 
 [dependencies]
-libc = { version = "0.2", optional = true }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-audio = { package = "gstreamer-audio", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
@@ -37,7 +36,7 @@ required-features = ["gtk", "gio"]
 gst-plugin-version-helper = { path="../../version-helper" }
 
 [features]
-default = ["libc", "v1_20"]
+default = ["v1_20"]
 static = []
 capi = []
 v1_20 = ["gst/v1_20"]
