@@ -103,6 +103,7 @@ struct Settings {
     buffer_size: u64,
     access_key: Option<String>,
     secret_access_key: Option<String>,
+    session_token: Option<String>,
     metadata: Option<gst::Structure>,
     retry_attempts: u32,
     multipart_upload_on_error: OnError,
@@ -152,6 +153,7 @@ impl Default for Settings {
             content_type: None,
             access_key: None,
             secret_access_key: None,
+            session_token: None,
             metadata: None,
             buffer_size: DEFAULT_BUFFER_SIZE,
             retry_attempts: DEFAULT_RETRY_ATTEMPTS,
@@ -466,7 +468,7 @@ impl S3Sink {
             (Some(access_key), Some(secret_access_key)) => Some(Credentials::new(
                 access_key.clone(),
                 secret_access_key.clone(),
-                None,
+                settings.session_token.clone(),
                 None,
                 "aws-s3-sink",
             )),
@@ -675,6 +677,13 @@ impl ObjectImpl for S3Sink {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecString::new(
+                    "session-token",
+                    "Session Token",
+                    "AWS temporary Session Token from STS",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
                 glib::ParamSpecBoxed::new(
                     "metadata",
                     "Metadata",
@@ -812,6 +821,9 @@ impl ObjectImpl for S3Sink {
             "secret-access-key" => {
                 settings.secret_access_key = value.get().expect("type checked upstream");
             }
+            "session-token" => {
+                settings.session_token = value.get().expect("type checked upstream");
+            }
             "metadata" => {
                 settings.metadata = value.get().expect("type checked upstream");
             }
@@ -873,6 +885,7 @@ impl ObjectImpl for S3Sink {
             }
             "access-key" => settings.access_key.to_value(),
             "secret-access-key" => settings.secret_access_key.to_value(),
+            "session-token" => settings.session_token.to_value(),
             "metadata" => settings.metadata.to_value(),
             "on-error" => settings.multipart_upload_on_error.to_value(),
             "retry-attempts" => settings.retry_attempts.to_value(),

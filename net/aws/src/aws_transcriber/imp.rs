@@ -121,6 +121,7 @@ struct Settings {
     results_stability: AwsTranscriberResultStability,
     access_key: Option<String>,
     secret_access_key: Option<String>,
+    session_token: Option<String>,
 }
 
 impl Default for Settings {
@@ -134,6 +135,7 @@ impl Default for Settings {
             results_stability: DEFAULT_STABILITY,
             access_key: None,
             secret_access_key: None,
+            session_token: None,
         }
     }
 }
@@ -876,7 +878,15 @@ impl Transcriber {
 
         let access_key = settings.access_key.as_ref().unwrap().clone();
         let secret_access_key = settings.secret_access_key.as_ref().unwrap().clone();
-        let credentials = Credentials::new(access_key, secret_access_key, None, None, "transcribe");
+        let session_token = settings.session_token.clone();
+
+        let credentials = Credentials::new(
+            access_key,
+            secret_access_key,
+            session_token,
+            None,
+            "transcribe",
+        );
 
         let region = Region::new("us-east-1");
         let current_time = Utc::now();
@@ -1185,6 +1195,13 @@ impl ObjectImpl for Transcriber {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecString::new(
+                    "session-token",
+                    "Session Token",
+                    "AWS temporary Session Token from STS",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -1245,6 +1262,10 @@ impl ObjectImpl for Transcriber {
                 let mut settings = self.settings.lock().unwrap();
                 settings.secret_access_key = value.get().expect("type checked upstream");
             }
+            "session-token" => {
+                let mut settings = self.settings.lock().unwrap();
+                settings.session_token = value.get().expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -1282,6 +1303,10 @@ impl ObjectImpl for Transcriber {
             "secret-access-key" => {
                 let settings = self.settings.lock().unwrap();
                 settings.secret_access_key.to_value()
+            }
+            "session-token" => {
+                let settings = self.settings.lock().unwrap();
+                settings.session_token.to_value()
             }
             _ => unimplemented!(),
         }

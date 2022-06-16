@@ -50,6 +50,7 @@ struct Settings {
     url: Option<GstS3Url>,
     access_key: Option<String>,
     secret_access_key: Option<String>,
+    session_token: Option<String>,
     retry_attempts: u32,
     request_timeout: Duration,
 }
@@ -61,6 +62,7 @@ impl Default for Settings {
             url: None,
             access_key: None,
             secret_access_key: None,
+            session_token: None,
             retry_attempts: DEFAULT_RETRY_ATTEMPTS,
             request_timeout: duration,
         }
@@ -102,7 +104,7 @@ impl S3Src {
             (Some(access_key), Some(secret_access_key)) => Some(Credentials::new(
                 access_key.clone(),
                 secret_access_key.clone(),
-                None,
+                settings.session_token.clone(),
                 None,
                 "aws-s3-src",
             )),
@@ -292,6 +294,13 @@ impl ObjectImpl for S3Src {
                     None,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
                 ),
+                glib::ParamSpecString::new(
+                    "session-token",
+                    "Session Token",
+                    "AWS temporary Session Token from STS",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
                 glib::ParamSpecInt64::new(
                     "request-timeout",
                     "Request timeout",
@@ -345,6 +354,9 @@ impl ObjectImpl for S3Src {
             "secret-access-key" => {
                 settings.secret_access_key = value.get().expect("type checked upstream");
             }
+            "session-token" => {
+                settings.session_token = value.get().expect("type checked upstream");
+            }
             "request-timeout" => {
                 settings.request_timeout =
                     duration_from_millis(value.get::<i64>().expect("type checked upstream"));
@@ -384,6 +396,7 @@ impl ObjectImpl for S3Src {
             }
             "access-key" => settings.access_key.to_value(),
             "secret-access-key" => settings.secret_access_key.to_value(),
+            "session-token" => settings.session_token.to_value(),
             "request-timeout" => duration_to_millis(Some(settings.request_timeout)).to_value(),
             "retry-duration" => {
                 let request_timeout = duration_to_millis(Some(settings.request_timeout));
