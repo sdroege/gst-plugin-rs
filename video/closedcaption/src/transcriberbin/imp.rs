@@ -449,7 +449,6 @@ impl TranscriberBin {
                     }
 
                     q.set(true, min, gst::ClockTime::NONE);
-                    eprintln!("Latency query response: {:?}", q);
                 }
 
                 ret
