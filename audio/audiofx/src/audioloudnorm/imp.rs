@@ -1637,7 +1637,7 @@ impl AudioLoudNorm {
                     }
                 }
             }
-            EventView::Eos(_) => {
+            EventView::Eos(_) | EventView::Segment(_) => {
                 let mut state = self.state.borrow_mut();
                 let mut outbuf = None;
                 if let Some(ref mut state) = &mut *state {
