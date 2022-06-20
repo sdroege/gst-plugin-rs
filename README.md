@@ -142,6 +142,9 @@ Note that you can also just use `cargo` directly to build Rust static libraries
 and shared C libraries. `cargo-c` is mostly useful to build static C libraries
 and generate `pkg-config` files.
 
+In case cargo complains about dependency versions after a `git pull`, `cargo update` may
+be able to resolve those.
+
 ## LICENSE
 
 gst-plugins-rs and all crates contained in here are licensed under one of the
