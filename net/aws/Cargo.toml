@@ -15,13 +15,13 @@ bytes = "1.0"
 futures = "0.3"
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
 gst-base = { package = "gstreamer-base", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs" }
-aws-config = "0.12.0"
-aws-sdk-s3 = "0.12.0"
-aws-sdk-transcribe = "0.12.0"
-aws-types = "0.12.0"
-aws-sig-auth = "0.12.0"
-aws-smithy-http = { version = "0.42.0", features = [ "rt-tokio" ] }
-aws-smithy-types = "0.42.0"
+aws-config = "0.13.0"
+aws-sdk-s3 = "0.13.0"
+aws-sdk-transcribe = "0.13.0"
+aws-types = "0.13.0"
+aws-sig-auth = "0.13.0"
+aws-smithy-http = { version = "0.43.0", features = [ "rt-tokio" ] }
+aws-smithy-types = "0.43.0"
 http = "0.2.7"
 chrono = "0.4"
 url = "2"
