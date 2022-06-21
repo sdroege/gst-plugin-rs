@@ -29,13 +29,12 @@ copyleft = "allow"
 allow-osi-fsf-free = "either"
 confidence-threshold = 0.8
 
-# https://github.com/hsivonen/encoding_rs/issues/75
 [[licenses.clarify]]
-name = "encoding_rs"
+name = "ring"
 version = "*"
-expression = "(Apache-2.0 OR MIT) AND BSD-3-Clause"
+expression = "OpenSSL"
 license-files = [
-    { path = "COPYRIGHT", hash = 0x39f8ad31 }
+    { path = "LICENSE", hash = 0xbd0eed23 }
 ]
 
 [bans]
@@ -107,6 +106,12 @@ version = "0.9"
 [[bans.skip]]
 name = "wasi"
 version = "0.10"
+
+# ignore duplicated hashbrown dependency because publicsuffix depends on an old version
+# https://github.com/rushmorem/publicsuffix/pull/36
+[[bans.skip]]
+name = "hashbrown"
+version = "0.11"
 
 [sources]
 unknown-registry = "deny"
