@@ -11,6 +11,7 @@ rust-version = "1.57"
 [dependencies]
 async-task = "4.0.3"
 concurrent-queue = "1.2.2"
+flume = "0.10.13"
 futures = { version = "0.3.17", features = ["thread-pool"] }
 libc = "0.2"
 gio = { git = "https://github.com/gtk-rs/gtk-rs-core" }
