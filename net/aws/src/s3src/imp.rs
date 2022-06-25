@@ -263,7 +263,7 @@ impl S3Src {
 
 #[glib::object_subclass]
 impl ObjectSubclass for S3Src {
-    const NAME: &'static str = "RusotoS3Src";
+    const NAME: &'static str = "AwsS3Src";
     type Type = super::S3Src;
     type ParentType = gst_base::BaseSrc;
     type Interfaces = (gst::URIHandler,);
@@ -484,7 +484,7 @@ impl BaseSrcImpl for S3Src {
         let mut state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
-            unreachable!("RusotoS3Src is already started");
+            unreachable!("AwsS3Src is already started");
         }
 
         let settings = self.settings.lock().unwrap();

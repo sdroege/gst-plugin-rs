@@ -616,7 +616,7 @@ impl S3Sink {
 
 #[glib::object_subclass]
 impl ObjectSubclass for S3Sink {
-    const NAME: &'static str = "RusotoS3Sink";
+    const NAME: &'static str = "AwsS3Sink";
     type Type = super::S3Sink;
     type ParentType = gst_base::BaseSink;
     type Interfaces = (gst::URIHandler,);
