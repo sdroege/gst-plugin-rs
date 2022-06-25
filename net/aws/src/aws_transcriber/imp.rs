@@ -956,10 +956,10 @@ impl Transcriber {
                     "Failed to build HTTP request URI: {}",
                     err
                 );
-                return error_msg!(
+                error_msg!(
                     gst::CoreError::Failed,
                     ["Failed to build HTTP request URI: {}", err]
-                );
+                )
             })?;
         let mut request = http::Request::builder()
             .uri(transcribe_uri)
