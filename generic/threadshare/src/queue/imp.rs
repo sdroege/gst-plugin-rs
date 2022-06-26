@@ -28,12 +28,12 @@ use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
 
 use std::collections::VecDeque;
-use std::sync::Mutex as StdMutex;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::{u32, u64};
 
 use crate::runtime::prelude::*;
-use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef, PadSrcWeak, Task};
+use crate::runtime::{Context, PadSink, PadSinkRef, PadSrc, PadSrcRef, Task};
 
 use crate::dataqueue::{DataQueue, DataQueueItem};
 
@@ -213,34 +213,6 @@ impl PadSinkHandler for QueuePadSinkHandler {
 #[derive(Clone, Debug)]
 struct QueuePadSrcHandler;
 
-impl QueuePadSrcHandler {
-    async fn push_item(
-        pad: &PadSrcRef<'_>,
-        queue: &Queue,
-        item: DataQueueItem,
-    ) -> Result<(), gst::FlowError> {
-        if let Some(pending_queue) = queue.pending_queue.lock().unwrap().as_mut() {
-            pending_queue.notify_more_queue_space();
-        }
-
-        match item {
-            DataQueueItem::Buffer(buffer) => {
-                gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
-                pad.push(buffer).await.map(drop)
-            }
-            DataQueueItem::BufferList(list) => {
-                gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", list);
-                pad.push_list(list).await.map(drop)
-            }
-            DataQueueItem::Event(event) => {
-                gst::log!(CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
-                pad.push_event(event).await;
-                Ok(())
-            }
-        }
-    }
-}
-
 impl PadSrcHandler for QueuePadSrcHandler {
     type ElementImpl = Queue;
 
@@ -322,16 +294,35 @@ impl PadSrcHandler for QueuePadSrcHandler {
 #[derive(Debug)]
 struct QueueTask {
     element: super::Queue,
-    src_pad: PadSrcWeak,
     dataqueue: DataQueue,
 }
 
 impl QueueTask {
-    fn new(element: &super::Queue, src_pad: &PadSrc, dataqueue: DataQueue) -> Self {
-        QueueTask {
-            element: element.clone(),
-            src_pad: src_pad.downgrade(),
-            dataqueue,
+    fn new(element: super::Queue, dataqueue: DataQueue) -> Self {
+        QueueTask { element, dataqueue }
+    }
+
+    async fn push_item(&self, item: DataQueueItem) -> Result<(), gst::FlowError> {
+        let queue = self.element.imp();
+
+        if let Some(pending_queue) = queue.pending_queue.lock().unwrap().as_mut() {
+            pending_queue.notify_more_queue_space();
+        }
+
+        match item {
+            DataQueueItem::Buffer(buffer) => {
+                gst::log!(CAT, obj: &self.element, "Forwarding {:?}", buffer);
+                queue.src_pad.push(buffer).await.map(drop)
+            }
+            DataQueueItem::BufferList(list) => {
+                gst::log!(CAT, obj: &self.element, "Forwarding {:?}", list);
+                queue.src_pad.push_list(list).await.map(drop)
+            }
+            DataQueueItem::Event(event) => {
+                gst::log!(CAT, obj: &self.element, "Forwarding {:?}", event);
+                queue.src_pad.push_event(event).await;
+                Ok(())
+            }
         }
     }
 }
@@ -366,9 +357,8 @@ impl TaskImpl for QueueTask {
                 }
             };
 
-            let pad = self.src_pad.upgrade().expect("PadSrc no longer exists");
+            let res = self.push_item(item).await;
             let queue = self.element.imp();
-            let res = QueuePadSrcHandler::push_item(&pad, queue, item).await;
             match res {
                 Ok(()) => {
                     gst::log!(CAT, obj: &self.element, "Successfully pushed item");
@@ -381,7 +371,7 @@ impl TaskImpl for QueueTask {
                 Err(gst::FlowError::Eos) => {
                     gst::debug!(CAT, obj: &self.element, "EOS");
                     *queue.last_res.lock().unwrap() = Err(gst::FlowError::Eos);
-                    pad.push_event(gst::event::Eos::new()).await;
+                    queue.src_pad.push_event(gst::event::Eos::new()).await;
                 }
                 Err(err) => {
                     gst::error!(CAT, obj: &self.element, "Got error {}", err);
@@ -449,10 +439,10 @@ pub struct Queue {
     sink_pad: PadSink,
     src_pad: PadSrc,
     task: Task,
-    dataqueue: StdMutex<Option<DataQueue>>,
-    pending_queue: StdMutex<Option<PendingQueue>>,
-    last_res: StdMutex<Result<gst::FlowSuccess, gst::FlowError>>,
-    settings: StdMutex<Settings>,
+    dataqueue: Mutex<Option<DataQueue>>,
+    pending_queue: Mutex<Option<PendingQueue>>,
+    last_res: Mutex<Result<gst::FlowSuccess, gst::FlowError>>,
+    settings: Mutex<Settings>,
 }
 
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -648,7 +638,7 @@ impl Queue {
             })?;
 
         self.task
-            .prepare(QueueTask::new(element, &self.src_pad, dataqueue), context)
+            .prepare(QueueTask::new(element.clone(), dataqueue), context)
             .map_err(|err| {
                 gst::error_msg!(
                     gst::ResourceError::OpenRead,
@@ -706,10 +696,10 @@ impl ObjectSubclass for Queue {
                 QueuePadSrcHandler,
             ),
             task: Task::default(),
-            dataqueue: StdMutex::new(None),
-            pending_queue: StdMutex::new(None),
-            last_res: StdMutex::new(Ok(gst::FlowSuccess::Ok)),
-            settings: StdMutex::new(Settings::default()),
+            dataqueue: Mutex::new(None),
+            pending_queue: Mutex::new(None),
+            last_res: Mutex::new(Ok(gst::FlowSuccess::Ok)),
+            settings: Mutex::new(Settings::default()),
         }
     }
 }

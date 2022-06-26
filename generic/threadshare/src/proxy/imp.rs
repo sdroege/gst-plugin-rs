@@ -28,9 +28,8 @@ use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::Mutex as StdMutex;
-use std::sync::MutexGuard as StdMutexGuard;
 use std::sync::{Arc, Weak};
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 use std::{u32, u64};
 
@@ -41,12 +40,12 @@ use crate::runtime::{
 
 use crate::dataqueue::{DataQueue, DataQueueItem};
 
-static PROXY_CONTEXTS: Lazy<StdMutex<HashMap<String, Weak<StdMutex<ProxyContextInner>>>>> =
-    Lazy::new(|| StdMutex::new(HashMap::new()));
-static PROXY_SRC_PADS: Lazy<StdMutex<HashMap<String, PadSrcWeak>>> =
-    Lazy::new(|| StdMutex::new(HashMap::new()));
-static PROXY_SINK_PADS: Lazy<StdMutex<HashMap<String, PadSinkWeak>>> =
-    Lazy::new(|| StdMutex::new(HashMap::new()));
+static PROXY_CONTEXTS: Lazy<Mutex<HashMap<String, Weak<Mutex<ProxyContextInner>>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static PROXY_SRC_PADS: Lazy<Mutex<HashMap<String, PadSrcWeak>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static PROXY_SINK_PADS: Lazy<Mutex<HashMap<String, PadSinkWeak>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 const DEFAULT_PROXY_CONTEXT: &str = "";
 
@@ -126,14 +125,14 @@ impl Drop for ProxyContextInner {
 
 #[derive(Debug)]
 struct ProxyContext {
-    shared: Arc<StdMutex<ProxyContextInner>>,
+    shared: Arc<Mutex<ProxyContextInner>>,
     as_sink: bool,
     name: String,
 }
 
 impl ProxyContext {
     #[inline]
-    fn lock_shared(&self) -> StdMutexGuard<'_, ProxyContextInner> {
+    fn lock_shared(&self) -> MutexGuard<'_, ProxyContextInner> {
         self.shared.lock().unwrap()
     }
 
@@ -171,7 +170,7 @@ impl ProxyContext {
         }
 
         if proxy_ctx.is_none() {
-            let shared = Arc::new(StdMutex::new(ProxyContextInner {
+            let shared = Arc::new(Mutex::new(ProxyContextInner {
                 name: name.into(),
                 dataqueue: None,
                 last_res: Err(gst::FlowError::Flushing),
@@ -329,8 +328,8 @@ impl PadSinkHandler for ProxySinkPadHandler {
 #[derive(Debug)]
 pub struct ProxySink {
     sink_pad: PadSink,
-    proxy_ctx: StdMutex<Option<ProxyContext>>,
-    settings: StdMutex<SettingsSink>,
+    proxy_ctx: Mutex<Option<ProxyContext>>,
+    settings: Mutex<SettingsSink>,
 }
 
 static SINK_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -581,8 +580,8 @@ impl ObjectSubclass for ProxySink {
                 gst::Pad::from_template(&klass.pad_template("sink").unwrap(), Some("sink")),
                 ProxySinkPadHandler,
             ),
-            proxy_ctx: StdMutex::new(None),
-            settings: StdMutex::new(SettingsSink::default()),
+            proxy_ctx: Mutex::new(None),
+            settings: Mutex::new(SettingsSink::default()),
         }
     }
 }
@@ -708,38 +707,6 @@ impl ElementImpl for ProxySink {
 #[derive(Clone, Debug)]
 struct ProxySrcPadHandler;
 
-impl ProxySrcPadHandler {
-    async fn push_item(
-        pad: &PadSrcRef<'_>,
-        proxysrc: &ProxySrc,
-        item: DataQueueItem,
-    ) -> Result<(), gst::FlowError> {
-        {
-            let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
-            let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
-            if let Some(pending_queue) = shared_ctx.pending_queue.as_mut() {
-                pending_queue.notify_more_queue_space();
-            }
-        }
-
-        match item {
-            DataQueueItem::Buffer(buffer) => {
-                gst::log!(SRC_CAT, obj: pad.gst_pad(), "Forwarding {:?}", buffer);
-                pad.push(buffer).await.map(drop)
-            }
-            DataQueueItem::BufferList(list) => {
-                gst::log!(SRC_CAT, obj: pad.gst_pad(), "Forwarding {:?}", list);
-                pad.push_list(list).await.map(drop)
-            }
-            DataQueueItem::Event(event) => {
-                gst::log!(SRC_CAT, obj: pad.gst_pad(), "Forwarding {:?}", event);
-                pad.push_event(event).await;
-                Ok(())
-            }
-        }
-    }
-}
-
 impl PadSrcHandler for ProxySrcPadHandler {
     type ElementImpl = ProxySrc;
 
@@ -853,16 +820,39 @@ impl PadSrcHandler for ProxySrcPadHandler {
 #[derive(Debug)]
 struct ProxySrcTask {
     element: super::ProxySrc,
-    src_pad: PadSrcWeak,
     dataqueue: DataQueue,
 }
 
 impl ProxySrcTask {
-    fn new(element: &super::ProxySrc, src_pad: &PadSrc, dataqueue: DataQueue) -> Self {
-        ProxySrcTask {
-            element: element.clone(),
-            src_pad: src_pad.downgrade(),
-            dataqueue,
+    fn new(element: super::ProxySrc, dataqueue: DataQueue) -> Self {
+        ProxySrcTask { element, dataqueue }
+    }
+
+    async fn push_item(&self, item: DataQueueItem) -> Result<(), gst::FlowError> {
+        let proxysrc = self.element.imp();
+
+        {
+            let proxy_ctx = proxysrc.proxy_ctx.lock().unwrap();
+            let mut shared_ctx = proxy_ctx.as_ref().unwrap().lock_shared();
+            if let Some(pending_queue) = shared_ctx.pending_queue.as_mut() {
+                pending_queue.notify_more_queue_space();
+            }
+        }
+
+        match item {
+            DataQueueItem::Buffer(buffer) => {
+                gst::log!(SRC_CAT, obj: &self.element, "Forwarding {:?}", buffer);
+                proxysrc.src_pad.push(buffer).await.map(drop)
+            }
+            DataQueueItem::BufferList(list) => {
+                gst::log!(SRC_CAT, obj: &self.element, "Forwarding {:?}", list);
+                proxysrc.src_pad.push_list(list).await.map(drop)
+            }
+            DataQueueItem::Event(event) => {
+                gst::log!(SRC_CAT, obj: &self.element, "Forwarding {:?}", event);
+                proxysrc.src_pad.push_event(event).await;
+                Ok(())
+            }
         }
     }
 }
@@ -902,9 +892,8 @@ impl TaskImpl for ProxySrcTask {
                 }
             };
 
-            let pad = self.src_pad.upgrade().expect("PadSrc no longer exists");
+            let res = self.push_item(item).await;
             let proxysrc = self.element.imp();
-            let res = ProxySrcPadHandler::push_item(&pad, proxysrc, item).await;
             match res {
                 Ok(()) => {
                     gst::log!(SRC_CAT, obj: &self.element, "Successfully pushed item");
@@ -989,9 +978,9 @@ impl TaskImpl for ProxySrcTask {
 pub struct ProxySrc {
     src_pad: PadSrc,
     task: Task,
-    proxy_ctx: StdMutex<Option<ProxyContext>>,
-    dataqueue: StdMutex<Option<DataQueue>>,
-    settings: StdMutex<SettingsSrc>,
+    proxy_ctx: Mutex<Option<ProxyContext>>,
+    dataqueue: Mutex<Option<DataQueue>>,
+    settings: Mutex<SettingsSrc>,
 }
 
 static SRC_CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -1052,11 +1041,10 @@ impl ProxySrc {
         }
 
         *self.proxy_ctx.lock().unwrap() = Some(proxy_ctx);
-
         *self.dataqueue.lock().unwrap() = Some(dataqueue.clone());
 
         self.task
-            .prepare(ProxySrcTask::new(element, &self.src_pad, dataqueue), ts_ctx)
+            .prepare(ProxySrcTask::new(element.clone(), dataqueue), ts_ctx)
             .map_err(|err| {
                 gst::error_msg!(
                     gst::ResourceError::OpenRead,
@@ -1121,9 +1109,9 @@ impl ObjectSubclass for ProxySrc {
                 ProxySrcPadHandler,
             ),
             task: Task::default(),
-            proxy_ctx: StdMutex::new(None),
-            dataqueue: StdMutex::new(None),
-            settings: StdMutex::new(SettingsSrc::default()),
+            proxy_ctx: Mutex::new(None),
+            dataqueue: Mutex::new(None),
+            settings: Mutex::new(SettingsSrc::default()),
         }
     }
 }
