@@ -1,4 +1,3 @@
-//
 // Copyright (C) 2021 Rafael Caricio <rafael@caricio.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
@@ -8,6 +7,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use crate::playlist::{Playlist, SegmentFormatter};
+use crate::HlsSink3PlaylistType;
 use gio::prelude::*;
 use glib::subclass::prelude::*;
 use gst::prelude::*;
@@ -24,6 +24,7 @@ const DEFAULT_PLAYLIST_LOCATION: &str = "playlist.m3u8";
 const DEFAULT_MAX_NUM_SEGMENT_FILES: u32 = 10;
 const DEFAULT_TARGET_DURATION: u32 = 15;
 const DEFAULT_PLAYLIST_LENGTH: u32 = 5;
+const DEFAULT_PLAYLIST_TYPE: HlsSink3PlaylistType = HlsSink3PlaylistType::Unspecified;
 const DEFAULT_SEND_KEYFRAME_REQUESTS: bool = true;
 
 const SIGNAL_GET_PLAYLIST_STREAM: &str = "get-playlist-stream";
@@ -33,6 +34,28 @@ const SIGNAL_DELETE_FRAGMENT: &str = "delete-fragment";
 static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new("hlssink3", gst::DebugColorFlags::empty(), Some("HLS sink"))
 });
+
+impl From<HlsSink3PlaylistType> for Option<MediaPlaylistType> {
+    fn from(pl_type: HlsSink3PlaylistType) -> Self {
+        use HlsSink3PlaylistType::*;
+        match pl_type {
+            Unspecified => None,
+            Event => Some(MediaPlaylistType::Event),
+            Vod => Some(MediaPlaylistType::Vod),
+        }
+    }
+}
+
+impl From<Option<MediaPlaylistType>> for HlsSink3PlaylistType {
+    fn from(inner_pl_type: Option<MediaPlaylistType>) -> Self {
+        use HlsSink3PlaylistType::*;
+        match inner_pl_type {
+            None => Unspecified,
+            Some(MediaPlaylistType::Event) => Event,
+            Some(MediaPlaylistType::Vod) => Vod,
+        }
+    }
+}
 
 struct Settings {
     location: String,
@@ -449,11 +472,12 @@ impl ObjectImpl for HlsSink3 {
                     DEFAULT_PLAYLIST_LENGTH,
                     glib::ParamFlags::READWRITE,
                 ),
-                glib::ParamSpecString::new(
+                glib::ParamSpecEnum::new(
                     "playlist-type",
                     "Playlist Type",
                     "The type of the playlist to use. When VOD type is set, the playlist will be live until the pipeline ends execution.",
-                    None,
+                    HlsSink3PlaylistType::static_type(),
+                    DEFAULT_PLAYLIST_TYPE as i32,
                     glib::ParamFlags::READWRITE,
                 ),
                 glib::ParamSpecBoolean::new(
@@ -517,15 +541,9 @@ impl ObjectImpl for HlsSink3 {
             }
             "playlist-type" => {
                 settings.playlist_type = value
-                    .get::<Option<String>>()
+                    .get::<HlsSink3PlaylistType>()
                     .expect("type checked upstream")
-                    .map(|chosen_type| {
-                        if chosen_type.to_lowercase() == "vod" {
-                            MediaPlaylistType::Vod
-                        } else {
-                            MediaPlaylistType::Event
-                        }
-                    })
+                    .into();
             }
             "send-keyframe-requests" => {
                 settings.send_keyframe_requests = value.get().expect("type checked upstream");
@@ -549,11 +567,10 @@ impl ObjectImpl for HlsSink3 {
             }
             "target-duration" => settings.target_duration.to_value(),
             "playlist-length" => settings.playlist_length.to_value(),
-            "playlist-type" => settings
-                .playlist_type
-                .as_ref()
-                .map(|ty| ty.to_string())
-                .to_value(),
+            "playlist-type" => {
+                let playlist_type: HlsSink3PlaylistType = settings.playlist_type.into();
+                playlist_type.to_value()
+            }
             "send-keyframe-requests" => settings.send_keyframe_requests.to_value(),
             _ => unimplemented!(),
         }

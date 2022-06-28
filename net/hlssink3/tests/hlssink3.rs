@@ -1,4 +1,3 @@
-//
 // Copyright (C) 2021 Rafael Caricio <rafael@caricio.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
@@ -9,6 +8,7 @@
 
 use gio::prelude::*;
 use gst::prelude::*;
+use gsthlssink3::HlsSink3PlaylistType;
 use once_cell::sync::Lazy;
 use std::io::Write;
 use std::sync::{mpsc, Arc, Mutex};
@@ -119,6 +119,12 @@ fn test_hlssink3_element_with_video_content() -> Result<(), ()> {
     hlssink3.set_property("target-duration", 2u32);
     hlssink3.set_property("playlist-length", 2u32);
     hlssink3.set_property("max-files", 2u32);
+
+    hlssink3.set_property("playlist-type", HlsSink3PlaylistType::Event);
+    let pl_type: HlsSink3PlaylistType = hlssink3.property("playlist-type");
+    assert_eq!(pl_type, HlsSink3PlaylistType::Event);
+
+    hlssink3.set_property_from_str("playlist-type", "Unspecified");
 
     let (hls_events_sender, hls_events_receiver) = mpsc::sync_channel(20);
     let playlist_content = Arc::new(Mutex::new(String::from("")));

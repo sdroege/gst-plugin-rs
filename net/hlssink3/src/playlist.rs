@@ -1,4 +1,3 @@
-//
 // Copyright (C) 2021 Rafael Caricio <rafael@caricio.com>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
