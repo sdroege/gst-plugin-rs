@@ -628,8 +628,6 @@ impl FallbackSwitch {
                 state.first = false;
             }
 
-            drop(pad_settings);
-
             if switch_to_pad {
                 state.timed_out = false;
                 self.set_active_pad(&mut state, pad);

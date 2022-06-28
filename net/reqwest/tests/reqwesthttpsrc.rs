@@ -889,7 +889,7 @@ fn test_seek_after_ready() {
                 if range == "bytes=123-" {
                     let mut data_seek = vec![0; 8192 - 123];
                     for (i, d) in data_seek.iter_mut().enumerate() {
-                        *d = (i + 123 % 256) as u8;
+                        *d = ((i + 123) % 256) as u8;
                     }
 
                     Response::builder()
@@ -971,7 +971,7 @@ fn test_seek_after_buffer_received() {
                 if range == "bytes=123-" {
                     let mut data_seek = vec![0; 8192 - 123];
                     for (i, d) in data_seek.iter_mut().enumerate() {
-                        *d = (i + 123 % 256) as u8;
+                        *d = ((i + 123) % 256) as u8;
                     }
 
                     Response::builder()
@@ -1049,7 +1049,7 @@ fn test_seek_with_stop_position() {
                 if range == "bytes=123-130" {
                     let mut data_seek = vec![0; 8];
                     for (i, d) in data_seek.iter_mut().enumerate() {
-                        *d = (i + 123 % 256) as u8;
+                        *d = ((i + 123) % 256) as u8;
                     }
 
                     Response::builder()

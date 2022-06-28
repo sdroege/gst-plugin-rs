@@ -344,10 +344,14 @@ impl TextAhead {
             if settings.ahead_attributes.is_empty() {
                 text.push_str(&input.text);
             } else {
-                text.push_str(&format!(
+                use std::fmt::Write;
+
+                write!(
+                    &mut text,
                     "<span {}>{}</span>",
-                    settings.ahead_attributes, input.text
-                ));
+                    settings.ahead_attributes, input.text,
+                )
+                .unwrap();
             }
         }
 

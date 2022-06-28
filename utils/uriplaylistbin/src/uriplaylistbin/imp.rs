@@ -69,7 +69,7 @@ impl StreamsTopology {
     }
 }
 
-impl<'a> From<gst::StreamCollection> for StreamsTopology {
+impl From<gst::StreamCollection> for StreamsTopology {
     fn from(collection: gst::StreamCollection) -> Self {
         let (mut audio, mut video, mut text) = (0, 0, 0);
         for stream in collection.iter() {

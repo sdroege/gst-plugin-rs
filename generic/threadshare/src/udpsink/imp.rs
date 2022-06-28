@@ -530,9 +530,7 @@ impl UdpSinkPadHandler {
         let now = element.current_running_time();
 
         match running_time.into().opt_checked_sub(now) {
-            Ok(Some(delay)) => {
-                let _ = runtime::time::delay_for(delay.into()).await;
-            }
+            Ok(Some(delay)) => runtime::time::delay_for(delay.into()).await,
             _ => runtime::executor::yield_now().await,
         }
     }

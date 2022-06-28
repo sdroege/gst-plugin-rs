@@ -2100,7 +2100,7 @@ impl FallbackSrc {
                 fallback_input.call_async(|fallback_input| {
                     // Re-run video fallback input with videotestsrc
                     let _ = fallback_input.set_state(gst::State::Null);
-                    let _ = fallback_input.set_property("uri", None::<&str>);
+                    fallback_input.set_property("uri", None::<&str>);
                     let _ = fallback_input.sync_state_with_parent();
                 });
 
