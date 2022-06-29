@@ -10,9 +10,11 @@
 use gst::glib;
 
 mod pipeline_snapshot;
+mod queue_levels;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     pipeline_snapshot::register(plugin)?;
+    queue_levels::register(plugin)?;
     Ok(())
 }
 
