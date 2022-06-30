@@ -115,7 +115,7 @@ impl RoundedCorners {
         let alpha_stride = out_info.stride()[3];
 
         let mem = &mut state.alpha_mem;
-        let mut_mem = mem.get_mut().unwrap();
+        let mut_mem = mem.make_mut();
 
         let mut alpha_mem = mut_mem
             .map_writable()
