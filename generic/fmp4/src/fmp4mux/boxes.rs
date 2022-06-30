@@ -1727,8 +1727,7 @@ fn write_traf(
 
     let mut current_data_offset = 0;
 
-    let mut iter = GroupBy::new(cfg.buffers, |a: &Buffer, b: &Buffer| a.idx == b.idx);
-    while let Some(run) = iter.next() {
+    for run in GroupBy::new(cfg.buffers, |a: &Buffer, b: &Buffer| a.idx == b.idx) {
         if run[0].idx != idx {
             // FIXME: What to do with >4GB offsets?
             current_data_offset = (current_data_offset as u64
