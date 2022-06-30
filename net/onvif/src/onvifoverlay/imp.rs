@@ -73,17 +73,20 @@ pub struct OnvifOverlay {
 
 impl OnvifOverlay {
     fn negotiate(&self, element: &super::OnvifOverlay) -> Result<gst::FlowSuccess, gst::FlowError> {
-        let video_info = match self.state.lock().unwrap().video_info.as_ref() {
-            Some(video_info) => Ok(video_info.clone()),
-            None => {
-                gst::element_error!(
-                    element,
-                    gst::CoreError::Negotiation,
-                    ["Element hasn't received valid video caps at negotiation time"]
-                );
-                Err(gst::FlowError::NotNegotiated)
-            }
-        }?;
+        let video_info = {
+            let state = self.state.lock().unwrap();
+            match state.video_info.as_ref() {
+                Some(video_info) => Ok(video_info.clone()),
+                None => {
+                    gst::element_error!(
+                        element,
+                        gst::CoreError::Negotiation,
+                        ["Element hasn't received valid video caps at negotiation time"]
+                    );
+                    Err(gst::FlowError::NotNegotiated)
+                }
+            }?
+        };
 
         let mut caps = video_info.to_caps().unwrap();
         let mut downstream_accepts_meta = false;

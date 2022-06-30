@@ -205,7 +205,7 @@ impl TextWrap {
                     .as_ref()
                     .expect("We should have a wrapper by now");
 
-                let lines = textwrap::wrap(&current_text, &*options);
+                let lines = textwrap::wrap(&current_text, options);
                 let mut chunks = lines.chunks(n_lines as usize).peekable();
                 let mut trailing = "".to_string();
 
@@ -268,7 +268,7 @@ impl TextWrap {
                     .options
                     .as_ref()
                     .expect("We should have a wrapper by now");
-                textwrap::fill(data, &*options)
+                textwrap::fill(data, options)
             };
 
             // If the lines property was set, we want to split the result into buffers

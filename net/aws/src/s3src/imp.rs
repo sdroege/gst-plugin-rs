@@ -474,7 +474,8 @@ impl BaseSrcImpl for S3Src {
     }
 
     fn size(&self, _: &Self::Type) -> Option<u64> {
-        match *self.state.lock().unwrap() {
+        let state = self.state.lock().unwrap();
+        match *state {
             StreamingState::Stopped => None,
             StreamingState::Started { size, .. } => Some(size),
         }

@@ -253,7 +253,8 @@ impl TaskQueue {
     where
         T: Future<Output = SubTaskOutput> + Send + 'static,
     {
-        match self.tasks.lock().unwrap().get_mut(task_id.0) {
+        let mut state = self.tasks.lock().unwrap();
+        match state.get_mut(task_id.0) {
             Some(task) => {
                 gst::trace!(
                     RUNTIME_CAT,

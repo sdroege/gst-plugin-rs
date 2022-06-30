@@ -602,7 +602,7 @@ fn language_code(lang: impl std::borrow::Borrow<[u8; 3]>) -> u16 {
     let lang = lang.borrow();
 
     // TODO: Need to relax this once we get the language code from tags
-    assert!(lang.iter().all(|c| (b'a'..b'z').contains(c)));
+    assert!(lang.iter().all(u8::is_ascii_lowercase));
 
     (((lang[0] as u16 - 0x60) & 0x1F) << 10)
         + (((lang[1] as u16 - 0x60) & 0x1F) << 5)

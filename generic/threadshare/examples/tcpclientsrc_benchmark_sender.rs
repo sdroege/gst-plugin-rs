@@ -38,7 +38,8 @@ fn main() {
     loop {
         let now = time::Instant::now();
 
-        for mut socket in sockets.lock().unwrap().iter() {
+        let sockets = sockets.lock().unwrap();
+        for mut socket in sockets.iter() {
             let _ = socket.write(&buffer);
         }
 

@@ -235,7 +235,8 @@ mod imp_src {
                 return Err(item);
             }
 
-            match self.sender.lock().unwrap().as_mut() {
+            let mut sender = self.sender.lock().unwrap();
+            match sender.as_mut() {
                 Some(sender) => sender
                     .try_send(item)
                     .map_err(mpsc::TrySendError::into_inner),

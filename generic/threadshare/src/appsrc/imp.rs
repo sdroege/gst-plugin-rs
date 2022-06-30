@@ -398,10 +398,8 @@ impl AppSrc {
             }
         }
 
-        match self
-            .sender
-            .lock()
-            .unwrap()
+        let mut sender = self.sender.lock().unwrap();
+        match sender
             .as_mut()
             .unwrap()
             .try_send(StreamItem::Buffer(buffer))

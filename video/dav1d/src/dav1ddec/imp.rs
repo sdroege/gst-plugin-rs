@@ -220,13 +220,13 @@ impl Dav1dDec {
             Err(err) => {
                 gst::error!(CAT, "Sending data failed (error code: {})", err);
                 element.release_frame(frame);
-                return gst_video::video_decoder_error!(
+                gst_video::video_decoder_error!(
                     element,
                     1,
                     gst::StreamError::Decode,
                     ["Sending data failed (error code {})", err]
                 )
-                .map(|_| std::ops::ControlFlow::Break(()));
+                .map(|_| std::ops::ControlFlow::Break(()))
             }
         }
     }
@@ -251,13 +251,13 @@ impl Dav1dDec {
             }
             Err(err) => {
                 gst::error!(CAT, "Sending data failed (error code: {})", err);
-                return gst_video::video_decoder_error!(
+                gst_video::video_decoder_error!(
                     element,
                     1,
                     gst::StreamError::Decode,
                     ["Sending data failed (error code {})", err]
                 )
-                .map(|_| std::ops::ControlFlow::Break(()));
+                .map(|_| std::ops::ControlFlow::Break(()))
             }
         }
     }

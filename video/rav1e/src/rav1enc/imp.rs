@@ -928,15 +928,15 @@ impl VideoEncoderImpl for Rav1Enc {
         let input_buffer = frame.input_buffer().expect("frame without input buffer");
 
         let in_frame =
-            gst_video::VideoFrameRef::from_buffer_ref_readable(&*input_buffer, &state.video_info)
+            gst_video::VideoFrameRef::from_buffer_ref_readable(input_buffer, &state.video_info)
                 .map_err(|_| {
-                gst::element_error!(
-                    element,
-                    gst::CoreError::Failed,
-                    ["Failed to map output buffer readable"]
-                );
-                gst::FlowError::Error
-            })?;
+                    gst::element_error!(
+                        element,
+                        gst::CoreError::Failed,
+                        ["Failed to map output buffer readable"]
+                    );
+                    gst::FlowError::Error
+                })?;
 
         match state.context.send_frame(
             frame.system_frame_number(),

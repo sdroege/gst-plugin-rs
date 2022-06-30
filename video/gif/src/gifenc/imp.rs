@@ -330,18 +330,16 @@ impl VideoEncoderImpl for GifEnc {
         let input_buffer = frame.input_buffer().expect("frame without input buffer");
 
         {
-            let in_frame = gst_video::VideoFrameRef::from_buffer_ref_readable(
-                &*input_buffer,
-                &state.video_info,
-            )
-            .map_err(|_| {
-                gst::element_error!(
-                    element,
-                    gst::CoreError::Failed,
-                    ["Failed to map output buffer readable"]
-                );
-                gst::FlowError::Error
-            })?;
+            let in_frame =
+                gst_video::VideoFrameRef::from_buffer_ref_readable(input_buffer, &state.video_info)
+                    .map_err(|_| {
+                        gst::element_error!(
+                            element,
+                            gst::CoreError::Failed,
+                            ["Failed to map output buffer readable"]
+                        );
+                        gst::FlowError::Error
+                    })?;
 
             let frame_width = in_frame.info().width();
             let frame_height = in_frame.info().height();

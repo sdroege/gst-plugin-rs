@@ -372,9 +372,12 @@ impl S3Sink {
         &self,
         started_state: &Started,
     ) -> Result<(), gst::ErrorMessage> {
-        let s3url = match *self.url.lock().unwrap() {
-            Some(ref url) => url.clone(),
-            None => unreachable!("Element should be started"),
+        let s3url = {
+            let url = self.url.lock().unwrap();
+            match *url {
+                Some(ref url) => url.clone(),
+                None => unreachable!("Element should be started"),
+            }
         };
 
         let client = &started_state.client;
@@ -449,13 +452,16 @@ impl S3Sink {
             unreachable!("Element should be started");
         }
 
-        let s3url = match *self.url.lock().unwrap() {
-            Some(ref url) => url.clone(),
-            None => {
-                return Err(gst::error_msg!(
-                    gst::ResourceError::Settings,
-                    ["Cannot start without a URL being set"]
-                ));
+        let s3url = {
+            let url = self.url.lock().unwrap();
+            match *url {
+                Some(ref url) => url.clone(),
+                None => {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Settings,
+                        ["Cannot start without a URL being set"]
+                    ));
+                }
             }
         };
 
@@ -876,7 +882,8 @@ impl ObjectImpl for S3Sink {
             "region" => settings.region.to_string().to_value(),
             "part-size" => settings.buffer_size.to_value(),
             "uri" => {
-                let url = match *self.url.lock().unwrap() {
+                let url = self.url.lock().unwrap();
+                let url = match *url {
                     Some(ref url) => url.to_string(),
                     None => "".to_string(),
                 };

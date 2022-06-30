@@ -1020,14 +1020,16 @@ impl ElementImpl for ReqwestHttpSrc {
 
 impl BaseSrcImpl for ReqwestHttpSrc {
     fn is_seekable(&self, _src: &Self::Type) -> bool {
-        match *self.state.lock().unwrap() {
+        let state = self.state.lock().unwrap();
+        match *state {
             State::Started { seekable, .. } => seekable,
             _ => false,
         }
     }
 
     fn size(&self, _src: &Self::Type) -> Option<u64> {
-        match *self.state.lock().unwrap() {
+        let state = self.state.lock().unwrap();
+        match *state {
             State::Started { size, .. } => size,
             _ => None,
         }
