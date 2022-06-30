@@ -305,7 +305,6 @@ impl ObjectImpl for RoundedCorners {
                 let border_radius = value.get().expect("type checked upstream");
                 if settings.border_radius_px != border_radius {
                     settings.changed = true;
-                    settings.border_radius_px = border_radius;
                     gst::info!(
                         CAT,
                         obj: obj,
@@ -313,6 +312,7 @@ impl ObjectImpl for RoundedCorners {
                         settings.border_radius_px,
                         border_radius
                     );
+                    settings.border_radius_px = border_radius;
                     obj.reconfigure_src();
                 }
             }
