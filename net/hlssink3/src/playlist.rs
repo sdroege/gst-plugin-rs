@@ -59,6 +59,7 @@ impl Playlist {
 
     /// Adds a new segment to the playlist.
     pub fn add_segment(&mut self, uri: String, duration: f32) {
+        self.start();
         self.inner.segments.push(MediaSegment {
             uri,
             duration,
@@ -80,8 +81,6 @@ impl Playlist {
     /// playlist length value. The playlist index and current media sequence is also kept up
     /// to date.
     pub fn update_playlist_state(&mut self, max_playlist_length: usize) {
-        self.start();
-
         if !self.is_type_undefined() {
             return;
         }
