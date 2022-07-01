@@ -110,10 +110,8 @@ impl Playlist {
                 MediaPlaylistType::Event => {
                     if self.turn_vod {
                         self.inner.playlist_type = Some(MediaPlaylistType::Vod);
-                        self.inner.end_list = false
-                    } else {
-                        self.inner.end_list = true
                     }
+                    self.inner.end_list = true
                 }
                 MediaPlaylistType::Vod => self.inner.end_list = false,
             },
