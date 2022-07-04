@@ -548,12 +548,11 @@ impl MccParse {
         // Update the last_timecode to the current one
         state.last_timecode = Some(timecode);
 
-        let send_eos = state.segment.stop().map_or(false, |stop| {
-            buffer
-                .pts()
-                .zip(buffer.duration())
-                .map_or(false, |(pts, duration)| pts + duration >= stop)
-        });
+        let send_eos = state
+            .segment
+            .stop()
+            .opt_lt(buffer.pts().opt_add(buffer.duration()))
+            .unwrap_or(false);
 
         // Drop our state mutex while we push out buffers or events
         drop(state);
@@ -1061,11 +1060,7 @@ impl MccParse {
 
                 if fmt == gst::Format::Time {
                     if let Some(pull) = state.pull.as_ref() {
-                        q.set(
-                            true,
-                            gst::GenericFormattedValue::Time(gst::ClockTime::ZERO.into()),
-                            gst::GenericFormattedValue::Time(pull.duration),
-                        );
+                        q.set(true, gst::ClockTime::ZERO, pull.duration);
                         true
                     } else {
                         false

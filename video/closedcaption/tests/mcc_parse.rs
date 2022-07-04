@@ -168,9 +168,9 @@ fn test_pull() {
         1.0,
         gst::SeekFlags::FLUSH,
         gst::SeekType::Set,
-        gst::GenericFormattedValue::Time(Some(gst::ClockTime::SECOND)),
+        gst::ClockTime::SECOND,
         gst::SeekType::Set,
-        gst::GenericFormattedValue::Time(Some(2 * gst::ClockTime::SECOND)),
+        2 * gst::ClockTime::SECOND,
     ));
 
     loop {

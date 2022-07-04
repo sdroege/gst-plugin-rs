@@ -190,14 +190,8 @@ fn test_pull_range() {
     // get the seeking capabilities
     let (seekable, start, stop) = q.result();
     assert!(seekable);
-    assert_eq!(
-        start,
-        gst::GenericFormattedValue::Bytes(Some(gst::format::Bytes(0)))
-    );
-    assert_eq!(
-        stop,
-        gst::GenericFormattedValue::Bytes(Some(gst::format::Bytes(6043)))
-    );
+    assert_eq!(start, gst::format::Bytes(0).into());
+    assert_eq!(stop, gst::format::Bytes(6043).into());
 
     // do pulls
     let expected_array_1 = [

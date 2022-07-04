@@ -210,10 +210,10 @@ impl BaseParseImpl for CdgParse {
         Ok((gst::FlowSuccess::Ok, skip))
     }
 
-    fn convert<V: Into<gst::GenericFormattedValue>>(
+    fn convert(
         &self,
         _element: &Self::Type,
-        src_val: V,
+        src_val: impl FormattedValue,
         dest_format: gst::Format,
     ) -> Option<gst::GenericFormattedValue> {
         let src_val = src_val.into();

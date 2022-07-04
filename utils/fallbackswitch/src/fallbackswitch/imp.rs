@@ -266,14 +266,10 @@ impl SinkState {
                         None
                     }
                 });
-                let end_ts = Option::zip(start_ts, duration)
-                    .map(|(start_ts, duration)| start_ts.saturating_add(duration));
-
+                let end_ts = start_ts.opt_saturating_add(duration);
                 let (clipped_start_ts, clipped_end_ts) = self.segment.clip(start_ts, end_ts)?;
 
-                let clipped_duration = Option::zip(clipped_start_ts, clipped_end_ts)
-                    .map(|(clipped_start_ts, clipped_end_ts)| clipped_end_ts - clipped_start_ts);
-
+                let clipped_duration = clipped_end_ts.opt_sub(clipped_start_ts);
                 if clipped_start_ts != start_ts || clipped_duration != buffer.duration() {
                     let buffer = buffer.make_mut();
                     buffer.set_pts(clipped_start_ts);
@@ -284,17 +280,13 @@ impl SinkState {
             }
             CapsInfo::None => {
                 let start_ts = buffer.pts();
-                let end_ts = Option::zip(start_ts, buffer.duration())
-                    .map(|(start_ts, duration)| start_ts.saturating_add(duration));
+                let end_ts = start_ts.opt_saturating_add(buffer.duration());
 
                 // Can only clip buffers completely away, i.e. drop them, if they're raw
                 if let Some((clipped_start_ts, clipped_end_ts)) =
                     self.segment.clip(start_ts, end_ts)
                 {
-                    let clipped_duration = Option::zip(clipped_start_ts, clipped_end_ts).map(
-                        |(clipped_start_ts, clipped_end_ts)| clipped_end_ts - clipped_start_ts,
-                    );
-
+                    let clipped_duration = clipped_end_ts.opt_sub(clipped_start_ts);
                     if clipped_start_ts != start_ts || clipped_duration != buffer.duration() {
                         let buffer = buffer.make_mut();
                         buffer.set_pts(clipped_start_ts);
@@ -719,12 +711,10 @@ impl FallbackSwitch {
         }
 
         if is_active {
-            if Option::zip(start_running_time, state.output_running_time).map_or(
-                false,
-                |(start_running_time, output_running_time)| {
-                    start_running_time < output_running_time
-                },
-            ) {
+            if start_running_time
+                .opt_lt(state.output_running_time)
+                .unwrap_or(false)
+            {
                 if raw_pad {
                     log!(
                         CAT,

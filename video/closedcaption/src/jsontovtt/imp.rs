@@ -620,7 +620,7 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_start(Some(gst::ClockTime::from_nseconds(2)));
+        segment.set_start(gst::ClockTime::from_nseconds(2));
 
         let pts = gst::ClockTime::from_nseconds(0);
         let duration = Some(gst::ClockTime::from_nseconds(10));
@@ -639,7 +639,7 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_stop(Some(gst::ClockTime::from_nseconds(7)));
+        segment.set_stop(gst::ClockTime::from_nseconds(7));
 
         let pts = gst::ClockTime::from_nseconds(0);
         let duration = Some(gst::ClockTime::from_nseconds(10));
@@ -658,8 +658,8 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_start(Some(gst::ClockTime::from_nseconds(2)));
-        segment.set_stop(Some(gst::ClockTime::from_nseconds(7)));
+        segment.set_start(gst::ClockTime::from_nseconds(2));
+        segment.set_stop(gst::ClockTime::from_nseconds(7));
 
         let pts = gst::ClockTime::from_nseconds(0);
         let duration = Some(gst::ClockTime::from_nseconds(10));
@@ -678,7 +678,7 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_start(Some(gst::ClockTime::from_nseconds(15)));
+        segment.set_start(gst::ClockTime::from_nseconds(15));
 
         let pts = gst::ClockTime::from_nseconds(0);
         let duration = Some(gst::ClockTime::from_nseconds(10));
@@ -691,7 +691,7 @@ mod tests {
         gst::init().unwrap();
 
         let mut segment = gst::FormattedSegment::<gst::ClockTime>::new();
-        segment.set_stop(Some(gst::ClockTime::from_nseconds(10)));
+        segment.set_stop(gst::ClockTime::from_nseconds(10));
 
         let pts = gst::ClockTime::from_nseconds(15);
         let duration = Some(gst::ClockTime::from_nseconds(10));

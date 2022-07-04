@@ -1455,7 +1455,7 @@ impl AggregatorImpl for FMP4Mux {
         match query.view_mut() {
             QueryViewMut::Seeking(q) => {
                 // We can't really handle seeking, it would break everything
-                q.set(false, gst::ClockTime::ZERO.into(), gst::ClockTime::NONE);
+                q.set(false, gst::ClockTime::ZERO, gst::ClockTime::NONE);
                 true
             }
             _ => self.parent_src_query(aggregator, query),

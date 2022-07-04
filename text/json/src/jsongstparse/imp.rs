@@ -801,11 +801,7 @@ impl JsonGstParse {
 
                 if fmt == gst::Format::Time {
                     if let Some(pull) = state.pull.as_ref() {
-                        q.set(
-                            true,
-                            gst::GenericFormattedValue::Time(Some(gst::ClockTime::ZERO)),
-                            gst::GenericFormattedValue::Time(pull.duration),
-                        );
+                        q.set(true, gst::ClockTime::ZERO, pull.duration);
                         true
                     } else {
                         false
