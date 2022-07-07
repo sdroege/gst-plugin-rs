@@ -36,7 +36,6 @@ const RTP_TWCC_URI: &str =
     "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01";
 
 const DEFAULT_STUN_SERVER: Option<&str> = Some("stun://stun.l.google.com:19302");
-const DEFAULT_DISPLAY_NAME: Option<&str> = None;
 const DEFAULT_MIN_BITRATE: u32 = 1000;
 
 /* I have found higher values to cause packet loss *somewhere* in
@@ -64,7 +63,7 @@ struct Settings {
     do_fec: bool,
     do_retransmission: bool,
     enable_data_channel_navigation: bool,
-    display_name: Option<String>,
+    meta: Option<gst::Structure>,
 }
 
 /// Represents a codec we can offer
@@ -318,7 +317,7 @@ impl Default for Settings {
             do_fec: DEFAULT_DO_FEC,
             do_retransmission: DEFAULT_DO_RETRANSMISSION,
             enable_data_channel_navigation: DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
-            display_name: DEFAULT_DISPLAY_NAME.map(String::from),
+            meta: None,
         }
     }
 }
@@ -2605,11 +2604,11 @@ impl ObjectImpl for WebRTCSink {
                     DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION,
                     glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY
                 ),
-                glib::ParamSpecString::new(
-                    "display-name",
-                    "Display name",
-                    "The display name of the producer",
-                    DEFAULT_DISPLAY_NAME,
+                glib::ParamSpecBoxed::new(
+                    "meta",
+                    "Meta",
+                    "Free form metadata about the producer",
+                    gst::Structure::static_type(),
                     glib::ParamFlags::READWRITE,
                 ),
             ]
@@ -2710,10 +2709,10 @@ impl ObjectImpl for WebRTCSink {
                 settings.enable_data_channel_navigation =
                     value.get::<bool>().expect("type checked upstream");
             }
-            "display-name" => {
+            "meta" => {
                 let mut settings = self.settings.lock().unwrap();
-                settings.display_name = value
-                    .get::<Option<String>>()
+                settings.meta = value
+                    .get::<Option<gst::Structure>>()
                     .expect("type checked upstream")
             }
             _ => unimplemented!(),
@@ -2767,9 +2766,9 @@ impl ObjectImpl for WebRTCSink {
                 settings.enable_data_channel_navigation.to_value()
             }
             "stats" => self.gather_stats().to_value(),
-            "display-name" => {
+            "meta" => {
                 let settings = self.settings.lock().unwrap();
-                settings.display_name.to_value()
+                settings.meta.to_value()
             }
             _ => unimplemented!(),
         }

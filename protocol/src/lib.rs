@@ -10,27 +10,30 @@ pub enum RegisteredMessage {
     #[serde(rename_all = "camelCase")]
     Producer {
         peer_id: String,
-        display_name: Option<String>,
+        #[serde(default)]
+        meta: Option<serde_json::Value>,
     },
     /// Registered as a consumer
     #[serde(rename_all = "camelCase")]
     Consumer {
         peer_id: String,
-        display_name: Option<String>,
+        #[serde(default)]
+        meta: Option<serde_json::Value>,
     },
     /// Registered as a listener
     #[serde(rename_all = "camelCase")]
     Listener {
         peer_id: String,
-        display_name: Option<String>,
+        #[serde(default)]
+        meta: Option<serde_json::Value>,
     },
 }
-
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Peer {
     pub id: String,
-    pub display_name: Option<String>,
+    #[serde(default)]
+    pub meta: Option<serde_json::Value>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -44,13 +47,15 @@ pub enum OutgoingMessage {
     #[serde(rename_all = "camelCase")]
     ProducerAdded {
         peer_id: String,
-        display_name: Option<String>,
+        #[serde(default)]
+        meta: Option<serde_json::Value>,
     },
     /// Notifies listeners that a producer was removed
     #[serde(rename_all = "camelCase")]
     ProducerRemoved {
         peer_id: String,
-        display_name: Option<String>,
+        #[serde(default)]
+        meta: Option<serde_json::Value>,
     },
     /// Instructs a peer to generate an offer
     #[serde(rename_all = "camelCase")]
@@ -75,19 +80,19 @@ pub enum RegisterMessage {
     #[serde(rename_all = "camelCase")]
     Producer {
         #[serde(default)]
-        display_name: Option<String>,
+        meta: Option<serde_json::Value>,
     },
     /// Register as a consumer
     #[serde(rename_all = "camelCase")]
     Consumer {
         #[serde(default)]
-        display_name: Option<String>,
+        meta: Option<serde_json::Value>,
     },
     /// Register as a listener
     #[serde(rename_all = "camelCase")]
     Listener {
         #[serde(default)]
-        display_name: Option<String>,
+        meta: Option<serde_json::Value>,
     },
 }
 

@@ -4,10 +4,12 @@ use async_std::task;
 use async_tungstenite::tungstenite::Message as WsMessage;
 use futures::channel::mpsc;
 use futures::prelude::*;
-use gst::glib;
 use gst::glib::prelude::*;
+use gst::glib::{self, Type};
+use gst::prelude::*;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use webrtcsink_protocol as p;
@@ -98,10 +100,14 @@ impl Signaller {
             Ok::<(), Error>(())
         });
 
+        let meta = if let Some(meta) = element.property::<Option<gst::Structure>>("meta") {
+            serialize_value(&meta.to_value())
+        } else {
+            None
+        };
+
         websocket_sender
-            .send(p::IncomingMessage::Register(p::RegisterMessage::Producer {
-                display_name: element.property("display-name"),
-            }))
+            .send(p::IncomingMessage::Register(p::RegisterMessage::Producer { meta, }))
             .await?;
 
         let element_clone = element.downgrade();
@@ -415,6 +421,52 @@ impl ObjectImpl for Signaller {
                 cafile.and_then(|file| file.to_str()).to_value()
             }
             _ => unimplemented!(),
+        }
+    }
+}
+
+fn serialize_value(val: &gst::glib::Value) -> Option<serde_json::Value> {
+    match val.type_() {
+        Type::STRING => Some(val.get::<String>().unwrap().into()),
+        Type::BOOL => Some(val.get::<bool>().unwrap().into()),
+        Type::I32 => Some(val.get::<i32>().unwrap().into()),
+        Type::U32 => Some(val.get::<u32>().unwrap().into()),
+        Type::I_LONG | Type::I64 => Some(val.get::<i64>().unwrap().into()),
+        Type::U_LONG | Type::U64 => Some(val.get::<u64>().unwrap().into()),
+        Type::F32 => Some(val.get::<f32>().unwrap().into()),
+        Type::F64 => Some(val.get::<f64>().unwrap().into()),
+        _ => {
+            if let Ok(s) = val.get::<gst::Structure>() {
+                serde_json::to_value(
+                    s.iter()
+                        .filter_map(|(name, value)| {
+                            serialize_value(value).map(|value| (name.to_string(), value))
+                        })
+                        .collect::<HashMap<String, serde_json::Value>>(),
+                )
+                .ok()
+            } else if let Ok(a) = val.get::<gst::Array>() {
+                serde_json::to_value(
+                    a.iter()
+                        .filter_map(|value| serialize_value(value))
+                        .collect::<Vec<serde_json::Value>>(),
+                )
+                .ok()
+            } else if let Some((_klass, values)) = gst::glib::FlagsValue::from_value(val) {
+                Some(
+                    values
+                        .iter()
+                        .map(|value| value.nick())
+                        .collect::<Vec<&str>>()
+                        .join("+")
+                        .into(),
+                )
+            } else if let Ok(value) = val.serialize() {
+                Some(value.as_str().into())
+            } else {
+                gst::warning!(CAT, "Can't convert {} to json", val.type_().name());
+                None
+            }
         }
     }
 }

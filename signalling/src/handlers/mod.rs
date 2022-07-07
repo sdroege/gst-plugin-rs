@@ -19,7 +19,7 @@ pin_project! {
         producers: HashMap<PeerId, HashSet<PeerId>>,
         consumers: HashMap<PeerId, Option<PeerId>>,
         listeners: HashSet<PeerId>,
-        display_names: HashMap<PeerId, Option<String>>,
+        meta: HashMap<PeerId, Option<serde_json::Value>>,
     }
 }
 
@@ -35,7 +35,7 @@ impl Handler {
             producers: HashMap::new(),
             consumers: HashMap::new(),
             listeners: HashSet::new(),
-            display_names: HashMap::new(),
+            meta: HashMap::new(),
         }
     }
 
@@ -47,15 +47,9 @@ impl Handler {
     ) -> Result<(), Error> {
         match msg {
             p::IncomingMessage::Register(message) => match message {
-                p::RegisterMessage::Producer { display_name } => {
-                    self.register_producer(peer_id, display_name)
-                }
-                p::RegisterMessage::Consumer { display_name } => {
-                    self.register_consumer(peer_id, display_name)
-                }
-                p::RegisterMessage::Listener { display_name } => {
-                    self.register_listener(peer_id, display_name)
-                }
+                p::RegisterMessage::Producer { meta } => self.register_producer(peer_id, meta),
+                p::RegisterMessage::Consumer { meta } => self.register_consumer(peer_id, meta),
+                p::RegisterMessage::Listener { meta } => self.register_listener(peer_id, meta),
             },
             p::IncomingMessage::StartSession(message) => {
                 self.start_session(&message.peer_id, peer_id)
@@ -108,9 +102,9 @@ impl Handler {
                     listener.to_string(),
                     p::OutgoingMessage::ProducerRemoved {
                         peer_id: peer_id.to_string(),
-                        display_name: match self.display_names.get(peer_id) {
-                            Some(name) => name.clone(),
-                            None => None,
+                        meta: match self.meta.get(peer_id) {
+                            Some(meta) => meta.clone(),
+                            None => Default::default(),
                         },
                     },
                 ));
@@ -133,7 +127,7 @@ impl Handler {
             ));
         }
 
-        let _ = self.display_names.remove(peer_id);
+        let _ = self.meta.remove(peer_id);
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -206,10 +200,10 @@ impl Handler {
                     .cloned()
                     .map(|peer_id| p::Peer {
                         id: peer_id.clone(),
-                        display_name: match self.display_names.get(&peer_id) {
-                            Some(name) => name.clone(),
-                            None => None,
-                        },
+                        meta: self
+                            .meta
+                            .get(&peer_id)
+                            .map_or_else(|| Default::default(), |m| m.clone()),
                     })
                     .collect(),
             },
@@ -348,11 +342,7 @@ impl Handler {
 
     /// Register peer as a producer
     #[instrument(level = "debug", skip(self))]
-    fn register_producer(
-        &mut self,
-        peer_id: &str,
-        display_name: Option<String>,
-    ) -> Result<(), Error> {
+    fn register_producer(&mut self, peer_id: &str, meta: Option<serde_json::Value>) -> Result<(), Error> {
         if self.producers.contains_key(peer_id) {
             Err(anyhow!("{} is already registered as a producer", peer_id))
         } else {
@@ -363,7 +353,7 @@ impl Handler {
                     listener.to_string(),
                     p::OutgoingMessage::ProducerAdded {
                         peer_id: peer_id.to_string(),
-                        display_name: display_name.clone(),
+                        meta: meta.clone(),
                     },
                 ));
             }
@@ -372,11 +362,11 @@ impl Handler {
                 peer_id.to_string(),
                 p::OutgoingMessage::Registered(p::RegisteredMessage::Producer {
                     peer_id: peer_id.to_string(),
-                    display_name: display_name.clone(),
+                    meta: meta.clone(),
                 }),
             ));
 
-            self.display_names.insert(peer_id.to_string(), display_name);
+            self.meta.insert(peer_id.to_string(), meta);
 
             info!(peer_id = %peer_id, "registered as a producer");
 
@@ -386,11 +376,7 @@ impl Handler {
 
     /// Register peer as a consumer
     #[instrument(level = "debug", skip(self))]
-    fn register_consumer(
-        &mut self,
-        peer_id: &str,
-        display_name: Option<String>,
-    ) -> Result<(), Error> {
+    fn register_consumer(&mut self, peer_id: &str, meta: Option<serde_json::Value>) -> Result<(), Error> {
         if self.consumers.contains_key(peer_id) {
             Err(anyhow!("{} is already registered as a consumer", peer_id))
         } else {
@@ -400,11 +386,11 @@ impl Handler {
                 peer_id.to_string(),
                 p::OutgoingMessage::Registered(p::RegisteredMessage::Consumer {
                     peer_id: peer_id.to_string(),
-                    display_name: display_name.clone(),
+                    meta: meta.clone(),
                 }),
             ));
 
-            self.display_names.insert(peer_id.to_string(), display_name);
+            self.meta.insert(peer_id.to_string(), meta);
 
             info!(peer_id = %peer_id, "registered as a consumer");
 
@@ -414,11 +400,7 @@ impl Handler {
 
     /// Register peer as a listener
     #[instrument(level = "debug", skip(self))]
-    fn register_listener(
-        &mut self,
-        peer_id: &str,
-        display_name: Option<String>,
-    ) -> Result<(), Error> {
+    fn register_listener(&mut self, peer_id: &str, meta: Option<serde_json::Value>) -> Result<(), Error> {
         if !self.listeners.insert(peer_id.to_string()) {
             Err(anyhow!("{} is already registered as a listener", peer_id))
         } else {
@@ -426,11 +408,11 @@ impl Handler {
                 peer_id.to_string(),
                 p::OutgoingMessage::Registered(p::RegisteredMessage::Listener {
                     peer_id: peer_id.to_string(),
-                    display_name: display_name.clone(),
+                    meta: meta.clone(),
                 }),
             ));
 
-            self.display_names.insert(peer_id.to_string(), display_name);
+            self.meta.insert(peer_id.to_string(), meta);
 
             info!(peer_id = %peer_id, "registered as a listener");
 
@@ -521,14 +503,16 @@ impl Stream for Handler {
 mod tests {
     use super::*;
     use futures::channel::mpsc;
+    use serde_json::json;
 
     #[async_std::test]
     async fn test_register_producer() {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
 
         tx.send(("producer".to_string(), Some(message)))
             .await
@@ -541,7 +525,7 @@ mod tests {
             sent_message,
             p::OutgoingMessage::Registered(p::RegisteredMessage::Producer {
                 peer_id: "producer".to_string(),
-                display_name: None,
+                meta: Default::default(),
             })
         );
     }
@@ -552,7 +536,7 @@ mod tests {
         let mut handler = Handler::new(Box::pin(rx));
 
         let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            display_name: Some("foobar".to_string()),
+            meta: Some(json!( {"display-name": "foobar".to_string() }))
         });
 
         tx.send(("producer".to_string(), Some(message)))
@@ -575,7 +559,9 @@ mod tests {
             p::OutgoingMessage::List {
                 producers: vec![p::Peer {
                     id: "producer".to_string(),
-                    display_name: Some("foobar".to_string())
+                    meta: Some(json!(
+                        {"display-name": "foobar".to_string()
+                    })),
                 }]
             }
         );
@@ -586,8 +572,9 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
 
         tx.send(("consumer".to_string(), Some(message)))
             .await
@@ -600,7 +587,7 @@ mod tests {
             sent_message,
             p::OutgoingMessage::Registered(p::RegisteredMessage::Consumer {
                 peer_id: "consumer".to_string(),
-                display_name: None,
+                meta: Default::default()
             })
         );
     }
@@ -610,15 +597,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -638,15 +627,18 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Listener { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Listener {
+            meta: Default::default(),
+        });
         tx.send(("listener".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
         let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
-            display_name: Some("foobar".to_string()),
+            meta: Some(json!({
+                "display-name": "foobar".to_string(),
+            })),
         });
         tx.send(("producer".to_string(), Some(message)))
             .await
@@ -658,7 +650,9 @@ mod tests {
             sent_message,
             p::OutgoingMessage::ProducerAdded {
                 peer_id: "producer".to_string(),
-                display_name: Some("foobar".to_string()),
+                meta: Some(json!({
+                    "display-name": Some("foobar".to_string()),
+                }))
             }
         );
     }
@@ -668,15 +662,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -705,15 +701,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -727,8 +725,9 @@ mod tests {
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Listener { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Listener {
+            meta: Default::default(),
+        });
         tx.send(("listener".to_string(), Some(message)))
             .await
             .unwrap();
@@ -752,7 +751,7 @@ mod tests {
             sent_message,
             p::OutgoingMessage::ProducerRemoved {
                 peer_id: "producer".to_string(),
-                display_name: None
+                meta: Default::default()
             }
         );
     }
@@ -762,15 +761,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -806,15 +807,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -850,15 +853,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -902,15 +907,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -952,15 +959,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -1028,15 +1037,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -1074,8 +1085,9 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -1103,8 +1115,9 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
@@ -1132,15 +1145,17 @@ mod tests {
         let (mut tx, rx) = mpsc::unbounded();
         let mut handler = Handler::new(Box::pin(rx));
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Producer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Producer {
+            meta: Default::default(),
+        });
         tx.send(("producer".to_string(), Some(message)))
             .await
             .unwrap();
         let _ = handler.next().await.unwrap();
 
-        let message =
-            p::IncomingMessage::Register(p::RegisterMessage::Consumer { display_name: None });
+        let message = p::IncomingMessage::Register(p::RegisterMessage::Consumer {
+            meta: Default::default(),
+        });
         tx.send(("consumer".to_string(), Some(message)))
             .await
             .unwrap();

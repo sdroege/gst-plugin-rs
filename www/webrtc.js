@@ -342,16 +342,21 @@ function session_closed(peer_id) {
     sessions[peer_id] = null;
 }
 
-function addPeer(peer_id, display_name) {
-    console.log("Display name: ", display_name);
+function addPeer(peer_id, meta) {
+    console.log("Meta: ", JSON.stringify(meta));
 
     var nav_ul = document.getElementById("camera-list");
 
-    if (display_name == null) {
-        var li_str = '<li id="peer-' + peer_id + '"><button class="button button1">' + peer_id + '</button></li>';
-    } else {
-        var li_str = '<li id="peer-' + peer_id + '"><button class="button button1">' + display_name + '</button></li>';
+    meta = meta ? meta : {"display-name": peer_id};
+    let display_html = `${meta["display-name"] ? meta["display-name"] : peer_id}<ul>`;
+    for (const key in meta) {
+        if (key != "display-name") {
+            display_html += `<li>- ${key}: ${meta[key]}</li>`;
+        }
     }
+    display_html += "</ul>"
+
+    var li_str = '<li id="peer-' + peer_id + '"><button class="button button1">' + display_html + '</button></li>';
 
     nav_ul.insertAdjacentHTML('beforeend', li_str);
     var li = document.getElementById("peer-" + peer_id);
@@ -393,10 +398,10 @@ function onServerMessage(event) {
     } else if (msg.type == "list") {
         clearPeers();
         for (i = 0; i < msg.producers.length; i++) {
-            addPeer(msg.producers[i].id, msg.producers[i].displayName);
+            addPeer(msg.producers[i].id, msg.producers[i].meta);
         }
     } else if (msg.type == "producerAdded") {
-        addPeer(msg.peerId, msg.displayName);
+        addPeer(msg.peerId, msg.meta);
     } else if (msg.type == "producerRemoved") {
         var li = document.getElementById("peer-" + msg.peerId);
         li.parentNode.removeChild(li);
