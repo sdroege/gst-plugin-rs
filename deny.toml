@@ -113,6 +113,11 @@ version = "0.10"
 name = "hashbrown"
 version = "0.11"
 
+# ignore duplicated spin dependency because various crates depend on an old version
+[[bans.skip]]
+name = "spin"
+version = "0.5"
+
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
