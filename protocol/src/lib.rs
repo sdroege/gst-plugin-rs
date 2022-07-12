@@ -28,6 +28,35 @@ pub enum RegisteredMessage {
         meta: Option<serde_json::Value>,
     },
 }
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[serde(tag = "peerType")]
+#[serde(rename_all = "camelCase")]
+/// Confirms registration
+pub enum UnregisteredMessage {
+    /// Unregistered as a producer
+    #[serde(rename_all = "camelCase")]
+    Producer {
+        peer_id: String,
+        #[serde(default)]
+        meta: Option<serde_json::Value>,
+    },
+    /// Unregistered as a consumer
+    #[serde(rename_all = "camelCase")]
+    Consumer {
+        peer_id: String,
+        #[serde(default)]
+        meta: Option<serde_json::Value>,
+    },
+    /// Unregistered as a listener
+    #[serde(rename_all = "camelCase")]
+    Listener {
+        peer_id: String,
+        #[serde(default)]
+        meta: Option<serde_json::Value>,
+    },
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Peer {
@@ -43,6 +72,8 @@ pub struct Peer {
 pub enum OutgoingMessage {
     /// Confirms registration
     Registered(RegisteredMessage),
+    /// Confirms registration
+    Unregistered(UnregisteredMessage),
     /// Notifies listeners that a producer was registered
     #[serde(rename_all = "camelCase")]
     ProducerAdded {
@@ -94,6 +125,22 @@ pub enum RegisterMessage {
         #[serde(default)]
         meta: Option<serde_json::Value>,
     },
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "peerType")]
+#[serde(rename_all = "camelCase")]
+/// Register with a peer type
+pub enum UnregisterMessage {
+    /// Unregister a producer
+    #[serde(rename_all = "camelCase")]
+    Producer,
+    /// Unregister a consumer
+    #[serde(rename_all = "camelCase")]
+    Consumer,
+    /// Unregister a listener
+    #[serde(rename_all = "camelCase")]
+    Listener,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -162,6 +209,8 @@ pub struct EndSessionMessage {
 pub enum IncomingMessage {
     /// Register as a peer type
     Register(RegisterMessage),
+    /// Unregister as a peer type
+    Unregister(UnregisterMessage),
     /// Start a session with a producer peer
     StartSession(StartSessionMessage),
     /// End an existing session
