@@ -277,10 +277,9 @@ impl Handler {
             },
         )?;
 
-        self.peers.get(consumer_id).map_or_else(
-            || Err(anyhow!("No consumer with ID: '{consumer_id}'")),
-            Ok,
-        )?;
+        self.peers
+            .get(consumer_id)
+            .map_or_else(|| Err(anyhow!("No consumer with ID: '{consumer_id}'")), Ok)?;
 
         let session_id = uuid::Uuid::new_v4().to_string();
         self.sessions.insert(
