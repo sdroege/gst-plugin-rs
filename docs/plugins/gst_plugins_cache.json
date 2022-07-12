@@ -6148,11 +6148,240 @@
                         "when": "last"
                     }
                 }
+            },
+            "webrtcsrc": {
+                "author": "Thibault Saunier <tsaunier@igalia.com>",
+                "description": "WebRTC src",
+                "hierarchy": [
+                    "GstWebRTCSrc",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy",
+                    "GstURIHandler"
+                ],
+                "klass": "Source/Network/WebRTC",
+                "long-name": "WebRTCSrc",
+                "pad-templates": {
+                    "audio_%%u": {
+                        "caps": "audio/x-raw(ANY):\naudio/x-opus:\napplication/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    },
+                    "video_%%u": {
+                        "caps": "video/x-raw(ANY):\napplication/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "sometimes",
+                        "type": "GstWebRTCSrcPad"
+                    }
+                },
+                "properties": {
+                    "audio-codecs": {
+                        "blurb": "Names of audio codecs to be be used during the SDP negotiation. Valid values: [OPUS]",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    },
+                    "meta": {
+                        "blurb": "Free form metadata about the consumer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
+                    "signaller": {
+                        "blurb": "The Signallable object to use to handle WebRTC Signalling",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstRSWebRTCSignallableIface",
+                        "writable": true
+                    },
+                    "stun-server": {
+                        "blurb": "NULL",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "stun://stun.l.google.com:19302",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "video-codecs": {
+                        "blurb": "Names of video codecs to be be used during the SDP negotiation. Valid values: [VP8, H264, VP9, H265]",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstValueArray",
+                        "writable": true
+                    }
+                },
+                "rank": "primary"
             }
         },
         "filename": "gstrswebrtc",
         "license": "MPL-2.0",
         "other-types": {
+            "GstRSWebRTCSignallableIface": {
+                "hierarchy": [
+                    "GstRSWebRTCSignallableIface",
+                    "GInterface"
+                ],
+                "kind": "interface",
+                "signals": {
+                    "error": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "handle-ice": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "guint"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg3",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "producer-added": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstStructure"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "producer-removed": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstStructure"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "request-meta": {
+                        "args": [],
+                        "return-type": "GstStructure",
+                        "when": "last"
+                    },
+                    "session-description": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstWebRTCSessionDescription"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "session-ended": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "session-requested": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "session-started": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "start": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "stop": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "void",
+                        "when": "last"
+                    }
+                }
+            },
             "GstWebRTCSinkCongestionControl": {
                 "kind": "enum",
                 "values": [
@@ -6172,6 +6401,18 @@
                         "value": "2"
                     }
                 ]
+            },
+            "GstWebRTCSrcPad": {
+                "hierarchy": [
+                    "GstWebRTCSrcPad",
+                    "GstGhostPad",
+                    "GstProxyPad",
+                    "GstPad",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "kind": "object"
             }
         },
         "package": "gst-plugin-webrtc",
