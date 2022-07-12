@@ -99,9 +99,17 @@ foreach plugin_name: list_plugin_res.stdout().split(':')
         gst_index: 'plugins/index.md',
         include_paths: join_paths(meson.current_source_dir(), '..'),
         gst_smart_index: true,
+        gst_c_source_filters: [
+            '../target/*/*.rs',
+            '../target/*/*/*.rs',
+            '../target/*/*/*/*.rs',
+            '../target/*/*/*/*/*.rs',
+            '../target/*/*/*/*/*/*.rs',
+        ],
         gst_c_sources: [
           '../*/*/*/*.rs',
           '../*/*/*/*/*.rs',
+          '../*/*/*/*/*/*.rs',
         ],
         dependencies: [gst_dep],
         gst_order_generated_subpages: true,
