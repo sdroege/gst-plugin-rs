@@ -88,12 +88,17 @@ pub enum OutgoingMessage {
         #[serde(default)]
         meta: Option<serde_json::Value>,
     },
-    /// Instructs a peer to generate an offer
+    /// Instructs a peer to generate an offer and inform about the session ID
     #[serde(rename_all = "camelCase")]
-    StartSession { peer_id: String },
+    StartSession { peer_id: String, session_id: String },
+
+    /// Let consumer know that the requested session is starting with the specified identifier
+    #[serde(rename_all = "camelCase")]
+    SessionStarted { peer_id: String, session_id: String },
+
     /// Signals that the session the peer was in was ended
     #[serde(rename_all = "camelCase")]
-    EndSession { peer_id: String },
+    EndSession(EndSessionMessage),
     /// Messages directly forwarded from one peer to another
     Peer(PeerMessage),
     /// Provides the current list of consumer peers
@@ -151,7 +156,7 @@ pub struct StartSessionMessage {
     pub peer_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(tag = "type")]
 #[serde(rename_all = "camelCase")]
 /// Conveys a SDP
@@ -168,7 +173,7 @@ pub enum SdpMessage {
     },
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 /// Contents of the peer message
 pub enum PeerMessageInner {
@@ -187,19 +192,17 @@ pub enum PeerMessageInner {
 #[serde(rename_all = "camelCase")]
 /// Messages directly forwarded from one peer to another
 pub struct PeerMessage {
-    /// The identifier of the peer, which must be in a session with the sender
-    pub peer_id: String,
-    /// The contents of the message
+    pub session_id: String,
     #[serde(flatten)]
     pub peer_message: PeerMessageInner,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 /// End a session
 pub struct EndSessionMessage {
-    /// The identifier of the peer to end the session with
-    pub peer_id: String,
+    /// The identifier of the session to end
+    pub session_id: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

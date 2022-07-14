@@ -15,18 +15,22 @@ unsafe impl Sync for WebRTCSink {}
 
 #[derive(thiserror::Error, Debug)]
 pub enum WebRTCSinkError {
-    #[error("no consumer with id")]
-    NoConsumerWithId(String),
+    #[error("no session with id")]
+    NoSessionWithId(String),
     #[error("consumer refused media")]
-    ConsumerRefusedMedia { peer_id: String, media_idx: u32 },
+    ConsumerRefusedMedia { session_id: String, media_idx: u32 },
     #[error("consumer did not provide valid payload for media")]
-    ConsumerNoValidPayload { peer_id: String, media_idx: u32 },
+    ConsumerNoValidPayload { session_id: String, media_idx: u32 },
     #[error("SDP mline index is currently mandatory")]
     MandatorySdpMlineIndex,
-    #[error("duplicate consumer id")]
-    DuplicateConsumerId(String),
+    #[error("duplicate session id")]
+    DuplicateSessionId(String),
     #[error("error setting up consumer pipeline")]
-    ConsumerPipelineError { peer_id: String, details: String },
+    SessionPipelineError {
+        session_id: String,
+        peer_id: String,
+        details: String,
+    },
 }
 
 pub trait Signallable: Sync + Send + 'static {
@@ -35,7 +39,7 @@ pub trait Signallable: Sync + Send + 'static {
     fn handle_sdp(
         &mut self,
         element: &WebRTCSink,
-        peer_id: &str,
+        session_id: &str,
         sdp: &gst_webrtc::WebRTCSessionDescription,
     ) -> Result<(), Box<dyn Error>>;
 
@@ -46,13 +50,13 @@ pub trait Signallable: Sync + Send + 'static {
     fn handle_ice(
         &mut self,
         element: &WebRTCSink,
-        peer_id: &str,
+        session_id: &str,
         candidate: &str,
         sdp_m_line_index: Option<u32>,
         sdp_mid: Option<String>,
     ) -> Result<(), Box<dyn Error>>;
 
-    fn consumer_removed(&mut self, element: &WebRTCSink, peer_id: &str);
+    fn session_ended(&mut self, element: &WebRTCSink, session_id: &str);
 
     fn stop(&mut self, element: &WebRTCSink);
 }
@@ -86,12 +90,12 @@ impl WebRTCSink {
 
     pub fn handle_sdp(
         &self,
-        peer_id: &str,
+        session_id: &str,
         sdp: &gst_webrtc::WebRTCSessionDescription,
     ) -> Result<(), WebRTCSinkError> {
         let ws = imp::WebRTCSink::from_instance(self);
 
-        ws.handle_sdp(self, peer_id, sdp)
+        ws.handle_sdp(self, session_id, sdp)
     }
 
     /// sdp_mid is exposed for future proofing, see
@@ -99,14 +103,14 @@ impl WebRTCSink {
     /// at the moment sdp_m_line_index must be Some
     pub fn handle_ice(
         &self,
-        peer_id: &str,
+        session_id: &str,
         sdp_m_line_index: Option<u32>,
         sdp_mid: Option<String>,
         candidate: &str,
     ) -> Result<(), WebRTCSinkError> {
         let ws = imp::WebRTCSink::from_instance(self);
 
-        ws.handle_ice(self, peer_id, sdp_m_line_index, sdp_mid, candidate)
+        ws.handle_ice(self, session_id, sdp_m_line_index, sdp_mid, candidate)
     }
 
     pub fn handle_signalling_error(&self, error: Box<dyn Error + Send + Sync>) {
@@ -115,16 +119,16 @@ impl WebRTCSink {
         ws.handle_signalling_error(self, anyhow::anyhow!(error));
     }
 
-    pub fn add_consumer(&self, peer_id: &str) -> Result<(), WebRTCSinkError> {
+    pub fn start_session(&self, session_id: &str, peer_id: &str) -> Result<(), WebRTCSinkError> {
         let ws = imp::WebRTCSink::from_instance(self);
 
-        ws.add_consumer(self, peer_id)
+        ws.start_session(self, session_id, peer_id)
     }
 
-    pub fn remove_consumer(&self, peer_id: &str) -> Result<(), WebRTCSinkError> {
+    pub fn end_session(&self, session_id: &str) -> Result<(), WebRTCSinkError> {
         let ws = imp::WebRTCSink::from_instance(self);
 
-        ws.remove_consumer(self, peer_id, false)
+        ws.remove_session(self, session_id, false)
     }
 }
 

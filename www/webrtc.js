@@ -47,6 +47,7 @@ function Uint8ToString(u8a){
 }
 
 function Session(our_id, peer_id, closed_callback) {
+    this.id = null;
     this.peer_connection = null;
     this.ws_conn = null;
     this.peer_id = peer_id;
@@ -113,7 +114,7 @@ function Session(our_id, peer_id, closed_callback) {
             this.setStatus("Sending SDP answer");
             var sdp = {
                 'type': 'peer',
-                'peerId': this.peer_id,
+                'sessionId': this.id,
                 'sdp': this.peer_connection.localDescription.toJSON()
             };
             this.ws_conn.send(JSON.stringify(sdp));
@@ -164,6 +165,9 @@ function Session(our_id, peer_id, closed_callback) {
         if (msg.type == "registered") {
             this.setStatus("Registered with server");
             this.connectPeer();
+        } else if (msg.type == "sessionStarted") {
+            this.setStatus("Registered with server");
+            this.id = msg.sessionId;
         } else if (msg.type == "error") {
             this.handleIncomingError(msg.details);
         } else if (msg.type == "endSession") {
@@ -315,7 +319,7 @@ function Session(our_id, peer_id, closed_callback) {
             }
             this.ws_conn.send(JSON.stringify({
                 "type": "peer",
-                "peerId": this.peer_id,
+                "sessionId": this.id,
                 "ice": event.candidate.toJSON()
             }));
         };

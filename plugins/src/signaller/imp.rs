@@ -133,23 +133,30 @@ impl Signaller {
                                         );
                                     }
                                     p::OutgoingMessage::Registered(_) => unreachable!(),
-                                    p::OutgoingMessage::StartSession { peer_id } => {
-                                        if let Err(err) = element.add_consumer(&peer_id) {
+                                    p::OutgoingMessage::StartSession {
+                                        session_id,
+                                        peer_id,
+                                    } => {
+                                        if let Err(err) =
+                                            element.start_session(&session_id, &peer_id)
+                                        {
                                             gst::warning!(CAT, obj: &element, "{}", err);
                                         }
                                     }
-                                    p::OutgoingMessage::EndSession { peer_id } => {
-                                        if let Err(err) = element.remove_consumer(&peer_id) {
+                                    p::OutgoingMessage::EndSession(session_info) => {
+                                        if let Err(err) =
+                                            element.end_session(&session_info.session_id)
+                                        {
                                             gst::warning!(CAT, obj: &element, "{}", err);
                                         }
                                     }
                                     p::OutgoingMessage::Peer(p::PeerMessage {
-                                        peer_id,
+                                        session_id,
                                         peer_message,
                                     }) => match peer_message {
                                         p::PeerMessageInner::Sdp(p::SdpMessage::Answer { sdp }) => {
                                             if let Err(err) = element.handle_sdp(
-                                                &peer_id,
+                                                &session_id,
                                                 &gst_webrtc::WebRTCSessionDescription::new(
                                                     gst_webrtc::WebRTCSDPType::Answer,
                                                     gst_sdp::SDPMessage::parse_buffer(
@@ -175,7 +182,7 @@ impl Signaller {
                                             sdp_m_line_index,
                                         } => {
                                             if let Err(err) = element.handle_ice(
-                                                &peer_id,
+                                                &session_id,
                                                 Some(sdp_m_line_index),
                                                 None,
                                                 &candidate,
@@ -254,13 +261,13 @@ impl Signaller {
     pub fn handle_sdp(
         &self,
         element: &WebRTCSink,
-        peer_id: &str,
+        session_id: &str,
         sdp: &gst_webrtc::WebRTCSessionDescription,
     ) {
         let state = self.state.lock().unwrap();
 
         let msg = p::IncomingMessage::Peer(p::PeerMessage {
-            peer_id: peer_id.to_string(),
+            session_id: session_id.to_string(),
             peer_message: p::PeerMessageInner::Sdp(p::SdpMessage::Offer {
                 sdp: sdp.sdp().as_text().unwrap(),
             }),
@@ -281,7 +288,7 @@ impl Signaller {
     pub fn handle_ice(
         &self,
         element: &WebRTCSink,
-        peer_id: &str,
+        session_id: &str,
         candidate: &str,
         sdp_m_line_index: Option<u32>,
         _sdp_mid: Option<String>,
@@ -289,7 +296,7 @@ impl Signaller {
         let state = self.state.lock().unwrap();
 
         let msg = p::IncomingMessage::Peer(p::PeerMessage {
-            peer_id: peer_id.to_string(),
+            session_id: session_id.to_string(),
             peer_message: p::PeerMessageInner::Ice {
                 candidate: candidate.to_string(),
                 sdp_m_line_index: sdp_m_line_index.unwrap(),
@@ -331,17 +338,17 @@ impl Signaller {
         }
     }
 
-    pub fn consumer_removed(&self, element: &WebRTCSink, peer_id: &str) {
-        gst::debug!(CAT, obj: element, "Signalling consumer {} removed", peer_id);
+    pub fn end_session(&self, element: &WebRTCSink, session_id: &str) {
+        gst::debug!(CAT, obj: element, "Signalling session {} ended", session_id);
 
         let state = self.state.lock().unwrap();
-        let peer_id = peer_id.to_string();
+        let session_id = session_id.to_string();
         let element = element.downgrade();
         if let Some(mut sender) = state.websocket_sender.clone() {
             task::spawn(async move {
                 if let Err(err) = sender
                     .send(p::IncomingMessage::EndSession(p::EndSessionMessage {
-                        peer_id: peer_id.to_string(),
+                        session_id: session_id.to_string(),
                     }))
                     .await
                 {

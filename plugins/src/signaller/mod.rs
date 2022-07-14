@@ -34,13 +34,13 @@ impl Signallable for Signaller {
     fn handle_ice(
         &mut self,
         element: &WebRTCSink,
-        peer_id: &str,
+        session_id: &str,
         candidate: &str,
         sdp_mline_index: Option<u32>,
         sdp_mid: Option<String>,
     ) -> Result<(), Box<dyn Error>> {
         let signaller = imp::Signaller::from_instance(self);
-        signaller.handle_ice(element, peer_id, candidate, sdp_mline_index, sdp_mid);
+        signaller.handle_ice(element, session_id, candidate, sdp_mline_index, sdp_mid);
         Ok(())
     }
 
@@ -49,9 +49,9 @@ impl Signallable for Signaller {
         signaller.stop(element);
     }
 
-    fn consumer_removed(&mut self, element: &WebRTCSink, peer_id: &str) {
+    fn session_ended(&mut self, element: &WebRTCSink, session_id: &str) {
         let signaller = imp::Signaller::from_instance(self);
-        signaller.consumer_removed(element, peer_id);
+        signaller.end_session(element, session_id);
     }
 }
 
