@@ -171,7 +171,7 @@ impl FMP4Mux {
             gst::FlowError::Error
         })?;
         let duration = buffer.duration();
-        let end_pts_position = duration.map_or(pts_position, |duration| pts_position + duration);
+        let end_pts_position = duration.opt_add(pts_position).unwrap_or(pts_position);
 
         let mut pts = segment
             .to_running_time_full(pts_position)
@@ -218,8 +218,7 @@ impl FMP4Mux {
             // Negative DTS are handled via the dts_offset and by having negative composition time
             // offsets in the `trun` box. The smallest DTS here is shifted to zero.
             let dts_position = buffer.dts().expect("not DTS");
-            let end_dts_position =
-                duration.map_or(dts_position, |duration| dts_position + duration);
+            let end_dts_position = duration.opt_add(dts_position).unwrap_or(dts_position);
 
             let signed_dts = segment.to_running_time_full(dts_position).ok_or_else(|| {
                 gst::error!(CAT, obj: &stream.sinkpad, "Couldn't convert DTS to running time");
@@ -519,7 +518,7 @@ impl FMP4Mux {
         };
 
         let pts = segment.to_running_time(pts);
-        if pts.map_or(true, |pts| last_force_keyunit_time > pts) {
+        if pts.opt_lt(last_force_keyunit_time).unwrap_or(true) {
             return Ok(None);
         }
 
@@ -620,18 +619,24 @@ impl FMP4Mux {
                 let end_pts = last_gop.end_pts;
                 let dts_offset = stream.dts_offset;
 
-                if min_earliest_pts.map_or(true, |min| min > earliest_pts) {
+                if min_earliest_pts.opt_gt(earliest_pts).unwrap_or(true) {
                     min_earliest_pts = Some(earliest_pts);
                 }
-                if min_earliest_pts_position.map_or(true, |min| min > earliest_pts_position) {
+                if min_earliest_pts_position
+                    .opt_gt(earliest_pts_position)
+                    .unwrap_or(true)
+                {
                     min_earliest_pts_position = Some(earliest_pts_position);
                 }
                 if let Some(start_dts_position) = start_dts_position {
-                    if min_start_dts_position.map_or(true, |min| min > start_dts_position) {
+                    if min_start_dts_position
+                        .opt_gt(start_dts_position)
+                        .unwrap_or(true)
+                    {
                         min_start_dts_position = Some(start_dts_position);
                     }
                 }
-                if max_end_pts.map_or(true, |max| max < end_pts) {
+                if max_end_pts.opt_lt(end_pts).unwrap_or(true) {
                     max_end_pts = Some(end_pts);
                 }
 
@@ -794,10 +799,12 @@ impl FMP4Mux {
 
             while settings
                 .interleave_bytes
-                .map_or(true, |max_bytes| dequeued_bytes <= max_bytes)
-                && settings.interleave_time.map_or(true, |max_time| {
-                    current_end_time.saturating_sub(start_time) <= max_time
-                })
+                .opt_ge(dequeued_bytes)
+                .unwrap_or(true)
+                && settings
+                    .interleave_time
+                    .opt_ge(current_end_time.saturating_sub(start_time))
+                    .unwrap_or(true)
             {
                 if let Some(buffer) = bs.pop_front() {
                     current_end_time = buffer.timestamp + buffer.duration;
@@ -1632,8 +1639,7 @@ impl AggregatorImpl for FMP4Mux {
                         }
                     };
 
-                    if earliest_pts.map_or(true, |earliest_pts| earliest_pts > stream_earliest_pts)
-                    {
+                    if earliest_pts.opt_gt(stream_earliest_pts).unwrap_or(true) {
                         earliest_pts = Some(stream_earliest_pts);
                     }
                 }
