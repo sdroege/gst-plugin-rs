@@ -148,6 +148,8 @@ impl FMP4Mux {
         segment: &gst::FormattedSegment<gst::ClockTime>,
         mut buffer: gst::Buffer,
     ) -> Result<(), gst::FlowError> {
+        use gst::Signed::*;
+
         assert!(!stream.fragment_filled);
 
         gst::trace!(CAT, obj: &stream.sinkpad, "Handling buffer {:?}", buffer);
@@ -171,33 +173,27 @@ impl FMP4Mux {
         let duration = buffer.duration();
         let end_pts_position = duration.map_or(pts_position, |duration| pts_position + duration);
 
-        let mut pts = match segment.to_running_time_full(pts_position) {
-            (_, None) => {
+        let mut pts = segment
+            .to_running_time_full(pts_position)
+            .ok_or_else(|| {
                 gst::error!(CAT, obj: &stream.sinkpad, "Couldn't convert PTS to running time");
-                return Err(gst::FlowError::Error);
-            }
-            (pts_signum, _) if pts_signum < 0 => {
+                gst::FlowError::Error
+            })?
+            .positive_or_else(|_| {
                 gst::error!(CAT, obj: &stream.sinkpad, "Negative PTSs are not supported");
-                return Err(gst::FlowError::Error);
-            }
-            (_, Some(pts)) => pts,
-        };
+                gst::FlowError::Error
+            })?;
 
-        let mut end_pts = match segment.to_running_time_full(end_pts_position) {
-            (_, None) => {
-                gst::error!(
-                    CAT,
-                    obj: &stream.sinkpad,
-                    "Couldn't convert end PTS to running time"
-                );
-                return Err(gst::FlowError::Error);
-            }
-            (pts_signum, _) if pts_signum < 0 => {
+        let mut end_pts = segment
+            .to_running_time_full(end_pts_position)
+            .ok_or_else(|| {
+                gst::error!(CAT, obj: &stream.sinkpad, "Couldn't convert end PTS to running time");
+                gst::FlowError::Error
+            })?
+            .positive_or_else(|_| {
                 gst::error!(CAT, obj: &stream.sinkpad, "Negative PTSs are not supported");
-                return Err(gst::FlowError::Error);
-            }
-            (_, Some(pts)) => pts,
-        };
+                gst::FlowError::Error
+            })?;
 
         // Enforce monotonically increasing PTS for intra-only streams
         if intra_only {
@@ -225,12 +221,19 @@ impl FMP4Mux {
             let end_dts_position =
                 duration.map_or(dts_position, |duration| dts_position + duration);
 
-            let mut dts = match segment.to_running_time_full(dts_position) {
-                (_, None) => {
-                    gst::error!(CAT, obj: &stream.sinkpad, "Couldn't convert DTS to running time");
-                    return Err(gst::FlowError::Error);
+            let signed_dts = segment.to_running_time_full(dts_position).ok_or_else(|| {
+                gst::error!(CAT, obj: &stream.sinkpad, "Couldn't convert DTS to running time");
+                gst::FlowError::Error
+            })?;
+            let mut dts = match signed_dts {
+                Positive(dts) => {
+                    if let Some(dts_offset) = stream.dts_offset {
+                        dts + dts_offset
+                    } else {
+                        dts
+                    }
                 }
-                (pts_signum, Some(dts)) if pts_signum < 0 => {
+                Negative(dts) => {
                     if stream.dts_offset.is_none() {
                         stream.dts_offset = Some(dts);
                     }
@@ -243,25 +246,28 @@ impl FMP4Mux {
                         dts_offset - dts
                     }
                 }
-                (_, Some(dts)) => {
+            };
+
+            let signed_end_dts =
+                segment
+                    .to_running_time_full(end_dts_position)
+                    .ok_or_else(|| {
+                        gst::error!(
+                            CAT,
+                            obj: &stream.sinkpad,
+                            "Couldn't convert end DTS to running time"
+                        );
+                        gst::FlowError::Error
+                    })?;
+            let mut end_dts = match signed_end_dts {
+                Positive(dts) => {
                     if let Some(dts_offset) = stream.dts_offset {
                         dts + dts_offset
                     } else {
                         dts
                     }
                 }
-            };
-
-            let mut end_dts = match segment.to_running_time_full(end_dts_position) {
-                (_, None) => {
-                    gst::error!(
-                        CAT,
-                        obj: &stream.sinkpad,
-                        "Couldn't convert end DTS to running time"
-                    );
-                    return Err(gst::FlowError::Error);
-                }
-                (pts_signum, Some(dts)) if pts_signum < 0 => {
+                Negative(dts) => {
                     if stream.dts_offset.is_none() {
                         stream.dts_offset = Some(dts);
                     }
@@ -272,13 +278,6 @@ impl FMP4Mux {
                         gst::ClockTime::ZERO
                     } else {
                         dts_offset - dts
-                    }
-                }
-                (_, Some(dts)) => {
-                    if let Some(dts_offset) = stream.dts_offset {
-                        dts + dts_offset
-                    } else {
-                        dts
                     }
                 }
             };
