@@ -5,7 +5,8 @@ DIRS = ['audio', 'generic', 'net', 'text', 'utils', 'video']
 RS_PREFIXED = ['audiofx', 'closedcaption',
                'dav1d', 'file', 'json', 'onvif', 'regex', 'webp']
 OVERRIDE = {'wrap': 'rstextwrap', 'flavors': 'rsflv',
-            'ahead': 'textahead', 'tracers': 'rstracers'}
+            'ahead': 'textahead', 'tracers': 'rstracers',
+            'webrtc-http': 'webrtchttp'}
 
 
 def iterate_plugins():

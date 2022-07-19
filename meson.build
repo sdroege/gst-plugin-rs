@@ -64,6 +64,7 @@ plugins = {
   'gst-plugin-textahead': 'libgsttextahead',
   'gst-plugin-onvif': 'libgstrsonvif',
   'gst-plugin-tracers': 'libgstrstracers',
+  'gst-plugin-webrtchttp': 'libgstwebrtchttp'
 }
 
 extra_env = {}
@@ -144,7 +145,7 @@ endforeach
 # before gstreamer-rs when building with gst-build.
 # Custom targets can't depend on dependency() objects so we have to depend
 # on the library variable from the subproject instead.
-gst_req = '>= 1.14.0'
+gst_req = '>= 1.18.0'
 depends = []
 
 deps = [
@@ -157,6 +158,8 @@ deps = [
   ['gstreamer-net-1.0', 'gstreamer', 'gst_net_dep', 'gst_net'],
   ['gstreamer-rtp-1.0', 'gst-plugins-base', 'rtp_dep', 'gst_rtp'],
   ['gstreamer-video-1.0', 'gst-plugins-base', 'video_dep', 'gstvideo'],
+  ['gstreamer-sdp-1.0', 'gst-plugins-base', 'sdp_dep', 'gstsdp_dep'],
+  ['gstreamer-webrtc-1.0', 'gst-plugins-bad', 'gstwebrtc_dep', 'gstwebrtc_dep'],
 ]
 
 foreach d: deps

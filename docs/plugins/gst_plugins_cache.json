@@ -6704,5 +6704,80 @@
         "source": "gst-plugin-videofx",
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
+    "webrtchttp": {
+        "description": "Plugin for WebRTC HTTP protocols",
+        "elements": {
+            "whipsink": {
+                "author": "Taruntej Kanakamalla <taruntej@asymptotic.io>",
+                "description": "A bin to stream media using the WebRTC HTTP Ingestion Protocol (WHIP)",
+                "hierarchy": [
+                    "WhipSink",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy"
+                ],
+                "klass": "Sink/Network/WebRTC",
+                "long-name": "WHIP Sink Bin",
+                "pad-templates": {
+                    "sink_%%u": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    }
+                },
+                "properties": {
+                    "auth-token": {
+                        "blurb": "Authentication token to use, will be sent in the HTTP Header as 'Bearer <auth-token>'",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "use-link-headers": {
+                        "blurb": "Use link headers to configure ice-servers from the WHIP server response to the POST or OPTIONS request.\n                        If set to TRUE and the WHIP server returns valid ice-servers,\n                        this property overrides the ice-servers values set using the stun-server and turn-server properties.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "whip-endpoint": {
+                        "blurb": "The WHIP server endpoint to POST SDP offer to.\n                        e.g.: https://example.com/whip/endpoint/room1234",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    }
+                },
+                "rank": "marginal"
+            }
+        },
+        "filename": "gstwebrtchttp",
+        "license": "MPL",
+        "other-types": {},
+        "package": "gst-plugin-webrtchttp",
+        "source": "gst-plugin-webrtchttp",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     }
 }
