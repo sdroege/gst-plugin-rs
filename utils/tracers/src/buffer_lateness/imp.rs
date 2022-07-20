@@ -196,6 +196,13 @@ impl ObjectImpl for BufferLateness {
             }
         };
 
+        gst::debug!(
+            CAT,
+            obj: obj,
+            "Writing file {}",
+            state.settings.file.display()
+        );
+
         for LogLine {
             timestamp,
             element_name,
