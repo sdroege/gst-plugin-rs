@@ -214,6 +214,13 @@ impl ObjectImpl for QueueLevels {
             }
         };
 
+        gst::debug!(
+            CAT,
+            obj: obj,
+            "Writing file {}",
+            state.settings.file.display()
+        );
+
         for LogLine {
             timestamp,
             name,
