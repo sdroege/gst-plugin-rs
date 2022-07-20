@@ -4,6 +4,7 @@ import re
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 parser = argparse.ArgumentParser()
 parser.add_argument("file", help="Input file with queue levels")
@@ -74,21 +75,17 @@ if num_plots == 0:
     num_plots += 1
     axes_names.append("time (s)")
 
-fig, ax1 = plt.subplots()
-ax1.set_xlabel("wallclock (s)")
-ax1.set_ylabel(axes_names[0])
-ax1.tick_params(axis='y')
-axes = [ax1]
+fig, axes = plt.subplots(num_plots, sharex=True)
+axes[0].set_xlabel("wallclock (s)")
+axes[0].set_ylabel(axes_names[0])
+axes[0].tick_params(axis='y')
 
 if num_plots > 1:
-    ax2 = ax1.twinx()
-    ax2.set_ylabel(axes_names[1])
-    axes.append(ax2)
+    axes[1].set_ylabel(axes_names[1])
 if num_plots > 2:
-    ax3 = ax1.twinx()
-    ax3.set_ylabel(axes_names[2])
-    ax3.spines['right'].set_position(('outward', 60))
-    axes.append(ax3)
+    axes[2].set_ylabel(axes_names[2])
+
+patches = []
 
 for (i, (queue, values)) in enumerate(queues.items()):
     axis = 0
@@ -115,7 +112,7 @@ for (i, (queue, values)) in enumerate(queues.items()):
         axes[axis].plot(
             [x[0] for x in values['cur-level-time']],
             [x[1] for x in values['cur-level-time']],
-            'p', label = '{}: cur-level-time'.format(queue),
+            '.', label = '{}: cur-level-time'.format(queue),
             color = colors[i],
         )
 
@@ -123,7 +120,7 @@ for (i, (queue, values)) in enumerate(queues.items()):
             axes[axis].plot(
                 [x[0] for x in values['max-size-time']],
                 [x[1] for x in values['max-size-time']],
-                '-.', label = '{}: max-size-time'.format(queue),
+                '-', label = '{}: max-size-time'.format(queue),
                 color = colors[i],
             )
 
@@ -133,7 +130,7 @@ for (i, (queue, values)) in enumerate(queues.items()):
         axes[axis].plot(
             [x[0] for x in values['cur-level-bytes']],
             [x[1] for x in values['cur-level-bytes']],
-            'x', label = '{}: cur-level-bytes'.format(queue),
+            '.', label = '{}: cur-level-bytes'.format(queue),
             color = colors[i],
         )
 
@@ -141,13 +138,15 @@ for (i, (queue, values)) in enumerate(queues.items()):
             axes[axis].plot(
                 [x[0] for x in values['max-size-bytes']],
                 [x[1] for x in values['max-size-bytes']],
-                '--', label = '{}: max-size-bytes'.format(queue),
+                '-', label = '{}: max-size-bytes'.format(queue),
                 color = colors[i],
             )
 
         axis += 1
 
-fig.tight_layout()
-fig.legend()
+    patches.append(mpatches.Patch(color=colors[i], label=queue))
 
+fig.tight_layout()
+
+plt.legend(handles=patches, loc='best')
 plt.show()
