@@ -28,7 +28,10 @@ You will find the following plugins in this repository:
 
     - `aws`: Various elements for Amazon AWS services using the [AWS SDK](https://awslabs.github.io/aws-sdk-rust/) library
       - `s3src`/`s3sink`: A source and sink element to talk to the Amazon S3 object storage system.
+      - `s3hlssink`: A sink element to store HLS streams on Amazon S3.
       - `aws_transcriber`: an element wrapping the AWS Transcriber service.
+
+    - `raptorq`: Encoder/decoder element for RaptorQ RTP FEC mechanism.
 
   * `audio`
     - `audiofx`: Elements to apply audio effects to a stream
@@ -108,6 +111,17 @@ You will find the following plugins in this repository:
         source.
 
     - `togglerecord`: Element to enable starting and stopping multiple streams together.
+
+    - `tracers`: Plugin with multiple tracers:
+      - `buffer-lateness`: Records lateness of buffers and the reported
+        latency for each pad in a CSV file. Contains a script for
+        visualization.
+      - `pipeline-snapshot`: Creates a .dot file of all pipelines in the
+        application whenever requested.
+      - `queue-levels`: Records queue levels for each queue in a CSV file.
+        Contains a script for visualization.
+
+    - `uriplaylistbin`: Helper bin to gaplessly play a list of URIs.
 
 ## Building
 
