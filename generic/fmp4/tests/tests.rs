@@ -519,6 +519,7 @@ fn test_live_timeout() {
     }
 
     // Advance time and crank the clock: this should bring us to the end of the first fragment
+    h1.set_time(gst::ClockTime::from_seconds(5)).unwrap();
     h1.crank_single_clock_wait().unwrap();
 
     let header = h1.pull().unwrap();
@@ -550,6 +551,7 @@ fn test_live_timeout() {
             if j == 1 && i == 4 {
                 // Advance time and crank the clock another time. This brings us at the end of the
                 // EOS.
+                h1.set_time(gst::ClockTime::from_seconds(7)).unwrap();
                 h1.crank_single_clock_wait().unwrap();
                 continue;
             }
