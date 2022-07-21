@@ -579,77 +579,71 @@ impl ObjectImpl for HlsSink3 {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
-                glib::subclass::Signal::builder(
-                    SIGNAL_GET_PLAYLIST_STREAM,
-                    &[String::static_type().into()],
-                    gio::OutputStream::static_type().into(),
-                )
-                .class_handler(|_, args| {
-                    let element = args[0]
-                        .get::<super::HlsSink3>()
-                        .expect("playlist-stream signal arg");
-                    let playlist_location =
-                        args[1].get::<String>().expect("playlist-stream signal arg");
-                    let hlssink3 = element.imp();
+                glib::subclass::Signal::builder(SIGNAL_GET_PLAYLIST_STREAM)
+                    .param_types(&[String::static_type()])
+                    .return_type::<gio::OutputStream>()
+                    .class_handler(|_, args| {
+                        let element = args[0]
+                            .get::<super::HlsSink3>()
+                            .expect("playlist-stream signal arg");
+                        let playlist_location =
+                            args[1].get::<String>().expect("playlist-stream signal arg");
+                        let hlssink3 = element.imp();
 
-                    Some(
-                        hlssink3
-                            .new_file_stream(&element, &playlist_location)
-                            .ok()?
-                            .to_value(),
-                    )
-                })
-                .accumulator(|_hint, ret, value| {
-                    // First signal handler wins
-                    *ret = value.clone();
-                    false
-                })
-                .build(),
-                glib::subclass::Signal::builder(
-                    SIGNAL_GET_FRAGMENT_STREAM,
-                    &[String::static_type().into()],
-                    gio::OutputStream::static_type().into(),
-                )
-                .class_handler(|_, args| {
-                    let element = args[0]
-                        .get::<super::HlsSink3>()
-                        .expect("fragment-stream signal arg");
-                    let fragment_location =
-                        args[1].get::<String>().expect("fragment-stream signal arg");
-                    let hlssink3 = element.imp();
+                        Some(
+                            hlssink3
+                                .new_file_stream(&element, &playlist_location)
+                                .ok()?
+                                .to_value(),
+                        )
+                    })
+                    .accumulator(|_hint, ret, value| {
+                        // First signal handler wins
+                        *ret = value.clone();
+                        false
+                    })
+                    .build(),
+                glib::subclass::Signal::builder(SIGNAL_GET_FRAGMENT_STREAM)
+                    .param_types(&[String::static_type()])
+                    .return_type::<gio::OutputStream>()
+                    .class_handler(|_, args| {
+                        let element = args[0]
+                            .get::<super::HlsSink3>()
+                            .expect("fragment-stream signal arg");
+                        let fragment_location =
+                            args[1].get::<String>().expect("fragment-stream signal arg");
+                        let hlssink3 = element.imp();
 
-                    Some(
-                        hlssink3
-                            .new_file_stream(&element, &fragment_location)
-                            .ok()?
-                            .to_value(),
-                    )
-                })
-                .accumulator(|_hint, ret, value| {
-                    // First signal handler wins
-                    *ret = value.clone();
-                    false
-                })
-                .build(),
-                glib::subclass::Signal::builder(
-                    SIGNAL_DELETE_FRAGMENT,
-                    &[String::static_type().into()],
-                    glib::types::Type::BOOL.into(),
-                )
-                .class_handler(|_, args| {
-                    let element = args[0].get::<super::HlsSink3>().expect("signal arg");
-                    let fragment_location = args[1].get::<String>().expect("signal arg");
-                    let hlssink3 = element.imp();
+                        Some(
+                            hlssink3
+                                .new_file_stream(&element, &fragment_location)
+                                .ok()?
+                                .to_value(),
+                        )
+                    })
+                    .accumulator(|_hint, ret, value| {
+                        // First signal handler wins
+                        *ret = value.clone();
+                        false
+                    })
+                    .build(),
+                glib::subclass::Signal::builder(SIGNAL_DELETE_FRAGMENT)
+                    .param_types(&[String::static_type()])
+                    .return_type::<bool>()
+                    .class_handler(|_, args| {
+                        let element = args[0].get::<super::HlsSink3>().expect("signal arg");
+                        let fragment_location = args[1].get::<String>().expect("signal arg");
+                        let hlssink3 = element.imp();
 
-                    hlssink3.delete_fragment(&element, &fragment_location);
-                    Some(true.to_value())
-                })
-                .accumulator(|_hint, ret, value| {
-                    // First signal handler wins
-                    *ret = value.clone();
-                    false
-                })
-                .build(),
+                        hlssink3.delete_fragment(&element, &fragment_location);
+                        Some(true.to_value())
+                    })
+                    .accumulator(|_hint, ret, value| {
+                        // First signal handler wins
+                        *ret = value.clone();
+                        false
+                    })
+                    .build(),
             ]
         });
 

@@ -1045,47 +1045,41 @@ impl ObjectImpl for UdpSink {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
-                glib::subclass::Signal::builder(
-                    "add",
-                    &[String::static_type().into(), i32::static_type().into()],
-                    glib::types::Type::UNIT.into(),
-                )
-                .action()
-                .class_handler(|_, args| {
-                    let element = args[0].get::<super::UdpSink>().expect("signal arg");
-                    let host = args[1].get::<String>().expect("signal arg");
-                    let port = args[2].get::<i32>().expect("signal arg");
+                glib::subclass::Signal::builder("add")
+                    .param_types(&[String::static_type(), i32::static_type()])
+                    .action()
+                    .class_handler(|_, args| {
+                        let element = args[0].get::<super::UdpSink>().expect("signal arg");
+                        let host = args[1].get::<String>().expect("signal arg");
+                        let port = args[2].get::<i32>().expect("signal arg");
 
-                    if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
-                        let udpsink = element.imp();
-                        let mut settings = udpsink.settings.lock().unwrap();
-                        udpsink.add_client(&mut settings, addr);
-                    }
+                        if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
+                            let udpsink = element.imp();
+                            let mut settings = udpsink.settings.lock().unwrap();
+                            udpsink.add_client(&mut settings, addr);
+                        }
 
-                    None
-                })
-                .build(),
-                glib::subclass::Signal::builder(
-                    "remove",
-                    &[String::static_type().into(), i32::static_type().into()],
-                    glib::types::Type::UNIT.into(),
-                )
-                .action()
-                .class_handler(|_, args| {
-                    let element = args[0].get::<super::UdpSink>().expect("signal arg");
-                    let host = args[1].get::<String>().expect("signal arg");
-                    let port = args[2].get::<i32>().expect("signal arg");
+                        None
+                    })
+                    .build(),
+                glib::subclass::Signal::builder("remove")
+                    .param_types(&[String::static_type(), i32::static_type()])
+                    .action()
+                    .class_handler(|_, args| {
+                        let element = args[0].get::<super::UdpSink>().expect("signal arg");
+                        let host = args[1].get::<String>().expect("signal arg");
+                        let port = args[2].get::<i32>().expect("signal arg");
 
-                    if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
-                        let udpsink = element.imp();
-                        let mut settings = udpsink.settings.lock().unwrap();
-                        udpsink.remove_client(&mut settings, addr);
-                    }
+                        if let Ok(addr) = try_into_socket_addr(&element, &host, port) {
+                            let udpsink = element.imp();
+                            let mut settings = udpsink.settings.lock().unwrap();
+                            udpsink.remove_client(&mut settings, addr);
+                        }
 
-                    None
-                })
-                .build(),
-                glib::subclass::Signal::builder("clear", &[], glib::types::Type::UNIT.into())
+                        None
+                    })
+                    .build(),
+                glib::subclass::Signal::builder("clear")
                     .action()
                     .class_handler(|_, args| {
                         let element = args[0].get::<super::UdpSink>().expect("signal arg");

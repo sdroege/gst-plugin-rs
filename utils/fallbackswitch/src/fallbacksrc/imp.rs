@@ -653,22 +653,20 @@ impl ObjectImpl for FallbackSrc {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
-                glib::subclass::Signal::builder(
-                    "update-uri",
-                    &[String::static_type().into()],
-                    String::static_type().into(),
-                )
-                .class_handler(|_token, args| {
-                    // Simply return the input by default
-                    Some(args[1].clone())
-                })
-                .accumulator(|_hint, ret, value| {
-                    // First signal handler wins
-                    *ret = value.clone();
-                    false
-                })
-                .build(),
-                glib::subclass::Signal::builder("unblock", &[], glib::types::Type::UNIT.into())
+                glib::subclass::Signal::builder("update-uri")
+                    .param_types(&[String::static_type()])
+                    .return_type::<String>()
+                    .class_handler(|_token, args| {
+                        // Simply return the input by default
+                        Some(args[1].clone())
+                    })
+                    .accumulator(|_hint, ret, value| {
+                        // First signal handler wins
+                        *ret = value.clone();
+                        false
+                    })
+                    .build(),
+                glib::subclass::Signal::builder("unblock")
                     .action()
                     .class_handler(|_token, args| {
                         let element = args[0].get::<super::FallbackSrc>().expect("signal arg");

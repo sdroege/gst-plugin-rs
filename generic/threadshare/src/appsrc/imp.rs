@@ -511,21 +511,20 @@ impl ObjectImpl for AppSrc {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
-                glib::subclass::Signal::builder(
-                    "push-buffer",
-                    &[gst::Buffer::static_type().into()],
-                    bool::static_type().into(),
-                )
-                .action()
-                .class_handler(|_, args| {
-                    let element = args[0].get::<super::AppSrc>().expect("signal arg");
-                    let buffer = args[1].get::<gst::Buffer>().expect("signal arg");
-                    let appsrc = element.imp();
+                glib::subclass::Signal::builder("push-buffer")
+                    .param_types(&[gst::Buffer::static_type()])
+                    .return_type::<bool>()
+                    .action()
+                    .class_handler(|_, args| {
+                        let element = args[0].get::<super::AppSrc>().expect("signal arg");
+                        let buffer = args[1].get::<gst::Buffer>().expect("signal arg");
+                        let appsrc = element.imp();
 
-                    Some(appsrc.push_buffer(&element, buffer).to_value())
-                })
-                .build(),
-                glib::subclass::Signal::builder("end-of-stream", &[], bool::static_type().into())
+                        Some(appsrc.push_buffer(&element, buffer).to_value())
+                    })
+                    .build(),
+                glib::subclass::Signal::builder("end-of-stream")
+                    .return_type::<bool>()
                     .action()
                     .class_handler(|_, args| {
                         let element = args[0].get::<super::AppSrc>().expect("signal arg");

@@ -124,20 +124,18 @@ impl ObjectSubclass for EbuR128Level {
 impl ObjectImpl for EbuR128Level {
     fn signals() -> &'static [glib::subclass::Signal] {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
-            vec![
-                glib::subclass::Signal::builder("reset", &[], glib::Type::UNIT.into())
-                    .action()
-                    .class_handler(|_token, args| {
-                        let this = args[0].get::<super::EbuR128Level>().unwrap();
-                        let imp = this.imp();
+            vec![glib::subclass::Signal::builder("reset")
+                .action()
+                .class_handler(|_token, args| {
+                    let this = args[0].get::<super::EbuR128Level>().unwrap();
+                    let imp = this.imp();
 
-                        gst::info!(CAT, obj: &this, "Resetting measurements",);
-                        imp.reset.store(true, atomic::Ordering::SeqCst);
+                    gst::info!(CAT, obj: &this, "Resetting measurements",);
+                    imp.reset.store(true, atomic::Ordering::SeqCst);
 
-                        None
-                    })
-                    .build(),
-            ]
+                    None
+                })
+                .build()]
         });
 
         &*SIGNALS
