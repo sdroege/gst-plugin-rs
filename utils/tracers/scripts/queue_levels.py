@@ -76,6 +76,9 @@ if num_plots == 0:
     axes_names.append("time (s)")
 
 fig, axes = plt.subplots(num_plots, sharex=True)
+if num_plots == 1:
+    axes = [axes]
+
 axes[0].set_xlabel("wallclock (s)")
 axes[0].set_ylabel(axes_names[0])
 axes[0].tick_params(axis='y')
