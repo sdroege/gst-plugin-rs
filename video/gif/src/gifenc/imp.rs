@@ -13,6 +13,7 @@ use gst::glib;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
+use gst_video::VideoFormat;
 use once_cell::sync::Lazy;
 use std::{
     io,
@@ -222,24 +223,10 @@ impl ElementImpl for GifEnc {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::builder("video/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([
-                        gst_video::VideoFormat::Rgb.to_str(),
-                        gst_video::VideoFormat::Rgba.to_str(),
-                    ]),
-                )
-                .field("width", gst::IntRange::new(1, std::u16::MAX as i32))
-                .field("height", gst::IntRange::new(1, std::u16::MAX as i32))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(1, 1),
-                        // frame-delay timing in gif is a multiple of 10ms -> max 100fps
-                        gst::Fraction::new(100, 1),
-                    ),
-                )
+            let sink_caps = gst_video::VideoCapsBuilder::new()
+                .format_list([VideoFormat::Rgb, VideoFormat::Rgba])
+                // frame-delay timing in gif is a multiple of 10ms -> max 100fps
+                .framerate_range(gst::Fraction::new(1, 1)..gst::Fraction::new(100, 1))
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

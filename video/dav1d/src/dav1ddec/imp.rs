@@ -446,8 +446,8 @@ impl Dav1dDec {
     }
 }
 
-fn video_output_formats() -> Vec<glib::SendValue> {
-    let values = [
+fn video_output_formats() -> impl IntoIterator<Item = gst_video::VideoFormat> {
+    [
         gst_video::VideoFormat::Gray8,
         #[cfg(target_endian = "little")]
         gst_video::VideoFormat::Gray16Le,
@@ -482,8 +482,7 @@ fn video_output_formats() -> Vec<glib::SendValue> {
         gst_video::VideoFormat::I42212be,
         #[cfg(target_endian = "big")]
         gst_video::VideoFormat::Y44412be,
-    ];
-    values.iter().map(|i| i.to_str().to_send_value()).collect()
+    ]
 }
 
 #[glib::object_subclass]
@@ -586,17 +585,8 @@ impl ElementImpl for Dav1dDec {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::builder("video/x-raw")
-                .field("format", gst::List::from(video_output_formats()))
-                .field("width", gst::IntRange::new(1, i32::MAX))
-                .field("height", gst::IntRange::new(1, i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
+            let src_caps = gst_video::VideoCapsBuilder::new()
+                .format_list(video_output_formats())
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

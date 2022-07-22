@@ -233,25 +233,14 @@ impl ElementImpl for ColorDetect {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let formats = gst::List::new([
-                VideoFormat::Rgb.to_str(),
-                VideoFormat::Rgba.to_str(),
-                VideoFormat::Argb.to_str(),
-                VideoFormat::Bgr.to_str(),
-                VideoFormat::Bgra.to_str(),
-            ]);
-
-            let caps = gst::Caps::builder("video/x-raw")
-                .field("format", &formats)
-                .field("width", gst::IntRange::new(1, i32::MAX))
-                .field("height", gst::IntRange::new(1, i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
+            let caps = gst_video::VideoCapsBuilder::new()
+                .format_list([
+                    VideoFormat::Rgb,
+                    VideoFormat::Rgba,
+                    VideoFormat::Argb,
+                    VideoFormat::Bgr,
+                    VideoFormat::Bgra,
+                ])
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

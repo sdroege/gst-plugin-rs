@@ -253,25 +253,13 @@ impl ElementImpl for PngEncoder {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::builder("video/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([
-                        gst_video::VideoFormat::Gray8.to_str(),
-                        gst_video::VideoFormat::Gray16Be.to_str(),
-                        gst_video::VideoFormat::Rgb.to_str(),
-                        gst_video::VideoFormat::Rgba.to_str(),
-                    ]),
-                )
-                .field("width", gst::IntRange::new(1, std::i32::MAX))
-                .field("height", gst::IntRange::new(1, std::i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(1, 1),
-                        gst::Fraction::new(std::i32::MAX, 1),
-                    ),
-                )
+            let sink_caps = gst_video::VideoCapsBuilder::new()
+                .format_list([
+                    gst_video::VideoFormat::Gray8,
+                    gst_video::VideoFormat::Gray16Be,
+                    gst_video::VideoFormat::Rgb,
+                    gst_video::VideoFormat::Rgba,
+                ])
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

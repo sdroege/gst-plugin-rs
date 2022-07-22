@@ -553,31 +553,19 @@ impl ElementImpl for Rav1Enc {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::builder("video/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([
-                        gst_video::VideoFormat::I420.to_str(),
-                        gst_video::VideoFormat::Y42b.to_str(),
-                        gst_video::VideoFormat::Y444.to_str(),
-                        gst_video::VideoFormat::I42010le.to_str(),
-                        gst_video::VideoFormat::I42210le.to_str(),
-                        gst_video::VideoFormat::Y44410le.to_str(),
-                        gst_video::VideoFormat::I42012le.to_str(),
-                        gst_video::VideoFormat::I42212le.to_str(),
-                        gst_video::VideoFormat::Y44412le.to_str(),
-                        gst_video::VideoFormat::Gray8.to_str(),
-                    ]),
-                )
-                .field("width", gst::IntRange::new(1, std::i32::MAX))
-                .field("height", gst::IntRange::new(1, std::i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(std::i32::MAX, 1),
-                    ),
-                )
+            let sink_caps = gst_video::VideoCapsBuilder::new()
+                .format_list([
+                    gst_video::VideoFormat::I420,
+                    gst_video::VideoFormat::Y42b,
+                    gst_video::VideoFormat::Y444,
+                    gst_video::VideoFormat::I42010le,
+                    gst_video::VideoFormat::I42210le,
+                    gst_video::VideoFormat::Y44410le,
+                    gst_video::VideoFormat::I42012le,
+                    gst_video::VideoFormat::I42212le,
+                    gst_video::VideoFormat::Y44412le,
+                    gst_video::VideoFormat::Gray8,
+                ])
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",

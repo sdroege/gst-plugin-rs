@@ -13,7 +13,6 @@ use ffv1::decoder::{Decoder, Frame};
 use ffv1::record::ConfigRecord;
 
 use gst::glib;
-use gst::prelude::*;
 use gst::subclass::prelude::*;
 use gst_video::prelude::*;
 use gst_video::subclass::prelude::*;
@@ -42,8 +41,8 @@ pub struct Ffv1Dec {
     state: Mutex<DecoderState>,
 }
 
-fn get_all_video_formats() -> Vec<glib::SendValue> {
-    let values = [
+fn get_all_video_formats() -> impl IntoIterator<Item = gst_video::VideoFormat> {
+    [
         VideoFormat::Gray8,
         VideoFormat::Gray16Le,
         VideoFormat::Gray16Be,
@@ -81,9 +80,7 @@ fn get_all_video_formats() -> Vec<glib::SendValue> {
         VideoFormat::Gbra12be,
         VideoFormat::Y41b,
         VideoFormat::Yuv9,
-    ];
-
-    values.iter().map(|i| i.to_str().to_send_value()).collect()
+    ]
 }
 
 fn get_output_format(record: &ConfigRecord) -> Option<VideoFormat> {
@@ -339,17 +336,8 @@ impl ElementImpl for Ffv1Dec {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::builder("video/x-raw")
-                .field("format", gst::List::from(get_all_video_formats()))
-                .field("width", gst::IntRange::new(1, i32::MAX))
-                .field("height", gst::IntRange::new(1, i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
+            let src_caps = gst_video::VideoCapsBuilder::new()
+                .format_list(get_all_video_formats())
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

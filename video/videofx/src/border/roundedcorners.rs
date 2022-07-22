@@ -349,17 +349,8 @@ impl ElementImpl for RoundedCorners {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let sink_caps = gst::Caps::builder("video/x-raw")
-                .field("format", VideoFormat::I420.to_str())
-                .field("width", gst::IntRange::new(1, i32::MAX))
-                .field("height", gst::IntRange::new(1, i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
+            let sink_caps = gst_video::VideoCapsBuilder::new()
+                .format(VideoFormat::I420)
                 .build();
             let sink_pad_template = gst::PadTemplate::new(
                 "sink",
@@ -369,20 +360,8 @@ impl ElementImpl for RoundedCorners {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::builder("video/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([VideoFormat::A420.to_str(), VideoFormat::I420.to_str()]),
-                )
-                .field("width", gst::IntRange::new(1, i32::MAX))
-                .field("height", gst::IntRange::new(1, i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
+            let src_caps = gst_video::VideoCapsBuilder::new()
+                .format_list([VideoFormat::I420, VideoFormat::A420])
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

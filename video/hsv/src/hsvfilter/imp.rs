@@ -14,7 +14,6 @@ use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 use gst_video::subclass::prelude::*;
 
-use std::i32;
 use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
@@ -295,31 +294,19 @@ impl ElementImpl for HsvFilter {
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
             // src pad capabilities
-            let caps = gst::Caps::builder("video/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([
-                        gst_video::VideoFormat::Rgbx.to_str(),
-                        gst_video::VideoFormat::Xrgb.to_str(),
-                        gst_video::VideoFormat::Bgrx.to_str(),
-                        gst_video::VideoFormat::Xbgr.to_str(),
-                        gst_video::VideoFormat::Rgba.to_str(),
-                        gst_video::VideoFormat::Argb.to_str(),
-                        gst_video::VideoFormat::Bgra.to_str(),
-                        gst_video::VideoFormat::Abgr.to_str(),
-                        gst_video::VideoFormat::Rgb.to_str(),
-                        gst_video::VideoFormat::Bgr.to_str(),
-                    ]),
-                )
-                .field("width", gst::IntRange::new(0, i32::MAX))
-                .field("height", gst::IntRange::new(0, i32::MAX))
-                .field(
-                    "framerate",
-                    gst::FractionRange::new(
-                        gst::Fraction::new(0, 1),
-                        gst::Fraction::new(i32::MAX, 1),
-                    ),
-                )
+            let caps = gst_video::VideoCapsBuilder::new()
+                .format_list([
+                    gst_video::VideoFormat::Rgbx,
+                    gst_video::VideoFormat::Xrgb,
+                    gst_video::VideoFormat::Bgrx,
+                    gst_video::VideoFormat::Xbgr,
+                    gst_video::VideoFormat::Rgba,
+                    gst_video::VideoFormat::Argb,
+                    gst_video::VideoFormat::Bgra,
+                    gst_video::VideoFormat::Abgr,
+                    gst_video::VideoFormat::Rgb,
+                    gst_video::VideoFormat::Bgr,
+                ])
                 .build();
 
             let src_pad_template = gst::PadTemplate::new(
