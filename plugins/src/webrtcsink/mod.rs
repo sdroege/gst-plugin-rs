@@ -3,6 +3,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use std::error::Error;
 
+mod homegrown_cc;
 mod imp;
 
 glib::wrapper! {
