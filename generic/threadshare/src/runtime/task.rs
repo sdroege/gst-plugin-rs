@@ -353,25 +353,14 @@ impl TaskInner {
             }
         })?;
 
+        self.context.as_ref().unwrap().wake_up();
+
         Ok(ack_rx)
     }
 
-    /// Aborts the task iteration loop ASAP.
-    ///
-    /// When the iteration loop is throttling, the call to `abort`
-    /// on the `loop_abort_handle` returns immediately, but the
-    /// actual `Future` for the iteration loop is aborted only when
-    /// the scheduler throttling completes.
-    ///
-    /// This function aborts the task iteration loop and awakes the
-    /// iteration scheduler.
     fn abort_task_loop(&mut self) {
         if let Some(loop_abort_handle) = self.loop_abort_handle.take() {
             loop_abort_handle.abort();
-
-            if let Some(context) = self.context.as_ref() {
-                context.wake_up();
-            }
         }
     }
 }
@@ -508,6 +497,10 @@ impl Task {
 
         inner.state = TaskState::Unpreparing;
 
+        if let Some(prepare_abort_handle) = inner.prepare_abort_handle.take() {
+            prepare_abort_handle.abort();
+        }
+
         inner.abort_task_loop();
 
         let _ = inner.trigger(Trigger::Unprepare).unwrap();
@@ -515,11 +508,6 @@ impl Task {
 
         let state_machine_handle = inner.state_machine_handle.take();
         let context = inner.context.take().unwrap();
-
-        if let Some(prepare_abort_handle) = inner.prepare_abort_handle.take() {
-            prepare_abort_handle.abort();
-        }
-
         drop(inner);
 
         match state_machine_handle {
