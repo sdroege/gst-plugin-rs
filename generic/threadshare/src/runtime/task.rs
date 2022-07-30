@@ -353,7 +353,7 @@ impl TaskInner {
             }
         })?;
 
-        self.context.as_ref().unwrap().wake_up();
+        self.context.as_ref().unwrap().unpark();
 
         Ok(ack_rx)
     }
@@ -594,28 +594,25 @@ impl Task {
     }
 
     pub fn flush_start(&self) -> Result<TransitionStatus, TransitionError> {
-        self.abort_push_wakeup_await(Trigger::FlushStart)
+        self.abort_push_await(Trigger::FlushStart)
     }
 
     pub fn flush_stop(&self) -> Result<TransitionStatus, TransitionError> {
-        self.abort_push_wakeup_await(Trigger::FlushStop)
+        self.abort_push_await(Trigger::FlushStop)
     }
 
     /// Stops the `Started` `Task` and wait for it to finish.
     pub fn stop(&self) -> Result<TransitionStatus, TransitionError> {
-        self.abort_push_wakeup_await(Trigger::Stop)
+        self.abort_push_await(Trigger::Stop)
     }
 
     /// Pushes a [`Trigger`] which requires the iteration loop to abort ASAP.
     ///
     /// This function:
-    /// - Makes sure the iteration loop aborts as soon as possible.
+    /// - Aborts the iteration loop aborts.
     /// - Pushes the provided [`Trigger`].
     /// - Awaits for the expected transition as usual.
-    fn abort_push_wakeup_await(
-        &self,
-        trigger: Trigger,
-    ) -> Result<TransitionStatus, TransitionError> {
+    fn abort_push_await(&self, trigger: Trigger) -> Result<TransitionStatus, TransitionError> {
         let mut inner = self.0.lock().unwrap();
 
         inner.abort_task_loop();
@@ -751,7 +748,7 @@ macro_rules! exec_action {
 
         let join_handle = {
             let mut task_inner = $task_inner.lock().unwrap();
-            let join_handle = $context.spawn_and_awake(action_fut);
+            let join_handle = $context.spawn_and_unpark(action_fut);
             task_inner.spawned_task_id = Some(join_handle.task_id());
 
             join_handle
@@ -1014,7 +1011,7 @@ impl StateMachine {
                     // Unprepare is not joined by an ack_rx but by joining the state machine
                     // handle, so we don't need to keep track of the spwaned_task_id
                     context
-                        .spawn_and_awake(async move {
+                        .spawn_and_unpark(async move {
                             self.task_impl.unprepare().await;
 
                             while Context::current_has_sub_tasks() {
@@ -1119,7 +1116,7 @@ impl StateMachine {
 
         let join_handle = {
             let mut task_inner = task_inner.lock().unwrap();
-            let join_handle = context.spawn_and_awake(loop_fut);
+            let join_handle = context.spawn_and_unpark(loop_fut);
             task_inner.spawned_task_id = Some(join_handle.task_id());
 
             join_handle

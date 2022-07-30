@@ -32,8 +32,8 @@ pub(super) struct Scheduler {
     context_name: Arc<str>,
     max_throttling: Duration,
     tasks: TaskQueue,
-    must_awake: Mutex<bool>,
-    must_awake_cvar: Condvar,
+    must_unpark: Mutex<bool>,
+    must_unpark_cvar: Condvar,
 }
 
 impl Scheduler {
@@ -102,8 +102,8 @@ impl Scheduler {
                 context_name: context_name.clone(),
                 max_throttling,
                 tasks: TaskQueue::new(context_name),
-                must_awake: Mutex::new(false),
-                must_awake_cvar: Condvar::new(),
+                must_unpark: Mutex::new(false),
+                must_unpark_cvar: Condvar::new(),
             }));
 
             *cur_scheduler = Some(handle.downgrade());
@@ -198,32 +198,32 @@ impl Scheduler {
                 })?;
             }
 
-            let mut must_awake = self.must_awake.lock().unwrap();
+            let mut must_unpark = self.must_unpark.lock().unwrap();
             loop {
-                if *must_awake {
-                    *must_awake = false;
+                if *must_unpark {
+                    *must_unpark = false;
                     break;
                 }
 
                 if let Some(wait_duration) = self.max_throttling.checked_sub(last.elapsed()) {
                     let result = self
-                        .must_awake_cvar
-                        .wait_timeout(must_awake, wait_duration)
+                        .must_unpark_cvar
+                        .wait_timeout(must_unpark, wait_duration)
                         .unwrap();
 
-                    must_awake = result.0;
+                    must_unpark = result.0;
                 } else {
-                    *must_awake = false;
+                    *must_unpark = false;
                     break;
                 }
             }
         }
     }
 
-    fn wake_up(&self) {
-        let mut must_awake = self.must_awake.lock().unwrap();
-        *must_awake = true;
-        self.must_awake_cvar.notify_one();
+    fn unpark(&self) {
+        let mut must_unpark = self.must_unpark.lock().unwrap();
+        *must_unpark = true;
+        self.must_unpark_cvar.notify_one();
     }
 
     fn close(context_name: Arc<str>) {
@@ -384,7 +384,7 @@ impl Handle {
         // ensures that the lifetime bounds satisfy the safety
         // requirements for `TaskQueue::add_sync`.
         let task = unsafe { self.0.scheduler.tasks.add_sync(f) };
-        self.0.scheduler.wake_up();
+        self.0.scheduler.unpark();
         futures::executor::block_on(task)
     }
 
@@ -397,18 +397,18 @@ impl Handle {
         JoinHandle::new(task_id, task, self)
     }
 
-    pub fn spawn_and_awake<F>(&self, future: F) -> JoinHandle<F::Output>
+    pub fn spawn_and_unpark<F>(&self, future: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
         F::Output: Send + 'static,
     {
         let (task_id, task) = self.0.scheduler.tasks.add(future);
-        self.0.scheduler.wake_up();
+        self.0.scheduler.unpark();
         JoinHandle::new(task_id, task, self)
     }
 
-    pub(super) fn wake_up(&self) {
-        self.0.scheduler.wake_up();
+    pub(super) fn unpark(&self) {
+        self.0.scheduler.unpark();
     }
 
     pub fn has_sub_tasks(&self, task_id: TaskId) -> bool {

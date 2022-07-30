@@ -246,23 +246,23 @@ impl Context {
         self.0.spawn(future)
     }
 
-    pub fn spawn_and_awake<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
+    pub fn spawn_and_unpark<Fut>(&self, future: Fut) -> JoinHandle<Fut::Output>
     where
         Fut: Future + Send + 'static,
         Fut::Output: Send + 'static,
     {
-        self.0.spawn_and_awake(future)
+        self.0.spawn_and_unpark(future)
     }
 
-    /// Forces the scheduler to wake up.
+    /// Forces the scheduler to unpark.
     ///
     /// This is not needed by elements implementors as they are
-    /// supposed to call [`Self::spawn_and_awake`] when needed.
+    /// supposed to call [`Self::spawn_and_unpark`] when needed.
     /// However, it's useful for lower level implementations such as
     /// `runtime::Task` so as to make sure the iteration loop yields
     /// as soon as possible when a transition is requested.
-    pub(in crate::runtime) fn wake_up(&self) {
-        self.0.wake_up();
+    pub(in crate::runtime) fn unpark(&self) {
+        self.0.unpark();
     }
 
     pub fn current_has_sub_tasks() -> bool {
