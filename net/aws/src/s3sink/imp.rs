@@ -17,7 +17,9 @@ use aws_sdk_s3::client::fluent_builders::{
 use aws_sdk_s3::config;
 use aws_sdk_s3::model::{CompletedMultipartUpload, CompletedPart};
 use aws_sdk_s3::types::ByteStream;
+use aws_sdk_s3::Endpoint;
 use aws_sdk_s3::{Client, Credentials, Region, RetryConfig};
+use http::Uri;
 
 use futures::future;
 use once_cell::sync::Lazy;
@@ -108,6 +110,7 @@ struct Settings {
     retry_attempts: u32,
     multipart_upload_on_error: OnError,
     request_timeout: Duration,
+    endpoint_uri: Option<String>,
 }
 
 impl Settings {
@@ -159,6 +162,7 @@ impl Default for Settings {
             retry_attempts: DEFAULT_RETRY_ATTEMPTS,
             multipart_upload_on_error: DEFAULT_MULTIPART_UPLOAD_ON_ERROR,
             request_timeout: Duration::from_millis(DEFAULT_REQUEST_TIMEOUT_MSEC),
+            endpoint_uri: None,
         }
     }
 }
@@ -496,9 +500,30 @@ impl S3Sink {
                     }
                 })?;
 
-        let config = config::Builder::from(&sdk_config)
-            .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts))
-            .build();
+        let endpoint_uri = match &settings.endpoint_uri {
+            Some(endpoint) => match endpoint.parse::<Uri>() {
+                Ok(uri) => Some(uri),
+                Err(e) => {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Settings,
+                        ["Invalid S3 endpoint uri. Error: {}", e]
+                    ));
+                }
+            },
+            None => None,
+        };
+
+        let config_builder = config::Builder::from(&sdk_config)
+            .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts));
+
+        let config = if let Some(uri) = endpoint_uri {
+            config_builder
+                .endpoint_resolver(Endpoint::mutable(uri))
+                .build()
+        } else {
+            config_builder.build()
+        };
+
         let client = Client::from_conf(config);
 
         let create_multipart_req =
@@ -768,6 +793,13 @@ impl ObjectImpl for S3Sink {
                     DEFAULT_COMPLETE_RETRY_DURATION_MSEC as i64,
                     glib::ParamFlags::READWRITE,
                 ),
+                glib::ParamSpecString::new(
+                    "endpoint-uri",
+                    "S3 endpoint URI",
+                    "The S3 endpoint URI to use",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
             ]
         });
 
@@ -869,6 +901,14 @@ impl ObjectImpl for S3Sink {
             "upload-part-retry-duration" | "complete-upload-retry-duration" => {
                 gst::warning!(CAT, "Use retry-attempts. retry/upload-part/complete-upload-retry duration are deprecated.");
             }
+            "endpoint-uri" => {
+                settings.endpoint_uri = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+                if settings.key.is_some() && settings.bucket.is_some() {
+                    let _ = self.set_uri(obj, Some(&settings.to_uri()));
+                }
+            }
             _ => unimplemented!(),
         }
     }
@@ -907,6 +947,7 @@ impl ObjectImpl for S3Sink {
                 let request_timeout = duration_to_millis(Some(settings.request_timeout));
                 (settings.retry_attempts as i64 * request_timeout).to_value()
             }
+            "endpoint-uri" => settings.endpoint_uri.to_value(),
             _ => unimplemented!(),
         }
     }

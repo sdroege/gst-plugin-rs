@@ -13,7 +13,9 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use aws_sdk_s3::config;
+use aws_sdk_s3::Endpoint;
 use aws_sdk_s3::{Client, Credentials, RetryConfig};
+use http::Uri;
 
 use gst::glib;
 use gst::prelude::*;
@@ -53,6 +55,7 @@ struct Settings {
     session_token: Option<String>,
     retry_attempts: u32,
     request_timeout: Duration,
+    endpoint_uri: Option<String>,
 }
 
 impl Default for Settings {
@@ -65,6 +68,7 @@ impl Default for Settings {
             session_token: None,
             retry_attempts: DEFAULT_RETRY_ATTEMPTS,
             request_timeout: duration,
+            endpoint_uri: None,
         }
     }
 }
@@ -126,9 +130,29 @@ impl S3Src {
                     }
                 })?;
 
-        let config = config::Builder::from(&sdk_config)
-            .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts))
-            .build();
+        let endpoint_uri = match &settings.endpoint_uri {
+            Some(endpoint) => match endpoint.parse::<Uri>() {
+                Ok(uri) => Some(uri),
+                Err(e) => {
+                    return Err(gst::error_msg!(
+                        gst::ResourceError::Settings,
+                        ["Invalid S3 endpoint uri. Error: {}", e]
+                    ));
+                }
+            },
+            None => None,
+        };
+
+        let config_builder = config::Builder::from(&sdk_config)
+            .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts));
+
+        let config = if let Some(uri) = endpoint_uri {
+            config_builder
+                .endpoint_resolver(Endpoint::mutable(uri))
+                .build()
+        } else {
+            config_builder.build()
+        };
 
         Ok(Client::from_conf(config))
     }
@@ -328,6 +352,13 @@ impl ObjectImpl for S3Src {
                     DEFAULT_RETRY_ATTEMPTS,
                     glib::ParamFlags::READWRITE,
                 ),
+                glib::ParamSpecString::new(
+                    "endpoint-uri",
+                    "S3 endpoint URI",
+                    "The S3 endpoint URI to use",
+                    None,
+                    glib::ParamFlags::READWRITE,
+                ),
             ]
         });
 
@@ -378,6 +409,11 @@ impl ObjectImpl for S3Src {
             "retry-attempts" => {
                 settings.retry_attempts = value.get::<u32>().expect("type checked upstream");
             }
+            "endpoint-uri" => {
+                settings.endpoint_uri = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -403,6 +439,7 @@ impl ObjectImpl for S3Src {
                 (settings.retry_attempts as i64 * request_timeout).to_value()
             }
             "retry-attempts" => settings.retry_attempts.to_value(),
+            "endpoint-uri" => settings.endpoint_uri.to_value(),
             _ => unimplemented!(),
         }
     }

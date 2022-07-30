@@ -23,8 +23,10 @@ use gst::{element_error, glib, prelude::ObjectExt, prelude::*, subclass::prelude
 use aws_sdk_s3::config;
 use aws_sdk_s3::model::ObjectCannedAcl;
 use aws_sdk_s3::types::ByteStream;
+use aws_sdk_s3::Endpoint;
 use aws_sdk_s3::{Client, Credentials, Region, RetryConfig};
 use aws_types::sdk_config::SdkConfig;
+use http::Uri;
 
 use crate::s3utils;
 
@@ -55,6 +57,7 @@ struct Settings {
     audio_sink: bool,
     video_sink: bool,
     config: Option<SdkConfig>,
+    endpoint_uri: Option<String>,
 }
 
 impl Default for Settings {
@@ -76,6 +79,7 @@ impl Default for Settings {
             audio_sink: false,
             video_sink: false,
             config: None,
+            endpoint_uri: None,
         }
     }
 }
@@ -346,11 +350,33 @@ fn s3client_from_settings(element: &super::S3HlsSink) -> Client {
         settings.config = Some(sdk_config);
     }
 
-    let sdk_config = settings.config.as_ref().unwrap();
-    let config = config::Builder::from(sdk_config)
+    let sdk_config = settings.config.as_ref().expect("SDK config must be set");
+    let endpoint_uri = match &settings.endpoint_uri {
+        Some(endpoint) => match endpoint.parse::<Uri>() {
+            Ok(uri) => Some(uri),
+            Err(e) => {
+                element_error!(
+                    element,
+                    gst::ResourceError::Settings,
+                    ["Invalid S3 endpoint uri. Error: {}", e]
+                );
+                None
+            }
+        },
+        None => None,
+    };
+
+    let config_builder = config::Builder::from(sdk_config)
         .region(settings.s3_region.clone())
-        .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts))
-        .build();
+        .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts));
+
+    let config = if let Some(uri) = endpoint_uri {
+        config_builder
+            .endpoint_resolver(Endpoint::mutable(uri))
+            .build()
+    } else {
+        config_builder.build()
+    };
 
     Client::from_conf(config)
 }
@@ -481,6 +507,13 @@ impl ObjectImpl for S3HlsSink {
                     DEFAULT_TIMEOUT_IN_MSECS,
                     glib::ParamFlags::READWRITE,
                 ),
+                glib::ParamSpecString::new(
+                    "endpoint-uri",
+                    "S3 endpoint URI",
+                    "The S3 endpoint URI to use",
+                    None,
+                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
+                ),
             ]
         });
 
@@ -539,6 +572,11 @@ impl ObjectImpl for S3HlsSink {
                 settings.request_timeout =
                     Duration::from_millis(value.get::<u64>().expect("type checked upstream"));
             }
+            "endpoint-uri" => {
+                settings.endpoint_uri = value
+                    .get::<Option<String>>()
+                    .expect("type checked upstream");
+            }
             _ => unimplemented!(),
         }
     }
@@ -557,6 +595,7 @@ impl ObjectImpl for S3HlsSink {
             "acl" => settings.s3_acl.as_str().to_value(),
             "retry-attempts" => settings.retry_attempts.to_value(),
             "request-timeout" => (settings.request_timeout.as_millis() as u64).to_value(),
+            "endpoint-uri" => settings.endpoint_uri.to_value(),
             _ => unimplemented!(),
         }
     }
@@ -657,16 +696,9 @@ impl ObjectImpl for S3HlsSink {
                 };
 
                 let s3hlssink = element.imp();
+                let s3_client = s3client_from_settings(&element);
+
                 let settings = s3hlssink.settings.lock().unwrap();
-
-                let sdk_config = settings.config.as_ref().unwrap();
-                let config = config::Builder::from(sdk_config)
-                    .region(settings.s3_region.clone())
-                    .retry_config(RetryConfig::new().with_max_attempts(settings.retry_attempts))
-                    .build();
-
-                let s3_client = Client::from_conf(config);
-
                 let s3_bucket = settings.s3_bucket.as_ref().unwrap().clone();
                 let s3_location = args[1].get::<String>().unwrap();
 
