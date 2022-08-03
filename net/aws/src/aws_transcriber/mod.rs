@@ -31,6 +31,19 @@ pub enum AwsTranscriberResultStability {
     Low = 2,
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, glib::Enum)]
+#[repr(u32)]
+#[enum_type(name = "GstAwsTranscriberVocabularyFilterMethod")]
+#[non_exhaustive]
+pub enum AwsTranscriberVocabularyFilterMethod {
+    #[enum_value(name = "Mask: replace words with ***", nick = "mask")]
+    Mask = 0,
+    #[enum_value(name = "Remove: delete words", nick = "remove")]
+    Remove = 1,
+    #[enum_value(name = "Tag: flag words without changing them", nick = "tag")]
+    Tag = 2,
+}
+
 glib::wrapper! {
     pub struct Transcriber(ObjectSubclass<imp::Transcriber>) @extends gst::Element, gst::Object;
 }
