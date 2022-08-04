@@ -13,8 +13,10 @@ use gst::{element_error, error_msg, loggable_error};
 
 use std::default::Default;
 
+use aws_config::default_provider::credentials::DefaultCredentialsChain;
 use aws_sig_auth::signer::{self, HttpSignatureType, OperationSigningConfig, RequestConfig};
 use aws_smithy_http::body::SdkBody;
+use aws_types::credentials::ProvideCredentials;
 use aws_types::region::{Region, SigningRegion};
 use aws_types::{Credentials, SigningService};
 use std::time::{Duration, SystemTime};
@@ -43,6 +45,8 @@ use serde_derive::{Deserialize, Serialize};
 use once_cell::sync::Lazy;
 
 use super::AwsTranscriberResultStability;
+
+const DEFAULT_TRANSCRIBER_REGION: &str = "us-east-1";
 
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -869,26 +873,47 @@ impl Transcriber {
 
         gst::info!(CAT, obj: element, "Connecting ..");
 
-        if settings.access_key.is_none() || settings.secret_access_key.is_none() {
+        let region = Region::new(DEFAULT_TRANSCRIBER_REGION);
+        let access_key = settings.access_key.as_ref();
+        let secret_access_key = settings.secret_access_key.as_ref();
+        let session_token = settings.session_token.clone();
+
+        let credentials = match (access_key, secret_access_key) {
+            (Some(key), Some(secret_key)) => {
+                gst::debug!(
+                    CAT,
+                    obj: element,
+                    "Using provided access and secret access key"
+                );
+                Ok(Credentials::new(
+                    key.clone(),
+                    secret_key.clone(),
+                    session_token,
+                    None,
+                    "transcribe",
+                ))
+            }
+            _ => {
+                gst::debug!(CAT, obj: element, "Using default AWS credentials");
+                let cred_future = async {
+                    let cred = DefaultCredentialsChain::builder()
+                        .region(region.clone())
+                        .build()
+                        .await;
+                    cred.provide_credentials().await
+                };
+
+                RUNTIME.block_on(cred_future)
+            }
+        };
+
+        if let Err(e) = credentials {
             return Err(error_msg!(
                 gst::LibraryError::Settings,
-                ["Access key and secret access key not provided"]
+                ["Failed to retrieve credentials with error {}", e]
             ));
         }
 
-        let access_key = settings.access_key.as_ref().unwrap().clone();
-        let secret_access_key = settings.secret_access_key.as_ref().unwrap().clone();
-        let session_token = settings.session_token.clone();
-
-        let credentials = Credentials::new(
-            access_key,
-            secret_access_key,
-            session_token,
-            None,
-            "transcribe",
-        );
-
-        let region = Region::new("us-east-1");
         let current_time = Utc::now();
 
         let mut query_params = String::from("/stream-transcription-websocket?");
@@ -969,7 +994,7 @@ impl Transcriber {
             .sign(
                 &operation_config,
                 &request_config,
-                &credentials,
+                &credentials.unwrap(),
                 &mut request,
             )
             .map_err(|err| {
