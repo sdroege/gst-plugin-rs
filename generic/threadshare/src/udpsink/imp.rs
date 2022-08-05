@@ -186,7 +186,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         async move {
             if let EventView::FlushStop(_) = event.view() {
                 let udpsink = element.imp();
-                return udpsink.task.flush_stop().is_ok();
+                return udpsink.task.flush_stop().await_maybe_on_context().is_ok();
             } else if sender.send_async(TaskItem::Event(event)).await.is_err() {
                 gst::debug!(CAT, obj: &element, "Flushing");
             }
@@ -204,7 +204,7 @@ impl PadSinkHandler for UdpSinkPadHandler {
         event: gst::Event,
     ) -> bool {
         if let EventView::FlushStart(..) = event.view() {
-            return udpsink.task.flush_start().is_ok();
+            return udpsink.task.flush_start().await_maybe_on_context().is_ok();
         }
 
         true
@@ -805,12 +805,7 @@ impl UdpSink {
         let (item_sender, item_receiver) = flume::bounded(0);
         let (cmd_sender, cmd_receiver) = flume::unbounded();
         let task_impl = UdpSinkTask::new(element, item_receiver, cmd_receiver);
-        self.task.prepare(task_impl, context).map_err(|err| {
-            error_msg!(
-                gst::ResourceError::OpenRead,
-                ["Error preparing Task: {:?}", err]
-            )
-        })?;
+        self.task.prepare(task_impl, context).block_on()?;
 
         *self.item_sender.lock().unwrap() = Some(item_sender);
         *self.cmd_sender.lock().unwrap() = Some(cmd_sender);
@@ -822,20 +817,20 @@ impl UdpSink {
 
     fn unprepare(&self, element: &super::UdpSink) {
         gst::debug!(CAT, obj: element, "Unpreparing");
-        self.task.unprepare().unwrap();
+        self.task.unprepare().block_on().unwrap();
         gst::debug!(CAT, obj: element, "Unprepared");
     }
 
     fn stop(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Stopping");
-        self.task.stop()?;
+        self.task.stop().block_on()?;
         gst::debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
     fn start(&self, element: &super::UdpSink) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Starting");
-        self.task.start()?;
+        self.task.start().block_on()?;
         gst::debug!(CAT, obj: element, "Started");
         Ok(())
     }

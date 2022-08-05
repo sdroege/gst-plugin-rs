@@ -97,15 +97,17 @@ mod imp_src {
             gst::log!(SRC_CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
             let ret = match event.view() {
-                EventView::FlushStart(..) => {
-                    elem_src_test.task.flush_start().unwrap();
-                    true
-                }
+                EventView::FlushStart(..) => elem_src_test
+                    .task
+                    .flush_start()
+                    .await_maybe_on_context()
+                    .is_ok(),
                 EventView::Qos(..) | EventView::Reconfigure(..) | EventView::Latency(..) => true,
-                EventView::FlushStop(..) => {
-                    elem_src_test.task.flush_stop().unwrap();
-                    true
-                }
+                EventView::FlushStop(..) => elem_src_test
+                    .task
+                    .flush_stop()
+                    .await_maybe_on_context()
+                    .is_ok(),
                 _ => false,
             };
 
@@ -243,12 +245,7 @@ mod imp_src {
 
             self.task
                 .prepare(ElementSrcTestTask::new(element.clone(), receiver), context)
-                .map_err(|err| {
-                    gst::error_msg!(
-                        gst::ResourceError::Failed,
-                        ["Error preparing Task: {:?}", err]
-                    )
-                })?;
+                .block_on()?;
 
             gst::debug!(SRC_CAT, obj: element, "Prepared");
 
@@ -259,26 +256,26 @@ mod imp_src {
             gst::debug!(SRC_CAT, obj: element, "Unpreparing");
 
             *self.sender.lock().unwrap() = None;
-            self.task.unprepare().unwrap();
+            self.task.unprepare().block_on().unwrap();
 
             gst::debug!(SRC_CAT, obj: element, "Unprepared");
         }
 
         fn stop(&self, element: &super::ElementSrcTest) {
             gst::debug!(SRC_CAT, obj: element, "Stopping");
-            self.task.stop().unwrap();
+            self.task.stop().await_maybe_on_context().unwrap();
             gst::debug!(SRC_CAT, obj: element, "Stopped");
         }
 
         fn start(&self, element: &super::ElementSrcTest) {
             gst::debug!(SRC_CAT, obj: element, "Starting");
-            self.task.start().unwrap();
+            self.task.start().await_maybe_on_context().unwrap();
             gst::debug!(SRC_CAT, obj: element, "Started");
         }
 
         fn pause(&self, element: &super::ElementSrcTest) {
             gst::debug!(SRC_CAT, obj: element, "Pausing");
-            self.task.pause().unwrap();
+            let _ = self.task.pause().check().unwrap();
             gst::debug!(SRC_CAT, obj: element, "Paused");
         }
     }
@@ -421,10 +418,10 @@ mod imp_src {
         fn send_event(&self, _element: &Self::Type, event: gst::Event) -> bool {
             match event.view() {
                 EventView::FlushStart(..) => {
-                    self.task.flush_start().unwrap();
+                    self.task.flush_start().await_maybe_on_context().unwrap();
                 }
                 EventView::FlushStop(..) => {
-                    self.task.flush_stop().unwrap();
+                    self.task.flush_stop().await_maybe_on_context().unwrap();
                 }
                 _ => (),
             }

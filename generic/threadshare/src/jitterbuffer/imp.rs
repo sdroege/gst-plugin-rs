@@ -590,7 +590,7 @@ impl PadSinkHandler for SinkHandler {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         if let EventView::FlushStart(..) = event.view() {
-            if let Err(err) = jb.task.flush_start() {
+            if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
                 gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
                 gst::element_error!(
                     element,
@@ -632,7 +632,7 @@ impl PadSinkHandler for SinkHandler {
                     state.segment = e.segment().clone().downcast::<gst::format::Time>().unwrap();
                 }
                 EventView::FlushStop(..) => {
-                    if let Err(err) = jb.task.flush_stop() {
+                    if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
                         gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
                         gst::element_error!(
                             element,
@@ -908,7 +908,7 @@ impl PadSrcHandler for SrcHandler {
 
         match event.view() {
             EventView::FlushStart(..) => {
-                if let Err(err) = jb.task.flush_start() {
+                if let Err(err) = jb.task.flush_start().await_maybe_on_context() {
                     gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
                     gst::element_error!(
                         element,
@@ -920,7 +920,7 @@ impl PadSrcHandler for SrcHandler {
                 }
             }
             EventView::FlushStop(..) => {
-                if let Err(err) = jb.task.flush_stop() {
+                if let Err(err) = jb.task.flush_stop().await_maybe_on_context() {
                     gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
                     gst::element_error!(
                         element,
@@ -1286,12 +1286,7 @@ impl JitterBuffer {
                 JitterBufferTask::new(element, &self.src_pad_handler, &self.sink_pad_handler),
                 context,
             )
-            .map_err(|err| {
-                gst::error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Error preparing Task: {:?}", err]
-                )
-            })?;
+            .block_on()?;
 
         gst::debug!(CAT, obj: element, "Prepared");
 
@@ -1300,20 +1295,20 @@ impl JitterBuffer {
 
     fn unprepare(&self, element: &super::JitterBuffer) {
         gst::debug!(CAT, obj: element, "Unpreparing");
-        self.task.unprepare().unwrap();
+        self.task.unprepare().block_on().unwrap();
         gst::debug!(CAT, obj: element, "Unprepared");
     }
 
     fn start(&self, element: &super::JitterBuffer) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Starting");
-        self.task.start()?;
+        self.task.start().block_on()?;
         gst::debug!(CAT, obj: element, "Started");
         Ok(())
     }
 
     fn stop(&self, element: &super::JitterBuffer) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Stopping");
-        self.task.stop()?;
+        self.task.stop().block_on()?;
         gst::debug!(CAT, obj: element, "Stopped");
         Ok(())
     }

@@ -734,7 +734,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
 
         match event.view() {
             EventView::FlushStart(..) => {
-                if let Err(err) = proxysrc.task.flush_start() {
+                if let Err(err) = proxysrc.task.flush_start().await_maybe_on_context() {
                     gst::error!(SRC_CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
                     gst::element_error!(
                         element,
@@ -746,7 +746,7 @@ impl PadSrcHandler for ProxySrcPadHandler {
                 }
             }
             EventView::FlushStop(..) => {
-                if let Err(err) = proxysrc.task.flush_stop() {
+                if let Err(err) = proxysrc.task.flush_stop().await_maybe_on_context() {
                     gst::error!(SRC_CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
                     gst::element_error!(
                         element,
@@ -1045,12 +1045,7 @@ impl ProxySrc {
 
         self.task
             .prepare(ProxySrcTask::new(element.clone(), dataqueue), ts_ctx)
-            .map_err(|err| {
-                gst::error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Error preparing Task: {:?}", err]
-                )
-            })?;
+            .block_on()?;
 
         gst::debug!(SRC_CAT, obj: element, "Prepared");
 
@@ -1066,7 +1061,7 @@ impl ProxySrc {
             proxy_src_pads.remove(&settings.proxy_context);
         }
 
-        self.task.unprepare().unwrap();
+        self.task.unprepare().block_on().unwrap();
 
         *self.dataqueue.lock().unwrap() = None;
         *self.proxy_ctx.lock().unwrap() = None;
@@ -1076,21 +1071,21 @@ impl ProxySrc {
 
     fn stop(&self, element: &super::ProxySrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(SRC_CAT, obj: element, "Stopping");
-        self.task.stop()?;
+        self.task.stop().await_maybe_on_context()?;
         gst::debug!(SRC_CAT, obj: element, "Stopped");
         Ok(())
     }
 
     fn start(&self, element: &super::ProxySrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(SRC_CAT, obj: element, "Starting");
-        self.task.start()?;
+        self.task.start().await_maybe_on_context()?;
         gst::debug!(SRC_CAT, obj: element, "Started");
         Ok(())
     }
 
     fn pause(&self, element: &super::ProxySrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(SRC_CAT, obj: element, "Pausing");
-        self.task.pause()?;
+        let _ = self.task.pause().check()?;
         gst::debug!(SRC_CAT, obj: element, "Paused");
         Ok(())
     }

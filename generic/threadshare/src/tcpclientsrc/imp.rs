@@ -108,8 +108,16 @@ impl PadSrcHandler for TcpClientSrcPadHandler {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
-            EventView::FlushStart(..) => tcpclientsrc.task.flush_start().is_ok(),
-            EventView::FlushStop(..) => tcpclientsrc.task.flush_stop().is_ok(),
+            EventView::FlushStart(..) => tcpclientsrc
+                .task
+                .flush_start()
+                .await_maybe_on_context()
+                .is_ok(),
+            EventView::FlushStop(..) => tcpclientsrc
+                .task
+                .flush_stop()
+                .await_maybe_on_context()
+                .is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -440,46 +448,45 @@ impl TcpClientSrc {
 
         let saddr = SocketAddr::new(host, port as u16);
 
-        self.task
+        // Don't block on `prepare` as the socket connection takes time.
+        // This will be performed in the background and we'll block on
+        // `start` which will also ensure `prepare` completed successfully.
+        let _ = self
+            .task
             .prepare(
                 TcpClientSrcTask::new(element.clone(), saddr, buffer_pool),
                 context,
             )
-            .map_err(|err| {
-                gst::error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Error preparing Task: {:?}", err]
-                )
-            })?;
+            .check()?;
 
-        gst::debug!(CAT, obj: element, "Prepared");
+        gst::debug!(CAT, obj: element, "Preparing asynchronously");
 
         Ok(())
     }
 
     fn unprepare(&self, element: &super::TcpClientSrc) {
         gst::debug!(CAT, obj: element, "Unpreparing");
-        self.task.unprepare().unwrap();
+        self.task.unprepare().block_on().unwrap();
         gst::debug!(CAT, obj: element, "Unprepared");
     }
 
     fn stop(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Stopping");
-        self.task.stop()?;
+        self.task.stop().block_on()?;
         gst::debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
     fn start(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Starting");
-        self.task.start()?;
+        self.task.start().block_on()?;
         gst::debug!(CAT, obj: element, "Started");
         Ok(())
     }
 
     fn pause(&self, element: &super::TcpClientSrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Pausing");
-        self.task.pause()?;
+        let _ = self.task.pause().check()?;
         gst::debug!(CAT, obj: element, "Paused");
         Ok(())
     }

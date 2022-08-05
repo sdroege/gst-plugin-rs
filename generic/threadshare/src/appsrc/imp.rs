@@ -94,8 +94,8 @@ impl PadSrcHandler for AppSrcPadHandler {
         gst::log!(CAT, obj: pad.gst_pad(), "Handling {:?}", event);
 
         let ret = match event.view() {
-            EventView::FlushStart(..) => appsrc.task.flush_start().is_ok(),
-            EventView::FlushStop(..) => appsrc.task.flush_stop().is_ok(),
+            EventView::FlushStart(..) => appsrc.task.flush_start().await_maybe_on_context().is_ok(),
+            EventView::FlushStop(..) => appsrc.task.flush_stop().await_maybe_on_context().is_ok(),
             EventView::Reconfigure(..) => true,
             EventView::Latency(..) => true,
             _ => false,
@@ -396,12 +396,7 @@ impl AppSrc {
 
         self.task
             .prepare(AppSrcTask::new(element.clone(), receiver), context)
-            .map_err(|err| {
-                gst::error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Error preparing Task: {:?}", err]
-                )
-            })?;
+            .block_on()?;
 
         gst::debug!(CAT, obj: element, "Prepared");
 
@@ -412,28 +407,28 @@ impl AppSrc {
         gst::debug!(CAT, obj: element, "Unpreparing");
 
         *self.sender.lock().unwrap() = None;
-        self.task.unprepare().unwrap();
+        self.task.unprepare().block_on().unwrap();
 
         gst::debug!(CAT, obj: element, "Unprepared");
     }
 
     fn stop(&self, element: &super::AppSrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Stopping");
-        self.task.stop()?;
+        self.task.stop().block_on()?;
         gst::debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
     fn start(&self, element: &super::AppSrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Starting");
-        self.task.start()?;
+        self.task.start().block_on()?;
         gst::debug!(CAT, obj: element, "Started");
         Ok(())
     }
 
     fn pause(&self, element: &super::AppSrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Pausing");
-        self.task.pause()?;
+        let _ = self.task.pause().check()?;
         gst::debug!(CAT, obj: element, "Paused");
         Ok(())
     }

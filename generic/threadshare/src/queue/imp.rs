@@ -135,7 +135,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
         gst::debug!(CAT, obj: pad.gst_pad(), "Handling non-serialized {:?}", event);
 
         if let EventView::FlushStart(..) = event.view() {
-            if let Err(err) = queue.task.flush_start() {
+            if let Err(err) = queue.task.flush_start().await_maybe_on_context() {
                 gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
                 gst::element_error!(
                     element,
@@ -169,7 +169,7 @@ impl PadSinkHandler for QueuePadSinkHandler {
             let queue = element.imp();
 
             if let EventView::FlushStop(..) = event.view() {
-                if let Err(err) = queue.task.flush_stop() {
+                if let Err(err) = queue.task.flush_stop().await_maybe_on_context() {
                     gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
                     gst::element_error!(
                         element,
@@ -229,12 +229,12 @@ impl PadSrcHandler for QueuePadSrcHandler {
 
         match event.view() {
             EventView::FlushStart(..) => {
-                if let Err(err) = queue.task.flush_start() {
+                if let Err(err) = queue.task.flush_start().await_maybe_on_context() {
                     gst::error!(CAT, obj: pad.gst_pad(), "FlushStart failed {:?}", err);
                 }
             }
             EventView::FlushStop(..) => {
-                if let Err(err) = queue.task.flush_stop() {
+                if let Err(err) = queue.task.flush_stop().await_maybe_on_context() {
                     gst::error!(CAT, obj: pad.gst_pad(), "FlushStop failed {:?}", err);
                     gst::element_error!(
                         element,
@@ -639,12 +639,7 @@ impl Queue {
 
         self.task
             .prepare(QueueTask::new(element.clone(), dataqueue), context)
-            .map_err(|err| {
-                gst::error_msg!(
-                    gst::ResourceError::OpenRead,
-                    ["Error preparing Task: {:?}", err]
-                )
-            })?;
+            .block_on()?;
 
         gst::debug!(CAT, obj: element, "Prepared");
 
@@ -654,7 +649,7 @@ impl Queue {
     fn unprepare(&self, element: &super::Queue) {
         gst::debug!(CAT, obj: element, "Unpreparing");
 
-        self.task.unprepare().unwrap();
+        self.task.unprepare().block_on().unwrap();
 
         *self.dataqueue.lock().unwrap() = None;
         *self.pending_queue.lock().unwrap() = None;
@@ -666,14 +661,14 @@ impl Queue {
 
     fn stop(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Stopping");
-        self.task.stop()?;
+        self.task.stop().await_maybe_on_context()?;
         gst::debug!(CAT, obj: element, "Stopped");
         Ok(())
     }
 
     fn start(&self, element: &super::Queue) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Starting");
-        self.task.start()?;
+        self.task.start().await_maybe_on_context()?;
         gst::debug!(CAT, obj: element, "Started");
         Ok(())
     }
