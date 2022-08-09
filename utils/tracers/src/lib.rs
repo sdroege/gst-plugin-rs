@@ -10,10 +10,12 @@
 use gst::glib;
 
 mod buffer_lateness;
+#[cfg(unix)]
 mod pipeline_snapshot;
 mod queue_levels;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    #[cfg(unix)]
     pipeline_snapshot::register(plugin)?;
     queue_levels::register(plugin)?;
     buffer_lateness::register(plugin)?;
