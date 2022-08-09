@@ -46,11 +46,11 @@ impl From<HlsSink3PlaylistType> for Option<MediaPlaylistType> {
     }
 }
 
-impl From<Option<MediaPlaylistType>> for HlsSink3PlaylistType {
-    fn from(inner_pl_type: Option<MediaPlaylistType>) -> Self {
+impl From<Option<&MediaPlaylistType>> for HlsSink3PlaylistType {
+    fn from(inner_pl_type: Option<&MediaPlaylistType>) -> Self {
         use HlsSink3PlaylistType::*;
         match inner_pl_type {
-            None => Unspecified,
+            None | Some(MediaPlaylistType::Other(_)) => Unspecified,
             Some(MediaPlaylistType::Event) => Event,
             Some(MediaPlaylistType::Vod) => Vod,
         }
@@ -124,6 +124,7 @@ impl StartedState {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum State {
     Stopped,
     Started(StartedState),
@@ -147,7 +148,10 @@ impl HlsSink3 {
 
         let (target_duration, playlist_type) = {
             let settings = self.settings.lock().unwrap();
-            (settings.target_duration as f32, settings.playlist_type)
+            (
+                settings.target_duration as f32,
+                settings.playlist_type.clone(),
+            )
         };
 
         let mut state = self.state.lock().unwrap();
@@ -568,7 +572,7 @@ impl ObjectImpl for HlsSink3 {
             "target-duration" => settings.target_duration.to_value(),
             "playlist-length" => settings.playlist_length.to_value(),
             "playlist-type" => {
-                let playlist_type: HlsSink3PlaylistType = settings.playlist_type.into();
+                let playlist_type: HlsSink3PlaylistType = settings.playlist_type.as_ref().into();
                 playlist_type.to_value()
             }
             "send-keyframe-requests" => settings.send_keyframe_requests.to_value(),

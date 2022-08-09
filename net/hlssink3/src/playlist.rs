@@ -39,7 +39,7 @@ impl Playlist {
         };
         Self {
             inner: MediaPlaylist {
-                version: GST_M3U8_PLAYLIST_VERSION,
+                version: Some(GST_M3U8_PLAYLIST_VERSION),
                 target_duration,
                 media_sequence: 0,
                 segments: vec![],
@@ -49,6 +49,7 @@ impl Playlist {
                 i_frames_only: false,
                 start: None,
                 independent_segments: false,
+                unknown_tags: vec![],
             },
             playlist_index: 0,
             status: PlaylistRenderState::Init,
@@ -106,6 +107,7 @@ impl Playlist {
         match &self.inner.playlist_type {
             None => self.inner.end_list = false,
             Some(defined) => match defined {
+                MediaPlaylistType::Other(_) => unreachable!(),
                 MediaPlaylistType::Event => {
                     if self.turn_vod {
                         self.inner.playlist_type = Some(MediaPlaylistType::Vod);
