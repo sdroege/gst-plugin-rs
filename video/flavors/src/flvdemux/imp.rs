@@ -215,9 +215,9 @@ impl ElementImpl for FlvDemux {
                         .build(),
                 );
                 caps.append(
-                    gst::Caps::builder("audio/x-raw")
-                        .field("layout", "interleaved")
-                        .field("format", gst::List::new(["U8", "S16LE"]))
+                    gst_audio::AudioCapsBuilder::new()
+                        .layout(gst_audio::AudioLayout::Interleaved)
+                        .format_list([gst_audio::AudioFormat::U8, gst_audio::AudioFormat::S16le])
                         .build(),
                 );
                 caps.append(
@@ -1280,9 +1280,13 @@ impl AudioFormat {
                     // Assume little-endian for "PCM_NE", it's probably more common and we have no
                     // way to know what the endianness of the system creating the stream was
                     Some(
-                        gst::Caps::builder("audio/x-raw")
-                            .field("layout", "interleaved")
-                            .field("format", if self.width == 8 { "U8" } else { "S16LE" })
+                        gst_audio::AudioCapsBuilder::new()
+                            .layout(gst_audio::AudioLayout::Interleaved)
+                            .format(if self.width == 8 {
+                                gst_audio::AudioFormat::U8
+                            } else {
+                                gst_audio::AudioFormat::S16le
+                            })
                             .build(),
                     )
                 } else {

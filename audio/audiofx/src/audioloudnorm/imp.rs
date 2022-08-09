@@ -1880,11 +1880,10 @@ impl ElementImpl for AudioLoudNorm {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::builder("audio/x-raw")
-                .field("format", gst_audio::AUDIO_FORMAT_F64.to_str())
-                .field("rate", 192_000i32)
-                .field("channels", gst::IntRange::new(1, std::i32::MAX))
-                .field("layout", "interleaved")
+            let caps = gst_audio::AudioCapsBuilder::new()
+                .format(gst_audio::AUDIO_FORMAT_F64)
+                .rate(192_000)
+                .layout(gst_audio::AudioLayout::Interleaved)
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

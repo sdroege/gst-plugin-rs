@@ -12,7 +12,7 @@ use gst::subclass::prelude::*;
 use gst_base::subclass::prelude::*;
 
 use std::sync::Mutex;
-use std::{cmp, i32, u64};
+use std::{cmp, u64};
 
 use byte_slice_cast::*;
 
@@ -209,17 +209,9 @@ impl ElementImpl for AudioEcho {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::builder("audio/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([
-                        gst_audio::AUDIO_FORMAT_F32.to_str(),
-                        gst_audio::AUDIO_FORMAT_F64.to_str(),
-                    ]),
-                )
-                .field("rate", gst::IntRange::new(0, i32::MAX))
-                .field("channels", gst::IntRange::new(0, i32::MAX))
-                .field("layout", "interleaved")
+            let caps = gst_audio::AudioCapsBuilder::new()
+                .format_list([gst_audio::AUDIO_FORMAT_F32, gst_audio::AUDIO_FORMAT_F64])
+                .layout(gst_audio::AudioLayout::Interleaved)
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

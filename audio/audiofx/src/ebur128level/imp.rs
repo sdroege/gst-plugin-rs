@@ -250,21 +250,21 @@ impl ElementImpl for EbuR128Level {
 
     fn pad_templates() -> &'static [gst::PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<gst::PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::builder("audio/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([
-                        gst_audio::AUDIO_FORMAT_S16.to_str(),
-                        gst_audio::AUDIO_FORMAT_S32.to_str(),
-                        gst_audio::AUDIO_FORMAT_F32.to_str(),
-                        gst_audio::AUDIO_FORMAT_F64.to_str(),
-                    ]),
-                )
-                .field("layout", gst::List::new(["interleaved", "non-interleaved"]))
+            let caps = gst_audio::AudioCapsBuilder::new()
+                .format_list([
+                    gst_audio::AUDIO_FORMAT_S16,
+                    gst_audio::AUDIO_FORMAT_S32,
+                    gst_audio::AUDIO_FORMAT_F32,
+                    gst_audio::AUDIO_FORMAT_F64,
+                ])
                 // Limit from ebur128
-                .field("rate", gst::IntRange::new(1i32, 2_822_400))
+                .rate_range(1..2_822_400)
                 // Limit from ebur128
-                .field("channels", gst::IntRange::new(1i32, 64))
+                .channels_range(1..64)
+                .layout_list([
+                    gst_audio::AudioLayout::Interleaved,
+                    gst_audio::AudioLayout::NonInterleaved,
+                ])
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",

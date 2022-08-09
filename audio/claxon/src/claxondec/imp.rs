@@ -76,19 +76,16 @@ impl ElementImpl for ClaxonDec {
             )
             .unwrap();
 
-            let src_caps = gst::Caps::builder("audio/x-raw")
-                .field(
-                    "format",
-                    gst::List::new([
-                        gst_audio::AudioFormat::S8.to_str(),
-                        gst_audio::AUDIO_FORMAT_S16.to_str(),
-                        gst_audio::AUDIO_FORMAT_S2432.to_str(),
-                        gst_audio::AUDIO_FORMAT_S32.to_str(),
-                    ]),
-                )
-                .field("rate", gst::IntRange::new(1i32, 655_350))
-                .field("channels", gst::IntRange::new(1i32, 8))
-                .field("layout", "interleaved")
+            let src_caps = gst_audio::AudioCapsBuilder::new()
+                .format_list([
+                    gst_audio::AudioFormat::S8,
+                    gst_audio::AUDIO_FORMAT_S16,
+                    gst_audio::AUDIO_FORMAT_S2432,
+                    gst_audio::AUDIO_FORMAT_S32,
+                ])
+                .rate_range(1..655_350)
+                .channels_range(1..8)
+                .layout(gst_audio::AudioLayout::Interleaved)
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
