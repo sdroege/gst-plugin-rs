@@ -40,7 +40,7 @@ use crate::runtime::{Async, Context, PadSrc, PadSrcRef, Task};
 use crate::socket::{wrap_socket, GioSocketWrapper, Socket, SocketError, SocketRead};
 
 const DEFAULT_ADDRESS: Option<&str> = Some("0.0.0.0");
-const DEFAULT_PORT: i32 = 5000;
+const DEFAULT_PORT: i32 = 5004;
 const DEFAULT_REUSE: bool = true;
 const DEFAULT_CAPS: Option<gst::Caps> = None;
 const DEFAULT_MTU: u32 = 1492;
