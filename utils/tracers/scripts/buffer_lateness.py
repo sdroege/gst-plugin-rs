@@ -58,6 +58,9 @@ ax1.set_ylabel("time (s)")
 ax1.tick_params(axis='y')
 
 for (i, (pad, values)) in enumerate(pads.items()):
+    # cycle colors
+    i = i % len(colors)
+
     ax1.plot(
         [x[0] for x in values['lateness']],
         [x[1] for x in values['lateness']],
