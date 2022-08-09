@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Error};
-use chrono::{DateTime, Duration, SecondsFormat, Utc};
+use chrono::{DateTime, Duration, Utc};
 use m3u8_rs::{
     AlternativeMedia, AlternativeMediaType, MasterPlaylist, MediaPlaylist, MediaSegment,
     VariantStream,
@@ -45,7 +45,7 @@ impl State {
         all_mimes.dedup();
 
         let playlist = MasterPlaylist {
-            version: 7,
+            version: Some(7),
             variants: self
                 .video_streams
                 .iter()
@@ -57,9 +57,12 @@ impl State {
 
                     VariantStream {
                         uri: path.as_path().display().to_string(),
-                        bandwidth: stream.bitrate.to_string(),
+                        bandwidth: stream.bitrate,
                         codecs: Some(all_mimes.join(",")),
-                        resolution: Some(format!("{}x{}", stream.width, stream.height)),
+                        resolution: Some(m3u8_rs::Resolution {
+                            width: stream.width,
+                            height: stream.height,
+                        }),
                         audio: Some("audio".to_string()),
                         ..Default::default()
                     }
@@ -124,9 +127,9 @@ struct StreamState {
 
 struct VideoStream {
     name: String,
-    bitrate: u32,
-    width: i32,
-    height: i32,
+    bitrate: u64,
+    width: u64,
+    height: u64,
 }
 
 struct AudioStream {
@@ -185,7 +188,7 @@ fn update_manifest(state: &mut StreamState) {
     trim_segments(state);
 
     let playlist = MediaPlaylist {
-        version: 7,
+        version: Some(7),
         target_duration: 2.5,
         media_sequence: state.media_sequence,
         segments: state
@@ -201,11 +204,7 @@ fn update_manifest(state: &mut StreamState) {
                     ..Default::default()
                 }),
                 program_date_time: if idx == 0 {
-                    Some(
-                        segment
-                            .date_time
-                            .to_rfc3339_opts(SecondsFormat::Millis, false),
-                    )
+                    Some(segment.date_time.into())
                 } else {
                     None
                 },
@@ -444,7 +443,7 @@ impl VideoStream {
 
         src.set_property("is-live", true);
         enc.set_property("bframes", 0u32);
-        enc.set_property("bitrate", self.bitrate / 1000u32);
+        enc.set_property("bitrate", self.bitrate as u32 / 1000u32);
         enc.set_property_from_str("tune", "zerolatency");
         mux.set_property("fragment-duration", gst::ClockTime::from_mseconds(2500));
         mux.set_property_from_str("header-update-mode", "update");

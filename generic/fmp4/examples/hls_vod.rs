@@ -33,9 +33,9 @@ struct StreamState {
 
 struct VideoStream {
     name: String,
-    bitrate: u32,
-    width: i32,
-    height: i32,
+    bitrate: u64,
+    width: u64,
+    height: u64,
 }
 
 struct AudioStream {
@@ -68,7 +68,7 @@ impl State {
         all_mimes.dedup();
 
         let playlist = MasterPlaylist {
-            version: 7,
+            version: Some(7),
             variants: self
                 .video_streams
                 .iter()
@@ -80,9 +80,12 @@ impl State {
 
                     VariantStream {
                         uri: path.as_path().display().to_string(),
-                        bandwidth: stream.bitrate.to_string(),
+                        bandwidth: stream.bitrate,
                         codecs: Some(all_mimes.join(",")),
-                        resolution: Some(format!("{}x{}", stream.width, stream.height)),
+                        resolution: Some(m3u8_rs::Resolution {
+                            width: stream.width,
+                            height: stream.height,
+                        }),
                         audio: Some("audio".to_string()),
                         ..Default::default()
                     }
@@ -226,7 +229,7 @@ fn setup_appsink(appsink: &gst_app::AppSink, name: &str, path: &Path, is_video: 
                 println!("writing manifest to {}", path.display());
 
                 let playlist = MediaPlaylist {
-                    version: 7,
+                    version: Some(7),
                     target_duration: 2.5,
                     media_sequence: 0,
                     segments: state
@@ -335,7 +338,7 @@ impl VideoStream {
 
         src.set_property("num-buffers", 300);
         enc.set_property("bframes", 0u32);
-        enc.set_property("bitrate", self.bitrate / 1000u32);
+        enc.set_property("bitrate", self.bitrate as u32 / 1000u32);
         mux.set_property("fragment-duration", gst::ClockTime::from_mseconds(2500));
         mux.set_property_from_str("header-update-mode", "update");
         mux.set_property("write-mehd", true);
