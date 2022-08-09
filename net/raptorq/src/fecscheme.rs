@@ -10,7 +10,7 @@ pub const MAX_ENCODING_SYMBOL_SIZE: usize = 65536;
 // RFC6681, section 8.1.1.1
 pub const FEC_SCHEME_ID: u32 = 6;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DataUnitHeader {
     pub flow_indication: u8,
     pub len_indication: u16,
@@ -35,7 +35,7 @@ impl DataUnitHeader {
 }
 
 // RFC6881, section 8.1.3
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RepairPayloadId {
     pub initial_sequence_num: u16,
     pub source_block_len: u16,
