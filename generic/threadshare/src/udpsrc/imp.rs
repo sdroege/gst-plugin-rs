@@ -208,67 +208,11 @@ impl UdpSrcTask {
             need_segment: true,
         }
     }
-
-    async fn push_buffer(
-        &mut self,
-        buffer: gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: &self.element, "Handling {:?}", buffer);
-        let udpsrc = self.element.imp();
-
-        if self.need_initial_events {
-            gst::debug!(CAT, obj: &self.element, "Pushing initial events");
-
-            let stream_id = format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
-            let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
-                .group_id(gst::GroupId::next())
-                .build();
-            udpsrc.src_pad.push_event(stream_start_evt).await;
-
-            let caps = udpsrc.settings.lock().unwrap().caps.clone();
-            if let Some(caps) = caps {
-                udpsrc
-                    .src_pad
-                    .push_event(gst::event::Caps::new(&caps))
-                    .await;
-                *udpsrc.configured_caps.lock().unwrap() = Some(caps);
-            }
-
-            self.need_initial_events = false;
-        }
-
-        if self.need_segment {
-            let segment_evt =
-                gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
-            udpsrc.src_pad.push_event(segment_evt).await;
-
-            self.need_segment = false;
-        }
-
-        let res = udpsrc.src_pad.push(buffer).await;
-        match res {
-            Ok(_) => gst::log!(CAT, obj: &self.element, "Successfully pushed buffer"),
-            Err(gst::FlowError::Flushing) => gst::debug!(CAT, obj: &self.element, "Flushing"),
-            Err(gst::FlowError::Eos) => {
-                gst::debug!(CAT, obj: &self.element, "EOS");
-                udpsrc.src_pad.push_event(gst::event::Eos::new()).await;
-            }
-            Err(err) => {
-                gst::error!(CAT, obj: &self.element, "Got error {}", err);
-                gst::element_error!(
-                    self.element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason {}", err]
-                );
-            }
-        }
-
-        res
-    }
 }
 
 impl TaskImpl for UdpSrcTask {
+    type Item = gst::Buffer;
+
     fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             let udpsrc = self.element.imp();
@@ -489,46 +433,105 @@ impl TaskImpl for UdpSrcTask {
         .boxed()
     }
 
-    fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+    fn try_next(&mut self) -> BoxFuture<'_, Result<gst::Buffer, gst::FlowError>> {
         async move {
-            let item = self.socket.as_mut().unwrap().next().await.ok_or_else(|| {
-                gst::log!(CAT, obj: &self.element, "SocketStream Stopped");
-                gst::FlowError::Flushing
-            })?;
+            self.socket
+                .as_mut()
+                .unwrap()
+                .try_next()
+                .await
+                .map(|(mut buffer, saddr)| {
+                    if let Some(saddr) = saddr {
+                        if self.retrieve_sender_address {
+                            NetAddressMeta::add(
+                                buffer.get_mut().unwrap(),
+                                &gio::InetSocketAddress::from(saddr),
+                            );
+                        }
+                    }
+                    buffer
+                })
+                .map_err(|err| {
+                    gst::error!(CAT, obj: &self.element, "Got error {:?}", err);
+                    match err {
+                        SocketError::Gst(err) => {
+                            gst::element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("Internal data stream error"),
+                                ["streaming stopped, reason {}", err]
+                            );
+                        }
+                        SocketError::Io(err) => {
+                            gst::element_error!(
+                                self.element,
+                                gst::StreamError::Failed,
+                                ("I/O error"),
+                                ["streaming stopped, I/O error {}", err]
+                            );
+                        }
+                    }
+                    gst::FlowError::Error
+                })
+        }
+        .boxed()
+    }
 
-            let (mut buffer, saddr) = item.map_err(|err| {
-                gst::error!(CAT, obj: &self.element, "Got error {:?}", err);
-                match err {
-                    SocketError::Gst(err) => {
-                        gst::element_error!(
-                            self.element,
-                            gst::StreamError::Failed,
-                            ("Internal data stream error"),
-                            ["streaming stopped, reason {}", err]
-                        );
-                    }
-                    SocketError::Io(err) => {
-                        gst::element_error!(
-                            self.element,
-                            gst::StreamError::Failed,
-                            ("I/O error"),
-                            ["streaming stopped, I/O error {}", err]
-                        );
-                    }
+    fn handle_item(&mut self, buffer: gst::Buffer) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        async {
+            gst::log!(CAT, obj: &self.element, "Handling {:?}", buffer);
+            let udpsrc = self.element.imp();
+
+            if self.need_initial_events {
+                gst::debug!(CAT, obj: &self.element, "Pushing initial events");
+
+                let stream_id =
+                    format!("{:08x}{:08x}", rand::random::<u32>(), rand::random::<u32>());
+                let stream_start_evt = gst::event::StreamStart::builder(&stream_id)
+                    .group_id(gst::GroupId::next())
+                    .build();
+                udpsrc.src_pad.push_event(stream_start_evt).await;
+
+                let caps = udpsrc.settings.lock().unwrap().caps.clone();
+                if let Some(caps) = caps {
+                    udpsrc
+                        .src_pad
+                        .push_event(gst::event::Caps::new(&caps))
+                        .await;
+                    *udpsrc.configured_caps.lock().unwrap() = Some(caps);
                 }
-                gst::FlowError::Error
-            })?;
 
-            if let Some(saddr) = saddr {
-                if self.retrieve_sender_address {
-                    NetAddressMeta::add(
-                        buffer.get_mut().unwrap(),
-                        &gio::InetSocketAddress::from(saddr),
+                self.need_initial_events = false;
+            }
+
+            if self.need_segment {
+                let segment_evt =
+                    gst::event::Segment::new(&gst::FormattedSegment::<gst::format::Time>::new());
+                udpsrc.src_pad.push_event(segment_evt).await;
+
+                self.need_segment = false;
+            }
+
+            let res = udpsrc.src_pad.push(buffer).await.map(drop);
+            match res {
+                Ok(_) => gst::log!(CAT, obj: &self.element, "Successfully pushed buffer"),
+                Err(gst::FlowError::Flushing) => gst::debug!(CAT, obj: &self.element, "Flushing"),
+                Err(gst::FlowError::Eos) => {
+                    gst::debug!(CAT, obj: &self.element, "EOS");
+                    udpsrc.src_pad.push_event(gst::event::Eos::new()).await;
+                }
+                Err(err) => {
+                    gst::error!(CAT, obj: &self.element, "Got error {}", err);
+                    gst::element_error!(
+                        self.element,
+                        gst::StreamError::Failed,
+                        ("Internal data stream error"),
+                        ["streaming stopped, reason {}", err]
                     );
                 }
             }
 
-            self.push_buffer(buffer).await.map(drop)
+            res
         }
         .boxed()
     }
@@ -616,7 +619,7 @@ impl UdpSrc {
 
     fn pause(&self, element: &super::UdpSrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Pausing");
-        let _ = self.task.pause().check()?;
+        self.task.pause().block_on()?;
         gst::debug!(CAT, obj: element, "Paused");
         Ok(())
     }

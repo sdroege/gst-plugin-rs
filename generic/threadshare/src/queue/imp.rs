@@ -328,6 +328,8 @@ impl QueueTask {
 }
 
 impl TaskImpl for QueueTask {
+    type Item = DataQueueItem;
+
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst::log!(CAT, obj: &self.element, "Starting task");
@@ -345,18 +347,18 @@ impl TaskImpl for QueueTask {
         .boxed()
     }
 
-    fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+    fn try_next(&mut self) -> BoxFuture<'_, Result<DataQueueItem, gst::FlowError>> {
         async move {
-            let item = self.dataqueue.next().await;
+            self.dataqueue
+                .next()
+                .await
+                .ok_or_else(|| panic!("DataQueue stopped while Task is Started"))
+        }
+        .boxed()
+    }
 
-            let item = match item {
-                Some(item) => item,
-                None => {
-                    gst::log!(CAT, obj: &self.element, "DataQueue Stopped");
-                    return Err(gst::FlowError::Flushing);
-                }
-            };
-
+    fn handle_item(&mut self, item: DataQueueItem) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        async {
             let res = self.push_item(item).await;
             let queue = self.element.imp();
             match res {

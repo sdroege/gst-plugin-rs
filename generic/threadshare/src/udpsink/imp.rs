@@ -691,6 +691,8 @@ impl UdpSinkTask {
 }
 
 impl TaskImpl for UdpSinkTask {
+    type Item = TaskItem;
+
     fn prepare(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst::info!(CAT, obj: &self.element, "Preparing Task");
@@ -725,17 +727,25 @@ impl TaskImpl for UdpSinkTask {
         .boxed()
     }
 
-    fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+    fn try_next(&mut self) -> BoxFuture<'_, Result<TaskItem, gst::FlowError>> {
         async move {
-            let item = futures::select_biased! {
-                cmd = self.cmd_receiver.recv_async() => {
-                    self.process_command(cmd.unwrap());
-                    return Ok(());
+            loop {
+                futures::select_biased! {
+                    cmd = self.cmd_receiver.recv_async() => {
+                        self.process_command(cmd.unwrap());
+                    }
+                    item = self.item_receiver.recv_async() => {
+                        break item.map_err(|_| panic!("Internal channel sender dropped while Task is Started"))
+                    }
                 }
-                item = self.item_receiver.recv_async() => item,
-            };
+            }
+        }
+        .boxed()
+    }
 
-            match item.map_err(|_| gst::FlowError::Flushing)? {
+    fn handle_item(&mut self, item: TaskItem) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        async move {
+            match item {
                 TaskItem::Buffer(buffer) => self.render(buffer).await.map_err(|err| {
                     element_error!(
                         &self.element,

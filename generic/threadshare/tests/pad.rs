@@ -155,19 +155,21 @@ mod imp_src {
     }
 
     impl TaskImpl for ElementSrcTestTask {
-        fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        type Item = Item;
+
+        fn try_next(&mut self) -> BoxFuture<'_, Result<Item, gst::FlowError>> {
             async move {
-                let item = self.receiver.next().await;
+                self.receiver.next().await.ok_or_else(|| {
+                    gst::log!(SRC_CAT, obj: &self.element, "SrcPad channel aborted");
+                    gst::FlowError::Eos
+                })
+            }
+            .boxed()
+        }
 
-                let item = match item {
-                    Some(item) => item,
-                    None => {
-                        gst::log!(SRC_CAT, obj: &self.element, "SrcPad channel aborted");
-                        return Err(gst::FlowError::Eos);
-                    }
-                };
-
-                let res = self.push_item(item).await;
+        fn handle_item(&mut self, item: Item) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+            async move {
+                let res = self.push_item(item).await.map(drop);
                 match res {
                     Ok(_) => gst::log!(SRC_CAT, obj: &self.element, "Successfully pushed item"),
                     Err(gst::FlowError::Flushing) => {
@@ -176,7 +178,7 @@ mod imp_src {
                     Err(err) => panic!("Got error {}", err),
                 }
 
-                res.map(drop)
+                res
             }
             .boxed()
         }
@@ -275,7 +277,7 @@ mod imp_src {
 
         fn pause(&self, element: &super::ElementSrcTest) {
             gst::debug!(SRC_CAT, obj: element, "Pausing");
-            let _ = self.task.pause().check().unwrap();
+            self.task.pause().block_on().unwrap();
             gst::debug!(SRC_CAT, obj: element, "Paused");
         }
     }

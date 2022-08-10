@@ -117,13 +117,13 @@ impl fmt::Display for SocketError {
     }
 }
 
-pub type SocketStreamItem = Result<(gst::Buffer, Option<std::net::SocketAddr>), SocketError>;
-
 impl<T: SocketRead> Socket<T> {
     // Can't implement this as a Stream trait because we end up using things like
     // tokio::net::UdpSocket which don't implement pollable functions.
     #[allow(clippy::should_implement_trait)]
-    pub async fn next(&mut self) -> Option<SocketStreamItem> {
+    pub async fn try_next(
+        &mut self,
+    ) -> Result<(gst::Buffer, Option<std::net::SocketAddr>), SocketError> {
         gst::log!(SOCKET_CAT, obj: &self.element, "Trying to read data");
 
         if self.mapped_buffer.is_none() {
@@ -133,7 +133,7 @@ impl<T: SocketRead> Socket<T> {
                 }
                 Err(err) => {
                     gst::debug!(SOCKET_CAT, obj: &self.element, "Failed to acquire buffer {:?}", err);
-                    return Some(Err(SocketError::Gst(err)));
+                    return Err(SocketError::Gst(err));
                 }
             }
         }
@@ -172,12 +172,12 @@ impl<T: SocketRead> Socket<T> {
                     buffer.set_dts(dts);
                 }
 
-                Some(Ok((buffer, saddr)))
+                Ok((buffer, saddr))
             }
             Err(err) => {
                 gst::debug!(SOCKET_CAT, obj: &self.element, "Read error {:?}", err);
 
-                Some(Err(SocketError::Io(err)))
+                Err(SocketError::Io(err))
             }
         }
     }

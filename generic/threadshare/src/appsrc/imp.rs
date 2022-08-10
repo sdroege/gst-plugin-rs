@@ -238,19 +238,20 @@ impl AppSrcTask {
 }
 
 impl TaskImpl for AppSrcTask {
-    fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
-        async move {
-            let item = self.receiver.next().await.ok_or_else(|| {
-                gst::error!(CAT, obj: &self.element, "SrcPad channel aborted");
-                gst::element_error!(
-                    &self.element,
-                    gst::StreamError::Failed,
-                    ("Internal data stream error"),
-                    ["streaming stopped, reason: channel aborted"]
-                );
-                gst::FlowError::Flushing
-            })?;
+    type Item = StreamItem;
 
+    fn try_next(&mut self) -> BoxFuture<'_, Result<StreamItem, gst::FlowError>> {
+        async move {
+            self.receiver
+                .next()
+                .await
+                .ok_or_else(|| panic!("Internal channel sender dropped while Task is Started"))
+        }
+        .boxed()
+    }
+
+    fn handle_item(&mut self, item: StreamItem) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        async move {
             let res = self.push_item(item).await;
             match res {
                 Ok(_) => {
@@ -428,7 +429,7 @@ impl AppSrc {
 
     fn pause(&self, element: &super::AppSrc) -> Result<(), gst::ErrorMessage> {
         gst::debug!(CAT, obj: element, "Pausing");
-        let _ = self.task.pause().check()?;
+        self.task.pause().block_on()?;
         gst::debug!(CAT, obj: element, "Paused");
         Ok(())
     }

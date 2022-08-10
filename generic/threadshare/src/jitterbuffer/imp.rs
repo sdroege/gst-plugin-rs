@@ -1066,6 +1066,8 @@ impl JitterBufferTask {
 }
 
 impl TaskImpl for JitterBufferTask {
+    type Item = ();
+
     fn start(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
         async move {
             gst::log!(CAT, obj: &self.element, "Starting task");
@@ -1087,7 +1089,17 @@ impl TaskImpl for JitterBufferTask {
         .boxed()
     }
 
-    fn iterate(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+    // FIXME this function was migrated to the try_next / handle_item model
+    // but hasn't been touched as there are pending changes to jitterbuffer
+    // in https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs/-/merge_requests/756.
+    // It should be possible to remove the loop below as try_next /  handle_item
+    // are executed in a loop by the Task state machine.
+    // It should also be possible to store latency and context_wait as
+    // fields of JitterBufferTask so as to avoid locking the settings.
+    // If latency can change during processing, a command based mechanism
+    // could be implemented. See the command implemention for ts-udpsink as
+    // an example.
+    fn try_next(&mut self) -> BoxFuture<'_, Result<(), gst::FlowError>> {
         async move {
             let jb = self.element.imp();
             let (latency, context_wait) = {
@@ -1221,6 +1233,10 @@ impl TaskImpl for JitterBufferTask {
             }
         }
         .boxed()
+    }
+
+    fn handle_item(&mut self, _item: ()) -> BoxFuture<'_, Result<(), gst::FlowError>> {
+        future::ok(()).boxed()
     }
 
     fn stop(&mut self) -> BoxFuture<'_, Result<(), gst::ErrorMessage>> {
