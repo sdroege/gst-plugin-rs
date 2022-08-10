@@ -31,8 +31,7 @@ fn test_mono_s16() {
 
     assert_eq!(
         caps,
-        gst_audio::AudioCapsBuilder::new()
-            .layout(gst_audio::AudioLayout::Interleaved)
+        gst_audio::AudioCapsBuilder::new_interleaved()
             .format(gst_audio::AUDIO_FORMAT_S16)
             .rate(44_100)
             .channels(1)

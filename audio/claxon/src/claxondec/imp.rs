@@ -76,7 +76,7 @@ impl ElementImpl for ClaxonDec {
             )
             .unwrap();
 
-            let src_caps = gst_audio::AudioCapsBuilder::new()
+            let src_caps = gst_audio::AudioCapsBuilder::new_interleaved()
                 .format_list([
                     gst_audio::AudioFormat::S8,
                     gst_audio::AUDIO_FORMAT_S16,
@@ -85,7 +85,6 @@ impl ElementImpl for ClaxonDec {
                 ])
                 .rate_range(1..655_350)
                 .channels_range(1..8)
-                .layout(gst_audio::AudioLayout::Interleaved)
                 .build();
             let src_pad_template = gst::PadTemplate::new(
                 "src",
