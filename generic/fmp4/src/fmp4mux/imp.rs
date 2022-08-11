@@ -2429,6 +2429,7 @@ impl ElementImpl for ONVIFFMP4Mux {
                         .build(),
                     gst::Structure::builder("application/x-onvif-metadata")
                         .field("encoding", "utf8")
+                        .field("parsed", true)
                         .build(),
                 ]
                 .into_iter()
