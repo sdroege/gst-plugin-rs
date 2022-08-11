@@ -91,6 +91,8 @@ if num_plots > 2:
 patches = []
 
 for (i, (queue, values)) in enumerate(queues.items()):
+    # cycle colors
+    i = i % len(colors)
     axis = 0
 
     if args.buffers:
