@@ -196,7 +196,7 @@ impl Cea608Overlay {
             // Pass ownership of the buffer to the cairo surface but keep around
             // a raw pointer so we can later retrieve it again when the surface
             // is done
-            let buffer_ptr = unsafe { buffer.buffer().as_ptr() };
+            let buffer_ptr = buffer.buffer().as_ptr();
             let surface = cairo::ImageSurface::create_for_data(
                 buffer,
                 cairo::Format::ARgb32,
