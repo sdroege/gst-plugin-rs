@@ -161,10 +161,7 @@ impl OnvifMetadataParse {
                 );
 
                 let xml = queued_frames.entry(dt_unix_ns).or_insert_with(|| {
-                    Element::builder("VideoAnalytics", "http://www.onvif.org/ver10/schema")
-                        .prefix(Some("tt".into()), "http://www.onvif.org/ver10/schema")
-                        .unwrap()
-                        .build()
+                    Element::bare("VideoAnalytics", "http://www.onvif.org/ver10/schema")
                 });
 
                 xml.append_child(el.clone());
