@@ -1485,7 +1485,6 @@ pub(super) fn create_fmp4_fragment_header(
     Ok((gst::Buffer::from_mut_slice(v), styp_len as u64))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn write_moof(
     v: &mut Vec<u8>,
     cfg: &super::FragmentHeaderConfiguration,
