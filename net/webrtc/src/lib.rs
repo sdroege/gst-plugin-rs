@@ -1,3 +1,8 @@
+/**
+ * plugin-rswebrtc:
+ *
+ * Since: plugins-rs-0.9
+ */
 use gst::glib;
 
 pub mod gcc;
@@ -12,7 +17,7 @@ fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
 }
 
 gst::plugin_define!(
-    webrtcsink,
+    rswebrtc,
     env!("CARGO_PKG_DESCRIPTION"),
     plugin_init,
     concat!(env!("CARGO_PKG_VERSION"), "-", env!("COMMIT_ID")),

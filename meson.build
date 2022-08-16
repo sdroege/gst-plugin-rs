@@ -66,6 +66,7 @@ plugins = {
   'gst-plugin-textahead': 'libgsttextahead',
   'gst-plugin-onvif': 'libgstrsonvif',
   'gst-plugin-tracers': 'libgstrstracers',
+  'gst-plugin-webrtc': 'libgstrswebrtc',
   'gst-plugin-webrtchttp': 'libgstwebrtchttp',
   'gst-plugin-rtpav1': 'libgstrtpav1',
   'gst-plugin-ndi': 'libgstndi',
@@ -233,10 +234,17 @@ foreach plugin : plugins
     capture: true,
     check: true)
   foreach dep_name : p.stdout().strip().split(',')
+    dep_name_version = dep_name.split('|')
+    dep_name = dep_name_version.get(0)
+    if dep_name_version.length() > 1
+      extras = {'version': dep_name_version.get(1)}
+    else
+      extras = {}
+    endif
     if deps_cache.has_key(dep_name)
       plugin_deps += deps_cache[dep_name]
     else
-      dep = dependency(dep_name, required: false)
+      dep = dependency(dep_name, required: false, kwargs: extras)
       plugin_deps += dep
       deps_cache += {dep_name: dep}
     endif

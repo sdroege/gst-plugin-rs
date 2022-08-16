@@ -5359,6 +5359,357 @@
         "tracers": {},
         "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
     },
+    "rswebrtc": {
+        "description": "High level GStreamer WebRTC elements and simple signaling server",
+        "elements": {
+            "rtpgccbwe": {
+                "author": "Thibault Saunier <tsaunier@igalia.com>",
+                "description": "Estimates current network bandwidth using the Google Congestion Control algorithm notifying about it through the 'bitrate' property",
+                "hierarchy": [
+                    "GstRTPGCCBwE",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "klass": "Network/WebRTC/RTP/Filter",
+                "long-name": "Google Congestion Control bandwidth estimator",
+                "pad-templates": {
+                    "sink": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "sink",
+                        "presence": "always"
+                    },
+                    "src": {
+                        "caps": "application/x-rtp:\n",
+                        "direction": "src",
+                        "presence": "always"
+                    }
+                },
+                "properties": {
+                    "estimated-bitrate": {
+                        "blurb": "Currently estimated bitrate. Can be set before starting\n                     the element to configure the starting bitrate, in which case the\n                     encoder should also use it as target bitrate",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2048000",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "max-bitrate": {
+                        "blurb": "Maximal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "8192000",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "min-bitrate": {
+                        "blurb": "Minimal bitrate to use (in bit/sec) when computing it through the bandwidth estimation algorithm",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    }
+                },
+                "rank": "none"
+            },
+            "webrtcsink": {
+                "author": "Mathieu Duponchelle <mathieu@centricular.com>",
+                "description": "WebRTC sink",
+                "hierarchy": [
+                    "RsWebRTCSink",
+                    "GstBin",
+                    "GstElement",
+                    "GstObject",
+                    "GInitiallyUnowned",
+                    "GObject"
+                ],
+                "interfaces": [
+                    "GstChildProxy",
+                    "GstNavigation"
+                ],
+                "klass": "Sink/Network/WebRTC",
+                "long-name": "WebRTCSink",
+                "pad-templates": {
+                    "audio_%%u": {
+                        "caps": "audio/x-raw:\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    },
+                    "video_%%u": {
+                        "caps": "video/x-raw:\n\nvideo/x-raw(memory:CUDAMemory):\n\nvideo/x-raw(memory:GLMemory):\n\nvideo/x-raw(memory:NVMM):\n",
+                        "direction": "sink",
+                        "presence": "request"
+                    }
+                },
+                "properties": {
+                    "audio-caps": {
+                        "blurb": "Governs what audio codecs will be proposed",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "audio/x-opus",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    },
+                    "congestion-control": {
+                        "blurb": "Defines how congestion is controlled, if at all",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "gcc (2)",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstWebRTCSinkCongestionControl",
+                        "writable": true
+                    },
+                    "do-fec": {
+                        "blurb": "Whether the element should negotiate and send FEC data",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "do-retransmission": {
+                        "blurb": "Whether the element should offer to honor retransmission requests",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "true",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "enable-data-channel-navigation": {
+                        "blurb": "Enable navigation events through a dedicated WebRTCDataChannel",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "false",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "gboolean",
+                        "writable": true
+                    },
+                    "max-bitrate": {
+                        "blurb": "Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "8192000",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "meta": {
+                        "blurb": "Free form metadata about the producer",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": true
+                    },
+                    "min-bitrate": {
+                        "blurb": "Minimal bitrate to use (in bit/sec) when computing it through the congestion control algorithm",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "1000",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "start-bitrate": {
+                        "blurb": "Start bitrate to use (in bit/sec)",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "2048000",
+                        "max": "-1",
+                        "min": "1",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "guint",
+                        "writable": true
+                    },
+                    "stats": {
+                        "blurb": "Statistics for the current consumers",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "application/x-webrtcsink-stats;",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "GstStructure",
+                        "writable": false
+                    },
+                    "stun-server": {
+                        "blurb": "The STUN server of the form stun://hostname:port",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "stun://stun.l.google.com:19302",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "turn-server": {
+                        "blurb": "The TURN server of the form turn(s)://username:password@host:port.",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "NULL",
+                        "mutable": "null",
+                        "readable": true,
+                        "type": "gchararray",
+                        "writable": true
+                    },
+                    "video-caps": {
+                        "blurb": "Governs what video codecs will be proposed",
+                        "conditionally-available": false,
+                        "construct": false,
+                        "construct-only": false,
+                        "controllable": false,
+                        "default": "video/x-vp8; video/x-h264; video/x-vp9; video/x-h265",
+                        "mutable": "ready",
+                        "readable": true,
+                        "type": "GstCaps",
+                        "writable": true
+                    }
+                },
+                "rank": "none",
+                "signals": {
+                    "consumer-added": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstElement"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "consumer-removed": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "GstElement"
+                            }
+                        ],
+                        "return-type": "void",
+                        "when": "last"
+                    },
+                    "encoder-setup": {
+                        "args": [
+                            {
+                                "name": "arg0",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg1",
+                                "type": "gchararray"
+                            },
+                            {
+                                "name": "arg2",
+                                "type": "GstElement"
+                            }
+                        ],
+                        "return-type": "gboolean",
+                        "when": "last"
+                    },
+                    "get-sessions": {
+                        "action": true,
+                        "args": [],
+                        "return-type": "GStrv",
+                        "when": "last"
+                    }
+                }
+            }
+        },
+        "filename": "gstrswebrtc",
+        "license": "MPL-2.0",
+        "other-types": {
+            "GstWebRTCSinkCongestionControl": {
+                "kind": "enum",
+                "values": [
+                    {
+                        "desc": "Disabled: no congestion control is applied",
+                        "name": "disabled",
+                        "value": "0"
+                    },
+                    {
+                        "desc": "Homegrown: simple sender-side heuristic",
+                        "name": "homegrown",
+                        "value": "1"
+                    },
+                    {
+                        "desc": "Google Congestion Control algorithm",
+                        "name": "gcc",
+                        "value": "2"
+                    }
+                ]
+            }
+        },
+        "package": "gst-plugin-webrtc",
+        "source": "gst-plugin-webrtc",
+        "tracers": {},
+        "url": "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs"
+    },
     "rtpav1": {
         "description": "AV1 RTP (De)payloader Plugins",
         "elements": {

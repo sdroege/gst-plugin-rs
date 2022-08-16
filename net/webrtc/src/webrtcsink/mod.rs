@@ -155,6 +155,7 @@ enum WebRTCSinkMitigationMode {
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    WebRTCSinkCongestionControl::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     gst::Element::register(
         Some(plugin),
         "webrtcsink",

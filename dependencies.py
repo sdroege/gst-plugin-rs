@@ -36,6 +36,7 @@ RENAMES = {
     'rsclosedcaption': 'closedcaption',
     'rsdav1d': 'dav1d',
     'webrtchttp': 'webrtc-http',
+    'rswebrtc': 'webrtc',
 }
 
 
@@ -60,5 +61,5 @@ if __name__ == "__main__":
                 requires = data['package']['metadata']['capi']['pkg_config']['requires_private']
             except KeyError:
                 continue
-            deps.update([i.strip() for i in requires.split(',')])
+            deps.update([i.strip().replace('>', "|>").replace('<', "|<").replace("==", "|==") for i in requires.split(',')])
     print(','.join(deps))

@@ -33,6 +33,7 @@ You will find the following plugins in this repository:
 
     - `raptorq`: Encoder/decoder element for RaptorQ RTP FEC mechanism.
     - `ndi`: An [NDI](https://www.newtek.com/ndi/) plugin containing a source, sink and device provider.
+    - `webrtc`: WebRTC elements, with batteries included Sink elements for specific signalling protocols
 
   * `audio`
     - `audiofx`: Elements to apply audio effects to a stream
