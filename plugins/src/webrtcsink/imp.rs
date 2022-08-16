@@ -2480,15 +2480,9 @@ impl ObjectImpl for WebRTCSink {
                  * This signal can be used to tweak @webrtcbin, creating a data
                  * channel for example.
                  */
-                glib::subclass::Signal::builder(
-                    "consumer-added",
-                    &[
-                        String::static_type().into(),
-                        gst::Element::static_type().into(),
-                    ],
-                    glib::types::Type::UNIT.into(),
-                )
-                .build(),
+                glib::subclass::Signal::builder("consumer-added")
+                    .param_types([String::static_type(), gst::Element::static_type()])
+                    .build(),
                 /*
                  * RsWebRTCSink::consumer_removed:
                  * @consumer_id: Identifier of the consumer that was removed
@@ -2497,43 +2491,34 @@ impl ObjectImpl for WebRTCSink {
                  * This signal is emitted right after the connection with a consumer
                  * has been dropped.
                  */
-                glib::subclass::Signal::builder(
-                    "consumer-removed",
-                    &[
-                        String::static_type().into(),
-                        gst::Element::static_type().into(),
-                    ],
-                    glib::types::Type::UNIT.into(),
-                )
-                .build(),
+                glib::subclass::Signal::builder("consumer-removed")
+                    .param_types([String::static_type(), gst::Element::static_type()])
+                    .build(),
                 /*
                  * RsWebRTCSink::get_consumers:
                  *
                  * List all consumers (by ID).
                  */
-                glib::subclass::Signal::builder(
-                    "get-consumers",
-                    &[],
-                    <Vec<String>>::static_type().into(),
-                )
-                .action()
-                .class_handler(|_, args| {
-                    let element = args[0].get::<super::WebRTCSink>().expect("signal arg");
-                    let this = element.imp();
+                glib::subclass::Signal::builder("get-consumers")
+                    .action()
+                    .class_handler(|_, args| {
+                        let element = args[0].get::<super::WebRTCSink>().expect("signal arg");
+                        let this = element.imp();
 
-                    let res = Some(
-                        this.state
-                            .lock()
-                            .unwrap()
-                            .consumers
-                            .keys()
-                            .cloned()
-                            .collect::<Vec<String>>()
-                            .to_value(),
-                    );
-                    res
-                })
-                .build(),
+                        let res = Some(
+                            this.state
+                                .lock()
+                                .unwrap()
+                                .consumers
+                                .keys()
+                                .cloned()
+                                .collect::<Vec<String>>()
+                                .to_value(),
+                        );
+                        res
+                    })
+                    .return_type::<Vec<String>>()
+                    .build(),
                 /*
                  * RsWebRTCSink::encoder-setup:
                  * @consumer_id: Identifier of the consumer
@@ -2545,35 +2530,33 @@ impl ObjectImpl for WebRTCSink {
                  * Returns: True if the encoder is entirely configured,
                  * False to let other handlers run
                  */
-                glib::subclass::Signal::builder(
-                    "encoder-setup",
-                    &[
-                        String::static_type().into(),
-                        String::static_type().into(),
-                        gst::Element::static_type().into(),
-                    ],
-                    bool::static_type().into(),
-                )
-                .accumulator(|_hint, _ret, value| !value.get::<bool>().unwrap())
-                .class_handler(|_, args| {
-                    let element = args[0].get::<super::WebRTCSink>().expect("signal arg");
-                    let enc = args[3].get::<gst::Element>().unwrap();
+                glib::subclass::Signal::builder("encoder-setup")
+                    .param_types([
+                        String::static_type(),
+                        String::static_type(),
+                        gst::Element::static_type(),
+                    ])
+                    .return_type::<bool>()
+                    .accumulator(|_hint, _ret, value| !value.get::<bool>().unwrap())
+                    .class_handler(|_, args| {
+                        let element = args[0].get::<super::WebRTCSink>().expect("signal arg");
+                        let enc = args[3].get::<gst::Element>().unwrap();
 
-                    gst::debug!(
-                        CAT,
-                        obj: &element,
-                        "applying default configuration on encoder {:?}",
-                        enc
-                    );
+                        gst::debug!(
+                            CAT,
+                            obj: &element,
+                            "applying default configuration on encoder {:?}",
+                            enc
+                        );
 
-                    let this = element.imp();
-                    let settings = this.settings.lock().unwrap();
-                    configure_encoder(&enc, settings.cc_info.start_bitrate);
+                        let this = element.imp();
+                        let settings = this.settings.lock().unwrap();
+                        configure_encoder(&enc, settings.cc_info.start_bitrate);
 
-                    // Return false here so that latter handlers get called
-                    Some(false.to_value())
-                })
-                .build(),
+                        // Return false here so that latter handlers get called
+                        Some(false.to_value())
+                    })
+                    .build(),
             ]
         });
 
