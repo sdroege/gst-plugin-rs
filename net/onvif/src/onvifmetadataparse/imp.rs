@@ -253,7 +253,7 @@ impl OnvifMetadataParse {
 
             gst::ReferenceTimestampMeta::add(
                 buffer_ref,
-                &crate::UNIX_CAPS,
+                &crate::NTP_CAPS,
                 utc_time,
                 gst::ClockTime::NONE,
             );
