@@ -43,7 +43,7 @@ const DEFAULT_MIN_BITRATE: u32 = 1000;
  * buffer sizes */
 const DEFAULT_MAX_BITRATE: u32 = 8192000;
 const DEFAULT_CONGESTION_CONTROL: WebRTCSinkCongestionControl =
-    WebRTCSinkCongestionControl::Homegrown;
+    WebRTCSinkCongestionControl::GoogleCongestionControl;
 const DEFAULT_DO_FEC: bool = true;
 const DEFAULT_DO_RETRANSMISSION: bool = true;
 const DEFAULT_ENABLE_DATA_CHANNEL_NAVIGATION: bool = false;
@@ -255,7 +255,7 @@ impl Default for Settings {
             stun_server: DEFAULT_STUN_SERVER.map(String::from),
             turn_server: None,
             cc_info: CCInfo {
-                heuristic: WebRTCSinkCongestionControl::Homegrown,
+                heuristic: WebRTCSinkCongestionControl::GoogleCongestionControl,
                 min_bitrate: DEFAULT_MIN_BITRATE,
                 max_bitrate: (DEFAULT_MAX_BITRATE as f64 * 1.5) as u32,
                 start_bitrate: DEFAULT_START_BITRATE,
