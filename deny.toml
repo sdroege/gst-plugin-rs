@@ -11,6 +11,8 @@ ignore = [
     "RUSTSEC-2021-0061",
     # https://github.com/chronotope/chrono/issues/499
     "RUSTSEC-2020-0071",
+    # sodiumoxide is deprecated
+    "RUSTSEC-2021-0137",
 ]
 
 [licenses]
@@ -106,12 +108,6 @@ version = "0.9"
 [[bans.skip]]
 name = "wasi"
 version = "0.10"
-
-# ignore duplicated hashbrown dependency because publicsuffix depends on an old version
-# https://github.com/rushmorem/publicsuffix/pull/36
-[[bans.skip]]
-name = "hashbrown"
-version = "0.11"
 
 # ignore duplicated spin dependency because various crates depend on an old version
 [[bans.skip]]
