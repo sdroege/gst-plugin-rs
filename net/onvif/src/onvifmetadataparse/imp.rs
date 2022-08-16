@@ -56,7 +56,13 @@ impl OnvifMetadataParse {
         element: &super::OnvifMetadataParse,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        gst::log!(CAT, obj: element, "Handling buffer {:?}", buffer);
+        gst::log!(
+            CAT,
+            obj: element,
+            "Handling buffer {:?} with UTC time {}",
+            buffer,
+            crate::lookup_reference_timestamp(&buffer).display()
+        );
 
         let mut state = self.state.lock().unwrap();
 
@@ -151,7 +157,8 @@ impl OnvifMetadataParse {
                     gst::FlowError::Error
                 })?;
 
-                let dt_unix_ns = gst::ClockTime::from_nseconds(dt.timestamp_nanos() as u64);
+                let dt_unix_ns = gst::ClockTime::from_nseconds(dt.timestamp_nanos() as u64)
+                    + crate::PRIME_EPOCH_OFFSET;
 
                 gst::trace!(
                     CAT,
