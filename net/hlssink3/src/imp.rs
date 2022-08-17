@@ -584,7 +584,7 @@ impl ObjectImpl for HlsSink3 {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
                 glib::subclass::Signal::builder(SIGNAL_GET_PLAYLIST_STREAM)
-                    .param_types(&[String::static_type()])
+                    .param_types([String::static_type()])
                     .return_type::<gio::OutputStream>()
                     .class_handler(|_, args| {
                         let element = args[0]
@@ -608,7 +608,7 @@ impl ObjectImpl for HlsSink3 {
                     })
                     .build(),
                 glib::subclass::Signal::builder(SIGNAL_GET_FRAGMENT_STREAM)
-                    .param_types(&[String::static_type()])
+                    .param_types([String::static_type()])
                     .return_type::<gio::OutputStream>()
                     .class_handler(|_, args| {
                         let element = args[0]
@@ -632,7 +632,7 @@ impl ObjectImpl for HlsSink3 {
                     })
                     .build(),
                 glib::subclass::Signal::builder(SIGNAL_DELETE_FRAGMENT)
-                    .param_types(&[String::static_type()])
+                    .param_types([String::static_type()])
                     .return_type::<bool>()
                     .class_handler(|_, args| {
                         let element = args[0].get::<super::HlsSink3>().expect("signal arg");

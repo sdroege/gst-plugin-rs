@@ -1104,7 +1104,7 @@ impl ObjectImpl for UdpSink {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
                 glib::subclass::Signal::builder("add")
-                    .param_types(&[String::static_type(), i32::static_type()])
+                    .param_types([String::static_type(), i32::static_type()])
                     .action()
                     .class_handler(|_, args| {
                         let element = args[0].get::<super::UdpSink>().expect("signal arg");
@@ -1121,7 +1121,7 @@ impl ObjectImpl for UdpSink {
                     })
                     .build(),
                 glib::subclass::Signal::builder("remove")
-                    .param_types(&[String::static_type(), i32::static_type()])
+                    .param_types([String::static_type(), i32::static_type()])
                     .action()
                     .class_handler(|_, args| {
                         let element = args[0].get::<super::UdpSink>().expect("signal arg");

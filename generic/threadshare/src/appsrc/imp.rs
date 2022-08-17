@@ -508,7 +508,7 @@ impl ObjectImpl for AppSrc {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
                 glib::subclass::Signal::builder("push-buffer")
-                    .param_types(&[gst::Buffer::static_type()])
+                    .param_types([gst::Buffer::static_type()])
                     .return_type::<bool>()
                     .action()
                     .class_handler(|_, args| {

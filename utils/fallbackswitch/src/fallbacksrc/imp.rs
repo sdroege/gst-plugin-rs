@@ -654,7 +654,7 @@ impl ObjectImpl for FallbackSrc {
         static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
             vec![
                 glib::subclass::Signal::builder("update-uri")
-                    .param_types(&[String::static_type()])
+                    .param_types([String::static_type()])
                     .return_type::<String>()
                     .class_handler(|_token, args| {
                         // Simply return the input by default
