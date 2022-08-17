@@ -1,5 +1,5 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
-// Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
+// Copyright (C) 2019-2022 François Laignel <fengalin@free.fr>
 //
 // Take a look at the license at the top of the repository in the LICENSE file.
 
@@ -132,11 +132,7 @@ impl Scheduler {
             let res = future.await;
 
             let task_id = TaskId::current().unwrap();
-            while handle.has_sub_tasks(task_id) {
-                if handle.drain_sub_tasks(task_id).await.is_err() {
-                    break;
-                }
-            }
+            let _ = handle.drain_sub_tasks(task_id).await;
 
             res
         });
@@ -409,10 +405,6 @@ impl Handle {
 
     pub(super) fn unpark(&self) {
         self.0.scheduler.unpark();
-    }
-
-    pub fn has_sub_tasks(&self, task_id: TaskId) -> bool {
-        self.0.scheduler.tasks.has_sub_tasks(task_id)
     }
 
     pub fn add_sub_task<T>(&self, task_id: TaskId, sub_task: T) -> Result<(), T>

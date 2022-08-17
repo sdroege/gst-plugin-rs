@@ -1,5 +1,5 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
-// Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
+// Copyright (C) 2019-2022 François Laignel <fengalin@free.fr>
 //
 // Take a look at the license at the top of the repository in the LICENSE file.
 
@@ -90,10 +90,6 @@ impl Task {
         T: Future<Output = SubTaskOutput> + Send + 'static,
     {
         self.sub_tasks.push_back(sub_task.boxed());
-    }
-
-    fn drain_sub_tasks(&mut self) -> VecDeque<BoxFuture<'static, SubTaskOutput>> {
-        std::mem::take(&mut self.sub_tasks)
     }
 }
 
@@ -240,15 +236,6 @@ impl TaskQueue {
         self.runnables.pop()
     }
 
-    pub fn has_sub_tasks(&self, task_id: TaskId) -> bool {
-        self.tasks
-            .lock()
-            .unwrap()
-            .get(task_id.0)
-            .map(|t| !t.sub_tasks.is_empty())
-            .unwrap_or(false)
-    }
-
     pub fn add_sub_task<T>(&self, task_id: TaskId, sub_task: T) -> Result<(), T>
     where
         T: Future<Output = SubTaskOutput> + Send + 'static,
@@ -272,35 +259,24 @@ impl TaskQueue {
         }
     }
 
-    pub fn drain_sub_tasks(
-        &self,
-        task_id: TaskId,
-    ) -> impl Future<Output = SubTaskOutput> + Send + 'static {
-        let sub_tasks = self
-            .tasks
-            .lock()
-            .unwrap()
-            .get_mut(task_id.0)
-            .map(|task| (task.drain_sub_tasks(), Arc::clone(&self.context_name)));
+    pub async fn drain_sub_tasks(&self, task_id: TaskId) -> SubTaskOutput {
+        loop {
+            let mut sub_tasks = match self.tasks.lock().unwrap().get_mut(task_id.0) {
+                Some(task) if !task.sub_tasks.is_empty() => std::mem::take(&mut task.sub_tasks),
+                _ => return Ok(()),
+            };
 
-        async move {
-            if let Some((mut sub_tasks, context_name)) = sub_tasks {
-                if !sub_tasks.is_empty() {
-                    gst::log!(
-                        RUNTIME_CAT,
-                        "Scheduling draining {} sub tasks from {:?} on '{}'",
-                        sub_tasks.len(),
-                        task_id,
-                        &context_name,
-                    );
+            gst::trace!(
+                RUNTIME_CAT,
+                "Scheduling draining {} sub tasks from {:?} on '{}'",
+                sub_tasks.len(),
+                task_id,
+                self.context_name,
+            );
 
-                    for sub_task in sub_tasks.drain(..) {
-                        sub_task.await?;
-                    }
-                }
+            for sub_task in sub_tasks.drain(..) {
+                sub_task.await?;
             }
-
-            Ok(())
         }
     }
 }

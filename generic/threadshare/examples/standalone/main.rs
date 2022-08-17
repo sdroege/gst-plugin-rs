@@ -53,7 +53,7 @@ struct Args {
     #[clap(short, long, default_value_t = 6000)]
     num_buffers: i32,
 
-    /// Enable statistics logging (use GST_DEBUG=ts-standalone*:4).
+    /// Enables statistics logging (use GST_DEBUG=ts-standalone*:4).
     #[clap(short, long)]
     log_stats: bool,
 }

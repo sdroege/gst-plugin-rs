@@ -1,5 +1,5 @@
 // Copyright (C) 2018-2020 Sebastian Dröge <sebastian@centricular.com>
-// Copyright (C) 2019-2021 François Laignel <fengalin@free.fr>
+// Copyright (C) 2019-2022 François Laignel <fengalin@free.fr>
 //
 // Take a look at the license at the top of the repository in the LICENSE file.
 
@@ -55,7 +55,7 @@ where
             cur_task_id,
             cur_context.name()
         );
-        let _ = Context::add_sub_task(async move {
+        let _ = cur_context.add_sub_task(cur_task_id, async move {
             future.await;
             Ok(())
         });
@@ -199,7 +199,10 @@ impl Context {
 
     /// Returns the `TaskId` running on current thread, if any.
     pub fn current_task() -> Option<(Context, TaskId)> {
-        Scheduler::current().map(Context).zip(TaskId::current())
+        Scheduler::current().map(|scheduler| {
+            // Context users always operate on a Task
+            (Context(scheduler), TaskId::current().unwrap())
+        })
     }
 
     /// Executes the provided function relatively to this [`Context`].
@@ -265,31 +268,11 @@ impl Context {
         self.0.unpark();
     }
 
-    pub fn current_has_sub_tasks() -> bool {
-        let (ctx, task_id) = match Context::current_task() {
-            Some(task) => task,
-            None => {
-                gst::trace!(RUNTIME_CAT, "No current task");
-                return false;
-            }
-        };
-
-        ctx.0.has_sub_tasks(task_id)
-    }
-
-    pub fn add_sub_task<T>(sub_task: T) -> Result<(), T>
+    pub fn add_sub_task<T>(&self, task_id: TaskId, sub_task: T) -> Result<(), T>
     where
         T: Future<Output = SubTaskOutput> + Send + 'static,
     {
-        let (ctx, task_id) = match Context::current_task() {
-            Some(task) => task,
-            None => {
-                gst::trace!(RUNTIME_CAT, "No current task");
-                return Err(sub_task);
-            }
-        };
-
-        ctx.0.add_sub_task(task_id, sub_task)
+        self.0.add_sub_task(task_id, sub_task)
     }
 
     pub async fn drain_sub_tasks() -> SubTaskOutput {
@@ -339,7 +322,7 @@ mod tests {
             assert_eq!(ctx.name(), Scheduler::DUMMY_NAME);
             assert_eq!(task_id, super::TaskId(0));
 
-            let res = Context::add_sub_task(async move {
+            let res = ctx.add_sub_task(task_id, async move {
                 let (_ctx, task_id) = Context::current_task().unwrap();
                 assert_eq!(task_id, super::TaskId(0));
                 Ok(())
@@ -381,10 +364,10 @@ mod tests {
 
         let ctx_weak = context.downgrade();
         let join_handle = context.spawn(async move {
-            let (_ctx, task_id) = Context::current_task().unwrap();
+            let (ctx, task_id) = Context::current_task().unwrap();
             assert_eq!(task_id, TaskId(0));
 
-            let res = Context::add_sub_task(async move {
+            let res = ctx.add_sub_task(task_id, async move {
                 let (_ctx, task_id) = Context::current_task().unwrap();
                 assert_eq!(task_id, TaskId(0));
                 Ok(())
@@ -395,10 +378,10 @@ mod tests {
                 .upgrade()
                 .unwrap()
                 .spawn(async {
-                    let (_ctx, task_id) = Context::current_task().unwrap();
+                    let (ctx, task_id) = Context::current_task().unwrap();
                     assert_eq!(task_id, TaskId(1));
 
-                    let res = Context::add_sub_task(async move {
+                    let res = ctx.add_sub_task(task_id, async move {
                         let (_ctx, task_id) = Context::current_task().unwrap();
                         assert_eq!(task_id, TaskId(1));
                         Ok(())
@@ -433,14 +416,19 @@ mod tests {
 
             let add_sub_task = move |item| {
                 let sender = sender.clone();
-                Context::add_sub_task(async move {
-                    sender
-                        .lock()
-                        .await
-                        .send(item)
-                        .await
-                        .map_err(|_| gst::FlowError::Error)
-                })
+                Context::current_task()
+                    .ok_or(())
+                    .and_then(|(ctx, task_id)| {
+                        ctx.add_sub_task(task_id, async move {
+                            sender
+                                .lock()
+                                .await
+                                .send(item)
+                                .await
+                                .map_err(|_| gst::FlowError::Error)
+                        })
+                        .map_err(drop)
+                    })
             };
 
             // Tests
@@ -450,7 +438,7 @@ mod tests {
             drain_fut.await.unwrap();
 
             // Add a subtask
-            add_sub_task(0).map_err(drop).unwrap();
+            add_sub_task(0).unwrap();
 
             // Check that it was not executed yet
             receiver.try_next().unwrap_err();
@@ -461,7 +449,7 @@ mod tests {
             assert_eq!(receiver.try_next().unwrap(), Some(0));
 
             // Add another task and check that it's not executed yet
-            add_sub_task(1).map_err(drop).unwrap();
+            add_sub_task(1).unwrap();
             receiver.try_next().unwrap_err();
 
             // Return the receiver

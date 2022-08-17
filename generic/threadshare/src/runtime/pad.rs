@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 François Laignel <fengalin@free.fr>
+// Copyright (C) 2019-2022 François Laignel <fengalin@free.fr>
 // Copyright (C) 2020 Sebastian Dröge <sebastian@centricular.com>
 //
 // This library is free software; you can redistribute it and/or
@@ -80,7 +80,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::{Arc, Weak};
 
-use super::executor::{block_on_or_add_sub_task, Context};
+use super::executor::{self, Context};
 use super::RUNTIME_CAT;
 
 #[inline]
@@ -234,9 +234,7 @@ impl PadSrcInner {
         })?;
 
         gst::log!(RUNTIME_CAT, obj: &self.gst_pad, "Processing any pending sub tasks");
-        while Context::current_has_sub_tasks() {
-            Context::drain_sub_tasks().await?;
-        }
+        Context::drain_sub_tasks().await?;
 
         Ok(success)
     }
@@ -255,9 +253,7 @@ impl PadSrcInner {
         })?;
 
         gst::log!(RUNTIME_CAT, obj: &self.gst_pad, "Processing any pending sub tasks");
-        while Context::current_has_sub_tasks() {
-            Context::drain_sub_tasks().await?;
-        }
+        Context::drain_sub_tasks().await?;
 
         Ok(success)
     }
@@ -268,10 +264,8 @@ impl PadSrcInner {
         let was_handled = self.gst_pad().push_event(event);
 
         gst::log!(RUNTIME_CAT, obj: &self.gst_pad, "Processing any pending sub tasks");
-        while Context::current_has_sub_tasks() {
-            if Context::drain_sub_tasks().await.is_err() {
-                return false;
-            }
+        if Context::drain_sub_tasks().await.is_err() {
+            return false;
         }
 
         was_handled
@@ -758,18 +752,6 @@ impl<'a> PadSinkRef<'a> {
 
         Ok(())
     }
-
-    fn handle_future(
-        &self,
-        fut: impl Future<Output = Result<FlowSuccess, FlowError>> + Send + 'static,
-    ) -> Result<FlowSuccess, FlowError> {
-        if let Err(fut) = Context::add_sub_task(fut.map(|res| res.map(drop))) {
-            block_on_or_add_sub_task(fut.map(|res| res.map(|_| gst::FlowSuccess::Ok)))
-                .unwrap_or(Ok(gst::FlowSuccess::Ok))
-        } else {
-            Ok(gst::FlowSuccess::Ok)
-        }
-    }
 }
 
 impl<'a> Deref for PadSinkRef<'a> {
@@ -876,7 +858,7 @@ impl PadSink {
                         parent,
                         || Err(FlowError::Error),
                         move |imp, element| {
-                            if Context::current_has_sub_tasks() {
+                            if let Some((ctx, task_id)) = Context::current_task() {
                                 let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
                                 let handler = handler.clone();
                                 let element =
@@ -889,7 +871,8 @@ impl PadSink {
                                         this_weak.upgrade().ok_or(gst::FlowError::Flushing)?;
                                     handler.sink_chain(&this_ref, imp, &element, buffer).await
                                 };
-                                let _ = Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
+                                let _ =
+                                    ctx.add_sub_task(task_id, delayed_fut.map(|res| res.map(drop)));
 
                                 Ok(gst::FlowSuccess::Ok)
                             } else {
@@ -900,7 +883,7 @@ impl PadSink {
                                     element.dynamic_cast_ref::<gst::Element>().unwrap(),
                                     buffer,
                                 );
-                                this_ref.handle_future(chain_fut)
+                                executor::block_on(chain_fut)
                             }
                         },
                     )
@@ -916,7 +899,7 @@ impl PadSink {
                         parent,
                         || Err(FlowError::Error),
                         move |imp, element| {
-                            if Context::current_has_sub_tasks() {
+                            if let Some((ctx, task_id)) = Context::current_task() {
                                 let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
                                 let handler = handler.clone();
                                 let element =
@@ -931,7 +914,8 @@ impl PadSink {
                                         .sink_chain_list(&this_ref, imp, &element, list)
                                         .await
                                 };
-                                let _ = Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
+                                let _ =
+                                    ctx.add_sub_task(task_id, delayed_fut.map(|res| res.map(drop)));
 
                                 Ok(gst::FlowSuccess::Ok)
                             } else {
@@ -942,7 +926,7 @@ impl PadSink {
                                     element.dynamic_cast_ref::<gst::Element>().unwrap(),
                                     list,
                                 );
-                                this_ref.handle_future(chain_list_fut)
+                                executor::block_on(chain_list_fut)
                             }
                         },
                     )
@@ -961,7 +945,7 @@ impl PadSink {
                         || Err(FlowError::Error),
                         move |imp, element| {
                             if event.is_serialized() {
-                                if Context::current_has_sub_tasks() {
+                                if let Some((ctx, task_id)) = Context::current_task() {
                                     let this_weak = PadSinkWeak(Arc::downgrade(&inner_arc));
                                     let handler = handler.clone();
                                     let element =
@@ -980,8 +964,10 @@ impl PadSink {
                                             )
                                             .await
                                     };
-                                    let _ =
-                                        Context::add_sub_task(delayed_fut.map(|res| res.map(drop)));
+                                    let _ = ctx.add_sub_task(
+                                        task_id,
+                                        delayed_fut.map(|res| res.map(drop)),
+                                    );
 
                                     Ok(gst::FlowSuccess::Ok)
                                 } else {
@@ -992,7 +978,7 @@ impl PadSink {
                                         element.dynamic_cast_ref::<gst::Element>().unwrap(),
                                         event,
                                     );
-                                    this_ref.handle_future(event_fut)
+                                    executor::block_on(event_fut)
                                 }
                             } else {
                                 let this_ref = PadSinkRef::new(inner_arc);

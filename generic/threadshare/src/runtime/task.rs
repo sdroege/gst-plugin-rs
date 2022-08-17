@@ -203,14 +203,14 @@ impl TransitionStatus {
                 origin,
                 res_fut,
             } => {
-                if let Some(cur_ctx) = Context::current() {
+                if let Some((ctx, task_id)) = Context::current_task() {
                     gst::debug!(
                         RUNTIME_CAT,
                         "Awaiting for {:?} ack in a subtask on context {}",
                         trigger,
-                        cur_ctx.name()
+                        ctx.name()
                     );
-                    let _ = Context::add_sub_task(async move {
+                    let _ = ctx.add_sub_task(task_id, async move {
                         let res = res_fut.await;
                         if res.is_ok() {
                             gst::log!(RUNTIME_CAT, "Received ack {:?} for {:?}", res, trigger);
@@ -826,18 +826,14 @@ macro_rules! exec_action {
     ($self:ident, $action:ident, $triggering_evt:expr, $origin:expr, $task_inner:expr) => {{
         match $self.task_impl.$action().await {
             Ok(()) => {
-                let mut res;
-                while Context::current_has_sub_tasks() {
-                    gst::trace!(RUNTIME_CAT, "Draining subtasks for {}", stringify!($action));
-                    res = Context::drain_sub_tasks().await.map_err(|err| {
-                        let msg = format!("{} subtask returned {:?}", stringify!($action), err);
-                        gst::log!(RUNTIME_CAT, "{}", &msg);
-                        gst::error_msg!(gst::CoreError::StateChange, ["{}", &msg])
-                    });
-
-                    if res.is_err() {
-                        break;
-                    }
+                gst::trace!(RUNTIME_CAT, "Draining subtasks for {}", stringify!($action));
+                if let Err(err) = Context::drain_sub_tasks().await {
+                    gst::log!(
+                        RUNTIME_CAT,
+                        "{} subtask returned {:?}",
+                        stringify!($action),
+                        err
+                    );
                 }
 
                 Ok($triggering_evt)
@@ -1097,15 +1093,9 @@ impl<Item: Send + 'static> StateMachine<Item> {
                     // Unprepare is not joined by an ack_rx but by joining the state machine handle
                     self.task_impl.unprepare().await;
 
-                    while Context::current_has_sub_tasks() {
-                        gst::trace!(RUNTIME_CAT, "Draining subtasks for unprepare");
-                        let res = Context::drain_sub_tasks().await.map_err(|err| {
-                            gst::log!(RUNTIME_CAT, "unprepare subtask returned {:?}", err);
-                            err
-                        });
-                        if res.is_err() {
-                            break;
-                        }
+                    gst::trace!(RUNTIME_CAT, "Draining subtasks for unprepare");
+                    if let Err(err) = Context::drain_sub_tasks().await {
+                        gst::log!(RUNTIME_CAT, "unprepare subtask returned {:?}", err);
                     }
 
                     task_inner
@@ -1185,12 +1175,9 @@ impl<Item: Send + 'static> StateMachine<Item> {
                 err
             })?;
 
-            while Context::current_has_sub_tasks() {
-                gst::trace!(RUNTIME_CAT, "Draining subtasks after Task loop iteration");
-                Context::drain_sub_tasks().await.map_err(|err| {
-                    gst::debug!(RUNTIME_CAT, "Task iteration subtask returned {:?}", err);
-                    err
-                })?;
+            gst::trace!(RUNTIME_CAT, "Draining subtasks after Task loop iteration");
+            if let Err(err) = Context::drain_sub_tasks().await {
+                gst::debug!(RUNTIME_CAT, "Task iteration subtask returned {:?}", err);
             }
         }
     }
