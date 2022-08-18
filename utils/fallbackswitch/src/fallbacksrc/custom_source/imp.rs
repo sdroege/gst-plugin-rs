@@ -57,13 +57,14 @@ impl ObjectSubclass for CustomSource {
 impl ObjectImpl for CustomSource {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecObject::new(
-                "source",
-                "Source",
-                "Source",
-                gst::Element::static_type(),
-                glib::ParamFlags::WRITABLE | glib::ParamFlags::CONSTRUCT_ONLY,
-            )]
+            vec![
+                glib::ParamSpecObject::builder("source", gst::Element::static_type())
+                    .nick("Source")
+                    .blurb("Source")
+                    .write_only()
+                    .construct_only()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

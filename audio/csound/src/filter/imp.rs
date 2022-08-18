@@ -336,38 +336,31 @@ impl ObjectImpl for CsoundFilter {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoolean::new(
-                    "loop",
-                    "Loop",
-                    "loop over the score (can be changed in PLAYING or PAUSED state)",
-                    DEFAULT_LOOP,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecString::new(
-                    "location",
-                    "Location",
-                    "Location of the csd file to be used by csound.
-                    Use either location or CSD-text but not both at the same time, if so and error would be triggered",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "csd-text",
-                    "CSD-text",
-                    "The content of a csd file passed as a String.
-                    Use either location or csd-text but not both at the same time, if so and error would be triggered",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecDouble::new(
-                    "score-offset",
-                    "Score Offset",
-                    "Score offset in seconds to start the performance",
-                    0.0,
-                    f64::MAX,
-                    SCORE_OFFSET_DEFAULT,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecBoolean::builder("loop")
+                    .nick("Loop")
+                    .blurb("loop over the score (can be changed in PLAYING or PAUSED state)")
+                    .default_value(DEFAULT_LOOP)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecString::builder("location")
+                    .nick("Location")
+                    .blurb("Location of the csd file to be used by csound.
+                    Use either location or CSD-text but not both at the same time, if so and error would be triggered")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("csd-text")
+                    .nick("CSD-text")
+                    .blurb("The content of a csd file passed as a String.
+                    Use either location or csd-text but not both at the same time, if so and error would be triggered")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecDouble::builder("score-offset")
+                    .nick("Score Offset")
+                    .blurb("Score offset in seconds to start the performance")
+                    .minimum(0.0)
+                    .default_value(SCORE_OFFSET_DEFAULT)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

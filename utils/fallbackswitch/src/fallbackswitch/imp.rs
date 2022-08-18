@@ -136,22 +136,17 @@ impl ObjectImpl for FallbackSwitchSinkPad {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecUInt::new(
-                    PROP_PRIORITY,
-                    "Stream Priority",
-                    "Selection priority for this stream",
-                    0,
-                    std::u32::MAX,
-                    SinkSettings::default().priority,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    PROP_IS_HEALTHY,
-                    "Stream Health",
-                    "Whether this stream is healthy",
-                    false,
-                    glib::ParamFlags::READABLE,
-                ),
+                glib::ParamSpecUInt::builder(PROP_PRIORITY)
+                    .nick("Stream Priority")
+                    .blurb("Selection priority for this stream")
+                    .default_value(SinkSettings::default().priority)
+                    .build(),
+                glib::ParamSpecBoolean::builder(PROP_IS_HEALTHY)
+                    .nick("Stream Health")
+                    .blurb("Whether this stream is healthy")
+                    .default_value(false)
+                    .read_only()
+                    .build(),
             ]
         });
 
@@ -1073,54 +1068,44 @@ impl ObjectImpl for FallbackSwitch {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecObject::new(
-                    PROP_ACTIVE_PAD,
-                    "Active Pad",
-                    "Currently active pad",
-                    gst::Pad::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt64::new(
-                    PROP_TIMEOUT,
-                    "Input timeout",
-                    "Timeout on an input before switching to a lower priority input.",
-                    0,
-                    std::u64::MAX - 1,
-                    Settings::default().timeout.nseconds(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt64::new(
-                    PROP_LATENCY,
-                    "Latency",
-                    "Additional latency in live mode to allow upstream to take longer to produce buffers for the current position (in nanoseconds)",
-                    0,
-                    std::u64::MAX - 1,
-                    Settings::default().latency.nseconds(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    PROP_MIN_UPSTREAM_LATENCY,
-                    "Minimum Upstream Latency",
-                    "When sources with a higher latency are expected to be plugged in dynamically after the fallbackswitch has started playing, this allows overriding the minimum latency reported by the initial source(s). This is only taken into account when larger than the actually reported minimum latency. (nanoseconds)",
-                    0,
-                    std::u64::MAX - 1,
-                    Settings::default().min_upstream_latency.nseconds(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    PROP_IMMEDIATE_FALLBACK,
-                    "Immediate fallback",
-                    "Forward lower-priority streams immediately at startup, when the stream with priority 0 is slow to start up and immediate output is required",
-                    Settings::default().immediate_fallback,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    PROP_AUTO_SWITCH,
-                    "Automatically switch pads",
-                    "Automatically switch pads (If true, use the priority pad property, otherwise manual selection via the active-pad property)",
-                    Settings::default().auto_switch,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecObject::builder(PROP_ACTIVE_PAD, gst::Pad::static_type())
+                    .nick("Active Pad")
+                    .blurb("Currently active pad")
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt64::builder(PROP_TIMEOUT)
+                    .nick("Input timeout")
+                    .blurb("Timeout on an input before switching to a lower priority input.")
+                    .maximum(std::u64::MAX - 1)
+                    .default_value(Settings::default().timeout.nseconds())
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt64::builder(PROP_LATENCY)
+                    .nick("Latency")
+                    .blurb("Additional latency in live mode to allow upstream to take longer to produce buffers for the current position (in nanoseconds)")
+                    .maximum(std::u64::MAX - 1)
+                    .default_value(Settings::default().latency.nseconds())
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder(PROP_MIN_UPSTREAM_LATENCY)
+                    .nick("Minimum Upstream Latency")
+                    .blurb("When sources with a higher latency are expected to be plugged in dynamically after the fallbackswitch has started playing, this allows overriding the minimum latency reported by the initial source(s). This is only taken into account when larger than the actually reported minimum latency. (nanoseconds)")
+                    .maximum(std::u64::MAX - 1)
+                    .default_value(Settings::default().min_upstream_latency.nseconds())
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder(PROP_IMMEDIATE_FALLBACK)
+                    .nick("Immediate fallback")
+                    .blurb("Forward lower-priority streams immediately at startup, when the stream with priority 0 is slow to start up and immediate output is required")
+                    .default_value(Settings::default().immediate_fallback)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder(PROP_AUTO_SWITCH)
+                    .nick("Automatically switch pads")
+                    .blurb("Automatically switch pads (If true, use the priority pad property, otherwise manual selection via the active-pad property)")
+                    .default_value(Settings::default().auto_switch)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

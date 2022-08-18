@@ -657,149 +657,108 @@ impl ObjectImpl for S3Sink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "bucket",
-                    "S3 Bucket",
-                    "The bucket of the file to write",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "key",
-                    "S3 Key",
-                    "The key of the file to write",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "region",
-                    "AWS Region",
-                    "An AWS region (e.g. eu-west-2).",
-                    Some("us-west-2"),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "part-size",
-                    "Part size",
-                    "A size (in bytes) of an individual part used for multipart upload.",
-                    5 * 1024 * 1024,        // 5 MB
-                    5 * 1024 * 1024 * 1024, // 5 GB
-                    DEFAULT_BUFFER_SIZE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "uri",
-                    "URI",
-                    "The S3 object URI",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "access-key",
-                    "Access Key",
-                    "AWS Access Key",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "secret-access-key",
-                    "Secret Access Key",
-                    "AWS Secret Access Key",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "session-token",
-                    "Session Token",
-                    "AWS temporary Session Token from STS",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "metadata",
-                    "Metadata",
-                    "A map of metadata to store with the object in S3; field values need to be convertible to strings.",
-                    gst::Structure::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecEnum::new(
-                    "on-error",
-                    "Whether to upload or complete the multipart upload on error",
-                    "Do nothing, abort or complete a multipart upload request on error",
-                    OnError::static_type(),
-                    DEFAULT_MULTIPART_UPLOAD_ON_ERROR as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "retry-attempts",
-                    "Retry attempts",
-                    "Number of times AWS SDK attempts a request before abandoning the request",
-                    1,
-                    10,
-                    DEFAULT_RETRY_ATTEMPTS,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt64::new(
-                    "request-timeout",
-                    "Request timeout",
-                    "Timeout for general S3 requests (in ms, set to -1 for infinity)",
-                    -1,
-                    std::i64::MAX,
-                    DEFAULT_REQUEST_TIMEOUT_MSEC as i64,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt64::new(
-                    "upload-part-request-timeout",
-                    "Upload part request timeout",
-                    "Timeout for a single upload part request (in ms, set to -1 for infinity) (Deprecated. Use request-timeout.)",
-                    -1,
-                    std::i64::MAX,
-                    DEFAULT_UPLOAD_PART_REQUEST_TIMEOUT_MSEC as i64,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt64::new(
-                    "complete-upload-request-timeout",
-                    "Complete upload request timeout",
-                    "Timeout for the complete multipart upload request (in ms, set to -1 for infinity) (Deprecated. Use request-timeout.)",
-                    -1,
-                    std::i64::MAX,
-                    DEFAULT_COMPLETE_REQUEST_TIMEOUT_MSEC as i64,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt64::new(
-                    "retry-duration",
-                    "Retry duration",
-                    "How long we should retry general S3 requests before giving up (in ms, set to -1 for infinity) (Deprecated. Use retry-attempts.)",
-                    -1,
-                    std::i64::MAX,
-                    DEFAULT_RETRY_DURATION_MSEC as i64,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt64::new(
-                    "upload-part-retry-duration",
-                    "Upload part retry duration",
-                    "How long we should retry upload part requests before giving up (in ms, set to -1 for infinity) (Deprecated. Use retry-attempts.)",
-                    -1,
-                    std::i64::MAX,
-                    DEFAULT_UPLOAD_PART_RETRY_DURATION_MSEC as i64,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt64::new(
-                    "complete-upload-retry-duration",
-                    "Complete upload retry duration",
-                    "How long we should retry complete multipart upload requests before giving up (in ms, set to -1 for infinity) (Deprecated. Use retry-attempts.)",
-                    -1,
-                    std::i64::MAX,
-                    DEFAULT_COMPLETE_RETRY_DURATION_MSEC as i64,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "endpoint-uri",
-                    "S3 endpoint URI",
-                    "The S3 endpoint URI to use",
-                    None,
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("bucket")
+                    .nick("S3 Bucket")
+                    .blurb("The bucket of the file to write")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("key")
+                    .nick("S3 Key")
+                    .blurb("The key of the file to write")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("region")
+                    .nick("AWS Region")
+                    .blurb("An AWS region (e.g. eu-west-2).")
+                    .default_value(Some("us-west-2"))
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("part-size")
+                    .nick("Part size")
+                    .blurb("A size (in bytes) of an individual part used for multipart upload.")
+                    .minimum(5 * 1024 * 1024)        // 5 MB
+                    .maximum(5 * 1024 * 1024 * 1024) // 5 GB
+                    .default_value(DEFAULT_BUFFER_SIZE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("uri")
+                    .nick("URI")
+                    .blurb("The S3 object URI")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("access-key")
+                    .nick("Access Key")
+                    .blurb("AWS Access Key")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("secret-access-key")
+                    .nick("Secret Access Key")
+                    .blurb("AWS Secret Access Key")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("session-token")
+                    .nick("Session Token")
+                    .blurb("AWS temporary Session Token from STS")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder("metadata", gst::Structure::static_type())
+                    .nick("Metadata")
+                    .blurb("A map of metadata to store with the object in S3; field values need to be convertible to strings.")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder("on-error", OnError::static_type())
+                    .nick("Whether to upload or complete the multipart upload on error")
+                    .blurb("Do nothing, abort or complete a multipart upload request on error")
+                    .default_value(DEFAULT_MULTIPART_UPLOAD_ON_ERROR as i32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("retry-attempts")
+                    .nick("Retry attempts")
+                    .blurb("Number of times AWS SDK attempts a request before abandoning the request")
+                    .minimum(1)
+                    .maximum(10)
+                    .default_value(DEFAULT_RETRY_ATTEMPTS)
+                    .build(),
+                glib::ParamSpecInt64::builder("request-timeout")
+                    .nick("Request timeout")
+                    .blurb("Timeout for general S3 requests (in ms, set to -1 for infinity)")
+                    .minimum(-1)
+                    .default_value(DEFAULT_REQUEST_TIMEOUT_MSEC as i64)
+                    .build(),
+                glib::ParamSpecInt64::builder("upload-part-request-timeout")
+                    .nick("Upload part request timeout")
+                    .blurb("Timeout for a single upload part request (in ms, set to -1 for infinity) (Deprecated. Use request-timeout.)")
+                    .minimum(-1)
+                    .default_value(DEFAULT_UPLOAD_PART_REQUEST_TIMEOUT_MSEC as i64)
+                    .build(),
+                glib::ParamSpecInt64::builder("complete-upload-request-timeout")
+                    .nick("Complete upload request timeout")
+                    .blurb("Timeout for the complete multipart upload request (in ms, set to -1 for infinity) (Deprecated. Use request-timeout.)")
+                    .minimum(-1)
+                    .default_value(DEFAULT_COMPLETE_REQUEST_TIMEOUT_MSEC as i64)
+                    .build(),
+                glib::ParamSpecInt64::builder("retry-duration")
+                    .nick("Retry duration")
+                    .blurb("How long we should retry general S3 requests before giving up (in ms, set to -1 for infinity) (Deprecated. Use retry-attempts.)")
+                    .minimum(-1)
+                    .default_value(DEFAULT_RETRY_DURATION_MSEC as i64)
+                    .build(),
+                glib::ParamSpecInt64::builder("upload-part-retry-duration")
+                    .nick("Upload part retry duration")
+                    .blurb("How long we should retry upload part requests before giving up (in ms, set to -1 for infinity) (Deprecated. Use retry-attempts.)")
+                    .minimum(-1)
+                    .default_value(DEFAULT_UPLOAD_PART_RETRY_DURATION_MSEC as i64)
+                    .build(),
+                glib::ParamSpecInt64::builder("complete-upload-retry-duration")
+                    .nick("Complete upload retry duration")
+                    .blurb("How long we should retry complete multipart upload requests before giving up (in ms, set to -1 for infinity) (Deprecated. Use retry-attempts.)")
+                    .minimum(-1)
+                    .default_value(DEFAULT_COMPLETE_RETRY_DURATION_MSEC as i64)
+                    .build(),
+                glib::ParamSpecString::builder("endpoint-uri")
+                    .nick("S3 endpoint URI")
+                    .blurb("The S3 endpoint URI to use")
+                    .build(),
             ]
         });
 

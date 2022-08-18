@@ -705,49 +705,33 @@ impl ObjectImpl for Queue {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "context",
-                    "Context",
-                    "Context name to share threads with",
-                    Some(DEFAULT_CONTEXT),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "context-wait",
-                    "Context Wait",
-                    "Throttle poll loop to run at most once every this many ms",
-                    0,
-                    1000,
-                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-size-buffers",
-                    "Max Size Buffers",
-                    "Maximum number of buffers to queue (0=unlimited)",
-                    0,
-                    u32::MAX,
-                    DEFAULT_MAX_SIZE_BUFFERS,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-size-bytes",
-                    "Max Size Bytes",
-                    "Maximum number of bytes to queue (0=unlimited)",
-                    0,
-                    u32::MAX,
-                    DEFAULT_MAX_SIZE_BYTES,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "max-size-time",
-                    "Max Size Time",
-                    "Maximum number of nanoseconds to queue (0=unlimited)",
-                    0,
-                    u64::MAX - 1,
-                    DEFAULT_MAX_SIZE_TIME.nseconds(),
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("context")
+                    .nick("Context")
+                    .blurb("Context name to share threads with")
+                    .default_value(Some(DEFAULT_CONTEXT))
+                    .build(),
+                glib::ParamSpecUInt::builder("context-wait")
+                    .nick("Context Wait")
+                    .blurb("Throttle poll loop to run at most once every this many ms")
+                    .maximum(1000)
+                    .default_value(DEFAULT_CONTEXT_WAIT.as_millis() as u32)
+                    .build(),
+                glib::ParamSpecUInt::builder("max-size-buffers")
+                    .nick("Max Size Buffers")
+                    .blurb("Maximum number of buffers to queue (0=unlimited)")
+                    .default_value(DEFAULT_MAX_SIZE_BUFFERS)
+                    .build(),
+                glib::ParamSpecUInt::builder("max-size-bytes")
+                    .nick("Max Size Bytes")
+                    .blurb("Maximum number of bytes to queue (0=unlimited)")
+                    .default_value(DEFAULT_MAX_SIZE_BYTES)
+                    .build(),
+                glib::ParamSpecUInt64::builder("max-size-time")
+                    .nick("Max Size Time")
+                    .blurb("Maximum number of nanoseconds to queue (0=unlimited)")
+                    .maximum(u64::MAX - 1)
+                    .default_value(DEFAULT_MAX_SIZE_TIME.nseconds())
+                    .build(),
             ]
         });
 

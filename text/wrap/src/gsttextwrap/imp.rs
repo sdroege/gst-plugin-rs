@@ -456,45 +456,37 @@ impl ObjectSubclass for TextWrap {
 
 impl ObjectImpl for TextWrap {
     fn properties() -> &'static [glib::ParamSpec] {
-        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![
-                glib::ParamSpecString::new(
-                    "dictionary",
-                    "Dictionary",
-                    "Path to a dictionary to load at runtime to perform hyphenation, see \
-                        <https://docs.rs/crate/hyphenation/0.7.1> for more information",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt::new(
-                    "columns",
-                    "Columns",
-                    "Maximum number of columns for any given line",
-                    1,
-                    std::u32::MAX,
-                    DEFAULT_COLUMNS,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt::new(
-                    "lines",
-                    "Lines",
-                    "Split input buffer into output buffers with max lines (0=do not split)",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_LINES,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "accumulate-time",
-                    "accumulate-time",
-                    "Cut-off time for input text accumulation (0=do not accumulate)",
-                    0,
-                    u64::MAX - 1,
-                    DEFAULT_ACCUMULATE.nseconds(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+        static PROPERTIES: Lazy<Vec<glib::ParamSpec>> =
+            Lazy::new(|| {
+                vec![
+                glib::ParamSpecString::builder("dictionary")
+                    .nick("Dictionary")
+                    .blurb("Path to a dictionary to load at runtime to perform hyphenation, see \
+                        <https://docs.rs/crate/hyphenation/0.7.1> for more information")
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt::builder("columns")
+                    .nick("Columns")
+                    .blurb("Maximum number of columns for any given line")
+                    .minimum(1)
+                    .default_value(DEFAULT_COLUMNS)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt::builder("lines")
+                    .nick("Lines")
+                    .blurb("Split input buffer into output buffers with max lines (0=do not split)")
+                    .default_value(DEFAULT_LINES)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt64::builder("accumulate-time")
+                    .nick("accumulate-time")
+                    .blurb("Cut-off time for input text accumulation (0=do not accumulate)")
+                    .maximum(u64::MAX - 1)
+                    .default_value(DEFAULT_ACCUMULATE.nseconds())
+                    .mutable_playing()
+                    .build(),
             ]
-        });
+            });
 
         PROPERTIES.as_ref()
     }

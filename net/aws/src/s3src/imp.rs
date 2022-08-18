@@ -297,68 +297,49 @@ impl ObjectImpl for S3Src {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "uri",
-                    "URI",
-                    "The S3 object URI",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "access-key",
-                    "Access Key",
-                    "AWS Access Key",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "secret-access-key",
-                    "Secret Access Key",
-                    "AWS Secret Access Key",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "session-token",
-                    "Session Token",
-                    "AWS temporary Session Token from STS",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecInt64::new(
-                    "request-timeout",
-                    "Request timeout",
-                    "Timeout for each S3 request (in ms, set to -1 for infinity)",
-                    -1,
-                    std::i64::MAX,
-                    DEFAULT_REQUEST_TIMEOUT_MSEC as i64,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt64::new(
-                    "retry-duration",
-                    "Retry duration",
-                    "How long we should retry S3 requests before giving up (in ms, set to -1 for infinity) (Deprecated. Use retry-attempts.)",
-                    -1,
-                    std::i64::MAX,
-                    DEFAULT_RETRY_DURATION_MSEC as i64,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "retry-attempts",
-                    "Retry attempts",
-                    "Number of times AWS SDK attempts a request before abandoning the request",
-                    1,
-                    10,
-                    DEFAULT_RETRY_ATTEMPTS,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "endpoint-uri",
-                    "S3 endpoint URI",
-                    "The S3 endpoint URI to use",
-                    None,
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("uri")
+                    .nick("URI")
+                    .blurb("The S3 object URI")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("access-key")
+                    .nick("Access Key")
+                    .blurb("AWS Access Key")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("secret-access-key")
+                    .nick("Secret Access Key")
+                    .blurb("AWS Secret Access Key")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("session-token")
+                    .nick("Session Token")
+                    .blurb("AWS temporary Session Token from STS")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecInt64::builder("request-timeout")
+                    .nick("Request timeout")
+                    .blurb("Timeout for each S3 request (in ms, set to -1 for infinity)")
+                    .minimum(-1)
+                    .default_value(DEFAULT_REQUEST_TIMEOUT_MSEC as i64)
+                    .build(),
+                glib::ParamSpecInt64::builder("retry-duration")
+                    .nick("Retry duration")
+                    .blurb("How long we should retry S3 requests before giving up (in ms, set to -1 for infinity) (Deprecated. Use retry-attempts.)")
+                    .minimum(-1)
+                    .default_value(DEFAULT_RETRY_DURATION_MSEC as i64)
+                    .build(),
+                glib::ParamSpecUInt::builder("retry-attempts")
+                    .nick("Retry attempts")
+                    .blurb("Number of times AWS SDK attempts a request before abandoning the request")
+                    .minimum(1)
+                    .maximum(10)
+                    .default_value(DEFAULT_RETRY_ATTEMPTS)
+                    .build(),
+                glib::ParamSpecString::builder("endpoint-uri")
+                    .nick("S3 endpoint URI")
+                    .blurb("The S3 endpoint URI to use")
+                    .build(),
             ]
         });
 

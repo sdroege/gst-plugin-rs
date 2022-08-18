@@ -597,64 +597,49 @@ impl ObjectImpl for TranscriberBin {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoolean::new(
-                    "passthrough",
-                    "Passthrough",
-                    "Whether transcription should occur",
-                    DEFAULT_PASSTHROUGH,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt::new(
-                    "latency",
-                    "Latency",
-                    "Amount of milliseconds to allow the transcriber",
-                    0u32,
-                    std::u32::MAX,
-                    DEFAULT_LATENCY.mseconds() as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "accumulate-time",
-                    "accumulate-time",
-                    "Cut-off time for textwrap accumulation, in milliseconds (0=do not accumulate). \
-                    Set this to a non-default value if you plan to switch to pop-on mode",
-                    0,
-                    u32::MAX,
-                    DEFAULT_ACCUMULATE.mseconds() as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecEnum::new(
-                    "mode",
-                    "Mode",
-                    "Which closed caption mode to operate in",
-                    Cea608Mode::static_type(),
-                    DEFAULT_MODE as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "cc-caps",
-                    "Closed Caption caps",
-                    "The expected format of the closed captions",
-                    gst::Caps::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecObject::new(
-                    "transcriber",
-                    "Transcriber",
-                    "The transcriber element to use",
-                    gst::Element::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecEnum::new(
-                    "caption-source",
-                    "Caption source",
-                    "Caption source to use. \
+                glib::ParamSpecBoolean::builder("passthrough")
+                    .nick("Passthrough")
+                    .blurb("Whether transcription should occur")
+                    .default_value(DEFAULT_PASSTHROUGH)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt::builder("latency")
+                    .nick("Latency")
+                    .blurb("Amount of milliseconds to allow the transcriber")
+                    .default_value(DEFAULT_LATENCY.mseconds() as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("accumulate-time")
+                    .nick("accumulate-time")
+                    .blurb("Cut-off time for textwrap accumulation, in milliseconds (0=do not accumulate). \
+                    Set this to a non-default value if you plan to switch to pop-on mode")
+                    .default_value(DEFAULT_ACCUMULATE.mseconds() as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder("mode", Cea608Mode::static_type())
+                    .nick("Mode")
+                    .blurb("Which closed caption mode to operate in")
+                    .default_value(DEFAULT_MODE as i32)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoxed::builder("cc-caps", gst::Caps::static_type())
+                    .nick("Closed Caption caps")
+                    .blurb("The expected format of the closed captions")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecObject::builder("transcriber", gst::Element::static_type())
+                    .nick("Transcriber")
+                    .blurb("The transcriber element to use")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder("caption-source", CaptionSource::static_type())
+                    .nick("Caption source")
+                    .blurb("Caption source to use. \
                     If \"Transcription\" or \"Inband\" is selected, the caption meta \
-                    of the other source will be dropped by transcriberbin",
-                    CaptionSource::static_type(),
-                    DEFAULT_CAPTION_SOURCE as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                    of the other source will be dropped by transcriberbin")
+                    .default_value(DEFAULT_CAPTION_SOURCE as i32)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 

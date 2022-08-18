@@ -404,51 +404,44 @@ impl ObjectImpl for HrtfRender {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoxed::new(
-                    "hrir-raw",
-                    "Head Transform Impulse Response",
-                    "Head Transform Impulse Response raw bytes",
-                    glib::Bytes::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "hrir-file",
-                    "Head Transform Impulse Response",
-                    "Head Transform Impulse Response file location to read from",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "interpolation-steps",
-                    "Interpolation Steps",
-                    "Interpolation Steps is the amount of slices to cut source to",
-                    0,
-                    u64::MAX - 1,
-                    DEFAULT_INTERPOLATION_STEPS,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "block-length",
-                    "Block Length",
-                    "Block Length is the length of each slice",
-                    0,
-                    u64::MAX - 1,
-                    DEFAULT_BLOCK_LENGTH,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                gst::ParamSpecArray::new(
-                    "spatial-objects",
-                    "Spatial Objects",
-                    "Spatial object Metadata to apply on input channels",
-                    Some(&glib::ParamSpecBoxed::new(
-                        "spatial-object",
-                        "Spatial Object",
-                        "Spatial Object Metadata",
-                        gst::Structure::static_type(),
-                        glib::ParamFlags::READWRITE,
-                    )),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                glib::ParamSpecBoxed::builder("hrir-raw", glib::Bytes::static_type())
+                    .nick("Head Transform Impulse Response")
+                    .blurb("Head Transform Impulse Response raw bytes")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("hrir-file")
+                    .nick("Head Transform Impulse Response")
+                    .blurb("Head Transform Impulse Response file location to read from")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("interpolation-steps")
+                    .nick("Interpolation Steps")
+                    .blurb("Interpolation Steps is the amount of slices to cut source to")
+                    .maximum(u64::MAX - 1)
+                    .default_value(DEFAULT_INTERPOLATION_STEPS)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("block-length")
+                    .nick("Block Length")
+                    .blurb("Block Length is the length of each slice")
+                    .maximum(u64::MAX - 1)
+                    .default_value(DEFAULT_BLOCK_LENGTH)
+                    .mutable_ready()
+                    .build(),
+                gst::ParamSpecArray::builder("spatial-objects")
+                    .element_spec(
+                        &glib::ParamSpecBoxed::builder(
+                            "spatial-object",
+                            gst::Structure::static_type(),
+                        )
+                        .nick("Spatial Object")
+                        .blurb("Spatial Object Metadata")
+                        .build(),
+                    )
+                    .nick("Spatial Objects")
+                    .blurb("Spatial object Metadata to apply on input channels")
+                    .mutable_playing()
+                    .build(),
             ]
         });
 

@@ -168,47 +168,39 @@ impl ObjectImpl for SineSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpec::uint(
-                    "samples-per-buffer",
-                    "Samples Per Buffer",
-                    "Number of samples per output buffer",
-                    1,
-                    u32::MAX,
-                    DEFAULT_SAMPLES_PER_BUFFER,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpec::uint(
-                    "freq",
-                    "Frequency",
-                    "Frequency",
-                    1,
-                    u32::MAX,
-                    DEFAULT_FREQ,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpec::double(
-                    "volume",
-                    "Volume",
-                    "Output volume",
-                    0.0,
-                    10.0,
-                    DEFAULT_VOLUME,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpec::boolean(
-                    "mute",
-                    "Mute",
-                    "Mute",
-                    DEFAULT_MUTE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpec::boolean(
-                    "is-live",
-                    "Is Live",
-                    "(Pseudo) live output",
-                    DEFAULT_IS_LIVE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecUInt::builder("samples-per-buffer")
+                    .nick("Samples Per Buffer")
+                    .blurb("Number of samples per output buffer")
+                    .minimum(1)
+                    .default_value(DEFAULT_SAMPLES_PER_BUFFER)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("freq")
+                    .nick("Frequency")
+                    .blurb("Frequency")
+                    .minimum(1)
+                    .default_value(DEFAULT_FREQ)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecDouble::builder("volume")
+                    .nick("Volume")
+                    .blurb("Output volume")
+                    .maximum(10.0)
+                    .default_value(DEFAULT_VOLUME)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoolean::builder("mute")
+                    .nick("Mute")
+                    .blurb("Mute")
+                    .default_value(DEFAULT_MUTE)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoolean::builder("is-live")
+                    .nick("Is Live")
+                    .blurb("(Pseudo) live output")
+                    .default_value(DEFAULT_IS_LIVE)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

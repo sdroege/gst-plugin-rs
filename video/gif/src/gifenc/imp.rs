@@ -146,24 +146,22 @@ impl ObjectImpl for GifEnc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecInt::new(
-                    "repeat",
-                    "Repeat",
-                    "Repeat (-1 to loop forever, 0 .. n finite repetitions)",
-                    -1,
-                    std::u16::MAX as i32,
-                    DEFAULT_REPEAT,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecInt::new(
-                    "speed",
-                    "Speed",
-                    "Speed (1 .. 30; higher value yields faster encoding)",
-                    1,
-                    30,
-                    DEFAULT_SPEED,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecInt::builder("repeat")
+                    .nick("Repeat")
+                    .blurb("Repeat (-1 to loop forever, 0 .. n finite repetitions)")
+                    .minimum(-1)
+                    .maximum(std::u16::MAX as i32)
+                    .default_value(DEFAULT_REPEAT)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecInt::builder("speed")
+                    .nick("Speed")
+                    .blurb("Speed (1 .. 30; higher value yields faster encoding)")
+                    .minimum(1)
+                    .maximum(30)
+                    .default_value(DEFAULT_SPEED)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

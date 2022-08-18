@@ -496,24 +496,20 @@ impl ObjectImpl for Dav1dDec {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecUInt::new(
-                    "n-threads",
-                    "Number of threads",
-                    "Number of threads to use while decoding (set to 0 to use number of logical cores)",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_N_THREADS,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecInt64::new(
-                    "max-frame-delay",
-                    "Maximum frame delay",
-                    "Maximum delay in frames for the decoder (set to 1 for low latency, 0 to be equal to the number of logical cores. -1 to choose between these two based on pipeline liveness)",
-                    -1,
-                    std::u32::MAX.into(),
-                    DEFAULT_MAX_FRAME_DELAY,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecUInt::builder("n-threads")
+                    .nick("Number of threads")
+                    .blurb("Number of threads to use while decoding (set to 0 to use number of logical cores)")
+                    .default_value(DEFAULT_N_THREADS)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecInt64::builder("max-frame-delay")
+                    .nick("Maximum frame delay")
+                    .blurb("Maximum delay in frames for the decoder (set to 1 for low latency, 0 to be equal to the number of logical cores. -1 to choose between these two based on pipeline liveness)")
+                    .minimum(-1)
+                    .maximum(std::u32::MAX.into())
+                    .default_value(DEFAULT_MAX_FRAME_DELAY)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

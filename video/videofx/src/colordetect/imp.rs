@@ -136,24 +136,21 @@ impl ObjectImpl for ColorDetect {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecUInt::new(
-                    "quality",
-                    "Quality of an output colors",
-                    "A step in pixels to improve performance",
-                    0,
-                    10,
-                    DEFAULT_QUALITY,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-colors",
-                    "Number of colors in the output palette",
-                    "Actual colors count can be lower depending on the image",
-                    2,
-                    255,
-                    DEFAULT_MAX_COLORS,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                glib::ParamSpecUInt::builder("quality")
+                    .nick("Quality of an output colors")
+                    .blurb("A step in pixels to improve performance")
+                    .maximum(10)
+                    .default_value(DEFAULT_QUALITY)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt::builder("max-colors")
+                    .nick("Number of colors in the output palette")
+                    .blurb("Actual colors count can be lower depending on the image")
+                    .minimum(2)
+                    .maximum(255)
+                    .default_value(DEFAULT_MAX_COLORS)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 

@@ -459,45 +459,32 @@ impl ObjectImpl for AppSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "context",
-                    "Context",
-                    "Context name to share threads with",
-                    Some(DEFAULT_CONTEXT),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "context-wait",
-                    "Context Wait",
-                    "Throttle poll loop to run at most once every this many ms",
-                    0,
-                    1000,
-                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-buffers",
-                    "Max Buffers",
-                    "Maximum number of buffers to queue up",
-                    1,
-                    u32::MAX,
-                    DEFAULT_MAX_BUFFERS,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "caps",
-                    "Caps",
-                    "Caps to use",
-                    gst::Caps::static_type(),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "do-timestamp",
-                    "Do Timestamp",
-                    "Timestamp buffers with the current running time on arrival",
-                    DEFAULT_DO_TIMESTAMP,
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("context")
+                    .nick("Context")
+                    .blurb("Context name to share threads with")
+                    .default_value(Some(DEFAULT_CONTEXT))
+                    .build(),
+                glib::ParamSpecUInt::builder("context-wait")
+                    .nick("Context Wait")
+                    .blurb("Throttle poll loop to run at most once every this many ms")
+                    .maximum(1000)
+                    .default_value(DEFAULT_CONTEXT_WAIT.as_millis() as u32)
+                    .build(),
+                glib::ParamSpecUInt::builder("max-buffers")
+                    .nick("Max Buffers")
+                    .blurb("Maximum number of buffers to queue up")
+                    .minimum(1)
+                    .default_value(DEFAULT_MAX_BUFFERS)
+                    .build(),
+                glib::ParamSpecBoxed::builder("caps", gst::Caps::static_type())
+                    .nick("Caps")
+                    .blurb("Caps to use")
+                    .build(),
+                glib::ParamSpecBoolean::builder("do-timestamp")
+                    .nick("Do Timestamp")
+                    .blurb("Timestamp buffers with the current running time on arrival")
+                    .default_value(DEFAULT_DO_TIMESTAMP)
+                    .build(),
             ]
         });
 

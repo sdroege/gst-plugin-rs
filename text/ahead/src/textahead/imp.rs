@@ -103,37 +103,31 @@ impl ObjectImpl for TextAhead {
             let default = Settings::default();
 
             vec![
-                glib::ParamSpecUInt::new(
-                    "n-ahead",
-                    "n-ahead",
-                    "The number of ahead text buffers to display along with the current one",
-                    0,
-                    u32::MAX,
-                    default.n_ahead,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecString::new(
-                    "separator",
-                    "Separator",
-                    "Text inserted between each text buffers",
-                    Some(&default.separator),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                glib::ParamSpecUInt::builder("n-ahead")
+                    .nick("n-ahead")
+                    .blurb("The number of ahead text buffers to display along with the current one")
+                    .default_value(default.n_ahead)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecString::builder("separator")
+                    .nick("Separator")
+                    .blurb("Text inserted between each text buffers")
+                    .default_value(Some(&default.separator))
+                    .mutable_playing()
+                    .build(),
                 // See https://developer.gimp.org/api/2.0/pango/PangoMarkupFormat.html for pango attributes
-                glib::ParamSpecString::new(
-                    "current-attributes",
-                    "Current attributes",
-                    "Pango span attributes to set on the text from the current buffer",
-                    Some(&default.current_attributes),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecString::new(
-                    "ahead-attributes",
-                    "Ahead attributes",
-                    "Pango span attributes to set on the ahead text",
-                    Some(&default.ahead_attributes),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                glib::ParamSpecString::builder("current-attributes")
+                    .nick("Current attributes")
+                    .blurb("Pango span attributes to set on the text from the current buffer")
+                    .default_value(Some(&default.current_attributes))
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecString::builder("ahead-attributes")
+                    .nick("Ahead attributes")
+                    .blurb("Pango span attributes to set on the ahead text")
+                    .default_value(Some(&default.ahead_attributes))
+                    .mutable_playing()
+                    .build(),
             ]
         });
 

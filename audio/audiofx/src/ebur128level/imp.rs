@@ -144,30 +144,25 @@ impl ObjectImpl for EbuR128Level {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecFlags::new(
-                    "mode",
-                    "Mode",
-                    "Selection of metrics to calculate",
-                    Mode::static_type(),
-                    DEFAULT_MODE.bits() as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "post-messages",
-                    "Post Messages",
-                    "Whether to post messages on the bus for each interval",
-                    DEFAULT_POST_MESSAGES,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "interval",
-                    "Interval",
-                    "Interval in nanoseconds for posting messages",
-                    0,
-                    u64::MAX - 1,
-                    DEFAULT_INTERVAL.nseconds(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecFlags::builder("mode", Mode::static_type())
+                    .nick("Mode")
+                    .blurb("Selection of metrics to calculate")
+                    .default_value(DEFAULT_MODE.bits() as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("post-messages")
+                    .nick("Post Messages")
+                    .blurb("Whether to post messages on the bus for each interval")
+                    .default_value(DEFAULT_POST_MESSAGES)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt64::builder("interval")
+                    .nick("Interval")
+                    .blurb("Interval in nanoseconds for posting messages")
+                    .maximum(u64::MAX - 1)
+                    .default_value(DEFAULT_INTERVAL.nseconds())
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

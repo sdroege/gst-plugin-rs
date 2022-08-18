@@ -337,31 +337,23 @@ impl ObjectImpl for TestSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "context",
-                    "Context",
-                    "Context name to share threads with",
-                    Some(DEFAULT_CONTEXT),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "context-wait",
-                    "Context Wait",
-                    "Throttle poll loop to run at most once every this many ms",
-                    0,
-                    1000,
-                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt::new(
-                    "num-buffers",
-                    "Num Buffers",
-                    "Number of buffers to output before sending EOS (-1 = unlimited)",
-                    -1i32,
-                    i32::MAX,
-                    DEFAULT_NUM_BUFFERS,
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("context")
+                    .nick("Context")
+                    .blurb("Context name to share threads with")
+                    .default_value(Some(DEFAULT_CONTEXT))
+                    .build(),
+                glib::ParamSpecUInt::builder("context-wait")
+                    .nick("Context Wait")
+                    .blurb("Throttle poll loop to run at most once every this many ms")
+                    .maximum(1000)
+                    .default_value(DEFAULT_CONTEXT_WAIT.as_millis() as u32)
+                    .build(),
+                glib::ParamSpecInt::builder("num-buffers")
+                    .nick("Num Buffers")
+                    .blurb("Number of buffers to output before sending EOS (-1 = unlimited)")
+                    .minimum(-1i32)
+                    .default_value(DEFAULT_NUM_BUFFERS)
+                    .build(),
             ]
         });
 

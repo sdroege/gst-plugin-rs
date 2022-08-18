@@ -278,15 +278,12 @@ impl ObjectSubclass for RoundedCorners {
 impl ObjectImpl for RoundedCorners {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecUInt::new(
-                "border-radius-px",
-                "Border radius in pixels",
-                "Draw rounded corners with given border radius",
-                0,
-                u32::MAX,
-                DEFAULT_BORDER_RADIUS,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-            )]
+            vec![glib::ParamSpecUInt::builder("border-radius-px")
+                .nick("Border radius in pixels")
+                .blurb("Draw rounded corners with given border radius")
+                .default_value(DEFAULT_BORDER_RADIUS)
+                .mutable_playing()
+                .build()]
         });
 
         PROPERTIES.as_ref()

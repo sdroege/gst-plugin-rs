@@ -433,87 +433,66 @@ impl ObjectImpl for S3HlsSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "access-key",
-                    "Access Key",
-                    "AWS Access Key",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "secret-access-key",
-                    "Secret Access Key",
-                    "AWS Secret Access Key",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "session-token",
-                    "Session Token",
-                    "AWS temporary session token from STS",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "bucket",
-                    "S3 Bucket",
-                    "The bucket of the file to write",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "key-prefix",
-                    "S3 key prefix",
-                    "The key prefix for segment and playlist files",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "region",
-                    "AWS Region",
-                    "The AWS region for the S3 bucket (e.g. eu-west-2).",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecObject::new(
-                    "hlssink",
-                    "HLS Sink",
-                    "The underlying HLS sink being used",
-                    gst::Element::static_type(),
-                    glib::ParamFlags::READABLE,
-                ),
-                glib::ParamSpecString::new(
-                    "acl",
-                    "S3 ACL",
-                    "Canned ACL to use for uploading to S3",
-                    Some(S3_ACL_DEFAULT.as_str()),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "retry-attempts",
-                    "Retry attempts",
-                    "Number of times AWS SDK attempts a request before abandoning the request",
-                    1,
-                    10,
-                    DEFAULT_RETRY_ATTEMPTS,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "request-timeout",
-                    "API call timeout",
-                    "Timeout for request to S3 service (in ms)",
-                    1,
-                    std::u64::MAX,
-                    DEFAULT_TIMEOUT_IN_MSECS,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "endpoint-uri",
-                    "S3 endpoint URI",
-                    "The S3 endpoint URI to use",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecString::builder("access-key")
+                    .nick("Access Key")
+                    .blurb("AWS Access Key")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("secret-access-key")
+                    .nick("Secret Access Key")
+                    .blurb("AWS Secret Access Key")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("session-token")
+                    .nick("Session Token")
+                    .blurb("AWS temporary session token from STS")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("bucket")
+                    .nick("S3 Bucket")
+                    .blurb("The bucket of the file to write")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("key-prefix")
+                    .nick("S3 key prefix")
+                    .blurb("The key prefix for segment and playlist files")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("region")
+                    .nick("AWS Region")
+                    .blurb("The AWS region for the S3 bucket (e.g. eu-west-2).")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecObject::builder("hlssink", gst::Element::static_type())
+                    .nick("HLS Sink")
+                    .blurb("The underlying HLS sink being used")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecString::builder("acl")
+                    .nick("S3 ACL")
+                    .blurb("Canned ACL to use for uploading to S3")
+                    .default_value(Some(S3_ACL_DEFAULT.as_str()))
+                    .build(),
+                glib::ParamSpecUInt::builder("retry-attempts")
+                    .nick("Retry attempts")
+                    .blurb(
+                        "Number of times AWS SDK attempts a request before abandoning the request",
+                    )
+                    .minimum(1)
+                    .maximum(10)
+                    .default_value(DEFAULT_RETRY_ATTEMPTS)
+                    .build(),
+                glib::ParamSpecUInt64::builder("request-timeout")
+                    .nick("API call timeout")
+                    .blurb("Timeout for request to S3 service (in ms)")
+                    .minimum(1)
+                    .default_value(DEFAULT_TIMEOUT_IN_MSECS)
+                    .build(),
+                glib::ParamSpecString::builder("endpoint-uri")
+                    .nick("S3 endpoint URI")
+                    .blurb("The S3 endpoint URI to use")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

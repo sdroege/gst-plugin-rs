@@ -753,61 +753,52 @@ impl ObjectImpl for RaptorqEnc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecUInt::new(
-                    "protected-packets",
-                    "Protected Packets",
-                    "Number of packets to protect together",
-                    1,
-                    u32::MAX - 1,
-                    DEFAULT_PROTECTED_PACKETS,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "repair-packets",
-                    "Repair Packets",
-                    "Number of repair packets per block to send",
-                    1,
-                    u32::MAX - 1,
-                    DEFAULT_REPAIR_PACKETS,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "repair-window",
-                    "Repair Window",
-                    "A time span in milliseconds in which repair packets are send",
-                    0,
-                    u32::MAX - 1,
-                    DEFAULT_REPAIR_PACKETS,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "symbol-size",
-                    "Symbol Size",
-                    "Size of RaptorQ data unit",
-                    1,
-                    u32::MAX - 1,
-                    DEFAULT_SYMBOL_SIZE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    // TODO: maybe change this to max-rtp-packet-size or max-media-packet-size
-                    "mtu",
-                    "MTU",
-                    "Maximum expected packet size",
-                    0,
-                    i32::MAX as u32,
-                    DEFAULT_MTU,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "pt",
-                    "Payload Type",
-                    "The payload type of FEC packets",
-                    96,
-                    255,
-                    DEFAULT_PT,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecUInt::builder("protected-packets")
+                    .nick("Protected Packets")
+                    .blurb("Number of packets to protect together")
+                    .minimum(1)
+                    .maximum(u32::MAX - 1)
+                    .default_value(DEFAULT_PROTECTED_PACKETS)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("repair-packets")
+                    .nick("Repair Packets")
+                    .blurb("Number of repair packets per block to send")
+                    .minimum(1)
+                    .maximum(u32::MAX - 1)
+                    .default_value(DEFAULT_REPAIR_PACKETS)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("repair-window")
+                    .nick("Repair Window")
+                    .blurb("A time span in milliseconds in which repair packets are send")
+                    .maximum(u32::MAX - 1)
+                    .default_value(DEFAULT_REPAIR_PACKETS)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("symbol-size")
+                    .nick("Symbol Size")
+                    .blurb("Size of RaptorQ data unit")
+                    .minimum(1)
+                    .maximum(u32::MAX - 1)
+                    .default_value(DEFAULT_SYMBOL_SIZE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("mtu") // TODO: maybe change this to max-rtp-packet-size or max-media-packet-size
+                    .nick("MTU")
+                    .blurb("Maximum expected packet size")
+                    .maximum(i32::MAX as u32)
+                    .default_value(DEFAULT_MTU)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("pt")
+                    .nick("Payload Type")
+                    .blurb("The payload type of FEC packets")
+                    .minimum(96)
+                    .maximum(255)
+                    .default_value(DEFAULT_PT)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

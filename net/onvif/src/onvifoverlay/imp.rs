@@ -758,13 +758,11 @@ impl ObjectSubclass for OnvifOverlay {
 impl ObjectImpl for OnvifOverlay {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecString::new(
-                "font-desc",
-                "Font Description",
-                "Pango font description of font to be used for rendering",
-                Some(DEFAULT_FONT_DESC),
-                glib::ParamFlags::READWRITE,
-            )]
+            vec![glib::ParamSpecString::builder("font-desc")
+                .nick("Font Description")
+                .blurb("Pango font description of font to be used for rendering")
+                .default_value(Some(DEFAULT_FONT_DESC))
+                .build()]
         });
 
         PROPERTIES.as_ref()

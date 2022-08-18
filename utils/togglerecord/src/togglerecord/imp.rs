@@ -1813,27 +1813,24 @@ impl ObjectImpl for ToggleRecord {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoolean::new(
-                    "record",
-                    "Record",
-                    "Enable/disable recording",
-                    DEFAULT_RECORD,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "recording",
-                    "Recording",
-                    "Whether recording is currently taking place",
-                    DEFAULT_RECORD,
-                    glib::ParamFlags::READABLE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "is-live",
-                    "Live mode",
-                    "Live mode: no \"gap eating\", forward incoming segment",
-                    DEFAULT_LIVE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecBoolean::builder("record")
+                    .nick("Record")
+                    .blurb("Enable/disable recording")
+                    .default_value(DEFAULT_RECORD)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoolean::builder("recording")
+                    .nick("Recording")
+                    .blurb("Whether recording is currently taking place")
+                    .default_value(DEFAULT_RECORD)
+                    .read_only()
+                    .build(),
+                glib::ParamSpecBoolean::builder("is-live")
+                    .nick("Live mode")
+                    .blurb("Live mode: no \"gap eating\", forward incoming segment")
+                    .default_value(DEFAULT_LIVE)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

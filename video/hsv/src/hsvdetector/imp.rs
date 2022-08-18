@@ -163,60 +163,52 @@ impl ObjectImpl for HsvDetector {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecFloat::new(
-                    "hue-ref",
-                    "Hue reference",
-                    "Hue reference in degrees",
-                    f32::MIN,
-                    f32::MAX,
-                    DEFAULT_HUE_REF,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecFloat::new(
-                    "hue-var",
-                    "Hue variation",
-                    "Allowed hue variation from the reference hue angle, in degrees",
-                    0.0,
-                    180.0,
-                    DEFAULT_HUE_VAR,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecFloat::new(
-                    "saturation-ref",
-                    "Saturation reference",
-                    "Reference saturation value",
-                    0.0,
-                    1.0,
-                    DEFAULT_SATURATION_REF,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecFloat::new(
-                    "saturation-var",
-                    "Saturation variation",
-                    "Allowed saturation variation from the reference value",
-                    0.0,
-                    1.0,
-                    DEFAULT_SATURATION_VAR,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecFloat::new(
-                    "value-ref",
-                    "Value reference",
-                    "Reference value value",
-                    0.0,
-                    1.0,
-                    DEFAULT_VALUE_REF,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecFloat::new(
-                    "value-var",
-                    "Value variation",
-                    "Allowed value variation from the reference value",
-                    0.0,
-                    1.0,
-                    DEFAULT_VALUE_VAR,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                glib::ParamSpecFloat::builder("hue-ref")
+                    .nick("Hue reference")
+                    .blurb("Hue reference in degrees")
+                    .default_value(DEFAULT_HUE_REF)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("hue-var")
+                    .nick("Hue variation")
+                    .blurb("Allowed hue variation from the reference hue angle, in degrees")
+                    .minimum(0.0)
+                    .maximum(180.0)
+                    .default_value(DEFAULT_HUE_VAR)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("saturation-ref")
+                    .nick("Saturation reference")
+                    .blurb("Reference saturation value")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(DEFAULT_SATURATION_REF)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("saturation-var")
+                    .nick("Saturation variation")
+                    .blurb("Allowed saturation variation from the reference value")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(DEFAULT_SATURATION_VAR)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("value-ref")
+                    .nick("Value reference")
+                    .blurb("Reference value value")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(DEFAULT_VALUE_REF)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("value-var")
+                    .nick("Value variation")
+                    .blurb("Allowed value variation from the reference value")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(DEFAULT_VALUE_VAR)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 

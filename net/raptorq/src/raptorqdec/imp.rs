@@ -661,33 +661,27 @@ impl ObjectImpl for RaptorqDec {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecUInt::new(
-                    "repair-window-tolerance",
-                    "Repair Window Tolerance (ms)",
-                    "The amount of time to add to repair-window reported by RaptorQ encoder (in ms)",
-                    0,
-                    u32::MAX - 1,
-                    DEFAULT_REPAIR_WINDOW_TOLERANCE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "media-packets-reset-threshold",
-                    "Media Packets Reset Threshold",
-                    "This is the maximum allowed number of buffered packets, before we reset the decoder. \
+                glib::ParamSpecUInt::builder("repair-window-tolerance")
+                    .nick("Repair Window Tolerance (ms)")
+                    .blurb("The amount of time to add to repair-window reported by RaptorQ encoder (in ms)")
+                    .maximum(u32::MAX - 1)
+                    .default_value(DEFAULT_REPAIR_WINDOW_TOLERANCE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("media-packets-reset-threshold")
+                    .nick("Media Packets Reset Threshold")
+                    .blurb("This is the maximum allowed number of buffered packets, before we reset the decoder. \
                      It can only be triggered if we don't receive repair packets for too long, or packets \
-                     have no valid timestamps, (0 - disable)",
-                    0,
-                    u32::MAX - 1,
-                    DEFAULT_MEDIA_PACKETS_RESET_THRESHOLD,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "stats",
-                    "Statistics",
-                    "Various statistics",
-                    gst::Structure::static_type(),
-                    glib::ParamFlags::READABLE,
-                ),
+                     have no valid timestamps, (0 - disable)")
+                    .maximum(u32::MAX - 1)
+                    .default_value(DEFAULT_MEDIA_PACKETS_RESET_THRESHOLD)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder("stats", gst::Structure::static_type())
+                    .nick("Statistics")
+                    .blurb("Various statistics")
+                    .read_only()
+                    .build(),
             ]
         });
 

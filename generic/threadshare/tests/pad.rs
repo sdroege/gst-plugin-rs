@@ -304,13 +304,12 @@ mod imp_src {
     impl ObjectImpl for ElementSrcTest {
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-                vec![glib::ParamSpecString::new(
-                    "context",
-                    "Context",
-                    "Context name to share threads with",
-                    Some(DEFAULT_CONTEXT),
-                    glib::ParamFlags::WRITABLE,
-                )]
+                vec![glib::ParamSpecString::builder("context")
+                    .nick("Context")
+                    .blurb("Context name to share threads with")
+                    .default_value(Some(DEFAULT_CONTEXT))
+                    .write_only()
+                    .build()]
             });
 
             PROPERTIES.as_ref()
@@ -637,13 +636,14 @@ mod imp_sink {
     impl ObjectImpl for ElementSinkTest {
         fn properties() -> &'static [glib::ParamSpec] {
             static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-                vec![glib::ParamSpecBoxed::new(
-                    "sender",
-                    "Sender",
-                    "Channel sender to forward the incoming items to",
-                    ItemSender::static_type(),
-                    glib::ParamFlags::WRITABLE | glib::ParamFlags::CONSTRUCT_ONLY,
-                )]
+                vec![
+                    glib::ParamSpecBoxed::builder("sender", ItemSender::static_type())
+                        .nick("Sender")
+                        .blurb("Channel sender to forward the incoming items to")
+                        .write_only()
+                        .construct_only()
+                        .build(),
+                ]
             });
 
             PROPERTIES.as_ref()

@@ -1362,63 +1362,42 @@ impl ObjectImpl for JitterBuffer {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "context",
-                    "Context",
-                    "Context name to share threads with",
-                    Some(DEFAULT_CONTEXT),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "context-wait",
-                    "Context Wait",
-                    "Throttle poll loop to run at most once every this many ms",
-                    0,
-                    1000,
-                    DEFAULT_CONTEXT_WAIT.mseconds() as u32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "latency",
-                    "Buffer latency in ms",
-                    "Amount of ms to buffer",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_LATENCY.mseconds() as u32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "do-lost",
-                    "Do Lost",
-                    "Send an event downstream when a packet is lost",
-                    DEFAULT_DO_LOST,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-dropout-time",
-                    "Max dropout time",
-                    "The maximum time (milliseconds) of missing packets tolerated.",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_MAX_DROPOUT_TIME,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-misorder-time",
-                    "Max misorder time",
-                    "The maximum time (milliseconds) of misordered packets tolerated.",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_MAX_MISORDER_TIME,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "stats",
-                    "Statistics",
-                    "Various statistics",
-                    gst::Structure::static_type(),
-                    glib::ParamFlags::READABLE,
-                ),
+                glib::ParamSpecString::builder("context")
+                    .nick("Context")
+                    .blurb("Context name to share threads with")
+                    .default_value(Some(DEFAULT_CONTEXT))
+                    .build(),
+                glib::ParamSpecUInt::builder("context-wait")
+                    .nick("Context Wait")
+                    .blurb("Throttle poll loop to run at most once every this many ms")
+                    .maximum(1000)
+                    .default_value(DEFAULT_CONTEXT_WAIT.mseconds() as u32)
+                    .build(),
+                glib::ParamSpecUInt::builder("latency")
+                    .nick("Buffer latency in ms")
+                    .blurb("Amount of ms to buffer")
+                    .default_value(DEFAULT_LATENCY.mseconds() as u32)
+                    .build(),
+                glib::ParamSpecBoolean::builder("do-lost")
+                    .nick("Do Lost")
+                    .blurb("Send an event downstream when a packet is lost")
+                    .default_value(DEFAULT_DO_LOST)
+                    .build(),
+                glib::ParamSpecUInt::builder("max-dropout-time")
+                    .nick("Max dropout time")
+                    .blurb("The maximum time (milliseconds) of missing packets tolerated.")
+                    .default_value(DEFAULT_MAX_DROPOUT_TIME)
+                    .build(),
+                glib::ParamSpecUInt::builder("max-misorder-time")
+                    .nick("Max misorder time")
+                    .blurb("The maximum time (milliseconds) of misordered packets tolerated.")
+                    .default_value(DEFAULT_MAX_MISORDER_TIME)
+                    .build(),
+                glib::ParamSpecBoxed::builder("stats", gst::Structure::static_type())
+                    .nick("Statistics")
+                    .blurb("Various statistics")
+                    .read_only()
+                    .build(),
             ]
         });
 

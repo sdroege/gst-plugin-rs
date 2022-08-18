@@ -1014,14 +1014,15 @@ impl ObjectImpl for Cea608ToJson {
 
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecBoolean::new(
-                "unbuffered",
-                "Unbuffered",
-                "Whether captions should be output at display time, \
+            vec![glib::ParamSpecBoolean::builder("unbuffered")
+                .nick("Unbuffered")
+                .blurb(
+                    "Whether captions should be output at display time, \
                      instead of waiting to determine durations. Useful with live input",
-                DEFAULT_UNBUFFERED,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-            )]
+                )
+                .default_value(DEFAULT_UNBUFFERED)
+                .mutable_ready()
+                .build()]
         });
 
         PROPERTIES.as_ref()

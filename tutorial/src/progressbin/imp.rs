@@ -82,14 +82,14 @@ impl ObjectImpl for ProgressBin {
     // Metadata for the element's properties
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecEnum::new(
-                "output",
-                "Output",
-                "Defines the output type of the progressbin",
-                ProgressBinOutput::static_type(),
-                DEFAULT_OUTPUT_TYPE as i32,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-            )]
+            vec![
+                glib::ParamSpecEnum::builder("output", ProgressBinOutput::static_type())
+                    .nick("Output")
+                    .blurb("Defines the output type of the progressbin")
+                    .default_value(DEFAULT_OUTPUT_TYPE as i32)
+                    .mutable_playing()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

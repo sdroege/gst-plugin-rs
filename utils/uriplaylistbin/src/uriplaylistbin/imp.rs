@@ -737,40 +737,27 @@ impl ObjectImpl for UriPlaylistBin {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoxed::new(
-                    "uris",
-                    "URIs",
-                    "URIs of the medias to play",
-                    Vec::<String>::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "iterations",
-                    "Iterations",
-                    "Number of time the playlist items should be played each (0 = unlimited)",
-                    0,
-                    u32::MAX,
-                    1,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "current-iteration",
-                    "Current iteration",
-                    "The index of the current playlist iteration, or 0 if the iterations property is 0 (unlimited playlist)",
-                    0,
-                    u32::MAX,
-                    0,
-                    glib::ParamFlags::READABLE,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "current-uri-index",
-                    "Current URI",
-                    "The index from the uris property of the current URI being played",
-                    0,
-                    u64::MAX,
-                    0,
-                    glib::ParamFlags::READABLE,
-                ),
+                glib::ParamSpecBoxed::builder("uris", Vec::<String>::static_type())
+                    .nick("URIs")
+                    .blurb("URIs of the medias to play")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("iterations")
+                    .nick("Iterations")
+                    .blurb("Number of time the playlist items should be played each (0 = unlimited)")
+                    .default_value(1)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("current-iteration")
+                    .nick("Current iteration")
+                    .blurb("The index of the current playlist iteration, or 0 if the iterations property is 0 (unlimited playlist)")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecUInt64::builder("current-uri-index")
+                    .nick("Current URI")
+                    .blurb("The index from the uris property of the current URI being played")
+                    .read_only()
+                    .build(),
             ]
         });
 

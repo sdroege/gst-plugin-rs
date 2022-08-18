@@ -1762,42 +1762,38 @@ impl ObjectImpl for AudioLoudNorm {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecDouble::new(
-                    "loudness-target",
-                    "Loudness Target",
-                    "Loudness target in LUFS",
-                    -70.0,
-                    -5.0,
-                    DEFAULT_LOUDNESS_TARGET,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecDouble::new(
-                    "loudness-range-target",
-                    "Loudness Range Target",
-                    "Loudness range target in LU",
-                    1.0,
-                    20.0,
-                    DEFAULT_LOUDNESS_RANGE_TARGET,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecDouble::new(
-                    "max-true-peak",
-                    "Maximum True Peak",
-                    "Maximum True Peak in dbTP",
-                    -9.0,
-                    0.0,
-                    DEFAULT_MAX_TRUE_PEAK,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecDouble::new(
-                    "offset",
-                    "Offset Gain",
-                    "Offset Gain in LU",
-                    -99.0,
-                    99.0,
-                    DEFAULT_OFFSET,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecDouble::builder("loudness-target")
+                    .nick("Loudness Target")
+                    .blurb("Loudness target in LUFS")
+                    .minimum(-70.0)
+                    .maximum(-5.0)
+                    .default_value(DEFAULT_LOUDNESS_TARGET)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecDouble::builder("loudness-range-target")
+                    .nick("Loudness Range Target")
+                    .blurb("Loudness range target in LU")
+                    .minimum(1.0)
+                    .maximum(20.0)
+                    .default_value(DEFAULT_LOUDNESS_RANGE_TARGET)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecDouble::builder("max-true-peak")
+                    .nick("Maximum True Peak")
+                    .blurb("Maximum True Peak in dbTP")
+                    .minimum(-9.0)
+                    .maximum(0.0)
+                    .default_value(DEFAULT_MAX_TRUE_PEAK)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecDouble::builder("offset")
+                    .nick("Offset Gain")
+                    .blurb("Offset Gain in LU")
+                    .minimum(-99.0)
+                    .maximum(99.0)
+                    .default_value(DEFAULT_OFFSET)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

@@ -141,19 +141,17 @@ impl ObjectSubclass for RegEx {
 impl ObjectImpl for RegEx {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![gst::ParamSpecArray::new(
-                "commands",
-                "Commands",
-                "A set of commands to apply on input text",
-                Some(&glib::ParamSpecBoxed::new(
-                    "command",
-                    "Command",
-                    "A command to apply on input text",
-                    gst::Structure::static_type(),
-                    glib::ParamFlags::READWRITE,
-                )),
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-            )]
+            vec![gst::ParamSpecArray::builder("commands")
+                .nick("Commands")
+                .blurb("A set of commands to apply on input text")
+                .element_spec(
+                    &glib::ParamSpecBoxed::builder("command", gst::Structure::static_type())
+                        .nick("Command")
+                        .blurb("A command to apply on input text")
+                        .build(),
+                )
+                .mutable_playing()
+                .build()]
         });
 
         PROPERTIES.as_ref()

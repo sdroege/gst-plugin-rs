@@ -389,29 +389,21 @@ impl ObjectImpl for Encrypter {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoxed::new(
-                    "receiver-key",
-                    "Receiver Key",
-                    "The public key of the Receiver",
-                    glib::Bytes::static_type(),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "sender-key",
-                    "Sender Key",
-                    "The private key of the Sender",
-                    glib::Bytes::static_type(),
-                    glib::ParamFlags::WRITABLE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "block-size",
-                    "Block Size",
-                    "The block-size of the chunks",
-                    1024,
-                    std::u32::MAX,
-                    32768,
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecBoxed::builder("receiver-key", glib::Bytes::static_type())
+                    .nick("Receiver Key")
+                    .blurb("The public key of the Receiver")
+                    .build(),
+                glib::ParamSpecBoxed::builder("sender-key", glib::Bytes::static_type())
+                    .nick("Sender Key")
+                    .blurb("The private key of the Sender")
+                    .write_only()
+                    .build(),
+                glib::ParamSpecUInt::builder("block-size")
+                    .nick("Block Size")
+                    .blurb("The block-size of the chunks")
+                    .minimum(1024)
+                    .default_value(32768)
+                    .build(),
             ]
         });
 

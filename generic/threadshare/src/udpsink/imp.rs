@@ -963,137 +963,98 @@ impl ObjectImpl for UdpSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "context",
-                    "Context",
-                    "Context name to share threads with",
-                    Some(DEFAULT_CONTEXT),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "context-wait",
-                    "Context Wait",
-                    "Throttle poll loop to run at most once every this many ms",
-                    0,
-                    1000,
-                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "sync",
-                    "Sync",
-                    "Sync on the clock",
-                    DEFAULT_SYNC,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "bind-address",
-                    "Bind Address",
-                    "Address to bind the socket to",
-                    Some(DEFAULT_BIND_ADDRESS),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt::new(
-                    "bind-port",
-                    "Bind Port",
-                    "Port to bind the socket to",
-                    0,
-                    u16::MAX as i32,
-                    DEFAULT_BIND_PORT,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "bind-address-v6",
-                    "Bind Address V6",
-                    "Address to bind the V6 socket to",
-                    Some(DEFAULT_BIND_ADDRESS_V6),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt::new(
-                    "bind-port-v6",
-                    "Bind Port",
-                    "Port to bind the V6 socket to",
-                    0,
-                    u16::MAX as i32,
-                    DEFAULT_BIND_PORT_V6,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecObject::new(
-                    "socket",
-                    "Socket",
-                    "Socket to use for UDP transmission. (None == allocate)",
-                    gio::Socket::static_type(),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecObject::new(
-                    "used-socket",
-                    "Used Socket",
-                    "Socket currently in use for UDP transmission. (None = no socket)",
-                    gio::Socket::static_type(),
-                    glib::ParamFlags::READABLE,
-                ),
-                glib::ParamSpecObject::new(
-                    "socket-v6",
-                    "Socket V6",
-                    "IPV6 Socket to use for UDP transmission. (None == allocate)",
-                    gio::Socket::static_type(),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecObject::new(
-                    "used-socket-v6",
-                    "Used Socket V6",
-                    "V6 Socket currently in use for UDP transmission. (None = no socket)",
-                    gio::Socket::static_type(),
-                    glib::ParamFlags::READABLE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "auto-multicast",
-                    "Auto multicast",
-                    "Automatically join/leave the multicast groups, FALSE means user has to do it himself",
-                    DEFAULT_AUTO_MULTICAST,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "loop",
-                    "Loop",
-                    "Set the multicast loop parameter.",
-                    DEFAULT_LOOP,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "ttl",
-                    "Time To Live",
-                    "Used for setting the unicast TTL parameter",
-                    0,
-                    u8::MAX as u32,
-                    DEFAULT_TTL,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "ttl-mc",
-                    "Time To Live Multicast",
-                    "Used for setting the multicast TTL parameter",
-                    0,
-                    u8::MAX as u32,
-                    DEFAULT_TTL_MC,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt::new(
-                    "qos-dscp",
-                    "QoS DSCP",
-                    "Quality of Service, differentiated services code point (-1 default)",
-                    -1,
-                    63,
-                    DEFAULT_QOS_DSCP,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "clients",
-                    "Clients",
-                    "A comma separated list of host:port pairs with destinations",
-                    Some(DEFAULT_CLIENTS),
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("context")
+                    .nick("Context")
+                    .blurb("Context name to share threads with")
+                    .default_value(Some(DEFAULT_CONTEXT))
+                    .build(),
+                glib::ParamSpecUInt::builder("context-wait")
+                    .nick("Context Wait")
+                    .blurb("Throttle poll loop to run at most once every this many ms")
+                    .maximum(1000)
+                    .default_value(DEFAULT_CONTEXT_WAIT.as_millis() as u32)
+                    .build(),
+                glib::ParamSpecBoolean::builder("sync")
+                    .nick("Sync")
+                    .blurb("Sync on the clock")
+                    .default_value(DEFAULT_SYNC)
+                    .build(),
+                glib::ParamSpecString::builder("bind-address")
+                    .nick("Bind Address")
+                    .blurb("Address to bind the socket to")
+                    .default_value(Some(DEFAULT_BIND_ADDRESS))
+                    .build(),
+                glib::ParamSpecInt::builder("bind-port")
+                    .nick("Bind Port")
+                    .blurb("Port to bind the socket to")
+                    .minimum(0)
+                    .maximum(u16::MAX as i32)
+                    .default_value(DEFAULT_BIND_PORT)
+                    .build(),
+                glib::ParamSpecString::builder("bind-address-v6")
+                    .nick("Bind Address V6")
+                    .blurb("Address to bind the V6 socket to")
+                    .default_value(Some(DEFAULT_BIND_ADDRESS_V6))
+                    .build(),
+                glib::ParamSpecInt::builder("bind-port-v6")
+                    .nick("Bind Port")
+                    .blurb("Port to bind the V6 socket to")
+                    .minimum(0)
+                    .maximum(u16::MAX as i32)
+                    .default_value(DEFAULT_BIND_PORT_V6)
+                    .build(),
+                glib::ParamSpecObject::builder("socket", gio::Socket::static_type())
+                    .nick("Socket")
+                    .blurb("Socket to use for UDP transmission. (None == allocate)")
+                    .build(),
+                glib::ParamSpecObject::builder("used-socket", gio::Socket::static_type())
+                    .nick("Used Socket")
+                    .blurb("Socket currently in use for UDP transmission. (None = no socket)")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecObject::builder("socket-v6", gio::Socket::static_type())
+                    .nick("Socket V6")
+                    .blurb("IPV6 Socket to use for UDP transmission. (None == allocate)")
+                    .build(),
+                glib::ParamSpecObject::builder("used-socket-v6", gio::Socket::static_type())
+                    .nick("Used Socket V6")
+                    .blurb("V6 Socket currently in use for UDP transmission. (None = no socket)")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecBoolean::builder("auto-multicast")
+                    .nick("Auto multicast")
+                    .blurb("Automatically join/leave the multicast groups, FALSE means user has to do it himself")
+                    .default_value(DEFAULT_AUTO_MULTICAST)
+                    .build(),
+                glib::ParamSpecBoolean::builder("loop")
+                    .nick("Loop")
+                    .blurb("Set the multicast loop parameter.")
+                    .default_value(DEFAULT_LOOP)
+                    .build(),
+                glib::ParamSpecUInt::builder("ttl")
+                    .nick("Time To Live")
+                    .blurb("Used for setting the unicast TTL parameter")
+                    .maximum(u8::MAX as u32)
+                    .default_value(DEFAULT_TTL)
+                    .build(),
+                glib::ParamSpecUInt::builder("ttl-mc")
+                    .nick("Time To Live Multicast")
+                    .blurb("Used for setting the multicast TTL parameter")
+                    .maximum(u8::MAX as u32)
+                    .default_value(DEFAULT_TTL_MC)
+                    .build(),
+                glib::ParamSpecInt::builder("qos-dscp")
+                    .nick("QoS DSCP")
+                    .blurb("Quality of Service, differentiated services code point (-1 default)")
+                    .minimum(-1)
+                    .maximum(63)
+                    .default_value(DEFAULT_QOS_DSCP)
+                    .build(),
+                glib::ParamSpecString::builder("clients")
+                    .nick("Clients")
+                    .blurb("A comma separated list of host:port pairs with destinations")
+                    .default_value(Some(DEFAULT_CLIENTS))
+                    .build(),
             ]
         });
 

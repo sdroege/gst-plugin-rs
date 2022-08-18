@@ -1544,56 +1544,42 @@ impl ObjectImpl for FMP4Mux {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
                 // TODO: Add chunk-duration property separate from fragment-size
-                glib::ParamSpecUInt64::new(
-                    "fragment-duration",
-                    "Fragment Duration",
-                    "Duration for each FMP4 fragment",
-                    0,
-                    u64::MAX,
-                    DEFAULT_FRAGMENT_DURATION.nseconds(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecEnum::new(
-                    "header-update-mode",
-                    "Header update mode",
-                    "Mode for updating the header at the end of the stream",
-                    super::HeaderUpdateMode::static_type(),
-                    DEFAULT_HEADER_UPDATE_MODE as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "write-mfra",
-                    "Write mfra box",
-                    "Write fragment random access box at the end of the stream",
-                    DEFAULT_WRITE_MFRA,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "write-mehd",
-                    "Write mehd box",
-                    "Write movie extends header box with the duration at the end of the stream (needs a header-update-mode enabled)",
-                    DEFAULT_WRITE_MFRA,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "interleave-bytes",
-                    "Interleave Bytes",
-                    "Interleave between streams in bytes",
-                    0,
-                    u64::MAX,
-                    DEFAULT_INTERLEAVE_BYTES.unwrap_or(0),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "interleave-time",
-                    "Interleave Time",
-                    "Interleave between streams in nanoseconds",
-                    0,
-                    u64::MAX,
-                    DEFAULT_INTERLEAVE_TIME.map(gst::ClockTime::nseconds).unwrap_or(u64::MAX),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-
+                glib::ParamSpecUInt64::builder("fragment-duration")
+                    .nick("Fragment Duration")
+                    .blurb("Duration for each FMP4 fragment")
+                    .default_value(DEFAULT_FRAGMENT_DURATION.nseconds())
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder("header-update-mode", super::HeaderUpdateMode::static_type())
+                    .nick("Header update mode")
+                    .blurb("Mode for updating the header at the end of the stream")
+                    .default_value(DEFAULT_HEADER_UPDATE_MODE as i32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("write-mfra")
+                    .nick("Write mfra box")
+                    .blurb("Write fragment random access box at the end of the stream")
+                    .default_value(DEFAULT_WRITE_MFRA)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("write-mehd")
+                    .nick("Write mehd box")
+                    .blurb("Write movie extends header box with the duration at the end of the stream (needs a header-update-mode enabled)")
+                    .default_value(DEFAULT_WRITE_MFRA)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("interleave-bytes")
+                    .nick("Interleave Bytes")
+                    .blurb("Interleave between streams in bytes")
+                    .default_value(DEFAULT_INTERLEAVE_BYTES.unwrap_or(0))
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("interleave-time")
+                    .nick("Interleave Time")
+                    .blurb("Interleave between streams in nanoseconds")
+                    .default_value(DEFAULT_INTERLEAVE_TIME.map(gst::ClockTime::nseconds).unwrap_or(u64::MAX))
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

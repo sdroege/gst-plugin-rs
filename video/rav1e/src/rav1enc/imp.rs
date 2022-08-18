@@ -243,145 +243,106 @@ impl ObjectImpl for Rav1Enc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecUInt::new(
-                    "speed-preset",
-                    "Speed Preset",
-                    "Speed preset (10 fastest, 0 slowest)",
-                    0,
-                    10,
-                    DEFAULT_SPEED_PRESET,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "low-latency",
-                    "Low Latency",
-                    "Low Latency",
-                    DEFAULT_LOW_LATENCY,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "min-key-frame-interval",
-                    "Min Key Frame Interval",
-                    "Min Key Frame Interval",
-                    0,
-                    std::u64::MAX,
-                    DEFAULT_MIN_KEY_FRAME_INTERVAL,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "max-key-frame-interval",
-                    "Max Key Frame Interval",
-                    "Max Key Frame Interval",
-                    0,
-                    std::u64::MAX,
-                    DEFAULT_MAX_KEY_FRAME_INTERVAL,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "switch-frame-interval",
-                    "Switch Frame Interval",
-                    "Switch Frame Interval",
-                    0,
-                    std::u64::MAX,
-                    DEFAULT_SWITCH_FRAME_INTERVAL,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecInt::new(
-                    "bitrate",
-                    "Bitrate",
-                    "Bitrate",
-                    0,
-                    std::i32::MAX,
-                    DEFAULT_BITRATE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "quantizer",
-                    "Quantizer",
-                    "Quantizer",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_QUANTIZER as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "min-quantizer",
-                    "Min Quantizer",
-                    "Min Quantizer",
-                    0,
-                    std::u8::MAX as u32,
-                    DEFAULT_MIN_QUANTIZER as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "tile-cols",
-                    "Tile Cols",
-                    "Tile Cols",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_TILE_COLS as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "tile-rows",
-                    "Tile Rows",
-                    "Tile Rows",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_TILE_ROWS as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "tiles",
-                    "Tiles",
-                    "Tiles",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_TILES as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecInt::new(
-                    "rdo-lookahead-frames",
-                    "RDO Lookahead Frames",
-                    "RDO Lookahead Frames",
-                    -1,
-                    std::i32::MAX,
-                    DEFAULT_RDO_LOOKAHEAD_FRAMES,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecEnum::new(
-                    "tune",
-                    "Tune",
-                    "Tune",
-                    Tune::static_type(),
-                    DEFAULT_TUNE as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecInt::new(
-                    "reservoir-frame-delay",
-                    "Reservoir Frame Delay",
-                    "Reservoir Frame Delay",
-                    std::i32::MIN,
-                    std::i32::MAX,
-                    DEFAULT_RESERVOIR_FRAME_DELAY,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "error-resilient",
-                    "Error Resilient",
-                    "Error Resilient",
-                    DEFAULT_ERROR_RESILIENT,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "threads",
-                    "Threads",
-                    "Threads",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_THREADS as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecUInt::builder("speed-preset")
+                    .nick("Speed Preset")
+                    .blurb("Speed preset (10 fastest, 0 slowest)")
+                    .maximum(10)
+                    .default_value(DEFAULT_SPEED_PRESET)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("low-latency")
+                    .nick("Low Latency")
+                    .blurb("Low Latency")
+                    .default_value(DEFAULT_LOW_LATENCY)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("min-key-frame-interval")
+                    .nick("Min Key Frame Interval")
+                    .blurb("Min Key Frame Interval")
+                    .default_value(DEFAULT_MIN_KEY_FRAME_INTERVAL)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("max-key-frame-interval")
+                    .nick("Max Key Frame Interval")
+                    .blurb("Max Key Frame Interval")
+                    .default_value(DEFAULT_MAX_KEY_FRAME_INTERVAL)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("switch-frame-interval")
+                    .nick("Switch Frame Interval")
+                    .blurb("Switch Frame Interval")
+                    .default_value(DEFAULT_SWITCH_FRAME_INTERVAL)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecInt::builder("bitrate")
+                    .nick("Bitrate")
+                    .blurb("Bitrate")
+                    .minimum(0)
+                    .default_value(DEFAULT_BITRATE)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("quantizer")
+                    .nick("Quantizer")
+                    .blurb("Quantizer")
+                    .default_value(DEFAULT_QUANTIZER as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("min-quantizer")
+                    .nick("Min Quantizer")
+                    .blurb("Min Quantizer")
+                    .maximum(std::u8::MAX as u32)
+                    .default_value(DEFAULT_MIN_QUANTIZER as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("tile-cols")
+                    .nick("Tile Cols")
+                    .blurb("Tile Cols")
+                    .default_value(DEFAULT_TILE_COLS as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("tile-rows")
+                    .nick("Tile Rows")
+                    .blurb("Tile Rows")
+                    .default_value(DEFAULT_TILE_ROWS as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("tiles")
+                    .nick("Tiles")
+                    .blurb("Tiles")
+                    .default_value(DEFAULT_TILES as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecInt::builder("rdo-lookahead-frames")
+                    .nick("RDO Lookahead Frames")
+                    .blurb("RDO Lookahead Frames")
+                    .minimum(-1)
+                    .default_value(DEFAULT_RDO_LOOKAHEAD_FRAMES)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder("tune", Tune::static_type())
+                    .nick("Tune")
+                    .blurb("Tune")
+                    .default_value(DEFAULT_TUNE as i32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecInt::builder("reservoir-frame-delay")
+                    .nick("Reservoir Frame Delay")
+                    .blurb("Reservoir Frame Delay")
+                    .default_value(DEFAULT_RESERVOIR_FRAME_DELAY)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("error-resilient")
+                    .nick("Error Resilient")
+                    .blurb("Error Resilient")
+                    .default_value(DEFAULT_ERROR_RESILIENT)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("threads")
+                    .nick("Threads")
+                    .blurb("Threads")
+                    .default_value(DEFAULT_THREADS as u32)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

@@ -118,13 +118,10 @@ impl ObjectSubclass for FileSink {
 impl ObjectImpl for FileSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecString::new(
-                "location",
-                "File Location",
-                "Location of the file to write",
-                None,
-                glib::ParamFlags::READWRITE,
-            )]
+            vec![glib::ParamSpecString::builder("location")
+                .nick("File Location")
+                .blurb("Location of the file to write")
+                .build()]
         });
 
         PROPERTIES.as_ref()

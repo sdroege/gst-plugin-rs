@@ -88,48 +88,42 @@ impl ObjectSubclass for SpotifyAudioSrc {
 impl ObjectImpl for SpotifyAudioSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecString::new(
-                    "username",
-                    "Username",
-                    "Spotify device username from https://www.spotify.com/us/account/set-device-password/",
-                    Some(""),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "password",
-                    "Password",
-                    "Spotify device password from https://www.spotify.com/us/account/set-device-password/",
-                    Some(""),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "cache-credentials",
-                    "Credentials cache",
-                    "Directory where to cache Spotify credentials",
-                    Some(""),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "cache-files",
-                    "Files cache",
-                    "Directory where to cache downloaded files from Spotify",
-                    Some(""),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "cache-max-size",
-                    "Cache max size",
-                    "The max allowed size of the cache, in bytes, or 0 to disable the cache limit",
-                    0, u64::MAX, 0,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "track",
-                    "Spotify URI",
-                    "Spotify track URI, in the form 'spotify:track:$SPOTIFY_ID'",
-                    Some(""),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+            vec![glib::ParamSpecString::builder("username")
+                    .nick("Username")
+                    .blurb("Spotify device username from https://www.spotify.com/us/account/set-device-password/")
+                    .default_value(Some(""))
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("password")
+                    .nick("Password")
+                    .blurb("Spotify device password from https://www.spotify.com/us/account/set-device-password/")
+                    .default_value(Some(""))
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("cache-credentials")
+                    .nick("Credentials cache")
+                    .blurb("Directory where to cache Spotify credentials")
+                    .default_value(Some(""))
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("cache-files")
+                    .nick("Files cache")
+                    .blurb("Directory where to cache downloaded files from Spotify")
+                    .default_value(Some(""))
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("cache-max-size")
+                    .nick("Cache max size")
+                    .blurb("The max allowed size of the cache, in bytes, or 0 to disable the cache limit")
+                    .default_value(0)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("track")
+                    .nick("Spotify URI")
+                    .blurb("Spotify track URI, in the form 'spotify:track:$SPOTIFY_ID'")
+                    .default_value(Some(""))
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

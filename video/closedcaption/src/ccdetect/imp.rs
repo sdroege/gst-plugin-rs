@@ -218,29 +218,25 @@ impl ObjectImpl for CCDetect {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecUInt64::new(
-                    "window",
-                    "Window",
-                    "Window of time (in ns) to determine if captions exist in the stream",
-                    0,
-                    u64::MAX - 1,
-                    DEFAULT_WINDOW.nseconds(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "cc608",
-                    "cc608",
-                    "Whether CEA608 captions (CC1/CC3) have been detected",
-                    DEFAULT_CC608,
-                    glib::ParamFlags::READABLE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "cc708",
-                    "cc608",
-                    "Whether CEA708 captions (cc_data) have been detected",
-                    DEFAULT_CC708,
-                    glib::ParamFlags::READABLE,
-                ),
+                glib::ParamSpecUInt64::builder("window")
+                    .nick("Window")
+                    .blurb("Window of time (in ns) to determine if captions exist in the stream")
+                    .maximum(u64::MAX - 1)
+                    .default_value(DEFAULT_WINDOW.nseconds())
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoolean::builder("cc608")
+                    .nick("cc608")
+                    .blurb("Whether CEA608 captions (CC1/CC3) have been detected")
+                    .default_value(DEFAULT_CC608)
+                    .read_only()
+                    .build(),
+                glib::ParamSpecBoolean::builder("cc708")
+                    .nick("cc608")
+                    .blurb("Whether CEA708 captions (cc_data) have been detected")
+                    .default_value(DEFAULT_CC708)
+                    .read_only()
+                    .build(),
             ]
         });
 

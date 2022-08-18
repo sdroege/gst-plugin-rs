@@ -1061,41 +1061,33 @@ impl ObjectImpl for TtToCea608 {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecEnum::new(
-                    "mode",
-                    "Mode",
-                    "Which mode to operate in",
-                    Cea608Mode::static_type(),
-                    DEFAULT_MODE as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecInt::new(
-                    "origin-row",
-                    "Origin row",
-                    "Origin row, (-1=automatic)",
-                    -1,
-                    14,
-                    DEFAULT_ORIGIN_ROW,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt::new(
-                    "origin-column",
-                    "Origin column",
-                    "Origin column",
-                    0,
-                    31,
-                    DEFAULT_ORIGIN_COLUMN,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "roll-up-timeout",
-                    "Roll-Up Timeout",
-                    "Duration after which to erase display memory in roll-up mode",
-                    0,
-                    u64::MAX,
-                    u64::MAX,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                glib::ParamSpecEnum::builder("mode", Cea608Mode::static_type())
+                    .nick("Mode")
+                    .blurb("Which mode to operate in")
+                    .default_value(DEFAULT_MODE as i32)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecInt::builder("origin-row")
+                    .nick("Origin row")
+                    .blurb("Origin row, (-1=automatic)")
+                    .minimum(-1)
+                    .maximum(14)
+                    .default_value(DEFAULT_ORIGIN_ROW)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt::builder("origin-column")
+                    .nick("Origin column")
+                    .blurb("Origin column")
+                    .maximum(31)
+                    .default_value(DEFAULT_ORIGIN_COLUMN)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt64::builder("roll-up-timeout")
+                    .nick("Roll-Up Timeout")
+                    .blurb("Duration after which to erase display memory in roll-up mode")
+                    .default_value(u64::MAX)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 

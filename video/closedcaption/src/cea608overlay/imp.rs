@@ -618,31 +618,27 @@ impl ObjectImpl for Cea608Overlay {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecInt::new(
-                    "field",
-                    "Field",
-                    "The field to render the caption for when available, (-1=automatic)",
-                    -1,
-                    1,
-                    DEFAULT_FIELD,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "black-background",
-                    "Black background",
-                    "Whether a black background should be drawn behind text",
-                    DEFAULT_BLACK_BACKGROUND,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "timeout",
-                    "Timeout",
-                    "Duration after which to erase overlay when no cc data has arrived for the selected field",
-                    gst::ClockTime::from_seconds(16).nseconds(),
-                    u64::MAX,
-                    u64::MAX,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                glib::ParamSpecInt::builder("field")
+                    .nick("Field")
+                    .blurb("The field to render the caption for when available, (-1=automatic)")
+                    .minimum(-1)
+                    .maximum(1)
+                    .default_value(DEFAULT_FIELD)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecBoolean::builder("black-background")
+                    .nick("Black background")
+                    .blurb("Whether a black background should be drawn behind text")
+                    .default_value(DEFAULT_BLACK_BACKGROUND)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecUInt64::builder("timeout")
+                    .nick("Timeout")
+                    .blurb("Duration after which to erase overlay when no cc data has arrived for the selected field")
+                    .minimum(gst::ClockTime::from_seconds(16).nseconds())
+                    .default_value(u64::MAX)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 

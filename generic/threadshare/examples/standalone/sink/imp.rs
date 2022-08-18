@@ -605,36 +605,28 @@ impl ObjectImpl for TestSink {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "context",
-                    "Context",
-                    "Context name to share threads with",
-                    Some(DEFAULT_CONTEXT),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "context-wait",
-                    "Context Wait",
-                    "Throttle poll loop to run at most once every this many ms",
-                    0,
-                    1000,
-                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "sync",
-                    "Sync",
-                    "Sync on the clock",
-                    DEFAULT_SYNC,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "must-log-stats",
-                    "Must Log Stats",
-                    "Whether statistics should be logged",
-                    DEFAULT_MUST_LOG_STATS,
-                    glib::ParamFlags::WRITABLE,
-                ),
+                glib::ParamSpecString::builder("context")
+                    .nick("Context")
+                    .blurb("Context name to share threads with")
+                    .default_value(Some(DEFAULT_CONTEXT))
+                    .build(),
+                glib::ParamSpecUInt::builder("context-wait")
+                    .nick("Context Wait")
+                    .blurb("Throttle poll loop to run at most once every this many ms")
+                    .maximum(1000)
+                    .default_value(DEFAULT_CONTEXT_WAIT.as_millis() as u32)
+                    .build(),
+                glib::ParamSpecBoolean::builder("sync")
+                    .nick("Sync")
+                    .blurb("Sync on the clock")
+                    .default_value(DEFAULT_SYNC)
+                    .build(),
+                glib::ParamSpecBoolean::builder("must-log-stats")
+                    .nick("Must Log Stats")
+                    .blurb("Whether statistics should be logged")
+                    .default_value(DEFAULT_MUST_LOG_STATS)
+                    .write_only()
+                    .build(),
             ]
         });
 

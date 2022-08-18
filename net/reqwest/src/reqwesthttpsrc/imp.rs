@@ -671,106 +671,100 @@ impl ObjectImpl for ReqwestHttpSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "location",
-                    "Location",
-                    "URL to read from",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "user-agent",
-                    "User-Agent",
-                    "Value of the User-Agent HTTP request header field",
-                    DEFAULT_USER_AGENT.into(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "is-live",
-                    "Is Live",
-                    "Act like a live source",
-                    DEFAULT_IS_LIVE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "user-id",
-                    "User-id",
-                    "HTTP location URI user id for authentication",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "user-pw",
-                    "User-pw",
-                    "HTTP location URI user password for authentication",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "timeout",
-                    "Timeout",
-                    "Value in seconds to timeout a blocking I/O (0 = No timeout).",
-                    0,
-                    3600,
-                    DEFAULT_TIMEOUT,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "compress",
-                    "Compress",
-                    "Allow compressed content encodings",
-                    DEFAULT_COMPRESS,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "extra-headers",
-                    "Extra Headers",
-                    "Extra headers to append to the HTTP request",
-                    gst::Structure::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "cookies",
-                    "Cookies",
-                    "HTTP request cookies",
-                    Vec::<String>::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "iradio-mode",
-                    "I-Radio Mode",
-                    "Enable internet radio mode (ask server to send shoutcast/icecast metadata interleaved with the actual stream data",
-                    DEFAULT_IRADIO_MODE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "keep-alive",
-                    "Keep Alive",
-                    "Use HTTP persistent connections",
-                    DEFAULT_KEEP_ALIVE,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "proxy",
-                    "Proxy",
-                    "HTTP proxy server URI",
-                    Some(""),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "proxy-id",
-                    "Proxy-id",
-                    "HTTP proxy URI user id for authentication",
-                    Some(""),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "proxy-pw",
-                    "Proxy-pw",
-                    "HTTP proxy URI user password for authentication",
-                    Some(""),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                glib::ParamSpecString::builder("location")
+                    .nick("Location")
+                    .blurb("URL to read from")
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("user-agent")
+                    .nick("User-Agent")
+                    .blurb("Value of the User-Agent HTTP request header field")
+                    .default_value(DEFAULT_USER_AGENT.into())
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("is-live")
+                    .nick("Is Live")
+                    .blurb("Act like a live source")
+                    .default_value(DEFAULT_IS_LIVE)
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("user-id")
+                    .nick("User-id")
+                    .blurb("HTTP location URI user id for authentication")
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("user-pw")
+                    .nick("User-pw")
+                    .blurb("HTTP location URI user password for authentication")
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("timeout")
+                    .nick("Timeout")
+                    .blurb("Value in seconds to timeout a blocking I/O (0 = No timeout).")
+                    .maximum(3600)
+                    .default_value(DEFAULT_TIMEOUT)
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("compress")
+                    .nick("Compress")
+                    .blurb("Allow compressed content encodings")
+                    .default_value(DEFAULT_COMPRESS)
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder("extra-headers", gst::Structure::static_type())
+                    .nick("Extra Headers")
+                    .blurb("Extra headers to append to the HTTP request")
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder("cookies", Vec::<String>::static_type())
+                    .nick("Cookies")
+                    .nick("HTTP request cookies")
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("iradio-mode")
+                    .nick("I-Radio Mode")
+                    .blurb("Enable internet radio mode (ask server to send shoutcast/icecast metadata interleaved with the actual stream data")
+                    .default_value(DEFAULT_IRADIO_MODE)
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("keep-alive")
+                    .nick("Keep Alive")
+                    .blurb("Use HTTP persistent connections")
+                    .default_value(DEFAULT_KEEP_ALIVE)
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("proxy")
+                    .nick("Proxy")
+                    .blurb("HTTP proxy server URI")
+                    .default_value(Some(""))
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("proxy-id")
+                    .nick("Proxy-id")
+                    .blurb("HTTP proxy URI user id for authentication")
+                    .default_value(Some(""))
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("proxy-pw")
+                    .nick("Proxy-pw")
+                    .blurb("HTTP proxy URI user password for authentication")
+                    .default_value(Some(""))
+                    .readwrite()
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

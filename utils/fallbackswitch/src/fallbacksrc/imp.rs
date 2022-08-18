@@ -198,132 +198,109 @@ impl ObjectImpl for FallbackSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecBoolean::new(
-                    "enable-audio",
-                    "Enable Audio",
-                    "Enable the audio stream, this will output silence if there's no audio in the configured URI",
-                    true,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "enable-video",
-                    "Enable Video",
-                    "Enable the video stream, this will output black or the fallback video if there's no video in the configured URI",
-                    true,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new("uri", "URI", "URI to use", None, glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY),
-                glib::ParamSpecObject::new(
-                    "source",
-                    "Source",
-                    "Source to use instead of the URI",
-                    gst::Element::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "fallback-uri",
-                    "Fallback URI",
-                    "Fallback URI to use for video in case the main stream doesn't work",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "timeout",
-                    "Timeout",
-                    "Timeout for switching to the fallback URI",
-                    0,
-                    std::u64::MAX - 1,
-                    5 * *gst::ClockTime::SECOND,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "restart-timeout",
-                    "Timeout",
-                    "Timeout for restarting an active source",
-                    0,
-                    std::u64::MAX - 1,
-                    5 * *gst::ClockTime::SECOND,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "retry-timeout",
-                    "Retry Timeout",
-                    "Timeout for stopping after repeated failure",
-                    0,
-                    std::u64::MAX - 1,
-                    60 * *gst::ClockTime::SECOND,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "restart-on-eos",
-                    "Restart on EOS",
-                    "Restart source on EOS",
-                    false,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecEnum::new(
-                    "status",
-                    "Status",
-                    "Current source status",
-                    Status::static_type(),
-                    Status::Stopped as i32,
-                    glib::ParamFlags::READABLE,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "min-latency",
-                    "Minimum Latency",
-                    "When the main source has a higher latency than the fallback source \
+                glib::ParamSpecBoolean::builder("enable-audio")
+                    .nick("Enable Audio")
+                    .blurb("Enable the audio stream, this will output silence if there's no audio in the configured URI")
+                    .default_value(true)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("enable-video")
+                    .nick("Enable Video")
+                    .blurb("Enable the video stream, this will output black or the fallback video if there's no video in the configured URI")
+                    .default_value(true)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("uri")
+                    .nick("URI")
+                    .blurb("URI to use")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecObject::builder("source", gst::Element::static_type())
+                    .nick("Source")
+                    .blurb("Source to use instead of the URI")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("fallback-uri")
+                    .nick("Fallback URI")
+                    .blurb("Fallback URI to use for video in case the main stream doesn't work")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("timeout")
+                    .nick("Timeout")
+                    .blurb("Timeout for switching to the fallback URI")
+                    .maximum(std::u64::MAX - 1)
+                    .default_value(5 * *gst::ClockTime::SECOND)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("restart-timeout")
+                    .nick("Timeout")
+                    .blurb("Timeout for restarting an active source")
+                    .maximum(std::u64::MAX - 1)
+                    .default_value(5 * *gst::ClockTime::SECOND)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("retry-timeout")
+                    .nick("Retry Timeout")
+                    .blurb("Timeout for stopping after repeated failure")
+                    .maximum(std::u64::MAX - 1)
+                    .default_value(60 * *gst::ClockTime::SECOND)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("restart-on-eos")
+                    .nick("Restart on EOS")
+                    .blurb("Restart source on EOS")
+                    .default_value(false)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder("status", Status::static_type())
+                    .nick("Status")
+                    .blurb("Current source status")
+                    .default_value(Status::Stopped as i32)
+                    .read_only()
+                    .build(),
+                glib::ParamSpecUInt64::builder("min-latency")
+                    .nick("Minimum Latency")
+                    .blurb("When the main source has a higher latency than the fallback source \
                      this allows to configure a minimum latency that would be configured \
-                     if initially the fallback is enabled",
-                    0,
-                    std::u64::MAX - 1,
-                    0,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecInt64::new(
-                    "buffer-duration",
-                    "Buffer Duration",
-                    "Buffer duration when buffering streams (-1 default value)",
-                    -1,
-                    std::i64::MAX - 1,
-                    -1,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "statistics",
-                    "Statistics",
-                    "Various statistics",
-                    gst::Structure::static_type(),
-                    glib::ParamFlags::READABLE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "manual-unblock",
-                    "Manual unblock",
-                    "When enabled, the application must call the unblock signal, except for live streams",
-                    false,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "immediate-fallback",
-                    "Immediate fallback",
-                    "Forward the fallback streams immediately at startup, when the primary streams are slow to start up and immediate output is required",
-                    false,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "fallback-video-caps",
-                    "Fallback Video Caps",
-                    "Raw video caps for fallback stream",
-                    gst::Caps::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "fallback-audio-caps",
-                    "Fallback Audio Caps",
-                    "Raw audio caps for fallback stream",
-                    gst::Caps::static_type(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                     if initially the fallback is enabled")
+                    .maximum(std::u64::MAX - 1)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecInt64::builder("buffer-duration")
+                    .nick("Buffer Duration")
+                    .blurb("Buffer duration when buffering streams (-1 default value)")
+                    .minimum(-1)
+                    .maximum(std::i64::MAX - 1)
+                    .default_value(-1)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder("statistics", gst::Structure::static_type())
+                    .nick("Statistics")
+                    .blurb("Various statistics")
+                    .read_only()
+                    .build(),
+                glib::ParamSpecBoolean::builder("manual-unblock")
+                    .nick("Manual unblock")
+                    .blurb("When enabled, the application must call the unblock signal, except for live streams")
+                    .default_value(false)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoolean::builder("immediate-fallback")
+                    .nick("Immediate fallback")
+                    .blurb("Forward the fallback streams immediately at startup, when the primary streams are slow to start up and immediate output is required")
+                    .default_value(false)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder("fallback-video-caps", gst::Caps::static_type())
+                    .nick("Fallback Video Caps")
+                    .blurb("Raw video caps for fallback stream")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecBoxed::builder("fallback-audio-caps", gst::Caps::static_type())
+                    .nick("Fallback Audio Caps")
+                    .blurb("Raw audio caps for fallback stream")
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

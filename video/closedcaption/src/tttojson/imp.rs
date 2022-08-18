@@ -223,14 +223,14 @@ impl ObjectSubclass for TtToJson {
 impl ObjectImpl for TtToJson {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecEnum::new(
-                "mode",
-                "Mode",
-                "Which mode to operate in",
-                Cea608Mode::static_type(),
-                DEFAULT_MODE as i32,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-            )]
+            vec![
+                glib::ParamSpecEnum::builder("mode", Cea608Mode::static_type())
+                    .nick("Mode")
+                    .blurb("Which mode to operate in")
+                    .default_value(DEFAULT_MODE as i32)
+                    .mutable_ready()
+                    .build(),
+            ]
         });
 
         PROPERTIES.as_ref()

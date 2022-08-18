@@ -648,86 +648,66 @@ impl ObjectImpl for UdpSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             let mut properties = vec![
-                glib::ParamSpecString::new(
-                    "context",
-                    "Context",
-                    "Context name to share threads with",
-                    Some(DEFAULT_CONTEXT),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "context-wait",
-                    "Context Wait",
-                    "Throttle poll loop to run at most once every this many ms",
-                    0,
-                    1000,
-                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "address",
-                    "Address",
-                    "Address/multicast group to listen on",
-                    DEFAULT_ADDRESS,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt::new(
-                    "port",
-                    "Port",
-                    "Port to listen on",
-                    0,
-                    u16::MAX as i32,
-                    DEFAULT_PORT,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "reuse",
-                    "Reuse",
-                    "Allow reuse of the port",
-                    DEFAULT_REUSE,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "caps",
-                    "Caps",
-                    "Caps to use",
-                    gst::Caps::static_type(),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "mtu",
-                    "MTU",
-                    "Maximum expected packet size. This directly defines the allocation size of the receive buffer pool",
-                    0,
-                    i32::MAX as u32,
-                    DEFAULT_MTU,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "retrieve-sender-address",
-                    "Retrieve sender address",
-                    "Whether to retrieve the sender address and add it to buffers as meta. Disabling this might result in minor performance improvements in certain scenarios",
-                    DEFAULT_RETRIEVE_SENDER_ADDRESS,
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("context")
+                    .nick("Context")
+                    .blurb("Context name to share threads with")
+                    .default_value(Some(DEFAULT_CONTEXT))
+                    .build(),
+                glib::ParamSpecUInt::builder("context-wait")
+                    .nick("Context Wait")
+                    .blurb("Throttle poll loop to run at most once every this many ms")
+                    .maximum(1000)
+                    .default_value(DEFAULT_CONTEXT_WAIT.as_millis() as u32)
+                    .build(),
+                glib::ParamSpecString::builder("address")
+                    .nick("Address")
+                    .blurb("Address/multicast group to listen on")
+                    .default_value(DEFAULT_ADDRESS)
+                    .build(),
+                glib::ParamSpecInt::builder("port")
+                    .nick("Port")
+                    .blurb("Port to listen on")
+                    .minimum(0)
+                    .maximum(u16::MAX as i32)
+                    .default_value(DEFAULT_PORT)
+                    .build(),
+                glib::ParamSpecBoolean::builder("reuse")
+                    .nick("Reuse")
+                    .blurb("Allow reuse of the port")
+                    .default_value(DEFAULT_REUSE)
+                    .build(),
+                glib::ParamSpecBoxed::builder("caps", gst::Caps::static_type())
+                    .nick("Caps")
+                    .blurb("Caps to use")
+                    .build(),
+                glib::ParamSpecUInt::builder("mtu")
+                    .nick("MTU")
+                    .blurb("Maximum expected packet size. This directly defines the allocation size of the receive buffer pool")
+                    .maximum(i32::MAX as u32)
+                    .default_value(DEFAULT_MTU)
+                    .build(),
+                glib::ParamSpecBoolean::builder("retrieve-sender-address")
+                    .nick("Retrieve sender address")
+                    .blurb("Whether to retrieve the sender address and add it to buffers as meta. Disabling this might result in minor performance improvements in certain scenarios")
+                    .default_value(DEFAULT_RETRIEVE_SENDER_ADDRESS)
+                    .build(),
             ];
 
             #[cfg(not(windows))]
             {
-                properties.push(glib::ParamSpecObject::new(
-                    "socket",
-                    "Socket",
-                    "Socket to use for UDP reception. (None == allocate)",
-                    gio::Socket::static_type(),
-                    glib::ParamFlags::READWRITE,
-                ));
-                properties.push(glib::ParamSpecObject::new(
-                    "used-socket",
-                    "Used Socket",
-                    "Socket currently in use for UDP reception. (None = no socket)",
-                    gio::Socket::static_type(),
-                    glib::ParamFlags::READABLE,
-                ));
+                properties.push(
+                    glib::ParamSpecObject::builder("socket", gio::Socket::static_type())
+                        .nick("Socket")
+                        .blurb("Socket to use for UDP reception. (None == allocate)")
+                        .build(),
+                );
+                properties.push(
+                    glib::ParamSpecObject::builder("used-socket", gio::Socket::static_type())
+                        .nick("Used Socket")
+                        .blurb("Socket currently in use for UDP reception. (None = no socket)")
+                        .read_only()
+                        .build(),
+                );
             }
 
             properties

@@ -519,19 +519,20 @@ impl ObjectSubclass for OnvifMetadataParse {
 impl ObjectImpl for OnvifMetadataParse {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecUInt64::new(
-                "latency",
-                "Latency",
-                "Maximum latency to introduce for reordering metadata \
+            vec![glib::ParamSpecUInt64::builder("latency")
+                .nick("Latency")
+                .blurb(
+                    "Maximum latency to introduce for reordering metadata \
                  (max=auto: 6s if unparsed input, 0s if parsed input)",
-                0,
-                u64::MAX,
-                Settings::default()
-                    .latency
-                    .map(|l| l.nseconds())
-                    .unwrap_or(u64::MAX),
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-            )]
+                )
+                .default_value(
+                    Settings::default()
+                        .latency
+                        .map(|l| l.nseconds())
+                        .unwrap_or(u64::MAX),
+                )
+                .mutable_ready()
+                .build()]
         });
 
         PROPERTIES.as_ref()

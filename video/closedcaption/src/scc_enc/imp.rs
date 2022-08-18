@@ -418,15 +418,16 @@ impl ObjectImpl for SccEnc {
 
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
-            vec![glib::ParamSpecBoolean::new(
-                "output-padding",
-                "Output padding",
-                "Whether the encoder should output padding captions. \
+            vec![glib::ParamSpecBoolean::builder("output-padding")
+                .nick("Output padding")
+                .blurb(
+                    "Whether the encoder should output padding captions. \
                 The element will never add padding, but will encode padding \
                 buffers it receives if this property is set to true.",
-                DEFAULT_OUTPUT_PADDING,
-                glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-            )]
+                )
+                .default_value(DEFAULT_OUTPUT_PADDING)
+                .mutable_ready()
+                .build()]
         });
 
         PROPERTIES.as_ref()

@@ -428,69 +428,44 @@ impl ObjectImpl for HlsSink3 {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "location",
-                    "File Location",
-                    "Location of the file to write",
-                    Some(DEFAULT_LOCATION),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "playlist-location",
-                    "Playlist Location",
-                    "Location of the playlist to write.",
-                    Some(DEFAULT_PLAYLIST_LOCATION),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "playlist-root",
-                    "Playlist Root",
-                    "Base path for the segments in the playlist file.",
-                    None,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "max-files",
-                    "Max files",
-                    "Maximum number of files to keep on disk. Once the maximum is reached, old files start to be deleted to make room for new ones.",
-                    0,
-                    u32::MAX,
-                    DEFAULT_MAX_NUM_SEGMENT_FILES,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "target-duration",
-                    "Target duration",
-                    "The target duration in seconds of a segment/file. (0 - disabled, useful for management of segment duration by the streaming server)",
-                    0,
-                    u32::MAX,
-                    DEFAULT_TARGET_DURATION,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "playlist-length",
-                    "Playlist length",
-                    "Length of HLS playlist. To allow players to conform to section 6.3.3 of the HLS specification, this should be at least 3. If set to 0, the playlist will be infinite.",
-                    0,
-                    u32::MAX,
-                    DEFAULT_PLAYLIST_LENGTH,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecEnum::new(
-                    "playlist-type",
-                    "Playlist Type",
-                    "The type of the playlist to use. When VOD type is set, the playlist will be live until the pipeline ends execution.",
-                    HlsSink3PlaylistType::static_type(),
-                    DEFAULT_PLAYLIST_TYPE as i32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoolean::new(
-                    "send-keyframe-requests",
-                    "Send Keyframe Requests",
-                    "Send keyframe requests to ensure correct fragmentation. If this is disabled then the input must have keyframes in regular intervals.",
-                    DEFAULT_SEND_KEYFRAME_REQUESTS,
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("location")
+                    .nick("File Location")
+                    .blurb("Location of the file to write")
+                    .default_value(Some(DEFAULT_LOCATION))
+                    .build(),
+                glib::ParamSpecString::builder("playlist-location")
+                    .nick("Playlist Location")
+                    .blurb("Location of the playlist to write.")
+                    .default_value(Some(DEFAULT_PLAYLIST_LOCATION))
+                    .build(),
+                glib::ParamSpecString::builder("playlist-root")
+                    .nick("Playlist Root")
+                    .blurb("Base path for the segments in the playlist file.")
+                    .build(),
+                glib::ParamSpecUInt::builder("max-files")
+                    .nick("Max files")
+                    .blurb("Maximum number of files to keep on disk. Once the maximum is reached, old files start to be deleted to make room for new ones.")
+                    .build(),
+                glib::ParamSpecUInt::builder("target-duration")
+                    .nick("Target duration")
+                    .blurb("The target duration in seconds of a segment/file. (0 - disabled, useful for management of segment duration by the streaming server)")
+                    .default_value(DEFAULT_TARGET_DURATION)
+                    .build(),
+                glib::ParamSpecUInt::builder("playlist-length")
+                    .nick("Playlist length")
+                    .blurb("Length of HLS playlist. To allow players to conform to section 6.3.3 of the HLS specification, this should be at least 3. If set to 0, the playlist will be infinite.")
+                    .default_value(DEFAULT_PLAYLIST_LENGTH)
+                    .build(),
+                glib::ParamSpecEnum::builder("playlist-type", HlsSink3PlaylistType::static_type())
+                    .nick("Playlist Type")
+                    .blurb("The type of the playlist to use. When VOD type is set, the playlist will be live until the pipeline ends execution.")
+                    .default_value(DEFAULT_PLAYLIST_TYPE as i32)
+                    .build(),
+                glib::ParamSpecBoolean::builder("send-keyframe-requests")
+                    .nick("Send Keyframe Requests")
+                    .blurb("Send keyframe requests to ensure correct fragmentation. If this is disabled then the input must have keyframes in regular intervals.")
+                    .default_value(DEFAULT_SEND_KEYFRAME_REQUESTS)
+                    .build(),
             ]
         });
 

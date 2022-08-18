@@ -520,54 +520,38 @@ impl ObjectImpl for TcpClientSrc {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "context",
-                    "Context",
-                    "Context name to share threads with",
-                    Some(DEFAULT_CONTEXT),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "context-wait",
-                    "Context Wait",
-                    "Throttle poll loop to run at most once every this many ms",
-                    0,
-                    1000,
-                    DEFAULT_CONTEXT_WAIT.as_millis() as u32,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecString::new(
-                    "host",
-                    "Host",
-                    "The host IP address to receive packets from",
-                    DEFAULT_HOST,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecInt::new(
-                    "port",
-                    "Port",
-                    "Port to receive packets from",
-                    0,
-                    u16::MAX as i32,
-                    DEFAULT_PORT,
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecBoxed::new(
-                    "caps",
-                    "Caps",
-                    "Caps to use",
-                    gst::Caps::static_type(),
-                    glib::ParamFlags::READWRITE,
-                ),
-                glib::ParamSpecUInt::new(
-                    "blocksize",
-                    "Blocksize",
-                    "Size in bytes to read per buffer (-1 = default)",
-                    0,
-                    u32::MAX,
-                    DEFAULT_BLOCKSIZE,
-                    glib::ParamFlags::READWRITE,
-                ),
+                glib::ParamSpecString::builder("context")
+                    .nick("Context")
+                    .blurb("Context name to share threads with")
+                    .default_value(Some(DEFAULT_CONTEXT))
+                    .build(),
+                glib::ParamSpecUInt::builder("context-wait")
+                    .nick("Context Wait")
+                    .blurb("Throttle poll loop to run at most once every this many ms")
+                    .maximum(1000)
+                    .default_value(DEFAULT_CONTEXT_WAIT.as_millis() as u32)
+                    .build(),
+                glib::ParamSpecString::builder("host")
+                    .nick("Host")
+                    .blurb("The host IP address to receive packets from")
+                    .default_value(DEFAULT_HOST)
+                    .build(),
+                glib::ParamSpecInt::builder("port")
+                    .nick("Port")
+                    .blurb("Port to receive packets from")
+                    .minimum(0)
+                    .maximum(u16::MAX as i32)
+                    .default_value(DEFAULT_PORT)
+                    .build(),
+                glib::ParamSpecBoxed::builder("caps", gst::Caps::static_type())
+                    .nick("Caps")
+                    .blurb("Caps to use")
+                    .build(),
+                glib::ParamSpecUInt::builder("blocksize")
+                    .nick("Blocksize")
+                    .blurb("Size in bytes to read per buffer (-1 = default)")
+                    .default_value(DEFAULT_BLOCKSIZE)
+                    .build(),
             ]
         });
 

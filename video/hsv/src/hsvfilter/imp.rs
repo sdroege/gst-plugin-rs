@@ -123,51 +123,36 @@ impl ObjectImpl for HsvFilter {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecFloat::new(
-                    "hue-shift",
-                    "Hue shift",
-                    "Hue shifting in degrees",
-                    f32::MIN,
-                    f32::MAX,
-                    DEFAULT_HUE_SHIFT,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecFloat::new(
-                    "saturation-mul",
-                    "Saturation multiplier",
-                    "Saturation multiplier to apply to the saturation value (before offset)",
-                    f32::MIN,
-                    f32::MAX,
-                    DEFAULT_SATURATION_MUL,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecFloat::new(
-                    "saturation-off",
-                    "Saturation offset",
-                    "Saturation offset to add to the saturation value (after multiplier)",
-                    f32::MIN,
-                    f32::MAX,
-                    DEFAULT_SATURATION_OFF,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecFloat::new(
-                    "value-mul",
-                    "Value multiplier",
-                    "Value multiplier to apply to the value (before offset)",
-                    f32::MIN,
-                    f32::MAX,
-                    DEFAULT_VALUE_MUL,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecFloat::new(
-                    "value-off",
-                    "Value offset",
-                    "Value offset to add to the value (after multiplier)",
-                    f32::MIN,
-                    f32::MAX,
-                    DEFAULT_VALUE_OFF,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                glib::ParamSpecFloat::builder("hue-shift")
+                    .nick("Hue shift")
+                    .blurb("Hue shifting in degrees")
+                    .default_value(DEFAULT_HUE_SHIFT)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("saturation-mul")
+                    .nick("Saturation multiplier")
+                    .blurb("Saturation multiplier to apply to the saturation value (before offset)")
+                    .default_value(DEFAULT_SATURATION_MUL)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("saturation-off")
+                    .nick("Saturation offset")
+                    .blurb("Saturation offset to add to the saturation value (after multiplier)")
+                    .default_value(DEFAULT_SATURATION_OFF)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("value-mul")
+                    .nick("Value multiplier")
+                    .blurb("Value multiplier to apply to the value (before offset)")
+                    .default_value(DEFAULT_VALUE_MUL)
+                    .mutable_playing()
+                    .build(),
+                glib::ParamSpecFloat::builder("value-off")
+                    .nick("Value offset")
+                    .blurb("Value offset to add to the value (after multiplier)")
+                    .default_value(DEFAULT_VALUE_OFF)
+                    .mutable_playing()
+                    .build(),
             ]
         });
 

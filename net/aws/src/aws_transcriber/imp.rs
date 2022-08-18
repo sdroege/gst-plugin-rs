@@ -1178,95 +1178,72 @@ impl ObjectImpl for Transcriber {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecString::new(
-                    "language-code",
-                    "Language Code",
-                    "The Language of the Stream, see \
+                glib::ParamSpecString::builder("language-code")
+                    .nick("Language Code")
+                    .blurb("The Language of the Stream, see \
                         <https://docs.aws.amazon.com/transcribe/latest/dg/how-streaming-transcription.html> \
-                        for an up to date list of allowed languages",
-                    Some("en-US"),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "latency",
-                    "Latency",
-                    "Amount of milliseconds to allow AWS transcribe",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_LATENCY.mseconds() as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt::new(
-                    "lateness",
-                    "Lateness",
-                    "Amount of milliseconds to introduce as lateness",
-                    0,
-                    std::u32::MAX,
-                    DEFAULT_LATENESS.mseconds() as u32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "vocabulary-name",
-                    "Vocabulary Name",
-                    "The name of a custom vocabulary, see \
+                        for an up to date list of allowed languages")
+                    .default_value(Some("en-US"))
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("latency")
+                    .nick("Latency")
+                    .blurb("Amount of milliseconds to allow AWS transcribe")
+                    .default_value(DEFAULT_LATENCY.mseconds() as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt::builder("lateness")
+                    .nick("Lateness")
+                    .blurb("Amount of milliseconds to introduce as lateness")
+                    .default_value(DEFAULT_LATENESS.mseconds() as u32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("vocabulary-name")
+                    .nick("Vocabulary Name")
+                    .blurb("The name of a custom vocabulary, see \
                         <https://docs.aws.amazon.com/transcribe/latest/dg/how-vocabulary.html> \
-                        for more information",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "session-id",
-                    "Session ID",
-                    "The ID of the transcription session, must be length 36",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecEnum::new(
-                    "results-stability",
-                    "Results stability",
-                    "Defines how fast results should stabilize",
-                    AwsTranscriberResultStability::static_type(),
-                    DEFAULT_STABILITY as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "access-key",
-                    "Access Key",
-                    "AWS Access Key",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "secret-access-key",
-                    "Secret Access Key",
-                    "AWS Secret Access Key",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "session-token",
-                    "Session Token",
-                    "AWS temporary Session Token from STS",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecString::new(
-                    "vocabulary-filter-name",
-                    "Vocabulary Filter Name",
-                    "The name of a custom filter vocabulary, see \
+                        for more information")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("session-id")
+                    .nick("Session ID")
+                    .blurb("The ID of the transcription session, must be length 36")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder("results-stability", AwsTranscriberResultStability::static_type())
+                    .nick("Results stability")
+                    .blurb("Defines how fast results should stabilize")
+                    .default_value(DEFAULT_STABILITY as i32)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("access-key")
+                    .nick("Access Key")
+                    .blurb("AWS Access Key")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("secret-access-key")
+                    .nick("Secret Access Key")
+                    .blurb("AWS Secret Access Key")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("session-token")
+                    .nick("Session Token")
+                    .blurb("AWS temporary Session Token from STS")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecString::builder("vocabulary-filter-name")
+                    .nick("Vocabulary Filter Name")
+                    .blurb("The name of a custom filter vocabulary, see \
                         <https://docs.aws.amazon.com/transcribe/latest/help-panel/vocab-filter.html> \
-                        for more information",
-                    None,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecEnum::new(
-                    "vocabulary-filter-method",
-                    "Vocabulary Filter Method",
-                    "Defines how filtered words will be edited, has no effect when vocabulary-filter-name isn't set",
-                    AwsTranscriberVocabularyFilterMethod::static_type(),
-                    DEFAULT_VOCABULARY_FILTER_METHOD as i32,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
+                        for more information")
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecEnum::builder("vocabulary-filter-method", AwsTranscriberVocabularyFilterMethod::static_type())
+                    .nick("Vocabulary Filter Method")
+                    .blurb("Defines how filtered words will be edited, has no effect when vocabulary-filter-name isn't set")
+                    .default_value(DEFAULT_VOCABULARY_FILTER_METHOD as i32)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 

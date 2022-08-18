@@ -96,40 +96,36 @@ impl ObjectImpl for AudioEcho {
     fn properties() -> &'static [glib::ParamSpec] {
         static PROPERTIES: Lazy<Vec<glib::ParamSpec>> = Lazy::new(|| {
             vec![
-                glib::ParamSpecUInt64::new("max-delay",
-                    "Maximum Delay",
-                    "Maximum delay of the echo in nanoseconds (can't be changed in PLAYING or PAUSED state)",
-                    0, u64::MAX - 1,
-                    DEFAULT_MAX_DELAY.nseconds(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_READY,
-                ),
-                glib::ParamSpecUInt64::new(
-                    "delay",
-                    "Delay",
-                    "Delay of the echo in nanoseconds",
-                    0,
-                    u64::MAX - 1,
-                    DEFAULT_DELAY.nseconds(),
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecDouble::new(
-                    "intensity",
-                    "Intensity",
-                    "Intensity of the echo",
-                    0.0,
-                    1.0,
-                    DEFAULT_INTENSITY,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
-                glib::ParamSpecDouble::new(
-                    "feedback",
-                    "Feedback",
-                    "Amount of feedback",
-                    0.0,
-                    1.0,
-                    DEFAULT_FEEDBACK,
-                    glib::ParamFlags::READWRITE | gst::PARAM_FLAG_MUTABLE_PLAYING,
-                ),
+                glib::ParamSpecUInt64::builder("max-delay")
+                    .nick("Maximum Delay")
+                    .blurb("Maximum delay of the echo in nanoseconds (can't be changed in PLAYING or PAUSED state)")
+                    .maximum(u64::MAX - 1)
+                    .default_value(DEFAULT_MAX_DELAY.nseconds())
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecUInt64::builder("delay")
+                    .nick("Delay")
+                    .blurb("Delay of the echo in nanoseconds")
+                    .maximum(u64::MAX - 1)
+                    .default_value(DEFAULT_DELAY.nseconds())
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecDouble::builder("intensity")
+                    .nick("Intensity")
+                    .blurb("Intensity of the echo")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(DEFAULT_INTENSITY)
+                    .mutable_ready()
+                    .build(),
+                glib::ParamSpecDouble::builder("feedback")
+                    .nick("Feedback")
+                    .blurb("Amount of feedback")
+                    .minimum(0.0)
+                    .maximum(1.0)
+                    .default_value(DEFAULT_FEEDBACK)
+                    .mutable_ready()
+                    .build(),
             ]
         });
 
